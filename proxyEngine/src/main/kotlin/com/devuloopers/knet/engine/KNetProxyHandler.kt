@@ -1,0 +1,218 @@
+package com.devuloopers.knet.engine
+
+import com.devuloopers.knet.crypto.CertificateAuthority
+import com.devuloopers.knet.crypto.CertificateCache
+import io.netty.bootstrap.Bootstrap
+import io.netty.channel.Channel
+import io.netty.channel.ChannelHandlerContext
+import io.netty.channel.ChannelInitializer
+import io.netty.channel.SimpleChannelInboundHandler
+import io.netty.channel.socket.SocketChannel
+import io.netty.channel.socket.nio.NioSocketChannel
+import io.netty.handler.codec.http.DefaultFullHttpRequest
+import io.netty.handler.codec.http.DefaultFullHttpResponse
+import io.netty.handler.codec.http.FullHttpRequest
+import io.netty.handler.codec.http.FullHttpResponse
+import io.netty.handler.codec.http.HttpClientCodec
+import io.netty.handler.codec.http.HttpObjectAggregator
+import io.netty.handler.codec.http.HttpResponseStatus
+import io.netty.handler.codec.http.HttpServerCodec
+import io.netty.handler.codec.http.HttpVersion
+import io.netty.handler.ssl.SslContextBuilder
+import io.netty.handler.ssl.util.InsecureTrustManagerFactory
+import io.netty.util.AttributeKey
+import com.devuloopers.knet.engine.util.HttpMapper
+import com.devuloopers.knet.logger.KNetLogger
+import java.net.URI
+import java.net.URL
+
+private const val TAG = "ProxyEngine"
+
+/**
+ * Netty inbound handler that parses client requests, intercepts HTTPS CONNECT handshake,
+ * and manages MITM decryption and request forwarding.
+ */
+@Suppress("HttpUrlsUsage")
+class KNetProxyHandler(
+    private val ca: CertificateAuthority,
+    private val certCache: CertificateCache
+) : SimpleChannelInboundHandler<FullHttpRequest>() {
+
+    companion object {
+        private val HOST_ATTR = AttributeKey.valueOf<String>("knet.host")
+        private val PORT_ATTR = AttributeKey.valueOf<Int>("knet.port")
+        private val SSL_ATTR = AttributeKey.valueOf<Boolean>("knet.ssl")
+    }
+
+    override fun channelRead0(context: ChannelHandlerContext, msg: FullHttpRequest) {
+        if (msg.method().name() == "CONNECT") {
+            handleConnect(context, msg)
+        } else {
+            handleRequest(context, msg)
+        }
+    }
+
+    /**
+     * Intercepts and handles HTTPS CONNECT requests from clients.
+     * Establishes dynamic TLS context using LeafCertificateGenerator and swaps HTTP codecs.
+     */
+    private fun handleConnect(context: ChannelHandlerContext, request: FullHttpRequest) {
+        val uri = request.uri()
+        val parts = uri.split(":")
+        val host = parts[0]
+        val port = if (parts.size > 1) parts[1].toInt() else 443
+
+        // Cache the hostname and SSL metadata on the channel context for downstream requests.
+        context.channel().attr(HOST_ATTR).set(host)
+        context.channel().attr(PORT_ATTR).set(port)
+        context.channel().attr(SSL_ATTR).set(true)
+
+        // Write HTTP 200 Connection Established to let the client start TLS.
+        val response = DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK)
+        context.writeAndFlush(response).addListener { future ->
+            if (future.isSuccess) {
+                // Remove plaintext HTTP server codecs.
+                val pipeline = context.pipeline()
+                pipeline.remove("httpCodec")
+                pipeline.remove("httpAggregator")
+
+                // Generate dynamic leaf certificate matching the requested host.
+                val leaf = certCache.get(host, ca)
+
+                // Instantiate Netty SSL context using generated certificate keys.
+                val sslContext = SslContextBuilder.forServer(leaf.keyPair.private, leaf.certificate).build()
+
+                // Insert client-side SslHandler at the front of the pipeline.
+                pipeline.addFirst("ssl", sslContext.newHandler(context.alloc()))
+
+                // Re-add HTTP server codecs before proxyHandler to parse decrypted streams.
+                pipeline.addBefore("proxyHandler", "httpCodec", HttpServerCodec())
+                pipeline.addBefore("proxyHandler", "httpAggregator", HttpObjectAggregator(10 * 1024 * 1024))
+            } else {
+                context.close()
+            }
+        }
+    }
+
+    /**
+     * Relays plaintext HTTP or decrypted HTTPS client requests to the remote target server.
+     */
+    private fun handleRequest(context: ChannelHandlerContext, request: FullHttpRequest) {
+        val channel = context.channel()
+        val isSsl = channel.attr(SSL_ATTR).get() ?: false
+        var targetHost = channel.attr(HOST_ATTR).get()
+        var targetPort = channel.attr(PORT_ATTR).get() ?: 80
+
+        if (targetHost == null) {
+            // Extract from absolute URI if this is an unencrypted HTTP proxy request.
+            val uri = request.uri()
+            if (uri.startsWith("http://")) {
+                val urlObj = URI.create(uri).toURL()
+                targetHost = urlObj.host
+                targetPort = if (urlObj.port != -1) urlObj.port else 80
+            } else {
+                // Fallback to Host header
+                val hostHeader = request.headers().get("Host")
+                if (hostHeader != null) {
+                    val parts = hostHeader.split(":")
+                    targetHost = parts[0]
+                    targetPort = if (parts.size > 1) parts[1].toInt() else 80
+                }
+            }
+        }
+
+        if (targetHost == null) {
+            context.writeAndFlush(DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.BAD_REQUEST))
+            return
+        }
+
+        // Map client netty request to common DTO model
+        val mappedRequest = HttpMapper.mapRequest(request, targetHost, isSsl)
+        
+        // Log the captured request URL
+        KNetLogger.info(TAG) { "KNet Proxy Captured: ${mappedRequest.method} ${mappedRequest.url}" }
+
+        // Transform absolute URI proxy request to relative URI for outbound request.
+        val relativeUri = if (request.uri().startsWith("http://") || request.uri().startsWith("https://")) {
+            val urlObj = URI.create(request.uri()).toURL()
+            val path = urlObj.path.ifEmpty { "/" }
+            val query = urlObj.query
+            if (query != null) "$path?$query" else path
+        } else {
+            request.uri()
+        }
+
+        val outboundRequest = DefaultFullHttpRequest(
+            request.protocolVersion(),
+            request.method(),
+            relativeUri,
+            request.content().retain()
+        )
+        outboundRequest.headers().set(request.headers())
+        outboundRequest.headers().remove("Proxy-Connection")
+
+        // Establish connection to target remote server.
+        val clientBootstrap = Bootstrap()
+        clientBootstrap.group(context.channel().eventLoop()) // Reuse client event loop thread
+            .channel(NioSocketChannel::class.java)
+            .handler(object : ChannelInitializer<SocketChannel>() {
+                override fun initChannel(ch: SocketChannel) {
+                    val pipeline = ch.pipeline()
+                    if (isSsl) {
+                        // Trust all certificates during outbound proxy forwarding (relying on client verification)
+                        val sslCtx = SslContextBuilder.forClient()
+                            .trustManager(InsecureTrustManagerFactory.INSTANCE)
+                            .build()
+                        pipeline.addLast("ssl", sslCtx.newHandler(ch.alloc(), targetHost, targetPort))
+                    }
+                    pipeline.addLast("httpCodec", HttpClientCodec())
+                    pipeline.addLast("aggregator", HttpObjectAggregator(10 * 1024 * 1024))
+                    pipeline.addLast("outboundHandler", KNetOutboundHandler(context.channel(), outboundRequest))
+                }
+            })
+
+        clientBootstrap.connect(targetHost, targetPort).addListener { future ->
+            if (!future.isSuccess) {
+                KNetLogger.error(TAG, future.cause()) { "KNet Proxy Failed to connect to $targetHost:$targetPort" }
+                val errResponse = DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.BAD_GATEWAY)
+                context.writeAndFlush(errResponse)
+            }
+        }
+    }
+
+    override fun exceptionCaught(context: ChannelHandlerContext, cause: Throwable) {
+        KNetLogger.error(TAG, cause) { "KNet Proxy Exception: ${cause.message}" }
+        context.close()
+    }
+}
+
+/**
+ * Netty outbound client connection handler.
+ * Fires the request to the remote server, listens to the response, maps it, and writes it back to the client.
+ */
+class KNetOutboundHandler(
+    private val clientChannel: Channel,
+    private val request: FullHttpRequest
+) : SimpleChannelInboundHandler<FullHttpResponse>() {
+
+    override fun channelActive(context: ChannelHandlerContext) {
+        context.writeAndFlush(request)
+    }
+
+    override fun channelRead0(context: ChannelHandlerContext, msg: FullHttpResponse) {
+        // Map server netty response to common DTO model
+        val mappedResponse = HttpMapper.mapResponse(msg)
+        KNetLogger.info(TAG) { "KNet Proxy Response: ${mappedResponse.statusCode} ${mappedResponse.statusText}" }
+
+        // Write the response back to client and close outbound channel.
+        clientChannel.writeAndFlush(msg.retain()).addListener {
+            context.close()
+        }
+    }
+
+    override fun exceptionCaught(context: ChannelHandlerContext, cause: Throwable) {
+        KNetLogger.error(TAG, cause) { "KNet Outbound Exception: ${cause.message}" }
+        context.close()
+        clientChannel.close()
+    }
+}

@@ -1,0 +1,86 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "066da65f387f17b92fc86581213a354f",
+    "entities": [
+      {
+        "tableName": "HttpTransactionEntity",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `url` TEXT NOT NULL, `method` TEXT NOT NULL, `requestHeadersJson` TEXT NOT NULL, `requestBodyPath` TEXT, `responseStatusCode` INTEGER, `responseStatusText` TEXT, `responseHeadersJson` TEXT, `responseBodyPath` TEXT, `durationMs` INTEGER NOT NULL, `timestamp` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "url",
+            "columnName": "url",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "method",
+            "columnName": "method",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "requestHeadersJson",
+            "columnName": "requestHeadersJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "requestBodyPath",
+            "columnName": "requestBodyPath",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "responseStatusCode",
+            "columnName": "responseStatusCode",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "responseStatusText",
+            "columnName": "responseStatusText",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "responseHeadersJson",
+            "columnName": "responseHeadersJson",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "responseBodyPath",
+            "columnName": "responseBodyPath",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "durationMs",
+            "columnName": "durationMs",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '066da65f387f17b92fc86581213a354f')"
+    ]
+  }
+}
