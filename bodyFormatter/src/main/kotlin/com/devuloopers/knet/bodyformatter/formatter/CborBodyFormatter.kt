@@ -27,7 +27,7 @@ class CborBodyFormatter : BodyFormatter {
             val node = cborMapper.readTree(bytes)
             val prettyJson = jsonMapper.writeValueAsString(node)
             BodyFormat.Cbor(prettyJson)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // In case of parsing exception, fallback to raw text
             BodyFormat.RawText(bodyText)
         }

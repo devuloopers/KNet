@@ -32,7 +32,7 @@ class WebChannelStreamFormatter(
                 cleanedChunks.add(formattedFrame)
             }
 
-            val frames = if (cleanedChunks.isNotEmpty()) cleanedChunks else listOf(trimmed)
+            val frames = cleanedChunks.ifEmpty { listOf(trimmed) }
             return BodyFormat.JsonStream(frames)
         }
         return BodyFormat.JsonStream(if (trimmed.isEmpty()) emptyList() else listOf(trimmed))

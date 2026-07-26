@@ -14,8 +14,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.sp
-import com.devuloopers.knet.theme.KNetColors
-import java.util.ArrayDeque
+import java.util.*
 
 /**
  * Syntax highlighter strategy for CSS styles.
@@ -90,18 +89,19 @@ class CssLanguageHighlighter : CodeLanguageHighlighter {
                         // This is a selector block (e.g. .class-selector, #id-selector)
                         var i = 0
                         while (i < lineText.length) {
-                            val ch = lineText[i]
-                            when (ch) {
+                            when (val ch = lineText[i]) {
                                 '.', '#' -> {
                                     withStyle(SpanStyle(color = Color(0xFFDE935F), fontWeight = FontWeight.Bold)) {
                                         append(ch)
                                     }
                                 }
+
                                 '{', '}' -> {
                                     withStyle(SpanStyle(color = Color.White, fontWeight = FontWeight.Bold)) {
                                         append(ch)
                                     }
                                 }
+
                                 else -> {
                                     if (ch.isLetterOrDigit() || ch == '-' || ch == '_') {
                                         withStyle(SpanStyle(color = Color(0xFFCC6666))) {

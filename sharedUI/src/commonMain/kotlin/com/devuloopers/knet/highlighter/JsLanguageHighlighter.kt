@@ -14,7 +14,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.sp
-import com.devuloopers.knet.theme.KNetColors
 import java.util.ArrayDeque
 
 /**
@@ -72,8 +71,22 @@ class JsLanguageHighlighter : CodeLanguageHighlighter {
                         "true", "false", "null", "undefined", "async", "await", "try", "catch", "throw"
                     )
 
+                    fun appendToken(token: String) {
+                        if (token in keywords) {
+                            withStyle(SpanStyle(color = Color(0xFFDE935F), fontWeight = FontWeight.Bold)) {
+                                append(token)
+                            }
+                        } else if (token.toDoubleOrNull() != null) {
+                            withStyle(SpanStyle(color = Color(0xFF81A2BE))) {
+                                append(token)
+                            }
+                        } else {
+                            append(token)
+                        }
+                    }
+
                     var i = 0
-                    var tokenBuilder = StringBuilder()
+                    val tokenBuilder = StringBuilder()
 
                     while (i < lineText.length) {
                         val ch = lineText[i]
@@ -102,10 +115,8 @@ class JsLanguageHighlighter : CodeLanguageHighlighter {
 
                         // Strings
                         if (ch == '\'' || ch == '"' || ch == '`') {
-                            val quoteType = ch
                             val stringBuilder = StringBuilder().append(ch)
                             var escaped = false
-                            var stringEndIndex = -1
                             for (j in (i + 1) until lineText.length) {
                                 val cur = lineText[j]
                                 stringBuilder.append(cur)
@@ -113,8 +124,7 @@ class JsLanguageHighlighter : CodeLanguageHighlighter {
                                     escaped = false
                                 } else if (cur == '\\') {
                                     escaped = true
-                                } else if (cur == quoteType) {
-                                    stringEndIndex = j
+                                } else if (cur == ch) {
                                     break
                                 }
                             }
@@ -132,18 +142,7 @@ class JsLanguageHighlighter : CodeLanguageHighlighter {
                             if (tokenBuilder.isNotEmpty()) {
                                 val token = tokenBuilder.toString()
                                 tokenBuilder.setLength(0)
-
-                                if (token in keywords) {
-                                    withStyle(SpanStyle(color = Color(0xFFDE935F), fontWeight = FontWeight.Bold)) {
-                                        append(token)
-                                    }
-                                } else if (token.toDoubleOrNull() != null) {
-                                    withStyle(SpanStyle(color = Color(0xFF81A2BE))) {
-                                        append(token)
-                                    }
-                                } else {
-                                    append(token)
-                                }
+                                appendToken(token)
                             }
                             append(ch)
                         }
@@ -152,17 +151,7 @@ class JsLanguageHighlighter : CodeLanguageHighlighter {
 
                     if (tokenBuilder.isNotEmpty()) {
                         val token = tokenBuilder.toString()
-                        if (token in keywords) {
-                            withStyle(SpanStyle(color = Color(0xFFDE935F), fontWeight = FontWeight.Bold)) {
-                                append(token)
-                            }
-                        } else if (token.toDoubleOrNull() != null) {
-                            withStyle(SpanStyle(color = Color(0xFF81A2BE))) {
-                                append(token)
-                            }
-                        } else {
-                            append(token)
-                        }
+                        appendToken(token)
                     }
                 }
             }

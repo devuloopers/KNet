@@ -31,7 +31,7 @@ class ProtobufBinaryFormatter : BodyFormatter {
                     val message = DynamicMessage.parseFrom(descriptor, bytes)
                     val jsonString = JsonFormat.printer().print(message)
                     BodyFormat.Json(jsonString)
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     BodyFormat.Protobuf(bodyText)
                 }
             }

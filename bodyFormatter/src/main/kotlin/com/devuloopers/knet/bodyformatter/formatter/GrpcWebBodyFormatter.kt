@@ -4,8 +4,6 @@ import com.devuloopers.knet.bodyformatter.model.BodyFormat
 import com.devuloopers.knet.bodyformatter.model.GrpcWebFrame
 import com.google.protobuf.DynamicMessage
 import com.google.protobuf.util.JsonFormat
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.databind.SerializationFeature
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.util.Base64
@@ -18,7 +16,6 @@ class GrpcWebBodyFormatter(
     private val jsonFormatter: JsonBodyFormatter = JsonBodyFormatter()
 ) : BodyFormatter {
     override val priority: Int = 95
-    private val jsonMapper = ObjectMapper().enable(SerializationFeature.INDENT_OUTPUT)
 
     override fun matches(headers: Map<String, String>, bodyText: String): Boolean {
         val contentType = headers.entries.find { it.key.equals("content-type", ignoreCase = true) }?.value ?: ""

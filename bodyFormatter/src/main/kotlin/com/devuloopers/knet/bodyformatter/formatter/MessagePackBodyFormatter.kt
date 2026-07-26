@@ -27,7 +27,7 @@ class MessagePackBodyFormatter : BodyFormatter {
             val node = msgpackMapper.readTree(bytes)
             val prettyJson = jsonMapper.writeValueAsString(node)
             BodyFormat.Json(prettyJson)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             BodyFormat.RawText(bodyText)
         }
     }

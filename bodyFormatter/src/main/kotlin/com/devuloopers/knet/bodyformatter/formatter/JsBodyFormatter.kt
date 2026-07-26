@@ -112,25 +112,11 @@ class JsBodyFormatter : BodyFormatter {
             // Format JavaScript formatting boundaries
             when (ch) {
                 '{' -> {
-                    var temp = builder.toString().trimEnd()
-                    builder.clear().append(temp)
-                    builder.append(" {\n")
-                    indentLevel++
-                    builder.append("  ".repeat(indentLevel))
+                    indentLevel = builder.appendOpenBrace(indentLevel)
                 }
                 '}' -> {
-                    indentLevel = (indentLevel - 1).coerceAtLeast(0)
-                    if (builder.isNotEmpty() && builder.last() != '\n') {
-                        builder.append('\n')
-                    }
-                    var lastLineStart = builder.lastIndexOf("\n")
-                    if (lastLineStart >= 0) {
-                        val lastLine = builder.substring(lastLineStart + 1)
-                        if (lastLine.isBlank()) {
-                            builder.delete(lastLineStart + 1, builder.length)
-                        }
-                    }
-                    builder.append("  ".repeat(indentLevel)).append("}\n").append("  ".repeat(indentLevel))
+                    indentLevel = builder.appendCloseBrace(indentLevel, "\n")
+                    builder.append("  ".repeat(indentLevel))
                 }
                 ';' -> {
                     builder.append(";\n").append("  ".repeat(indentLevel))

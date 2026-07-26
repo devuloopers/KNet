@@ -56,27 +56,10 @@ class CssBodyFormatter : BodyFormatter {
             // Normal formatting
             when (ch) {
                 '{' -> {
-                    // Remove trailing whitespace before brace
-                    var temp = builder.toString().trimEnd()
-                    builder.clear().append(temp)
-                    builder.append(" {\n")
-                    indentLevel++
-                    builder.append("  ".repeat(indentLevel))
+                    indentLevel = builder.appendOpenBrace(indentLevel)
                 }
                 '}' -> {
-                    indentLevel = (indentLevel - 1).coerceAtLeast(0)
-                    if (builder.isNotEmpty() && builder.last() != '\n') {
-                        builder.append('\n')
-                    }
-                    // Trim trailing spaces from last line
-                    var lastLineStart = builder.lastIndexOf("\n")
-                    if (lastLineStart >= 0) {
-                        val lastLine = builder.substring(lastLineStart + 1)
-                        if (lastLine.isBlank()) {
-                            builder.delete(lastLineStart + 1, builder.length)
-                        }
-                    }
-                    builder.append("  ".repeat(indentLevel)).append("}\n\n")
+                    indentLevel = builder.appendCloseBrace(indentLevel, "\n\n")
                 }
                 ';' -> {
                     builder.append(";\n").append("  ".repeat(indentLevel))

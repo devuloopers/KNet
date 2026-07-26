@@ -2,10 +2,9 @@ package com.devuloopers.knet.bodyformatter.formatter
 
 import com.devuloopers.knet.bodyformatter.model.BodyFormat
 import com.fasterxml.jackson.core.JsonGenerator
-import com.fasterxml.jackson.databind.ObjectMapper
-import com.fasterxml.jackson.databind.SerializationFeature
-import com.fasterxml.jackson.core.util.DefaultPrettyPrinter
 import com.fasterxml.jackson.core.util.DefaultIndenter
+import com.fasterxml.jackson.core.util.DefaultPrettyPrinter
+import com.fasterxml.jackson.databind.ObjectMapper
 
 private class CustomPrettyPrinter : DefaultPrettyPrinter() {
     init {
@@ -106,25 +105,39 @@ class JsonBodyFormatter : BodyFormatter {
         var escaped = false
         for (ch in targetJson) {
             when {
-                escaped -> { sb.append(ch); escaped = false }
-                inString && ch == '\\' -> { sb.append(ch); escaped = true }
-                ch == '"' -> { inString = !inString; sb.append(ch) }
+                escaped -> {
+                    sb.append(ch); escaped = false
+                }
+
+                inString && ch == '\\' -> {
+                    sb.append(ch); escaped = true
+                }
+
+                ch == '"' -> {
+                    inString = !inString; sb.append(ch)
+                }
+
                 inString -> sb.append(ch)
                 ch == '{' || ch == '[' -> {
                     sb.append(ch); sb.append('\n'); indent++
                     repeat(indent) { sb.append("  ") }
                 }
+
                 ch == '}' || ch == ']' -> {
                     sb.append('\n'); indent--
                     repeat(indent) { sb.append("  ") }
                     sb.append(ch)
                 }
+
                 ch == ',' -> {
                     sb.append(ch); sb.append('\n')
                     repeat(indent) { sb.append("  ") }
                 }
+
                 ch == ':' -> sb.append(": ")
-                ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' -> { /* normalise */ }
+                ch == ' ' || ch == '\n' || ch == '\r' || ch == '\t' -> { /* normalise */
+                }
+
                 else -> sb.append(ch)
             }
         }
