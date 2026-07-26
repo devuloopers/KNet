@@ -12,6 +12,10 @@ sealed class BodyFormat {
     data class Image(val label: String) : BodyFormat()
     data class Html(val formattedText: String) : BodyFormat()
     data class Xml(val formattedText: String) : BodyFormat()
+    data class Cbor(val formattedText: String) : BodyFormat()
+    data class Js(val formattedText: String) : BodyFormat()
+    data class Css(val formattedText: String) : BodyFormat()
+    data class GrpcWeb(val frames: List<GrpcWebFrame>) : BodyFormat()
     data class RawText(val text: String) : BodyFormat()
 
     val badgeLabel: String
@@ -24,6 +28,17 @@ sealed class BodyFormat {
             is Image -> label
             is Html -> "HTML"
             is Xml -> "XML"
+            is Cbor -> "CBOR"
+            is Js -> "JS"
+            is Css -> "CSS"
+            is GrpcWeb -> "gRPC-Web"
             is RawText -> "PLAIN"
         }
 }
+
+data class GrpcWebFrame(
+    val isTrailer: Boolean,
+    val payloadHex: String,
+    val decodedJsonOrText: String
+)
+

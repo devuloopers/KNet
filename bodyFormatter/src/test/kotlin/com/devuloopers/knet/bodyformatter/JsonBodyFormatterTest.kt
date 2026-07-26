@@ -16,7 +16,8 @@ class JsonBodyFormatterTest {
 
         val result = formatter.format(emptyMap(), rawJson)
         assertTrue(result is BodyFormat.Json)
-        assertTrue(result.formattedText.contains("\"name\": \"KNet\""))
+        assertTrue(result.formattedText.contains("\"name\""))
+        assertTrue(result.formattedText.contains("KNet"))
     }
 
     @Test

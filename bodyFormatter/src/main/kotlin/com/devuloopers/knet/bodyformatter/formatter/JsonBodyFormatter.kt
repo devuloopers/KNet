@@ -1,17 +1,30 @@
 package com.devuloopers.knet.bodyformatter.formatter
 
 import com.devuloopers.knet.bodyformatter.model.BodyFormat
-import kotlinx.serialization.ExperimentalSerializationApi
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonElement
+import com.fasterxml.jackson.core.JsonGenerator
+import com.fasterxml.jackson.databind.ObjectMapper
+import com.fasterxml.jackson.databind.SerializationFeature
+import com.fasterxml.jackson.core.util.DefaultPrettyPrinter
+import com.fasterxml.jackson.core.util.DefaultIndenter
 
-@OptIn(ExperimentalSerializationApi::class)
-private val strictJsonSerializer = Json {
-    prettyPrint = true
-    prettyPrintIndent = "  "
-    isLenient = true
-    ignoreUnknownKeys = true
+private class CustomPrettyPrinter : DefaultPrettyPrinter() {
+    init {
+        indentObjectsWith(DefaultIndenter("  ", "\n"))
+        indentArraysWith(DefaultIndenter("  ", "\n"))
+    }
+
+    override fun writeObjectFieldValueSeparator(g: JsonGenerator) {
+        g.writeRaw(": ")
+    }
+
+    override fun createInstance(): CustomPrettyPrinter {
+        val instance = CustomPrettyPrinter()
+        return instance
+    }
 }
+
+private val printer = CustomPrettyPrinter()
+private val mapper = ObjectMapper().setDefaultPrettyPrinter(printer)
 
 /**
  * Strategy formatter for JSON objects, arrays, and Google XSSI security prefixed payloads.
@@ -72,8 +85,15 @@ class JsonBodyFormatter : BodyFormatter {
         val targetJson = trimmed.substring(startIndex, endIndex + 1)
 
         return try {
-            val jsonElement = strictJsonSerializer.parseToJsonElement(targetJson)
-            strictJsonSerializer.encodeToString(JsonElement.serializer(), jsonElement)
+            val jsonNode = mapper.readTree(targetJson)
+            mapper.writer(printer).writeValueAsString(jsonNode)
+                .replace("{\n}", "{}")
+                .replace("[\n]", "[]")
+                .replace("{\n  }", "{}")
+                .replace("[\n  ]", "[]")
+                .replace("{ }", "{}")
+                .replace("[ ]", "[]")
+                .trim()
         } catch (_: Exception) {
             formatCustomJsonFallback(targetJson)
         }

@@ -1,12 +1,10 @@
 package com.devuloopers.knet.bodyformatter.formatter
 
 import com.devuloopers.knet.bodyformatter.model.BodyFormat
-import java.io.StringReader
-import java.io.StringWriter
-import javax.xml.transform.OutputKeys
-import javax.xml.transform.TransformerFactory
-import javax.xml.transform.stream.StreamResult
-import javax.xml.transform.stream.StreamSource
+import com.fasterxml.jackson.databind.SerializationFeature
+import com.fasterxml.jackson.dataformat.xml.XmlMapper
+
+private val xmlMapper = XmlMapper().enable(SerializationFeature.INDENT_OUTPUT)
 
 /**
  * High-performance, fault-tolerant XML payload formatter.
@@ -41,21 +39,8 @@ class XmlBodyFormatter : BodyFormatter {
     }
 
     private fun formatXmlString(input: String): String {
-        val factory = TransformerFactory.newInstance()
-        try {
-            factory.setAttribute("indent-number", 2)
-        } catch (_: Exception) {
-            // Ignore if attribute not supported on specific JVM transformer providers
-        }
-
-        val transformer = factory.newTransformer()
-        transformer.setOutputProperty(OutputKeys.INDENT, "yes")
-        transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, if (input.startsWith("<?xml")) "no" else "yes")
-        transformer.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "2")
-
-        val writer = StringWriter()
-        transformer.transform(StreamSource(StringReader(input)), StreamResult(writer))
-        return writer.toString().trim()
+        val node = xmlMapper.readTree(input)
+        return xmlMapper.writeValueAsString(node).trim()
     }
 
     private fun formatXmlSoftFallback(input: String): String {

@@ -7,6 +7,12 @@ dependencies {
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.brotli.dec)
     implementation(libs.zstd.jni)
+    implementation(libs.jackson.databind)
+    implementation(libs.jackson.dataformat.xml)
+    implementation(libs.jackson.dataformat.cbor)
+    implementation(libs.jackson.dataformat.msgpack)
+    implementation(libs.protobuf.java)
+    implementation(libs.protobuf.java.util)
 
     testImplementation(kotlin("test"))
 }

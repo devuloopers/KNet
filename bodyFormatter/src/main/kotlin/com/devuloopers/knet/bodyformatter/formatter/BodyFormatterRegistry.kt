@@ -17,6 +17,11 @@ object BodyFormatterRegistry {
     private val imageFormatter = ImageBodyFormatter()
     private val htmlFormatter = HtmlBodyFormatter()
     private val xmlFormatter = XmlBodyFormatter()
+    private val cborFormatter = CborBodyFormatter()
+    private val msgpackFormatter = MessagePackBodyFormatter()
+    private val jsFormatter = JsBodyFormatter()
+    private val cssFormatter = CssBodyFormatter()
+    private val grpcWebFormatter = GrpcWebBodyFormatter(jsonFormatter)
     private val plainTextFormatter = PlainTextBodyFormatter()
 
     private val formatters: List<BodyFormatter> = listOf(
@@ -27,6 +32,11 @@ object BodyFormatterRegistry {
         jsonFormatter,
         formDataFormatter,
         xmlFormatter,
+        cborFormatter,
+        msgpackFormatter,
+        jsFormatter,
+        cssFormatter,
+        grpcWebFormatter,
         htmlFormatter,
         plainTextFormatter
     ).sortedByDescending { it.priority }
@@ -45,11 +55,16 @@ object BodyFormatterRegistry {
             mime.startsWith("image/") -> return imageFormatter.format(headers, trimmed)
             mime.contains("x-www-form-urlencoded") -> return formDataFormatter.format(headers, trimmed)
             mime.contains("event-stream") -> return sseFormatter.format(headers, trimmed)
+            mime.contains("grpc-web") || mime.contains("grpc-web-text") -> return grpcWebFormatter.format(headers, trimmed)
             mime.contains("grpc") || mime.contains("channel") -> return webChannelFormatter.format(headers, trimmed)
             mime.contains("proto") -> return protobufFormatter.format(headers, trimmed)
             mime.contains("json") -> return jsonFormatter.format(headers, trimmed)
+            mime.contains("cbor") -> return cborFormatter.format(headers, trimmed)
+            mime.contains("msgpack") || mime.contains("messagepack") -> return msgpackFormatter.format(headers, trimmed)
             mime.contains("xml") -> return xmlFormatter.format(headers, trimmed)
             mime.contains("html") -> return htmlFormatter.format(headers, trimmed)
+            mime.contains("javascript") -> return jsFormatter.format(headers, trimmed)
+            mime.contains("css") -> return cssFormatter.format(headers, trimmed)
         }
 
         if (trimmed.isEmpty()) return BodyFormat.RawText("")
@@ -72,6 +87,15 @@ object BodyFormatterRegistry {
             is BodyFormat.Image -> format.label
             is BodyFormat.Html -> format.formattedText
             is BodyFormat.Xml -> format.formattedText
+            is BodyFormat.Cbor -> format.formattedText
+            is BodyFormat.Js -> format.formattedText
+            is BodyFormat.Css -> format.formattedText
+            is BodyFormat.GrpcWeb -> {
+                format.frames.joinToString("\n\n") { frame ->
+                    val type = if (frame.isTrailer) "=== gRPC-Web Trailer ===" else "=== gRPC-Web Data Frame ==="
+                    "$type\n${frame.decodedJsonOrText}"
+                }
+            }
             is BodyFormat.RawText -> format.text
         }
     }

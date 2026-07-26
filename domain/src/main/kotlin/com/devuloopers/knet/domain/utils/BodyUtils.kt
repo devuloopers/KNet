@@ -177,6 +177,10 @@ fun detectContentType(headers: Map<String, String>, bodyText: String): BodyConte
         is BodyFormat.Image -> BodyContentType.IMAGE
         is BodyFormat.Html -> BodyContentType.HTML
         is BodyFormat.Xml -> BodyContentType.XML
+        is BodyFormat.Cbor -> BodyContentType.JSON
+        is BodyFormat.Js -> BodyContentType.JS
+        is BodyFormat.Css -> BodyContentType.CSS
+        is BodyFormat.GrpcWeb -> BodyContentType.PLAIN_TEXT
         is BodyFormat.RawText -> {
             if (mime.contains("protobuf") || mime.contains("proto")) BodyContentType.PROTOBUF
             else if (mime.startsWith("image/")) BodyContentType.IMAGE

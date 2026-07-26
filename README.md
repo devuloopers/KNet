@@ -157,13 +157,13 @@ KNet is strictly architected into 11 decoupled Gradle modules following **Clean 
 | **Server-Sent Events** | `text/event-stream` | `SseStreamFormatter` | SSE Frame Streaming | `[DONE]` |
 | **WebChannel** | `application/json+webchannel` | `WebChannelStreamFormatter` | WebChannel Frame Streaming | `[DONE]` |
 | **Images** | `image/png`, `image/jpeg`, `image/webp`, `image/gif` | `ImageBodyFormatter` | Image Preview Canvas | `[DONE]` |
-| **Protobuf** | `application/x-protobuf`, `application/grpc` | `ProtobufBinaryFormatter` | Proto Frame Viewer | `[DONE]` |
+| **Protobuf** | `application/x-protobuf`, `application/x-google-protobuf` | `ProtobufBinaryFormatter` | Decoded JSON Tree / Raw Hex | `[DONE]` |
 | **Plain Text** | `text/plain` | `PlainTextBodyFormatter` | `PlainTextLanguageHighlighter` | `[DONE]` |
-| **JavaScript** | `application/javascript`, `text/javascript` | Uses `PlainTextBodyFormatter` | `PlainTextLanguageHighlighter` | `[PENDING]` |
-| **CSS** | `text/css` | Uses `PlainTextBodyFormatter` | `PlainTextLanguageHighlighter` | `[PENDING]` |
-| **CBOR** | `application/cbor` | Pending `CborBodyFormatter` | Pending `CborViewer` | `[PENDING]` |
-| **MessagePack** | `application/x-msgpack` | Pending `MessagePackBodyFormatter` | Pending `MessagePackViewer` | `[PENDING]` |
-| **gRPC-Web** | `application/grpc-web`, `application/grpc-web+proto` | Pending `GrpcWebBodyFormatter` | Pending `GrpcWebViewer` | `[PENDING]` |
+| **JavaScript** | `application/javascript`, `text/javascript` | `JsBodyFormatter` | `JsLanguageHighlighter` | `[DONE]` |
+| **CSS** | `text/css` | `CssBodyFormatter` | `CssLanguageHighlighter` | `[DONE]` |
+| **CBOR** | `application/cbor` | `CborBodyFormatter` | Json/Code Viewer | `[DONE]` |
+| **MessagePack** | `application/x-msgpack` | `MessagePackBodyFormatter` | Json/Code Viewer | `[DONE]` |
+| **gRPC-Web** | `application/grpc-web`, `application/grpc-web+proto`, `application/grpc-web+json`, `application/grpc-web-text`, `application/grpc-web-text+proto`, `application/grpc-web-text+json` | `GrpcWebBodyFormatter` | Decoded JSON Tree / Raw Hex | `[DONE]` |
 
 ---
 

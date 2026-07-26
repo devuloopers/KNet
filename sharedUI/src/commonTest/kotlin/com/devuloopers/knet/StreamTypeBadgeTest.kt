@@ -204,7 +204,7 @@ class StreamTypeBadgeTest {
             resBody = rawSearchSuggestBody
         )
 
-        assertEquals("JSON", tx.responseContentTypeBadge)
+        assertEquals("JS", tx.responseContentTypeBadge)
 
         val formatted = prettyPrintBody(rawSearchSuggestBody)
         assertTrue(formatted.startsWith("["))

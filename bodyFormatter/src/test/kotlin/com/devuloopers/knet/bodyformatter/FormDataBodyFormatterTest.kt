@@ -21,4 +21,34 @@ class FormDataBodyFormatterTest {
         assertEquals("code" to "xyz 123", result.pairs[1])
         assertEquals("client_id" to "knet_app", result.pairs[2])
     }
+
+    @Test
+    fun testMultipartFormDataParsing() {
+        val rawMultipart = """
+            --boundary123
+            Content-Disposition: form-data; name="field1"
+            
+            value1
+            --boundary123
+            Content-Disposition: form-data; name="file"; filename="avatar.png"
+            Content-Type: image/png
+            
+            binary-data
+            --boundary123--
+        """.trimIndent()
+
+        assertTrue(
+            formatter.matches(
+                mapOf("content-type" to "multipart/form-data; boundary=boundary123"),
+                rawMultipart
+            )
+        )
+
+        val result =
+            formatter.format(mapOf("content-type" to "multipart/form-data; boundary=boundary123"), rawMultipart)
+        assertTrue(result is BodyFormat.FormData)
+        assertEquals(2, result.pairs.size)
+        assertEquals("field1" to "value1", result.pairs[0])
+        assertEquals("file [avatar.png]" to "binary-data", result.pairs[1])
+    }
 }
