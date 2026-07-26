@@ -80,11 +80,7 @@ class GetTransactionDetailUseCase(
             queryParams = uriDetails.queryParams,
             requestHeaders = tx.request.headers.toMap(),
             responseHeaders = tx.response?.headers?.toMap() ?: emptyMap(),
-            timingDnsMs = 2,
-            timingTcpMs = (durationMs * 0.2).toLong().coerceAtLeast(1),
-            timingTlsMs = (durationMs * 0.3).toLong().coerceAtLeast(1),
-            timingTtfbMs = (durationMs * 0.3).toLong().coerceAtLeast(1),
-            timingDownloadMs = (durationMs * 0.2).toLong().coerceAtLeast(1)
+            timings = tx.timings
         )
     }
 }

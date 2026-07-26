@@ -18,5 +18,6 @@ data class HttpTransaction(
     val requestBodyPath: String?,
     val responseBodyPath: String?,
     val durationMs: Long,
-    val timestamp: Long
+    val timestamp: Long,
+    val timings: HttpTimings = HttpTimings()
 )

@@ -10,6 +10,8 @@ sealed class BodyFormat {
     data class SseStream(val events: List<String>) : BodyFormat()
     data class Protobuf(val descriptor: String) : BodyFormat()
     data class Image(val label: String) : BodyFormat()
+    data class Html(val formattedText: String) : BodyFormat()
+    data class Xml(val formattedText: String) : BodyFormat()
     data class RawText(val text: String) : BodyFormat()
 
     val badgeLabel: String
@@ -20,6 +22,8 @@ sealed class BodyFormat {
             is SseStream -> "SSE Stream"
             is Protobuf -> "Protobuf"
             is Image -> label
+            is Html -> "HTML"
+            is Xml -> "XML"
             is RawText -> "PLAIN"
         }
 }

@@ -106,9 +106,19 @@ class KNetCoreRepository private constructor(
                 }
             }
 
-            override fun onResponseCaptured(transactionId: String, response: HttpResponse, durationMs: Long) {
+            override fun onResponseCaptured(
+                transactionId: String,
+                response: HttpResponse,
+                durationMs: Long,
+                timings: com.devuloopers.knet.model.HttpTimings
+            ) {
                 scope.launch {
-                    session.recordResponse(transactionId, response, durationMs)
+                    session.recordResponse(
+                        transactionId = transactionId,
+                        response = response,
+                        durationMs = durationMs,
+                        timings = timings
+                    )
                 }
             }
         }

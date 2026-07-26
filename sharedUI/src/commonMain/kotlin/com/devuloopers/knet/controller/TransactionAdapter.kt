@@ -43,14 +43,6 @@ fun HttpTransaction.toUiModel(sequentialId: Int): TransactionUiModel {
     val reqBodyText = decodeBodyToText(request.body, request.headers)
     val resBodyText = decodeBodyToText(response?.body, response?.headers ?: emptyList())
 
-    // 6. Map timing benchmarks
-    val dns = 4L
-    val tcp = 8L
-    val tls = 12L
-    val remaining = (durationMs - (dns + tcp + tls)).coerceAtLeast(0L)
-    val ttfb = (remaining * 0.7).toLong()
-    val download = (remaining * 0.3).toLong()
-
     val scheme = try {
         URI(request.url).scheme ?: "https"
     } catch (_: Exception) {
@@ -74,10 +66,6 @@ fun HttpTransaction.toUiModel(sequentialId: Int): TransactionUiModel {
         queryParams = queryParams,
         requestHeaders = reqHeadersMap,
         responseHeaders = resHeadersMap,
-        timingDnsMs = dns,
-        timingTcpMs = tcp,
-        timingTlsMs = tls,
-        timingTtfbMs = ttfb,
-        timingDownloadMs = download
+        timings = timings
     )
 }

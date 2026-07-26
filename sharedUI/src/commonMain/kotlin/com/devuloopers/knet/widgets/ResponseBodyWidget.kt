@@ -72,6 +72,13 @@ fun ResponseBodyWidget(
         prettyPrintBody(transaction.responseBody)
     }
 
+    val resolvedFormat = remember(transaction.responseHeaders, transaction.responseBody) {
+        com.devuloopers.knet.bodyformatter.formatter.BodyFormatterRegistry.resolveFormat(
+            transaction.responseHeaders,
+            transaction.responseBody
+        )
+    }
+
     SubFrame(
         headerContent = {
             // Header Bar: Content-Type badge + Search Input Box + Copy Raw Body Button
@@ -116,18 +123,28 @@ fun ResponseBodyWidget(
                         androidx.compose.foundation.text.BasicTextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
+                            singleLine = true,
                             textStyle = androidx.compose.ui.text.TextStyle(
                                 color = Color.White,
                                 fontSize = 10.sp,
-                                fontFamily = FontFamily.Monospace
+                                fontFamily = FontFamily.Monospace,
+                                lineHeight = 14.sp
                             ),
                             cursorBrush = androidx.compose.ui.graphics.SolidColor(KNetColors.ActiveBlue),
                             modifier = Modifier.weight(1f),
                             decorationBox = { innerTextField ->
-                                if (searchQuery.isEmpty()) {
-                                    Text(text = "Search response body...", color = KNetColors.TextSecondary, fontSize = 10.sp)
+                                Box(contentAlignment = Alignment.CenterStart) {
+                                    if (searchQuery.isEmpty()) {
+                                        Text(
+                                            text = "Search response body...",
+                                            color = KNetColors.TextSecondary,
+                                            fontSize = 10.sp,
+                                            fontFamily = FontFamily.Monospace,
+                                            lineHeight = 14.sp
+                                        )
+                                    }
+                                    innerTextField()
                                 }
-                                innerTextField()
                             }
                         )
                     }
@@ -146,6 +163,7 @@ fun ResponseBodyWidget(
         Column(modifier = Modifier.fillMaxSize()) {
             CodeViewerWidget(
                 codeText = prettyBody,
+                bodyFormat = resolvedFormat,
                 searchQuery = searchQuery,
                 modifier = Modifier.weight(1f)
             )
@@ -153,6 +171,30 @@ fun ResponseBodyWidget(
             Spacer(modifier = Modifier.height(6.dp))
 
             // Footer status info
+            val formatLabel = resolvedFormat.badgeLabel
+            val charset = remember(transaction.responseHeaders) {
+                val contentType = transaction.responseHeaders.entries.find { it.key.equals("content-type", ignoreCase = true) }?.value ?: ""
+                if (contentType.contains("charset=", ignoreCase = true)) {
+                    contentType.substringAfter("charset=", "").substringBefore(";").trim().uppercase()
+                } else "UTF-8"
+            }
+            val lineEnding = remember(transaction.responseBody) {
+                if (transaction.responseBody.contains("\r\n")) "CRLF" else "LF"
+            }
+            val bodySize = remember(transaction.responseBody) {
+                val bytes = transaction.responseBody.encodeToByteArray().size
+                when {
+                    bytes < 1024 -> "Res: $bytes B"
+                    bytes < 1024 * 1024 -> "Res: %.2f KB".format(bytes / 1024.0)
+                    else -> "Res: %.2f MB".format(bytes / (1024.0 * 1024.0))
+                }
+            }
+            val statusColor = when (transaction.status) {
+                in 200..299 -> KNetColors.SuccessGreen
+                in 300..399 -> KNetColors.ActiveBlue
+                else -> Color(0xFFFF6B6B)
+            }
+
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -163,12 +205,12 @@ fun ResponseBodyWidget(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text(text = "JSON", color = KNetColors.TextSecondary, fontSize = 10.sp, fontFamily = FontFamily.Monospace, maxLines = 1, softWrap = false)
-                    Text(text = "UTF-8", color = KNetColors.TextSecondary, fontSize = 10.sp, fontFamily = FontFamily.Monospace, maxLines = 1, softWrap = false)
-                    Text(text = "LF", color = KNetColors.TextSecondary, fontSize = 10.sp, fontFamily = FontFamily.Monospace, maxLines = 1, softWrap = false)
-                    Text(text = "1.12 KB", color = KNetColors.TextSecondary, fontSize = 10.sp, fontFamily = FontFamily.Monospace, maxLines = 1, softWrap = false)
-                    Text(text = "200 OK", color = KNetColors.SuccessGreen, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, maxLines = 1, softWrap = false)
-                    Text(text = "83 ms", color = KNetColors.TextSecondary, fontSize = 10.sp, fontFamily = FontFamily.Monospace, maxLines = 1, softWrap = false)
+                    Text(text = formatLabel, color = KNetColors.TextSecondary, fontSize = 10.sp, fontFamily = FontFamily.Monospace, maxLines = 1, softWrap = false)
+                    Text(text = charset, color = KNetColors.TextSecondary, fontSize = 10.sp, fontFamily = FontFamily.Monospace, maxLines = 1, softWrap = false)
+                    Text(text = lineEnding, color = KNetColors.TextSecondary, fontSize = 10.sp, fontFamily = FontFamily.Monospace, maxLines = 1, softWrap = false)
+                    Text(text = bodySize, color = KNetColors.TextSecondary, fontSize = 10.sp, fontFamily = FontFamily.Monospace, maxLines = 1, softWrap = false)
+                    Text(text = "${transaction.status} ${transaction.statusText}".trim(), color = statusColor, fontSize = 10.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace, maxLines = 1, softWrap = false)
+                    Text(text = transaction.time, color = KNetColors.TextSecondary, fontSize = 10.sp, fontFamily = FontFamily.Monospace, maxLines = 1, softWrap = false)
                 }
             }
         }

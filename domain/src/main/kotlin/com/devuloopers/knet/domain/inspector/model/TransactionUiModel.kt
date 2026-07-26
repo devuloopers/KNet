@@ -1,6 +1,7 @@
 package com.devuloopers.knet.domain.inspector.model
 
 import com.devuloopers.knet.domain.utils.detectContentTypeLabel
+import com.devuloopers.knet.model.HttpTimings
 
 /**
  * Represents an HTTP transaction UI presentation model captured by KNet.
@@ -20,15 +21,18 @@ data class TransactionUiModel(
     val queryParams: Map<String, Any>,
     val requestHeaders: Map<String, String>,
     val responseHeaders: Map<String, String>,
-    val timingDnsMs: Long,
-    val timingTcpMs: Long,
-    val timingTlsMs: Long,
-    val timingTtfbMs: Long,
-    val timingDownloadMs: Long
+    val timings: HttpTimings = HttpTimings()
 ) {
+    /** High-resolution timing phase shortcuts. */
+    val timingDnsMs: Long get() = timings.dnsMs
+    val timingTcpMs: Long get() = timings.tcpMs
+    val timingTlsMs: Long get() = timings.tlsMs
+    val timingTtfbMs: Long get() = timings.ttfbMs
+    val timingDownloadMs: Long get() = timings.downloadMs
+
     /** The total execution duration of the transaction in milliseconds. */
     val totalTimeMs: Long
-        get() = timingDnsMs + timingTcpMs + timingTlsMs + timingTtfbMs + timingDownloadMs
+        get() = timings.totalTimeMs
 }
 
 /** Human-readable content type badge label for request payloads. */

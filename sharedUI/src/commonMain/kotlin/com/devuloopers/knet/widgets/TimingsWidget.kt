@@ -64,11 +64,11 @@ fun TimingsWidget(
         data class TimingSegment(val label: String, val ms: Long, val color: Color)
 
         val segments = listOf(
-            TimingSegment("DNS",      transaction.timingDnsMs,      Color(0xFF4FC3F7)),
-            TimingSegment("TCP",      transaction.timingTcpMs,      Color(0xFF81C784)),
-            TimingSegment("TLS",      transaction.timingTlsMs,      Color(0xFFFFB74D)),
-            TimingSegment("TTFB",     transaction.timingTtfbMs,     Color(0xFFBA68C8)),
-            TimingSegment("Download", transaction.timingDownloadMs,  Color(0xFF4DB6AC)),
+            TimingSegment("DNS",      transaction.timings.dnsMs,      Color(0xFF4FC3F7)),
+            TimingSegment("TCP",      transaction.timings.tcpMs,      Color(0xFF81C784)),
+            TimingSegment("TLS",      transaction.timings.tlsMs,      Color(0xFFFFB74D)),
+            TimingSegment("TTFB",     transaction.timings.ttfbMs,     Color(0xFFBA68C8)),
+            TimingSegment("Download", transaction.timings.downloadMs,  Color(0xFF4DB6AC)),
         )
 
         segments.forEach { segment ->

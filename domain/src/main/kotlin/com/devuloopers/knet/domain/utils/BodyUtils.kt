@@ -175,6 +175,8 @@ fun detectContentType(headers: Map<String, String>, bodyText: String): BodyConte
         is BodyFormat.SseStream -> BodyContentType.SSE_STREAM
         is BodyFormat.Protobuf -> BodyContentType.PROTOBUF
         is BodyFormat.Image -> BodyContentType.IMAGE
+        is BodyFormat.Html -> BodyContentType.HTML
+        is BodyFormat.Xml -> BodyContentType.XML
         is BodyFormat.RawText -> {
             if (mime.contains("protobuf") || mime.contains("proto")) BodyContentType.PROTOBUF
             else if (mime.startsWith("image/")) BodyContentType.IMAGE

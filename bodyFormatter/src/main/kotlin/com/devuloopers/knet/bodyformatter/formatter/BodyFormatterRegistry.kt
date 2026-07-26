@@ -15,6 +15,8 @@ object BodyFormatterRegistry {
     private val formDataFormatter = FormDataBodyFormatter()
     private val protobufFormatter = ProtobufBinaryFormatter()
     private val imageFormatter = ImageBodyFormatter()
+    private val htmlFormatter = HtmlBodyFormatter()
+    private val xmlFormatter = XmlBodyFormatter()
     private val plainTextFormatter = PlainTextBodyFormatter()
 
     private val formatters: List<BodyFormatter> = listOf(
@@ -24,6 +26,8 @@ object BodyFormatterRegistry {
         sseFormatter,
         jsonFormatter,
         formDataFormatter,
+        xmlFormatter,
+        htmlFormatter,
         plainTextFormatter
     ).sortedByDescending { it.priority }
 
@@ -44,6 +48,8 @@ object BodyFormatterRegistry {
             mime.contains("grpc") || mime.contains("channel") -> return webChannelFormatter.format(headers, trimmed)
             mime.contains("proto") -> return protobufFormatter.format(headers, trimmed)
             mime.contains("json") -> return jsonFormatter.format(headers, trimmed)
+            mime.contains("xml") -> return xmlFormatter.format(headers, trimmed)
+            mime.contains("html") -> return htmlFormatter.format(headers, trimmed)
         }
 
         if (trimmed.isEmpty()) return BodyFormat.RawText("")
@@ -64,6 +70,8 @@ object BodyFormatterRegistry {
             is BodyFormat.SseStream -> format.events.joinToString("\n")
             is BodyFormat.Protobuf -> format.descriptor
             is BodyFormat.Image -> format.label
+            is BodyFormat.Html -> format.formattedText
+            is BodyFormat.Xml -> format.formattedText
             is BodyFormat.RawText -> format.text
         }
     }

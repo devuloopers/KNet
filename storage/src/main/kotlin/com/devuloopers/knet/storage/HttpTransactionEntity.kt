@@ -31,5 +31,10 @@ data class HttpTransactionEntity(
     val responseHeadersJson: String?,
     val responseBodyPath: String?,
     val durationMs: Long,
-    val timestamp: Long
+    val timestamp: Long,
+    val timingDnsMs: Long = 0L,
+    val timingTcpMs: Long = 0L,
+    val timingTlsMs: Long = 0L,
+    val timingTtfbMs: Long = 0L,
+    val timingDownloadMs: Long = 0L
 )

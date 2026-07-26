@@ -91,6 +91,14 @@ object HttpTransactionMapper {
             null
         }
 
+        val timings = com.devuloopers.knet.model.HttpTimings(
+            dnsMs = entity.timingDnsMs,
+            tcpMs = entity.timingTcpMs,
+            tlsMs = entity.timingTlsMs,
+            ttfbMs = entity.timingTtfbMs,
+            downloadMs = entity.timingDownloadMs
+        )
+
         return HttpTransaction(
             id = entity.id,
             request = request,
@@ -98,7 +106,8 @@ object HttpTransactionMapper {
             requestBodyPath = entity.requestBodyPath,
             responseBodyPath = entity.responseBodyPath,
             durationMs = entity.durationMs,
-            timestamp = entity.timestamp
+            timestamp = entity.timestamp,
+            timings = timings
         )
     }
 }

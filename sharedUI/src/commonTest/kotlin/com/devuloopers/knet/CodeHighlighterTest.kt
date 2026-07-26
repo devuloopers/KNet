@@ -1,0 +1,62 @@
+package com.devuloopers.knet
+
+import com.devuloopers.knet.bodyformatter.model.BodyFormat
+import com.devuloopers.knet.highlighter.CodeHighlighterRegistry
+import com.devuloopers.knet.highlighter.HtmlLanguageHighlighter
+import com.devuloopers.knet.highlighter.JsonLanguageHighlighter
+import com.devuloopers.knet.highlighter.PlainTextLanguageHighlighter
+import com.devuloopers.knet.highlighter.XmlLanguageHighlighter
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+
+class CodeHighlighterTest {
+
+    @Test
+    fun testCodeHighlighterRegistryResolution() {
+        val jsonStrategy = CodeHighlighterRegistry.resolve(BodyFormat.Json("{}"))
+        assertTrue(jsonStrategy is JsonLanguageHighlighter, "JSON format must resolve JsonLanguageHighlighter")
+
+        val htmlStrategy = CodeHighlighterRegistry.resolve(BodyFormat.Html("<html></html>"))
+        assertTrue(htmlStrategy is HtmlLanguageHighlighter, "HTML format must resolve HtmlLanguageHighlighter")
+
+        val xmlStrategy = CodeHighlighterRegistry.resolve(BodyFormat.Xml("<xml></xml>"))
+        assertTrue(xmlStrategy is XmlLanguageHighlighter, "XML format must resolve XmlLanguageHighlighter")
+
+        val plainStrategy = CodeHighlighterRegistry.resolve(BodyFormat.RawText("plain text"))
+        assertTrue(plainStrategy is PlainTextLanguageHighlighter, "RawText format must resolve PlainTextLanguageHighlighter")
+    }
+
+    @Test
+    fun testJsonLanguageHighlighterFolding() {
+        val strategy = JsonLanguageHighlighter()
+        val lines = listOf(
+            "{",
+            "  \"key\": \"value\"",
+            "}"
+        )
+        val foldRanges = strategy.calculateFoldRanges(lines)
+        assertEquals(1, foldRanges.size)
+        assertEquals(2, foldRanges[0])
+    }
+
+    @Test
+    fun testHtmlLanguageHighlighterTagFolding() {
+        val strategy = HtmlLanguageHighlighter()
+        val lines = listOf(
+            "<HTML>",
+            "  <HEAD>",
+            "    <meta charset=\"utf-8\">",
+            "  </HEAD>",
+            "  <BODY>",
+            "    <H1>Title</H1>",
+            "  </BODY>",
+            "</HTML>"
+        )
+        val foldRanges = strategy.calculateFoldRanges(lines)
+        assertEquals(3, foldRanges.size)
+        assertEquals(7, foldRanges[0], "Root <HTML> tag must fold to line 7 </HTML>")
+        assertEquals(3, foldRanges[1], "<HEAD> tag must fold to line 3 </HEAD>")
+        assertEquals(6, foldRanges[4], "<BODY> tag must fold to line 6 </BODY>")
+    }
+}

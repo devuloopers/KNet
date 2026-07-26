@@ -47,12 +47,13 @@ class GetLiveTrafficUseCase(
                 if (filtered.isEmpty()) {
                     LiveTrafficUiState.Empty(filter, searchQuery)
                 } else {
-                    // Map chronological ID: 1 for oldest, N for newest
-                    val mappedItems = filtered.mapIndexed { index, tx ->
-                        mapToUiState(index + 1, tx, selectedId)
+                    val totalCount = filtered.size
+                    // List is chronologically descending (index 0 = newest transaction).
+                    // Newest transaction gets sequentialId = totalCount (#N at top), oldest gets #1.
+                    val displayedItems = filtered.mapIndexed { index, tx ->
+                        val sequentialId = totalCount - index
+                        mapToUiState(sequentialId, tx, selectedId)
                     }
-                    // Reverse list for display so newest (#N) is at top down to oldest (#1) at bottom
-                    val displayedItems = mappedItems.reversed()
                     val selectedItem = displayedItems.find { it.transactionId == selectedId }
                     LiveTrafficUiState.Success(
                         items = displayedItems,
@@ -132,6 +133,7 @@ class GetLiveTrafficUseCase(
             queryParams = uriDetails.queryParams,
             requestHeaders = tx.request.headers.toMap(),
             responseHeaders = tx.response?.headers?.toMap() ?: emptyMap(),
+            timings = tx.timings,
             isSelected = tx.id == selectedId
         )
     }

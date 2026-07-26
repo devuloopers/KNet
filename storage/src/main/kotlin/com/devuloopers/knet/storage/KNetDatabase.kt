@@ -4,12 +4,13 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import androidx.sqlite.execSQL
 import java.io.File
 
 /**
  * Main database definition for KNet traffic inspection metadata.
  */
-@Database(entities = [HttpTransactionEntity::class], version = 1)
+@Database(entities = [HttpTransactionEntity::class], version = 2)
 abstract class KNetDatabase : RoomDatabase() {
 
     /**
@@ -18,6 +19,19 @@ abstract class KNetDatabase : RoomDatabase() {
     abstract fun httpTransactionDao(): HttpTransactionDao
 
     companion object {
+        /**
+         * Room Migration from v1 to v2 adding high-resolution socket timing columns.
+         */
+        val MIGRATION_1_2 = object : androidx.room.migration.Migration(1, 2) {
+            override fun migrate(connection: androidx.sqlite.SQLiteConnection) {
+                connection.execSQL("ALTER TABLE HttpTransactionEntity ADD COLUMN timingDnsMs INTEGER NOT NULL DEFAULT 0")
+                connection.execSQL("ALTER TABLE HttpTransactionEntity ADD COLUMN timingTcpMs INTEGER NOT NULL DEFAULT 0")
+                connection.execSQL("ALTER TABLE HttpTransactionEntity ADD COLUMN timingTlsMs INTEGER NOT NULL DEFAULT 0")
+                connection.execSQL("ALTER TABLE HttpTransactionEntity ADD COLUMN timingTtfbMs INTEGER NOT NULL DEFAULT 0")
+                connection.execSQL("ALTER TABLE HttpTransactionEntity ADD COLUMN timingDownloadMs INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
         /**
          * Creates and configures a [KNetDatabase] instance using the Bundled SQLite Driver.
          *
@@ -30,6 +44,8 @@ abstract class KNetDatabase : RoomDatabase() {
                 factory = { KNetDatabase_Impl() }
             )
             builder.setDriver(BundledSQLiteDriver())
+            builder.addMigrations(MIGRATION_1_2)
+            builder.fallbackToDestructiveMigration(dropAllTables = true)
             return builder.build()
         }
     }

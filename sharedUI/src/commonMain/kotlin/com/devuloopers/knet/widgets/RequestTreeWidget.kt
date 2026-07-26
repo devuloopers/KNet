@@ -108,18 +108,28 @@ fun RequestTreeWidget(
                         androidx.compose.foundation.text.BasicTextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
+                            singleLine = true,
                             textStyle = androidx.compose.ui.text.TextStyle(
                                 color = Color.White,
                                 fontSize = 10.sp,
-                                fontFamily = FontFamily.Monospace
+                                fontFamily = FontFamily.Monospace,
+                                lineHeight = 14.sp
                             ),
                             cursorBrush = androidx.compose.ui.graphics.SolidColor(KNetColors.ActiveBlue),
                             modifier = Modifier.weight(1f),
                             decorationBox = { innerTextField ->
-                                if (searchQuery.isEmpty()) {
-                                    Text(text = "Search parameters...", color = KNetColors.TextSecondary, fontSize = 10.sp)
+                                Box(contentAlignment = Alignment.CenterStart) {
+                                    if (searchQuery.isEmpty()) {
+                                        Text(
+                                            text = "Search parameters...",
+                                            color = KNetColors.TextSecondary,
+                                            fontSize = 10.sp,
+                                            fontFamily = FontFamily.Monospace,
+                                            lineHeight = 14.sp
+                                        )
+                                    }
+                                    innerTextField()
                                 }
-                                innerTextField()
                             }
                         )
                     }

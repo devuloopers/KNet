@@ -77,11 +77,7 @@ fun App(controller: com.devuloopers.knet.controller.ProxyStateController) {
                         queryParams = item.queryParams,
                         requestHeaders = item.requestHeaders,
                         responseHeaders = item.responseHeaders,
-                        timingDnsMs = 0L,
-                        timingTcpMs = 0L,
-                        timingTlsMs = 0L,
-                        timingTtfbMs = 0L,
-                        timingDownloadMs = 0L
+                        timings = item.timings
                     )
                 }
 

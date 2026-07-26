@@ -41,11 +41,7 @@ class StreamTypeBadgeTest {
             queryParams = emptyMap(),
             requestHeaders = reqHeaders,
             responseHeaders = resHeaders,
-            timingDnsMs = 0L,
-            timingTcpMs = 0L,
-            timingTlsMs = 0L,
-            timingTtfbMs = 0L,
-            timingDownloadMs = 0L
+            timings = com.devuloopers.knet.model.HttpTimings()
         )
     }
 

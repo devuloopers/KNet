@@ -107,15 +107,21 @@ fun TransactionOverviewWidget(
                 )
                 Spacer(modifier = Modifier.width(10.dp))
                 // Status Badge
+                // Status Badge
+                val statusColor = when (transaction.status) {
+                    in 200..299 -> KNetColors.SuccessGreen
+                    in 300..399 -> KNetColors.ActiveBlue
+                    else -> KNetColors.ErrorRed
+                }
                 Box(
                     modifier = Modifier
-                        .background(KNetColors.SuccessGreen.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
-                        .border(1.dp, KNetColors.SuccessGreen.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                        .background(statusColor.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                        .border(1.dp, statusColor.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
                         .padding(horizontal = 8.dp, vertical = 2.dp)
                 ) {
                     Text(
-                        text = "200 OK",
-                        color = KNetColors.SuccessGreen,
+                        text = "${transaction.status} ${transaction.statusText}".trim(),
+                        color = statusColor,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -137,7 +143,8 @@ fun TransactionOverviewWidget(
                         .background(KNetColors.BorderDark.copy(alpha = 0.5f), RoundedCornerShape(4.dp))
                         .padding(horizontal = 6.dp, vertical = 2.dp)
                 ) {
-                    Text(text = "HTTPS", color = KNetColors.TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
+                    val scheme = if (transaction.host.startsWith("https") || transaction.path.startsWith("https")) "HTTPS" else "HTTP"
+                    Text(text = scheme, color = KNetColors.TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, maxLines = 1, softWrap = false)
                 }
             }
 
@@ -255,11 +262,10 @@ fun TransactionOverviewWidget(
             verticalAlignment = Alignment.CenterVertically
         ) {
             val details = listOf(
-                Icons.Default.Language to "api.example.com",
-                Icons.Default.Computer to "93.184.216.34:443",
-                Icons.Default.Schedule to "10:15:23",
-                Icons.Default.FlashOn to "3.45 s",
-                Icons.Default.ArrowDownward to "1.12 KB / 83 ms"
+                Icons.Default.Language to transaction.host,
+                Icons.Default.Schedule to transaction.time,
+                Icons.Default.FlashOn to "${transaction.totalTimeMs} ms",
+                Icons.Default.ArrowDownward to "${transaction.size} / ${transaction.totalTimeMs} ms"
             )
             details.forEach { (icon, text) ->
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -283,6 +289,7 @@ fun TransactionOverviewWidget(
         Spacer(modifier = Modifier.height(6.dp))
 
         // Row 3: Detail Panel Tabs
+        val headerCount = transaction.requestHeaders.size + transaction.responseHeaders.size
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -292,11 +299,11 @@ fun TransactionOverviewWidget(
             verticalAlignment = Alignment.CenterVertically
         ) {
             val tabs = listOf(
-                "Overview", "Request", "Response", "Timeline", "Headers (12)",
-                "Cookies (2)", "Auth", "WebSocket", "HTTP/2", "gRPC"
+                "Overview", "Request", "Response", "Timeline", "Headers ($headerCount)",
+                "Cookies", "Auth", "WebSocket", "HTTP/2", "gRPC"
             )
             tabs.forEach { tab ->
-                val isSelected = tab == "Request"
+                val isSelected = tab == "Request" || tab == "Overview"
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier

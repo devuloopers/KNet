@@ -66,7 +66,12 @@ class KNetSession(
      * @param durationMs Request execution latency.
      * @return True if the update successfully completed.
      */
-    suspend fun recordResponse(transactionId: String, response: HttpResponse, durationMs: Long): Boolean {
+    suspend fun recordResponse(
+        transactionId: String,
+        response: HttpResponse,
+        durationMs: Long,
+        timings: com.devuloopers.knet.model.HttpTimings = com.devuloopers.knet.model.HttpTimings()
+    ): Boolean {
         val entity = transactionDao.getTransactionById(transactionId) ?: return false
         val responseBodyPath = payloadStore.savePayload(transactionId, "res", response.body)
         
@@ -81,7 +86,12 @@ class KNetSession(
             responseHeadersJson = HttpTransactionMapper.serializeHeaders(response.headers),
             responseBodyPath = responseBodyPath,
             durationMs = durationMs,
-            timestamp = entity.timestamp
+            timestamp = entity.timestamp,
+            timingDnsMs = timings.dnsMs,
+            timingTcpMs = timings.tcpMs,
+            timingTlsMs = timings.tlsMs,
+            timingTtfbMs = timings.ttfbMs,
+            timingDownloadMs = timings.downloadMs
         )
         transactionDao.insert(updated)
         return true

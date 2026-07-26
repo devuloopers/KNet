@@ -80,6 +80,13 @@ fun RequestBodyWidget(
         prettyPrintBody(transaction.requestBody)
     }
 
+    val format = remember(transaction.requestHeaders, transaction.requestBody) {
+        com.devuloopers.knet.bodyformatter.formatter.BodyFormatterRegistry.resolveFormat(
+            transaction.requestHeaders,
+            transaction.requestBody
+        )
+    }
+
     SubFrame(
         modifier = modifier,
         resizeLeft = resizeLeft,
@@ -129,18 +136,28 @@ fun RequestBodyWidget(
                         androidx.compose.foundation.text.BasicTextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
+                            singleLine = true,
                             textStyle = androidx.compose.ui.text.TextStyle(
                                 color = Color.White,
                                 fontSize = 10.sp,
-                                fontFamily = FontFamily.Monospace
+                                fontFamily = FontFamily.Monospace,
+                                lineHeight = 14.sp
                             ),
                             cursorBrush = androidx.compose.ui.graphics.SolidColor(KNetColors.ActiveBlue),
                             modifier = Modifier.weight(1f),
                             decorationBox = { innerTextField ->
-                                if (searchQuery.isEmpty()) {
-                                    Text(text = "Search request body...", color = KNetColors.TextSecondary, fontSize = 10.sp)
+                                Box(contentAlignment = Alignment.CenterStart) {
+                                    if (searchQuery.isEmpty()) {
+                                        Text(
+                                            text = "Search request body...",
+                                            color = KNetColors.TextSecondary,
+                                            fontSize = 10.sp,
+                                            fontFamily = FontFamily.Monospace,
+                                            lineHeight = 14.sp
+                                        )
+                                    }
+                                    innerTextField()
                                 }
-                                innerTextField()
                             }
                         )
                     }
@@ -158,11 +175,31 @@ fun RequestBodyWidget(
         Column(modifier = Modifier.fillMaxSize()) {
             CodeViewerWidget(
                 codeText = prettyBody,
+                bodyFormat = format,
                 searchQuery = searchQuery,
                 modifier = Modifier.weight(1f)
             )
 
             Spacer(modifier = Modifier.height(6.dp))
+
+            val reqFormatLabel = format.badgeLabel
+            val reqCharset = remember(transaction.requestHeaders) {
+                val contentType = transaction.requestHeaders.entries.find { it.key.equals("content-type", ignoreCase = true) }?.value ?: ""
+                if (contentType.contains("charset=", ignoreCase = true)) {
+                    contentType.substringAfter("charset=", "").substringBefore(";").trim().uppercase()
+                } else "UTF-8"
+            }
+            val reqLineEnding = remember(transaction.requestBody) {
+                if (transaction.requestBody.contains("\r\n")) "CRLF" else "LF"
+            }
+            val reqBodySize = remember(transaction.requestBody) {
+                val bytes = transaction.requestBody.encodeToByteArray().size
+                when {
+                    bytes < 1024 -> "Req: $bytes B"
+                    bytes < 1024 * 1024 -> "Req: %.2f KB".format(bytes / 1024.0)
+                    else -> "Req: %.2f MB".format(bytes / (1024.0 * 1024.0))
+                }
+            }
 
             // Footer status info
             Row(
@@ -174,7 +211,7 @@ fun RequestBodyWidget(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "JSON  |  UTF-8  |  LF  |  72 bytes",
+                    text = "$reqFormatLabel  |  $reqCharset  |  $reqLineEnding  |  $reqBodySize",
                     color = KNetColors.TextSecondary,
                     fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace,
@@ -194,8 +231,14 @@ fun RequestBodyWidget(
                         modifier = Modifier.size(12.dp)
                     )
                     Spacer(modifier = Modifier.width(4.dp))
+                    val validityText = when (format) {
+                        is com.devuloopers.knet.bodyformatter.model.BodyFormat.Json -> "Valid JSON"
+                        is com.devuloopers.knet.bodyformatter.model.BodyFormat.Html -> "Valid HTML"
+                        is com.devuloopers.knet.bodyformatter.model.BodyFormat.Xml -> "Valid XML"
+                        else -> "Raw Payload"
+                    }
                     Text(
-                        text = "Valid JSON",
+                        text = validityText,
                         color = KNetColors.SuccessGreen,
                         fontSize = 10.sp,
                         fontWeight = FontWeight.Bold,

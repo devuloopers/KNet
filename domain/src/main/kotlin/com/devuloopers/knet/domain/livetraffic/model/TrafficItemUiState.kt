@@ -36,5 +36,6 @@ data class TrafficItemUiState(
     val queryParams: Map<String, Any>,
     val requestHeaders: Map<String, String>,
     val responseHeaders: Map<String, String>,
+    val timings: com.devuloopers.knet.model.HttpTimings = com.devuloopers.knet.model.HttpTimings(),
     val isSelected: Boolean = false
 )

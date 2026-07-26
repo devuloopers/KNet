@@ -24,10 +24,15 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -128,39 +133,12 @@ fun TrafficFeedWidget(
         }
 
         // --- Search Input Box ---
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(6.dp)
-                .background(KNetColors.FieldDark, shape = RoundedCornerShape(4.dp))
-                .padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Icon(
-                imageVector = Icons.Default.Search,
-                contentDescription = "Search",
-                tint = KNetColors.TextSecondary,
-                modifier = Modifier.size(14.dp)
-            )
-            Spacer(modifier = Modifier.width(6.dp))
-            BasicTextField(
-                value = searchQuery,
-                onValueChange = { onIntent(LiveTrafficIntent.SearchQueryChanged(it)) },
-                textStyle = TextStyle(color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace),
-                cursorBrush = SolidColor(KNetColors.ActiveBlue),
-                modifier = Modifier.weight(1f)
-            )
-            if (searchQuery.isNotEmpty()) {
-                Icon(
-                    imageVector = Icons.Default.Clear,
-                    contentDescription = "Clear Search",
-                    tint = KNetColors.TextSecondary,
-                    modifier = Modifier
-                        .size(14.dp)
-                        .clickable { onIntent(LiveTrafficIntent.SearchQueryChanged("")) }
-                )
-            }
-        }
+        com.devuloopers.knet.widgets.WidgetSearchBar(
+            query = searchQuery,
+            onQueryChange = { onIntent(LiveTrafficIntent.SearchQueryChanged(it)) },
+            placeholder = "Filter by URL, host, path, status...",
+            modifier = Modifier.padding(6.dp)
+        )
 
         // --- Table Column Header Row ---
         Row(

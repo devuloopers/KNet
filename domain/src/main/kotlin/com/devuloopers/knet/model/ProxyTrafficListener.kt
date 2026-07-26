@@ -11,6 +11,12 @@ interface ProxyTrafficListener {
 
     /**
      * Invoked when a target server response has been captured and decoded.
+     * Includes optional high-resolution socket connection phase timing metrics.
      */
-    fun onResponseCaptured(transactionId: String, response: HttpResponse, durationMs: Long)
+    fun onResponseCaptured(
+        transactionId: String,
+        response: HttpResponse,
+        durationMs: Long,
+        timings: HttpTimings = HttpTimings()
+    )
 }

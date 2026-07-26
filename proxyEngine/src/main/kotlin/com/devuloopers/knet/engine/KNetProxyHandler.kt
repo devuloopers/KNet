@@ -162,6 +162,19 @@ class KNetProxyHandler(
         outboundRequest.headers().set(request.headers())
         outboundRequest.headers().remove("Proxy-Connection")
 
+        val dnsStartTime = System.currentTimeMillis()
+        try {
+            java.net.InetAddress.getByName(targetHost)
+        } catch (_: Exception) {
+            // Fall back to unresolved hostname if lookup fails
+        }
+        val dnsDuration = (System.currentTimeMillis() - dnsStartTime).coerceAtLeast(0L)
+
+        val connectStartTime = System.currentTimeMillis()
+        var connectEndTime = connectStartTime
+        var sslEndTime = connectStartTime
+        val sslDurationHolder = longArrayOf(0L)
+
         // Establish connection to target remote server.
         val clientBootstrap = Bootstrap()
         clientBootstrap.group(context.channel().eventLoop()) // Reuse client event loop thread
@@ -169,20 +182,41 @@ class KNetProxyHandler(
             .handler(object : ChannelInitializer<SocketChannel>() {
                 override fun initChannel(ch: SocketChannel) {
                     val pipeline = ch.pipeline()
+
                     if (isSsl) {
                         // Trust all certificates during outbound proxy forwarding (relying on client verification)
                         val sslCtx = SslContextBuilder.forClient()
                             .trustManager(InsecureTrustManagerFactory.INSTANCE)
                             .build()
-                        pipeline.addLast("ssl", sslCtx.newHandler(ch.alloc(), targetHost, targetPort))
+                        val sslHandler = sslCtx.newHandler(ch.alloc(), targetHost, targetPort)
+                        sslHandler.handshakeFuture().addListener { handshakeFuture ->
+                            if (handshakeFuture.isSuccess) {
+                                sslEndTime = System.currentTimeMillis()
+                                sslDurationHolder[0] = (sslEndTime - connectEndTime).coerceAtLeast(0L)
+                            }
+                        }
+                        pipeline.addLast("ssl", sslHandler)
                     }
                     pipeline.addLast("httpCodec", HttpClientCodec())
                     pipeline.addLast("aggregator", HttpObjectAggregator(10 * 1024 * 1024))
-                    pipeline.addLast("outboundHandler", KNetOutboundHandler(context.channel(), outboundRequest, listener, mappedRequest.id))
+                    pipeline.addLast(
+                        "outboundHandler",
+                        KNetOutboundHandler(
+                            clientChannel = context.channel(),
+                            request = outboundRequest,
+                            listener = listener,
+                            transactionId = mappedRequest.id,
+                            connectStartTime = connectStartTime,
+                            getDnsDuration = { dnsDuration },
+                            getTcpDuration = { (connectEndTime - connectStartTime).coerceAtLeast(0L) },
+                            getSslDuration = { sslDurationHolder[0] }
+                        )
+                    )
                 }
             })
 
         clientBootstrap.connect(targetHost, targetPort).addListener { future ->
+            connectEndTime = System.currentTimeMillis()
             if (!future.isSuccess) {
                 KNetLogger.error(TAG, future.cause()) { "KNet Proxy Failed to connect to $targetHost:$targetPort" }
                 val errResponse = DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.BAD_GATEWAY)
@@ -209,23 +243,47 @@ class KNetOutboundHandler(
     private val clientChannel: Channel,
     private val request: FullHttpRequest,
     private val listener: ProxyTrafficListener? = null,
-    private val transactionId: String
+    private val transactionId: String,
+    private val connectStartTime: Long = System.currentTimeMillis(),
+    private val getDnsDuration: () -> Long = { 0L },
+    private val getTcpDuration: () -> Long = { 0L },
+    private val getSslDuration: () -> Long = { 0L }
 ) : SimpleChannelInboundHandler<FullHttpResponse>() {
 
-    private val requestStartTime = System.currentTimeMillis()
+    private var requestSentTime: Long = System.currentTimeMillis()
 
     override fun channelActive(context: ChannelHandlerContext) {
+        requestSentTime = System.currentTimeMillis()
         context.writeAndFlush(request)
     }
 
     override fun channelRead0(context: ChannelHandlerContext, msg: FullHttpResponse) {
-        // Map server netty response to common DTO model
+        val responseReceivedTime = System.currentTimeMillis()
         val mappedResponse = HttpMapper.mapResponse(msg)
         KNetLogger.info(TAG) { "KNet Proxy Response: ${mappedResponse.statusCode} ${mappedResponse.statusText}" }
 
-        // Trigger response captured callback
-        val durationMs = System.currentTimeMillis() - requestStartTime
-        listener?.onResponseCaptured(transactionId, mappedResponse, durationMs)
+        val dnsDuration = getDnsDuration()
+        val tcpDuration = getTcpDuration()
+        val tlsDuration = getSslDuration()
+        val ttfbDuration = (responseReceivedTime - requestSentTime).coerceAtLeast(0L)
+        val downloadDuration = (System.currentTimeMillis() - responseReceivedTime).coerceAtLeast(0L)
+
+        val totalDuration = dnsDuration + tcpDuration + tlsDuration + ttfbDuration + downloadDuration
+
+        val timings = com.devuloopers.knet.model.HttpTimings(
+            dnsMs = dnsDuration,
+            tcpMs = tcpDuration,
+            tlsMs = tlsDuration,
+            ttfbMs = ttfbDuration,
+            downloadMs = downloadDuration
+        )
+
+        listener?.onResponseCaptured(
+            transactionId = transactionId,
+            response = mappedResponse,
+            durationMs = totalDuration,
+            timings = timings
+        )
 
         // Set connection close header to tell the client we are closing the socket
         msg.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE)
