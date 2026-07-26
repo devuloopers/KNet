@@ -62,7 +62,8 @@ object TrustStoreInstaller {
      * Windows implementation utilizing command-line certutil.
      */
     private fun installWindows(certFile: File): InstallationResult {
-        val command = "certutil -addstore -user ROOT \"${certFile.absolutePath}\""
+        val command = arrayOf("certutil", "-addstore", "-user", "ROOT", certFile.absolutePath)
+        val commandString = command.joinToString(" ")
         return try {
             val process = Runtime.getRuntime().exec(command)
             val exitCode = process.waitFor()
@@ -70,10 +71,10 @@ object TrustStoreInstaller {
                 InstallationResult.Success
             } else {
                 val errorStream = process.errorStream.bufferedReader().use { it.readText() }
-                InstallationResult.Failure("certutil failed with exit code $exitCode: $errorStream", command)
+                InstallationResult.Failure("certutil failed with exit code $exitCode: $errorStream", commandString)
             }
         } catch (e: Exception) {
-            InstallationResult.Failure("Failed to execute certutil: ${e.message}", command)
+            InstallationResult.Failure("Failed to execute certutil: ${e.message}", commandString)
         }
     }
 
@@ -83,7 +84,13 @@ object TrustStoreInstaller {
     private fun installMac(certFile: File): InstallationResult {
         // macOS: Install to user's login keychain so it does not prompt for administrator (sudo) privileges.
         val loginKeychain = "${System.getProperty("user.home")}/Library/Keychains/login.keychain-db"
-        val command = "security add-trusted-cert -d -r trustRoot -k \"$loginKeychain\" \"${certFile.absolutePath}\""
+        val command = arrayOf(
+            "security", "add-trusted-cert",
+            "-d", "-r", "trustRoot",
+            "-k", loginKeychain,
+            certFile.absolutePath
+        )
+        val commandString = command.joinToString(" ")
         return try {
             val process = Runtime.getRuntime().exec(command)
             val exitCode = process.waitFor()

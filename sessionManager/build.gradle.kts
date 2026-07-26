@@ -4,7 +4,7 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":shared"))
+    implementation(project(":domain"))
     implementation(project(":logger"))
     implementation(project(":storage"))
     implementation(libs.room.runtime)

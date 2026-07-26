@@ -9,7 +9,7 @@ room {
 }
 
 dependencies {
-    implementation(project(":shared"))
+    implementation(project(":domain"))
     implementation(project(":logger"))
     implementation(libs.room.runtime)
     implementation(libs.sqlite.bundled)

@@ -3,7 +3,7 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":shared"))
+    implementation(project(":domain"))
     implementation(libs.bouncycastle.prov)
     implementation(libs.bouncycastle.pkix)
     

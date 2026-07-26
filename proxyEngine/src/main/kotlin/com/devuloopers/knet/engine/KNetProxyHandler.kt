@@ -20,9 +20,12 @@ import io.netty.handler.codec.http.HttpServerCodec
 import io.netty.handler.codec.http.HttpVersion
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.ssl.util.InsecureTrustManagerFactory
+import io.netty.handler.codec.http.HttpHeaderNames
+import io.netty.handler.codec.http.HttpHeaderValues
 import io.netty.util.AttributeKey
 import com.devuloopers.knet.engine.util.HttpMapper
 import com.devuloopers.knet.logger.KNetLogger
+import com.devuloopers.knet.model.ProxyTrafficListener
 import java.net.URI
 import java.net.URL
 
@@ -35,13 +38,15 @@ private const val TAG = "ProxyEngine"
 @Suppress("HttpUrlsUsage")
 class KNetProxyHandler(
     private val ca: CertificateAuthority,
-    private val certCache: CertificateCache
+    private val certCache: CertificateCache,
+    private val listener: ProxyTrafficListener? = null
 ) : SimpleChannelInboundHandler<FullHttpRequest>() {
 
     companion object {
         private val HOST_ATTR = AttributeKey.valueOf<String>("knet.host")
         private val PORT_ATTR = AttributeKey.valueOf<Int>("knet.port")
         private val SSL_ATTR = AttributeKey.valueOf<Boolean>("knet.ssl")
+        private val TX_ID_ATTR = AttributeKey.valueOf<String>("knet.txId")
     }
 
     override fun channelRead0(context: ChannelHandlerContext, msg: FullHttpRequest) {
@@ -132,6 +137,12 @@ class KNetProxyHandler(
         // Log the captured request URL
         KNetLogger.info(TAG) { "KNet Proxy Captured: ${mappedRequest.method} ${mappedRequest.url}" }
 
+        // Store transaction ID on channel context attributes
+        context.channel().attr(TX_ID_ATTR).set(mappedRequest.id)
+
+        // Dispatch capture notification to listener
+        listener?.onRequestCaptured(mappedRequest)
+
         // Transform absolute URI proxy request to relative URI for outbound request.
         val relativeUri = if (request.uri().startsWith("http://") || request.uri().startsWith("https://")) {
             val urlObj = URI.create(request.uri()).toURL()
@@ -167,7 +178,7 @@ class KNetProxyHandler(
                     }
                     pipeline.addLast("httpCodec", HttpClientCodec())
                     pipeline.addLast("aggregator", HttpObjectAggregator(10 * 1024 * 1024))
-                    pipeline.addLast("outboundHandler", KNetOutboundHandler(context.channel(), outboundRequest))
+                    pipeline.addLast("outboundHandler", KNetOutboundHandler(context.channel(), outboundRequest, listener, mappedRequest.id))
                 }
             })
 
@@ -181,7 +192,11 @@ class KNetProxyHandler(
     }
 
     override fun exceptionCaught(context: ChannelHandlerContext, cause: Throwable) {
-        KNetLogger.error(TAG, cause) { "KNet Proxy Exception: ${cause.message}" }
+        if (cause is java.io.IOException) {
+            KNetLogger.debug(TAG) { "KNet Proxy IO Exception (normal connection close): ${cause.message}" }
+        } else {
+            KNetLogger.error(TAG, cause) { "KNet Proxy Exception: ${cause.message}" }
+        }
         context.close()
     }
 }
@@ -192,8 +207,12 @@ class KNetProxyHandler(
  */
 class KNetOutboundHandler(
     private val clientChannel: Channel,
-    private val request: FullHttpRequest
+    private val request: FullHttpRequest,
+    private val listener: ProxyTrafficListener? = null,
+    private val transactionId: String
 ) : SimpleChannelInboundHandler<FullHttpResponse>() {
+
+    private val requestStartTime = System.currentTimeMillis()
 
     override fun channelActive(context: ChannelHandlerContext) {
         context.writeAndFlush(request)
@@ -204,14 +223,26 @@ class KNetOutboundHandler(
         val mappedResponse = HttpMapper.mapResponse(msg)
         KNetLogger.info(TAG) { "KNet Proxy Response: ${mappedResponse.statusCode} ${mappedResponse.statusText}" }
 
+        // Trigger response captured callback
+        val durationMs = System.currentTimeMillis() - requestStartTime
+        listener?.onResponseCaptured(transactionId, mappedResponse, durationMs)
+
+        // Set connection close header to tell the client we are closing the socket
+        msg.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE)
+
         // Write the response back to client and close outbound channel.
         clientChannel.writeAndFlush(msg.retain()).addListener {
             context.close()
+            clientChannel.close()
         }
     }
 
     override fun exceptionCaught(context: ChannelHandlerContext, cause: Throwable) {
-        KNetLogger.error(TAG, cause) { "KNet Outbound Exception: ${cause.message}" }
+        if (cause is java.io.IOException) {
+            KNetLogger.debug(TAG) { "KNet Outbound IO Exception (normal connection close): ${cause.message}" }
+        } else {
+            KNetLogger.error(TAG, cause) { "KNet Outbound Exception: ${cause.message}" }
+        }
         context.close()
         clientChannel.close()
     }

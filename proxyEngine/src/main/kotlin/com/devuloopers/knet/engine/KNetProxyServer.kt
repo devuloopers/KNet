@@ -13,6 +13,7 @@ import io.netty.handler.codec.http.HttpObjectAggregator
 import io.netty.handler.codec.http.HttpServerCodec
 import io.netty.handler.logging.LogLevel
 import io.netty.handler.logging.LoggingHandler
+import com.devuloopers.knet.model.ProxyTrafficListener
 import java.net.InetSocketAddress
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -23,11 +24,13 @@ import java.util.concurrent.atomic.AtomicBoolean
  * @property port The port KNet will bind to (default: 8080).
  * @property ca The Root Certificate Authority used to dynamically sign leaf certificates for SSL decryption.
  * @property certCache The cache managing generated leaf certificates.
+ * @property listener The listener to receive captured HTTP requests and responses.
  */
 class KNetProxyServer(
     val port: Int = 8080,
     private val ca: CertificateAuthority,
-    private val certCache: CertificateCache
+    private val certCache: CertificateCache,
+    private val listener: ProxyTrafficListener? = null
 ) {
 
     companion object {
@@ -78,7 +81,7 @@ class KNetProxyServer(
                     pipelineInitializers.forEach { it(pipeline) }
 
                     // Add KNet's core proxy logic handler.
-                    pipeline.addLast("proxyHandler", KNetProxyHandler(ca, certCache))
+                    pipeline.addLast("proxyHandler", KNetProxyHandler(ca, certCache, listener))
                 }
             })
 

@@ -3,7 +3,7 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":shared"))
+    implementation(project(":domain"))
     implementation(project(":logger"))
     implementation(libs.netty.all)
     implementation(libs.kotlinx.coroutines.core)

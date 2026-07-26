@@ -32,7 +32,7 @@ plugins {
 }
 
 include(":desktopApp")
-include(":shared")
+include(":sharedUI")
 include(":certificateManager")
 include(":proxyEngine")
 include(":logger")
@@ -42,3 +42,6 @@ include(":sessionManager")
 include(":trafficModifier")
 include(":networkSimulator")
 include(":protocolInspector")
+include(":bodyFormatter")
+include(":domain")
+include(":data")

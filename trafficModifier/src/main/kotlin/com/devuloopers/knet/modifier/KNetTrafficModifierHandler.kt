@@ -5,13 +5,7 @@ import io.netty.buffer.Unpooled
 import io.netty.channel.ChannelDuplexHandler
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelPromise
-import io.netty.handler.codec.http.DefaultFullHttpResponse
-import io.netty.handler.codec.http.FullHttpRequest
-import io.netty.handler.codec.http.FullHttpResponse
-import io.netty.handler.codec.http.HttpHeaderNames
-import io.netty.handler.codec.http.HttpHeaderValues
-import io.netty.handler.codec.http.HttpResponseStatus
-import io.netty.handler.codec.http.HttpVersion
+import io.netty.handler.codec.http.*
 import io.netty.util.AttributeKey
 import io.netty.util.ReferenceCountUtil
 import java.io.File
@@ -81,11 +75,11 @@ class KNetTrafficModifierHandler(
         // --- 3. Apply request-side Modifier Rules ---
         val requestRules = manager.modifierRules.filter { rule ->
             rule.enabled && url.contains(Regex(rule.urlPattern)) &&
-                rule.target in listOf(
-                    RuleTarget.REQUEST_HEADER,
-                    RuleTarget.REQUEST_QUERY,
-                    RuleTarget.REQUEST_BODY
-                )
+                    rule.target in listOf(
+                RuleTarget.REQUEST_HEADER,
+                RuleTarget.REQUEST_QUERY,
+                RuleTarget.REQUEST_BODY
+            )
         }
         applyRequestRules(msg, requestRules)
 
@@ -180,6 +174,7 @@ class KNetTrafficModifierHandler(
                     matchValue = rule.matchValue,
                     newValue = rule.newValue
                 )
+
                 RuleTarget.REQUEST_BODY -> applyBodyRule(request, rule)
                 else -> Unit
             }
@@ -202,6 +197,7 @@ class KNetTrafficModifierHandler(
                     matchValue = rule.matchValue,
                     newValue = rule.newValue
                 )
+
                 RuleTarget.RESPONSE_STATUS -> {
                     val code = rule.newValue?.toIntOrNull()
                     if (code != null) {
@@ -209,6 +205,7 @@ class KNetTrafficModifierHandler(
                         KNetLogger.debug(TAG) { "Response status overridden to $code" }
                     }
                 }
+
                 RuleTarget.RESPONSE_BODY -> {
                     replaceBodyContent(
                         content = response.content(),
@@ -217,6 +214,7 @@ class KNetTrafficModifierHandler(
                         newValue = rule.newValue
                     )
                 }
+
                 else -> Unit
             }
         }
@@ -243,12 +241,14 @@ class KNetTrafficModifierHandler(
                     KNetLogger.debug(TAG) { "Header added: $matchValue = $newValue" }
                 }
             }
+
             RuleAction.MODIFY -> {
                 if (matchValue != null && newValue != null) {
                     headers.set(matchValue, newValue)
                     KNetLogger.debug(TAG) { "Header modified: $matchValue = $newValue" }
                 }
             }
+
             RuleAction.REMOVE -> {
                 if (matchValue != null) {
                     headers.remove(matchValue)

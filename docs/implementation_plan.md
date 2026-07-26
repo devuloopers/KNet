@@ -1,4 +1,4 @@
-# KNet Implementation Plan (Charles & mitmproxy Parity)
+# KNet Implementation Plan [COMPLETED] - Feature Module: `inspector` (Transaction Inspector)
 
 This document outlines the end-to-end, phase-by-phase plan to build KNet, a modern, Kotlin-first HTTP/HTTPS debugging proxy. The objective is to achieve feature parity with industry standards like Charles Proxy and mitmproxy while utilizing Netty, Kotlin Coroutines, and Compose Multiplatform.
 
@@ -114,19 +114,19 @@ Expand KNet's parsing capabilities to modern protocols. See design details in [d
 
 ---
 
-### Phase 8: Compose Desktop Presentation Layer (desktopApp) [IN PROGRESS]
+### Phase 8: Compose Desktop Presentation Layer (desktopApp) [COMPLETED]
 Create a high-fidelity visual layout based on a dynamic modular grid architecture. Each visual feature acts as an independent widget inside a layout container that supports dynamic addition, removal, and future resizing. See design details in [docs/phase_8_plan.md](file:///c:/Users/Anant.gupta/IdeaProjects/KNet/docs/phase_8_plan.md).
 * **Modules modified**: `shared` (common UI packages), `desktopApp` (JVM runner)
 * **Tasks**:
-  * **Widget Catalog**: Create WidgetType, WidgetFrame, and SubFrame definitions. [PENDING]
-  * **Live Traffic Feed Widget**: List table view grouped by date chips. [PENDING]
-  * **Selected Transaction Overview Widget**: Metadata headers and Forward/Drop/Edit action triggers. [PENDING]
-  * **Request Details & JSON Widgets**: Query parameters tree view, raw request headers, and request body JSON code block formatting. [PENDING]
-  * **Response Inspector Widgets**: Header collections, cookie maps, and response body pretty code block. [PENDING]
-  * **Connection Timings Widget**: Visual timing bar graphs for DNS, TCP, and TLS. [PENDING]
-  * **Rules Console Widget**: Interactive table list of breakpoint and header rewrite parameters. [PENDING]
-  * **Quick Replay & Tags Widgets**: Replay batch trigger inputs, tags list, and notes comments section. [PENDING]
-  * **Dynamic Grid Coordinator**: Assemble and coordinate the dynamic widget state visibility dashboard in App.kt. [PENDING]
+  * **Widget Catalog**: Create WidgetType, WidgetFrame, and SubFrame definitions. [COMPLETED]
+  * **Live Traffic Feed Widget**: List table view grouped by date chips. [COMPLETED]
+  * **Selected Transaction Overview Widget**: Metadata headers and Forward/Drop/Edit action triggers. [COMPLETED]
+  * **Request Details & JSON Widgets**: Query parameters tree view, raw request headers, and request body JSON code block formatting. [COMPLETED]
+  * **Response Inspector Widgets**: Header collections, cookie maps, and response body pretty code block. [COMPLETED]
+  * **Connection Timings Widget**: Visual timing bar graphs for DNS, TCP, and TLS. [COMPLETED]
+  * **Rules Console Widget**: Interactive table list of breakpoint and header rewrite parameters. [COMPLETED]
+  * **Quick Replay & Tags Widgets**: Replay batch trigger inputs, tags list, and notes comments section. [COMPLETED]
+  * **Dynamic Grid Coordinator**: Assemble and coordinate the dynamic widget state visibility dashboard in App.kt. [COMPLETED]
 
 ---
 
