@@ -12,6 +12,7 @@ kotlin {
         commonMain.dependencies {
             api(project(":domain"))
             api(project(":data"))
+            api(project(":networkEngine"))
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
             implementation(libs.compose.material3)

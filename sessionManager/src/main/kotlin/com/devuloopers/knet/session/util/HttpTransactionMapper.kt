@@ -3,7 +3,7 @@ package com.devuloopers.knet.session.util
 import com.devuloopers.knet.model.HttpRequest
 import com.devuloopers.knet.model.HttpResponse
 import com.devuloopers.knet.model.HttpTransaction
-import com.devuloopers.knet.storage.HttpTransactionEntity
+import com.devuloopers.knet.storage.interception.HttpTransactionEntity
 
 /**
  * Mapper utility responsible for translating Room database entities to domain DTOs.

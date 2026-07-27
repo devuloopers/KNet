@@ -4,7 +4,7 @@ plugins {
 
 dependencies {
     implementation(project(":domain"))
-    implementation(project(":proxyEngine"))
+    implementation(project(":networkEngine"))
     implementation(project(":certificateManager"))
     implementation(project(":sessionManager"))
     implementation(project(":storage"))

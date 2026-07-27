@@ -1,6 +1,6 @@
 package com.devuloopers.knet.interceptor
 
-import com.devuloopers.knet.engine.util.HttpMapper
+import com.devuloopers.knet.engine.proxy.util.HttpMapper
 import com.devuloopers.knet.logger.KNetLogger
 import com.devuloopers.knet.model.HttpRequest
 import io.netty.buffer.Unpooled

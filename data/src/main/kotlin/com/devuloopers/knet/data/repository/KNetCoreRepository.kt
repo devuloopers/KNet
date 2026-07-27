@@ -3,7 +3,7 @@ package com.devuloopers.knet.data.repository
 import com.devuloopers.knet.crypto.CertificateAuthority
 import com.devuloopers.knet.crypto.CertificateCache
 import com.devuloopers.knet.crypto.TrustStoreInstaller
-import com.devuloopers.knet.engine.KNetProxyServer
+import com.devuloopers.knet.engine.proxy.KNetProxyServer
 import com.devuloopers.knet.model.HttpRequest
 import com.devuloopers.knet.model.HttpResponse
 import com.devuloopers.knet.model.HttpTransaction

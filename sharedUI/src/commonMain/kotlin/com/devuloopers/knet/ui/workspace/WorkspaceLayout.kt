@@ -30,13 +30,15 @@ import com.devuloopers.knet.ui.workspace.model.WorkspaceUiState
 import com.devuloopers.knet.widgets.MiddleInspectorWidget
 import com.devuloopers.knet.widgets.NotesTagsWidget
 import com.devuloopers.knet.widgets.QuickReplayWidget
-import com.devuloopers.knet.widgets.SystemStatusBar
-import com.devuloopers.knet.widgets.TopHeader
 import com.devuloopers.knet.widgets.WidgetFrame
 import com.devuloopers.knet.widgets.WidgetType
 
 /**
- * Dynamic multi-column workspace layout coordinator for KNet.
+ * Pure 3-column workspace content grid for KNet.
+ *
+ * Renders Live Traffic Feed (Column 1), Inspector (Column 2), and Tools Panel (Column 3).
+ * TopHeader and SystemStatusBar are intentionally excluded — they are rendered persistently
+ * by [AppNavDisplay] and shared across all navigation destinations.
  *
  * Consumes [WorkspaceUiState] reactively from [WorkspaceViewModel] and emits [WorkspaceIntent]
  * actions following strict Unidirectional Data Flow (UDF).
@@ -83,21 +85,15 @@ fun WorkspaceLayout(
                     .fillMaxSize()
                     .background(KNetColors.BackgroundDark)
             ) {
-                // 1. Navigation Header & Widget Manager Toolbar
-                TopHeader(
-                    currentTab = currentTab,
-                    onTabSelected = onTabSelected,
-                    visibleWidgets = visibleWidgets,
-                    onToggleWidget = { widget ->
-                        workspaceViewModel.processIntent(WorkspaceIntent.ToggleWidget(widget))
-                    },
-                    isProxyRunning = controller.isProxyRunning.value,
-                    proxyPort = controller.proxyPort,
-                    onToggleProxy = { controller.toggleProxy() },
-                    onTrustCa = { controller.trustRootCertificate() }
-                )
+                // Sessions Manager Banner (lazy — only rendered when Sessions tab is active)
+                if (currentTab == "Sessions") {
+                    com.devuloopers.knet.ui.sessions.view.SessionsBannerWidget(
+                        controller = controller,
+                        onClose = { onTabSelected("Live Traffic") }
+                    )
+                }
 
-                // 2. Middle Row: Splitting Column 1 (Left), Column 2 (Middle), and Column 3 (Right)
+                // 1. Middle Row: Splitting Column 1 (Left), Column 2 (Middle), and Column 3 (Right)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -228,8 +224,6 @@ fun WorkspaceLayout(
                     }
                 }
 
-                // 4. System Footer Status Bar
-                SystemStatusBar()
             }
         }
     }

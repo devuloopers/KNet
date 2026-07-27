@@ -5,7 +5,7 @@ import com.devuloopers.knet.model.HttpResponse
 import com.devuloopers.knet.model.HttpTransaction
 import com.devuloopers.knet.session.util.HttpTransactionMapper
 import com.devuloopers.knet.storage.KNetDatabase
-import com.devuloopers.knet.storage.HttpTransactionEntity
+import com.devuloopers.knet.storage.interception.HttpTransactionEntity
 import com.devuloopers.knet.logger.KNetLogger
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map

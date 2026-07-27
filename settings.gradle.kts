@@ -34,7 +34,7 @@ plugins {
 include(":desktopApp")
 include(":sharedUI")
 include(":certificateManager")
-include(":proxyEngine")
+include(":networkEngine")
 include(":logger")
 include(":interceptor")
 include(":storage")

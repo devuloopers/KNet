@@ -2,7 +2,7 @@ package com.devuloopers.knet.interceptor
 
 import com.devuloopers.knet.crypto.CertificateAuthority
 import com.devuloopers.knet.crypto.CertificateCache
-import com.devuloopers.knet.engine.KNetProxyServer
+import com.devuloopers.knet.engine.proxy.KNetProxyServer
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpHandler
 import com.sun.net.httpserver.HttpServer

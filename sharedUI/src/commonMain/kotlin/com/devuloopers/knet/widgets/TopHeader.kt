@@ -62,7 +62,7 @@ fun TopHeader(
     onTrustCa: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val primaryTabs = listOf("Live Traffic", "Sessions", "Collections")
+    val primaryTabs = listOf("Live Traffic", "Sessions", "API Studio")
     val secondaryTabs = listOf("Rules", "Certificates", "Settings")
 
     var widgetManagerDropdownExpanded by remember { mutableStateOf(false) }

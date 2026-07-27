@@ -5,7 +5,7 @@ plugins {
 dependencies {
     implementation(project(":domain"))
     implementation(project(":logger"))
-    implementation(project(":proxyEngine"))
+    implementation(project(":networkEngine"))
     implementation(libs.netty.all)
     implementation(libs.kotlinx.coroutines.core)
     
