@@ -1,7 +1,9 @@
 package com.devuloopers.knet.domain.apistudio.usecase
 
 import com.devuloopers.knet.domain.apistudio.model.HttpMethod
+import com.devuloopers.knet.domain.apistudio.model.RequestHeader
 import com.devuloopers.knet.domain.apistudio.model.SavedApiRequest
+import com.devuloopers.knet.domain.apistudio.model.defaultHeaders
 import com.devuloopers.knet.domain.apistudio.repository.CollectionsRepository
 import com.devuloopers.knet.model.HttpTransaction
 import kotlin.uuid.ExperimentalUuidApi
@@ -37,7 +39,9 @@ class SaveLiveTransactionToCollectionUseCase(
             method = methodEnum,
             customMethod = if (methodEnum == HttpMethod.CUSTOM) transaction.request.method else null,
             url = transaction.request.url,
-            headers = transaction.request.headers.associate { it.first to it.second },
+            headers = defaultHeaders() + transaction.request.headers.map { (name, value) ->
+                RequestHeader(key = name, value = value, isEnabled = true, isAuto = false)
+            },
             body = transaction.request.body?.let { String(it, Charsets.UTF_8) } ?: ""
         )
 

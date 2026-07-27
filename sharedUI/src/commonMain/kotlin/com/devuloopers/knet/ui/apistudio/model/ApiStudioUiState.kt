@@ -24,5 +24,6 @@ data class ApiStudioUiState(
     val latestResult: ExecutionResult? = null,
     val searchQuery: String = "",
     val isSuiteRunning: Boolean = false,
-    val suiteRunSummary: SuiteRunSummary? = null
+    val suiteRunSummary: SuiteRunSummary? = null,
+    val detectedPathParams: Map<String, String> = emptyMap()
 )

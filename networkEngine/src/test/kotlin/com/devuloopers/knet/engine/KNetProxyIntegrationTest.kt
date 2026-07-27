@@ -1,7 +1,8 @@
-package com.devuloopers.knet.engine.proxy
+package com.devuloopers.knet.engine
 
 import com.devuloopers.knet.crypto.CertificateAuthority
 import com.devuloopers.knet.crypto.CertificateCache
+import com.devuloopers.knet.engine.proxy.KNetProxyServer
 import com.sun.net.httpserver.*
 import java.net.InetSocketAddress
 import java.net.ProxySelector

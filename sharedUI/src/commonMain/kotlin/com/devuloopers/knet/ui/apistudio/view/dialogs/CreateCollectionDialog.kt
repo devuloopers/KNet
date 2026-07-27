@@ -23,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -73,6 +74,7 @@ fun CreateItemDialog(
                         value = nameText,
                         onValueChange = { nameText = it },
                         singleLine = true,
+                        cursorBrush = SolidColor(KNetColors.ActiveBlue),
                         textStyle = TextStyle(color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                     )
                 }

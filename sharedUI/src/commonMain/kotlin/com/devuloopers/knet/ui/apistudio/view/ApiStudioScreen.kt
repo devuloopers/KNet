@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -42,6 +43,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import com.devuloopers.knet.widgets.WidgetSearchBar
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -140,6 +142,11 @@ fun ApiStudioScreen(
             activeTab = uiState.activeReqTab,
             isExecuting = uiState.isExecuting,
             onTabSelected = { viewModel.selectReqTab(it) },
+            onUrlChange = { viewModel.onUrlInputChanged(it) },
+            onToggleHeader = { viewModel.toggleHeader(it) },
+            onUpdateHeaderValue = { key, value -> viewModel.updateHeaderValue(key, value) },
+            onAddHeader = { viewModel.addHeader() },
+            onRemoveHeader = { viewModel.removeHeader(it) },
             onSend = { viewModel.sendCurrentRequest() },
             modifier = Modifier
                 .weight(1.8f)
@@ -197,28 +204,12 @@ private fun CollectionsTreeSidebar(
             .padding(12.dp)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // Search & Filter Input Bar
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(KNetColors.FieldDark, RoundedCornerShape(6.dp))
-                    .border(1.dp, KNetColors.BorderDark, RoundedCornerShape(6.dp))
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Search, contentDescription = "Search", tint = KNetColors.TextSecondary, modifier = Modifier.size(14.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    if (searchQuery.isEmpty()) {
-                        Text("Search collections...", color = KNetColors.TextSecondary.copy(alpha = 0.6f), fontSize = 11.sp)
-                    }
-                    androidx.compose.foundation.text.BasicTextField(
-                        value = searchQuery,
-                        onValueChange = onSearchChange,
-                        singleLine = true,
-                        textStyle = androidx.compose.ui.text.TextStyle(color = Color.White, fontSize = 11.sp)
-                    )
-                }
-            }
+            // Search & Filter Input Bar (Reusing Live Traffic's WidgetSearchBar)
+            WidgetSearchBar(
+                query = searchQuery,
+                onQueryChange = onSearchChange,
+                placeholder = "Search collections..."
+            )
 
             Spacer(modifier = Modifier.height(10.dp))
 
@@ -368,6 +359,11 @@ private fun RequestBuilderPanel(
     activeTab: String,
     isExecuting: Boolean = false,
     onTabSelected: (String) -> Unit,
+    onUrlChange: (String) -> Unit = {},
+    onToggleHeader: (String) -> Unit = {},
+    onUpdateHeaderValue: (String, String) -> Unit = { _, _ -> },
+    onAddHeader: () -> Unit = {},
+    onRemoveHeader: (String) -> Unit = {},
     onSend: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -406,6 +402,7 @@ private fun RequestBuilderPanel(
                                     value = customMethodText,
                                     onValueChange = { customMethodText = it.uppercase() },
                                     singleLine = true,
+                                    cursorBrush = SolidColor(Color(selectedMethod.badgeColorHex)),
                                     textStyle = androidx.compose.ui.text.TextStyle(
                                         color = Color(selectedMethod.badgeColorHex),
                                         fontSize = 12.sp,
@@ -461,11 +458,26 @@ private fun RequestBuilderPanel(
                         .border(1.dp, KNetColors.BorderDark, RoundedCornerShape(6.dp))
                         .padding(horizontal = 12.dp, vertical = 8.dp)
                 ) {
-                    Text(
-                        text = request.url,
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontFamily = FontFamily.Monospace
+                    var tfValue by remember(request.url) {
+                        mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(
+                            text = request.url,
+                            selection = androidx.compose.ui.text.TextRange(request.url.length)
+                        ))
+                    }
+                    androidx.compose.foundation.text.BasicTextField(
+                        value = tfValue,
+                        onValueChange = { newValue ->
+                            tfValue = newValue
+                            onUrlChange(newValue.text)
+                        },
+                        singleLine = true,
+                        cursorBrush = SolidColor(KNetColors.ActiveBlue),
+                        textStyle = androidx.compose.ui.text.TextStyle(
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace
+                        ),
+                        modifier = Modifier.fillMaxWidth()
                     )
                 }
 
@@ -632,23 +644,117 @@ private fun RequestBuilderPanel(
                     }
 
                     activeTab.startsWith("Headers") -> {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("HTTP Request Headers (${request.headers.size.coerceAtLeast(4)})", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            val headersList = request.headers.ifEmpty {
-                                mapOf(
-                                    "Content-Type" to "application/json",
-                                    "Accept" to "application/json",
-                                    "User-Agent" to "KNet-Desktop/2.4.0",
-                                    "Cache-Control" to "no-cache"
-                                )
+                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                            // Header row count: enabled only
+                            val enabledCount = request.headers.count { it.isEnabled }
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("HTTP Request Headers ($enabledCount active)", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                // + Add Header button
+                                Box(
+                                    modifier = Modifier
+                                        .background(KNetColors.ActiveBlue.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                                        .border(1.dp, KNetColors.ActiveBlue, RoundedCornerShape(4.dp))
+                                        .clickable { onAddHeader() }
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text("+ Add Header", color = KNetColors.ActiveBlue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
                             }
-                            headersList.forEach { (key, value) ->
+                            // Column headers
+                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text("", modifier = Modifier.width(20.dp))
+                                Text("Key", color = KNetColors.TextSecondary, fontSize = 10.sp, modifier = Modifier.weight(1f))
+                                Text("Value", color = KNetColors.TextSecondary, fontSize = 10.sp, modifier = Modifier.weight(1.5f))
+                                Text("", modifier = Modifier.width(20.dp))
+                            }
+                            // Header rows
+                            request.headers.forEach { header ->
                                 Row(
                                     modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween
+                                    verticalAlignment = Alignment.CenterVertically
                                 ) {
-                                    Text(key, color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
-                                    Text(value, color = KNetColors.ActiveBlue, fontSize = 11.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1.5f))
+                                    // ☑ Enabled checkbox
+                                    Box(
+                                        modifier = Modifier
+                                            .size(16.dp)
+                                            .background(
+                                                if (header.isEnabled) KNetColors.ActiveBlue else KNetColors.FieldDark,
+                                                RoundedCornerShape(3.dp)
+                                            )
+                                            .border(1.dp, KNetColors.BorderDark, RoundedCornerShape(3.dp))
+                                            .clickable { onToggleHeader(header.key) },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        if (header.isEnabled) {
+                                            Text("✓", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    // Key + Auto badge
+                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = header.key,
+                                            color = if (header.isEnabled) Color.White else KNetColors.TextSecondary,
+                                            fontSize = 11.sp,
+                                            fontFamily = FontFamily.Monospace
+                                        )
+                                        if (header.isAuto) {
+                                            Spacer(modifier = Modifier.width(4.dp))
+                                            Box(
+                                                modifier = Modifier
+                                                    .background(KNetColors.ActiveBlue.copy(alpha = 0.15f), RoundedCornerShape(3.dp))
+                                                    .border(1.dp, KNetColors.ActiveBlue, RoundedCornerShape(3.dp))
+                                                    .padding(horizontal = 4.dp, vertical = 1.dp)
+                                            ) {
+                                                Text("Auto", color = KNetColors.ActiveBlue, fontSize = 8.sp, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    // Editable value field
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1.5f)
+                                            .background(KNetColors.FieldDark, RoundedCornerShape(4.dp))
+                                            .border(1.dp, KNetColors.BorderDark, RoundedCornerShape(4.dp))
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        var tfValue by remember(header.key, header.value) {
+                                            mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(
+                                                text = header.value,
+                                                selection = androidx.compose.ui.text.TextRange(header.value.length)
+                                            ))
+                                        }
+                                        androidx.compose.foundation.text.BasicTextField(
+                                            value = tfValue,
+                                            onValueChange = { newValue ->
+                                                tfValue = newValue
+                                                onUpdateHeaderValue(header.key, newValue.text)
+                                            },
+                                            singleLine = true,
+                                            cursorBrush = SolidColor(KNetColors.ActiveBlue),
+                                            textStyle = androidx.compose.ui.text.TextStyle(
+                                                color = if (header.value.startsWith("<")) KNetColors.TextSecondary else KNetColors.ActiveBlue,
+                                                fontSize = 11.sp,
+                                                fontFamily = FontFamily.Monospace
+                                            ),
+                                            modifier = Modifier.fillMaxWidth()
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    // Remove (✕) button
+                                    Box(
+                                        modifier = Modifier
+                                            .size(16.dp)
+                                            .clickable { onRemoveHeader(header.key) },
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Text("✕", color = KNetColors.TextSecondary, fontSize = 10.sp)
+                                    }
                                 }
                             }
                         }

@@ -15,6 +15,22 @@ enum class HttpMethod(val badgeColorHex: Long) {
 }
 
 /**
+ * Represents a single HTTP request header row.
+ *
+ * @property key The header name (e.g. "Content-Type").
+ * @property value The header value (e.g. "application/json"). May be "<auto>" for calculated headers.
+ * @property isEnabled Whether this header row is checked and will be sent with the request.
+ * @property isAuto True if this header was seeded automatically by KNet (shows "Auto" badge in UI).
+ *                  False if manually added by the user.
+ */
+data class RequestHeader(
+    val key: String,
+    val value: String,
+    val isEnabled: Boolean = true,
+    val isAuto: Boolean = false
+)
+
+/**
  * Data model for a test assertion result.
  */
 data class TestAssertionResult(
@@ -25,6 +41,9 @@ data class TestAssertionResult(
 
 /**
  * Data model representing a saved request within a collection folder.
+ *
+ * @property headers List of [RequestHeader] rows shown in the Headers tab.
+ *                   Always pre-seeded with universal HTTP client defaults via [defaultHeaders].
  */
 data class SavedApiRequest(
     val id: String,
@@ -32,7 +51,7 @@ data class SavedApiRequest(
     val method: HttpMethod,
     val customMethod: String? = null,
     val url: String,
-    val headers: Map<String, String> = emptyMap(),
+    val headers: List<RequestHeader> = defaultHeaders(),
     val body: String = "",
     val expectedStatus: Int = 200,
     val testResults: List<TestAssertionResult> = emptyList()
@@ -40,6 +59,21 @@ data class SavedApiRequest(
     val methodString: String
         get() = if (method == HttpMethod.CUSTOM && !customMethod.isNullOrBlank()) customMethod.uppercase() else method.name
 }
+
+/**
+ * Returns the 6 universal HTTP client default headers pre-seeded for every new [SavedApiRequest].
+ *
+ * These are identical to what Postman auto-generates for every endpoint regardless of URL.
+ * `Host` and `KNet-Token` are shown as `<auto>` since their values are calculated at send time.
+ */
+fun defaultHeaders(): List<RequestHeader> = listOf(
+    RequestHeader(key = "User-Agent",      value = "KNet-Desktop/2.4.0",   isEnabled = true,  isAuto = true),
+    RequestHeader(key = "Accept",          value = "*/*",                  isEnabled = true,  isAuto = true),
+    RequestHeader(key = "Accept-Encoding", value = "gzip, deflate, br",    isEnabled = true,  isAuto = true),
+    RequestHeader(key = "Connection",      value = "keep-alive",           isEnabled = true,  isAuto = true),
+    RequestHeader(key = "Host",            value = "<auto>",               isEnabled = true,  isAuto = true),
+    RequestHeader(key = "KNet-Token",      value = "<auto>",               isEnabled = true,  isAuto = true)
+)
 
 /**
  * Data model representing a folder inside an API collection.

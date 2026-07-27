@@ -30,6 +30,10 @@ import com.devuloopers.knet.domain.apistudio.runner.SuiteRunSummary
 import com.devuloopers.knet.domain.apistudio.importer.PostmanCollectionImporter
 import com.devuloopers.knet.domain.apistudio.exporter.PostmanCollectionExporter
 
+import com.devuloopers.knet.domain.apistudio.detector.UrlParameterExtractor
+import com.devuloopers.knet.domain.apistudio.model.RequestHeader
+import com.devuloopers.knet.domain.apistudio.model.defaultHeaders
+
 class ApiStudioViewModel(
     private val repository: CollectionsRepository? = null,
     private val proxyPort: Int? = null
@@ -40,6 +44,78 @@ class ApiStudioViewModel(
 
     private val apiClient = KNetApiClient(proxyPort)
     private val testRunner = CollectionTestRunner()
+    private val urlParameterExtractor = UrlParameterExtractor()
+
+    /**
+     * Called on every URL field keypress. Extracts path variables and query params
+     * and updates the selected request URL without touching the headers.
+     */
+    fun onUrlInputChanged(newUrl: String) {
+        val selectedReq = _uiState.value.selectedRequest ?: return
+        val parseResult = urlParameterExtractor.extract(newUrl)
+        _uiState.update { state ->
+            state.copy(
+                selectedRequest = selectedReq.copy(url = newUrl),
+                detectedPathParams = parseResult.pathVariables
+            )
+        }
+    }
+
+    /**
+     * Toggles the enabled/disabled state of a header row by key.
+     * Disabled headers are not sent with the request.
+     */
+    fun toggleHeader(key: String) {
+        val selectedReq = _uiState.value.selectedRequest ?: return
+        val updatedHeaders = selectedReq.headers.map { header ->
+            if (header.key == key) header.copy(isEnabled = !header.isEnabled) else header
+        }
+        _uiState.update { it.copy(selectedRequest = selectedReq.copy(headers = updatedHeaders)) }
+    }
+
+    /**
+     * Updates the value of a header row identified by key.
+     */
+    fun updateHeaderValue(key: String, newValue: String) {
+        val selectedReq = _uiState.value.selectedRequest ?: return
+        val updatedHeaders = selectedReq.headers.map { header ->
+            if (header.key == key) header.copy(value = newValue) else header
+        }
+        _uiState.update { it.copy(selectedRequest = selectedReq.copy(headers = updatedHeaders)) }
+    }
+
+    /**
+     * Adds a new user-defined header row to the selected request.
+     */
+    fun addHeader(key: String = "", value: String = "") {
+        val selectedReq = _uiState.value.selectedRequest ?: return
+        val newHeader = RequestHeader(key = key, value = value, isEnabled = true, isAuto = false)
+        _uiState.update {
+            it.copy(selectedRequest = selectedReq.copy(headers = selectedReq.headers + newHeader))
+        }
+    }
+
+    /**
+     * Removes a header row by key from the selected request.
+     * Auto headers can be restored later via [restoreDefaultHeaders].
+     */
+    fun removeHeader(key: String) {
+        val selectedReq = _uiState.value.selectedRequest ?: return
+        val updatedHeaders = selectedReq.headers.filter { it.key != key }
+        _uiState.update { it.copy(selectedRequest = selectedReq.copy(headers = updatedHeaders)) }
+    }
+
+    /**
+     * Restores any deleted auto-generated default headers back to the selected request.
+     */
+    fun restoreDefaultHeaders() {
+        val selectedReq = _uiState.value.selectedRequest ?: return
+        val existingKeys = selectedReq.headers.map { it.key }.toSet()
+        val missingDefaults = defaultHeaders().filter { it.key !in existingKeys }
+        _uiState.update {
+            it.copy(selectedRequest = selectedReq.copy(headers = missingDefaults + selectedReq.headers))
+        }
+    }
 
     // Seed default sample collection data if repository is empty
     init {
@@ -103,7 +179,9 @@ class ApiStudioViewModel(
             val result = apiClient.execute(
                 url = request.url,
                 method = request.methodString,
-                headers = request.headers,
+                headers = request.headers
+                    .filter { it.isEnabled && !it.value.startsWith("<") }
+                    .associate { it.key to it.value },
                 body = request.body,
                 bodyType = RequestBodyType.JSON
             )
@@ -218,7 +296,9 @@ class ApiStudioViewModel(
                 val res = apiClient.execute(
                     url = req.url,
                     method = req.methodString,
-                    headers = req.headers,
+                    headers = req.headers
+                        .filter { it.isEnabled && !it.value.startsWith("<") }
+                        .associate { it.key to it.value },
                     body = req.body
                 )
                 val domainRes = com.devuloopers.knet.domain.apistudio.usecase.ExecutionResult(
