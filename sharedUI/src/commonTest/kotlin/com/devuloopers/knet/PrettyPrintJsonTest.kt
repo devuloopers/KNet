@@ -155,11 +155,11 @@ class PrettyPrintJsonTest {
     // -------------------------------------------------------------------------
 
     @Test
-    fun googleOctetStreamCompressibleMimeReturnsBinaryBadge() {
+    fun googleOctetStreamCompressibleMimeReturnsRawBytesForProtobufWireDecoder() {
         val bytes = ByteArray(512) { 0x01 }
         val headers = listOf("Content-Type" to "application/vnd.google.octet-stream-compressible")
         val result = com.devuloopers.knet.domain.utils.decodeBodyToText(bytes, headers)
-        assertEquals("[Binary payload — 0.5 KB · application/vnd.google.octet-stream-compressible]", result)
+        assertEquals(String(bytes, Charsets.ISO_8859_1), result)
     }
 
     @Test

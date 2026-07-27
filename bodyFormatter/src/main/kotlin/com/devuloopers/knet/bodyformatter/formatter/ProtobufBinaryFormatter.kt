@@ -21,23 +21,31 @@ class ProtobufBinaryFormatter : BodyFormatter {
     }
 
     override fun format(headers: Map<String, String>, bodyText: String): BodyFormat {
-        // Do not trim bodyText, as binary bytes (like 10 for newline) at the start/end will be lost
+        // Convert bodyText back to raw bytes (preserving ISO_8859_1 byte fidelity)
+        val bytes = bodyText.toByteArray(StandardCharsets.ISO_8859_1)
+
+        // Stage 1: Registered .proto Schema Lookup
         val messageType = headers["x-protobuf-schema"] ?: headers["x-protobuf-message"] ?: ""
         if (messageType.isNotEmpty()) {
             val descriptor = ProtobufDescriptorRegistry.findDescriptor(messageType)
             if (descriptor != null) {
-                return try {
-                    val bytes = bodyText.toByteArray(StandardCharsets.ISO_8859_1)
+                try {
                     val message = DynamicMessage.parseFrom(descriptor, bytes)
                     val jsonString = JsonFormat.printer().print(message)
-                    BodyFormat.Json(jsonString)
+                    return BodyFormat.Json(jsonString)
                 } catch (_: Exception) {
-                    BodyFormat.Protobuf(bodyText)
+                    // Fallthrough to Stage 2
                 }
             }
         }
-        
-        // Mode 1: Fallback to Raw Binary
+
+        // Stage 2: Schema-less Protobuf Wire Decoder
+        val decodedWire = RawProtobufWireDecoder.decodeWireFormat(bytes)
+        if (decodedWire != null) {
+            return BodyFormat.Protobuf(decodedWire)
+        }
+
+        // Stage 3: Binary Payload Fallback Descriptor
         return BodyFormat.Protobuf(bodyText)
     }
 }

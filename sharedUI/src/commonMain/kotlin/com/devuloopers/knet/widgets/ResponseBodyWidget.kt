@@ -22,11 +22,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -37,14 +39,18 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.devuloopers.knet.bodyformatter.model.BodyFormat
 import com.devuloopers.knet.domain.inspector.model.TransactionUiModel
 import com.devuloopers.knet.domain.inspector.model.responseContentTypeBadge
-import com.devuloopers.knet.domain.utils.prettyPrintBody
-import com.devuloopers.knet.domain.utils.prettyPrintJson
 import com.devuloopers.knet.theme.KNetColors
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.ui.draw.clipToBounds
+
+/** Maximum payload size (2 MB) that will be formatted and rendered inline. */
+private const val MAX_FORMATTABLE_SIZE_BYTES = 2 * 1024 * 1024
 
 /**
  * Response payload viewer widget displaying formatted response body, HTTP status, and headers.
@@ -67,17 +73,79 @@ fun ResponseBodyWidget(
         return
     }
 
-    var searchQuery by remember { mutableStateOf("") }
-    val prettyBody = remember(transaction.responseBody) {
-        prettyPrintBody(transaction.responseBody)
+    // --- Large Payload Size Guard ---
+    val bodySizeBytes = transaction.responseBody.length
+    if (bodySizeBytes > MAX_FORMATTABLE_SIZE_BYTES) {
+        val sizeMb = "%.2f".format(bodySizeBytes / (1024.0 * 1024.0))
+        Box(
+            modifier = modifier.fillMaxSize().background(KNetColors.SurfaceDark),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(
+                    text = "\uD83D\uDEAB Payload too large to render inline",
+                    color = KNetColors.TextSecondary,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = "Size: $sizeMb MB (limit: 2 MB)",
+                    color = KNetColors.TextSecondary,
+                    fontSize = 11.sp
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    CopyButton(textToCopy = transaction.responseBody, label = "Copy Raw")
+                }
+            }
+        }
+        return
     }
 
-    val resolvedFormat = remember(transaction.responseHeaders, transaction.responseBody) {
-        com.devuloopers.knet.bodyformatter.formatter.BodyFormatterRegistry.resolveFormat(
-            transaction.responseHeaders,
-            transaction.responseBody
-        )
+    var searchQuery by remember { mutableStateOf("") }
+
+    // --- Off-Thread Formatting via produceState ---
+    val formattingResult by produceState<FormattingResult>(
+        initialValue = FormattingResult.Loading,
+        key1 = transaction.responseBody,
+        key2 = transaction.responseHeaders
+    ) {
+        value = withContext(Dispatchers.Default) {
+            val format = com.devuloopers.knet.bodyformatter.formatter.BodyFormatterRegistry.resolveFormat(
+                transaction.responseHeaders,
+                transaction.responseBody
+            )
+            val pretty = com.devuloopers.knet.bodyformatter.formatter.BodyFormatterRegistry.prettyPrintBody(
+                transaction.responseHeaders,
+                transaction.responseBody
+            )
+            FormattingResult.Ready(prettyBody = pretty, format = format)
+        }
     }
+
+    // Show loading shimmer while formatting is computing off-thread
+    if (formattingResult is FormattingResult.Loading) {
+        Box(
+            modifier = modifier.fillMaxSize().background(KNetColors.SurfaceDark),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    color = KNetColors.ActiveBlue,
+                    strokeWidth = 2.dp
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(text = "Formatting response...", color = KNetColors.TextSecondary, fontSize = 10.sp)
+            }
+        }
+        return
+    }
+
+    val readyResult = formattingResult as FormattingResult.Ready
+    val prettyBody = readyResult.prettyBody
+    val resolvedFormat = readyResult.format
 
     SubFrame(
         headerContent = {

@@ -18,8 +18,10 @@ koin = "4.0.2"
 jackson = "2.18.2"
 jackson-msgpack = "0.9.12"
 protobuf = "3.25.3"
+datastore = "1.2.1"
 
 [libraries]
+datastore-preferences = { module = "androidx.datastore:datastore-preferences-core", version.ref = "datastore" }
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 kotlin-testJunit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
 junit = { module = "junit:junit", version.ref = "junit" }

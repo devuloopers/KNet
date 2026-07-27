@@ -9,6 +9,7 @@ dependencies {
     implementation(project(":sessionManager"))
     implementation(project(":storage"))
     implementation(project(":interceptor"))
+    implementation(libs.datastore.preferences)
     implementation(libs.kotlinx.coroutines.core)
     api(libs.koin.core)
 

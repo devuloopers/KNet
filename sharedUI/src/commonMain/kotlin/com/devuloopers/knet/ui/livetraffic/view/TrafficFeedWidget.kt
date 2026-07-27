@@ -159,7 +159,7 @@ fun TrafficFeedWidget(
         }
 
         // --- Body Content Rendering ---
-        Box(modifier = Modifier.weight(1f)) {
+        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when (state) {
                 is LiveTrafficUiState.Loading -> {
                     CircularProgressIndicator(
@@ -178,7 +178,7 @@ fun TrafficFeedWidget(
                 }
                 is LiveTrafficUiState.Success -> {
                     LazyColumn(modifier = Modifier.fillMaxSize()) {
-                        items(state.items, key = { it.transactionId }) { item ->
+                        items(state.items, key = { it.transactionId }, contentType = { "traffic_row" }) { item ->
                             TrafficItemRow(
                                 item = item,
                                 onSelect = { onIntent(LiveTrafficIntent.SelectTransaction(item.transactionId)) }

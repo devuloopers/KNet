@@ -47,6 +47,7 @@ class ProxyStateController(
     val liveTrafficViewModel: LiveTrafficViewModel by inject()
     val inspectorViewModel: com.devuloopers.knet.ui.inspector.viewmodel.InspectorViewModel by inject()
     val rulesViewModel: com.devuloopers.knet.ui.rules.viewmodel.RulesViewModel by inject()
+    val workspaceViewModel: com.devuloopers.knet.ui.workspace.viewmodel.WorkspaceViewModel by inject()
 
     init {
         scope.launch(Dispatchers.Main) {

@@ -6,8 +6,11 @@ import com.devuloopers.knet.model.HttpTransaction
 import com.devuloopers.knet.session.util.HttpTransactionMapper
 import com.devuloopers.knet.storage.KNetDatabase
 import com.devuloopers.knet.storage.HttpTransactionEntity
+import com.devuloopers.knet.logger.KNetLogger
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+
+private const val TAG = "KNetSession"
 
 /**
  * Manages the active workspace session capture buffer, SQLite sync database,
@@ -20,6 +23,15 @@ class KNetSession(
     private val database: KNetDatabase,
     private val payloadStore: FilePayloadStore
 ) {
+
+    companion object {
+        /**
+         * Maximum number of transactions persisted in the database.
+         * When this limit is exceeded after a new request is recorded,
+         * the oldest transactions and their disk payload files are pruned automatically.
+         */
+        const val MAX_PERSISTED_TRANSACTIONS = 1000
+    }
 
     private val transactionDao = database.httpTransactionDao()
 
@@ -55,6 +67,10 @@ class KNetSession(
             timestamp = request.timestamp
         )
         transactionDao.insert(entity)
+
+        // Enforce sliding transaction limit after each insert
+        pruneIfLimitExceeded()
+
         return HttpTransactionMapper.toDomainModel(entity, payloadStore)
     }
 
@@ -103,5 +119,37 @@ class KNetSession(
     suspend fun clearSession() {
         transactionDao.clearAll()
         payloadStore.clearStore()
+    }
+
+    /**
+     * Enforces the [MAX_PERSISTED_TRANSACTIONS] sliding limit.
+     *
+     * When the total transaction count exceeds the limit, the oldest
+     * excess records are identified, their corresponding disk payload
+     * files (both request and response) are deleted, and the database
+     * rows are batch-removed in a single query.
+     */
+    private suspend fun pruneIfLimitExceeded() {
+        val count = transactionDao.getTransactionCount()
+        if (count <= MAX_PERSISTED_TRANSACTIONS) return
+
+        val excess = count - MAX_PERSISTED_TRANSACTIONS
+        val oldestEntities = transactionDao.getOldestTransactions(excess)
+
+        if (oldestEntities.isEmpty()) return
+
+        KNetLogger.info(TAG) {
+            "Pruning $excess oldest transactions (total: $count, limit: $MAX_PERSISTED_TRANSACTIONS)"
+        }
+
+        // Delete disk payload files for each pruned transaction
+        oldestEntities.forEach { entity ->
+            payloadStore.deletePayload(entity.requestBodyPath)
+            payloadStore.deletePayload(entity.responseBodyPath)
+        }
+
+        // Batch-delete database rows
+        val idsToDelete = oldestEntities.map { it.id }
+        transactionDao.deleteTransactionsByIds(idsToDelete)
     }
 }

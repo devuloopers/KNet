@@ -3,6 +3,7 @@ package com.devuloopers.knet.domain.di
 import com.devuloopers.knet.domain.inspector.di.inspectorDomainModule
 import com.devuloopers.knet.domain.livetraffic.di.liveTrafficDomainModule
 import com.devuloopers.knet.domain.rules.di.rulesDomainModule
+import com.devuloopers.knet.domain.workspace.di.workspaceDomainModule
 import org.koin.dsl.module
 
 /**
@@ -10,5 +11,5 @@ import org.koin.dsl.module
  * Aggregates all feature-specific domain modules.
  */
 val domainModule = module {
-    includes(liveTrafficDomainModule, inspectorDomainModule, rulesDomainModule)
+    includes(liveTrafficDomainModule, inspectorDomainModule, rulesDomainModule, workspaceDomainModule)
 }

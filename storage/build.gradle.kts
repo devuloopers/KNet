@@ -13,6 +13,7 @@ dependencies {
     implementation(project(":logger"))
     implementation(libs.room.runtime)
     implementation(libs.sqlite.bundled)
+    api(libs.datastore.preferences)
     ksp(libs.room.compiler)
     
     testImplementation(kotlin("test"))

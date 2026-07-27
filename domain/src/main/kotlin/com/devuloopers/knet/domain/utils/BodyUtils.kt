@@ -127,6 +127,12 @@ fun decodeBodyToText(bodyBytes: ByteArray?, headers: List<Pair<String, String>>)
     val decompressed = decompressBody(bodyBytes, encodingHeader)
 
     val sizeKb = "%.1f KB".format(decompressed.size / 1024.0)
+    val isProtobufOrGrpcMime = mimeType.contains("proto") || mimeType.contains("grpc") || mimeType.contains("octet-stream")
+    if (isProtobufOrGrpcMime) {
+        // Pass raw bytes to formatters via ISO_8859_1 string encoding so wire decoders can inspect tag fields
+        return String(decompressed, Charsets.ISO_8859_1)
+    }
+
     val isBinaryMime = BINARY_CONTENT_TYPES.any { mimeType.startsWith(it) }
     val isBinaryBytes = decompressed.isBinaryContent()
 
@@ -144,6 +150,7 @@ fun decodeBodyToText(bodyBytes: ByteArray?, headers: List<Pair<String, String>>)
  */
 enum class BodyContentType(val badgeLabel: String) {
     JSON("JSON"),
+    GRAPHQL("GraphQL"),
     JSON_STREAM("JSON Stream"),
     FORM_DATA("Form Data"),
     SSE_STREAM("SSE Stream"),
@@ -167,6 +174,7 @@ fun detectContentType(headers: Map<String, String>, bodyText: String): BodyConte
     val mime = typeHeader.substringBefore(";").trim().lowercase()
 
     return when (format) {
+        is BodyFormat.GraphQL -> BodyContentType.GRAPHQL
         is BodyFormat.Json -> BodyContentType.JSON
         is BodyFormat.JsonStream -> {
             if (mime.contains("grpc") && !bodyText.contains("{")) BodyContentType.GRPC_STREAM else BodyContentType.JSON_STREAM

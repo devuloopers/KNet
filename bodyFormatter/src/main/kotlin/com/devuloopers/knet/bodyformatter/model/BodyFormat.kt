@@ -16,6 +16,12 @@ sealed class BodyFormat {
     data class Js(val formattedText: String) : BodyFormat()
     data class Css(val formattedText: String) : BodyFormat()
     data class GrpcWeb(val frames: List<GrpcWebFrame>) : BodyFormat()
+    data class GraphQL(
+        val operationType: String,
+        val operationName: String?,
+        val queryText: String,
+        val variablesJson: String
+    ) : BodyFormat()
     data class RawText(val text: String) : BodyFormat()
 
     val badgeLabel: String
@@ -32,6 +38,7 @@ sealed class BodyFormat {
             is Js -> "JS"
             is Css -> "CSS"
             is GrpcWeb -> "gRPC-Web"
+            is GraphQL -> if (!operationName.isNullOrEmpty()) "GQL: $operationName" else "GQL: $operationType"
             is RawText -> "PLAIN"
         }
 }

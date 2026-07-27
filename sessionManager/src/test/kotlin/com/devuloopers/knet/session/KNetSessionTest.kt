@@ -121,4 +121,76 @@ class KNetSessionTest {
         val cacheFiles = cacheFolder.listFiles() ?: emptyArray()
         assertTrue(cacheFiles.isEmpty(), "Cache directory should be empty after clearSession")
     }
+
+    /**
+     * Verifies that session pruning automatically trims the oldest transactions
+     * when the [KNetSession.MAX_PERSISTED_TRANSACTIONS] limit is exceeded.
+     * After inserting 1005 records, exactly 1000 should remain, and the 5
+     * oldest request payload `.bin` files should be deleted from disk.
+     */
+    @Test
+    fun testPruneOldestTransactionsWhenLimitExceeded() = runBlocking {
+        val limit = KNetSession.MAX_PERSISTED_TRANSACTIONS
+        val totalInserts = limit + 5
+
+        // Insert totalInserts transactions (each with a unique timestamp and request body)
+        for (index in 1..totalInserts) {
+            val request = HttpRequest(
+                id = "prune-tx-$index",
+                method = "GET",
+                url = "http://localhost/item/$index",
+                protocol = "HTTP/1.1",
+                headers = listOf("Content-Type" to "text/plain"),
+                body = "body-$index".toByteArray(),
+                timestamp = 1600000000000L + index
+            )
+            session.recordRequest(request)
+        }
+
+        // Verify that exactly MAX_PERSISTED_TRANSACTIONS remain
+        val remainingTransactions = session.transactionsFlow.first()
+        assertEquals(
+            limit,
+            remainingTransactions.size,
+            "Transaction count should be pruned to $limit, but was ${remainingTransactions.size}"
+        )
+
+        // Verify the 5 oldest transactions (prune-tx-1 through prune-tx-5) were pruned
+        val remainingIds = remainingTransactions.map { it.id }.toSet()
+        for (prunedIndex in 1..5) {
+            val prunedId = "prune-tx-$prunedIndex"
+            assertTrue(
+                prunedId !in remainingIds,
+                "Transaction '$prunedId' should have been pruned but is still present"
+            )
+        }
+
+        // Verify the newest transactions survived
+        for (survivingIndex in 6..totalInserts) {
+            val survivingId = "prune-tx-$survivingIndex"
+            assertTrue(
+                survivingId in remainingIds,
+                "Transaction '$survivingId' should have survived pruning but was deleted"
+            )
+        }
+
+        // Verify disk payload files for pruned transactions are deleted
+        val cacheFolder = File(tempDir, "payloads")
+        for (prunedIndex in 1..5) {
+            val prunedFile = File(cacheFolder, "prune-tx-${prunedIndex}_req.bin")
+            assertTrue(
+                !prunedFile.exists(),
+                "Payload file '${prunedFile.name}' should have been deleted during pruning"
+            )
+        }
+
+        // Verify disk payload files for surviving transactions still exist
+        for (survivingIndex in 6..totalInserts) {
+            val survivingFile = File(cacheFolder, "prune-tx-${survivingIndex}_req.bin")
+            assertTrue(
+                survivingFile.exists(),
+                "Payload file '${survivingFile.name}' should still exist after pruning"
+            )
+        }
+    }
 }

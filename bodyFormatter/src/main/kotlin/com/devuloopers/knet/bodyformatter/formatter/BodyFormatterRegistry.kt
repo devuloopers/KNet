@@ -22,6 +22,7 @@ object BodyFormatterRegistry {
     private val jsFormatter = JsBodyFormatter()
     private val cssFormatter = CssBodyFormatter()
     private val grpcWebFormatter = GrpcWebBodyFormatter(jsonFormatter)
+    private val graphQLFormatter = GraphQLBodyFormatter()
     private val plainTextFormatter = PlainTextBodyFormatter()
 
     private val formatters: List<BodyFormatter> = listOf(
@@ -29,6 +30,7 @@ object BodyFormatterRegistry {
         imageFormatter,
         webChannelFormatter,
         sseFormatter,
+        graphQLFormatter,
         jsonFormatter,
         formDataFormatter,
         xmlFormatter,
@@ -52,13 +54,17 @@ object BodyFormatterRegistry {
         val mime = contentType.substringBefore(";").trim().lowercase()
 
         when {
+            mime.contains("graphql") -> return graphQLFormatter.format(headers, trimmed)
             mime.startsWith("image/") -> return imageFormatter.format(headers, trimmed)
             mime.contains("x-www-form-urlencoded") -> return formDataFormatter.format(headers, trimmed)
             mime.contains("event-stream") -> return sseFormatter.format(headers, trimmed)
             mime.contains("grpc-web") || mime.contains("grpc-web-text") -> return grpcWebFormatter.format(headers, trimmed)
             mime.contains("grpc") || mime.contains("channel") -> return webChannelFormatter.format(headers, trimmed)
             mime.contains("proto") -> return protobufFormatter.format(headers, trimmed)
-            mime.contains("json") -> return jsonFormatter.format(headers, trimmed)
+            mime.contains("json") -> {
+                if (graphQLFormatter.matches(headers, trimmed)) return graphQLFormatter.format(headers, trimmed)
+                return jsonFormatter.format(headers, trimmed)
+            }
             mime.contains("cbor") -> return cborFormatter.format(headers, trimmed)
             mime.contains("msgpack") || mime.contains("messagepack") -> return msgpackFormatter.format(headers, trimmed)
             mime.contains("xml") -> return xmlFormatter.format(headers, trimmed)
@@ -79,6 +85,11 @@ object BodyFormatterRegistry {
      */
     fun prettyPrintBody(headers: Map<String, String>, bodyText: String): String {
         return when (val format = resolveFormat(headers, bodyText)) {
+            is BodyFormat.GraphQL -> {
+                val opName = if (!format.operationName.isNullOrEmpty()) " (${format.operationName})" else ""
+                val varsStr = if (format.variablesJson.isNotEmpty()) "\n\n# Variables / Arguments:\n${format.variablesJson}" else ""
+                "# GraphQL ${format.operationType}$opName:\n${format.queryText}$varsStr"
+            }
             is BodyFormat.Json -> format.formattedText
             is BodyFormat.JsonStream -> format.frames.joinToString("\n\n")
             is BodyFormat.FormData -> format.pairs.joinToString("\n") { "${it.first} = ${it.second}" }

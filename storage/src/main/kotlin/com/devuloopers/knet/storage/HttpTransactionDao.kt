@@ -42,4 +42,32 @@ interface HttpTransactionDao {
      */
     @Query("DELETE FROM HttpTransactionEntity")
     suspend fun clearAll()
+
+    /**
+     * Returns the total number of persisted transaction records.
+     * Used by session pruning to detect when the limit is exceeded.
+     *
+     * @return The count of rows in the HttpTransactionEntity table.
+     */
+    @Query("SELECT COUNT(*) FROM HttpTransactionEntity")
+    suspend fun getTransactionCount(): Int
+
+    /**
+     * Retrieves the oldest transaction records sorted by timestamp ascending.
+     * Used by session pruning to identify records eligible for deletion.
+     *
+     * @param count The maximum number of oldest records to return.
+     * @return A list of the oldest [HttpTransactionEntity] records.
+     */
+    @Query("SELECT * FROM HttpTransactionEntity ORDER BY timestamp ASC LIMIT :count")
+    suspend fun getOldestTransactions(count: Int): List<HttpTransactionEntity>
+
+    /**
+     * Batch-deletes transaction records whose IDs match the provided list.
+     * Used by session pruning to remove expired records in a single query.
+     *
+     * @param ids The list of transaction IDs to delete.
+     */
+    @Query("DELETE FROM HttpTransactionEntity WHERE id IN (:ids)")
+    suspend fun deleteTransactionsByIds(ids: List<String>)
 }

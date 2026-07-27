@@ -46,6 +46,17 @@ import com.devuloopers.knet.highlighter.CodeHighlighterRegistry
 import com.devuloopers.knet.highlighter.CodeLanguageHighlighter
 import com.devuloopers.knet.theme.KNetColors
 
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+
+data class VisibleLineInfo(
+    val index: Int,
+    val lineText: String,
+    val isFoldable: Boolean,
+    val isCollapsed: Boolean,
+    val closingSymbol: String
+)
+
 /**
  * Reusable Code Viewer Component with line numbering, JetBrains-style code folding,
  * search filtering, modular strategy-based syntax highlighting, and custom dark context menu text selection/copying support.
@@ -133,6 +144,51 @@ fun CodeViewerWidget(
         }
     }
 
+    // Precompute visible lines list for virtualization performance
+    val visibleLines = remember(lines, foldRanges, collapsedStartLines, searchQuery, isSearching) {
+        val result = mutableListOf<VisibleLineInfo>()
+        var skipUntilIndex = -1
+        for (index in lines.indices) {
+            val line = lines[index]
+            if (isSearching) {
+                if (line.contains(searchQuery, ignoreCase = true)) {
+                    result.add(
+                        VisibleLineInfo(
+                            index = index,
+                            lineText = line,
+                            isFoldable = false,
+                            isCollapsed = false,
+                            closingSymbol = ""
+                        )
+                    )
+                }
+            } else {
+                if (index <= skipUntilIndex) continue
+                val isFoldable = foldRanges.containsKey(index)
+                val isCollapsed = collapsedStartLines.contains(index)
+                val endLineIndex = foldRanges[index]
+                val closingSymbol = if (endLineIndex != null) {
+                    highlighter.resolveClosingSymbol(lines, endLineIndex)
+                } else ""
+
+                if (isCollapsed && endLineIndex != null) {
+                    skipUntilIndex = endLineIndex
+                }
+
+                result.add(
+                    VisibleLineInfo(
+                        index = index,
+                        lineText = line,
+                        isFoldable = isFoldable,
+                        isCollapsed = isCollapsed,
+                        closingSymbol = closingSymbol
+                    )
+                )
+            }
+        }
+        result
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -187,56 +243,23 @@ fun CodeViewerWidget(
             SelectionContainer(
                 modifier = Modifier.weight(1f).fillMaxWidth()
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState()),
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
-                    var skipUntilIndex = -1
-
-                    for (index in lines.indices) {
-                        if (isSearching) {
-                            val line = lines[index]
-                            if (line.contains(searchQuery, ignoreCase = true)) {
-                                CodeLineView(
-                                    lineNumber = index + 1,
-                                    lineText = line,
-                                    isFoldable = false,
-                                    isCollapsed = false,
-                                    closingSymbol = "",
-                                    highlighter = highlighter,
-                                    onToggleFold = {}
-                                )
-                            }
-                            continue
-                        }
-
-                        if (index <= skipUntilIndex) continue
-
-                        val isFoldable = foldRanges.containsKey(index)
-                        val isCollapsed = collapsedStartLines.contains(index)
-                        val endLineIndex = foldRanges[index]
-                        val closingSymbol = if (endLineIndex != null) {
-                            highlighter.resolveClosingSymbol(lines, endLineIndex)
-                        } else ""
-
-                        if (isCollapsed && endLineIndex != null) {
-                            skipUntilIndex = endLineIndex
-                        }
-
+                    items(visibleLines, key = { it.index }) { item ->
                         CodeLineView(
-                            lineNumber = index + 1,
-                            lineText = lines[index],
-                            isFoldable = isFoldable,
-                            isCollapsed = isCollapsed,
-                            closingSymbol = closingSymbol,
+                            lineNumber = item.index + 1,
+                            lineText = item.lineText,
+                            isFoldable = item.isFoldable,
+                            isCollapsed = item.isCollapsed,
+                            closingSymbol = item.closingSymbol,
                             highlighter = highlighter,
                             onToggleFold = {
-                                collapsedStartLines = if (isCollapsed) {
-                                    collapsedStartLines - index
+                                collapsedStartLines = if (item.isCollapsed) {
+                                    collapsedStartLines - item.index
                                 } else {
-                                    collapsedStartLines + index
+                                    collapsedStartLines + item.index
                                 }
                             }
                         )

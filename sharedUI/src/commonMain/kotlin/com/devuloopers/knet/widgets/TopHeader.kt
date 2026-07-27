@@ -62,11 +62,8 @@ fun TopHeader(
     onTrustCa: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val primaryTabs = listOf("Dashboard", "Live Traffic", "Sessions", "Collections")
-    val secondaryTabs = listOf(
-        "Breakpoints", "Rewrite Rules", "Map Local", "Map Remote",
-        "WebSocket", "HTTP/2", "gRPC", "Certificates", "Settings"
-    )
+    val primaryTabs = listOf("Live Traffic", "Sessions", "Collections")
+    val secondaryTabs = listOf("Rules", "Certificates", "Settings")
 
     var widgetManagerDropdownExpanded by remember { mutableStateOf(false) }
 
@@ -224,106 +221,6 @@ fun TopHeader(
                         softWrap = false
                     )
                 }
-
-                Spacer(modifier = Modifier.width(16.dp))
-
-                // 3. Search box with ⌘K badge
-                Box(
-                    modifier = Modifier
-                        .background(Color.Black.copy(alpha = 0.2f), RoundedCornerShape(6.dp))
-                        .border(1.dp, KNetColors.BorderDark, RoundedCornerShape(6.dp))
-                        .width(200.dp)
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = "Search",
-                                tint = KNetColors.TextSecondary,
-                                modifier = Modifier.size(12.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = "Search (Ctrl + K)",
-                                color = KNetColors.TextSecondary,
-                                fontSize = 11.sp,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
-                        Box(
-                            modifier = Modifier
-                                .background(KNetColors.FieldDark, RoundedCornerShape(3.dp))
-                                .border(1.dp, KNetColors.BorderDark, RoundedCornerShape(3.dp))
-                                .padding(horizontal = 4.dp, vertical = 1.dp)
-                        ) {
-                            Text(
-                                text = "⌘K",
-                                color = KNetColors.TextSecondary,
-                                fontSize = 8.sp,
-                                fontWeight = FontWeight.Bold,
-                                maxLines = 1,
-                                softWrap = false
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.width(16.dp))
-
-                // 4. Icon tools list matching SVG buttons (Material 3 Icons)
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.padding(end = 12.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Notifications,
-                        contentDescription = "Notifications",
-                        tint = KNetColors.TextSecondary,
-                        modifier = Modifier.size(16.dp).clickable { }
-                    )
-                    Icon(
-                        imageVector = Icons.Default.Info,
-                        contentDescription = "Help",
-                        tint = KNetColors.TextSecondary,
-                        modifier = Modifier.size(16.dp).clickable { }
-                    )
-                    Icon(
-                        imageVector = Icons.Default.Settings,
-                        contentDescription = "Settings",
-                        tint = KNetColors.TextSecondary,
-                        modifier = Modifier.size(16.dp).clickable { }
-                    )
-                    Icon(
-                        imageVector = Icons.Default.Brightness4,
-                        contentDescription = "Theme",
-                        tint = KNetColors.TextSecondary,
-                        modifier = Modifier.size(16.dp).clickable { }
-                    )
-                }
-
-                // Avatar Profile Indigo w-8 h-8
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .background(Color(0xFF6366F1), CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "K",
-                        color = Color.White,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        softWrap = false
-                    )
-                }
             }
         }
 
@@ -374,7 +271,7 @@ fun TopHeader(
                     .background(KNetColors.BorderDark)
             )
 
-            // Render Secondary Tabs
+            // Render Secondary Tabs (Rules, Certificates, Settings)
             secondaryTabs.forEach { tab ->
                 val isSelected = tab == currentTab
                 Column(
