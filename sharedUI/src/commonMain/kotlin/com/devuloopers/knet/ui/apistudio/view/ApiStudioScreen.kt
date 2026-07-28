@@ -4,8 +4,10 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -19,11 +21,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FileDownload
@@ -59,10 +64,14 @@ import com.devuloopers.knet.domain.apistudio.model.SavedApiRequest
 import com.devuloopers.knet.domain.apistudio.model.TestAssertionResult
 import com.devuloopers.knet.theme.KNetColors
 import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.text.TextStyle
 import com.devuloopers.knet.ui.apistudio.viewmodel.ApiStudioViewModel
 import com.devuloopers.knet.domain.apistudio.usecase.ExecutionResult
 import com.devuloopers.knet.ui.apistudio.view.dialogs.CreateItemDialog
 import com.devuloopers.knet.ui.apistudio.view.dialogs.CollectionRunnerModal
+import com.devuloopers.knet.widgets.TableCellTextField
+import com.devuloopers.knet.widgets.CodeEditorWidget
+import com.devuloopers.knet.widgets.KNetInputField
 
 /**
  * 3-Column API Studio & Test Runner Screen for KNet.
@@ -74,8 +83,13 @@ fun ApiStudioScreen(
     modifier: Modifier = Modifier
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val sampleFolders = uiState.collections.firstOrNull()?.folders ?: emptyList()
-    val selectedRequest = uiState.selectedRequest ?: (sampleFolders.firstOrNull()?.requests?.firstOrNull() ?: SavedApiRequest("r-0", "Default", HttpMethod.GET, url = "https://httpbin.org/get"))
+    val folders = remember(uiState.collections) { uiState.collections.flatMap { it.folders } }
+    val selectedRequest = uiState.selectedRequest ?: SavedApiRequest(
+        id = "r-new",
+        name = "New Request",
+        method = HttpMethod.GET,
+        url = ""
+    )
 
     var showCreateCollectionDialog by remember { mutableStateOf(false) }
 
@@ -123,11 +137,15 @@ fun ApiStudioScreen(
     ) {
         // ── Left Column: Collections Tree Sidebar (25% width) ────────────────
         CollectionsTreeSidebar(
-            folders = sampleFolders,
+            folders = folders,
             selectedRequestId = selectedRequest.id,
             searchQuery = uiState.searchQuery,
             onSearchChange = { viewModel.updateSearchQuery(it) },
             onSelectRequest = { req -> viewModel.selectRequest(req) },
+            onDeleteRequest = { reqId ->
+                val colId = uiState.collections.firstOrNull()?.id ?: ""
+                viewModel.deleteRequest(colId, reqId)
+            },
             onRunCollection = { viewModel.runCollectionSuite() },
             onCreateCollection = { showCreateCollectionDialog = true },
             onImportCollection = { showImportDialog = true },
@@ -139,14 +157,34 @@ fun ApiStudioScreen(
         // ── Middle Column: Request Details & Payload Builder (45% width) ─────
         RequestBuilderPanel(
             request = selectedRequest,
+            uiState = uiState,
             activeTab = uiState.activeReqTab,
             isExecuting = uiState.isExecuting,
             onTabSelected = { viewModel.selectReqTab(it) },
             onUrlChange = { viewModel.onUrlInputChanged(it) },
             onToggleHeader = { viewModel.toggleHeader(it) },
+            onUpdateHeaderKey = { oldKey, newKey -> viewModel.updateHeaderKey(oldKey, newKey) },
             onUpdateHeaderValue = { key, value -> viewModel.updateHeaderValue(key, value) },
             onAddHeader = { viewModel.addHeader() },
             onRemoveHeader = { viewModel.removeHeader(it) },
+            onRestoreDefaultHeaders = { viewModel.restoreDefaultHeaders() },
+            onAuthTypeChange = { viewModel.updateAuthType(it) },
+            onAuthTokenChange = { viewModel.updateAuthToken(it) },
+            onAuthUsernameChange = { viewModel.updateAuthUsername(it) },
+            onAuthPasswordChange = { viewModel.updateAuthPassword(it) },
+            onApiKeyNameChange = { viewModel.updateApiKeyName(it) },
+            onApiKeyValueChange = { viewModel.updateApiKeyValue(it) },
+            onApiKeyLocationChange = { viewModel.updateApiKeyLocation(it) },
+            onOauthHeaderPrefixChange = { viewModel.updateOauthHeaderPrefix(it) },
+            onAwsAccessKeyChange = { viewModel.updateAwsAccessKey(it) },
+            onAwsSecretKeyChange = { viewModel.updateAwsSecretKey(it) },
+            onAwsRegionChange = { viewModel.updateAwsRegion(it) },
+            onAwsServiceChange = { viewModel.updateAwsService(it) },
+            onScriptLanguageChange = { viewModel.updateScriptLanguage(it) },
+            onPreRequestScriptChange = { viewModel.updatePreRequestScript(it) },
+            onTestScriptChange = { viewModel.updateTestScript(it) },
+            onBodyChange = { viewModel.updateRequestBody(it) },
+            onBodyTypeChange = { viewModel.updateRequestBodyType(it) },
             onSend = { viewModel.sendCurrentRequest() },
             modifier = Modifier
                 .weight(1.8f)
@@ -158,6 +196,7 @@ fun ApiStudioScreen(
             request = selectedRequest,
             activeTab = uiState.activeRespTab,
             latestResult = uiState.latestResult,
+            testResults = uiState.testResults,
             onTabSelected = { viewModel.selectRespTab(it) },
             modifier = Modifier
                 .weight(1.2f)
@@ -177,6 +216,8 @@ private fun CollectionsTreeSidebar(
     searchQuery: String = "",
     onSearchChange: (String) -> Unit = {},
     onSelectRequest: (SavedApiRequest) -> Unit,
+    onDeleteRequest: (String) -> Unit = {},
+    onDeleteCollection: (String) -> Unit = {},
     onRunCollection: () -> Unit,
     onCreateCollection: () -> Unit,
     onImportCollection: () -> Unit = {},
@@ -294,34 +335,46 @@ private fun CollectionsTreeSidebar(
                         ) {
                             folder.requests.forEach { req ->
                                 val isSelected = req.id == selectedRequestId
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .background(
-                                            if (isSelected) KNetColors.ActiveBlue.copy(alpha = 0.2f) else Color.Transparent,
-                                            RoundedCornerShape(4.dp)
-                                        )
-                                        .clickable { onSelectRequest(req) }
-                                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    // Method Badge
-                                    Text(
-                                        text = req.method.name,
-                                        color = Color(req.method.badgeColorHex),
-                                        fontSize = 9.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        fontFamily = FontFamily.Monospace,
-                                        modifier = Modifier.width(34.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text(
-                                        text = req.name,
-                                        color = if (isSelected) Color.White else KNetColors.TextSecondary,
-                                        fontSize = 11.sp,
-                                        fontFamily = FontFamily.Monospace
-                                    )
-                                }
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(
+                                                if (isSelected) KNetColors.ActiveBlue.copy(alpha = 0.2f) else Color.Transparent,
+                                                RoundedCornerShape(4.dp)
+                                            )
+                                            .clickable { onSelectRequest(req) }
+                                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                            // Method Badge
+                                            Text(
+                                                text = req.method.name,
+                                                color = Color(req.method.badgeColorHex),
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                fontFamily = FontFamily.Monospace,
+                                                modifier = Modifier.width(34.dp)
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = req.name,
+                                                color = if (isSelected) Color.White else KNetColors.TextSecondary,
+                                                fontSize = 11.sp,
+                                                fontFamily = FontFamily.Monospace
+                                            )
+                                        }
+                                        // Delete Request Icon
+                                        Box(
+                                            modifier = Modifier
+                                                .size(16.dp)
+                                                .clickable { onDeleteRequest(req.id) },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            Text("✕", color = KNetColors.TextSecondary, fontSize = 10.sp)
+                                        }
+                                    }
                             }
                         }
                     }
@@ -356,18 +409,39 @@ private fun CollectionsTreeSidebar(
 @Composable
 private fun RequestBuilderPanel(
     request: SavedApiRequest,
+    uiState: com.devuloopers.knet.ui.apistudio.model.ApiStudioUiState,
     activeTab: String,
     isExecuting: Boolean = false,
     onTabSelected: (String) -> Unit,
     onUrlChange: (String) -> Unit = {},
     onToggleHeader: (String) -> Unit = {},
+    onUpdateHeaderKey: (String, String) -> Unit = { _, _ -> },
     onUpdateHeaderValue: (String, String) -> Unit = { _, _ -> },
     onAddHeader: () -> Unit = {},
     onRemoveHeader: (String) -> Unit = {},
+    onRestoreDefaultHeaders: () -> Unit = {},
+    onAuthTypeChange: (String) -> Unit = {},
+    onAuthTokenChange: (String) -> Unit = {},
+    onAuthUsernameChange: (String) -> Unit = {},
+    onAuthPasswordChange: (String) -> Unit = {},
+    onApiKeyNameChange: (String) -> Unit = {},
+    onApiKeyValueChange: (String) -> Unit = {},
+    onApiKeyLocationChange: (String) -> Unit = {},
+    onOauthHeaderPrefixChange: (String) -> Unit = {},
+    onAwsAccessKeyChange: (String) -> Unit = {},
+    onAwsSecretKeyChange: (String) -> Unit = {},
+    onAwsRegionChange: (String) -> Unit = {},
+    onAwsServiceChange: (String) -> Unit = {},
+    onScriptLanguageChange: (com.devuloopers.knet.scriptengine.api.ScriptLanguage) -> Unit = {},
+    onPreRequestScriptChange: (String) -> Unit = {},
+
+    onTestScriptChange: (String) -> Unit = {},
+    onBodyChange: (String) -> Unit = {},
+    onBodyTypeChange: (String) -> Unit = {},
     onSend: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val reqTabs = listOf("Body (JSON)", "Params", "Authorization", "Headers", "Pre-request Script", "Tests")
+    val reqTabs = listOf("Body", "Params", "Authorization", "Headers", "Pre-request Script", "Tests")
 
     Box(
         modifier = modifier
@@ -384,7 +458,6 @@ private fun RequestBuilderPanel(
             ) {
                 var methodDropdownExpanded by remember { mutableStateOf(false) }
                 var selectedMethod by remember(request) { mutableStateOf(request.method) }
-
                 var customMethodText by remember(request) { mutableStateOf(request.customMethod ?: "CUSTOM") }
 
                 // Method Badge Dropdown / Editable Badge
@@ -451,35 +524,15 @@ private fun RequestBuilderPanel(
                 }
 
                 // URL Text Input Field
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .background(KNetColors.FieldDark, RoundedCornerShape(6.dp))
-                        .border(1.dp, KNetColors.BorderDark, RoundedCornerShape(6.dp))
-                        .padding(horizontal = 12.dp, vertical = 8.dp)
-                ) {
-                    var tfValue by remember(request.url) {
-                        mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(
-                            text = request.url,
-                            selection = androidx.compose.ui.text.TextRange(request.url.length)
-                        ))
-                    }
-                    androidx.compose.foundation.text.BasicTextField(
-                        value = tfValue,
-                        onValueChange = { newValue ->
-                            tfValue = newValue
-                            onUrlChange(newValue.text)
-                        },
-                        singleLine = true,
-                        cursorBrush = SolidColor(KNetColors.ActiveBlue),
-                        textStyle = androidx.compose.ui.text.TextStyle(
-                            color = Color.White,
-                            fontSize = 12.sp,
-                            fontFamily = FontFamily.Monospace
-                        ),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
+                KNetInputField(
+                    value = request.url,
+                    onValueChange = onUrlChange,
+                    placeholder = "https://api.example.com/v1/resource",
+                    fontSize = 12.sp,
+                    height = 36.dp,
+                    cornerRadius = 6.dp,
+                    modifier = Modifier.weight(1f)
+                )
 
                 // Send Request Primary Button
                 Box(
@@ -512,7 +565,7 @@ private fun RequestBuilderPanel(
 
             Spacer(modifier = Modifier.height(14.dp))
 
-            // Sub-tabs Row (Body, Params, Auth, Headers, Pre-script, Tests)
+            // Sub-tabs Row
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -522,7 +575,7 @@ private fun RequestBuilderPanel(
                     modifier = Modifier
                         .fillMaxWidth()
                         .horizontalScroll(rememberScrollState())
-                        .padding(horizontal = 4.dp),
+                        .padding(horizontal = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(24.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -556,7 +609,7 @@ private fun RequestBuilderPanel(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Dynamic Sub-tab Panel Content
+            // Sub-tab Content Area
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -567,85 +620,527 @@ private fun RequestBuilderPanel(
             ) {
                 when {
                     activeTab.startsWith("Body") -> {
-                        Row(modifier = Modifier.fillMaxSize()) {
-                            Column(modifier = Modifier.padding(end = 12.dp)) {
-                                (1..5).forEach { num ->
-                                    Text(
-                                        text = "$num",
-                                        color = KNetColors.TextSecondary.copy(alpha = 0.5f),
-                                        fontSize = 11.sp,
-                                        fontFamily = FontFamily.Monospace
-                                    )
+                        val bodyModes = listOf("none", "json", "form-data", "x-www-form-urlencoded", "raw", "graphql")
+                        val currentBodyType = request.bodyType.ifBlank { "json" }
+
+                        Column(verticalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxSize()) {
+                            // Body Mode Selector Pills Row
+                            Row(
+                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text("Payload Mode:", color = KNetColors.TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(end = 4.dp))
+                                bodyModes.forEach { mode ->
+                                    val isSelected = currentBodyType.equals(mode, ignoreCase = true) || (mode == "raw" && currentBodyType.startsWith("raw"))
+                                    Box(
+                                        modifier = Modifier
+                                            .background(
+                                                color = if (isSelected) KNetColors.ActiveBlue else KNetColors.FieldDark,
+                                                shape = RoundedCornerShape(4.dp)
+                                            )
+                                            .border(
+                                                width = 1.dp,
+                                                color = if (isSelected) KNetColors.ActiveBlue else KNetColors.BorderDark,
+                                                shape = RoundedCornerShape(4.dp)
+                                            )
+                                            .clickable {
+                                                val newType = if (mode == "raw") "raw-text" else mode
+                                                onBodyTypeChange(newType)
+                                            }
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = mode,
+                                            color = if (isSelected) Color.White else KNetColors.TextSecondary,
+                                            fontSize = 10.sp,
+                                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                                        )
+                                    }
                                 }
                             }
-                            Column {
-                                Text(
-                                    text = request.body.ifBlank { "{\n  \"username\": \"developer@knet.dev\",\n  \"auth_type\": \"bearer\",\n  \"client_id\": \"knet_desktop_v2\"\n}" },
-                                    color = Color(0xFF10B981),
-                                    fontSize = 11.sp,
-                                    fontFamily = FontFamily.Monospace
-                                )
+
+                            HorizontalDivider(thickness = 0.5.dp, color = KNetColors.BorderDark.copy(alpha = 0.5f))
+
+                            // Body Payload Content Area
+                            Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                                when {
+                                    currentBodyType.equals("none", ignoreCase = true) -> {
+                                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                            Text("This request does not have a body payload.", color = KNetColors.TextSecondary.copy(alpha = 0.5f), fontSize = 11.sp)
+                                        }
+                                    }
+                                    currentBodyType.equals("json", ignoreCase = true) -> {
+                                        CodeEditorWidget(
+                                            code = request.body,
+                                            onCodeChange = onBodyChange,
+                                            placeholder = "// Enter raw JSON payload content...\n{\n  \"key\": \"value\"\n}",
+                                            textColor = Color(0xFFA855F7),
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
+                                    currentBodyType.startsWith("raw", ignoreCase = true) -> {
+                                        val rawSubFormats = listOf("text", "json", "xml", "html", "javascript")
+                                        val currentSubFormat = if (currentBodyType.contains("-")) currentBodyType.substringAfter("-") else "text"
+                                        var rawFormatDropdownExpanded by remember { mutableStateOf(false) }
+                                        var selectedSubFormat by remember(currentSubFormat) {
+                                            mutableStateOf(if (currentBodyType.contains("-")) currentBodyType.substringAfter("-") else "text")
+                                        }
+
+                                        Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize()) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Text("Format: ", color = KNetColors.TextSecondary, fontSize = 10.sp)
+                                                Spacer(modifier = Modifier.width(4.dp))
+                                                Box {
+                                                    Box(
+                                                        modifier = Modifier
+                                                            .background(KNetColors.FieldDark, RoundedCornerShape(4.dp))
+                                                            .border(1.dp, KNetColors.BorderDark, RoundedCornerShape(4.dp))
+                                                            .clickable { rawFormatDropdownExpanded = !rawFormatDropdownExpanded }
+                                                            .padding(horizontal = 8.dp, vertical = 3.dp)
+                                                    ) {
+                                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                                            Text(selectedSubFormat.uppercase(), color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                                            Spacer(modifier = Modifier.width(4.dp))
+                                                            Icon(Icons.Default.ArrowDropDown, contentDescription = null, tint = KNetColors.TextSecondary, modifier = Modifier.size(12.dp))
+                                                        }
+                                                    }
+                                                    androidx.compose.material3.DropdownMenu(
+                                                        expanded = rawFormatDropdownExpanded,
+                                                        onDismissRequest = { rawFormatDropdownExpanded = false },
+                                                        modifier = Modifier.background(KNetColors.SurfaceDark).border(1.dp, KNetColors.BorderDark, RoundedCornerShape(4.dp))
+                                                    ) {
+                                                        rawSubFormats.forEach { fmt ->
+                                                            androidx.compose.material3.DropdownMenuItem(
+                                                                text = { Text(fmt.uppercase(), color = Color.White, fontSize = 10.sp) },
+                                                                onClick = {
+                                                                    selectedSubFormat = fmt
+                                                                    rawFormatDropdownExpanded = false
+                                                                    onBodyTypeChange("raw-$fmt")
+                                                                }
+                                                            )
+                                                        }
+                                                    }
+                                                }
+                                            }
+
+                                            val rawSubFormat = if (currentBodyType.contains("-")) currentBodyType.substringAfter("-") else "text"
+                                            val accentColor = when (rawSubFormat.lowercase()) {
+                                                "xml" -> Color(0xFF06B6D4)
+                                                "html" -> Color(0xFF0284C7)
+                                                else -> Color(0xFFF8FAFC)
+                                            }
+                                            CodeEditorWidget(
+                                                code = request.body,
+                                                onCodeChange = onBodyChange,
+                                                placeholder = "// Enter raw $rawSubFormat payload content...",
+                                                textColor = accentColor,
+                                                modifier = Modifier.fillMaxWidth().weight(1f)
+                                            )
+                                        }
+                                    }
+                                    currentBodyType.equals("graphql", ignoreCase = true) -> {
+                                        CodeEditorWidget(
+                                            code = request.body,
+                                            onCodeChange = onBodyChange,
+                                            placeholder = "# Enter GraphQL Query / Mutation...\nquery GetUser {\n  user(id: 1) {\n    name\n  }\n}",
+                                            textColor = Color(0xFFA855F7),
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
+                                    else -> {
+                                        // Form Data / URL Encoded Key-Value Form
+                                        CodeEditorWidget(
+                                            code = request.body,
+                                            onCodeChange = onBodyChange,
+                                            placeholder = "// Enter key=value form payload data (one per line or standard form string)...",
+                                            textColor = Color(0xFFF59E0B),
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
 
                     activeTab == "Params" -> {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Query Parameters", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        val baseUrl = request.url.substringBefore("?")
+                        val queryString = if (request.url.contains("?")) request.url.substringAfter("?").substringBefore("#") else ""
+                        
+                        var paramList by remember(request.id) {
+                            mutableStateOf(
+                                if (queryString.isNotBlank()) {
+                                    queryString.split("&").mapNotNull { pair ->
+                                        val parts = pair.split("=")
+                                        if (parts.isNotEmpty() && parts[0].isNotBlank()) {
+                                            parts[0] to (if (parts.size > 1) parts[1] else "")
+                                        } else null
+                                    }.toMutableList()
+                                } else mutableListOf()
+                            )
+                        }
+
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize()) {
                             Row(
-                                modifier = Modifier.fillMaxWidth().background(KNetColors.FieldDark, RoundedCornerShape(4.dp)).padding(8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
-                                Text("Key", color = KNetColors.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                                Text("Value", color = KNetColors.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
-                                Text("Description", color = KNetColors.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                                Text("Query Parameters (${paramList.size})", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                                Box(
+                                    modifier = Modifier
+                                        .background(KNetColors.ActiveBlue.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                                        .border(1.dp, KNetColors.ActiveBlue, RoundedCornerShape(4.dp))
+                                        .clickable {
+                                            val updated = paramList + ("" to "")
+                                            paramList = updated.toMutableList()
+                                            val newQuery = updated.filter { it.first.isNotBlank() }.joinToString("&") { "${it.first}=${it.second}" }
+                                            onUrlChange(if (newQuery.isNotBlank()) "$baseUrl?$newQuery" else baseUrl)
+                                        }
+                                        .padding(horizontal = 10.dp, vertical = 5.dp)
+                                ) {
+                                    Text("+ Add Parameter", color = KNetColors.ActiveBlue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                }
                             }
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("page", color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
-                                Text("1", color = KNetColors.ActiveBlue, fontSize = 11.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
-                                Text("Page offset", color = KNetColors.TextSecondary, fontSize = 11.sp, modifier = Modifier.weight(1f))
-                            }
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("limit", color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
-                                Text("20", color = KNetColors.ActiveBlue, fontSize = 11.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f))
-                                Text("Max items per page", color = KNetColors.TextSecondary, fontSize = 11.sp, modifier = Modifier.weight(1f))
+
+                            // Relaxed Single Outer Table Container
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .border(1.dp, KNetColors.BorderDark.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
+                                    .clip(RoundedCornerShape(6.dp))
+                            ) {
+                                Column {
+                                    // Grid Header
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(KNetColors.FieldDark.copy(alpha = 0.6f))
+                                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text("Key", color = KNetColors.TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                                        Text("Value", color = KNetColors.TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.5f))
+                                        Box(modifier = Modifier.width(20.dp))
+                                    }
+
+                                    HorizontalDivider(thickness = 1.dp, color = KNetColors.BorderDark.copy(alpha = 0.5f))
+
+                                    if (paramList.isEmpty()) {
+                                        Text("No query parameters. Click '+ Add Parameter' or type ?key=value in URL.", color = KNetColors.TextSecondary.copy(alpha = 0.5f), fontSize = 11.sp, modifier = Modifier.padding(12.dp))
+                                    } else {
+                                        paramList.forEachIndexed { index, (key, value) ->
+                                            if (index > 0) {
+                                                HorizontalDivider(thickness = 0.5.dp, color = KNetColors.BorderDark.copy(alpha = 0.3f))
+                                            }
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(32.dp)
+                                                    .padding(horizontal = 10.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                // Editable Key
+                                                var keyTf by remember(key) { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(key, selection = androidx.compose.ui.text.TextRange(key.length))) }
+                                                TableCellTextField(
+                                                    value = keyTf,
+                                                    onValueChange = { newKey ->
+                                                        keyTf = newKey
+                                                        val updated = paramList.toMutableList().apply { this[index] = newKey.text to value }
+                                                        paramList = updated
+                                                        val newQuery = updated.filter { it.first.isNotBlank() }.joinToString("&") { "${it.first}=${it.second}" }
+                                                        onUrlChange(if (newQuery.isNotBlank()) "$baseUrl?$newQuery" else baseUrl)
+                                                    },
+                                                    placeholder = "Key",
+                                                    textColor = Color.White,
+                                                    modifier = Modifier.weight(1f)
+                                                )
+
+                                                Spacer(modifier = Modifier.width(8.dp))
+
+                                                // Editable Value
+                                                var valTf by remember(value) { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(value, selection = androidx.compose.ui.text.TextRange(value.length))) }
+                                                TableCellTextField(
+                                                    value = valTf,
+                                                    onValueChange = { newVal ->
+                                                        valTf = newVal
+                                                        val updated = paramList.toMutableList().apply { this[index] = key to newVal.text }
+                                                        paramList = updated
+                                                        val newQuery = updated.filter { it.first.isNotBlank() }.joinToString("&") { "${it.first}=${it.second}" }
+                                                        onUrlChange(if (newQuery.isNotBlank()) "$baseUrl?$newQuery" else baseUrl)
+                                                    },
+                                                    placeholder = "Value",
+                                                    textColor = KNetColors.ActiveBlue,
+                                                    modifier = Modifier.weight(1.5f)
+                                                )
+
+                                                Spacer(modifier = Modifier.width(8.dp))
+
+                                                // Delete Icon
+                                                Box(
+                                                    modifier = Modifier.size(20.dp).clip(RoundedCornerShape(4.dp)).clickable {
+                                                        val updated = paramList.toMutableList().apply { removeAt(index) }
+                                                        paramList = updated
+                                                        val newQuery = if (updated.isNotEmpty()) "?${updated.joinToString("&") { "${it.first}=${it.second}" }}" else ""
+                                                        onUrlChange("$baseUrl$newQuery")
+                                                    },
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(Icons.Default.Clear, contentDescription = "Remove", tint = KNetColors.TextSecondary, modifier = Modifier.size(12.dp))
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
 
                     activeTab == "Authorization" -> {
-                        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxSize()) {
                             Text("Authentication Configuration", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Text("Type: ", color = KNetColors.TextSecondary, fontSize = 11.sp)
-                                Box(
-                                    modifier = Modifier
-                                        .background(KNetColors.FieldDark, RoundedCornerShape(4.dp))
-                                        .border(1.dp, KNetColors.BorderDark, RoundedCornerShape(4.dp))
-                                        .padding(horizontal = 10.dp, vertical = 6.dp)
-                                ) {
-                                    Text("Bearer Token", color = KNetColors.ActiveBlue, fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                listOf("Inherit Auth", "No Auth", "Bearer Token", "API Key", "Basic Auth", "OAuth 2.0", "AWS Signature").forEach { type ->
+                                    val isSelected = type == uiState.authType
+                                    Box(
+                                        modifier = Modifier
+                                            .background(if (isSelected) KNetColors.ActiveBlue else KNetColors.FieldDark, RoundedCornerShape(4.dp))
+                                            .border(1.dp, if (isSelected) KNetColors.ActiveBlue else KNetColors.BorderDark, RoundedCornerShape(4.dp))
+                                            .clickable { onAuthTypeChange(type) }
+                                            .padding(horizontal = 10.dp, vertical = 5.dp)
+                                    ) {
+                                        Text(type, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                                    }
+                                    Spacer(modifier = Modifier.width(6.dp))
                                 }
                             }
-                            Column {
-                                Text("Token / Secret:", color = KNetColors.TextSecondary, fontSize = 10.sp)
-                                Spacer(modifier = Modifier.height(4.dp))
-                                Box(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .background(KNetColors.FieldDark, RoundedCornerShape(4.dp))
-                                        .border(1.dp, KNetColors.BorderDark, RoundedCornerShape(4.dp))
-                                        .padding(8.dp)
-                                ) {
-                                    Text("eyJhbGciOiJKV1QiLCJhbGciOi...", color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+
+                            when (uiState.authType) {
+                                "Inherit Auth" -> {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(KNetColors.FieldDark, RoundedCornerShape(6.dp))
+                                            .border(1.dp, KNetColors.BorderDark, RoundedCornerShape(6.dp))
+                                            .padding(12.dp)
+                                    ) {
+                                        Text(
+                                            "This request inherits authentication from its parent Collection or Folder.",
+                                            color = KNetColors.TextSecondary,
+                                            fontSize = 11.sp
+                                        )
+                                    }
+                                }
+                                "Bearer Token" -> {
+                                    Column {
+                                        Text("Bearer Token:", color = KNetColors.TextSecondary, fontSize = 10.sp)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Row(
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Box(
+                                                modifier = Modifier
+                                                    .background(KNetColors.ActiveBlue.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                                                    .border(1.dp, KNetColors.ActiveBlue, RoundedCornerShape(4.dp))
+                                                    .padding(horizontal = 10.dp, vertical = 7.dp)
+                                            ) {
+                                                Text(
+                                                    "Bearer",
+                                                    color = KNetColors.ActiveBlue,
+                                                    fontSize = 11.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            }
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            KNetInputField(
+                                                value = uiState.authToken,
+                                                onValueChange = onAuthTokenChange,
+                                                placeholder = "Paste your token here...",
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                        }
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        Text(
+                                            "Note: The 'Bearer ' prefix is automatically added to the Authorization header.",
+                                            color = KNetColors.TextSecondary,
+                                            fontSize = 9.sp
+                                        )
+                                    }
+                                }
+
+
+                                "API Key" -> {
+                                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text("Key Name:", color = KNetColors.TextSecondary, fontSize = 10.sp)
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                KNetInputField(
+                                                    value = uiState.apiKeyName,
+                                                    onValueChange = onApiKeyNameChange,
+                                                    placeholder = "e.g. X-API-Key or api_key",
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                            }
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text("Key Value:", color = KNetColors.TextSecondary, fontSize = 10.sp)
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                KNetInputField(
+                                                    value = uiState.apiKeyValue,
+                                                    onValueChange = onApiKeyValueChange,
+                                                    placeholder = "e.g. secret_live_abcdef123",
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                            }
+                                        }
+
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text("Add To: ", color = KNetColors.TextSecondary, fontSize = 10.sp)
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            listOf("Header", "Query Params").forEach { loc ->
+                                                val isLocSelected = loc.equals(uiState.apiKeyLocation, ignoreCase = true)
+                                                Box(
+                                                    modifier = Modifier
+                                                        .background(if (isLocSelected) KNetColors.ActiveBlue else KNetColors.FieldDark, RoundedCornerShape(4.dp))
+                                                        .border(1.dp, if (isLocSelected) KNetColors.ActiveBlue else KNetColors.BorderDark, RoundedCornerShape(4.dp))
+                                                        .clickable { onApiKeyLocationChange(loc) }
+                                                        .padding(horizontal = 10.dp, vertical = 4.dp)
+                                                ) {
+                                                    Text(loc, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                                                }
+                                                Spacer(modifier = Modifier.width(6.dp))
+                                            }
+                                        }
+                                    }
+                                }
+                                "Basic Auth" -> {
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Column {
+                                            Text("Username:", color = KNetColors.TextSecondary, fontSize = 10.sp)
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            KNetInputField(
+                                                value = uiState.authUsername,
+                                                onValueChange = onAuthUsernameChange,
+                                                placeholder = "Enter username...",
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                        Column {
+                                            Text("Password:", color = KNetColors.TextSecondary, fontSize = 10.sp)
+                                            Spacer(modifier = Modifier.height(4.dp))
+                                            KNetInputField(
+                                                value = uiState.authPassword,
+                                                onValueChange = onAuthPasswordChange,
+                                                placeholder = "Enter password...",
+                                                isPassword = true,
+                                                modifier = Modifier.fillMaxWidth()
+                                            )
+                                        }
+                                    }
+                                }
+                                "OAuth 2.0" -> {
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text("Header Prefix:", color = KNetColors.TextSecondary, fontSize = 10.sp)
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                KNetInputField(
+                                                    value = uiState.oauthHeaderPrefix,
+                                                    onValueChange = onOauthHeaderPrefixChange,
+                                                    placeholder = "Bearer",
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                            }
+                                            Column(modifier = Modifier.weight(2f)) {
+                                                Text("Access Token:", color = KNetColors.TextSecondary, fontSize = 10.sp)
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                KNetInputField(
+                                                    value = uiState.authToken,
+                                                    onValueChange = onAuthTokenChange,
+                                                    placeholder = "Paste OAuth 2.0 Access Token...",
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                                "AWS Signature" -> {
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text("Access Key ID:", color = KNetColors.TextSecondary, fontSize = 10.sp)
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                KNetInputField(
+                                                    value = uiState.awsAccessKey,
+                                                    onValueChange = onAwsAccessKeyChange,
+                                                    placeholder = "AKIAIOSFODNN7EXAMPLE",
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                            }
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text("Secret Access Key:", color = KNetColors.TextSecondary, fontSize = 10.sp)
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                KNetInputField(
+                                                    value = uiState.awsSecretKey,
+                                                    onValueChange = onAwsSecretKeyChange,
+                                                    placeholder = "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+                                                    isPassword = true,
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                            }
+                                        }
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                                        ) {
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text("AWS Region:", color = KNetColors.TextSecondary, fontSize = 10.sp)
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                KNetInputField(
+                                                    value = uiState.awsRegion,
+                                                    onValueChange = onAwsRegionChange,
+                                                    placeholder = "us-east-1",
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                            }
+                                            Column(modifier = Modifier.weight(1f)) {
+                                                Text("Service Name:", color = KNetColors.TextSecondary, fontSize = 10.sp)
+                                                Spacer(modifier = Modifier.height(4.dp))
+                                                KNetInputField(
+                                                    value = uiState.awsService,
+                                                    onValueChange = onAwsServiceChange,
+                                                    placeholder = "s3",
+                                                    modifier = Modifier.fillMaxWidth()
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                                else -> {
+                                    Text("This request does not use authentication.", color = KNetColors.TextSecondary.copy(alpha = 0.5f), fontSize = 11.sp)
                                 }
                             }
                         }
                     }
 
                     activeTab.startsWith("Headers") -> {
-                        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            // Header row count: enabled only
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize()) {
                             val enabledCount = request.headers.count { it.isEnabled }
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -653,136 +1148,296 @@ private fun RequestBuilderPanel(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text("HTTP Request Headers ($enabledCount active)", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                                // + Add Header button
-                                Box(
-                                    modifier = Modifier
-                                        .background(KNetColors.ActiveBlue.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
-                                        .border(1.dp, KNetColors.ActiveBlue, RoundedCornerShape(4.dp))
-                                        .clickable { onAddHeader() }
-                                        .padding(horizontal = 8.dp, vertical = 4.dp)
-                                ) {
-                                    Text("+ Add Header", color = KNetColors.ActiveBlue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                                }
-                            }
-                            // Column headers
-                            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                Text("", modifier = Modifier.width(20.dp))
-                                Text("Key", color = KNetColors.TextSecondary, fontSize = 10.sp, modifier = Modifier.weight(1f))
-                                Text("Value", color = KNetColors.TextSecondary, fontSize = 10.sp, modifier = Modifier.weight(1.5f))
-                                Text("", modifier = Modifier.width(20.dp))
-                            }
-                            // Header rows
-                            request.headers.forEach { header ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    // ☑ Enabled checkbox
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     Box(
                                         modifier = Modifier
-                                            .size(16.dp)
-                                            .background(
-                                                if (header.isEnabled) KNetColors.ActiveBlue else KNetColors.FieldDark,
-                                                RoundedCornerShape(3.dp)
-                                            )
-                                            .border(1.dp, KNetColors.BorderDark, RoundedCornerShape(3.dp))
-                                            .clickable { onToggleHeader(header.key) },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        if (header.isEnabled) {
-                                            Text("✓", color = Color.White, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                                        }
-                                    }
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    // Key + Auto badge
-                                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = header.key,
-                                            color = if (header.isEnabled) Color.White else KNetColors.TextSecondary,
-                                            fontSize = 11.sp,
-                                            fontFamily = FontFamily.Monospace
-                                        )
-                                        if (header.isAuto) {
-                                            Spacer(modifier = Modifier.width(4.dp))
-                                            Box(
-                                                modifier = Modifier
-                                                    .background(KNetColors.ActiveBlue.copy(alpha = 0.15f), RoundedCornerShape(3.dp))
-                                                    .border(1.dp, KNetColors.ActiveBlue, RoundedCornerShape(3.dp))
-                                                    .padding(horizontal = 4.dp, vertical = 1.dp)
-                                            ) {
-                                                Text("Auto", color = KNetColors.ActiveBlue, fontSize = 8.sp, fontWeight = FontWeight.Bold)
-                                            }
-                                        }
-                                    }
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    // Editable value field
-                                    Box(
-                                        modifier = Modifier
-                                            .weight(1.5f)
                                             .background(KNetColors.FieldDark, RoundedCornerShape(4.dp))
                                             .border(1.dp, KNetColors.BorderDark, RoundedCornerShape(4.dp))
-                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                            .clickable { onRestoreDefaultHeaders() }
+                                            .padding(horizontal = 10.dp, vertical = 5.dp)
                                     ) {
-                                        var tfValue by remember(header.key, header.value) {
-                                            mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(
-                                                text = header.value,
-                                                selection = androidx.compose.ui.text.TextRange(header.value.length)
-                                            ))
-                                        }
-                                        androidx.compose.foundation.text.BasicTextField(
-                                            value = tfValue,
-                                            onValueChange = { newValue ->
-                                                tfValue = newValue
-                                                onUpdateHeaderValue(header.key, newValue.text)
-                                            },
-                                            singleLine = true,
-                                            cursorBrush = SolidColor(KNetColors.ActiveBlue),
-                                            textStyle = androidx.compose.ui.text.TextStyle(
-                                                color = if (header.value.startsWith("<")) KNetColors.TextSecondary else KNetColors.ActiveBlue,
-                                                fontSize = 11.sp,
-                                                fontFamily = FontFamily.Monospace
-                                            ),
-                                            modifier = Modifier.fillMaxWidth()
-                                        )
+                                        Text("↺ Restore Auto Headers", color = KNetColors.TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
                                     }
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    // Remove (✕) button
                                     Box(
                                         modifier = Modifier
-                                            .size(16.dp)
-                                            .clickable { onRemoveHeader(header.key) },
-                                        contentAlignment = Alignment.Center
+                                            .background(KNetColors.ActiveBlue.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                                            .border(1.dp, KNetColors.ActiveBlue, RoundedCornerShape(4.dp))
+                                            .clickable { onAddHeader() }
+                                            .padding(horizontal = 10.dp, vertical = 5.dp)
                                     ) {
-                                        Text("✕", color = KNetColors.TextSecondary, fontSize = 10.sp)
+                                        Text("+ Add Header", color = KNetColors.ActiveBlue, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                                    }
+                                }
+                            }
+
+                            // Relaxed Single Outer Table Container with Vertical Scroll
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .weight(1f)
+                                    .border(1.dp, KNetColors.BorderDark.copy(alpha = 0.6f), RoundedCornerShape(6.dp))
+                                    .clip(RoundedCornerShape(6.dp))
+                            ) {
+                                Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())) {
+                                    // Grid Header
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(KNetColors.FieldDark.copy(alpha = 0.6f))
+                                            .padding(horizontal = 10.dp, vertical = 6.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Box(modifier = Modifier.width(22.dp))
+                                        Text("Key", color = KNetColors.TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                                        Text("Value", color = KNetColors.TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1.5f))
+                                        Box(modifier = Modifier.width(22.dp))
+                                    }
+
+                                    HorizontalDivider(thickness = 1.dp, color = KNetColors.BorderDark.copy(alpha = 0.5f))
+
+                                    if (request.headers.isEmpty()) {
+                                        Text("No headers. Click '+ Add Header' or '↺ Restore Auto Headers'.", color = KNetColors.TextSecondary.copy(alpha = 0.5f), fontSize = 11.sp, modifier = Modifier.padding(12.dp))
+                                    } else {
+                                        request.headers.forEachIndexed { index, header ->
+                                            if (index > 0) {
+                                                HorizontalDivider(thickness = 0.5.dp, color = KNetColors.BorderDark.copy(alpha = 0.3f))
+                                            }
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(32.dp)
+                                                    .padding(horizontal = 10.dp),
+                                                verticalAlignment = Alignment.CenterVertically
+                                            ) {
+                                                // Borderless Checkbox Icon Toggle
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(16.dp)
+                                                        .clickable { onToggleHeader(header.key) },
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(
+                                                        Icons.Default.Check,
+                                                        contentDescription = "Toggle",
+                                                        tint = if (header.isEnabled) KNetColors.ActiveBlue else KNetColors.TextSecondary.copy(alpha = 0.3f),
+                                                        modifier = Modifier.size(12.dp)
+                                                    )
+                                                }
+
+                                                Spacer(modifier = Modifier.width(6.dp))
+
+                                                // Editable Key Field
+                                                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                                                    var keyTf by remember(header.key) { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(header.key, selection = androidx.compose.ui.text.TextRange(header.key.length))) }
+                                                    TableCellTextField(
+                                                        value = keyTf,
+                                                        onValueChange = { newKey ->
+                                                            keyTf = newKey
+                                                            onUpdateHeaderKey(header.key, newKey.text)
+                                                        },
+                                                        placeholder = "Key",
+                                                        textColor = if (header.isEnabled) Color.White else KNetColors.TextSecondary,
+                                                        fontWeight = FontWeight.Medium,
+                                                        modifier = Modifier.weight(1f)
+                                                    )
+                                                    if (header.isAuto) {
+                                                        Spacer(modifier = Modifier.width(4.dp))
+                                                        Box(
+                                                            modifier = Modifier
+                                                                .background(KNetColors.ActiveBlue.copy(alpha = 0.12f), RoundedCornerShape(3.dp))
+                                                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                                                        ) {
+                                                            Text("AUTO", color = KNetColors.ActiveBlue, fontSize = 7.5.sp, fontWeight = FontWeight.Bold)
+                                                        }
+                                                    }
+                                                }
+
+                                                Spacer(modifier = Modifier.width(8.dp))
+
+                                                // Editable Value Field with Placeholder Hint
+                                                var valTf by remember(header.key, header.value) { mutableStateOf(androidx.compose.ui.text.input.TextFieldValue(header.value, selection = androidx.compose.ui.text.TextRange(header.value.length))) }
+                                                TableCellTextField(
+                                                    value = valTf,
+                                                    onValueChange = { newValue ->
+                                                        valTf = newValue
+                                                        onUpdateHeaderValue(header.key, newValue.text)
+                                                    },
+                                                    placeholder = if (header.isAuto) "<auto>" else "Value",
+                                                    textColor = KNetColors.ActiveBlue,
+                                                    modifier = Modifier.weight(1.5f)
+                                                )
+
+                                                Spacer(modifier = Modifier.width(8.dp))
+
+                                                // Remove Icon Button
+                                                Box(
+                                                    modifier = Modifier
+                                                        .size(20.dp)
+                                                        .clip(RoundedCornerShape(4.dp))
+                                                        .clickable { onRemoveHeader(header.key) },
+                                                    contentAlignment = Alignment.Center
+                                                ) {
+                                                    Icon(Icons.Default.Clear, contentDescription = "Remove", tint = KNetColors.TextSecondary, modifier = Modifier.size(12.dp))
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
 
+
                     activeTab.contains("Pre-request") -> {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Pre-request Script (Runs before execution)", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            Text(
-                                text = "// Execute setup logic or set environment variables\npm.environment.set(\"timestamp\", Date.now());\npm.request.headers.add({key: \"X-Timestamp\", value: Date.now()});",
-                                color = Color(0xFFA855F7),
-                                fontSize = 11.sp,
-                                fontFamily = FontFamily.Monospace
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Language: ", color = KNetColors.TextSecondary, fontSize = 10.sp)
+                                    listOf("JavaScript", "Kotlin").forEach { lang ->
+                                        val isSelected = (lang == "JavaScript" && uiState.scriptLanguage == com.devuloopers.knet.scriptengine.api.ScriptLanguage.JAVASCRIPT) ||
+                                                (lang == "Kotlin" && uiState.scriptLanguage == com.devuloopers.knet.scriptengine.api.ScriptLanguage.KOTLIN)
+                                        Box(
+                                            modifier = Modifier
+                                                .background(if (isSelected) KNetColors.ActiveBlue else KNetColors.FieldDark, RoundedCornerShape(3.dp))
+                                                .border(1.dp, if (isSelected) KNetColors.ActiveBlue else KNetColors.BorderDark, RoundedCornerShape(3.dp))
+                                                .clickable {
+                                                    onScriptLanguageChange(if (lang == "JavaScript") com.devuloopers.knet.scriptengine.api.ScriptLanguage.JAVASCRIPT else com.devuloopers.knet.scriptengine.api.ScriptLanguage.KOTLIN)
+                                                }
+                                                .padding(horizontal = 6.dp, vertical = 3.dp)
+                                        ) {
+                                            Text(lang, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                                        }
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                    }
+                                }
+
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    com.devuloopers.knet.scriptengine.snippets.SnippetRegistry.SNIPPETS.forEach { snip ->
+                                        Box(
+                                            modifier = Modifier
+                                                .background(KNetColors.FieldDark, RoundedCornerShape(3.dp))
+                                                .border(1.dp, KNetColors.BorderDark, RoundedCornerShape(3.dp))
+                                                .clickable {
+                                                    val codeToInsert = com.devuloopers.knet.scriptengine.snippets.SnippetRegistry.getCode(snip, uiState.scriptLanguage)
+                                                    val newCode = if (uiState.preRequestScript.isBlank()) codeToInsert else "${uiState.preRequestScript}\n\n$codeToInsert"
+                                                    onPreRequestScriptChange(newCode)
+                                                }
+                                                .padding(horizontal = 6.dp, vertical = 3.dp)
+                                        ) {
+                                            Text("+ ${snip.title}", color = KNetColors.ActiveBlue, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+
+                            CodeEditorWidget(
+                                code = uiState.preRequestScript,
+                                onCodeChange = onPreRequestScriptChange,
+                                placeholder = "// Enter pre-request script (e.g. env[\"timestamp\"] = ...)...",
+                                textColor = Color(0xFFA855F7),
+                                modifier = Modifier.weight(1f).fillMaxWidth()
                             )
+
+                            // Live Pre-execution Security Diagnostic Banner
+                            val preSanitization = remember(uiState.preRequestScript) { com.devuloopers.knet.scriptengine.sandbox.ScriptSanitizer.validate(uiState.preRequestScript) }
+                            if (!preSanitization.isValid && preSanitization.errorMessage != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(Color(0xFFEF4444).copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                                        .border(1.dp, Color(0xFFEF4444), RoundedCornerShape(4.dp))
+                                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        text = "🔴 Line ${preSanitization.line ?: 1}: ${preSanitization.errorMessage}",
+                                        color = Color(0xFFEF4444),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
                         }
                     }
 
                     activeTab == "Tests" -> {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text("Test Scripts & Assertions", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            Text(
-                                text = "pm.test(\"Status code is 200\", function () {\n    pm.response.to.have.status(200);\n});\n\npm.test(\"Response contains access_token\", function () {\n    var jsonData = pm.response.json();\n    pm.expect(jsonData.access_token).to.exist;\n});",
-                                color = Color(0xFFF59E0B),
-                                fontSize = 11.sp,
-                                fontFamily = FontFamily.Monospace
+                        Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize()) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text("Language: ", color = KNetColors.TextSecondary, fontSize = 10.sp)
+                                    listOf("JavaScript", "Kotlin").forEach { lang ->
+                                        val isSelected = (lang == "JavaScript" && uiState.scriptLanguage == com.devuloopers.knet.scriptengine.api.ScriptLanguage.JAVASCRIPT) ||
+                                                (lang == "Kotlin" && uiState.scriptLanguage == com.devuloopers.knet.scriptengine.api.ScriptLanguage.KOTLIN)
+                                        Box(
+                                            modifier = Modifier
+                                                .background(if (isSelected) KNetColors.ActiveBlue else KNetColors.FieldDark, RoundedCornerShape(3.dp))
+                                                .border(1.dp, if (isSelected) KNetColors.ActiveBlue else KNetColors.BorderDark, RoundedCornerShape(3.dp))
+                                                .clickable {
+                                                    onScriptLanguageChange(if (lang == "JavaScript") com.devuloopers.knet.scriptengine.api.ScriptLanguage.JAVASCRIPT else com.devuloopers.knet.scriptengine.api.ScriptLanguage.KOTLIN)
+                                                }
+                                                .padding(horizontal = 6.dp, vertical = 3.dp)
+                                        ) {
+                                            Text(lang, color = Color.White, fontSize = 10.sp, fontWeight = FontWeight.SemiBold)
+                                        }
+                                        Spacer(modifier = Modifier.width(4.dp))
+                                    }
+                                }
+
+                                Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                    com.devuloopers.knet.scriptengine.snippets.SnippetRegistry.SNIPPETS.forEach { snip ->
+                                        Box(
+                                            modifier = Modifier
+                                                .background(KNetColors.FieldDark, RoundedCornerShape(3.dp))
+                                                .border(1.dp, KNetColors.BorderDark, RoundedCornerShape(3.dp))
+                                                .clickable {
+                                                    val codeToInsert = com.devuloopers.knet.scriptengine.snippets.SnippetRegistry.getCode(snip, uiState.scriptLanguage)
+                                                    val newCode = if (uiState.testScript.isBlank()) codeToInsert else "${uiState.testScript}\n\n$codeToInsert"
+                                                    onTestScriptChange(newCode)
+                                                }
+                                                .padding(horizontal = 6.dp, vertical = 3.dp)
+                                        ) {
+                                            Text("+ ${snip.title}", color = KNetColors.ActiveBlue, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+                                }
+                            }
+
+                            CodeEditorWidget(
+                                code = uiState.testScript,
+                                onCodeChange = onTestScriptChange,
+                                placeholder = "// Enter test script assertions...",
+                                textColor = Color(0xFFF59E0B),
+                                modifier = Modifier.weight(1f).fillMaxWidth()
                             )
+
+                            // Live Pre-execution Security Diagnostic Banner for Test Scripts
+                            val testSanitization = remember(uiState.testScript) { com.devuloopers.knet.scriptengine.sandbox.ScriptSanitizer.validate(uiState.testScript) }
+                            if (!testSanitization.isValid && testSanitization.errorMessage != null) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(Color(0xFFEF4444).copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                                        .border(1.dp, Color(0xFFEF4444), RoundedCornerShape(4.dp))
+                                        .padding(horizontal = 10.dp, vertical = 6.dp)
+                                ) {
+                                    Text(
+                                        text = "🔴 Line ${testSanitization.line ?: 1}: ${testSanitization.errorMessage}",
+                                        color = Color(0xFFEF4444),
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                }
+                            }
                         }
                     }
+
                 }
             }
         }
@@ -798,6 +1453,7 @@ private fun ResponseTestPanel(
     request: SavedApiRequest,
     activeTab: String,
     latestResult: ExecutionResult? = null,
+    testResults: List<com.devuloopers.knet.domain.apistudio.model.TestAssertionResult> = emptyList(),
     onTabSelected: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -810,32 +1466,36 @@ private fun ResponseTestPanel(
             .padding(14.dp)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // Status Code Header Row (200 OK • 124 ms • 1.4 KB)
+            // Status Code Header Row
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    val statusText = if (latestResult != null) "${latestResult.statusCode} ${latestResult.statusText}" else "200 OK"
-                    val statusColor = when {
-                        latestResult == null || latestResult.isSuccess -> KNetColors.SuccessGreen
-                        latestResult.statusCode in 400..499 -> Color(0xFFF59E0B)
-                        else -> Color(0xFFEF4444)
-                    }
-                    val latencyText = if (latestResult != null) "${latestResult.latencyMs} ms" else "124 ms"
-                    val sizeText = if (latestResult != null) "${latestResult.responseSizeBytes} B" else "1.4 KB"
+                    if (latestResult != null) {
+                        val statusText = "${latestResult.statusCode} ${latestResult.statusText}"
+                        val statusColor = when {
+                            latestResult.isSuccess -> KNetColors.SuccessGreen
+                            latestResult.statusCode in 400..499 -> Color(0xFFF59E0B)
+                            else -> Color(0xFFEF4444)
+                        }
+                        val latencyText = "${latestResult.latencyMs} ms"
+                        val sizeText = "${latestResult.responseSizeBytes} B"
 
-                    Box(
-                        modifier = Modifier
-                            .background(statusColor.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
-                            .border(1.dp, statusColor, RoundedCornerShape(4.dp))
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text(statusText, color = statusColor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        Box(
+                            modifier = Modifier
+                                .background(statusColor.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
+                                .border(1.dp, statusColor, RoundedCornerShape(4.dp))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(statusText, color = statusColor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("•  $latencyText  •  $sizeText", color = KNetColors.TextSecondary, fontSize = 11.sp)
+                    } else {
+                        Text("No response yet", color = KNetColors.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
                     }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("•  $latencyText  •  $sizeText", color = KNetColors.TextSecondary, fontSize = 11.sp)
                 }
 
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -868,7 +1528,8 @@ private fun ResponseTestPanel(
                                 fontSize = 11.sp,
                                 fontWeight = if (isTabActive) FontWeight.Bold else FontWeight.Medium
                             )
-                            if (tabName == "Tests") {
+                            val listToCount = testResults.ifEmpty { request.testResults }
+                            if (tabName == "Tests" && listToCount.isNotEmpty()) {
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Box(modifier = Modifier.size(6.dp).background(KNetColors.SuccessGreen, CircleShape))
                             }
@@ -891,11 +1552,73 @@ private fun ResponseTestPanel(
                 when (activeTab) {
                     "Headers" -> {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            val headers = latestResult?.headers ?: mapOf("Content-Type" to "application/json", "Server" to "KNet-Engine/2.4.0")
-                            headers.forEach { (k, v) ->
-                                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                                    Text(k, color = KNetColors.TextSecondary, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
-                                    Text(v, color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                            val headers = latestResult?.headers ?: emptyMap()
+                            if (headers.isEmpty()) {
+                                Text("No response headers received yet", color = KNetColors.TextSecondary.copy(alpha = 0.6f), fontSize = 11.sp)
+                            } else {
+                                headers.forEach { (k, v) ->
+                                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                                        Text(k, color = KNetColors.TextSecondary, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                                        Text(v, color = Color.White, fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    "Tests" -> {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
+                        ) {
+                            val activeTestResults = testResults.ifEmpty { request.testResults }
+                            if (activeTestResults.isEmpty()) {
+                                Text("No test assertions evaluated yet. Click 'Send Request' to run test scripts.", color = KNetColors.TextSecondary.copy(alpha = 0.6f), fontSize = 11.sp)
+                            } else {
+                                val passCount = activeTestResults.count { it.passed }
+                                Row(
+                                    modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "TEST ASSERTION RESULTS ($passCount/${activeTestResults.size} PASSED)",
+                                        color = if (passCount == activeTestResults.size) KNetColors.SuccessGreen else Color(0xFFF59E0B),
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                activeTestResults.forEach { test ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(if (test.passed) KNetColors.SuccessGreen.copy(alpha = 0.1f) else Color(0xFFEF4444).copy(alpha = 0.1f), RoundedCornerShape(4.dp))
+                                            .border(1.dp, if (test.passed) KNetColors.SuccessGreen.copy(alpha = 0.3f) else Color(0xFFEF4444).copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                            Text(
+                                                text = if (test.passed) "✔" else "✖",
+                                                color = if (test.passed) KNetColors.SuccessGreen else Color(0xFFEF4444),
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                            Spacer(modifier = Modifier.width(6.dp))
+                                            Text(
+                                                text = test.name,
+                                                color = Color.White,
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                        }
+                                        Text(
+                                            text = if (test.passed) "PASS" else "FAIL",
+                                            color = if (test.passed) KNetColors.SuccessGreen else Color(0xFFEF4444),
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -904,11 +1627,11 @@ private fun ResponseTestPanel(
                         val bodyText = when {
                             latestResult?.errorMessage != null -> "Error: ${latestResult.errorMessage}"
                             latestResult?.responseBody?.isNotBlank() == true -> latestResult.responseBody
-                            else -> "{\n  \"status\": \"success\",\n  \"token_type\": \"Bearer\",\n  \"access_token\": \"ey3JhbGciOiJKV1...\",\n  \"expires_in\": 3600,\n  \"user\": {\n    \"id\": 10294,\n    \"role\": \"admin\"\n  }\n}"
+                            else -> "No response payload. Enter a URL and click 'Send Request'."
                         }
                         Text(
                             text = bodyText,
-                            color = if (latestResult?.isSuccess == false) Color(0xFFEF4444) else Color(0xFF10B981),
+                            color = if (latestResult?.isSuccess == false) Color(0xFFEF4444) else if (latestResult == null) KNetColors.TextSecondary.copy(alpha = 0.6f) else Color(0xFF10B981),
                             fontSize = 11.sp,
                             fontFamily = FontFamily.Monospace
                         )
@@ -918,43 +1641,46 @@ private fun ResponseTestPanel(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // Test Assertion Results Section (PASS cards)
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Row(
+            // Test Assertion Results Section
+            if (request.testResults.isNotEmpty()) {
+                Column(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text(
-                        text = "TEST RESULTS (2/2 PASSED)",
-                        color = KNetColors.TextSecondary,
-                        fontSize = 9.sp,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Icon(Icons.Default.CheckCircle, contentDescription = null, tint = KNetColors.SuccessGreen, modifier = Modifier.size(14.dp))
-                }
-
-                request.testResults.forEach { test ->
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .background(KNetColors.BackgroundDark, RoundedCornerShape(4.dp))
-                            .border(1.dp, KNetColors.SuccessGreen.copy(alpha = 0.3f), RoundedCornerShape(4.dp))
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    val passCount = request.testResults.count { it.passed }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box(
-                                modifier = Modifier
-                                    .background(KNetColors.SuccessGreen.copy(alpha = 0.2f), RoundedCornerShape(3.dp))
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                            ) {
-                                Text("PASS", color = KNetColors.SuccessGreen, fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                        Text(
+                            text = "TEST RESULTS ($passCount/${request.testResults.size} PASSED)",
+                            color = KNetColors.TextSecondary,
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Icon(Icons.Default.CheckCircle, contentDescription = null, tint = KNetColors.SuccessGreen, modifier = Modifier.size(14.dp))
+                    }
+
+                    request.testResults.forEach { test ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(KNetColors.BackgroundDark, RoundedCornerShape(4.dp))
+                                .border(1.dp, if (test.passed) KNetColors.SuccessGreen.copy(alpha = 0.3f) else Color(0xFFEF4444).copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                                .padding(horizontal = 10.dp, vertical = 6.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Box(
+                                    modifier = Modifier
+                                        .background(if (test.passed) KNetColors.SuccessGreen.copy(alpha = 0.2f) else Color(0xFFEF4444).copy(alpha = 0.2f), RoundedCornerShape(3.dp))
+                                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                                ) {
+                                    Text(if (test.passed) "PASS" else "FAIL", color = if (test.passed) KNetColors.SuccessGreen else Color(0xFFEF4444), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(test.name, color = Color.White, fontSize = 11.sp)
                             }
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(test.name, color = Color.White, fontSize = 11.sp)
                         }
                     }
                 }

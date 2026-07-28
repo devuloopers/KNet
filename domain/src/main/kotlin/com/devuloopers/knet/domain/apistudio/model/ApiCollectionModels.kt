@@ -53,6 +53,7 @@ data class SavedApiRequest(
     val url: String,
     val headers: List<RequestHeader> = defaultHeaders(),
     val body: String = "",
+    val bodyType: String = "json",
     val expectedStatus: Int = 200,
     val testResults: List<TestAssertionResult> = emptyList()
 ) {
@@ -71,8 +72,8 @@ fun defaultHeaders(): List<RequestHeader> = listOf(
     RequestHeader(key = "Accept",          value = "*/*",                  isEnabled = true,  isAuto = true),
     RequestHeader(key = "Accept-Encoding", value = "gzip, deflate, br",    isEnabled = true,  isAuto = true),
     RequestHeader(key = "Connection",      value = "keep-alive",           isEnabled = true,  isAuto = true),
-    RequestHeader(key = "Host",            value = "<auto>",               isEnabled = true,  isAuto = true),
-    RequestHeader(key = "KNet-Token",      value = "<auto>",               isEnabled = true,  isAuto = true)
+    RequestHeader(key = "Host",            value = "",                     isEnabled = true,  isAuto = true),
+    RequestHeader(key = "KNet-Token",      value = "",                     isEnabled = true,  isAuto = true)
 )
 
 /**

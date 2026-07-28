@@ -130,7 +130,7 @@ Create a high-fidelity visual layout based on a dynamic modular grid architectur
 
 ---
 
-### Phase 9: Replay, Stress Testing & Scripting (replayEngine & pluginApi) [PENDING]
+### Phase 9: Replay, Stress Testing & Scripting (replayEngine & pluginApi) [IN PROGRESS]
 Add client-side generation and programmability.
 * **Modules created**: `replayEngine` (new), `pluginApi` (new)
 * **Tasks**:
@@ -141,12 +141,37 @@ Add client-side generation and programmability.
 
 ---
 
-### Phase 10: Upstream Proxies & Port Forwarding [PENDING]
+### Phase 10: Upstream Proxies & Port Forwarding [IN PROGRESS]
 Ensure KNet integrates into complex enterprise network topologies.
 * **Modules modified**: `proxyEngine`
 * **Tasks**:
   * **Upstream Proxy Chaining**: Route KNet's outgoing connections through an upstream HTTP/SOCKS5 proxy.
   * **Reverse Proxy**: Listen on custom ports and map them to local servers.
+
+---
+
+### Phase 11: API Studio Dual-Engine Scripting Platform v2.0 (scriptEngine) [COMPLETED]
+Build a language-agnostic scripting platform supporting JavaScript (GraalJS) and native Kotlin (Kotlin JVM Scripting) with a unified Script SDK, 1-click snippets, and live test assertions.
+* **Modules created**: `scriptEngine` (new)
+* **Tasks**:
+  * **Unified Script SDK**: Create `ScriptContext`, `ScriptRequestModel`, `ScriptResponseModel`, `ScriptTestResult`, and `ScriptExecutionResult`. [COMPLETED]
+  * **Security Sanitizer**: Enforce runtime-based and pre-execution security sandboxing blocking forbidden keywords (`launch`, `async`, `Thread`, `System.exit`). [COMPLETED]
+  * **GraalJS Engine**: Execute JavaScript with Postman `pm.*` API compatibility. [COMPLETED]
+  * **Kotlin JVM Script Engine**: Execute native Kotlin `.kts` scripts via `BasicJvmScriptingHost` compiling directly into in-memory JVM Bytecode. [COMPLETED]
+  * **1-Click Snippet Registry**: Provide template helpers (`Status 200`, `Latency < 500ms`, `JSON Value`, `Set Env Var`, `Generate UUID`). [COMPLETED]
+  * **UI Integration**: Add Language Toggle (`[JavaScript]` vs `[Kotlin]`) and Snippet Bar in script editors, and live `✔ PASS` / `✖ FAIL` test cards in Response Inspector. [COMPLETED]
+
+---
+
+### Phase 12: Spring Boot WebFlux Testing Server (testingServer) [COMPLETED]
+Build a standalone feature-modular Spring Boot WebFlux test server for offline testing of all KNet HTTP verbs, authentication modes, status codes, and latency delays.
+* **Modules created**: `testingServer` (new)
+* **Tasks**:
+  * **Feature Directory Structure**: Create `get/`, `post/`, `put/`, `patch/`, `delete/`, `authentication/`, `status/`, `delay/`, `headers/`, `cookies/` feature packages. [COMPLETED]
+  * **WebFlux Functional Routers**: Build `coRouter` and `suspend Handler` for each feature package. [COMPLETED]
+  * **Pre-loaded Test Suite**: Pre-load **"KNet Local Test Server (WebFlux)"** collection in API Studio. [COMPLETED]
+
+
 
 ---
 

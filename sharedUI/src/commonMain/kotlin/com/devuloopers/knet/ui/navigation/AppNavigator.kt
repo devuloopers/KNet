@@ -26,6 +26,8 @@ import com.devuloopers.knet.widgets.SystemStatusBar
 import com.devuloopers.knet.widgets.TopHeader
 import com.devuloopers.knet.widgets.WidgetType
 
+import com.devuloopers.knet.ui.apistudio.viewmodel.ApiStudioViewModel
+
 /**
  * Controller encapsulating application backstack navigation state and destination rendering.
  * Uses a developer-owned backstack [MutableList] following Navigation 3 design principles.
@@ -82,6 +84,9 @@ fun AppNavDisplay(
 ) {
     val workspaceViewModel = controller.workspaceViewModel
     val workspaceUiState by workspaceViewModel.uiState.collectAsState()
+
+    // Persistent ViewModel for API Studio across screen transitions within the app session
+    val apiStudioViewModel = remember(controller.proxyPort) { ApiStudioViewModel(proxyPort = controller.proxyPort) }
 
     val visibleWidgets: Map<WidgetType, Boolean> =
         (workspaceUiState as? WorkspaceUiState.Success)?.visibleWidgets ?: emptyMap()
@@ -140,6 +145,7 @@ fun AppNavDisplay(
                 currentTab == "API Studio" || currentTab == "Collections" -> {
                     ApiStudioScreen(
                         controller = controller,
+                        viewModel = apiStudioViewModel,
                         modifier = Modifier.fillMaxSize()
                     )
                 }

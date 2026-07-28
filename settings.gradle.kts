@@ -45,3 +45,7 @@ include(":protocolInspector")
 include(":bodyFormatter")
 include(":domain")
 include(":data")
+include(":scriptEngine")
+include(":testingServer")
+
+

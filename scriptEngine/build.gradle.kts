@@ -3,13 +3,12 @@ plugins {
 }
 
 dependencies {
-    api(project(":bodyFormatter"))
-    api(project(":scriptEngine"))
     implementation(libs.kotlinx.coroutines.core)
-
     implementation(libs.kotlinx.serialization.json)
-    implementation(libs.brotli.dec)
-    implementation(libs.zstd.jni)
-    api(libs.koin.core)
+
+    // Kotlin Scripting for JVM Bytecode execution
+    implementation(kotlin("scripting-jvm"))
+    implementation(kotlin("scripting-compiler-embeddable"))
+
     testImplementation(kotlin("test"))
 }

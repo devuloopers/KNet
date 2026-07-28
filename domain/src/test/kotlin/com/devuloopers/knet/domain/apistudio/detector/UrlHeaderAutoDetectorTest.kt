@@ -40,7 +40,7 @@ class UrlParameterExtractorTest {
         assertTrue(accept?.isAuto == true)
 
         val host = req.headers.find { it.key == "Host" }
-        assertEquals("<auto>", host?.value)
+        assertEquals("", host?.value)
         assertTrue(host?.isAuto == true)
     }
 }

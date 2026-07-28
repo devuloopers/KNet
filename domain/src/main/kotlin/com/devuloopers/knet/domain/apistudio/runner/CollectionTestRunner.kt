@@ -3,6 +3,11 @@ package com.devuloopers.knet.domain.apistudio.runner
 import com.devuloopers.knet.domain.apistudio.model.SavedApiRequest
 import com.devuloopers.knet.domain.apistudio.model.TestAssertionResult
 import com.devuloopers.knet.domain.apistudio.usecase.ExecutionResult
+import com.devuloopers.knet.scriptengine.api.ScriptExecutionResult
+import com.devuloopers.knet.scriptengine.api.ScriptLanguage
+import com.devuloopers.knet.scriptengine.api.ScriptRequestModel
+import com.devuloopers.knet.scriptengine.api.ScriptResponseModel
+import com.devuloopers.knet.scriptengine.runtime.ScriptRuntime
 
 /**
  * Result data class for an individual request test assertion evaluation within a batch runner suite.
@@ -29,16 +34,20 @@ data class SuiteRunSummary(
  */
 class CollectionTestRunner {
 
+    private val scriptRuntime = ScriptRuntime()
+
     /**
-     * Evaluates standard test assertions for an executed request.
+     * Evaluates standard test assertions and executes user test scripts for an executed request.
      */
     fun evaluateAssertions(
         request: SavedApiRequest,
-        result: ExecutionResult
+        result: ExecutionResult,
+        testScript: String = "",
+        scriptLanguage: ScriptLanguage = ScriptLanguage.JAVASCRIPT
     ): List<TestAssertionResult> {
         val assertions = mutableListOf<TestAssertionResult>()
 
-        // 1. Status Code assertion
+        // 1. Standard Status Code assertion
         val isStatusOk = result.statusCode == request.expectedStatus
         assertions.add(
             TestAssertionResult(
@@ -68,6 +77,49 @@ class CollectionTestRunner {
             )
         )
 
+        // 4. Run User Test Scripts via ScriptRuntime
+        if (testScript.isNotBlank()) {
+            val scriptReq = ScriptRequestModel(
+                url = request.url,
+                method = request.methodString,
+                headers = request.headers.associate { it.key to it.value }.toMutableMap(),
+                queryParams = mutableMapOf(),
+                body = request.body
+            )
+            val scriptResp = ScriptResponseModel(
+                statusCode = result.statusCode,
+                statusText = result.statusText,
+                latencyMs = result.latencyMs,
+                responseSizeBytes = result.responseSizeBytes,
+                headers = result.headers,
+                body = result.responseBody
+            )
+
+            when (val scriptRes = scriptRuntime.executeScript(testScript, scriptLanguage, scriptReq, scriptResp)) {
+                is ScriptExecutionResult.Success -> {
+                    scriptRes.testResults.forEachIndexed { index, tr ->
+                        assertions.add(
+                            TestAssertionResult(
+                                id = "script_test_$index",
+                                name = tr.name,
+                                passed = tr.passed
+                            )
+                        )
+                    }
+                }
+                is ScriptExecutionResult.Error -> {
+                    assertions.add(
+                        TestAssertionResult(
+                            id = "script_error",
+                            name = "Script Error: ${scriptRes.message}",
+                            passed = false
+                        )
+                    )
+                }
+            }
+        }
+
         return assertions
     }
 }
+
