@@ -99,8 +99,11 @@ internal fun BodyTab(
                 currentBodyType.equals("graphql", ignoreCase = true) -> {
                     CodeEditorWidget(code = request.bodyPayload, onCodeChange = onBodyChange, placeholder = "# Enter GraphQL Query / Mutation...\nquery GetUser {\n  user(id: 1) {\n    name\n  }\n}", textColor = Color(0xFFA855F7), modifier = Modifier.fillMaxSize())
                 }
+                currentBodyType.equals("form-data", ignoreCase = true) || currentBodyType.equals("x-www-form-urlencoded", ignoreCase = true) -> {
+                    FormDataTableGrid(bodyPayload = request.bodyPayload, onBodyChange = onBodyChange, modifier = Modifier.fillMaxSize())
+                }
                 else -> {
-                    CodeEditorWidget(code = request.bodyPayload, onCodeChange = onBodyChange, placeholder = "// Enter key=value form payload data (one per line or standard form string)...", textColor = Color(0xFFF59E0B), modifier = Modifier.fillMaxSize())
+                    CodeEditorWidget(code = request.bodyPayload, onCodeChange = onBodyChange, placeholder = "// Enter raw payload content...", textColor = Color(0xFFF59E0B), modifier = Modifier.fillMaxSize())
                 }
             }
         }
