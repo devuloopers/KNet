@@ -113,6 +113,7 @@ object TokenMaker {
 
                 TokenState.IN_DOUBLE_QUOTE -> {
                     val strStart = i
+                    i++ // Advance past opening quote
                     var strEnd = n
                     while (i < n) {
                         if (line[i] == '\\') {
@@ -132,6 +133,7 @@ object TokenMaker {
 
                 TokenState.IN_SINGLE_QUOTE -> {
                     val strStart = i
+                    i++ // Advance past opening quote
                     var strEnd = n
                     while (i < n) {
                         if (line[i] == '\\') {
@@ -151,6 +153,7 @@ object TokenMaker {
 
                 TokenState.IN_TEMPLATE_STRING -> {
                     val strStart = i
+                    i++ // Advance past opening quote
                     var strEnd = n
                     while (i < n) {
                         if (line[i] == '\\') {

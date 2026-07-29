@@ -192,6 +192,7 @@ fun ApiStudioScreen(
             latestResult = uiState.latestResult,
             testResults = uiState.testResults,
             onTabSelected = { viewModel.selectRespTab(it) },
+            onClearResponse = { viewModel.clearResponseState() },
             modifier = Modifier
                 .weight(1.2f)
                 .fillMaxHeight()

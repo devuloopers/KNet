@@ -116,7 +116,7 @@ class ApiStudioViewModel(
     }
 
 
-    private fun clearResponseState() {
+    fun clearResponseState() {
         _uiState.update {
             it.copy(
                 latestResult = null,
@@ -131,7 +131,6 @@ class ApiStudioViewModel(
      * Auto-creates an Unsaved Request session on the very first typed character.
      */
     fun onUrlInputChanged(newUrl: String) {
-        clearResponseState()
         val parseResult = urlParameterExtractor.extract(newUrl)
         var currentReq = _uiState.value.selectedRequest
 

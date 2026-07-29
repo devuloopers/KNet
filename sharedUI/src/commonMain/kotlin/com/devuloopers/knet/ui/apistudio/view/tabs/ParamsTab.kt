@@ -1,4 +1,4 @@
-﻿package com.devuloopers.knet.ui.apistudio.view.tabs
+package com.devuloopers.knet.ui.apistudio.view.tabs
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -55,7 +55,7 @@ internal fun ParamsTab(
     val baseUrl = request.url.substringBefore("?")
     val queryString = if (request.url.contains("?")) request.url.substringAfter("?").substringBefore("#") else ""
 
-    var paramList by remember(request.id) {
+    var paramList by remember(request.id, request.url) {
         mutableStateOf(
             if (queryString.isNotBlank()) {
                 queryString.split("&").mapNotNull { pair ->

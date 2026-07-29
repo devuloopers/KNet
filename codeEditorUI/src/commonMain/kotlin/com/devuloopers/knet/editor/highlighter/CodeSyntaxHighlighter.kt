@@ -14,7 +14,7 @@ import androidx.compose.ui.text.input.VisualTransformation
  */
 object CodeSyntaxColors {
     val Key = Color(0xFF79C0FF)       // Bright Cyan-Blue for JSON/Map keys
-    val String = Color(0xFFA5D6FF)    // Soft Pastel Blue for string literals
+    val String = Color(0xFFE6EDF3)    // Clean Bright White for string values
     val Number = Color(0xFFD2A8FF)    // Pastel Purple for numbers/integers
     val Boolean = Color(0xFFFFAB70)   // Coral-Orange for true/false/null
     val Keyword = Color(0xFFFF7B72)   // Soft Red for function/if/const/var/return

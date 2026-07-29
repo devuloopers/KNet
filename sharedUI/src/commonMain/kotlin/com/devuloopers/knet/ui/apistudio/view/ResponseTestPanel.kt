@@ -21,6 +21,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.Refresh
@@ -63,6 +64,7 @@ internal fun ResponseTestPanel(
     latestResult: ExecutionResult? = null,
     testResults: List<TestAssertionResult> = emptyList(),
     onTabSelected: (String) -> Unit,
+    onClearResponse: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val respTabs = listOf("Body", "Headers", "Cookies", "Tests")
@@ -101,7 +103,17 @@ internal fun ResponseTestPanel(
                         Text("No response yet", color = KNetColors.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
                     }
                 }
-                Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = KNetColors.TextSecondary, modifier = Modifier.size(14.dp).clickable { })
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (latestResult != null) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = "Clear Response",
+                            tint = KNetColors.TextSecondary,
+                            modifier = Modifier.size(14.dp).clickable { onClearResponse() }
+                        )
+                    }
+                    Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = KNetColors.TextSecondary, modifier = Modifier.size(14.dp).clickable { })
+                }
             }
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -141,8 +153,9 @@ internal fun ResponseTestPanel(
             ) {
                 when (activeTab) {
                     "Headers" -> ResponseHeadersViewer(headers = latestResult?.headers ?: emptyMap())
+                    "Cookies" -> com.devuloopers.knet.ui.apistudio.view.tabs.ResponseCookiesTab(headers = latestResult?.headers ?: emptyMap())
                     "Tests" -> TestResultsViewer(testResults = testResults, requestTestResults = request.testResults)
-                    else -> ResponseBodyViewer(latestResult = latestResult)
+                    else -> com.devuloopers.knet.ui.apistudio.view.tabs.ResponseBodyTab(latestResult = latestResult)
                 }
             }
 
