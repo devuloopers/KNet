@@ -24,10 +24,10 @@ class CodeHighlighterTest {
         assertTrue(xmlStrategy is XmlLanguageHighlighter, "XML format must resolve XmlLanguageHighlighter")
 
         val jsStrategy = CodeHighlighterRegistry.resolve(BodyFormat.Js("console.log('test')"))
-        assertTrue(jsStrategy is com.devuloopers.knet.highlighter.JsLanguageHighlighter, "JS format must resolve JsLanguageHighlighter")
+        assertTrue(jsStrategy is com.devuloopers.knet.editor.highlighter.JsLanguageHighlighter, "JS format must resolve JsLanguageHighlighter")
 
         val cssStrategy = CodeHighlighterRegistry.resolve(BodyFormat.Css("body { color: red; }"))
-        assertTrue(cssStrategy is com.devuloopers.knet.highlighter.CssLanguageHighlighter, "CSS format must resolve CssLanguageHighlighter")
+        assertTrue(cssStrategy is com.devuloopers.knet.editor.highlighter.CssLanguageHighlighter, "CSS format must resolve CssLanguageHighlighter")
 
         val grpcWebStrategy = CodeHighlighterRegistry.resolve(BodyFormat.GrpcWeb(emptyList()))
         assertTrue(grpcWebStrategy is JsonLanguageHighlighter, "gRPC-Web format must resolve JsonLanguageHighlighter")

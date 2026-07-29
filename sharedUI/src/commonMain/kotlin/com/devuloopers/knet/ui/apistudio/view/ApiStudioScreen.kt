@@ -79,6 +79,38 @@ fun ApiStudioScreen(
         )
     }
 
+    var requestToSave by remember { mutableStateOf<SavedApiRequest?>(null) }
+
+    requestToSave?.let { req ->
+        com.devuloopers.knet.ui.apistudio.view.dialogs.SaveSessionDialog(
+            request = req,
+            collections = uiState.collections,
+            onSaveToExisting = { collectionId, requestName ->
+                val col = uiState.collections.find { it.id == collectionId }
+                val folderId = col?.folders?.firstOrNull()?.id
+                viewModel.saveUnsavedToCollection(
+                    requestId = req.id,
+                    targetCollectionId = collectionId,
+                    targetFolderId = folderId,
+                    customName = requestName
+                )
+                requestToSave = null
+            },
+            onSaveToNew = { collectionName, requestName ->
+                viewModel.createNewCollection(collectionName)
+                val newColId = uiState.collections.find { it.name == collectionName }?.id
+                    ?: "col-${kotlin.uuid.Uuid.random()}"
+                viewModel.saveUnsavedToCollection(
+                    requestId = req.id,
+                    targetCollectionId = newColId,
+                    customName = requestName
+                )
+                requestToSave = null
+            },
+            onDismiss = { requestToSave = null }
+        )
+    }
+
     Row(
         modifier = modifier
             .fillMaxSize()
@@ -103,10 +135,7 @@ fun ApiStudioScreen(
             onDeleteUnsavedRequest = { reqId -> viewModel.deleteUnsavedRequest(reqId) },
             onAddNewUnsavedRequest = { viewModel.createUnsavedRequest() },
             onSaveUnsavedToCollection = { req ->
-                val collectionId = uiState.collections.firstOrNull()?.id ?: return@CollectionsTreeSidebar
-                val folderId =
-                    uiState.collections.firstOrNull()?.folders?.firstOrNull()?.id ?: return@CollectionsTreeSidebar
-                viewModel.saveUnsavedToCollection(req.id, collectionId, folderId)
+                requestToSave = req
             },
             onDeleteCollection = { colId -> viewModel.deleteCollection(colId) },
             onRenameCollection = { colId, name -> viewModel.renameCollection(colId, name) },

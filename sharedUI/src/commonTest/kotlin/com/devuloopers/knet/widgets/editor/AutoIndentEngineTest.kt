@@ -2,6 +2,7 @@ package com.devuloopers.knet.widgets.editor
 
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
+import com.devuloopers.knet.editor.engine.AutoIndentEngine
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull

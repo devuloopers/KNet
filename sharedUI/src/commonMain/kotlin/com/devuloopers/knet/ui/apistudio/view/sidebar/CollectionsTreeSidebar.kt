@@ -20,10 +20,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.devuloopers.knet.domain.apistudio.model.ApiCollection
 import com.devuloopers.knet.domain.apistudio.model.SavedApiRequest
-import com.devuloopers.knet.theme.KNetColors
-import com.devuloopers.knet.widgets.CollapsibleSection
 import com.devuloopers.knet.editor.widget.ContextMenuItem
 import com.devuloopers.knet.editor.widget.KNetContextMenuArea
+import com.devuloopers.knet.theme.KNetColors
+import com.devuloopers.knet.widgets.CollapsibleSection
 import com.devuloopers.knet.widgets.WidgetSearchBar
 
 /**

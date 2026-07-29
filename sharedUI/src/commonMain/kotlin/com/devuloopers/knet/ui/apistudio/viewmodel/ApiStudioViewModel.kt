@@ -476,7 +476,7 @@ class ApiStudioViewModel(
         }
         val source = initialRequest ?: _uiState.value.draftRequest
         val newReq = SavedApiRequest(
-            id = "unsaved-$nextNum-${kotlin.random.Random.nextInt(1000, 9999)}",
+            id = "unsaved-$nextNum-${kotlin.uuid.Uuid.random()}",
             name = "Unsaved Request $nextNum",
             method = source.method,
             url = source.url,
@@ -612,14 +612,23 @@ class ApiStudioViewModel(
     ) {
         val unsavedReq = _uiState.value.unsavedRequests.find { it.id == requestId } ?: _uiState.value.selectedRequest ?: return
         val promotedReq = unsavedReq.copy(
-            id = "req-${kotlin.random.Random.nextInt(1000, 9999)}",
+            id = "req-${kotlin.uuid.Uuid.random()}",
             name = customName?.takeIf { it.isNotBlank() } ?: unsavedReq.name
         )
 
         val updatedCollections = _uiState.value.collections.map { col ->
             if (col.id == targetCollectionId) {
-                val targetFolder = targetFolderId ?: col.folders.firstOrNull()?.id
-                col.copy(folders = col.folders.map { folder ->
+                val effectiveFolders = if (col.folders.isEmpty()) {
+                    listOf(
+                        com.devuloopers.knet.domain.apistudio.model.CollectionFolder(
+                            id = "folder-${kotlin.uuid.Uuid.random()}",
+                            name = "General",
+                            requests = emptyList()
+                        )
+                    )
+                } else col.folders
+                val targetFolder = targetFolderId ?: effectiveFolders.first().id
+                col.copy(folders = effectiveFolders.map { folder ->
                     if (folder.id == targetFolder) {
                         folder.copy(requests = folder.requests + promotedReq)
                     } else folder
@@ -917,11 +926,11 @@ class ApiStudioViewModel(
 
     fun createNewCollection(name: String) {
         val newCollection = ApiCollection(
-            id = "c-${System.currentTimeMillis()}",
+            id = "c-${kotlin.uuid.Uuid.random()}",
             name = name,
             folders = listOf(
                 CollectionFolder(
-                    id = "f-${System.currentTimeMillis()}",
+                    id = "f-${kotlin.uuid.Uuid.random()}",
                     name = name,
                     isExpanded = true,
                     requests = emptyList()
@@ -939,7 +948,7 @@ class ApiStudioViewModel(
 
     fun createNewFolder(collectionId: String, folderName: String) {
         val newFolder = CollectionFolder(
-            id = "f-${System.currentTimeMillis()}",
+            id = "f-${kotlin.uuid.Uuid.random()}",
             name = folderName,
             isExpanded = true,
             requests = emptyList()
@@ -963,7 +972,7 @@ class ApiStudioViewModel(
         url: String = "https://httpbin.org/get"
     ) {
         val newRequest = SavedApiRequest(
-            id = "r-${System.currentTimeMillis()}",
+            id = "r-${kotlin.uuid.Uuid.random()}",
             name = name,
             method = method,
             url = url

@@ -12,7 +12,7 @@ dependencies {
     implementation(project(":data"))
 
     implementation(compose.desktop.currentOs)
-    implementation(libs.kotlinx.coroutinesSwing)
+    implementation(libs.kotlinx.coroutines.swing)
 
     implementation(libs.compose.uiToolingPreview)
 }

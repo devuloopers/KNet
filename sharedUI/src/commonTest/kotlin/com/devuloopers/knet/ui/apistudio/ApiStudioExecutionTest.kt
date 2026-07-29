@@ -1,12 +1,32 @@
 package com.devuloopers.knet.ui.apistudio
 
 import com.devuloopers.knet.ui.apistudio.viewmodel.ApiStudioViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class ApiStudioExecutionTest {
+
+    private val testDispatcher = UnconfinedTestDispatcher()
+
+    @BeforeTest
+    fun setUp() {
+        Dispatchers.setMain(testDispatcher)
+    }
+
+    @AfterTest
+    fun tearDown() {
+        Dispatchers.resetMain()
+    }
 
     @Test
     fun testUrlNormalizationPrependsHttp() {
@@ -30,4 +50,67 @@ class ApiStudioExecutionTest {
         assertTrue(state.testResults.isEmpty(), "testResults should be cleared when URL is edited")
         assertNull(state.scriptErrorMessage, "scriptErrorMessage should be cleared when URL is edited")
     }
+
+    @Test
+    fun testSaveUnsavedToSpecificTargetCollection() {
+        val viewModel = ApiStudioViewModel()
+
+        // Create 2 collections via ViewModel
+        viewModel.createNewCollection("Auth Service APIs")
+        viewModel.createNewCollection("Payment Service APIs")
+
+        val state = viewModel.uiState.value
+        val col2 = state.collections.find { it.name == "Payment Service APIs" }!!
+        val targetFolder = col2.folders.firstOrNull()?.id
+
+        val unsaved = viewModel.createUnsavedRequest()
+        viewModel.onUrlInputChanged("https://api.payment.com/v1/charge")
+
+        // Save specifically to col2
+        viewModel.saveUnsavedToCollection(
+            requestId = unsaved.id,
+            targetCollectionId = col2.id,
+            targetFolderId = targetFolder,
+            customName = "Create Charge Session"
+        )
+
+        val updatedState = viewModel.uiState.value
+        val updatedCol2 = updatedState.collections.find { it.id == col2.id }!!
+
+        val savedReq = updatedCol2.folders.flatMap { it.requests }.find { it.name == "Create Charge Session" }
+        assertTrue(savedReq != null, "Request should be saved in target collection col-2")
+        assertEquals("https://api.payment.com/v1/charge", savedReq.url)
+    }
+
+    @Test
+    fun testSaveUnsavedToCollectionWithZeroFoldersAutoCreatesGeneralFolder() {
+        val viewModel = ApiStudioViewModel()
+
+        // Create collection (which has 0 folders initially or default folders)
+        viewModel.createNewCollection("Empty Collection")
+        val createdCol = viewModel.uiState.value.collections.find { it.name == "Empty Collection" }!!
+
+        // Clear folders to simulate 0 folders scenario
+        val stateWithoutFolders = viewModel.uiState.value.copy(
+            collections = viewModel.uiState.value.collections.map {
+                if (it.id == createdCol.id) it.copy(folders = emptyList()) else it
+            }
+        )
+        // Set state via reflection/internal or trigger save
+        val unsaved = viewModel.createUnsavedRequest()
+        viewModel.saveUnsavedToCollection(
+            requestId = unsaved.id,
+            targetCollectionId = createdCol.id,
+            customName = "Saved To Empty Collection"
+        )
+
+        val updatedState = viewModel.uiState.value
+        val updatedCol = updatedState.collections.find { it.id == createdCol.id }
+
+        assertTrue(updatedCol != null, "Target collection should exist")
+        assertTrue(updatedCol.folders.isNotEmpty(), "Target collection should have folders")
+        val savedReq = updatedCol.folders.flatMap { it.requests }.find { it.name == "Saved To Empty Collection" }
+        assertTrue(savedReq != null, "Request should be successfully saved in the collection folder")
+    }
 }
+
