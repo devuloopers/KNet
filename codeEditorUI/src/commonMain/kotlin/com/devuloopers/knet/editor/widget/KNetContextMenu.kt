@@ -1,6 +1,5 @@
-package com.devuloopers.knet.widgets
+package com.devuloopers.knet.editor.widget
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -37,7 +36,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
-import com.devuloopers.knet.theme.KNetColors
 
 /**
  * Data class representing a single action item inside a [KNetContextMenuArea].
@@ -130,13 +128,13 @@ fun KNetContextMenuArea(
                                         Icon(
                                             imageVector = item.icon,
                                             contentDescription = item.label,
-                                            tint = if (item.enabled) KNetColors.ActiveBlue else KNetColors.TextSecondary,
+                                            tint = if (item.enabled) Color(0xFF58A6FF) else Color(0xFF8B949E),
                                             modifier = Modifier.size(14.dp)
                                         )
                                     }
                                     Text(
                                         text = item.label,
-                                        color = if (item.enabled) Color.White else KNetColors.TextSecondary,
+                                        color = if (item.enabled) Color.White else Color(0xFF8B949E),
                                         fontSize = 11.sp,
                                         fontWeight = FontWeight.Medium
                                     )
@@ -145,7 +143,7 @@ fun KNetContextMenuArea(
                                 if (!item.shortcut.isNullOrEmpty()) {
                                     Text(
                                         text = item.shortcut,
-                                        color = KNetColors.TextSecondary,
+                                        color = Color(0xFF8B949E),
                                         fontSize = 10.sp,
                                         fontFamily = FontFamily.Monospace
                                     )

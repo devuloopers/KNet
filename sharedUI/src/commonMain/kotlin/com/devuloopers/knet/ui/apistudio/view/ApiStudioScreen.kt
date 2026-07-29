@@ -61,6 +61,7 @@ import com.devuloopers.knet.controller.ProxyStateController
 import com.devuloopers.knet.domain.apistudio.model.CollectionFolder
 import com.devuloopers.knet.domain.apistudio.model.HttpMethod
 import com.devuloopers.knet.domain.apistudio.model.SavedApiRequest
+import com.devuloopers.knet.domain.apistudio.model.isUrlValid
 import com.devuloopers.knet.domain.apistudio.model.TestAssertionResult
 import com.devuloopers.knet.theme.KNetColors
 import androidx.compose.runtime.collectAsState
@@ -70,7 +71,6 @@ import com.devuloopers.knet.domain.apistudio.usecase.ExecutionResult
 import com.devuloopers.knet.ui.apistudio.view.dialogs.CreateItemDialog
 import com.devuloopers.knet.ui.apistudio.view.dialogs.CollectionRunnerModal
 import com.devuloopers.knet.widgets.TableCellTextField
-import com.devuloopers.knet.widgets.CodeEditorWidget
 import com.devuloopers.knet.widgets.KNetInputField
 
 /**
@@ -442,6 +442,7 @@ private fun RequestBuilderPanel(
     modifier: Modifier = Modifier
 ) {
     val reqTabs = listOf("Body", "Params", "Authorization", "Headers", "Pre-request Script", "Tests")
+    val isUrlValid = request.isUrlValid
 
     Box(
         modifier = modifier
@@ -537,8 +538,13 @@ private fun RequestBuilderPanel(
                 // Send Request Primary Button
                 Box(
                     modifier = Modifier
-                        .background(if (isExecuting) KNetColors.ActiveBlue.copy(alpha = 0.5f) else KNetColors.ActiveBlue, RoundedCornerShape(6.dp))
-                        .clickable(enabled = !isExecuting) { onSend() }
+                        .background(
+                            if (!isUrlValid) KNetColors.ActiveBlue.copy(alpha = 0.4f)
+                            else if (isExecuting) KNetColors.ActiveBlue.copy(alpha = 0.5f)
+                            else KNetColors.ActiveBlue,
+                            RoundedCornerShape(6.dp)
+                        )
+                        .clickable(enabled = isUrlValid && !isExecuting) { onSend() }
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center
                 ) {
@@ -580,16 +586,16 @@ private fun RequestBuilderPanel(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     reqTabs.forEach { tabName ->
-                        val isTabActive = tabName == activeTab
+                        val isTabActive = tabName == activeTab && isUrlValid
                         Column(
                             modifier = Modifier
-                                .clickable { onTabSelected(tabName) }
+                                .clickable(enabled = isUrlValid) { onTabSelected(tabName) }
                                 .padding(top = 8.dp),
                             horizontalAlignment = Alignment.CenterHorizontally
                         ) {
                             Text(
                                 text = tabName,
-                                color = if (isTabActive) Color.White else KNetColors.TextSecondary,
+                                color = if (isTabActive) Color.White else if (!isUrlValid) KNetColors.TextSecondary.copy(alpha = 0.35f) else KNetColors.TextSecondary,
                                 fontSize = 11.sp,
                                 fontWeight = if (isTabActive) FontWeight.Bold else FontWeight.Medium,
                                 maxLines = 1,
@@ -618,7 +624,26 @@ private fun RequestBuilderPanel(
                     .border(1.dp, KNetColors.BorderDark, RoundedCornerShape(6.dp))
                     .padding(12.dp)
             ) {
-                when {
+                if (!isUrlValid) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text("🌐", fontSize = 24.sp)
+                            Text(
+                                text = "Enter a valid URL above to configure headers, body, and request parameters",
+                                color = KNetColors.TextSecondary.copy(alpha = 0.6f),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                    }
+                } else {
+                    when {
                     activeTab.startsWith("Body") -> {
                         val bodyModes = listOf("none", "json", "form-data", "x-www-form-urlencoded", "raw", "graphql")
                         val currentBodyType = request.bodyType.ifBlank { "json" }
@@ -672,7 +697,7 @@ private fun RequestBuilderPanel(
                                     }
                                     currentBodyType.equals("json", ignoreCase = true) -> {
                                         CodeEditorWidget(
-                                            code = request.body,
+                                            code = request.bodyPayload,
                                             onCodeChange = onBodyChange,
                                             placeholder = "// Enter raw JSON payload content...\n{\n  \"key\": \"value\"\n}",
                                             textColor = Color(0xFFA855F7),
@@ -731,7 +756,7 @@ private fun RequestBuilderPanel(
                                                 else -> Color(0xFFF8FAFC)
                                             }
                                             CodeEditorWidget(
-                                                code = request.body,
+                                                code = request.bodyPayload,
                                                 onCodeChange = onBodyChange,
                                                 placeholder = "// Enter raw $rawSubFormat payload content...",
                                                 textColor = accentColor,
@@ -741,7 +766,7 @@ private fun RequestBuilderPanel(
                                     }
                                     currentBodyType.equals("graphql", ignoreCase = true) -> {
                                         CodeEditorWidget(
-                                            code = request.body,
+                                            code = request.bodyPayload,
                                             onCodeChange = onBodyChange,
                                             placeholder = "# Enter GraphQL Query / Mutation...\nquery GetUser {\n  user(id: 1) {\n    name\n  }\n}",
                                             textColor = Color(0xFFA855F7),
@@ -751,7 +776,7 @@ private fun RequestBuilderPanel(
                                     else -> {
                                         // Form Data / URL Encoded Key-Value Form
                                         CodeEditorWidget(
-                                            code = request.body,
+                                            code = request.bodyPayload,
                                             onCodeChange = onBodyChange,
                                             placeholder = "// Enter key=value form payload data (one per line or standard form string)...",
                                             textColor = Color(0xFFF59E0B),
@@ -1437,11 +1462,11 @@ private fun RequestBuilderPanel(
                             }
                         }
                     }
-
                 }
             }
         }
     }
+}
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -1716,3 +1741,121 @@ private fun ResponseTestPanel(
         }
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Compatibility Extensions & Code Editor Bridge Component
+// ─────────────────────────────────────────────────────────────────────────────
+
+private val com.devuloopers.knet.domain.apistudio.model.SavedApiRequest.bodyType: String
+    get() = body.type
+
+private val com.devuloopers.knet.domain.apistudio.model.SavedApiRequest.bodyPayload: String
+    get() = body.content
+
+private val com.devuloopers.knet.domain.apistudio.model.SavedApiRequest.preRequestScript: String
+    get() = scripts.preRequest
+
+private val com.devuloopers.knet.domain.apistudio.model.SavedApiRequest.testScript: String
+    get() = scripts.test
+
+private val com.devuloopers.knet.domain.apistudio.model.SavedApiRequest.scriptLanguage: com.devuloopers.knet.scriptengine.api.ScriptLanguage
+    get() = scripts.language
+
+private val com.devuloopers.knet.ui.apistudio.model.ApiStudioUiState.authType: String
+    get() = (selectedRequest ?: draftRequest).auth.type
+
+private val com.devuloopers.knet.ui.apistudio.model.ApiStudioUiState.authToken: String
+    get() = when (val a = (selectedRequest ?: draftRequest).auth) {
+        is com.devuloopers.knet.domain.apistudio.model.ApiRequestAuth.Bearer -> a.token
+        is com.devuloopers.knet.domain.apistudio.model.ApiRequestAuth.OAuth2 -> a.token
+        else -> ""
+    }
+
+private val com.devuloopers.knet.ui.apistudio.model.ApiStudioUiState.authUsername: String
+    get() = when (val a = (selectedRequest ?: draftRequest).auth) {
+        is com.devuloopers.knet.domain.apistudio.model.ApiRequestAuth.Basic -> a.username
+        else -> ""
+    }
+
+private val com.devuloopers.knet.ui.apistudio.model.ApiStudioUiState.authPassword: String
+    get() = when (val a = (selectedRequest ?: draftRequest).auth) {
+        is com.devuloopers.knet.domain.apistudio.model.ApiRequestAuth.Basic -> a.password
+        else -> ""
+    }
+
+private val com.devuloopers.knet.ui.apistudio.model.ApiStudioUiState.apiKeyName: String
+    get() = when (val a = (selectedRequest ?: draftRequest).auth) {
+        is com.devuloopers.knet.domain.apistudio.model.ApiRequestAuth.ApiKey -> a.name
+        else -> "X-API-Key"
+    }
+
+private val com.devuloopers.knet.ui.apistudio.model.ApiStudioUiState.apiKeyValue: String
+    get() = when (val a = (selectedRequest ?: draftRequest).auth) {
+        is com.devuloopers.knet.domain.apistudio.model.ApiRequestAuth.ApiKey -> a.value
+        else -> ""
+    }
+
+private val com.devuloopers.knet.ui.apistudio.model.ApiStudioUiState.apiKeyLocation: String
+    get() = when (val a = (selectedRequest ?: draftRequest).auth) {
+        is com.devuloopers.knet.domain.apistudio.model.ApiRequestAuth.ApiKey -> a.location
+        else -> "Header"
+    }
+
+private val com.devuloopers.knet.ui.apistudio.model.ApiStudioUiState.oauthHeaderPrefix: String
+    get() = when (val a = (selectedRequest ?: draftRequest).auth) {
+        is com.devuloopers.knet.domain.apistudio.model.ApiRequestAuth.OAuth2 -> a.headerPrefix
+        else -> "Bearer"
+    }
+
+private val com.devuloopers.knet.ui.apistudio.model.ApiStudioUiState.awsAccessKey: String
+    get() = when (val a = (selectedRequest ?: draftRequest).auth) {
+        is com.devuloopers.knet.domain.apistudio.model.ApiRequestAuth.AwsSignature -> a.accessKey
+        else -> ""
+    }
+
+private val com.devuloopers.knet.ui.apistudio.model.ApiStudioUiState.awsSecretKey: String
+    get() = when (val a = (selectedRequest ?: draftRequest).auth) {
+        is com.devuloopers.knet.domain.apistudio.model.ApiRequestAuth.AwsSignature -> a.secretKey
+        else -> ""
+    }
+
+private val com.devuloopers.knet.ui.apistudio.model.ApiStudioUiState.awsRegion: String
+    get() = when (val a = (selectedRequest ?: draftRequest).auth) {
+        is com.devuloopers.knet.domain.apistudio.model.ApiRequestAuth.AwsSignature -> a.region
+        else -> "us-east-1"
+    }
+
+private val com.devuloopers.knet.ui.apistudio.model.ApiStudioUiState.awsService: String
+    get() = when (val a = (selectedRequest ?: draftRequest).auth) {
+        is com.devuloopers.knet.domain.apistudio.model.ApiRequestAuth.AwsSignature -> a.service
+        else -> "s3"
+    }
+
+private val com.devuloopers.knet.ui.apistudio.model.ApiStudioUiState.scriptLanguage: com.devuloopers.knet.scriptengine.api.ScriptLanguage
+    get() = (selectedRequest ?: draftRequest).scripts.language
+
+private val com.devuloopers.knet.ui.apistudio.model.ApiStudioUiState.preRequestScript: String
+    get() = (selectedRequest ?: draftRequest).scripts.preRequest
+
+private val com.devuloopers.knet.ui.apistudio.model.ApiStudioUiState.testScript: String
+    get() = (selectedRequest ?: draftRequest).scripts.test
+
+@Composable
+private fun CodeEditorWidget(
+    code: String,
+    onCodeChange: (String) -> Unit = {},
+    placeholder: String = "",
+    textColor: Color = Color.White,
+    modifier: Modifier = Modifier
+) {
+    com.devuloopers.knet.editor.KNetCodeEditor(
+        code = code,
+        mode = com.devuloopers.knet.editor.model.EditorMode.Editable(
+            onCodeChange = onCodeChange,
+            placeholder = placeholder,
+            textColor = textColor
+        ),
+        modifier = modifier
+    )
+}
+

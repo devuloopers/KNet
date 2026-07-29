@@ -84,6 +84,14 @@ class KNetCoreRepository private constructor(
     }
 
     /**
+     * Lazy instance of [CollectionsRepository] accessing SQLite Room database.
+     */
+    val collectionsRepository: com.devuloopers.knet.domain.apistudio.repository.CollectionsRepository by lazy {
+        CollectionsRepositoryImpl(database.collectionDao())
+    }
+
+
+    /**
      * Cold stream returning the chronologically descending transactions list.
      * Automatically maps database updates to domain DTOs.
      */

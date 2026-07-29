@@ -33,6 +33,7 @@ plugins {
 
 include(":desktopApp")
 include(":sharedUI")
+include(":codeEditorUI")
 include(":certificateManager")
 include(":networkEngine")
 include(":logger")

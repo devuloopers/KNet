@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 3,
-    "identityHash": "7c886e7a8ea80ab14324fc04b078d72d",
+    "identityHash": "4538a701ac3847ed281edb291b001f8f",
     "entities": [
       {
         "tableName": "HttpTransactionEntity",
@@ -192,7 +192,7 @@
       },
       {
         "tableName": "saved_requests",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `folderId` TEXT NOT NULL, `collectionId` TEXT NOT NULL, `name` TEXT NOT NULL, `method` TEXT NOT NULL, `customMethod` TEXT, `url` TEXT NOT NULL, `headersJson` TEXT NOT NULL, `bodyType` TEXT NOT NULL, `bodyContent` TEXT NOT NULL, `authType` TEXT NOT NULL, `authToken` TEXT NOT NULL, `expectedStatus` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `folderId` TEXT NOT NULL, `collectionId` TEXT NOT NULL, `name` TEXT NOT NULL, `method` TEXT NOT NULL, `customMethod` TEXT, `url` TEXT NOT NULL, `headersJson` TEXT NOT NULL, `bodyType` TEXT NOT NULL, `bodyContent` TEXT NOT NULL, `authType` TEXT NOT NULL, `authToken` TEXT NOT NULL, `expectedStatus` INTEGER NOT NULL, `authUsername` TEXT NOT NULL, `authPassword` TEXT NOT NULL, `apiKeyName` TEXT NOT NULL, `apiKeyValue` TEXT NOT NULL, `apiKeyLocation` TEXT NOT NULL, `oauthHeaderPrefix` TEXT NOT NULL, `awsAccessKey` TEXT NOT NULL, `awsSecretKey` TEXT NOT NULL, `awsRegion` TEXT NOT NULL, `awsService` TEXT NOT NULL, `preRequestScript` TEXT NOT NULL, `testScript` TEXT NOT NULL, `scriptLanguage` TEXT NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -270,6 +270,84 @@
             "columnName": "expectedStatus",
             "affinity": "INTEGER",
             "notNull": true
+          },
+          {
+            "fieldPath": "authUsername",
+            "columnName": "authUsername",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "authPassword",
+            "columnName": "authPassword",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "apiKeyName",
+            "columnName": "apiKeyName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "apiKeyValue",
+            "columnName": "apiKeyValue",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "apiKeyLocation",
+            "columnName": "apiKeyLocation",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "oauthHeaderPrefix",
+            "columnName": "oauthHeaderPrefix",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "awsAccessKey",
+            "columnName": "awsAccessKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "awsSecretKey",
+            "columnName": "awsSecretKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "awsRegion",
+            "columnName": "awsRegion",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "awsService",
+            "columnName": "awsService",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "preRequestScript",
+            "columnName": "preRequestScript",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "testScript",
+            "columnName": "testScript",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "scriptLanguage",
+            "columnName": "scriptLanguage",
+            "affinity": "TEXT",
+            "notNull": true
           }
         ],
         "primaryKey": {
@@ -282,7 +360,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '7c886e7a8ea80ab14324fc04b078d72d')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '4538a701ac3847ed281edb291b001f8f')"
     ]
   }
 }

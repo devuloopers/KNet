@@ -3,6 +3,7 @@ package com.devuloopers.knet.domain.apistudio.usecase
 import com.devuloopers.knet.domain.apistudio.model.HttpMethod
 import com.devuloopers.knet.domain.apistudio.model.RequestHeader
 import com.devuloopers.knet.domain.apistudio.model.SavedApiRequest
+import com.devuloopers.knet.domain.apistudio.model.ApiRequestBody
 import com.devuloopers.knet.domain.apistudio.model.defaultHeaders
 import com.devuloopers.knet.domain.apistudio.repository.CollectionsRepository
 import com.devuloopers.knet.model.HttpTransaction
@@ -42,7 +43,7 @@ class SaveLiveTransactionToCollectionUseCase(
             headers = defaultHeaders() + transaction.request.headers.map { (name, value) ->
                 RequestHeader(key = name, value = value, isEnabled = true, isAuto = false)
             },
-            body = transaction.request.body?.let { String(it, Charsets.UTF_8) } ?: ""
+            body = ApiRequestBody(content = transaction.request.body?.let { String(it, Charsets.UTF_8) } ?: "")
         )
 
         repository.saveRequest(collectionId, folderId, savedRequest)

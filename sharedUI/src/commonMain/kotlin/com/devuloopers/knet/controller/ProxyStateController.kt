@@ -21,9 +21,10 @@ import org.koin.core.component.inject
  * @property scope The coroutine scope used to collect the transaction flows.
  */
 class ProxyStateController(
-    private val repository: KNetCoreRepository,
+    val repository: KNetCoreRepository,
     private val scope: CoroutineScope
 ) : KoinComponent {
+
     /**
      * Observable Compose state list containing all captured HTTP transactions in the session.
      */

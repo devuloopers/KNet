@@ -33,10 +33,10 @@ class PostmanCollectionExporter {
                                         put("url", buildJsonObject {
                                             put("raw", req.url)
                                         })
-                                        if (req.body.isNotBlank()) {
+                                        if (req.body.content.isNotBlank()) {
                                             put("body", buildJsonObject {
                                                 put("mode", "raw")
-                                                put("raw", req.body)
+                                                put("raw", req.body.content)
                                             })
                                         }
                                     })

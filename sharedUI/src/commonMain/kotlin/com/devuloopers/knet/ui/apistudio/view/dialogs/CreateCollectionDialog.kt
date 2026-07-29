@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -23,16 +22,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import com.devuloopers.knet.theme.KNetColors
+import com.devuloopers.knet.widgets.KNetInputField
 
 /**
- * Modal dialog for creating a new Collection or Folder.
+ * Modal dialog for creating a new Collection or Folder using standard [KNetInputField].
  *
  * @param title Dialog title (e.g. "Create New Collection", "Add Folder").
  * @param placeholder Default text field placeholder.
@@ -60,24 +58,15 @@ fun CreateItemDialog(
                 Text(title, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(14.dp))
 
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(KNetColors.FieldDark, RoundedCornerShape(6.dp))
-                        .border(1.dp, KNetColors.BorderDark, RoundedCornerShape(6.dp))
-                        .padding(horizontal = 12.dp, vertical = 10.dp)
-                ) {
-                    if (nameText.isEmpty()) {
-                        Text(placeholder, color = KNetColors.TextSecondary.copy(alpha = 0.6f), fontSize = 12.sp)
-                    }
-                    BasicTextField(
-                        value = nameText,
-                        onValueChange = { nameText = it },
-                        singleLine = true,
-                        cursorBrush = SolidColor(KNetColors.ActiveBlue),
-                        textStyle = TextStyle(color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                    )
-                }
+                KNetInputField(
+                    value = nameText,
+                    onValueChange = { nameText = it },
+                    placeholder = placeholder,
+                    height = 36.dp,
+                    fontSize = 12.sp,
+                    cornerRadius = 6.dp,
+                    modifier = Modifier.fillMaxWidth()
+                )
 
                 Spacer(modifier = Modifier.height(18.dp))
 

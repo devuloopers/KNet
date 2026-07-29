@@ -1,12 +1,16 @@
 package com.devuloopers.knet.widgets
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,6 +38,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.devuloopers.knet.theme.KNetColors
 
+import androidx.compose.ui.unit.Dp
+
 /**
  * A reusable, high-performance search input bar for KNet widgets.
  * Manages cursor position locally to prevent cursor reset issues in reactive state flows.
@@ -41,6 +47,7 @@ import com.devuloopers.knet.theme.KNetColors
  * @param query Current active search string query.
  * @param onQueryChange Callback invoked when the user types or clears the query.
  * @param placeholder Optional placeholder text displayed when query is empty.
+ * @param height Height of the search bar widget (defaults to 32.dp).
  * @param modifier Layout modifier for custom styling.
  */
 @Composable
@@ -48,6 +55,7 @@ fun WidgetSearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
     placeholder: String = "Filter...",
+    height: Dp = 32.dp,
     modifier: Modifier = Modifier
 ) {
     var tfValue by remember { mutableStateOf(TextFieldValue(text = query)) }
@@ -64,10 +72,13 @@ fun WidgetSearchBar(
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .height(height)
             .background(KNetColors.FieldDark, shape = RoundedCornerShape(4.dp))
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+            .border(1.dp, KNetColors.BorderDark, shape = RoundedCornerShape(4.dp))
+            .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
+
         Icon(
             imageVector = Icons.Default.Search,
             contentDescription = "Search",

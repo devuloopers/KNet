@@ -1,6 +1,6 @@
-package com.devuloopers.knet.highlighter
+package com.devuloopers.knet.editor.highlighter
 
-import androidx.compose.runtime.Composable
+import androidx.compose.ui.text.AnnotatedString
 
 /**
  * Strategy interface for syntax highlighting and code folding across various document languages
@@ -26,22 +26,7 @@ interface CodeLanguageHighlighter {
     fun resolveClosingSymbol(lines: List<String>, endLineIndex: Int): String
 
     /**
-     * Renders the syntax-highlighted content for a given line.
-     *
-     * @param lineNumber 1-based line number.
-     * @param lineText Raw line string content.
-     * @param isFoldable True if this line starts a foldable block.
-     * @param isCollapsed True if this line's block is currently collapsed.
-     * @param closingSymbol Resolved closing symbol text.
-     * @param onToggleFold Callback to expand/collapse block range.
+     * Highlights a single line of text into a styled AnnotatedString.
      */
-    @Composable
-    fun RenderLineContent(
-        lineNumber: Int,
-        lineText: String,
-        isFoldable: Boolean,
-        isCollapsed: Boolean,
-        closingSymbol: String,
-        onToggleFold: () -> Unit
-    )
+    fun highlightLine(lineText: String): AnnotatedString
 }

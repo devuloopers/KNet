@@ -47,6 +47,7 @@ import androidx.compose.ui.unit.sp
 import com.devuloopers.knet.bodyformatter.model.BodyFormat
 import com.devuloopers.knet.domain.inspector.model.TransactionUiModel
 import com.devuloopers.knet.domain.inspector.model.requestContentTypeBadge
+import com.devuloopers.knet.editor.KNetCodeEditor
 import com.devuloopers.knet.theme.KNetColors
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -297,15 +298,17 @@ fun RequestBodyWidget(
                     else -> format
                 }
 
-                CodeViewerWidget(
-                    codeText = activeCodeText,
+                KNetCodeEditor(
+                    code = activeCodeText,
+                    mode = com.devuloopers.knet.editor.model.EditorMode.ReadOnly,
                     bodyFormat = activeFormat,
                     searchQuery = searchQuery,
                     modifier = Modifier.weight(1f)
                 )
             } else {
-                CodeViewerWidget(
-                    codeText = prettyBody,
+                KNetCodeEditor(
+                    code = prettyBody,
+                    mode = com.devuloopers.knet.editor.model.EditorMode.ReadOnly,
                     bodyFormat = format,
                     searchQuery = searchQuery,
                     modifier = Modifier.weight(1f)

@@ -49,4 +49,20 @@ interface CollectionsRepository {
      * Deletes a saved API request by ID.
      */
     suspend fun deleteRequest(requestId: String)
+
+    /**
+     * Emits the reactive list of all active unsaved request session tabs.
+     */
+    fun observeUnsavedRequests(): Flow<List<SavedApiRequest>>
+
+    /**
+     * Saves or updates an active unsaved request session tab.
+     */
+    suspend fun saveUnsavedRequest(request: SavedApiRequest)
+
+    /**
+     * Deletes an unsaved request session tab by ID.
+     */
+    suspend fun deleteUnsavedRequest(requestId: String)
 }
+

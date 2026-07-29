@@ -1,4 +1,4 @@
-package com.devuloopers.knet.highlighter
+package com.devuloopers.knet.editor.highlighter
 
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable

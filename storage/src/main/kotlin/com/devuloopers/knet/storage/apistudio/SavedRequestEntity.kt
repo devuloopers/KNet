@@ -34,5 +34,18 @@ data class SavedRequestEntity(
     val bodyContent: String = "",
     val authType: String = "NONE",
     val authToken: String = "",
-    val expectedStatus: Int = 200
+    val expectedStatus: Int = 200,
+    val authUsername: String = "",
+    val authPassword: String = "",
+    val apiKeyName: String = "X-API-Key",
+    val apiKeyValue: String = "",
+    val apiKeyLocation: String = "Header",
+    val oauthHeaderPrefix: String = "Bearer",
+    val awsAccessKey: String = "",
+    val awsSecretKey: String = "",
+    val awsRegion: String = "us-east-1",
+    val awsService: String = "s3",
+    val preRequestScript: String = "",
+    val testScript: String = "",
+    val scriptLanguage: String = "JAVASCRIPT"
 )

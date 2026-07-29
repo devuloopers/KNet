@@ -13,6 +13,7 @@ kotlin {
             api(project(":domain"))
             api(project(":data"))
             api(project(":networkEngine"))
+            api(project(":codeEditorUI"))
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
             implementation(libs.compose.material3)

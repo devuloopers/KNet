@@ -1,7 +1,7 @@
 package com.devuloopers.knet
 
-import com.devuloopers.knet.highlighter.JsonLanguageHighlighter
-import com.devuloopers.knet.highlighter.ParsedJsonKeyValue
+import com.devuloopers.knet.editor.highlighter.JsonLanguageHighlighter
+import com.devuloopers.knet.editor.highlighter.ParsedJsonKeyValue
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull

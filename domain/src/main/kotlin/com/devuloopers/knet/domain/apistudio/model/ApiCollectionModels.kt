@@ -1,5 +1,7 @@
 package com.devuloopers.knet.domain.apistudio.model
 
+import com.devuloopers.knet.scriptengine.api.ScriptLanguage
+
 /**
  * Supported HTTP methods for collection requests with exact Postman theme color coding.
  */
@@ -40,6 +42,59 @@ data class TestAssertionResult(
 )
 
 /**
+ * Groups properties related to request body configuration.
+ */
+data class ApiRequestBody(
+    val content: String = "",
+    val type: String = "json" // e.g. "none", "json", "form-data", "raw-text"
+)
+
+/**
+ * Groups properties related to pre-request and test scripting.
+ */
+data class ApiRequestScripts(
+    val preRequest: String = "",
+    val test: String = "",
+    val language: ScriptLanguage = ScriptLanguage.JAVASCRIPT
+)
+
+/**
+ * Represents the polymorphic authentication configuration for an API request.
+ */
+sealed interface ApiRequestAuth {
+    data object None : ApiRequestAuth
+    data object Inherit : ApiRequestAuth
+    data class Bearer(val token: String) : ApiRequestAuth
+    data class Basic(val username: String, val password: String) : ApiRequestAuth
+    data class ApiKey(
+        val name: String = "X-API-Key",
+        val value: String = "",
+        val location: String = "Header" // Header or Query Params
+    ) : ApiRequestAuth
+    data class OAuth2(
+        val token: String = "",
+        val headerPrefix: String = "Bearer"
+    ) : ApiRequestAuth
+    data class AwsSignature(
+        val accessKey: String = "",
+        val secretKey: String = "",
+        val region: String = "us-east-1",
+        val service: String = "s3"
+    ) : ApiRequestAuth
+
+    val type: String
+        get() = when (this) {
+            is None -> "No Auth"
+            is Inherit -> "Inherit Auth"
+            is Bearer -> "Bearer Token"
+            is Basic -> "Basic Auth"
+            is ApiKey -> "API Key"
+            is OAuth2 -> "OAuth 2.0"
+            is AwsSignature -> "AWS Signature"
+        }
+}
+
+/**
  * Data model representing a saved request within a collection folder.
  *
  * @property headers List of [RequestHeader] rows shown in the Headers tab.
@@ -52,8 +107,9 @@ data class SavedApiRequest(
     val customMethod: String? = null,
     val url: String,
     val headers: List<RequestHeader> = defaultHeaders(),
-    val body: String = "",
-    val bodyType: String = "json",
+    val body: ApiRequestBody = ApiRequestBody(),
+    val auth: ApiRequestAuth = ApiRequestAuth.None,
+    val scripts: ApiRequestScripts = ApiRequestScripts(),
     val expectedStatus: Int = 200,
     val testResults: List<TestAssertionResult> = emptyList()
 ) {
@@ -94,3 +150,43 @@ data class ApiCollection(
     val name: String,
     val folders: List<CollectionFolder> = emptyList()
 )
+
+/**
+ * Evaluates whether the provided API request URL is non-blank and structurally valid.
+ *
+ * Supports `http://`, `https://`, `localhost`, IP targets (`127.0.0.1`),
+ * environment variable syntax (`{{variableName}}`), and standard domain name patterns.
+ *
+ * @param url The target URL string to validate.
+ * @return True if the URL is non-blank and valid; false otherwise.
+ */
+fun isValidApiUrl(url: String): Boolean {
+    val trimmed = url.trim()
+    if (trimmed.isBlank()) return false
+
+    // Environment variable syntax e.g. {{baseUrl}}/endpoint
+    if (trimmed.startsWith("{{") && trimmed.contains("}}")) return true
+
+    // Direct localhost or IP targets
+    if (trimmed.startsWith("localhost", ignoreCase = true) ||
+        trimmed.startsWith("127.0.0.1") ||
+        trimmed.startsWith("0.0.0.0") ||
+        trimmed.startsWith("http://localhost", ignoreCase = true) ||
+        trimmed.startsWith("https://localhost", ignoreCase = true)
+    ) {
+        return true
+    }
+
+    // Standard URL scheme check or dot notation domain check
+    val hasValidScheme = trimmed.startsWith("http://", ignoreCase = true) || trimmed.startsWith("https://", ignoreCase = true)
+    val hasDomainDot = trimmed.contains(".")
+
+    return hasValidScheme || hasDomainDot
+}
+
+/**
+ * Extension property evaluating URL validity directly on a [SavedApiRequest].
+ */
+val SavedApiRequest.isUrlValid: Boolean
+    get() = isValidApiUrl(url)
+

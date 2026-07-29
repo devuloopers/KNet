@@ -29,24 +29,20 @@ data class ApiStudioUiState(
     val isSuiteRunning: Boolean = false,
     val suiteRunSummary: SuiteRunSummary? = null,
     val detectedPathParams: Map<String, String> = emptyMap(),
-    val authType: String = "Bearer Token",
-    val authToken: String = "",
-    val authUsername: String = "",
-    val authPassword: String = "",
-    val apiKeyName: String = "X-API-Key",
-    val apiKeyValue: String = "",
-    val apiKeyLocation: String = "Header",
-    val oauthHeaderPrefix: String = "Bearer",
-    val awsAccessKey: String = "",
-    val awsSecretKey: String = "",
-    val awsRegion: String = "us-east-1",
-    val awsService: String = "s3",
-    val preRequestScript: String = "",
-    val testScript: String = "",
-    val scriptLanguage: ScriptLanguage = ScriptLanguage.JAVASCRIPT,
     val testResults: List<TestAssertionResult> = emptyList(),
-    val scriptErrorMessage: String? = null
+    val scriptErrorMessage: String? = null,
+    val unsavedRequests: List<SavedApiRequest> = emptyList(),
+    val unsavedCounter: Int = 1,
+    val draftRequest: SavedApiRequest = SavedApiRequest(
+        id = "draft",
+        name = "New Request",
+        method = com.devuloopers.knet.domain.apistudio.model.HttpMethod.GET,
+        url = "http://127.0.0.1:9090/api/test/get",
+        headers = com.devuloopers.knet.domain.apistudio.model.defaultHeaders()
+    )
 )
+
+
 
 
 

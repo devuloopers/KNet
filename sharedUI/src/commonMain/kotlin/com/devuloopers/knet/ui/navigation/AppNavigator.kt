@@ -86,7 +86,13 @@ fun AppNavDisplay(
     val workspaceUiState by workspaceViewModel.uiState.collectAsState()
 
     // Persistent ViewModel for API Studio across screen transitions within the app session
-    val apiStudioViewModel = remember(controller.proxyPort) { ApiStudioViewModel(proxyPort = controller.proxyPort) }
+    val apiStudioViewModel = remember(controller.proxyPort) {
+        ApiStudioViewModel(
+            proxyPort = controller.proxyPort,
+            repository = controller.repository.collectionsRepository
+        )
+    }
+
 
     val visibleWidgets: Map<WidgetType, Boolean> =
         (workspaceUiState as? WorkspaceUiState.Success)?.visibleWidgets ?: emptyMap()

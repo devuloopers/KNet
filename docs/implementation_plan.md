@@ -169,11 +169,29 @@ Build a standalone feature-modular Spring Boot WebFlux test server for offline t
 * **Tasks**:
   * **Feature Directory Structure**: Create `get/`, `post/`, `put/`, `patch/`, `delete/`, `authentication/`, `status/`, `delay/`, `headers/`, `cookies/` feature packages. [COMPLETED]
   * **WebFlux Functional Routers**: Build `coRouter` and `suspend Handler` for each feature package. [COMPLETED]
-  * **Pre-loaded Test Suite**: Pre-load **"KNet Local Test Server (WebFlux)"** collection in API Studio. [COMPLETED]
-
-
+  * **Separate Router Configurations**: Maintain separate router files per directory. [COMPLETED]
 
 ---
+
+### Phase 13: 2-Category Collection System (UNSAVED vs SAVED) [COMPLETED]
+Implement a 2-category architecture in API Studio separating temporary ad-hoc sessions (`UNSAVED`) from saved collections (`SAVED`), featuring reusable collapsible sections and auto-session creation.
+* **Modules modified**: `sharedUI`
+* **Tasks**:
+  * **Reusable CollapsibleSection Component**: Build `CollapsibleSection.kt` with animated expansion, badge counters, and header action slots. [COMPLETED]
+  * **Auto-Creation of Unsaved Sessions**: Auto-create `Unsaved Request 1`, `Unsaved Request 2` when sending or opening new tabs without selecting a saved collection. [COMPLETED]
+  * **Save to Collection Action**: Move unsaved requests into permanent saved collections via a single click modal. [COMPLETED]
+
+---
+
+### Phase 14: Dedicated Code Editor Module (codeEditorUI) [COMPLETED]
+Extract the code editor engine into a standalone, modularized Kotlin Multiplatform Gradle library module.
+* **Modules created**: `codeEditorUI` (new)
+* **Tasks**:
+  * Extract code editor composables (`KNetCodeEditor`), FSM tokenizers (`TokenMaker`), AST fold engines (`FoldManager`), highlighters, and tokens into `:codeEditorUI`. [COMPLETED]
+  * Update `:sharedUI` to depend on `api(project(":codeEditorUI"))` and update consumer imports. [COMPLETED]
+
+---
+
 
 ## Verification & Testing Strategy
 * **testingServer**: A standalone Spring Boot WebFlux server that simulates every HTTP/HTTPS behavior (authentication, long polling, SSE, chunked upload/download, websocket echoes).

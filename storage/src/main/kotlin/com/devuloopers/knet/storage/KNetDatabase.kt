@@ -24,7 +24,7 @@ import com.devuloopers.knet.storage.interception.HttpTransactionEntity
         CollectionFolderEntity::class,
         SavedRequestEntity::class
     ],
-    version = 3
+    version = 4
 )
 abstract class KNetDatabase : RoomDatabase() {
 
@@ -53,6 +53,27 @@ abstract class KNetDatabase : RoomDatabase() {
         }
 
         /**
+         * Room Migration from v3 to v4 adding auth and script columns to saved_requests.
+         */
+        val MIGRATION_3_4 = object : androidx.room.migration.Migration(3, 4) {
+            override fun migrate(connection: androidx.sqlite.SQLiteConnection) {
+                connection.execSQL("ALTER TABLE saved_requests ADD COLUMN authUsername TEXT NOT NULL DEFAULT ''")
+                connection.execSQL("ALTER TABLE saved_requests ADD COLUMN authPassword TEXT NOT NULL DEFAULT ''")
+                connection.execSQL("ALTER TABLE saved_requests ADD COLUMN apiKeyName TEXT NOT NULL DEFAULT 'X-API-Key'")
+                connection.execSQL("ALTER TABLE saved_requests ADD COLUMN apiKeyValue TEXT NOT NULL DEFAULT ''")
+                connection.execSQL("ALTER TABLE saved_requests ADD COLUMN apiKeyLocation TEXT NOT NULL DEFAULT 'Header'")
+                connection.execSQL("ALTER TABLE saved_requests ADD COLUMN oauthHeaderPrefix TEXT NOT NULL DEFAULT 'Bearer'")
+                connection.execSQL("ALTER TABLE saved_requests ADD COLUMN awsAccessKey TEXT NOT NULL DEFAULT ''")
+                connection.execSQL("ALTER TABLE saved_requests ADD COLUMN awsSecretKey TEXT NOT NULL DEFAULT ''")
+                connection.execSQL("ALTER TABLE saved_requests ADD COLUMN awsRegion TEXT NOT NULL DEFAULT 'us-east-1'")
+                connection.execSQL("ALTER TABLE saved_requests ADD COLUMN awsService TEXT NOT NULL DEFAULT 's3'")
+                connection.execSQL("ALTER TABLE saved_requests ADD COLUMN preRequestScript TEXT NOT NULL DEFAULT ''")
+                connection.execSQL("ALTER TABLE saved_requests ADD COLUMN testScript TEXT NOT NULL DEFAULT ''")
+                connection.execSQL("ALTER TABLE saved_requests ADD COLUMN scriptLanguage TEXT NOT NULL DEFAULT 'JAVASCRIPT'")
+            }
+        }
+
+        /**
          * Creates and configures a [KNetDatabase] instance using the Bundled SQLite Driver.
          *
          * @param dbFile The SQLite database file on disk.
@@ -64,7 +85,7 @@ abstract class KNetDatabase : RoomDatabase() {
                 factory = { KNetDatabase_Impl() }
             )
             builder.setDriver(BundledSQLiteDriver())
-            builder.addMigrations(MIGRATION_1_2)
+            builder.addMigrations(MIGRATION_1_2, MIGRATION_3_4)
             builder.fallbackToDestructiveMigration(dropAllTables = true)
             return builder.build()
         }

@@ -540,7 +540,10 @@ private fun HeadersTabView(transaction: TransactionUiModel) {
         ) {
             Text(text = "Request Headers (${transaction.requestHeaders.size})", color = KNetColors.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(6.dp))
-            HeaderTable(transaction.requestHeaders)
+            HeaderKeyValueTableView(
+                headers = transaction.requestHeaders,
+                emptyPlaceholder = "No request headers available"
+            )
         }
 
         // Response Headers Column
@@ -554,32 +557,14 @@ private fun HeadersTabView(transaction: TransactionUiModel) {
         ) {
             Text(text = "Response Headers (${transaction.responseHeaders.size})", color = KNetColors.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             Spacer(modifier = Modifier.height(6.dp))
-            HeaderTable(transaction.responseHeaders)
+            HeaderKeyValueTableView(
+                headers = transaction.responseHeaders,
+                emptyPlaceholder = "No response headers available"
+            )
         }
     }
 }
 
-@Composable
-private fun HeaderTable(headers: Map<String, String>) {
-    if (headers.isEmpty()) {
-        Text(text = "No headers available", color = KNetColors.TextSecondary, fontSize = 11.sp)
-        return
-    }
-
-    LazyColumn(modifier = Modifier.fillMaxSize()) {
-        items(headers.entries.toList()) { (key, value) ->
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 2.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(text = key, color = KNetColors.ActiveBlue, fontSize = 10.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(0.4f))
-                Text(text = value, color = KNetColors.TextPrimary, fontSize = 10.sp, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(0.6f))
-            }
-        }
-    }
-}
 
 /**
  * Timeline tab content: Connection phase timing gauges.

@@ -1,11 +1,11 @@
 package com.devuloopers.knet
 
 import com.devuloopers.knet.bodyformatter.model.BodyFormat
-import com.devuloopers.knet.highlighter.CodeHighlighterRegistry
-import com.devuloopers.knet.highlighter.HtmlLanguageHighlighter
-import com.devuloopers.knet.highlighter.JsonLanguageHighlighter
-import com.devuloopers.knet.highlighter.PlainTextLanguageHighlighter
-import com.devuloopers.knet.highlighter.XmlLanguageHighlighter
+import com.devuloopers.knet.editor.highlighter.CodeHighlighterRegistry
+import com.devuloopers.knet.editor.highlighter.HtmlLanguageHighlighter
+import com.devuloopers.knet.editor.highlighter.JsonLanguageHighlighter
+import com.devuloopers.knet.editor.highlighter.PlainTextLanguageHighlighter
+import com.devuloopers.knet.editor.highlighter.XmlLanguageHighlighter
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

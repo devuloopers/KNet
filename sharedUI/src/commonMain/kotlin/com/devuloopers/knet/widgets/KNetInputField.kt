@@ -11,7 +11,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -44,10 +46,13 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import com.devuloopers.knet.theme.KNetColors
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
 
 /**
  * A [PopupPositionProvider] that positions the popup content directly below the anchor view,
@@ -87,7 +92,20 @@ private class BelowAnchorPopupPositionProvider(
  * @param fontSize Font size for typed text and placeholder. Defaults to [11.sp].
  * @param cornerRadius Border corner radius. Defaults to [4.dp].
  * @param isPassword Whether to obscure input text for sensitive fields (e.g. passwords).
+
+ * @param value The current string text value.
+ * @param onValueChange Callback invoked when the user edits the input.
+ * @param modifier Resizing constraints.
+ * @param placeholder Dim hint displayed when [value] is empty.
+ * @param textColor Color applied to the typed text.
+ * @param enabled Whether input is active.
+ * @param height Height of the container field. Defaults to [34.dp].
+ * @param fontSize Font size for typed text and placeholder. Defaults to [11.sp].
+ * @param cornerRadius Border corner radius. Defaults to [4.dp].
+ * @param isPassword Whether to obscure input text for sensitive fields (e.g. passwords). Automatically suppresses overflow hover popups to prevent credential leakage.
  * @param showHoverPopupOnOverflow Whether to trigger the bottom popup when text overflows and field is unfocused.
+ * @param focusRequester Optional FocusRequester for programmatically focusing this field.
+ * @param autoSelectAllOnFocus True to automatically select all text when focused.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -102,9 +120,11 @@ fun KNetInputField(
     fontSize: androidx.compose.ui.unit.TextUnit = 11.sp,
     cornerRadius: Dp = 4.dp,
     isPassword: Boolean = false,
-    showHoverPopupOnOverflow: Boolean = true
+    showHoverPopupOnOverflow: Boolean = true,
+    focusRequester: FocusRequester? = null,
+    autoSelectAllOnFocus: Boolean = false
 ) {
-    var tfValue by remember(value) {
+    var tfValue by remember {
         mutableStateOf(
             TextFieldValue(
                 text = value,
@@ -113,6 +133,13 @@ fun KNetInputField(
         )
     }
 
+    LaunchedEffect(value) {
+        if (value != tfValue.text) {
+            tfValue = tfValue.copy(text = value)
+        }
+    }
+
+    var hasAutoSelected by remember { mutableStateOf(false) }
     var isHovered by remember { mutableStateOf(false) }
     var isMouseStationary by remember { mutableStateOf(false) }
     var isFocused by remember { mutableStateOf(false) }
@@ -154,8 +181,8 @@ fun KNetInputField(
         containerWidthPx > 0 && textWidthPx > (containerWidthPx - paddingPx)
     }
 
-    // Determine if popup should render (allows focus mode when mouse cursor is inside the field)
-    val shouldShowPopup = showHoverPopupOnOverflow && isHovered && isMouseStationary && isOverflowing && value.isNotEmpty()
+    // Determine if popup should render (strictly disabled for secure password fields to prevent credential leakage)
+    val shouldShowPopup = showHoverPopupOnOverflow && !isPassword && isHovered && isMouseStationary && isOverflowing && value.isNotEmpty()
 
     Box(
         modifier = modifier
@@ -193,9 +220,16 @@ fun KNetInputField(
             textStyle = textStyle,
             modifier = Modifier
                 .fillMaxSize()
+                .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
                 .onFocusChanged { focusState ->
                     isFocused = focusState.isFocused
+                    if (focusState.isFocused && autoSelectAllOnFocus && !hasAutoSelected && tfValue.text.isNotEmpty()) {
+                        hasAutoSelected = true
+                        tfValue = tfValue.copy(selection = TextRange(0, tfValue.text.length))
+                    }
                 },
+
+
             decorationBox = { innerTextField ->
                 Box(
                     modifier = Modifier.fillMaxSize(),

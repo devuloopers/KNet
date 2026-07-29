@@ -1,4 +1,4 @@
-package com.devuloopers.knet.highlighter
+package com.devuloopers.knet.editor.highlighter
 
 import com.devuloopers.knet.bodyformatter.model.BodyFormat
 
