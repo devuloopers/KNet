@@ -39,7 +39,7 @@ class CollectionTestRunner {
     /**
      * Evaluates standard test assertions and executes user test scripts for an executed request.
      */
-    fun evaluateAssertions(
+    suspend fun evaluateAssertions(
         request: SavedApiRequest,
         result: ExecutionResult,
         testScript: String = request.scripts.test,

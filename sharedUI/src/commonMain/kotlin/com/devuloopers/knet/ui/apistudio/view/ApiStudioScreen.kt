@@ -97,13 +97,10 @@ fun ApiStudioScreen(
                 requestToSave = null
             },
             onSaveToNew = { collectionName, requestName ->
-                viewModel.createNewCollection(collectionName)
-                val newColId = uiState.collections.find { it.name == collectionName }?.id
-                    ?: "col-${kotlin.uuid.Uuid.random()}"
-                viewModel.saveUnsavedToCollection(
+                viewModel.saveUnsavedToNewCollection(
                     requestId = req.id,
-                    targetCollectionId = newColId,
-                    customName = requestName
+                    collectionName = collectionName,
+                    requestName = requestName
                 )
                 requestToSave = null
             },
@@ -177,6 +174,7 @@ fun ApiStudioScreen(
             onScriptLanguageChange = { viewModel.updateScriptLanguage(it) },
             onPreRequestScriptChange = { viewModel.updatePreRequestScript(it) },
             onTestScriptChange = { viewModel.updateTestScript(it) },
+            onApplyQuickFix = { viewModel.applyQuickFix(it) },
             onBodyChange = { viewModel.updateRequestBody(it) },
             onBodyTypeChange = { viewModel.updateRequestBodyType(it) },
             onSend = { viewModel.sendCurrentRequest() },

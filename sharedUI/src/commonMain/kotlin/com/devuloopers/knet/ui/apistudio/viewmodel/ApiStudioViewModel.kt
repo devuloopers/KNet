@@ -16,6 +16,7 @@ import com.devuloopers.knet.engine.client.KNetApiClient
 import com.devuloopers.knet.engine.client.model.AuthType
 import com.devuloopers.knet.engine.client.model.RequestBodyType
 import com.devuloopers.knet.ui.apistudio.model.ApiStudioUiState
+import com.devuloopers.knet.ui.apistudio.viewmodel.handler.CollectionHandler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,6 +49,7 @@ class ApiStudioViewModel(
     private val apiClient = KNetApiClient(proxyPort)
     private val testRunner = CollectionTestRunner()
     private val urlParameterExtractor = UrlParameterExtractor()
+    private val collectionHandler = CollectionHandler(repository)
 
     init {
 
@@ -373,16 +375,53 @@ class ApiStudioViewModel(
         if (_uiState.value.selectedRequest != null) syncSelectedRequestInList(updated) else _uiState.update { it.copy(draftRequest = updated) }
     }
 
+    private val scriptAnalyzer = com.devuloopers.knet.ui.apistudio.scriptanalyzer.ScriptAnalyzer()
+
     fun updatePreRequestScript(script: String) {
         val target = _uiState.value.selectedRequest ?: _uiState.value.draftRequest
         val updated = target.copy(scripts = target.scripts.copy(preRequest = script))
+        val analysisRes = scriptAnalyzer.analyze(
+            code = script,
+            phase = com.devuloopers.knet.ui.apistudio.scriptanalyzer.model.ScriptExecutionPhase.PRE_REQUEST
+        )
         if (_uiState.value.selectedRequest != null) syncSelectedRequestInList(updated) else _uiState.update { it.copy(draftRequest = updated) }
+        _uiState.update { it.copy(analysisResult = analysisRes) }
     }
 
     fun updateTestScript(script: String) {
         val target = _uiState.value.selectedRequest ?: _uiState.value.draftRequest
         val updated = target.copy(scripts = target.scripts.copy(test = script))
         if (_uiState.value.selectedRequest != null) syncSelectedRequestInList(updated) else _uiState.update { it.copy(draftRequest = updated) }
+    }
+
+    /**
+     * Applies an IDE 1-click Quick Fix refactoring action (e.g. moving pm.test code to Tests tab).
+     */
+    fun applyQuickFix(quickFix: com.devuloopers.knet.ui.apistudio.scriptanalyzer.model.ScriptQuickFix) {
+        when (quickFix) {
+            is com.devuloopers.knet.ui.apistudio.scriptanalyzer.model.ScriptQuickFix.MoveToTestsTab -> {
+                val target = _uiState.value.selectedRequest ?: _uiState.value.draftRequest
+                val existingTests = target.scripts.test
+                val newTests = if (existingTests.isNotBlank()) "$existingTests\n\n${quickFix.codeToMove}" else quickFix.codeToMove
+                val updated = target.copy(
+                    scripts = target.scripts.copy(
+                        preRequest = "",
+                        test = newTests
+                    )
+                )
+                if (_uiState.value.selectedRequest != null) {
+                    syncSelectedRequestInList(updated)
+                } else {
+                    _uiState.update { it.copy(draftRequest = updated) }
+                }
+                _uiState.update {
+                    it.copy(
+                        analysisResult = null,
+                        activeReqTab = "Tests"
+                    )
+                }
+            }
+        }
     }
 
     init {
@@ -648,6 +687,45 @@ class ApiStudioViewModel(
             repository?.deleteUnsavedRequest(requestId)
             val folderId = targetFolderId ?: _uiState.value.collections.find { it.id == targetCollectionId }?.folders?.firstOrNull()?.id ?: ""
             repository?.saveRequest(targetCollectionId, folderId, promotedReq)
+        }
+    }
+
+    /**
+     * Creates a new collection and immediately saves an unsaved request session into it.
+     */
+    fun saveUnsavedToNewCollection(
+        requestId: String,
+        collectionName: String,
+        requestName: String? = null
+    ) {
+        val (updatedCols, updatedUnsaved, promotedReq) = collectionHandler.saveUnsavedToNewCollection(
+            collections = _uiState.value.collections,
+            unsavedRequests = _uiState.value.unsavedRequests,
+            selectedRequest = _uiState.value.selectedRequest,
+            requestId = requestId,
+            collectionName = collectionName,
+            requestName = requestName
+        )
+        if (promotedReq == null) return
+
+        val newCol = updatedCols.last()
+        val defaultFolder = newCol.folders.first()
+
+        _uiState.update { state ->
+            state.copy(
+                collections = updatedCols,
+                unsavedRequests = updatedUnsaved,
+                selectedRequest = promotedReq
+            )
+        }
+
+        viewModelScope.launch {
+            repository?.saveUnsavedToNewCollectionTx(
+                collection = newCol,
+                folder = defaultFolder,
+                request = promotedReq,
+                unsavedRequestIdToDelete = requestId
+            )
         }
     }
 

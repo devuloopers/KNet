@@ -1,22 +1,32 @@
 package com.devuloopers.knet.scriptengine.runtime
 
+import com.devuloopers.knet.scriptengine.api.EnvironmentStore
 import com.devuloopers.knet.scriptengine.api.ScriptExecutionResult
 import com.devuloopers.knet.scriptengine.api.ScriptLanguage
 import com.devuloopers.knet.scriptengine.api.ScriptRequestModel
 import com.devuloopers.knet.scriptengine.api.ScriptResponseModel
-import com.devuloopers.knet.scriptengine.javascript.JsScriptEngine
-import com.devuloopers.knet.scriptengine.kotlin.KotlinScriptEngine
+import com.devuloopers.knet.scriptengine.core.ScriptEngineManager
 import com.devuloopers.knet.scriptengine.sandbox.ScriptSanitizer
 
 /**
- * Main runtime execution host managing pre-request scripts and test assertions.
+ * Main runtime execution host managing pre-request scripts and test assertions for KNet API Studio.
+ * Routes execution requests to the multi-language [ScriptEngineManager].
  */
 class ScriptRuntime {
 
-    private val jsEngine = JsScriptEngine()
-    private val kotlinEngine = KotlinScriptEngine()
+    private val engineManager = ScriptEngineManager()
 
-    fun executeScript(
+    /**
+     * Executes the given script source code against request and response models.
+     *
+     * @param code Script source code string.
+     * @param language The target [ScriptLanguage].
+     * @param request HTTP request model.
+     * @param response Optional HTTP response model.
+     * @param environment Initial map of environment variables.
+     * @return Execution result [ScriptExecutionResult].
+     */
+    suspend fun executeScript(
         code: String,
         language: ScriptLanguage,
         request: ScriptRequestModel,
@@ -32,7 +42,7 @@ class ScriptRuntime {
             )
         }
 
-        // Pre-execution security check
+        // Pre-execution security sanitization check
         val sanitization = ScriptSanitizer.validate(code)
         if (!sanitization.isValid) {
             return ScriptExecutionResult.Error(
@@ -41,11 +51,14 @@ class ScriptRuntime {
             )
         }
 
-        val envCopy = environment.toMutableMap()
+        val environmentStore = EnvironmentStore(initialValues = environment)
 
-        return when (language) {
-            ScriptLanguage.JAVASCRIPT -> jsEngine.execute(code, request, response, envCopy)
-            ScriptLanguage.KOTLIN -> kotlinEngine.execute(code, request, response, envCopy)
-        }
+        return engineManager.execute(
+            language = language,
+            code = code,
+            request = request,
+            response = response,
+            environment = environmentStore
+        )
     }
 }

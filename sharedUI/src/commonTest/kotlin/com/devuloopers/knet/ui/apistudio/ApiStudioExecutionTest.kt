@@ -10,6 +10,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -111,6 +112,37 @@ class ApiStudioExecutionTest {
         assertTrue(updatedCol.folders.isNotEmpty(), "Target collection should have folders")
         val savedReq = updatedCol.folders.flatMap { it.requests }.find { it.name == "Saved To Empty Collection" }
         assertTrue(savedReq != null, "Request should be successfully saved in the collection folder")
+    }
+
+    @Test
+    fun testSaveUnsavedToNewCollectionCreatesCollectionAndSavesSession() {
+        val viewModel = ApiStudioViewModel()
+
+        // 1. Create an unsaved session request when no collections exist
+        val unsaved = viewModel.createUnsavedRequest()
+        viewModel.onUrlInputChanged("https://api.stripe.com/v1/checkout")
+
+        // 2. Promote unsaved session to a brand new collection
+        viewModel.saveUnsavedToNewCollection(
+            requestId = unsaved.id,
+            collectionName = "Stripe API Collection",
+            requestName = "Checkout Session Request"
+        )
+
+        val updatedState = viewModel.uiState.value
+
+        // 3. Verify collection was created
+        val newCol = updatedState.collections.find { it.name == "Stripe API Collection" }
+        assertTrue(newCol != null, "New collection should be created in UI state")
+
+        // 4. Verify unsaved session request is inside the new collection's General folder
+        val savedReq = newCol.folders.flatMap { it.requests }.find { it.name == "Checkout Session Request" }
+        assertTrue(savedReq != null, "Unsaved session request should be saved inside the new collection")
+        assertEquals("https://api.stripe.com/v1/checkout", savedReq.url)
+
+        // 5. Verify session request was removed from unsavedRequests dropdown
+        val existsInUnsaved = updatedState.unsavedRequests.any { it.id == unsaved.id }
+        assertFalse(existsInUnsaved, "Session request should be removed from unsaved sessions dropdown")
     }
 }
 

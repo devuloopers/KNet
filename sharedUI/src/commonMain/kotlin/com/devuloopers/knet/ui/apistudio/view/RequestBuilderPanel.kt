@@ -1,4 +1,4 @@
-﻿package com.devuloopers.knet.ui.apistudio.view
+package com.devuloopers.knet.ui.apistudio.view
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -125,6 +125,7 @@ internal fun RequestBuilderPanel(
     onScriptLanguageChange: (ScriptLanguage) -> Unit = {},
     onPreRequestScriptChange: (String) -> Unit = {},
     onTestScriptChange: (String) -> Unit = {},
+    onApplyQuickFix: (com.devuloopers.knet.ui.apistudio.scriptanalyzer.model.ScriptQuickFix) -> Unit = {},
     onBodyChange: (String) -> Unit = {},
     onBodyTypeChange: (String) -> Unit = {},
     onSend: () -> Unit,
@@ -195,7 +196,8 @@ internal fun RequestBuilderPanel(
                         onAwsServiceChange = onAwsServiceChange,
                         onScriptLanguageChange = onScriptLanguageChange,
                         onPreRequestScriptChange = onPreRequestScriptChange,
-                        onTestScriptChange = onTestScriptChange
+                        onTestScriptChange = onTestScriptChange,
+                        onApplyQuickFix = onApplyQuickFix
                     )
                 }
             }
@@ -370,7 +372,8 @@ private fun RequestTabContent(
     onAwsServiceChange: (String) -> Unit,
     onScriptLanguageChange: (ScriptLanguage) -> Unit,
     onPreRequestScriptChange: (String) -> Unit,
-    onTestScriptChange: (String) -> Unit
+    onTestScriptChange: (String) -> Unit,
+    onApplyQuickFix: (com.devuloopers.knet.ui.apistudio.scriptanalyzer.model.ScriptQuickFix) -> Unit = {}
 ) {
     when {
         activeTab.startsWith("Body") -> BodyTab(request = request, onBodyChange = onBodyChange, onBodyTypeChange = onBodyTypeChange)
@@ -399,7 +402,12 @@ private fun RequestTabContent(
             onRemoveHeader = onRemoveHeader,
             onRestoreDefaultHeaders = onRestoreDefaultHeaders
         )
-        activeTab.contains("Pre-request") -> PreRequestScriptTab(uiState = uiState, onScriptLanguageChange = onScriptLanguageChange, onPreRequestScriptChange = onPreRequestScriptChange)
+        activeTab.contains("Pre-request") -> PreRequestScriptTab(
+            uiState = uiState,
+            onScriptLanguageChange = onScriptLanguageChange,
+            onPreRequestScriptChange = onPreRequestScriptChange,
+            onApplyQuickFix = onApplyQuickFix
+        )
         activeTab == "Tests" -> TestScriptTab(uiState = uiState, onScriptLanguageChange = onScriptLanguageChange, onTestScriptChange = onTestScriptChange)
     }
 }

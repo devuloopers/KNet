@@ -56,4 +56,21 @@ interface CollectionDao {
 
     @Query("DELETE FROM saved_requests WHERE id = :id")
     suspend fun deleteRequest(id: String)
+
+    /**
+     * Atomically inserts a new collection, a default folder, a promoted saved request,
+     * and deletes the old unsaved-session row — all within a single Room SQLite transaction.
+     */
+    @androidx.room.Transaction
+    suspend fun saveUnsavedToNewCollectionTx(
+        collection: CollectionEntity,
+        folder: CollectionFolderEntity,
+        request: SavedRequestEntity,
+        unsavedRequestIdToDelete: String
+    ) {
+        insertCollection(collection)
+        insertFolder(folder)
+        insertRequest(request)
+        deleteRequest(unsavedRequestIdToDelete)
+    }
 }

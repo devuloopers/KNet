@@ -27,19 +27,21 @@ import kotlin.io.encoding.Base64
  *
  * @param proxyPort Optional proxy port to route outgoing calls through KNet's proxy engine.
  */
-class KNetApiClient(
+open class KNetApiClient(
     private val proxyPort: Int? = null
 ) : Closeable {
 
-    private val httpClient = HttpClient(CIO) {
-        proxyPort?.let { port ->
-            engine {
-                proxy = io.ktor.client.engine.ProxyBuilder.http(Url("http://127.0.0.1:$port"))
+    private val httpClient by lazy {
+        HttpClient(CIO) {
+            proxyPort?.let { port ->
+                engine {
+                    proxy = io.ktor.client.engine.ProxyBuilder.http(Url("http://127.0.0.1:$port"))
+                }
             }
-        }
-        install(HttpTimeout) {
-            requestTimeoutMillis = 30_000
-            connectTimeoutMillis = 10_000
+            install(HttpTimeout) {
+                requestTimeoutMillis = 30_000
+                connectTimeoutMillis = 10_000
+            }
         }
     }
 
@@ -56,7 +58,7 @@ class KNetApiClient(
      * @param authToken Token string for Bearer/Basic auth.
      * @return [ApiExecutionResult] containing status code, latency, headers, and body.
      */
-    suspend fun execute(
+    open suspend fun execute(
         url: String,
         method: String = "GET",
         headers: Map<String, String> = emptyMap(),

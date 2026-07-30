@@ -19,11 +19,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -154,7 +157,12 @@ internal fun ResponseTestPanel(
                 when (activeTab) {
                     "Headers" -> ResponseHeadersViewer(headers = latestResult?.headers ?: emptyMap())
                     "Cookies" -> com.devuloopers.knet.ui.apistudio.view.tabs.ResponseCookiesTab(headers = latestResult?.headers ?: emptyMap())
-                    "Tests" -> TestResultsViewer(testResults = testResults, requestTestResults = request.testResults)
+                    "Tests" -> TestResultsViewer(
+                        testResults = testResults,
+                        requestTestResults = request.testResults,
+                        preRequestScript = request.scripts.preRequest,
+                        latestResult = latestResult
+                    )
                     else -> com.devuloopers.knet.ui.apistudio.view.tabs.ResponseBodyTab(latestResult = latestResult)
                 }
             }
@@ -221,14 +229,52 @@ private fun ResponseHeadersViewer(headers: Map<String, String>) {
 }
 
 @Composable
-private fun TestResultsViewer(testResults: List<TestAssertionResult>, requestTestResults: List<TestAssertionResult>) {
+private fun TestResultsViewer(
+    testResults: List<TestAssertionResult>,
+    requestTestResults: List<TestAssertionResult>,
+    preRequestScript: String = "",
+    latestResult: ExecutionResult? = null
+) {
     val activeTestResults = testResults.ifEmpty { requestTestResults }
     Column(
         verticalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())
     ) {
-        if (activeTestResults.isEmpty()) {
-            Text("No test assertions evaluated yet. Click 'Send Request' to run test scripts.", color = KNetColors.TextSecondary.copy(alpha = 0.6f), fontSize = 11.sp)
+        if (latestResult != null && !latestResult.isSuccess && latestResult.statusCode == 0 && latestResult.errorMessage != null) {
+            com.devuloopers.knet.ui.apistudio.view.components.ScriptErrorBlock(
+                title = "Pre-request Script Error",
+                errorMessage = "${latestResult.errorMessage}\nHTTP network request was skipped."
+            )
+        } else if (activeTestResults.isEmpty()) {
+            val hasPreRequestAssertions = preRequestScript.contains("pm.test") || preRequestScript.contains("pm.response")
+            if (hasPreRequestAssertions) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(Color(0xFF1E2530), RoundedCornerShape(6.dp))
+                        .border(1.dp, Color(0xFFE5A50A).copy(alpha = 0.6f), RoundedCornerShape(6.dp))
+                        .padding(10.dp)
+                ) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(Icons.Default.Lightbulb, contentDescription = "Warning", tint = Color(0xFFFFD54F), modifier = Modifier.size(14.dp))
+                            Text(
+                                text = "Pre-request Script Warning",
+                                color = Color(0xFFFFD54F),
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                        Text(
+                            text = "Test assertions (pm.test / pm.response) were detected in your Pre-request Script tab. Pre-request scripts run before receiving an HTTP response. Move them to the Tests tab to record test results.",
+                            color = Color(0xFFF0F4F8),
+                            fontSize = 11.sp
+                        )
+                    }
+                }
+            } else {
+                Text("No test assertions evaluated yet. Click 'Send Request' to run test scripts.", color = KNetColors.TextSecondary.copy(alpha = 0.6f), fontSize = 11.sp)
+            }
         } else {
             val passCount = activeTestResults.count { it.passed }
             Text(
@@ -239,20 +285,47 @@ private fun TestResultsViewer(testResults: List<TestAssertionResult>, requestTes
                 modifier = Modifier.padding(bottom = 4.dp)
             )
             activeTestResults.forEach { test ->
-                Row(
-                    modifier = Modifier.fillMaxWidth()
-                        .background(if (test.passed) KNetColors.SuccessGreen.copy(alpha = 0.1f) else Color(0xFFEF4444).copy(alpha = 0.1f), RoundedCornerShape(4.dp))
-                        .border(1.dp, if (test.passed) KNetColors.SuccessGreen.copy(alpha = 0.3f) else Color(0xFFEF4444).copy(alpha = 0.3f), RoundedCornerShape(4.dp))
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(if (test.passed) "✔" else "✖", color = if (test.passed) KNetColors.SuccessGreen else Color(0xFFEF4444), fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(test.name, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                if (test.name.startsWith("Script Error:", ignoreCase = true)) {
+                    com.devuloopers.knet.ui.apistudio.view.components.ScriptErrorBlock(
+                        title = "Syntax Error / Script Execution Failure",
+                        errorMessage = test.name
+                    )
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth()
+                            .background(if (test.passed) KNetColors.SuccessGreen.copy(alpha = 0.1f) else Color(0xFFEF4444).copy(alpha = 0.1f), RoundedCornerShape(4.dp))
+                            .border(1.dp, if (test.passed) KNetColors.SuccessGreen.copy(alpha = 0.3f) else Color(0xFFEF4444).copy(alpha = 0.3f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            modifier = Modifier.weight(1f),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = if (test.passed) Icons.Default.Check else Icons.Default.Close,
+                                contentDescription = null,
+                                tint = if (test.passed) KNetColors.SuccessGreen else Color(0xFFEF4444),
+                                modifier = Modifier.size(14.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = test.name,
+                                color = Color.White,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = if (test.passed) "PASS" else "FAIL",
+                            color = if (test.passed) KNetColors.SuccessGreen else Color(0xFFEF4444),
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Bold,
+                            softWrap = false
+                        )
                     }
-                    Text(if (test.passed) "PASS" else "FAIL", color = if (test.passed) KNetColors.SuccessGreen else Color(0xFFEF4444), fontSize = 10.sp, fontWeight = FontWeight.Bold)
                 }
             }
         }

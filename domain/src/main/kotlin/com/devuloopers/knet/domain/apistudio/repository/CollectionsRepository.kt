@@ -64,5 +64,15 @@ interface CollectionsRepository {
      * Deletes an unsaved request session tab by ID.
      */
     suspend fun deleteUnsavedRequest(requestId: String)
+
+    /**
+     * Atomically promotes an unsaved session request to a newly created collection via a database transaction.
+     */
+    suspend fun saveUnsavedToNewCollectionTx(
+        collection: ApiCollection,
+        folder: CollectionFolder,
+        request: SavedApiRequest,
+        unsavedRequestIdToDelete: String
+    )
 }
 

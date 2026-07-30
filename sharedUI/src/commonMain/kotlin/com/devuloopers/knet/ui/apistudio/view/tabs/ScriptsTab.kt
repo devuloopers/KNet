@@ -1,4 +1,4 @@
-﻿package com.devuloopers.knet.ui.apistudio.view.tabs
+package com.devuloopers.knet.ui.apistudio.view.tabs
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -12,9 +12,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -48,21 +51,39 @@ import com.devuloopers.knet.ui.apistudio.view.testScript
 internal fun PreRequestScriptTab(
     uiState: ApiStudioUiState,
     onScriptLanguageChange: (ScriptLanguage) -> Unit,
-    onPreRequestScriptChange: (String) -> Unit
+    onPreRequestScriptChange: (String) -> Unit,
+    onApplyQuickFix: (com.devuloopers.knet.ui.apistudio.scriptanalyzer.model.ScriptQuickFix) -> Unit = {}
 ) {
-    ScriptEditorTab(
-        label = "pre-request script",
-        scriptText = uiState.preRequestScript,
-        scriptLanguage = uiState.scriptLanguage,
-        placeholder = "// Enter pre-request script (e.g. env[\"timestamp\"] = ...)...",
-        editorAccent = Color(0xFFA855F7),
-        onScriptLanguageChange = onScriptLanguageChange,
-        onScriptChange = onPreRequestScriptChange,
-        onSnippetInsert = { code ->
-            val newCode = if (uiState.preRequestScript.isBlank()) code else "${uiState.preRequestScript}\n\n$code"
-            onPreRequestScriptChange(newCode)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxSize()) {
+        val analyzer = remember { com.devuloopers.knet.ui.apistudio.scriptanalyzer.ScriptAnalyzer() }
+        val analysisRes = remember(uiState.preRequestScript) {
+            analyzer.analyze(
+                code = uiState.preRequestScript,
+                phase = com.devuloopers.knet.ui.apistudio.scriptanalyzer.model.ScriptExecutionPhase.PRE_REQUEST
+            )
         }
-    )
+        val diagnostic = analysisRes.diagnostics.firstOrNull()
+        if (diagnostic != null) {
+            com.devuloopers.knet.ui.apistudio.view.components.DiagnosticsBanner(
+                diagnostic = diagnostic,
+                onApplyQuickFix = onApplyQuickFix
+            )
+        }
+
+        ScriptEditorTab(
+            label = "pre-request script",
+            scriptText = uiState.preRequestScript,
+            scriptLanguage = uiState.scriptLanguage,
+            placeholder = "// Enter pre-request script (e.g. env[\"timestamp\"] = ...)...",
+            editorAccent = Color(0xFFA855F7),
+            onScriptLanguageChange = onScriptLanguageChange,
+            onScriptChange = onPreRequestScriptChange,
+            onSnippetInsert = { code ->
+                val newCode = if (uiState.preRequestScript.isBlank()) code else "${uiState.preRequestScript}\n\n$code"
+                onPreRequestScriptChange(newCode)
+            }
+        )
+    }
 }
 
 /**
@@ -163,12 +184,20 @@ private fun ScriptEditorTab(
                     .border(1.dp, Color(0xFFEF4444), RoundedCornerShape(4.dp))
                     .padding(horizontal = 10.dp, vertical = 6.dp)
             ) {
-                Text(
-                    text = "🔴 Line ${sanitization.line ?: 1}: ${sanitization.errorMessage}",
-                    color = Color(0xFFEF4444),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    androidx.compose.material3.Icon(
+                        imageVector = androidx.compose.material.icons.Icons.Default.Close,
+                        contentDescription = "Sanitization Error",
+                        tint = Color(0xFFEF4444),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = "Line ${sanitization.line ?: 1}: ${sanitization.errorMessage}",
+                        color = Color(0xFFEF4444),
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
         }
     }

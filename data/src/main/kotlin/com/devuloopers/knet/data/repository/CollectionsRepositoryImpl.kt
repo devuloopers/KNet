@@ -200,6 +200,56 @@ class CollectionsRepositoryImpl(
         collectionDao.deleteRequest(requestId)
     }
 
+    override suspend fun saveUnsavedToNewCollectionTx(
+        collection: ApiCollection,
+        folder: CollectionFolder,
+        request: SavedApiRequest,
+        unsavedRequestIdToDelete: String
+    ) {
+        val colEntity = CollectionEntity(
+            id = collection.id,
+            name = collection.name,
+            updatedAt = System.currentTimeMillis()
+        )
+        val folderEntity = CollectionFolderEntity(
+            id = folder.id,
+            collectionId = collection.id,
+            name = folder.name,
+            orderIndex = 0
+        )
+        val packed = packAuth(request.auth)
+        val requestEntity = SavedRequestEntity(
+            id = request.id,
+            collectionId = collection.id,
+            folderId = folder.id,
+            name = request.name,
+            method = request.method.name,
+            customMethod = request.customMethod,
+            url = request.url,
+            headersJson = packHeaders(request.headers),
+            bodyContent = request.body.content,
+            bodyType = request.body.type,
+            authType = packed.authType,
+            authToken = packed.authToken,
+            authUsername = packed.authUsername,
+            authPassword = packed.authPassword,
+            apiKeyName = packed.apiKeyName,
+            apiKeyValue = packed.apiKeyValue,
+            apiKeyLocation = packed.apiKeyLocation,
+            oauthHeaderPrefix = packed.oauthHeaderPrefix,
+            awsAccessKey = packed.awsAccessKey,
+            awsSecretKey = packed.awsSecretKey,
+            awsRegion = packed.awsRegion,
+            awsService = packed.awsService,
+            preRequestScript = request.scripts.preRequest,
+            testScript = request.scripts.test,
+            scriptLanguage = request.scripts.language.name,
+            expectedStatus = request.expectedStatus
+        )
+
+        collectionDao.saveUnsavedToNewCollectionTx(colEntity, folderEntity, requestEntity, unsavedRequestIdToDelete)
+    }
+
     private suspend fun mapCollectionEntityToDomain(entity: CollectionEntity): ApiCollection {
         val folderEntities = collectionDao.getFoldersForCollection(entity.id)
         val folders = folderEntities.map { folderEntity ->
