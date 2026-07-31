@@ -37,6 +37,7 @@ import com.devuloopers.knet.domain.apistudio.exporter.PostmanCollectionExporter
 import com.devuloopers.knet.domain.apistudio.detector.UrlParameterExtractor
 import com.devuloopers.knet.domain.apistudio.model.RequestHeader
 import com.devuloopers.knet.domain.apistudio.model.defaultHeaders
+import com.devuloopers.knet.ui.apistudio.viewmodel.handler.ExecutionHandler
 
 class ApiStudioViewModel(
     private val repository: CollectionsRepository? = null,
@@ -50,6 +51,7 @@ class ApiStudioViewModel(
     private val testRunner = CollectionTestRunner()
     private val urlParameterExtractor = UrlParameterExtractor()
     private val collectionHandler = CollectionHandler(repository)
+    private val executionHandler = ExecutionHandler(proxyPort, apiClient, testRunner)
 
     init {
 
@@ -744,8 +746,9 @@ class ApiStudioViewModel(
     }
 
     /**
-     * Executes the currently selected request live over the network via [KNetApiClient].
-     * Dynamically formats and injects active [ApiStudioUiState.authType] credentials into headers/params.
+     * Executes the currently selected request live over the network via [ExecutionHandler].
+     * Dynamically delegates pre-request scripting, authentication formatting, network dispatching,
+     * test script evaluation, and minimum loading window enforcement.
      * Guaranteed to reset [ApiStudioUiState.isExecuting] via try-finally so requests can be re-run indefinitely.
      */
     fun sendCurrentRequest() {
@@ -764,132 +767,14 @@ class ApiStudioViewModel(
 
         viewModelScope.launch {
             try {
-                val state = _uiState.value
-                val finalHeaders = request.headers
-                    .filter { it.isEnabled && !it.value.startsWith("<") }
-                    .associate { it.key to it.value }
-                    .toMutableMap()
-
-                var finalUrl = normalizeUrl(request.url)
-
-                when (val auth = request.auth) {
-                    is ApiRequestAuth.Bearer -> {
-                        if (auth.token.isNotBlank()) {
-                            finalHeaders["Authorization"] = "Bearer ${auth.token}"
-                        }
-                    }
-                    is ApiRequestAuth.ApiKey -> {
-                        val keyName = auth.name.ifBlank { "X-API-Key" }
-                        if (auth.value.isNotBlank()) {
-                            if (auth.location.equals("Header", ignoreCase = true)) {
-                                finalHeaders[keyName] = auth.value
-                            } else {
-                                val separator = if (finalUrl.contains("?")) "&" else "?"
-                                finalUrl += "$separator$keyName=${auth.value}"
-                            }
-                        }
-                    }
-                    is ApiRequestAuth.Basic -> {
-                        if (auth.username.isNotBlank() || auth.password.isNotBlank()) {
-                            val raw = "${auth.username}:${auth.password}"
-                            @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
-                            val encoded = kotlin.io.encoding.Base64.Default.encode(raw.encodeToByteArray())
-                            finalHeaders["Authorization"] = "Basic $encoded"
-                        }
-                    }
-                    is ApiRequestAuth.OAuth2 -> {
-                        val prefix = auth.headerPrefix.ifBlank { "Bearer" }
-                        if (auth.token.isNotBlank()) {
-                            finalHeaders["Authorization"] = "$prefix ${auth.token}"
-                        }
-                    }
-                    is ApiRequestAuth.AwsSignature -> {
-                        if (auth.accessKey.isNotBlank()) {
-                            finalHeaders["Authorization"] = "AWS4-HMAC-SHA256 Credential=${auth.accessKey}/${auth.region}/${auth.service}/aws4_request"
-                        }
-                    }
-                    else -> {}
-                }
-
-                // Execute Pre-request Script before sending network request
-                if (request.scripts.preRequest.isNotBlank()) {
-                    val scriptReq = com.devuloopers.knet.scriptengine.api.ScriptRequestModel(
-                        url = finalUrl,
-                        method = request.methodString,
-                        headers = finalHeaders,
-                        queryParams = mutableMapOf(),
-                        body = request.body.content
-                    )
-                    val scriptRuntime = com.devuloopers.knet.scriptengine.runtime.ScriptRuntime()
-                    when (val preRes = scriptRuntime.executeScript(request.scripts.preRequest, request.scripts.language, scriptReq)) {
-                        is com.devuloopers.knet.scriptengine.api.ScriptExecutionResult.Success -> {
-                            finalUrl = preRes.request.url
-                            finalHeaders.putAll(preRes.request.headers)
-                        }
-                        is com.devuloopers.knet.scriptengine.api.ScriptExecutionResult.Error -> {
-                            // Use state update + throw so the finally block ALWAYS resets isExecuting.
-                            // return@launch would bypass finally and permanently block SEND.
-                            _uiState.update {
-                                it.copy(scriptErrorMessage = "Pre-request Error: ${preRes.message}")
-                            }
-                            throw IllegalStateException("Pre-request script failed: ${preRes.message}")
-                        }
-                    }
-                }
-
-
-                val result = apiClient.execute(
-                    url = finalUrl,
-                    method = request.methodString,
-                    headers = finalHeaders,
-                    body = request.body.content,
-                    bodyType = RequestBodyType.JSON
-                )
-
-                val domainResult = com.devuloopers.knet.domain.apistudio.usecase.ExecutionResult(
-                    statusCode = result.statusCode,
-                    statusText = result.statusText,
-                    headers = result.headers,
-                    responseBody = result.responseBody,
-                    latencyMs = result.latencyMs,
-                    responseSizeBytes = result.responseSizeBytes,
-                    isSuccess = result.isSuccess,
-                    errorMessage = result.errorMessage
-                )
-
-                val testResults = testRunner.evaluateAssertions(
-                    request = request,
-                    result = domainResult,
-                    testScript = request.scripts.test,
-                    scriptLanguage = request.scripts.language
-                )
-
+                val outcome = executionHandler.executeSingleRequest(request)
                 _uiState.update {
                     it.copy(
-                        latestResult = domainResult,
-                        testResults = testResults
+                        latestResult = outcome.result,
+                        testResults = outcome.testResults,
+                        scriptErrorMessage = outcome.scriptError,
+                        responsePresentation = outcome.presentation
                     )
-                }
-            } catch (e: Exception) {
-                // Only overwrite latestResult with a network error if this is NOT a pre-request script
-                // failure (which already set scriptErrorMessage). Avoids masking the script error UI.
-                if (_uiState.value.scriptErrorMessage == null) {
-                    val errorResult = com.devuloopers.knet.domain.apistudio.usecase.ExecutionResult(
-                        statusCode = 0,
-                        statusText = "Network Error",
-                        headers = emptyMap(),
-                        responseBody = "",
-                        latencyMs = 0L,
-                        responseSizeBytes = 0L,
-                        isSuccess = false,
-                        errorMessage = e.message ?: e.toString()
-                    )
-                    _uiState.update {
-                        it.copy(
-                            latestResult = errorResult,
-                            testResults = emptyList()
-                        )
-                    }
                 }
             } finally {
                 // GUARANTEED reset — isExecuting is ALWAYS set to false regardless of:

@@ -25,6 +25,7 @@ data class ApiStudioUiState(
     val activeRespTab: String = "Body",
     val isExecuting: Boolean = false,
     val latestResult: ExecutionResult? = null,
+    val responsePresentation: ResponsePresentation? = null,
     val searchQuery: String = "",
     val isSuiteRunning: Boolean = false,
     val suiteRunSummary: SuiteRunSummary? = null,

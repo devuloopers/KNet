@@ -1,4 +1,4 @@
-﻿package com.devuloopers.knet.ui.apistudio.view.tabs
+package com.devuloopers.knet.ui.apistudio.view.tabs
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.devuloopers.knet.theme.KNetColors
+import com.devuloopers.knet.ui.apistudio.model.ResponsePresentation
 
 /**
  * Single cookie parsed from HTTP Set-Cookie response headers.
@@ -50,9 +51,19 @@ private data class ResponseCookie(
 @Composable
 internal fun ResponseCookiesTab(
     headers: Map<String, String>,
+    presentation: ResponsePresentation? = null,
     modifier: Modifier = Modifier
 ) {
-    val parsedCookies = remember(headers) {
+    val parsedCookies = presentation?.cookies?.map {
+        ResponseCookie(
+            name = it.name,
+            value = it.value,
+            domain = it.domain,
+            path = it.path,
+            isSecure = it.isSecure,
+            isHttpOnly = it.isHttpOnly
+        )
+    } ?: remember(headers) {
         headers.entries
             .filter { it.key.equals("set-cookie", ignoreCase = true) || it.key.equals("cookie", ignoreCase = true) }
             .flatMap { entry ->

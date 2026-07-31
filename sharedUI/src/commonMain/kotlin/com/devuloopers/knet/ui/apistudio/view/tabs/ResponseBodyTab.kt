@@ -17,23 +17,26 @@ import com.devuloopers.knet.domain.apistudio.usecase.ExecutionResult
 import com.devuloopers.knet.editor.KNetCodeEditor
 import com.devuloopers.knet.editor.model.EditorMode
 import com.devuloopers.knet.theme.KNetColors
+import com.devuloopers.knet.ui.apistudio.model.ResponsePresentation
 
 /**
  * Response Body Tab content for the Response & Test panel.
  *
- * Renders the HTTP response payload in read-only mode using [KNetCodeEditor],
- * providing syntax highlighting (JSON, XML, HTML, etc.), line numbering,
- * code folding, and search capabilities.
+ * Renders the pre-computed HTTP response presentation model in read-only mode using [KNetCodeEditor],
+ * providing syntax highlighting (JSON, XML, HTML, etc.), line numbering, code folding, and search.
+ * Pure UI renderer performing zero string formatting or format detection during Compose render frames.
  *
  * @param latestResult The [ExecutionResult] from the last request run, or null.
+ * @param presentation Pre-computed [ResponsePresentation] model built on background threads.
  * @param modifier Layout modifier applied to the container.
  */
 @Composable
 internal fun ResponseBodyTab(
     latestResult: ExecutionResult?,
+    presentation: ResponsePresentation? = null,
     modifier: Modifier = Modifier
 ) {
-    if (latestResult == null) {
+    if (latestResult == null && presentation == null) {
         Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(
                 text = "No response payload. Enter a URL and click 'Send Request'.",
@@ -45,7 +48,7 @@ internal fun ResponseBodyTab(
         return
     }
 
-    if (latestResult.errorMessage != null) {
+    if (latestResult?.errorMessage != null) {
         Box(modifier = modifier.fillMaxSize().padding(12.dp)) {
             Text(
                 text = "Error: ${latestResult.errorMessage}",
@@ -57,7 +60,7 @@ internal fun ResponseBodyTab(
         return
     }
 
-    val rawBody = latestResult.responseBody
+    val rawBody = presentation?.rawBody ?: latestResult?.responseBody ?: ""
     if (rawBody.isBlank()) {
         Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             Text(
@@ -70,16 +73,16 @@ internal fun ResponseBodyTab(
         return
     }
 
-    val resolvedFormat = remember(rawBody, latestResult.headers) {
+    val resolvedFormat = presentation?.bodyFormat ?: remember(rawBody, latestResult?.headers) {
         BodyFormatterRegistry.resolveFormat(
-            headers = latestResult.headers,
+            headers = latestResult?.headers ?: emptyMap(),
             bodyText = rawBody
         )
     }
 
-    val prettyBody = remember(rawBody, latestResult.headers) {
+    val prettyBody = presentation?.formattedBody ?: remember(rawBody, latestResult?.headers) {
         BodyFormatterRegistry.prettyPrintBody(
-            headers = latestResult.headers,
+            headers = latestResult?.headers ?: emptyMap(),
             bodyText = rawBody
         )
     }

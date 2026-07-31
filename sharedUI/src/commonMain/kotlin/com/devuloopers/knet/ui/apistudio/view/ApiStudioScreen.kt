@@ -188,6 +188,7 @@ fun ApiStudioScreen(
             request = selectedRequest,
             activeTab = uiState.activeRespTab,
             latestResult = uiState.latestResult,
+            responsePresentation = uiState.responsePresentation,
             testResults = uiState.testResults,
             onTabSelected = { viewModel.selectRespTab(it) },
             onClearResponse = { viewModel.clearResponseState() },

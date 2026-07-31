@@ -68,31 +68,45 @@ fun CollectionsTreeSidebar(
 ) {
     var collectionStateMap by remember { mutableStateOf(collections.associate { it.id to true }) }
 
-    val filteredUnsaved = remember(unsavedRequests, searchQuery) {
-        if (searchQuery.isBlank()) unsavedRequests else {
-            unsavedRequests.filter {
-                it.name.contains(searchQuery, ignoreCase = true) || it.url.contains(searchQuery, ignoreCase = true)
+    val filteredUnsaved by androidx.compose.runtime.produceState(
+        initialValue = unsavedRequests,
+        key1 = unsavedRequests,
+        key2 = searchQuery
+    ) {
+        kotlinx.coroutines.delay(150)
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            if (searchQuery.isBlank()) unsavedRequests else {
+                unsavedRequests.filter {
+                    it.name.contains(searchQuery, ignoreCase = true) || it.url.contains(searchQuery, ignoreCase = true)
+                }
             }
         }
     }
 
-    val filteredCollections = remember(collections, searchQuery) {
-        if (searchQuery.isBlank()) collections else {
-            collections.mapNotNull { col ->
-                val matchingFolders = col.folders.mapNotNull { folder ->
-                    val matchingReqs = folder.requests.filter {
-                        it.name.contains(searchQuery, ignoreCase = true) || it.url.contains(
-                            searchQuery,
-                            ignoreCase = true
-                        )
+    val filteredCollections by androidx.compose.runtime.produceState(
+        initialValue = collections,
+        key1 = collections,
+        key2 = searchQuery
+    ) {
+        kotlinx.coroutines.delay(150)
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            if (searchQuery.isBlank()) collections else {
+                collections.mapNotNull { col ->
+                    val matchingFolders = col.folders.mapNotNull { folder ->
+                        val matchingReqs = folder.requests.filter {
+                            it.name.contains(searchQuery, ignoreCase = true) || it.url.contains(
+                                searchQuery,
+                                ignoreCase = true
+                            )
+                        }
+                        if (folder.name.contains(searchQuery, ignoreCase = true) || matchingReqs.isNotEmpty()) {
+                            folder.copy(requests = matchingReqs.ifEmpty { folder.requests })
+                        } else null
                     }
-                    if (folder.name.contains(searchQuery, ignoreCase = true) || matchingReqs.isNotEmpty()) {
-                        folder.copy(requests = matchingReqs.ifEmpty { folder.requests })
+                    if (col.name.contains(searchQuery, ignoreCase = true) || matchingFolders.isNotEmpty()) {
+                        col.copy(folders = matchingFolders.ifEmpty { col.folders })
                     } else null
                 }
-                if (col.name.contains(searchQuery, ignoreCase = true) || matchingFolders.isNotEmpty()) {
-                    col.copy(folders = matchingFolders.ifEmpty { col.folders })
-                } else null
             }
         }
     }

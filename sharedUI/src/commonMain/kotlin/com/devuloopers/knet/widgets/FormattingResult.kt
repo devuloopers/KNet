@@ -26,6 +26,9 @@ sealed interface FormattingResult {
      */
     data class Ready(
         val prettyBody: String,
-        val format: BodyFormat
+        val format: BodyFormat,
+        val charset: String = "UTF-8",
+        val lineEnding: String = "LF",
+        val bodySize: String = ""
     ) : FormattingResult
 }

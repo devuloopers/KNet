@@ -121,7 +121,20 @@ fun ResponseBodyWidget(
                 transaction.responseHeaders,
                 transaction.responseBody
             )
-            FormattingResult.Ready(prettyBody = pretty, format = format)
+            val charset = run {
+                val contentType = transaction.responseHeaders.entries.find { it.key.equals("content-type", ignoreCase = true) }?.value ?: ""
+                if (contentType.contains("charset=", ignoreCase = true)) {
+                    contentType.substringAfter("charset=", "").substringBefore(";").trim().uppercase()
+                } else "UTF-8"
+            }
+            val lineEnding = if (transaction.responseBody.contains("\r\n")) "CRLF" else "LF"
+            val bytes = transaction.responseBody.encodeToByteArray().size
+            val bodySize = when {
+                bytes < 1024 -> "Res: $bytes B"
+                bytes < 1024 * 1024 -> "Res: %.2f KB".format(bytes / 1024.0)
+                else -> "Res: %.2f MB".format(bytes / (1024.0 * 1024.0))
+            }
+            FormattingResult.Ready(prettyBody = pretty, format = format, charset = charset, lineEnding = lineEnding, bodySize = bodySize)
         }
     }
 
@@ -242,23 +255,9 @@ fun ResponseBodyWidget(
 
             // Footer status info
             val formatLabel = resolvedFormat.badgeLabel
-            val charset = remember(transaction.responseHeaders) {
-                val contentType = transaction.responseHeaders.entries.find { it.key.equals("content-type", ignoreCase = true) }?.value ?: ""
-                if (contentType.contains("charset=", ignoreCase = true)) {
-                    contentType.substringAfter("charset=", "").substringBefore(";").trim().uppercase()
-                } else "UTF-8"
-            }
-            val lineEnding = remember(transaction.responseBody) {
-                if (transaction.responseBody.contains("\r\n")) "CRLF" else "LF"
-            }
-            val bodySize = remember(transaction.responseBody) {
-                val bytes = transaction.responseBody.encodeToByteArray().size
-                when {
-                    bytes < 1024 -> "Res: $bytes B"
-                    bytes < 1024 * 1024 -> "Res: %.2f KB".format(bytes / 1024.0)
-                    else -> "Res: %.2f MB".format(bytes / (1024.0 * 1024.0))
-                }
-            }
+            val charset = readyResult.charset
+            val lineEnding = readyResult.lineEnding
+            val bodySize = readyResult.bodySize
             val statusColor = when (transaction.status) {
                 in 200..299 -> KNetColors.SuccessGreen
                 in 300..399 -> KNetColors.ActiveBlue

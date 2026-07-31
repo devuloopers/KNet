@@ -72,8 +72,13 @@ fun RequestTreeWidget(
     }
 
     var searchQuery by remember { mutableStateOf("") }
-    val rawQueryString = remember(transaction.queryParams) {
-        transaction.queryParams.entries.joinToString("&") { (k, v) -> "$k=$v" }
+    val rawQueryString by androidx.compose.runtime.produceState(
+        initialValue = "",
+        key1 = transaction.queryParams
+    ) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            transaction.queryParams.entries.joinToString("&") { (k, v) -> "$k=$v" }
+        }
     }
 
     SubFrame(
@@ -157,12 +162,19 @@ fun RequestTreeWidget(
                 )
             }
         } else {
-            val filteredParams = remember(transaction.queryParams, searchQuery) {
-                if (searchQuery.isBlank()) {
-                    transaction.queryParams
-                } else {
-                    transaction.queryParams.filter { (k, v) ->
-                        k.contains(searchQuery, ignoreCase = true) || v.toString().contains(searchQuery, ignoreCase = true)
+            val filteredParams by androidx.compose.runtime.produceState(
+                initialValue = transaction.queryParams,
+                key1 = transaction.queryParams,
+                key2 = searchQuery
+            ) {
+                kotlinx.coroutines.delay(150)
+                value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    if (searchQuery.isBlank()) {
+                        transaction.queryParams
+                    } else {
+                        transaction.queryParams.filter { (k, v) ->
+                            k.contains(searchQuery, ignoreCase = true) || v.toString().contains(searchQuery, ignoreCase = true)
+                        }
                     }
                 }
             }

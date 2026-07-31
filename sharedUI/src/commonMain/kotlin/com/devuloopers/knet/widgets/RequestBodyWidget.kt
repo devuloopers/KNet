@@ -129,7 +129,20 @@ fun RequestBodyWidget(
                 transaction.requestHeaders,
                 transaction.requestBody
             )
-            FormattingResult.Ready(prettyBody = pretty, format = format)
+            val charset = run {
+                val contentType = transaction.requestHeaders.entries.find { it.key.equals("content-type", ignoreCase = true) }?.value ?: ""
+                if (contentType.contains("charset=", ignoreCase = true)) {
+                    contentType.substringAfter("charset=", "").substringBefore(";").trim().uppercase()
+                } else "UTF-8"
+            }
+            val lineEnding = if (transaction.requestBody.contains("\r\n")) "CRLF" else "LF"
+            val bytes = transaction.requestBody.encodeToByteArray().size
+            val bodySize = when {
+                bytes < 1024 -> "Req: $bytes B"
+                bytes < 1024 * 1024 -> "Req: %.2f KB".format(bytes / 1024.0)
+                else -> "Req: %.2f MB".format(bytes / (1024.0 * 1024.0))
+            }
+            FormattingResult.Ready(prettyBody = pretty, format = format, charset = charset, lineEnding = lineEnding, bodySize = bodySize)
         }
     }
 
@@ -318,23 +331,9 @@ fun RequestBodyWidget(
             Spacer(modifier = Modifier.height(6.dp))
 
             val reqFormatLabel = format.badgeLabel
-            val reqCharset = remember(transaction.requestHeaders) {
-                val contentType = transaction.requestHeaders.entries.find { it.key.equals("content-type", ignoreCase = true) }?.value ?: ""
-                if (contentType.contains("charset=", ignoreCase = true)) {
-                    contentType.substringAfter("charset=", "").substringBefore(";").trim().uppercase()
-                } else "UTF-8"
-            }
-            val reqLineEnding = remember(transaction.requestBody) {
-                if (transaction.requestBody.contains("\r\n")) "CRLF" else "LF"
-            }
-            val reqBodySize = remember(transaction.requestBody) {
-                val bytes = transaction.requestBody.encodeToByteArray().size
-                when {
-                    bytes < 1024 -> "Req: $bytes B"
-                    bytes < 1024 * 1024 -> "Req: %.2f KB".format(bytes / 1024.0)
-                    else -> "Req: %.2f MB".format(bytes / (1024.0 * 1024.0))
-                }
-            }
+            val reqCharset = readyResult.charset
+            val reqLineEnding = readyResult.lineEnding
+            val reqBodySize = readyResult.bodySize
 
             // Footer status info
             Row(

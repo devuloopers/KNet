@@ -184,34 +184,37 @@ private fun EditableCodeEditor(
         }
     }
 
-    val lines = textFieldValue.text.lines()
-    val lineCount = lines.size.coerceAtLeast(1)
-
-    val fullText = remember(textFieldValue.text, collapsedFolds) { getFullText(textFieldValue.text) }
-    val fullLines = remember(fullText) { fullText.lines() }
-
-    val isHighPerformanceMode = remember(fullLines.size, code.length) {
-        fullLines.size > LARGE_PAYLOAD_LINE_THRESHOLD || code.length > LARGE_PAYLOAD_BYTE_THRESHOLD
+    val isHighPerformanceMode = remember(code.length) {
+        code.length > LARGE_PAYLOAD_BYTE_THRESHOLD
     }
 
-    val foldRegions = remember(fullText, isHighPerformanceMode) {
-        if (isFoldingEnabled && !isHighPerformanceMode) FoldManager.calculateFolds(fullLines) else emptyList()
+    val fullText = remember(textFieldValue.text, collapsedFolds) { getFullText(textFieldValue.text) }
+
+    val lineCount = remember(textFieldValue.text) {
+        textFieldValue.text.count { it == '\n' } + 1
+    }
+
+    val totalLineCount = remember(fullText) {
+        fullText.count { it == '\n' } + 1
+    }
+
+    val foldRegions = remember(fullText, isHighPerformanceMode, isFoldingEnabled) {
+        if (isFoldingEnabled && !isHighPerformanceMode && totalLineCount <= LARGE_PAYLOAD_LINE_THRESHOLD) {
+            FoldManager.calculateFolds(fullText.lines())
+        } else {
+            emptyList()
+        }
     }
     val foldStartLines = remember(foldRegions) { foldRegions.associateBy { it.startLine } }
 
     val caretOffset = textFieldValue.selection.start
     val activeLineIndex = remember(textFieldValue.text, caretOffset) {
-        var currentOffset = 0
-        var foundLine = 0
-        for (i in lines.indices) {
-            val lineLength = lines[i].length + 1
-            if (caretOffset >= currentOffset && caretOffset < currentOffset + lineLength) {
-                foundLine = i
-                break
-            }
-            currentOffset += lineLength
+        var line = 0
+        val max = caretOffset.coerceAtMost(textFieldValue.text.length)
+        for (i in 0 until max) {
+            if (textFieldValue.text[i] == '\n') line++
         }
-        foundLine
+        line
     }
 
     val verticalScrollState = rememberScrollState()
@@ -239,7 +242,7 @@ private fun EditableCodeEditor(
             .padding(CodeEditorTokens.ContainerPadding)
     ) {
         EditorHeaderToolbar(
-            totalLines = fullLines.size,
+            totalLines = totalLineCount,
             showLineCountHeader = showLineCountHeader,
             showFoldActionsHeader = showFoldActionsHeader,
             hasFoldRegions = foldRegions.isNotEmpty(),
@@ -370,8 +373,8 @@ private fun ReadOnlyCodeViewer(
 
     val activePayload = payloadState ?: ProcessedPayloadState(
         displayedText = code,
-        totalLineCount = code.lines().size,
-        displayedLineCount = code.lines().size,
+        totalLineCount = code.count { it == '\n' } + 1,
+        displayedLineCount = code.count { it == '\n' } + 1,
         isTruncated = false
     )
 
@@ -392,15 +395,18 @@ private fun ReadOnlyCodeViewer(
         onCollapsedFoldsChange(emptyMap())
     }
 
-    val lines = textFieldValue.text.lines()
-    val lineCount = lines.size.coerceAtLeast(1)
+    val lineCount = activePayload.displayedLineCount.coerceAtLeast(1)
 
     val isHighPerformanceMode = remember(activePayload.totalLineCount, code.length) {
         activePayload.totalLineCount > LARGE_PAYLOAD_LINE_THRESHOLD || code.length > LARGE_PAYLOAD_BYTE_THRESHOLD
     }
 
-    val foldRegions = remember(activePayload.displayedText, isHighPerformanceMode) {
-        if (isFoldingEnabled && !isSearching && !isHighPerformanceMode) FoldManager.calculateFolds(lines) else emptyList()
+    val foldRegions = remember(activePayload.displayedText, isHighPerformanceMode, isFoldingEnabled, isSearching) {
+        if (isFoldingEnabled && !isSearching && !isHighPerformanceMode) {
+            FoldManager.calculateFolds(textFieldValue.text.lines())
+        } else {
+            emptyList()
+        }
     }
     val foldStartLines = remember(foldRegions) { foldRegions.associateBy { it.startLine } }
 

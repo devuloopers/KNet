@@ -1,5 +1,12 @@
 package com.devuloopers.knet.ui.apistudio.view
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -265,20 +272,56 @@ private fun UrlBar(
         // URL input
         KNetInputField(value = request.url, onValueChange = onUrlChange, placeholder = "https://api.example.com/v1/resource", fontSize = 12.sp, height = 36.dp, cornerRadius = 6.dp, modifier = Modifier.weight(1f))
 
-        // Send button
+        // Animated Send button
+        val animatedBgColor by animateColorAsState(
+            targetValue = when {
+                !isUrlValid -> KNetColors.ActiveBlue.copy(alpha = 0.4f)
+                isExecuting -> KNetColors.ActiveBlue.copy(alpha = 0.6f)
+                else -> KNetColors.ActiveBlue
+            },
+            animationSpec = tween(durationMillis = 200),
+            label = "SendButtonBgColor"
+        )
+
         Box(
             modifier = Modifier
-                .background(if (!isUrlValid) KNetColors.ActiveBlue.copy(alpha = 0.4f) else if (isExecuting) KNetColors.ActiveBlue.copy(alpha = 0.5f) else KNetColors.ActiveBlue, RoundedCornerShape(6.dp))
+                .background(animatedBgColor, RoundedCornerShape(6.dp))
                 .clickable(enabled = isUrlValid && !isExecuting) { onSend() }
+                .animateContentSize(animationSpec = tween(durationMillis = 200))
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             contentAlignment = Alignment.Center
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (isExecuting) {
-                    CircularProgressIndicator(color = Color.White, modifier = Modifier.size(12.dp), strokeWidth = 2.dp)
-                    Spacer(modifier = Modifier.width(6.dp))
+            AnimatedContent(
+                targetState = isExecuting,
+                transitionSpec = {
+                    (fadeIn(animationSpec = tween(150)))
+                        .togetherWith(fadeOut(animationSpec = tween(150)))
+                },
+                label = "SendButtonContent"
+            ) { executing ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (executing) {
+                        CircularProgressIndicator(
+                            color = Color.White,
+                            modifier = Modifier.size(12.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            "Sending...",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    } else {
+                        Text(
+                            "Send Request",
+                            color = Color.White,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
-                Text(if (isExecuting) "Sending..." else "Send Request", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         }
 

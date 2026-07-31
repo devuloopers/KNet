@@ -1,10 +1,14 @@
 package com.devuloopers.knet.ui.apistudio
 
+import com.devuloopers.knet.domain.apistudio.model.HttpMethod
+import com.devuloopers.knet.domain.apistudio.model.SavedApiRequest
 import com.devuloopers.knet.ui.apistudio.viewmodel.ApiStudioViewModel
+import com.devuloopers.knet.ui.apistudio.viewmodel.handler.ExecutionHandler
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -31,12 +35,12 @@ class ApiStudioExecutionTest {
 
     @Test
     fun testUrlNormalizationPrependsHttp() {
-        val viewModel = ApiStudioViewModel()
+        val handler = ExecutionHandler()
 
-        assertEquals("http://127.0.0.1:9090/api/test/get", viewModel.normalizeUrl("127.0.0.1:9090/api/test/get"))
-        assertEquals("http://localhost:9090", viewModel.normalizeUrl("localhost:9090"))
-        assertEquals("https://httpbin.org/post", viewModel.normalizeUrl("https://httpbin.org/post"))
-        assertEquals("http://httpbin.org/get", viewModel.normalizeUrl("http://httpbin.org/get"))
+        assertEquals("http://127.0.0.1:9090/api/test/get", handler.normalizeUrl("127.0.0.1:9090/api/test/get"))
+        assertEquals("http://localhost:9090", handler.normalizeUrl("localhost:9090"))
+        assertEquals("https://httpbin.org/post", handler.normalizeUrl("https://httpbin.org/post"))
+        assertEquals("http://httpbin.org/get", handler.normalizeUrl("http://httpbin.org/get"))
     }
 
     @Test
@@ -91,13 +95,6 @@ class ApiStudioExecutionTest {
         viewModel.createNewCollection("Empty Collection")
         val createdCol = viewModel.uiState.value.collections.find { it.name == "Empty Collection" }!!
 
-        // Clear folders to simulate 0 folders scenario
-        val stateWithoutFolders = viewModel.uiState.value.copy(
-            collections = viewModel.uiState.value.collections.map {
-                if (it.id == createdCol.id) it.copy(folders = emptyList()) else it
-            }
-        )
-        // Set state via reflection/internal or trigger save
         val unsaved = viewModel.createUnsavedRequest()
         viewModel.saveUnsavedToCollection(
             requestId = unsaved.id,
@@ -144,5 +141,38 @@ class ApiStudioExecutionTest {
         val existsInUnsaved = updatedState.unsavedRequests.any { it.id == unsaved.id }
         assertFalse(existsInUnsaved, "Session request should be removed from unsaved sessions dropdown")
     }
-}
 
+    @Test
+    fun testMinimumLoadingDurationEnforced() = runTest {
+        val handler = ExecutionHandler()
+        val request = SavedApiRequest(
+            id = "test_1",
+            name = "Test",
+            method = HttpMethod.GET,
+            url = "http://127.0.0.1:9090/test"
+        )
+
+        val start = System.currentTimeMillis()
+        handler.executeSingleRequest(request, enforceMinDuration = true)
+        val elapsed = System.currentTimeMillis() - start
+
+        assertTrue(elapsed >= ExecutionHandler.MIN_LOADING_DURATION_MS, "Execution with enforceMinDuration should take at least ${ExecutionHandler.MIN_LOADING_DURATION_MS}ms")
+    }
+
+    @Test
+    fun testMinimumLoadingDurationCanBeBypassed() = runTest {
+        val handler = ExecutionHandler()
+        val request = SavedApiRequest(
+            id = "test_2",
+            name = "Test Bypassed",
+            method = HttpMethod.GET,
+            url = "http://127.0.0.1:9090/test"
+        )
+
+        val start = System.currentTimeMillis()
+        handler.executeSingleRequest(request, enforceMinDuration = false)
+        val elapsed = System.currentTimeMillis() - start
+
+        assertTrue(elapsed < 2000L, "Execution without min duration should finish quickly")
+    }
+}

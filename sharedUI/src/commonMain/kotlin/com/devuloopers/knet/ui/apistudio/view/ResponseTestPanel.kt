@@ -65,6 +65,7 @@ internal fun ResponseTestPanel(
     request: SavedApiRequest,
     activeTab: String,
     latestResult: ExecutionResult? = null,
+    responsePresentation: com.devuloopers.knet.ui.apistudio.model.ResponsePresentation? = null,
     testResults: List<TestAssertionResult> = emptyList(),
     onTabSelected: (String) -> Unit,
     onClearResponse: () -> Unit = {},
@@ -79,13 +80,16 @@ internal fun ResponseTestPanel(
             .padding(14.dp)
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
-            // Status Code Header Row
+            // Header bar with status badge, tabs, and clear button
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     if (latestResult != null) {
                         val statusColor = when {
                             latestResult.isSuccess -> KNetColors.SuccessGreen
@@ -95,44 +99,53 @@ internal fun ResponseTestPanel(
                         Box(
                             modifier = Modifier
                                 .background(statusColor.copy(alpha = 0.15f), RoundedCornerShape(4.dp))
-                                .border(1.dp, statusColor, RoundedCornerShape(4.dp))
+                                .border(1.dp, statusColor.copy(alpha = 0.4f), RoundedCornerShape(4.dp))
                                 .padding(horizontal = 8.dp, vertical = 4.dp)
                         ) {
                             Text("${latestResult.statusCode} ${latestResult.statusText}", color = statusColor, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                         }
-                        Spacer(modifier = Modifier.width(8.dp))
                         Text("•  ${latestResult.latencyMs} ms  •  ${latestResult.responseSizeBytes} B", color = KNetColors.TextSecondary, fontSize = 11.sp)
                     } else {
-                        Text("No response yet", color = KNetColors.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Medium)
+                        Text("RESPONSE", color = KNetColors.TextSecondary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                     }
                 }
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (latestResult != null) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = "Clear Response",
-                            tint = KNetColors.TextSecondary,
-                            modifier = Modifier.size(14.dp).clickable { onClearResponse() }
-                        )
+
+                if (latestResult != null) {
+                    Box(
+                        modifier = Modifier
+                            .background(KNetColors.FieldDark, RoundedCornerShape(4.dp))
+                            .border(1.dp, KNetColors.BorderDark, RoundedCornerShape(4.dp))
+                            .clickable { onClearResponse() }
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                    ) {
+                        Text("Clear", color = KNetColors.TextSecondary, fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     }
-                    Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = KNetColors.TextSecondary, modifier = Modifier.size(14.dp).clickable { })
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Sub-tabs
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // Sub-tabs bar: Body | Headers | Cookies | Tests
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(bottom = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
                 respTabs.forEach { tabName ->
-                    val isTabActive = tabName == activeTab
+                    val isSelected = activeTab == tabName
                     Box(
                         modifier = Modifier
-                            .background(if (isTabActive) KNetColors.FieldDark else Color.Transparent, RoundedCornerShape(4.dp))
+                            .background(
+                                if (isSelected) KNetColors.ActiveBlue.copy(alpha = 0.2f) else Color.Transparent,
+                                RoundedCornerShape(4.dp)
+                            )
                             .clickable { onTabSelected(tabName) }
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                            .padding(horizontal = 10.dp, vertical = 5.dp)
                     ) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(tabName, color = if (isTabActive) Color.White else KNetColors.TextSecondary, fontSize = 11.sp, fontWeight = if (isTabActive) FontWeight.Bold else FontWeight.Medium)
+                            Text(
+                                text = tabName,
+                                color = if (isSelected) KNetColors.ActiveBlue else KNetColors.TextSecondary,
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            )
                             val listToCount = testResults.ifEmpty { request.testResults }
                             if (tabName == "Tests" && listToCount.isNotEmpty()) {
                                 Spacer(modifier = Modifier.width(4.dp))
@@ -142,8 +155,6 @@ internal fun ResponseTestPanel(
                     }
                 }
             }
-
-            Spacer(modifier = Modifier.height(10.dp))
 
             // Dynamic Response Viewer
             Box(
@@ -156,14 +167,14 @@ internal fun ResponseTestPanel(
             ) {
                 when (activeTab) {
                     "Headers" -> ResponseHeadersViewer(headers = latestResult?.headers ?: emptyMap())
-                    "Cookies" -> com.devuloopers.knet.ui.apistudio.view.tabs.ResponseCookiesTab(headers = latestResult?.headers ?: emptyMap())
+                    "Cookies" -> com.devuloopers.knet.ui.apistudio.view.tabs.ResponseCookiesTab(headers = latestResult?.headers ?: emptyMap(), presentation = responsePresentation)
                     "Tests" -> TestResultsViewer(
                         testResults = testResults,
                         requestTestResults = request.testResults,
                         preRequestScript = request.scripts.preRequest,
                         latestResult = latestResult
                     )
-                    else -> com.devuloopers.knet.ui.apistudio.view.tabs.ResponseBodyTab(latestResult = latestResult)
+                    else -> com.devuloopers.knet.ui.apistudio.view.tabs.ResponseBodyTab(latestResult = latestResult, presentation = responsePresentation)
                 }
             }
 
