@@ -1,4 +1,4 @@
-package com.devuloopers.knet.ui.apistudio.viewmodel.handler
+package com.devuloopers.knet.ui.apistudio.handler
 
 import com.devuloopers.knet.domain.apistudio.detector.UrlParameterExtractor
 import com.devuloopers.knet.domain.apistudio.model.ApiRequestAuth

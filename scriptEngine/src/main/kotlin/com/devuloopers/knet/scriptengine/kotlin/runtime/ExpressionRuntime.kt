@@ -121,7 +121,11 @@ class ExpressionRuntime : KotlinRuntime {
         environment: EnvironmentStore
     ): Pair<Boolean, String?> {
         for (line in lines) {
-            val trimmed = line.trim()
+            // Normalize the optional 'context.' prefix so that both:
+            //   context.response.statusCode == 200
+            //   response.statusCode == 200
+            // are handled identically by the pattern matchers below.
+            val trimmed = line.trim().removePrefix("context.")
             if (trimmed.isEmpty() || trimmed.startsWith("//") || trimmed == "}") continue
 
             // 1. Not Null matcher (e.g. expect(request.headers["X-Timestamp"]).toNotBeNull())

@@ -2,13 +2,14 @@ package com.devuloopers.knet.ui.apistudio.viewmodel.handler
 
 import com.devuloopers.knet.domain.apistudio.model.HttpMethod
 import com.devuloopers.knet.domain.apistudio.model.SavedApiRequest
+import com.devuloopers.knet.ui.apistudio.handler.FormHandler
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 /**
- * Unit test suite for [FormHandler].
+ * Unit test suite for [com.devuloopers.knet.ui.apistudio.handler.FormHandler].
  */
 class FormHandlerTest {
 

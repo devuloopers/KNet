@@ -2,21 +2,19 @@ package com.devuloopers.knet.ui.apistudio.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.devuloopers.knet.domain.apistudio.model.ApiCollection
-import com.devuloopers.knet.domain.apistudio.model.CollectionFolder
-import com.devuloopers.knet.domain.apistudio.model.HttpMethod
-import com.devuloopers.knet.domain.apistudio.model.SavedApiRequest
-import com.devuloopers.knet.domain.apistudio.model.TestAssertionResult
-import com.devuloopers.knet.domain.apistudio.model.ApiRequestBody
-import com.devuloopers.knet.domain.apistudio.model.ApiRequestScripts
-import com.devuloopers.knet.domain.apistudio.model.ApiRequestAuth
+import com.devuloopers.knet.domain.apistudio.detector.UrlParameterExtractor
+import com.devuloopers.knet.domain.apistudio.exporter.PostmanCollectionExporter
+import com.devuloopers.knet.domain.apistudio.importer.PostmanCollectionImporter
+import com.devuloopers.knet.domain.apistudio.model.*
 import com.devuloopers.knet.domain.apistudio.repository.CollectionsRepository
-import com.devuloopers.knet.domain.apistudio.usecase.ExecuteApiRequestUseCase
+import com.devuloopers.knet.domain.apistudio.runner.CollectionTestRunner
+import com.devuloopers.knet.domain.apistudio.runner.SuiteRequestResult
+import com.devuloopers.knet.domain.apistudio.runner.SuiteRunSummary
 import com.devuloopers.knet.engine.client.KNetApiClient
-import com.devuloopers.knet.engine.client.model.AuthType
-import com.devuloopers.knet.engine.client.model.RequestBodyType
+import com.devuloopers.knet.scriptengine.api.ScriptLanguage
+import com.devuloopers.knet.ui.apistudio.handler.CollectionHandler
+import com.devuloopers.knet.ui.apistudio.handler.ExecutionHandler
 import com.devuloopers.knet.ui.apistudio.model.ApiStudioUiState
-import com.devuloopers.knet.ui.apistudio.viewmodel.handler.CollectionHandler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,21 +25,11 @@ import kotlinx.coroutines.launch
  * ViewModel managing state and API request execution for the API Studio Screen.
  *
  * @param repository Optional repository for persisting collections.
+ * @param proxyPort Optional proxy port for HTTP proxy interception.
  */
-import com.devuloopers.knet.domain.apistudio.runner.CollectionTestRunner
-import com.devuloopers.knet.domain.apistudio.runner.SuiteRequestResult
-import com.devuloopers.knet.domain.apistudio.runner.SuiteRunSummary
-import com.devuloopers.knet.domain.apistudio.importer.PostmanCollectionImporter
-import com.devuloopers.knet.domain.apistudio.exporter.PostmanCollectionExporter
-
-import com.devuloopers.knet.domain.apistudio.detector.UrlParameterExtractor
-import com.devuloopers.knet.domain.apistudio.model.RequestHeader
-import com.devuloopers.knet.domain.apistudio.model.defaultHeaders
-import com.devuloopers.knet.ui.apistudio.viewmodel.handler.ExecutionHandler
-
 class ApiStudioViewModel(
     private val repository: CollectionsRepository? = null,
-    private val proxyPort: Int? = null
+    proxyPort: Int? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(ApiStudioUiState())
@@ -136,10 +124,10 @@ class ApiStudioViewModel(
      */
     fun onUrlInputChanged(newUrl: String) {
         val parseResult = urlParameterExtractor.extract(newUrl)
-        var currentReq = _uiState.value.selectedRequest
+        val currentReq = _uiState.value.selectedRequest
 
         if (currentReq == null && newUrl.isNotBlank()) {
-            currentReq = createUnsavedRequest(
+            createUnsavedRequest(
                 initialRequest = _uiState.value.draftRequest.copy(url = newUrl)
             )
         } else {
@@ -248,14 +236,8 @@ class ApiStudioViewModel(
     /**
      * Updates the request payload body.
      */
-    fun updateRequestBody(newBody: String) {
-        val target = _uiState.value.selectedRequest ?: _uiState.value.draftRequest
-        val updated = target.copy(body = target.body.copy(content = newBody))
-        if (_uiState.value.selectedRequest != null) {
-            syncSelectedRequestInList(updated)
-        } else {
-            _uiState.update { it.copy(draftRequest = updated) }
-        }
+    fun updateRequestBody(newBody: String) = updateActiveRequest { req ->
+        req.copy(body = req.body.copy(content = newBody))
     }
 
     /**
@@ -279,9 +261,17 @@ class ApiStudioViewModel(
 
         if (contentTypeHeader != null) {
             if (existingIndex >= 0) {
-                currentHeaders[existingIndex] = currentHeaders[existingIndex].copy(value = contentTypeHeader, isEnabled = true)
+                currentHeaders[existingIndex] =
+                    currentHeaders[existingIndex].copy(value = contentTypeHeader, isEnabled = true)
             } else {
-                currentHeaders.add(com.devuloopers.knet.domain.apistudio.model.RequestHeader(key = "Content-Type", value = contentTypeHeader, isEnabled = true, isAuto = false))
+                currentHeaders.add(
+                    RequestHeader(
+                        key = "Content-Type",
+                        value = contentTypeHeader,
+                        isEnabled = true,
+                        isAuto = false
+                    )
+                )
             }
         } else if (newType.lowercase() == "none" && existingIndex >= 0) {
             currentHeaders[existingIndex] = currentHeaders[existingIndex].copy(isEnabled = false)
@@ -311,36 +301,38 @@ class ApiStudioViewModel(
     }
 
 
-    fun updateAuthType(type: String) {
-        val target = _uiState.value.selectedRequest ?: _uiState.value.draftRequest
+    fun updateAuthType(type: String) = updateActiveRequest { target ->
         val currentAuth = target.auth
-        val updated = target.copy(
+        target.copy(
             auth = when (type) {
                 "Bearer Token" -> ApiRequestAuth.Bearer(if (currentAuth is ApiRequestAuth.Bearer) currentAuth.token else "")
                 "Basic Auth" -> ApiRequestAuth.Basic(
                     username = if (currentAuth is ApiRequestAuth.Basic) currentAuth.username else "",
                     password = if (currentAuth is ApiRequestAuth.Basic) currentAuth.password else ""
                 )
+
                 "API Key" -> ApiRequestAuth.ApiKey(
                     name = if (currentAuth is ApiRequestAuth.ApiKey) currentAuth.name else "X-API-Key",
                     value = if (currentAuth is ApiRequestAuth.ApiKey) currentAuth.value else "",
                     location = if (currentAuth is ApiRequestAuth.ApiKey) currentAuth.location else "Header"
                 )
+
                 "OAuth 2.0" -> ApiRequestAuth.OAuth2(
                     token = if (currentAuth is ApiRequestAuth.OAuth2) currentAuth.token else "",
                     headerPrefix = if (currentAuth is ApiRequestAuth.OAuth2) currentAuth.headerPrefix else "Bearer"
                 )
+
                 "AWS Signature" -> ApiRequestAuth.AwsSignature(
                     accessKey = if (currentAuth is ApiRequestAuth.AwsSignature) currentAuth.accessKey else "",
                     secretKey = if (currentAuth is ApiRequestAuth.AwsSignature) currentAuth.secretKey else "",
                     region = if (currentAuth is ApiRequestAuth.AwsSignature) currentAuth.region else "us-east-1",
-                    service = if (currentAuth is ApiRequestAuth.AwsSignature) currentAuth.service else "s3"
+                    service = if (currentAuth is ApiRequestAuth.AwsSignature) currentAuth.service else "execute-api"
                 )
+
                 "Inherit Auth" -> ApiRequestAuth.Inherit
                 else -> ApiRequestAuth.None
             }
         )
-        if (_uiState.value.selectedRequest != null) syncSelectedRequestInList(updated) else _uiState.update { it.copy(draftRequest = updated) }
     }
 
     fun updateAuthToken(token: String) {
@@ -352,7 +344,11 @@ class ApiStudioViewModel(
                 else -> ApiRequestAuth.Bearer(token)
             }
         )
-        if (_uiState.value.selectedRequest != null) syncSelectedRequestInList(updated) else _uiState.update { it.copy(draftRequest = updated) }
+        if (_uiState.value.selectedRequest != null) syncSelectedRequestInList(updated) else _uiState.update {
+            it.copy(
+                draftRequest = updated
+            )
+        }
     }
 
     fun updateAuthUsername(username: String) {
@@ -363,7 +359,11 @@ class ApiStudioViewModel(
                 else -> ApiRequestAuth.Basic(username, "")
             }
         )
-        if (_uiState.value.selectedRequest != null) syncSelectedRequestInList(updated) else _uiState.update { it.copy(draftRequest = updated) }
+        if (_uiState.value.selectedRequest != null) syncSelectedRequestInList(updated) else _uiState.update {
+            it.copy(
+                draftRequest = updated
+            )
+        }
     }
 
     fun updateAuthPassword(password: String) {
@@ -374,7 +374,11 @@ class ApiStudioViewModel(
                 else -> ApiRequestAuth.Basic("", password)
             }
         )
-        if (_uiState.value.selectedRequest != null) syncSelectedRequestInList(updated) else _uiState.update { it.copy(draftRequest = updated) }
+        if (_uiState.value.selectedRequest != null) syncSelectedRequestInList(updated) else _uiState.update {
+            it.copy(
+                draftRequest = updated
+            )
+        }
     }
 
     private val scriptAnalyzer = com.devuloopers.knet.ui.apistudio.scriptanalyzer.ScriptAnalyzer()
@@ -386,14 +390,16 @@ class ApiStudioViewModel(
             code = script,
             phase = com.devuloopers.knet.ui.apistudio.scriptanalyzer.model.ScriptExecutionPhase.PRE_REQUEST
         )
-        if (_uiState.value.selectedRequest != null) syncSelectedRequestInList(updated) else _uiState.update { it.copy(draftRequest = updated) }
+        if (_uiState.value.selectedRequest != null) syncSelectedRequestInList(updated) else _uiState.update {
+            it.copy(
+                draftRequest = updated
+            )
+        }
         _uiState.update { it.copy(analysisResult = analysisRes) }
     }
 
-    fun updateTestScript(script: String) {
-        val target = _uiState.value.selectedRequest ?: _uiState.value.draftRequest
-        val updated = target.copy(scripts = target.scripts.copy(test = script))
-        if (_uiState.value.selectedRequest != null) syncSelectedRequestInList(updated) else _uiState.update { it.copy(draftRequest = updated) }
+    fun updateTestScript(script: String) = updateActiveRequest { req ->
+        req.copy(scripts = req.scripts.copy(test = script))
     }
 
     /**
@@ -404,7 +410,8 @@ class ApiStudioViewModel(
             is com.devuloopers.knet.ui.apistudio.scriptanalyzer.model.ScriptQuickFix.MoveToTestsTab -> {
                 val target = _uiState.value.selectedRequest ?: _uiState.value.draftRequest
                 val existingTests = target.scripts.test
-                val newTests = if (existingTests.isNotBlank()) "$existingTests\n\n${quickFix.codeToMove}" else quickFix.codeToMove
+                val newTests =
+                    if (existingTests.isNotBlank()) "$existingTests\n\n${quickFix.codeToMove}" else quickFix.codeToMove
                 val updated = target.copy(
                     scripts = target.scripts.copy(
                         preRequest = "",
@@ -454,7 +461,8 @@ class ApiStudioViewModel(
                 .find { it.id == collectionId }
                 .orEmptyRequests()
                 .any { it.id == _uiState.value.selectedRequest?.id }
-            if (isDeleted) updatedCollections.flatMap { it.folders }.flatMap { it.requests }.firstOrNull() else _uiState.value.selectedRequest
+            if (isDeleted) updatedCollections.flatMap { it.folders }.flatMap { it.requests }
+                .firstOrNull() else _uiState.value.selectedRequest
         } else {
             updatedCollections.flatMap { it.folders }.flatMap { it.requests }.firstOrNull()
         }
@@ -520,7 +528,7 @@ class ApiStudioViewModel(
             name = "Unsaved Request $nextNum",
             method = source.method,
             url = source.url,
-            headers = if (source.headers.isNotEmpty()) source.headers else defaultHeaders(),
+            headers = source.headers.ifEmpty { defaultHeaders() },
             body = source.body,
             auth = source.auth,
             scripts = source.scripts
@@ -604,6 +612,7 @@ class ApiStudioViewModel(
     /**
      * Clears current request selection to start a fresh ad-hoc draft request tab.
      */
+    @Suppress("unused")
     fun startNewDraftRequest() {
         _uiState.update { state ->
             state.copy(
@@ -627,7 +636,8 @@ class ApiStudioViewModel(
         _uiState.update { state ->
             val updatedUnsaved = state.unsavedRequests.filter { it.id != requestId }
             val newSelected = if (state.selectedRequest?.id == requestId) {
-                updatedUnsaved.lastOrNull() ?: state.collections.flatMap { it.folders }.flatMap { it.requests }.firstOrNull()
+                updatedUnsaved.lastOrNull() ?: state.collections.flatMap { it.folders }.flatMap { it.requests }
+                    .firstOrNull()
             } else {
                 state.selectedRequest
             }
@@ -650,7 +660,8 @@ class ApiStudioViewModel(
         targetFolderId: String? = null,
         customName: String? = null
     ) {
-        val unsavedReq = _uiState.value.unsavedRequests.find { it.id == requestId } ?: _uiState.value.selectedRequest ?: return
+        val unsavedReq =
+            _uiState.value.unsavedRequests.find { it.id == requestId } ?: _uiState.value.selectedRequest ?: return
         val promotedReq = unsavedReq.copy(
             id = "req-${kotlin.uuid.Uuid.random()}",
             name = customName?.takeIf { it.isNotBlank() } ?: unsavedReq.name
@@ -658,15 +669,15 @@ class ApiStudioViewModel(
 
         val updatedCollections = _uiState.value.collections.map { col ->
             if (col.id == targetCollectionId) {
-                val effectiveFolders = if (col.folders.isEmpty()) {
+                val effectiveFolders = col.folders.ifEmpty {
                     listOf(
-                        com.devuloopers.knet.domain.apistudio.model.CollectionFolder(
+                        CollectionFolder(
                             id = "folder-${kotlin.uuid.Uuid.random()}",
                             name = "General",
                             requests = emptyList()
                         )
                     )
-                } else col.folders
+                }
                 val targetFolder = targetFolderId ?: effectiveFolders.first().id
                 col.copy(folders = effectiveFolders.map { folder ->
                     if (folder.id == targetFolder) {
@@ -687,7 +698,8 @@ class ApiStudioViewModel(
 
         viewModelScope.launch {
             repository?.deleteUnsavedRequest(requestId)
-            val folderId = targetFolderId ?: _uiState.value.collections.find { it.id == targetCollectionId }?.folders?.firstOrNull()?.id ?: ""
+            val folderId = targetFolderId
+                ?: _uiState.value.collections.find { it.id == targetCollectionId }?.folders?.firstOrNull()?.id ?: ""
             repository?.saveRequest(targetCollectionId, folderId, promotedReq)
         }
     }
@@ -735,10 +747,15 @@ class ApiStudioViewModel(
     /**
      * Normalizes a raw URL input by prepending "http://" if protocol prefix is missing.
      */
+    @Suppress("HttpUrlsUsage", "unused")
     fun normalizeUrl(rawUrl: String): String {
         val trimmed = rawUrl.trim()
         if (trimmed.isEmpty()) return trimmed
-        return if (!trimmed.startsWith("http://", ignoreCase = true) && !trimmed.startsWith("https://", ignoreCase = true)) {
+        return if (!trimmed.startsWith("http://", ignoreCase = true) && !trimmed.startsWith(
+                "https://",
+                ignoreCase = true
+            )
+        ) {
             "http://$trimmed"
         } else {
             trimmed
@@ -785,101 +802,91 @@ class ApiStudioViewModel(
     }
 
 
-
-    fun updateScriptLanguage(language: com.devuloopers.knet.scriptengine.api.ScriptLanguage) {
+    private inline fun updateActiveRequest(transform: (SavedApiRequest) -> SavedApiRequest) {
         val target = _uiState.value.selectedRequest ?: _uiState.value.draftRequest
-        val updated = target.copy(scripts = target.scripts.copy(language = language))
-        if (_uiState.value.selectedRequest != null) syncSelectedRequestInList(updated) else _uiState.update { it.copy(draftRequest = updated) }
+        val updated = transform(target)
+        if (_uiState.value.selectedRequest != null) {
+            syncSelectedRequestInList(updated)
+        } else {
+            _uiState.update { it.copy(draftRequest = updated) }
+        }
     }
 
-    fun updateApiKeyName(name: String) {
-        val target = _uiState.value.selectedRequest ?: _uiState.value.draftRequest
-        val updated = target.copy(
-            auth = when (val a = target.auth) {
+    fun updateScriptLanguage(language: ScriptLanguage) = updateActiveRequest { req ->
+        req.copy(scripts = req.scripts.copy(language = language))
+    }
+
+    fun updateApiKeyName(name: String) = updateActiveRequest { req ->
+        req.copy(
+            auth = when (val a = req.auth) {
                 is ApiRequestAuth.ApiKey -> a.copy(name = name)
                 else -> ApiRequestAuth.ApiKey(name = name)
             }
         )
-        if (_uiState.value.selectedRequest != null) syncSelectedRequestInList(updated) else _uiState.update { it.copy(draftRequest = updated) }
     }
 
-    fun updateApiKeyValue(value: String) {
-        val target = _uiState.value.selectedRequest ?: _uiState.value.draftRequest
-        val updated = target.copy(
-            auth = when (val a = target.auth) {
+    fun updateApiKeyValue(value: String) = updateActiveRequest { req ->
+        req.copy(
+            auth = when (val a = req.auth) {
                 is ApiRequestAuth.ApiKey -> a.copy(value = value)
                 else -> ApiRequestAuth.ApiKey(value = value)
             }
         )
-        if (_uiState.value.selectedRequest != null) syncSelectedRequestInList(updated) else _uiState.update { it.copy(draftRequest = updated) }
     }
 
-    fun updateApiKeyLocation(location: String) {
-        val target = _uiState.value.selectedRequest ?: _uiState.value.draftRequest
-        val updated = target.copy(
-            auth = when (val a = target.auth) {
+    fun updateApiKeyLocation(location: String) = updateActiveRequest { req ->
+        req.copy(
+            auth = when (val a = req.auth) {
                 is ApiRequestAuth.ApiKey -> a.copy(location = location)
                 else -> ApiRequestAuth.ApiKey(location = location)
             }
         )
-        if (_uiState.value.selectedRequest != null) syncSelectedRequestInList(updated) else _uiState.update { it.copy(draftRequest = updated) }
     }
 
-    fun updateOauthHeaderPrefix(prefix: String) {
-        val target = _uiState.value.selectedRequest ?: _uiState.value.draftRequest
-        val updated = target.copy(
-            auth = when (val a = target.auth) {
+    fun updateOauthHeaderPrefix(prefix: String) = updateActiveRequest { req ->
+        req.copy(
+            auth = when (val a = req.auth) {
                 is ApiRequestAuth.OAuth2 -> a.copy(headerPrefix = prefix)
                 else -> ApiRequestAuth.OAuth2(headerPrefix = prefix)
             }
         )
-        if (_uiState.value.selectedRequest != null) syncSelectedRequestInList(updated) else _uiState.update { it.copy(draftRequest = updated) }
     }
 
-    fun updateAwsAccessKey(key: String) {
-        val target = _uiState.value.selectedRequest ?: _uiState.value.draftRequest
-        val updated = target.copy(
-            auth = when (val a = target.auth) {
+    fun updateAwsAccessKey(key: String) = updateActiveRequest { req ->
+        req.copy(
+            auth = when (val a = req.auth) {
                 is ApiRequestAuth.AwsSignature -> a.copy(accessKey = key)
                 else -> ApiRequestAuth.AwsSignature(accessKey = key)
             }
         )
-        if (_uiState.value.selectedRequest != null) syncSelectedRequestInList(updated) else _uiState.update { it.copy(draftRequest = updated) }
     }
 
-    fun updateAwsSecretKey(secret: String) {
-        val target = _uiState.value.selectedRequest ?: _uiState.value.draftRequest
-        val updated = target.copy(
-            auth = when (val a = target.auth) {
+    fun updateAwsSecretKey(secret: String) = updateActiveRequest { req ->
+        req.copy(
+            auth = when (val a = req.auth) {
                 is ApiRequestAuth.AwsSignature -> a.copy(secretKey = secret)
                 else -> ApiRequestAuth.AwsSignature(secretKey = secret)
             }
         )
-        if (_uiState.value.selectedRequest != null) syncSelectedRequestInList(updated) else _uiState.update { it.copy(draftRequest = updated) }
     }
 
-    fun updateAwsRegion(region: String) {
-        val target = _uiState.value.selectedRequest ?: _uiState.value.draftRequest
-        val updated = target.copy(
-            auth = when (val a = target.auth) {
+    fun updateAwsRegion(region: String) = updateActiveRequest { req ->
+        req.copy(
+            auth = when (val a = req.auth) {
                 is ApiRequestAuth.AwsSignature -> a.copy(region = region)
                 else -> ApiRequestAuth.AwsSignature(region = region)
             }
         )
-        if (_uiState.value.selectedRequest != null) syncSelectedRequestInList(updated) else _uiState.update { it.copy(draftRequest = updated) }
     }
 
-    fun updateAwsService(service: String) {
-        val target = _uiState.value.selectedRequest ?: _uiState.value.draftRequest
-        val updated = target.copy(
-            auth = when (val a = target.auth) {
+    fun updateAwsService(service: String) = updateActiveRequest { req ->
+        req.copy(
+            auth = when (val a = req.auth) {
                 is ApiRequestAuth.AwsSignature -> a.copy(service = service)
                 else -> ApiRequestAuth.AwsSignature(service = service)
             }
         )
-        if (_uiState.value.selectedRequest != null) syncSelectedRequestInList(updated) else _uiState.update { it.copy(draftRequest = updated) }
     }
-
 
 
     fun updateSearchQuery(query: String) {
@@ -908,6 +915,7 @@ class ApiStudioViewModel(
     }
 
 
+    @Suppress("unused")
     fun createNewFolder(collectionId: String, folderName: String) {
         val newFolder = CollectionFolder(
             id = "f-${kotlin.uuid.Uuid.random()}",
@@ -926,6 +934,7 @@ class ApiStudioViewModel(
         }
     }
 
+    @Suppress("unused")
     fun createNewRequest(
         collectionId: String,
         folderId: String,
@@ -958,51 +967,18 @@ class ApiStudioViewModel(
         }
     }
 
-    fun runCollectionSuite() {
-        val allRequests = _uiState.value.collections.flatMap { col ->
-            col.folders.flatMap { f -> f.requests }
-        }
-        if (allRequests.isEmpty() || _uiState.value.isSuiteRunning) return
+    fun runSuite(config: com.devuloopers.knet.ui.apistudio.handler.SuiteExecutionConfig) {
+        val collections = _uiState.value.collections
+        if (collections.isEmpty() || _uiState.value.isSuiteRunning) return
 
         _uiState.update { it.copy(isSuiteRunning = true, suiteRunSummary = null) }
 
         viewModelScope.launch {
-            val resultsList = mutableListOf<SuiteRequestResult>()
-
-            allRequests.forEach { req ->
-                val res = apiClient.execute(
-                    url = req.url,
-                    method = req.methodString,
-                    headers = req.headers
-                        .filter { it.isEnabled && !it.value.startsWith("<") }
-                        .associate { it.key to it.value },
-                    body = req.body.content
-                )
-                val domainRes = com.devuloopers.knet.domain.apistudio.usecase.ExecutionResult(
-                    statusCode = res.statusCode,
-                    statusText = res.statusText,
-                    headers = res.headers,
-                    responseBody = res.responseBody,
-                    latencyMs = res.latencyMs,
-                    responseSizeBytes = res.responseSizeBytes,
-                    isSuccess = res.isSuccess
-                )
-                val assertions = testRunner.evaluateAssertions(req, domainRes)
-                resultsList.add(SuiteRequestResult(req, domainRes, assertions))
-            }
-
-            val passed = resultsList.count { it.executionResult.isSuccess }
-            val failed = resultsList.size - passed
-            val avgLatency = if (resultsList.isNotEmpty()) resultsList.map { it.executionResult.latencyMs }.average().toLong() else 0L
-
-            val summary = SuiteRunSummary(
-                totalRequests = resultsList.size,
-                passedCount = passed,
-                failedCount = failed,
-                averageLatencyMs = avgLatency,
-                results = resultsList
+            val summary = executionHandler.executeSuiteScope(
+                scope = config.scope,
+                collections = collections,
+                currentRequest = _uiState.value.selectedRequest
             )
-
             _uiState.update {
                 it.copy(
                     isSuiteRunning = false,
@@ -1010,6 +986,19 @@ class ApiStudioViewModel(
                 )
             }
         }
+    }
+
+    fun runCollectionSuite(targetCollectionId: String? = null) {
+        val collections = _uiState.value.collections
+        if (collections.isEmpty()) return
+
+        val scope = if (targetCollectionId != null) {
+            com.devuloopers.knet.ui.apistudio.handler.SuiteExecutionScope.Collection(targetCollectionId)
+        } else {
+            com.devuloopers.knet.ui.apistudio.handler.SuiteExecutionScope.Collections(collections.map { it.id })
+        }
+
+        runSuite(com.devuloopers.knet.ui.apistudio.handler.SuiteExecutionConfig(scope = scope))
     }
 
     fun dismissRunnerModal() {
@@ -1025,7 +1014,8 @@ class ApiStudioViewModel(
             _uiState.update { state ->
                 state.copy(
                     collections = state.collections + importedCollection,
-                    selectedRequest = importedCollection.folders.firstOrNull()?.requests?.firstOrNull() ?: state.selectedRequest
+                    selectedRequest = importedCollection.folders.firstOrNull()?.requests?.firstOrNull()
+                        ?: state.selectedRequest
                 )
             }
             viewModelScope.launch {
@@ -1036,6 +1026,7 @@ class ApiStudioViewModel(
         }
     }
 
+    @Suppress("unused")
     fun exportCurrentCollectionJson(): String {
         val currentCollection = _uiState.value.collections.firstOrNull() ?: return "{}"
         return postmanExporter.exportToJson(currentCollection)

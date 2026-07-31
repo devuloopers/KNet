@@ -3,23 +3,22 @@ package com.devuloopers.knet.engine.client
 import com.devuloopers.knet.engine.client.model.AuthType
 import com.devuloopers.knet.engine.client.model.RequestBodyType
 import kotlinx.coroutines.runBlocking
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertNotNull
-import kotlin.test.assertTrue
+import org.junit.After
+import org.junit.Assert.assertNotNull
+import org.junit.Assert.assertTrue
+import org.junit.Before
+import org.junit.Test
 
 class KNetApiClientTest {
 
     private lateinit var client: KNetApiClient
 
-    @BeforeTest
+    @Before
     fun setUp() {
         client = KNetApiClient()
     }
 
-    @AfterTest
+    @After
     fun tearDown() {
         client.close()
     }
@@ -74,5 +73,15 @@ class KNetApiClientTest {
 
         val patchResult = client.patch("https://httpbin.org/patch", body = "{\"key\":\"val\"}")
         assertNotNull(patchResult)
+    }
+
+    @Test
+    fun testProxyFallbackWhenProxyIsStopped() = runBlocking {
+        // Port 59999 has no active proxy server listening
+        val inactiveProxyClient = KNetApiClient(proxyPort = 59999)
+        val result = inactiveProxyClient.get("https://httpbin.org/get")
+        assertNotNull(result)
+        assertTrue(result.latencyMs > 0)
+        inactiveProxyClient.close()
     }
 }

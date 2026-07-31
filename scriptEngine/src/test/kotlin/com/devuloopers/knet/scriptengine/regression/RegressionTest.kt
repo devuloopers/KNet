@@ -59,7 +59,7 @@ class RegressionTest {
         val script = """
             env["token"] = "kotlin_token_123"
             test("Status Check") {
-                statusCode == 200
+                response.statusCode == 200
             }
         """.trimIndent()
 

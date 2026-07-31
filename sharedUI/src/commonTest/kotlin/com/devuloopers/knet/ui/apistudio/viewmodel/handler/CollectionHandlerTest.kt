@@ -1,12 +1,13 @@
 package com.devuloopers.knet.ui.apistudio.viewmodel.handler
 
 import com.devuloopers.knet.domain.apistudio.model.ApiCollection
+import com.devuloopers.knet.ui.apistudio.handler.CollectionHandler
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
 /**
- * Unit test suite for [CollectionHandler].
+ * Unit test suite for [com.devuloopers.knet.ui.apistudio.handler.CollectionHandler].
  */
 class CollectionHandlerTest {
 

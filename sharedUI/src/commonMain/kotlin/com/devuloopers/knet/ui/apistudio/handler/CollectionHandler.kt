@@ -1,4 +1,4 @@
-package com.devuloopers.knet.ui.apistudio.viewmodel.handler
+package com.devuloopers.knet.ui.apistudio.handler
 
 import com.devuloopers.knet.domain.apistudio.exporter.PostmanCollectionExporter
 import com.devuloopers.knet.domain.apistudio.importer.PostmanCollectionImporter
@@ -7,6 +7,7 @@ import com.devuloopers.knet.domain.apistudio.model.CollectionFolder
 import com.devuloopers.knet.domain.apistudio.model.HttpMethod
 import com.devuloopers.knet.domain.apistudio.model.SavedApiRequest
 import com.devuloopers.knet.domain.apistudio.repository.CollectionsRepository
+import kotlin.uuid.Uuid
 
 /**
  * Pure handler managing API collection tree navigation, folder creation, request saving, deletion, and Postman import/export.
@@ -150,18 +151,18 @@ class CollectionHandler(
     ): Triple<List<ApiCollection>, List<SavedApiRequest>, SavedApiRequest?> {
         val unsavedReq = unsavedRequests.find { it.id == requestId } ?: selectedRequest ?: return Triple(collections, unsavedRequests, null)
         val promotedReq = unsavedReq.copy(
-            id = "req-${kotlin.uuid.Uuid.random()}",
+            id = "req-${Uuid.random()}",
             name = requestName?.takeIf { it.isNotBlank() } ?: unsavedReq.name
         )
 
         val defaultFolder = CollectionFolder(
-            id = "folder-${kotlin.uuid.Uuid.random()}",
+            id = "folder-${Uuid.random()}",
             name = "General",
             requests = listOf(promotedReq)
         )
 
         val newCol = ApiCollection(
-            id = "col-${kotlin.uuid.Uuid.random()}",
+            id = "col-${Uuid.random()}",
             name = collectionName.takeIf { it.isNotBlank() } ?: "New Collection",
             folders = listOf(defaultFolder)
         )

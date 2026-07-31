@@ -61,7 +61,7 @@ fun CollectionsTreeSidebar(
     onDeleteCollection: (String) -> Unit = {},
     onRenameCollection: (collectionId: String, currentName: String) -> Unit = { _, _ -> },
     onRenameRequest: (requestId: String, currentName: String) -> Unit = { _, _ -> },
-    onRunCollection: () -> Unit,
+    onRunCollection: (targetCollectionId: String?) -> Unit,
     onCreateCollection: () -> Unit,
     onImportCollection: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -159,7 +159,8 @@ fun CollectionsTreeSidebar(
                     onDeleteCollection = onDeleteCollection,
                     onRenameRequest = onRenameRequest,
                     onDeleteRequest = onDeleteRequest,
-                    onSelectRequest = onSelectRequest
+                    onSelectRequest = onSelectRequest,
+                    onRunCollection = onRunCollection
                 )
             }
 
@@ -171,19 +172,19 @@ fun CollectionsTreeSidebar(
 }
 
 @Composable
-private fun SidebarBottomRunButton(onRunCollection: () -> Unit) {
+private fun SidebarBottomRunButton(onRunCollection: (String?) -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .background(KNetColors.ActiveBlue, RoundedCornerShape(6.dp))
-            .clickable { onRunCollection() }
+            .clickable { onRunCollection(null) }
             .padding(vertical = 10.dp),
         contentAlignment = Alignment.Center
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
                 Icons.Default.PlayArrow,
-                contentDescription = null,
+                contentDescription = "Run Collection Suite",
                 tint = Color.White,
                 modifier = Modifier.size(16.dp)
             )
@@ -379,7 +380,8 @@ private fun SavedCollectionsCategory(
     onDeleteCollection: (String) -> Unit,
     onRenameRequest: (requestId: String, currentName: String) -> Unit,
     onDeleteRequest: (String) -> Unit,
-    onSelectRequest: (SavedApiRequest) -> Unit
+    onSelectRequest: (SavedApiRequest) -> Unit,
+    onRunCollection: (String?) -> Unit = {}
 ) {
     CollapsibleSection(
         title = "SAVED COLLECTIONS",
@@ -401,8 +403,13 @@ private fun SavedCollectionsCategory(
                     val isExpanded = collectionStateMap[col.id] ?: true
                     val collectionMenuItems = listOf(
                         ContextMenuItem(
+                            label = "Run Collection Suite",
+                            onClick = { onRunCollection(col.id) }
+                        ),
+                        ContextMenuItem(
                             label = "Rename Collection",
-                            onClick = { onRenameCollection(col.id, col.name) }),
+                            onClick = { onRenameCollection(col.id, col.name) }
+                        ),
                         ContextMenuItem(label = "Delete Collection", onClick = { onDeleteCollection(col.id) })
                     )
 

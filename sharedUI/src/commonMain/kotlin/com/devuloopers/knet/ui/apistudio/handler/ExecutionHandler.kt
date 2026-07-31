@@ -1,7 +1,8 @@
-package com.devuloopers.knet.ui.apistudio.viewmodel.handler
+package com.devuloopers.knet.ui.apistudio.handler
 
 import com.devuloopers.knet.domain.apistudio.model.ApiCollection
 import com.devuloopers.knet.domain.apistudio.model.ApiRequestAuth
+import com.devuloopers.knet.domain.apistudio.model.RequestHeader
 import com.devuloopers.knet.domain.apistudio.model.SavedApiRequest
 import com.devuloopers.knet.domain.apistudio.model.TestAssertionResult
 import com.devuloopers.knet.domain.apistudio.runner.CollectionTestRunner
@@ -18,6 +19,8 @@ import com.devuloopers.knet.ui.apistudio.model.ResponsePresentationBuilder
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 
 /**
  * Result data class for a single request execution run.
@@ -52,6 +55,7 @@ class ExecutionHandler(
     private val apiClient: KNetApiClient = KNetApiClient(proxyPort),
     private val testRunner: CollectionTestRunner = CollectionTestRunner()
 ) {
+    private val suiteExecutor = CollectionSuiteExecutor(apiClient, testRunner)
 
     companion object {
         /** Minimum visual loading window in milliseconds to prevent single-frame visual flickering on ultra-fast responses. */
@@ -132,8 +136,8 @@ class ExecutionHandler(
             is ApiRequestAuth.Bearer -> if (auth.token.isNotBlank()) finalHeaders["Authorization"] = "Bearer ${auth.token}"
             is ApiRequestAuth.Basic -> {
                 if (auth.username.isNotBlank() || auth.password.isNotBlank()) {
-                    @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
-                    val encoded = kotlin.io.encoding.Base64.Default.encode("${auth.username}:${auth.password}".encodeToByteArray())
+                    @OptIn(ExperimentalEncodingApi::class)
+                    val encoded = Base64.encode("${auth.username}:${auth.password}".encodeToByteArray())
                     finalHeaders["Authorization"] = "Basic $encoded"
                 }
             }
@@ -211,7 +215,7 @@ class ExecutionHandler(
 
         val mutatedRequest = request.copy(
             url = finalUrl,
-            headers = finalHeaders.map { (key, value) -> com.devuloopers.knet.domain.apistudio.model.RequestHeader(key, value) }
+            headers = finalHeaders.map { (key, value) -> RequestHeader(key, value) }
         )
 
         // 4. Evaluate Test Assertions on Dispatchers.Default (CPU-bound)
@@ -237,38 +241,42 @@ class ExecutionHandler(
         )
     }
 
+    private val suitePlanner = SuiteExecutionPlanner()
+
     /**
-     * Executes an entire collection suite sequentially.
+     * Executes an entire collection suite sequentially off the UI thread via [CollectionSuiteExecutor].
      *
      * @param collection The [ApiCollection] containing requests to execute.
      * @return Summary of the suite execution run [SuiteRunSummary].
      */
     suspend fun executeCollectionSuite(collection: ApiCollection): SuiteRunSummary {
-        val requests = collection.folders.flatMap { it.requests }
-        val results = mutableListOf<SuiteRequestResult>()
+        return suiteExecutor.executeSuite(listOf(collection))
+    }
 
-        for (req in requests) {
-            val outcome = executeSingleRequest(req, enforceMinDuration = false)
-            results.add(
-                SuiteRequestResult(
-                    request = req,
-                    executionResult = outcome.result,
-                    assertionResults = outcome.testResults
-                )
-            )
-        }
+    /**
+     * Executes a list of collection suites asynchronously off the UI thread via [CollectionSuiteExecutor].
+     *
+     * @param collections Target list of [ApiCollection] instances.
+     * @return Aggregated [SuiteRunSummary].
+     */
+    suspend fun executeCollectionSuite(collections: List<ApiCollection>): SuiteRunSummary {
+        return suiteExecutor.executeSuite(collections)
+    }
 
-        val total = results.size
-        val passed = results.count { r -> r.assertionResults.all { it.passed } }
-        val failed = total - passed
-        val avgLatency = if (total > 0) results.map { it.executionResult.latencyMs }.average().toLong() else 0L
-
-        return SuiteRunSummary(
-            totalRequests = total,
-            passedCount = passed,
-            failedCount = failed,
-            averageLatencyMs = avgLatency,
-            results = results
-        )
+    /**
+     * Resolves a target [SuiteExecutionScope] into an execution queue and executes it off the UI thread.
+     *
+     * @param scope Target [SuiteExecutionScope] specifying execution boundary.
+     * @param collections Complete list of workspace [ApiCollection] instances.
+     * @param currentRequest Optional focused request for [SuiteExecutionScope.CurrentRequest].
+     * @return Summary of the suite execution run [SuiteRunSummary].
+     */
+    suspend fun executeSuiteScope(
+        scope: SuiteExecutionScope,
+        collections: List<ApiCollection>,
+        currentRequest: SavedApiRequest? = null
+    ): SuiteRunSummary {
+        val targetQueue = suitePlanner.planExecutionQueue(scope, collections, currentRequest)
+        return suiteExecutor.executeRequests(targetQueue)
     }
 }

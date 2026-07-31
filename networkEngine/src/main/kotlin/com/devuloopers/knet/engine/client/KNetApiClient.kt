@@ -21,23 +21,19 @@ import kotlin.io.encoding.Base64
  * - All Postman body modes: JSON, XML, Form URL-encoded, Multipart form-data, GraphQL, Raw Text.
  * - Authentication modes: Bearer token, Basic auth, API Key header/param.
  * - Custom headers and request timeouts.
- *
- * Can optionally route through KNet's proxy port (`127.0.0.1:8888`) so Collections calls
- * automatically appear in the Live Traffic feed!
+ * - Dynamic dual-mode routing: Uses local proxy (`127.0.0.1:8888`) when running, and automatically
+ *   falls back to direct HTTP execution when proxy engine is stopped or unreachable.
  *
  * @param proxyPort Optional proxy port to route outgoing calls through KNet's proxy engine.
+ * @param routingStrategy Strategy dictating proxy routing attempt and fallback criteria.
  */
 open class KNetApiClient(
-    private val proxyPort: Int? = null
+    private val proxyPort: Int? = null,
+    private val routingStrategy: ProxyRoutingStrategy = DefaultProxyRoutingStrategy()
 ) : Closeable {
 
-    private val httpClient by lazy {
+    private val directHttpClient by lazy {
         HttpClient(CIO) {
-            proxyPort?.let { port ->
-                engine {
-                    proxy = io.ktor.client.engine.ProxyBuilder.http(Url("http://127.0.0.1:$port"))
-                }
-            }
             install(HttpTimeout) {
                 requestTimeoutMillis = 30_000
                 connectTimeoutMillis = 10_000
@@ -45,8 +41,23 @@ open class KNetApiClient(
         }
     }
 
+    private val proxyHttpClient by lazy {
+        proxyPort?.let { port ->
+            HttpClient(CIO) {
+                engine {
+                    proxy = io.ktor.client.engine.ProxyBuilder.http(Url("http://127.0.0.1:$port"))
+                }
+                install(HttpTimeout) {
+                    requestTimeoutMillis = 30_000
+                    connectTimeoutMillis = 10_000
+                }
+            }
+        }
+    }
+
     /**
      * Executes an outbound API call with full Postman body and header dispatching.
+     * Automatically attempts proxy routing if active, and falls back to direct execution if proxy is unreachable.
      *
      * @param url Target endpoint URL.
      * @param method HTTP method string (e.g. "GET", "POST", "PUT").
@@ -68,114 +79,160 @@ open class KNetApiClient(
         authType: AuthType = AuthType.NONE,
         authToken: String = ""
     ): ApiExecutionResult {
-        val startTime = System.currentTimeMillis()
+        val attemptProxy = routingStrategy.shouldAttemptProxy(proxyPort)
+        val initialClient = if (attemptProxy) (proxyHttpClient ?: directHttpClient) else directHttpClient
 
         return try {
-            val response = httpClient.request(url) {
-                this.method = HttpMethod.parse(method.uppercase())
+            dispatchWithClient(
+                client = initialClient,
+                url = url,
+                method = method,
+                headers = headers,
+                body = body,
+                bodyType = bodyType,
+                formParameters = formParameters,
+                authType = authType,
+                authToken = authToken
+            )
+        } catch (exception: Exception) {
+            if (attemptProxy && initialClient !== directHttpClient && routingStrategy.isProxyConnectionFailure(exception, proxyPort)) {
+                // Local Proxy is stopped/unreachable — fallback gracefully to direct HTTP execution
+                try {
+                    dispatchWithClient(
+                        client = directHttpClient,
+                        url = url,
+                        method = method,
+                        headers = headers,
+                        body = body,
+                        bodyType = bodyType,
+                        formParameters = formParameters,
+                        authType = authType,
+                        authToken = authToken
+                    )
+                } catch (fallbackException: Exception) {
+                    buildErrorResult(fallbackException)
+                }
+            } else {
+                buildErrorResult(exception)
+            }
+        }
+    }
 
-                // 1. Headers & Auth
-                headers.forEach { (key, value) ->
-                    header(key, value)
+    private suspend fun dispatchWithClient(
+        client: HttpClient,
+        url: String,
+        method: String,
+        headers: Map<String, String>,
+        body: String,
+        bodyType: RequestBodyType,
+        formParameters: Map<String, String>,
+        authType: AuthType,
+        authToken: String
+    ): ApiExecutionResult {
+        val startTime = System.currentTimeMillis()
+        val response = client.request(url) {
+            this.method = HttpMethod.parse(method.uppercase())
+
+            // 1. Headers & Auth
+            headers.forEach { (key, value) ->
+                header(key, value)
+            }
+
+            when (authType) {
+                AuthType.BEARER_TOKEN -> {
+                    if (authToken.isNotBlank()) {
+                        header(HttpHeaders.Authorization, "Bearer $authToken")
+                    }
                 }
 
-                when (authType) {
-                    AuthType.BEARER_TOKEN -> {
-                        if (authToken.isNotBlank()) {
-                            header(HttpHeaders.Authorization, "Bearer $authToken")
-                        }
-                    }
-
-                    AuthType.BASIC_AUTH -> {
-                        if (authToken.isNotBlank()) {
-                            val encoded = Base64.encode(authToken.encodeToByteArray())
-                            header(HttpHeaders.Authorization, "Basic $encoded")
-                        }
-                    }
-
-                    AuthType.API_KEY -> {
-                        if (authToken.isNotBlank()) {
-                            header("X-API-Key", authToken)
-                        }
-                    }
-
-                    AuthType.NONE -> { /* No auth header added */
+                AuthType.BASIC_AUTH -> {
+                    if (authToken.isNotBlank()) {
+                        val encoded = Base64.encode(authToken.encodeToByteArray())
+                        header(HttpHeaders.Authorization, "Basic $encoded")
                     }
                 }
 
-                // 2. Request Body Dispatching
-                if (this.method != HttpMethod.Get && this.method != HttpMethod.Head) {
-                    when (bodyType) {
-                        RequestBodyType.JSON -> {
-                            contentType(ContentType.Application.Json)
-                            setBody(body)
-                        }
+                AuthType.API_KEY -> {
+                    if (authToken.isNotBlank()) {
+                        header("X-API-Key", authToken)
+                    }
+                }
 
-                        RequestBodyType.XML -> {
-                            contentType(ContentType.Application.Xml)
-                            setBody(body)
-                        }
+                AuthType.NONE -> { /* No auth header added */ }
+            }
 
-                        RequestBodyType.FORM_URLENCODED -> {
-                            contentType(ContentType.Application.FormUrlEncoded)
-                            val encodedForm = formParameters.entries.joinToString("&") { (k, v) -> "$k=$v" }
-                            setBody(encodedForm)
-                        }
+            // 2. Request Body Dispatching
+            if (this.method != HttpMethod.Get && this.method != HttpMethod.Head) {
+                when (bodyType) {
+                    RequestBodyType.JSON -> {
+                        contentType(ContentType.Application.Json)
+                        setBody(body)
+                    }
 
-                        RequestBodyType.MULTIPART -> {
-                            setBody(MultiPartFormDataContent(formData {
-                                formParameters.forEach { (k, v) ->
-                                    append(k, v)
-                                }
-                            }))
-                        }
+                    RequestBodyType.XML -> {
+                        contentType(ContentType.Application.Xml)
+                        setBody(body)
+                    }
 
-                        RequestBodyType.GRAPHQL -> {
-                            contentType(ContentType.Application.Json)
-                            // Wrap GraphQL query into standard JSON payload
-                            val gqlJson = "{\"query\": ${escapeJsonString(body)}}"
-                            setBody(gqlJson)
-                        }
+                    RequestBodyType.FORM_URLENCODED -> {
+                        contentType(ContentType.Application.FormUrlEncoded)
+                        val encodedForm = formParameters.entries.joinToString("&") { (k, v) -> "$k=$v" }
+                        setBody(encodedForm)
+                    }
 
-                        RequestBodyType.RAW_TEXT -> {
-                            contentType(ContentType.Text.Plain)
-                            setBody(body)
-                        }
-
-                        RequestBodyType.NONE -> {
-                            if (body.isNotBlank()) {
-                                setBody(body)
+                    RequestBodyType.MULTIPART -> {
+                        setBody(MultiPartFormDataContent(formData {
+                            formParameters.forEach { (k, v) ->
+                                append(k, v)
                             }
+                        }))
+                    }
+
+                    RequestBodyType.GRAPHQL -> {
+                        contentType(ContentType.Application.Json)
+                        val gqlJson = "{\"query\": ${escapeJsonString(body)}}"
+                        setBody(gqlJson)
+                    }
+
+                    RequestBodyType.RAW_TEXT -> {
+                        contentType(ContentType.Text.Plain)
+                        setBody(body)
+                    }
+
+                    RequestBodyType.NONE -> {
+                        if (body.isNotBlank()) {
+                            setBody(body)
                         }
                     }
                 }
             }
-
-            val endTime = System.currentTimeMillis()
-            val responseText = response.bodyAsText()
-            val headerMap = response.headers.entries().associate { it.key to it.value.joinToString(", ") }
-
-            ApiExecutionResult(
-                statusCode = response.status.value,
-                statusText = response.status.description,
-                headers = headerMap,
-                responseBody = responseText,
-                latencyMs = (endTime - startTime).coerceAtLeast(1L),
-                responseSizeBytes = responseText.toByteArray().size.toLong()
-            )
-        } catch (e: Exception) {
-            val endTime = System.currentTimeMillis()
-            ApiExecutionResult(
-                statusCode = 0,
-                statusText = "Execution Error",
-                headers = emptyMap(),
-                responseBody = "",
-                latencyMs = (endTime - startTime).coerceAtLeast(1L),
-                responseSizeBytes = 0L,
-                isSuccess = false,
-                errorMessage = e.message ?: e.toString()
-            )
         }
+
+        val endTime = System.currentTimeMillis()
+        val responseText = response.bodyAsText()
+        val headerMap = response.headers.entries().associate { it.key to it.value.joinToString(", ") }
+
+        return ApiExecutionResult(
+            statusCode = response.status.value,
+            statusText = response.status.description,
+            headers = headerMap,
+            responseBody = responseText,
+            latencyMs = (endTime - startTime).coerceAtLeast(1L),
+            responseSizeBytes = responseText.toByteArray().size.toLong()
+        )
+    }
+
+    private fun buildErrorResult(exception: Exception): ApiExecutionResult {
+        return ApiExecutionResult(
+            statusCode = 0,
+            statusText = "Execution Error",
+            headers = emptyMap(),
+            responseBody = "",
+            latencyMs = 1L,
+            responseSizeBytes = 0L,
+            isSuccess = false,
+            errorMessage = exception.message ?: exception.toString()
+        )
     }
 
     private fun escapeJsonString(input: String): String {
@@ -269,6 +326,7 @@ open class KNetApiClient(
     )
 
     override fun close() {
-        httpClient.close()
+        runCatching { directHttpClient.close() }
+        runCatching { proxyHttpClient?.close() }
     }
 }

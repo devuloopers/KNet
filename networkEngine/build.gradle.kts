@@ -12,5 +12,5 @@ dependencies {
     implementation(libs.ktor.client.content.negotiation)
     implementation(libs.ktor.serialization.kotlinx.json)
     
-    testImplementation(kotlin("test"))
+    testImplementation(kotlin("test-junit"))
 }

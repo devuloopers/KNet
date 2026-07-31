@@ -9,7 +9,7 @@ import com.devuloopers.knet.controller.ProxyStateController
 import com.devuloopers.knet.domain.apistudio.model.HttpMethod
 import com.devuloopers.knet.domain.apistudio.model.SavedApiRequest
 import com.devuloopers.knet.theme.KNetColors
-import com.devuloopers.knet.ui.apistudio.view.dialogs.CollectionRunnerModal
+import com.devuloopers.knet.ui.apistudio.view.dialogs.SuiteRunnerDialog
 import com.devuloopers.knet.ui.apistudio.view.dialogs.CreateItemDialog
 import com.devuloopers.knet.ui.apistudio.view.sidebar.CollectionsTreeSidebar
 import com.devuloopers.knet.ui.apistudio.viewmodel.ApiStudioViewModel
@@ -57,12 +57,27 @@ fun ApiStudioScreen(
         )
     }
 
-    if (uiState.isSuiteRunning || uiState.suiteRunSummary != null) {
-        CollectionRunnerModal(
-            collectionName = uiState.collections.firstOrNull()?.name ?: "API Collection",
+    var showRunnerDialog by remember { mutableStateOf(false) }
+    var initialTargetCollectionId by remember { mutableStateOf<String?>(null) }
+
+    if (showRunnerDialog || uiState.isSuiteRunning || uiState.suiteRunSummary != null) {
+        val initialSelectedIds = if (initialTargetCollectionId != null) {
+            listOf(initialTargetCollectionId!!)
+        } else {
+            emptyList()
+        }
+
+        com.devuloopers.knet.ui.apistudio.view.dialogs.SuiteRunnerDialog(
+            collections = uiState.collections,
+            initialSelectedCollectionIds = initialSelectedIds,
             isRunning = uiState.isSuiteRunning,
             summary = uiState.suiteRunSummary,
-            onDismiss = { viewModel.dismissRunnerModal() }
+            onExecuteSuite = { config -> viewModel.runSuite(config) },
+            onDismiss = {
+                showRunnerDialog = false
+                initialTargetCollectionId = null
+                viewModel.dismissRunnerModal()
+            }
         )
     }
 
@@ -80,6 +95,7 @@ fun ApiStudioScreen(
     }
 
     var requestToSave by remember { mutableStateOf<SavedApiRequest?>(null) }
+    var targetSaveRequestId by remember { mutableStateOf<String?>(null) }
 
     requestToSave?.let { req ->
         com.devuloopers.knet.ui.apistudio.view.dialogs.SaveSessionDialog(
@@ -137,7 +153,10 @@ fun ApiStudioScreen(
             onDeleteCollection = { colId -> viewModel.deleteCollection(colId) },
             onRenameCollection = { colId, name -> viewModel.renameCollection(colId, name) },
             onRenameRequest = { reqId, name -> viewModel.renameSavedRequest(reqId, name) },
-            onRunCollection = { viewModel.runCollectionSuite() },
+            onRunCollection = { targetColId ->
+                initialTargetCollectionId = targetColId
+                showRunnerDialog = true
+            },
             onCreateCollection = { showCreateCollectionDialog = true },
             onImportCollection = { showImportDialog = true },
             modifier = Modifier

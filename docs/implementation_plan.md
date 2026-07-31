@@ -192,6 +192,20 @@ Extract the code editor engine into a standalone, modularized Kotlin Multiplatfo
 
 ---
 
+### Phase 15: Kotlin Scripting Runtime Stabilization & Typed ScriptContext Architecture [COMPLETED]
+Redesign the Kotlin scripting runtime to be strongly typed, safe, and predictable without dynamic string interpolation of runtime values.
+* **Modules modified**: `scriptEngine`, `domain`
+* **Tasks**:
+  * **Unified `ScriptContext` Model**: Created `ScriptContext` root object wrapping `request`, `response`, `environment`, and reserved Phase 2 maps (`globals`, `variables`). [COMPLETED]
+  * **Engine Bindings Update**: Updated `BindingsProvider` to expose `ScriptContext` under key `"context"`. [COMPLETED]
+  * **Static DSL Header**: Replaced string interpolation in `NativeKotlinRuntime` header with pure static DSL helpers (`test()`, `expect()`, `ExpectValue`). [COMPLETED]
+  * **Implicit Property Typing**: Leveraged `kotlin-scripting-jsr223` implicit script-level property type inference for `context`, `request`, `response`, `env`, and `environment`. [COMPLETED]
+  * **ExpressionRuntime Normalization**: Added `context.` prefix normalization in `ExpressionRuntime` to support `context.response.statusCode` and legacy `response.statusCode` syntax interchangeably. [COMPLETED]
+  * **Kotlin Exception Formatting**: Updated `ExceptionFormatter` with `javax.script.ScriptException` handling for clean error reporting with line/column numbers. [COMPLETED]
+  * **CollectionTestRunner Fix**: Updated default status check condition in `CollectionTestRunner` to only trigger when `testScript.isBlank()`, ensuring script compilation and runtime errors are surfaced as visible failure cards. [COMPLETED]
+
+---
+
 
 ## Verification & Testing Strategy
 * **testingServer**: A standalone Spring Boot WebFlux server that simulates every HTTP/HTTPS behavior (authentication, long polling, SSE, chunked upload/download, websocket echoes).

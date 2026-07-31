@@ -146,8 +146,7 @@ internal fun ResponseTestPanel(
                                 fontSize = 11.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                             )
-                            val listToCount = testResults.ifEmpty { request.testResults }
-                            if (tabName == "Tests" && listToCount.isNotEmpty()) {
+                            if (tabName == "Tests" && testResults.isNotEmpty()) {
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Box(modifier = Modifier.size(6.dp).background(KNetColors.SuccessGreen, CircleShape))
                             }
@@ -170,7 +169,6 @@ internal fun ResponseTestPanel(
                     "Cookies" -> com.devuloopers.knet.ui.apistudio.view.tabs.ResponseCookiesTab(headers = latestResult?.headers ?: emptyMap(), presentation = responsePresentation)
                     "Tests" -> TestResultsViewer(
                         testResults = testResults,
-                        requestTestResults = request.testResults,
                         preRequestScript = request.scripts.preRequest,
                         latestResult = latestResult
                     )
@@ -242,11 +240,10 @@ private fun ResponseHeadersViewer(headers: Map<String, String>) {
 @Composable
 private fun TestResultsViewer(
     testResults: List<TestAssertionResult>,
-    requestTestResults: List<TestAssertionResult>,
     preRequestScript: String = "",
     latestResult: ExecutionResult? = null
 ) {
-    val activeTestResults = testResults.ifEmpty { requestTestResults }
+    val activeTestResults = testResults
     Column(
         verticalArrangement = Arrangement.spacedBy(6.dp),
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState())

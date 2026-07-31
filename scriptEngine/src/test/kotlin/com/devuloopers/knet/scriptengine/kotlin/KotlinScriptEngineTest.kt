@@ -32,7 +32,7 @@ class KotlinScriptEngineTest {
             val x = 10
             env["token"] = "kotlin_token_123"
             test("Kotlin Status Test") {
-                statusCode == 200
+                response.statusCode == 200
             }
         """.trimIndent()
 
