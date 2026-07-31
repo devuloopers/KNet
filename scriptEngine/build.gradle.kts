@@ -13,6 +13,7 @@ dependencies {
     // Kotlin Scripting for JVM Bytecode execution
     implementation(kotlin("scripting-jvm"))
     implementation(kotlin("scripting-compiler-embeddable"))
+    implementation(kotlin("scripting-jsr223"))
 
     testImplementation(kotlin("test"))
 }

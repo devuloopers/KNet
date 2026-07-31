@@ -18,7 +18,7 @@ class EnvironmentStore(initialValues: Map<String, String> = emptyMap()) {
      * @param key Environment variable key name.
      * @return Value string if present, or null.
      */
-    fun get(key: String): String? {
+    operator fun get(key: String): String? {
         return store.get()[key]
     }
 
@@ -28,7 +28,7 @@ class EnvironmentStore(initialValues: Map<String, String> = emptyMap()) {
      * @param key Environment variable key name.
      * @param value Environment variable value string.
      */
-    fun set(key: String, value: String) {
+    operator fun set(key: String, value: String) {
         while (true) {
             val current = store.get()
             val updated = current + (key to value)

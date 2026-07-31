@@ -111,6 +111,7 @@ internal fun RequestBuilderPanel(
     isExecuting: Boolean = false,
     onTabSelected: (String) -> Unit,
     onUrlChange: (String) -> Unit = {},
+    onMethodChange: (HttpMethod) -> Unit = {},
     onToggleHeader: (String) -> Unit = {},
     onUpdateHeaderKey: (String, String) -> Unit = { _, _ -> },
     onUpdateHeaderValue: (String, String) -> Unit = { _, _ -> },
@@ -154,6 +155,7 @@ internal fun RequestBuilderPanel(
                 isUrlValid = isUrlValid,
                 isExecuting = isExecuting,
                 onUrlChange = onUrlChange,
+                onMethodChange = onMethodChange,
                 onSend = onSend
             )
 
@@ -222,6 +224,7 @@ private fun UrlBar(
     isUrlValid: Boolean,
     isExecuting: Boolean,
     onUrlChange: (String) -> Unit,
+    onMethodChange: (HttpMethod) -> Unit,
     onSend: () -> Unit
 ) {
     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -263,7 +266,11 @@ private fun UrlBar(
                 HttpMethod.entries.forEach { method ->
                     DropdownMenuItem(
                         text = { Text(method.name, color = Color(method.badgeColorHex), fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace) },
-                        onClick = { selectedMethod = method; methodDropdownExpanded = false }
+                        onClick = {
+                            selectedMethod = method
+                            methodDropdownExpanded = false
+                            onMethodChange(method)
+                        }
                     )
                 }
             }

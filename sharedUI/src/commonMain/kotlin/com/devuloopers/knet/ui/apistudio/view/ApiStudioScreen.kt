@@ -153,6 +153,7 @@ fun ApiStudioScreen(
             isExecuting = uiState.isExecuting,
             onTabSelected = { viewModel.selectReqTab(it) },
             onUrlChange = { viewModel.onUrlInputChanged(it) },
+            onMethodChange = { viewModel.updateMethod(it) },
             onToggleHeader = { viewModel.toggleHeader(it) },
             onUpdateHeaderKey = { oldKey, newKey -> viewModel.updateHeaderKey(oldKey, newKey) },
             onUpdateHeaderValue = { key, value -> viewModel.updateHeaderValue(key, value) },
