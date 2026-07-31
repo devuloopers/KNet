@@ -395,11 +395,14 @@ class ApiStudioViewModel(
                 draftRequest = updated
             )
         }
-        _uiState.update { it.copy(analysisResult = analysisRes) }
+        _uiState.update { it.copy(analysisResult = analysisRes, isExecutionStale = _uiState.value.latestResult != null) }
     }
 
-    fun updateTestScript(script: String) = updateActiveRequest { req ->
-        req.copy(scripts = req.scripts.copy(test = script))
+    fun updateTestScript(script: String) {
+        updateActiveRequest { req ->
+            req.copy(scripts = req.scripts.copy(test = script))
+        }
+        _uiState.update { it.copy(isExecutionStale = _uiState.value.latestResult != null) }
     }
 
     /**
@@ -785,12 +788,17 @@ class ApiStudioViewModel(
         viewModelScope.launch {
             try {
                 val outcome = executionHandler.executeSingleRequest(request)
+                val updatedRequest = request.copy(testResults = outcome.testResults)
+                if (_uiState.value.selectedRequest?.id == request.id) {
+                    syncSelectedRequestInList(updatedRequest)
+                }
                 _uiState.update {
                     it.copy(
                         latestResult = outcome.result,
                         testResults = outcome.testResults,
                         scriptErrorMessage = outcome.scriptError,
-                        responsePresentation = outcome.presentation
+                        responsePresentation = outcome.presentation,
+                        isExecutionStale = false
                     )
                 }
             } finally {

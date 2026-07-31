@@ -13,4 +13,7 @@ dependencies {
     implementation(libs.ktor.serialization.kotlinx.json)
     
     testImplementation(kotlin("test-junit"))
+    testImplementation(project(":scriptEngine"))
+    testImplementation(project(":testingServer"))
+    testImplementation(libs.spring.boot.starter.webflux)
 }

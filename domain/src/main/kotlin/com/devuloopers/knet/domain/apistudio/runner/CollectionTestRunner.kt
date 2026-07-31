@@ -43,7 +43,8 @@ class CollectionTestRunner {
         request: SavedApiRequest,
         result: ExecutionResult,
         testScript: String = request.scripts.test,
-        scriptLanguage: ScriptLanguage = request.scripts.language
+        scriptLanguage: ScriptLanguage = request.scripts.language,
+        environmentStore: com.devuloopers.knet.scriptengine.api.EnvironmentStore? = null
     ): List<TestAssertionResult> {
         val assertions = mutableListOf<TestAssertionResult>()
 
@@ -65,7 +66,8 @@ class CollectionTestRunner {
                 body = result.responseBody
             )
 
-            when (val scriptRes = scriptRuntime.executeScript(testScript, scriptLanguage, scriptReq, scriptResp)) {
+            val initialEnv = environmentStore?.snapshot() ?: emptyMap()
+            when (val scriptRes = scriptRuntime.executeScript(testScript, scriptLanguage, scriptReq, scriptResp, environment = initialEnv)) {
                 is ScriptExecutionResult.Success -> {
                     scriptRes.testResults.forEachIndexed { index, tr ->
                         assertions.add(
@@ -89,20 +91,6 @@ class CollectionTestRunner {
             }
         }
 
-        // Default execution check: only add the HTTP status check when no user test script
-        // was provided. If a non-blank script was supplied but failed (compile error or runtime
-        // exception), the ScriptExecutionResult.Error branch above already adds a visible
-        // "Script Error: ..." failure row. Overwriting that with a passing status check would
-        // hide the real error from the user.
-        if (testScript.isBlank()) {
-            assertions.add(
-                TestAssertionResult(
-                    id = "status_code_check",
-                    name = "Status code is 2xx (${result.statusCode} ${result.statusText.ifBlank { "OK" }})",
-                    passed = result.isSuccess
-                )
-            )
-        }
 
         return assertions
     }

@@ -206,6 +206,41 @@ Redesign the Kotlin scripting runtime to be strongly typed, safe, and predictabl
 
 ---
 
+### Phase 16: Network Engine Integration & End-to-End Test Suite [COMPLETED]
+Build a comprehensive, production-grade integration test suite in `:networkEngine` validating the complete request execution pipeline against a managed Spring Boot test server (`:testingServer`).
+* **Modules modified**: `networkEngine`
+* **Tasks**:
+  * **Build Dependencies**: Added `testImplementation(project(":scriptEngine"))` and `testImplementation(project(":testingServer"))` to `:networkEngine`. [COMPLETED]
+  * **Managed Test Server Lifecycle**: Created `TestServerLifecycleManager` for automatic health checking and `TestingServerApplication` startup on port 9090. [COMPLETED]
+  * **Modular Integration Suite**: Created `HeaderMutationIntegrationTest`, `HttpExecutionIntegrationTest`, `ResponseAssertionIntegrationTest`, `EnvironmentVariableIntegrationTest`, `FailureScenarioIntegrationTest`, `TimeoutIntegrationTest`, `LargePayloadIntegrationTest`, `FullPipelineIntegrationTest`, and `NegativePipelineIntegrationTest`. [COMPLETED]
+
+---
+
+### Phase 17: Execution Context & Environment State Coherence [COMPLETED]
+Refactored KNet API Studio request execution pipeline to establish strict separation between immutable request definitions (`SavedApiRequest`) and execution-scoped runtime state (`ExecutionContext`).
+* **Modules modified**: `domain`, `scriptEngine`, `sharedUI`, `docs`
+* **Tasks**:
+  * **ExecutionContext Creation**: Created `ExecutionContext` class in `:domain` to manage ephemeral runtime state (`request`, `environmentStore`, `response`). [COMPLETED]
+  * **Environment Propagation**: Updated `EnvironmentStore` with atomic `putAll()`, and updated `ExecutionHandler` and `CollectionTestRunner` to propagate environment state across Pre-request script, HTTP dispatch, and Test script evaluation. [COMPLETED]
+  * **State Synchronization**: Updated `ApiStudioViewModel` to sync test assertion results to `selectedRequest` and set `isExecutionStale = true` when script text is modified after execution. [COMPLETED]
+  * **Reproduction Unit Testing**: Added TDD reproduction test cases in `ExecutionHandlerTest.kt` verifying environment variable propagation and script toggling sequences. [COMPLETED]
+
+---
+
+### Phase 18: Kotlin Scripting ExpressionRuntime DSL Parity & Assertion Evaluation Improvements [COMPLETED]
+Upgraded ExpressionRuntime with alias normalization, generic value resolution, and explicit assertion failure reporting.
+* **Modules modified**: `scriptEngine`, `sharedUI`
+* **Tasks**:
+  * **Alias Normalization**: Added pre-parsing normalization mapping `environment[...]` to `env[...]` and `environment.set(...)` to `env.set(...)`. [COMPLETED]
+  * **Generic Value Resolver**: Implemented `resolveValue(...)` for dynamic value resolution (`env[...]`, `request.headers[...]`, `response.headers[...]`, `response.statusCode`, `response.body`). [COMPLETED]
+  * **Explicit Assertion Evaluation**: Implemented `expect(actual).toBe(expected)`, `expect(actual).toNotBeNull()`, and `left == right` assertion matchers. [COMPLETED]
+  * **Explicit Assertion Failure Reporting**: Failed assertions return explicit error messages (`Assertion failed: Expected 'ADMIN' but got 'TEST'`) with zero implicit status 200 pass fallbacks. [COMPLETED]
+  * **Regression Unit & E2E Test Suite**: Added comprehensive test cases in `KotlinScriptEngineTest.kt` and `ExecutionHandlerTest.kt`. [COMPLETED]
+
+---
+
+
+
 
 ## Verification & Testing Strategy
 * **testingServer**: A standalone Spring Boot WebFlux server that simulates every HTTP/HTTPS behavior (authentication, long polling, SSE, chunked upload/download, websocket echoes).

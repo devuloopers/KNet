@@ -63,6 +63,7 @@ class NativeKotlinRuntime(
         val resultCollector = ResultCollector()
         val bindingsProvider = BindingsProvider(request, response, environment, resultCollector)
 
+        ResultCollectorHolder.set(resultCollector)
         return try {
             val engine = engineManager.getEngineByName("kts")
                 ?: engineManager.getEngineByName("kotlin")
@@ -107,27 +108,19 @@ class NativeKotlinRuntime(
                 }
                 fun expect(value: Any?): ExpectValue = ExpectValue(value)
                 fun test(name: String, block: () -> Boolean) {
+                    val activeCollector = com.devuloopers.knet.scriptengine.kotlin.runtime.ResultCollectorHolder.get() ?: resultCollector
                     try {
                         val pass = block()
-                        resultCollector.addTestResult(name, pass, if (!pass) "Assertion failed" else null)
+                        activeCollector.addTestResult(name, pass, if (!pass) "Assertion failed" else null)
                     } catch (e: Exception) {
-                        resultCollector.addTestResult(name, false, e.message ?: e.toString())
+                        activeCollector.addTestResult(name, false, e.message ?: e.toString())
                     }
                 }
             """.trimIndent()
 
             val fullScript = "$headerScript\n$code"
 
-            if (engine is Compilable) {
-                val compiled = scriptCache.get(fullScript) ?: run {
-                    val newCompiled = engine.compile(fullScript)
-                    scriptCache.put(fullScript, newCompiled)
-                    newCompiled
-                }
-                compiled.eval(bindings)
-            } else {
-                engine.eval(fullScript, bindings)
-            }
+            engine.eval(fullScript, bindings)
 
             ScriptExecutionResult.Success(
                 request = request,
@@ -137,6 +130,8 @@ class NativeKotlinRuntime(
             )
         } catch (throwable: Throwable) {
             ExceptionFormatter.format(throwable)
+        } finally {
+            ResultCollectorHolder.clear()
         }
     }
 }

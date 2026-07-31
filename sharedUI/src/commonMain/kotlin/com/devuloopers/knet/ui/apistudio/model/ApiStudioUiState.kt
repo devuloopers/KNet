@@ -41,7 +41,8 @@ data class ApiStudioUiState(
         url = "http://127.0.0.1:9090/api/test/get",
         headers = com.devuloopers.knet.domain.apistudio.model.defaultHeaders()
     ),
-    val analysisResult: com.devuloopers.knet.ui.apistudio.scriptanalyzer.model.ScriptAnalysisResult? = null
+    val analysisResult: com.devuloopers.knet.ui.apistudio.scriptanalyzer.model.ScriptAnalysisResult? = null,
+    val isExecutionStale: Boolean = false
 )
 
 

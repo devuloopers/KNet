@@ -168,7 +168,7 @@ internal fun ResponseTestPanel(
                     "Headers" -> ResponseHeadersViewer(headers = latestResult?.headers ?: emptyMap())
                     "Cookies" -> com.devuloopers.knet.ui.apistudio.view.tabs.ResponseCookiesTab(headers = latestResult?.headers ?: emptyMap(), presentation = responsePresentation)
                     "Tests" -> TestResultsViewer(
-                        testResults = testResults,
+                        testResults = testResults.ifEmpty { request.testResults },
                         preRequestScript = request.scripts.preRequest,
                         latestResult = latestResult
                     )
@@ -177,12 +177,6 @@ internal fun ResponseTestPanel(
             }
 
             Spacer(modifier = Modifier.height(12.dp))
-
-            // Stored test results summary
-            if (request.testResults.isNotEmpty()) {
-                StoredTestResultsSummary(testResults = request.testResults)
-                Spacer(modifier = Modifier.height(12.dp))
-            }
 
             // Bottom Action Bar
             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
@@ -340,33 +334,4 @@ private fun TestResultsViewer(
     }
 }
 
-@Composable
-private fun StoredTestResultsSummary(testResults: List<TestAssertionResult>) {
-    val passCount = testResults.count { it.passed }
-    Column(modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-            Text("TEST RESULTS ($passCount/${testResults.size} PASSED)", color = KNetColors.TextSecondary, fontSize = 9.sp, fontWeight = FontWeight.Bold)
-            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = KNetColors.SuccessGreen, modifier = Modifier.size(14.dp))
-        }
-        testResults.forEach { test ->
-            Box(
-                modifier = Modifier.fillMaxWidth()
-                    .background(KNetColors.BackgroundDark, RoundedCornerShape(4.dp))
-                    .border(1.dp, if (test.passed) KNetColors.SuccessGreen.copy(alpha = 0.3f) else Color(0xFFEF4444).copy(alpha = 0.3f), RoundedCornerShape(4.dp))
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .background(if (test.passed) KNetColors.SuccessGreen.copy(alpha = 0.2f) else Color(0xFFEF4444).copy(alpha = 0.2f), RoundedCornerShape(3.dp))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(if (test.passed) "PASS" else "FAIL", color = if (test.passed) KNetColors.SuccessGreen else Color(0xFFEF4444), fontSize = 9.sp, fontWeight = FontWeight.Bold)
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(test.name, color = Color.White, fontSize = 11.sp)
-                }
-            }
-        }
-    }
-}
+

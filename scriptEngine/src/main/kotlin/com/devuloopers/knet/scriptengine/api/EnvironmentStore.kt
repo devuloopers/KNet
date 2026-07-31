@@ -23,6 +23,22 @@ class EnvironmentStore(initialValues: Map<String, String> = emptyMap()) {
     }
 
     /**
+     * Atomically sets or updates multiple environment key-value pairs.
+     *
+     * @param values Map of environment key-value pairs.
+     */
+    fun putAll(values: Map<String, String>) {
+        if (values.isEmpty()) return
+        while (true) {
+            val current = store.get()
+            val updated = current + values
+            if (store.compareAndSet(current, updated)) {
+                break
+            }
+        }
+    }
+
+    /**
      * Atomically sets or updates an environment key-value pair.
      *
      * @param key Environment variable key name.

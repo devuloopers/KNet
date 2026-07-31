@@ -125,6 +125,7 @@ class ExecutionHandler(
      * on [Dispatchers.Default], network dispatching on [Dispatchers.IO], and test script evaluation on [Dispatchers.Default].
      */
     private suspend fun executeSingleRequestPipeline(request: SavedApiRequest): SingleExecutionOutcome {
+        val executionContext = com.devuloopers.knet.domain.apistudio.model.ExecutionContext(request = request)
         var finalUrl = normalizeUrl(request.url)
         val finalHeaders = request.headers
             .filter { it.isEnabled && !it.value.startsWith("<") }
@@ -173,13 +174,19 @@ class ExecutionHandler(
                     body = request.body.content
                 )
                 val scriptRuntime = ScriptRuntime()
-                scriptRuntime.executeScript(request.scripts.preRequest, request.scripts.language, scriptReq)
+                scriptRuntime.executeScript(
+                    code = request.scripts.preRequest,
+                    language = request.scripts.language,
+                    request = scriptReq,
+                    environment = executionContext.environmentStore.snapshot()
+                )
             }
 
             when (scriptOutcome) {
                 is ScriptExecutionResult.Success -> {
                     finalUrl = scriptOutcome.request.url
                     finalHeaders.putAll(scriptOutcome.request.headers)
+                    executionContext.environmentStore.putAll(scriptOutcome.environmentUpdates)
                 }
                 is ScriptExecutionResult.Error -> {
                     return SingleExecutionOutcome(
@@ -212,6 +219,7 @@ class ExecutionHandler(
             isSuccess = networkResult.isSuccess,
             errorMessage = networkResult.errorMessage
         )
+        executionContext.response = domainResult
 
         val mutatedRequest = request.copy(
             url = finalUrl,
@@ -224,7 +232,8 @@ class ExecutionHandler(
                 request = mutatedRequest,
                 result = domainResult,
                 testScript = request.scripts.test,
-                scriptLanguage = request.scripts.language
+                scriptLanguage = request.scripts.language,
+                environmentStore = executionContext.environmentStore
             )
         }
 

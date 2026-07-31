@@ -38,7 +38,14 @@ class ExpressionRuntime : KotlinRuntime {
 
         try {
             for ((index, line) in code.lines().withIndex()) {
-                val trimmed = line.trim()
+                // 1. Alias Normalization: normalize environment[...] to env[...]
+                val normalizedLine = line
+                    .replace("environment[", "env[")
+                    .replace("environment.set(", "env.set(")
+                    .replace("environment.get(", "env.get(")
+                    .replace("context.", "")
+                val trimmed = normalizedLine.trim()
+
                 if (trimmed.isEmpty() || trimmed.startsWith("//")) continue
 
                 if (trimmed.startsWith("val ") || trimmed.startsWith("var ")) {
@@ -57,7 +64,7 @@ class ExpressionRuntime : KotlinRuntime {
                     if (key.isNotBlank()) {
                         request.headers[key] = resolvedVal
                     }
-                } else if (trimmed.startsWith("environment.set(") || trimmed.startsWith("env.set(")) {
+                } else if (trimmed.startsWith("env.set(")) {
                     val args = trimmed.substringAfter("(").substringBeforeLast(")")
                     val key = args.split(",")[0].trim().removeSurrounding("\"").removeSurrounding("'")
                     val rawVal = if (args.contains(",")) args.substringAfter(",").trim().removeSurrounding("\"").removeSurrounding("'") else ""
@@ -66,11 +73,7 @@ class ExpressionRuntime : KotlinRuntime {
                         environment.set(key, resolvedVal)
                     }
                 } else if (trimmed.startsWith("env[") && trimmed.contains("=")) {
-                    val key = if (trimmed.contains("env[\"")) {
-                        trimmed.substringAfter("env[\"").substringBefore("\"")
-                    } else {
-                        trimmed.substringAfter("env['").substringBefore("'")
-                    }
+                    val key = trimmed.substringAfter("env[\"").substringAfter("env['").substringBefore("\"").substringBefore("'")
                     val rawVal = trimmed.substringAfter("=").trim().removeSurrounding("\"").removeSurrounding("'")
                     val resolvedVal = localVariables[rawVal] ?: rawVal
                     if (key.isNotBlank()) {
@@ -85,7 +88,7 @@ class ExpressionRuntime : KotlinRuntime {
                     currentTestLines.clear()
                     if (trimmed.contains("}") || trimmed.endsWith("}")) {
                         currentTestLines.add(trimmed)
-                        val (isPass, errMsg) = evaluateTestBlock(currentTestName, currentTestLines, request, response, environment)
+                        val (isPass, errMsg) = evaluateTestBlock(currentTestName, currentTestLines, request, response, environment, localVariables)
                         resultCollector.addTestResult(name = currentTestName, passed = isPass, errorMessage = errMsg)
                     } else {
                         inTestBlock = true
@@ -93,7 +96,7 @@ class ExpressionRuntime : KotlinRuntime {
                 } else if (inTestBlock) {
                     if (trimmed.contains("}") || trimmed == "}") {
                         inTestBlock = false
-                        val (isPass, errMsg) = evaluateTestBlock(currentTestName, currentTestLines, request, response, environment)
+                        val (isPass, errMsg) = evaluateTestBlock(currentTestName, currentTestLines, request, response, environment, localVariables)
                         resultCollector.addTestResult(name = currentTestName, passed = isPass, errorMessage = errMsg)
                         currentTestLines.clear()
                     } else {
@@ -118,29 +121,54 @@ class ExpressionRuntime : KotlinRuntime {
         lines: List<String>,
         request: ScriptRequestModel,
         response: ScriptResponseModel?,
-        environment: EnvironmentStore
+        environment: EnvironmentStore,
+        localVariables: Map<String, String> = emptyMap()
     ): Pair<Boolean, String?> {
         for (line in lines) {
-            // Normalize the optional 'context.' prefix so that both:
-            //   context.response.statusCode == 200
-            //   response.statusCode == 200
-            // are handled identically by the pattern matchers below.
-            val trimmed = line.trim().removePrefix("context.")
-            if (trimmed.isEmpty() || trimmed.startsWith("//") || trimmed == "}") continue
+            val trimmed = line.replace("environment[", "env[").replace("environment.get(", "env.get(").replace("context.", "").trim()
+            if (trimmed.isEmpty() || trimmed.startsWith("//") || trimmed == "}" || trimmed.startsWith("test(")) continue
 
-            // 1. Not Null matcher (e.g. expect(request.headers["X-Timestamp"]).toNotBeNull())
-            if (trimmed.startsWith("expect(") && trimmed.contains(".toNotBeNull()")) {
-                val actualExpr = trimmed.substringAfter("expect(").substringBefore(").toNotBeNull")
-                if (actualExpr.contains("request.headers[")) {
-                    val key = actualExpr.substringAfter("request.headers[\"").substringAfter("request.headers['").substringBefore("\"").substringBefore("'")
-                    val reqHeaderVal = request.headers[key]
-                    if (reqHeaderVal.isNullOrBlank()) {
-                        return false to "Assertion failed: Expected request header '$key' to be not null, but was null."
-                    }
+            // 1. expect(...).toBe(...) matcher
+            if (trimmed.startsWith("expect(") && trimmed.contains(".toBe(")) {
+                val actualExpr = trimmed.substringAfter("expect(").substringBefore(").toBe(").trim()
+                val expectedExpr = trimmed.substringAfter(".toBe(").substringBeforeLast(")").trim().removeSurrounding("\"").removeSurrounding("'")
+
+                val actualVal = resolveValue(actualExpr, request, response, environment, localVariables)
+                val expectedVal = resolveValue(expectedExpr, request, response, environment, localVariables) ?: expectedExpr
+
+                return if (actualVal == expectedVal) {
+                    true to null
+                } else {
+                    false to "Assertion failed: Expected '$expectedVal' but got '${actualVal ?: "null"}'"
                 }
             }
 
-            // 2. Response body contains matcher (e.g. response.body.contains("X-Transaction-Id"))
+            // 2. expect(...).toNotBeNull() matcher
+            if (trimmed.startsWith("expect(") && trimmed.contains(".toNotBeNull()")) {
+                val actualExpr = trimmed.substringAfter("expect(").substringBefore(").toNotBeNull").trim()
+                val actualVal = resolveValue(actualExpr, request, response, environment, localVariables)
+                return if (!actualVal.isNullOrBlank()) {
+                    true to null
+                } else {
+                    false to "Assertion failed: Expected '$actualExpr' to be not null, but was null."
+                }
+            }
+
+            // 3. Environment/expression equality matcher (e.g. env["role"] == "ADMIN")
+            if (trimmed.contains("==")) {
+                val leftExpr = trimmed.substringBefore("==").trim()
+                val rightExpr = trimmed.substringAfter("==").trim().removeSurrounding("\"").removeSurrounding("'")
+                val actualVal = resolveValue(leftExpr, request, response, environment, localVariables)
+                val expectedVal = resolveValue(rightExpr, request, response, environment, localVariables) ?: rightExpr
+
+                return if (actualVal == expectedVal) {
+                    true to null
+                } else {
+                    false to "Assertion failed: Expected '$expectedVal' but got '${actualVal ?: "null"}'"
+                }
+            }
+
+            // 4. Response body contains matcher (e.g. response.body.contains("X-Transaction-Id"))
             if (trimmed.contains(".contains(")) {
                 val targetText = trimmed.substringAfter(".contains(").substringBefore(")").trim().removeSurrounding("\"").removeSurrounding("'")
                 val bodyText = response?.body ?: ""
@@ -150,17 +178,7 @@ class ExpressionRuntime : KotlinRuntime {
                 return true to null
             }
 
-            // 3. Status code comparison (e.g. response.statusCode == 200 or statusCode == 200)
-            if (trimmed.contains("statusCode") && trimmed.contains("==")) {
-                val expectedCode = trimmed.substringAfter("==").trim().toIntOrNull() ?: 200
-                val actualCode = response?.statusCode ?: 0
-                if (actualCode != expectedCode) {
-                    return false to "Assertion failed: Expected status code $expectedCode, but got $actualCode"
-                }
-                return true to null
-            }
-
-            // 4. Latency comparison (e.g. response.latencyMs < 500 or latencyMs < 500)
+            // 5. Latency comparison (e.g. response.latencyMs < 500)
             if (trimmed.contains("latencyMs") && trimmed.contains("<")) {
                 val maxLatency = trimmed.substringAfter("<").trim().removeSuffix("L").toLongOrNull() ?: 500L
                 val actualLatency = response?.latencyMs ?: 0L
@@ -170,7 +188,7 @@ class ExpressionRuntime : KotlinRuntime {
                 return true to null
             }
 
-            // 5. Header assertion check
+            // 6. Header assertion check
             if (trimmed.contains("headers") || trimmed.contains("X-Timestamp") || trimmed.contains("x-timestamp")) {
                 val reqHeaderVal = request.headers["X-Timestamp"] ?: request.headers["x-timestamp"]
                 val respHeaderVal = response?.headers?.get("X-Timestamp") ?: response?.headers?.get("x-timestamp")
@@ -185,7 +203,39 @@ class ExpressionRuntime : KotlinRuntime {
             }
         }
 
-        val defaultPass = response?.statusCode == 200 || (response != null && response.statusCode in 200..299)
-        return defaultPass to if (!defaultPass && response != null) "Assertion failed: statusCode is ${response?.statusCode}" else null
+        return false to "Assertion failed: Test expression evaluated to false"
+    }
+
+    private fun resolveValue(
+        expr: String,
+        request: ScriptRequestModel,
+        response: ScriptResponseModel?,
+        environment: EnvironmentStore,
+        localVariables: Map<String, String>
+    ): String? {
+        val cleaned = expr.replace("environment[", "env[").replace("environment.get(", "env.get(").removePrefix("context.").trim()
+        return when {
+            cleaned.contains("env[") -> {
+                val key = cleaned.substringAfter("env[\"").substringAfter("env['").substringBefore("\"").substringBefore("'").substringBefore("]")
+                environment[key]
+            }
+            cleaned.contains("env.get(") -> {
+                val key = cleaned.substringAfter("env.get(\"").substringAfter("env.get('").substringBefore("\"").substringBefore("'").substringBefore(")")
+                environment[key]
+            }
+            cleaned.contains("request.headers[") -> {
+                val key = cleaned.substringAfter("request.headers[\"").substringAfter("request.headers['").substringBefore("\"").substringBefore("'").substringBefore("]")
+                request.headers[key]
+            }
+            cleaned.contains("response.headers[") -> {
+                val key = cleaned.substringAfter("response.headers[\"").substringAfter("response.headers['").substringBefore("\"").substringBefore("'").substringBefore("]")
+                response?.headers?.get(key)
+            }
+            cleaned == "response.statusCode" || cleaned == "statusCode" -> response?.statusCode?.toString()
+            cleaned == "response.body" || cleaned == "body" -> response?.body
+            cleaned == "request.url" || cleaned == "url" -> request.url
+            cleaned == "request.method" || cleaned == "method" -> request.method
+            else -> localVariables[cleaned] ?: cleaned.removeSurrounding("\"").removeSurrounding("'")
+        }
     }
 }
