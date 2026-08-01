@@ -1,6 +1,6 @@
 package com.devuloopers.knet.testingserver.cookies
 
-import com.devuloopers.knet.testingserver.model.TestServerResponse
+import com.devuloopers.knet.testingserver.common.ResponseFactory
 import org.springframework.http.ResponseCookie
 import org.springframework.stereotype.Component
 import org.springframework.web.reactive.function.server.ServerRequest
@@ -10,24 +10,22 @@ import org.springframework.web.reactive.function.server.bodyValueAndAwait
 @Component
 class CookieHandler {
 
-    suspend fun handleCookies(request: ServerRequest): ServerResponse {
-        val clientCookies = request.cookies().toSingleValueMap().mapValues { it.value.value }
+    suspend fun handleGetCookies(request: ServerRequest): ServerResponse {
+        return ResponseFactory.ok(request)
+    }
 
-        val dto = TestServerResponse(
-            status = 200,
-            message = "Cookies processed successfully",
-            url = request.uri().toString(),
-            method = "GET",
-            cookies = clientCookies
-        )
-
-        val setCookie = ResponseCookie.from("KNet-Session-Id", "session_abc123_xyz")
-            .path("/")
+    suspend fun handleSetCookie(request: ServerRequest): ServerResponse {
+        val cookie = ResponseCookie.from("knet_session", "session_token_xyz")
             .httpOnly(true)
+            .secure(true)
+            .sameSite("Lax")
+            .path("/")
+            .maxAge(3600)
             .build()
 
-        return ServerResponse.ok()
-            .cookie(setCookie)
-            .bodyValueAndAwait(dto)
+        val response = ResponseFactory.ok(request, body = mapOf("message" to "Set-Cookie header attached"))
+        return ServerResponse.from(response)
+            .cookie(cookie)
+            .bodyValueAndAwait(response)
     }
 }

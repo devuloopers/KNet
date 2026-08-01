@@ -9,6 +9,6 @@ class StatusRouter(private val handler: StatusHandler) {
 
     @Bean
     fun statusRoutes() = coRouter {
-        GET("/api/test/status/{code}", handler::handleStatusCode)
+        GET("/api/status/{code}", handler::handleStatus)
     }
 }

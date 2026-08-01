@@ -132,8 +132,7 @@ KNet is strictly architected into 11 decoupled Gradle modules following **Clean 
 
 | Module | Scope / Description | Key Technologies |
 | :--- | :--- | :--- |
-| **`:desktopApp`** | Application launcher entry point, JVM window lifecycle, system tray integration, and native desktop window configuration. | JVM, Compose Desktop |
-| **`:sharedUI`** | Declarative Compose Multiplatform UI components, theme design tokens (`KNetColors`), reusable widgets (`WidgetSearchBar`, `CodeViewerWidget`, `TimingsWidget`), and syntax highlighters. | Compose Multiplatform 1.11.1, Material 3, Koin 4.0.2 |
+| **`:apps:desktop`** | Application launcher entry point, JVM window lifecycle, system tray integration, and native desktop window configuration. | JVM, Compose Desktop |
 | **`:domain`** | Pure Kotlin enterprise business logic, domain models (`HttpTransaction`, `HttpTimings`), repository interfaces, and isolated UseCases (`GetLiveTrafficUseCase`, `GetTransactionDetailUseCase`). | Pure Kotlin 2.4.0, Coroutines, Flow |
 | **`:data`** | Data layer orchestrator implementing domain repositories (`KNetCoreRepositoryImpl`), mediating between local Room database persistence and live proxy engine streams. | Kotlin Coroutines, Flow |
 | **`:storage`** | Offline persistent storage powered by Room Database (version 2). Manages schema migrations (`MIGRATION_1_2`) and SQL entity mapping. | AndroidX Room 2.8.4, KSP 2.3.10, SQLite |
@@ -201,16 +200,16 @@ KNet uses **AndroidX Room Database 2.8.4** for offline storage of network captur
 ## 🛠 Build & Verification Guidelines
 
 > [!IMPORTANT]
-> **Developer Directive**: Do **NOT** launch the desktop application directly (`:desktopApp:run`) during automated agent or CI sessions. Always compile and execute unit test suites.
+> **Developer Directive**: Do **NOT** launch the desktop application directly (`:apps:desktop:run`) during automated agent or CI sessions. Always compile and execute unit test suites.
 
 ### Recommended Verification Command
 ```bash
-./gradlew :domain:compileKotlin :sharedUI:compileKotlinJvm :bodyFormatter:test :sharedUI:jvmTest
+./gradlew compileKotlinJvm jvmTest
 ```
 
 ### Full Workspace Build Command
 ```bash
-./gradlew build -x :desktopApp:run
+./gradlew build -x :apps:desktop:run
 ```
 
 ---
@@ -222,10 +221,9 @@ KNet/
 ├── .agents/
 │   ├── AGENTS.md                   # Custom project rules & constraints
 │   └── AGENTS_ARCHITECTURE_GUIDE.md # Developer architecture blueprint
-├── bodyFormatter/                 # 2-stage payload formatters (JSON, HTML, XML, etc.)
-├── certificateManager/            # BouncyCastle MITM Root CA & Truststore installers
+├── apps/
+│   └── desktop/                    # Desktop launcher & composition root
 ├── data/                          # Data repository implementations
-├── desktopApp/                    # Desktop launcher & main window entry point
 ├── docs/                          # Architecture specs & feature strategy docs
 ├── domain/                        # Pure Kotlin business models & UseCases
 ├── gradle/

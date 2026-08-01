@@ -9,6 +9,6 @@ class HeaderRouter(private val handler: HeaderHandler) {
 
     @Bean
     fun headerRoutes() = coRouter {
-        GET("/api/test/headers", handler::handleCustomHeaders)
+        GET("/api/headers", handler::handleHeaders)
     }
 }

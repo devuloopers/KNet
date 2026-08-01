@@ -1,0 +1,56 @@
+package com.devuloopers.knet.data.desktop.workspace.repository
+
+import androidx.datastore.core.DataStore
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
+import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
+import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+
+/**
+ * Desktop implementation of [WidgetPreferencesRepository].
+ */
+class WidgetPreferencesRepositoryImpl(
+    private val dataStore: DataStore<Preferences>
+) : WidgetPreferencesRepository {
+
+    private companion object {
+        private val keyTrafficFeed = booleanPreferencesKey("is_traffic_feed_visible")
+        private val keyInspector = booleanPreferencesKey("is_inspector_visible")
+        private val keyRulesConsole = booleanPreferencesKey("is_rules_console_visible")
+        private val keyQuickReplay = booleanPreferencesKey("is_quick_replay_visible")
+        private val keyNotesTags = booleanPreferencesKey("is_notes_tags_visible")
+        private val keyTrafficWidth = floatPreferencesKey("traffic_feed_width_dp")
+        private val keySidebarWidth = floatPreferencesKey("sidebar_width_dp")
+        private val keyTrayHeight = floatPreferencesKey("bottom_tray_height_dp")
+    }
+
+    override val settingsFlow: Flow<WorkspaceLayoutSettings> = dataStore.data.map { preferences ->
+        WorkspaceLayoutSettings(
+            isTrafficFeedVisible = preferences[keyTrafficFeed] ?: true,
+            isInspectorVisible = preferences[keyInspector] ?: true,
+            isRulesConsoleVisible = preferences[keyRulesConsole] ?: false,
+            isQuickReplayVisible = preferences[keyQuickReplay] ?: false,
+            isNotesTagsVisible = preferences[keyNotesTags] ?: false,
+            trafficFeedWidthDp = preferences[keyTrafficWidth] ?: 600f,
+            sidebarWidthDp = preferences[keySidebarWidth] ?: 260f,
+            bottomTrayHeightDp = preferences[keyTrayHeight] ?: 180f
+        )
+    }
+
+    override suspend fun saveSettings(settings: WorkspaceLayoutSettings) {
+        dataStore.edit { preferences ->
+            preferences[keyTrafficFeed] = settings.isTrafficFeedVisible
+            preferences[keyInspector] = settings.isInspectorVisible
+            preferences[keyRulesConsole] = settings.isRulesConsoleVisible
+            preferences[keyQuickReplay] = settings.isQuickReplayVisible
+            preferences[keyNotesTags] = settings.isNotesTagsVisible
+            preferences[keyTrafficWidth] = settings.trafficFeedWidthDp
+            preferences[keySidebarWidth] = settings.sidebarWidthDp
+            preferences[keyTrayHeight] = settings.bottomTrayHeightDp
+        }
+    }
+}

@@ -9,6 +9,9 @@ class CookieRouter(private val handler: CookieHandler) {
 
     @Bean
     fun cookieRoutes() = coRouter {
-        GET("/api/test/cookies", handler::handleCookies)
+        "/api/cookies".nest {
+            GET("", handler::handleGetCookies)
+            GET("/set", handler::handleSetCookie)
+        }
     }
 }

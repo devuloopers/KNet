@@ -9,6 +9,6 @@ class DelayRouter(private val handler: DelayHandler) {
 
     @Bean
     fun delayRoutes() = coRouter {
-        GET("/api/test/delay/{seconds}", handler::handleDelay)
+        GET("/api/delay/{seconds}", handler::handleDelay)
     }
 }
