@@ -299,7 +299,7 @@ class TrafficViewModel(
         if (bodyText.isBlank()) return ""
         val trimmed = bodyText.trimEnd()
         val isJson = contentType.isNullOrBlank() || contentType.contains(
-            "json",
+            other = "json",
             ignoreCase = true
         ) || trimmed.startsWith("{") || trimmed.startsWith("[")
         return if (isJson) {

@@ -62,12 +62,12 @@ class MapperTest {
             url = "https://api.knet.dev/login",
             requestHeadersJson = "Content-Type:application/json",
             requestBodyPath = null,
-            requestBodySize = 15L,
+            requestBodySize = 120L,
             responseStatusCode = 200,
             responseStatusText = "OK",
             responseHeadersJson = "Content-Type:application/json;\nCache-Control:no-cache",
             responseBodyPath = null,
-            responseBodySize = 309L,
+            responseBodySize = 450L,
             durationMs = 120L,
             timestamp = 1000L
         )
@@ -78,11 +78,11 @@ class MapperTest {
         assertEquals("POST", domain.request.method)
         assertEquals(200, domain.response?.statusCode)
         assertEquals(2, domain.response?.headers?.size)
-        assertEquals(15L, domain.requestBodySize)
-        assertEquals(309L, domain.responseBodySize)
+        assertEquals(120L, domain.requestBodySize, "Request body size mapping should propagate correctly to Domain")
+        assertEquals(450L, domain.responseBodySize, "Response body size mapping should propagate correctly to Domain")
 
-        val entityBack = TransactionMapper.mapDomainToEntity(domain)
-        assertEquals(15L, entityBack.requestBodySize)
-        assertEquals(309L, entityBack.responseBodySize)
+        val mappedEntity = TransactionMapper.mapDomainToEntity(domain)
+        assertEquals(120L, mappedEntity.requestBodySize, "Request body size mapping should propagate correctly to Entity")
+        assertEquals(450L, mappedEntity.responseBodySize, "Response body size mapping should propagate correctly to Entity")
     }
 }

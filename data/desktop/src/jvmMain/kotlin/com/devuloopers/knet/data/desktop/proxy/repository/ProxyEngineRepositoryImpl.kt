@@ -61,6 +61,8 @@ public class ProxyEngineRepositoryImpl(
                         response = null,
                         requestBodyPath = reqBodyPath,
                         responseBodyPath = null,
+                        requestBodySize = request.body?.size?.toLong() ?: 0L,
+                        responseBodySize = 0L,
                         durationMs = 0L,
                         timestamp = request.timestamp
                     )
@@ -113,6 +115,8 @@ public class ProxyEngineRepositoryImpl(
                         response = response,
                         requestBodyPath = reqBodyPath,
                         responseBodyPath = resBodyPath,
+                        requestBodySize = reqToUse.body?.size?.toLong() ?: 0L,
+                        responseBodySize = response.body?.size?.toLong() ?: 0L,
                         durationMs = durationMs,
                         timestamp = reqToUse.timestamp,
                         timings = timings
@@ -143,7 +147,9 @@ public class ProxyEngineRepositoryImpl(
                             val resBodyPath = payloadStore.savePayload(transaction.id, "res", transaction.response?.body)
                             val txToSave = transaction.copy(
                                 requestBodyPath = reqBodyPath,
-                                responseBodyPath = resBodyPath
+                                responseBodyPath = resBodyPath,
+                                requestBodySize = transaction.request.body?.size?.toLong() ?: transaction.requestBodySize,
+                                responseBodySize = transaction.response?.body?.size?.toLong() ?: transaction.responseBodySize
                             )
                             val entity = TransactionMapper.mapDomainToEntity(txToSave)
                             database.httpTransactionDao().insert(entity)

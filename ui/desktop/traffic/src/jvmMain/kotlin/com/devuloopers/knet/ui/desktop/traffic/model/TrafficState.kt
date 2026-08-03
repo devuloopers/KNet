@@ -6,7 +6,7 @@ import com.devuloopers.knet.domain.traffic.model.TrafficItemUiState
 /**
  * Capture execution state enum.
  */
-public enum class CaptureState {
+enum class CaptureState {
     IDLE,
     CAPTURING,
     PAUSED,
@@ -16,7 +16,7 @@ public enum class CaptureState {
 /**
  * Inspection panel sub-tabs enum.
  */
-public enum class InspectorTab {
+enum class InspectorTab {
     OVERVIEW,
     REQUEST,
     RESPONSE,
@@ -26,7 +26,7 @@ public enum class InspectorTab {
 /**
  * Preview format switcher mode enum.
  */
-public enum class PreviewFormatMode {
+enum class PreviewFormatMode {
     PRETTY,
     RAW,
     HEX
@@ -50,7 +50,7 @@ public enum class PreviewFormatMode {
  * @property activeResponseSubTab Currently selected response sub-tab (Headers, Body).
  * @property previewFormatMode Active response/request body preview format mode.
  */
-public data class TrafficState(
+data class TrafficState(
     val transactions: List<TrafficItemUiState> = emptyList(),
     val filteredTransactions: List<TrafficItemUiState> = emptyList(),
     val selectedTransactionId: String? = null,
@@ -71,7 +71,7 @@ public data class TrafficState(
     /**
      * Selected transaction UI model matching [selectedTransactionId].
      */
-    public val selectedTransaction: TrafficItemUiState?
+    val selectedTransaction: TrafficItemUiState?
         get() = transactions.find { it.transactionId == selectedTransactionId }
             ?: filteredTransactions.find { it.transactionId == selectedTransactionId }
             ?: transactions.firstOrNull()
@@ -79,22 +79,36 @@ public data class TrafficState(
     /**
      * Calculated statistics counts for quick protocol chips.
      */
-    public val httpCount: Int
-        get() = transactions.count { it.protocol.startsWith("HTTP/1") || (it.protocol.startsWith("HTTP") && !it.protocol.startsWith("HTTP/2")) }
+    val httpCount: Int
+        get() = transactions.count {
+            it.protocol.startsWith("HTTP/1") || (it.protocol.startsWith("HTTP") && !it.protocol.startsWith(
+                "HTTP/2"
+            ))
+        }
 
-    public val httpsCount: Int
-        get() = transactions.count { it.protocol.startsWith("HTTP/2") || it.protocol.equals("HTTPS", ignoreCase = true) }
+    val httpsCount: Int
+        get() = transactions.count {
+            it.protocol.startsWith("HTTP/2") || it.protocol.equals(
+                "HTTPS",
+                ignoreCase = true
+            )
+        }
 
-    public val wsCount: Int
-        get() = transactions.count { it.method.equals("WS", ignoreCase = true) || it.protocol.equals("WS", ignoreCase = true) }
+    val wsCount: Int
+        get() = transactions.count {
+            it.method.equals("WS", ignoreCase = true) || it.protocol.equals(
+                "WS",
+                ignoreCase = true
+            )
+        }
 
-    public val otherCount: Int
+    val otherCount: Int
         get() = (transactions.size - (httpCount + httpsCount + wsCount)).coerceAtLeast(0)
 
     /**
      * Calculated total transferred payload size string.
      */
-    public val formattedTotalSize: String
+    val formattedTotalSize: String
         get() {
             val totalBytes = transactions.sumOf { tx ->
                 tx.formattedSize.replace(" KB", "").replace(" B", "").replace(" MB", "").toDoubleOrNull()?.let { size ->
