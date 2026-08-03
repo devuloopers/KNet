@@ -209,6 +209,8 @@ private fun RequestTabContent(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            val cookieHeader = transaction.requestHeaders.entries.find { it.key.equals("cookie", ignoreCase = true) }?.value
+            val cookiesCount = if (!cookieHeader.isNullOrBlank()) parseCookieHeader(cookieHeader).size else 0
             SubTabChip(
                 label = "Headers (${transaction.requestHeaders.size})",
                 isSelected = activeSubTab == RequestSubTab.HEADERS,
@@ -218,6 +220,11 @@ private fun RequestTabContent(
                 label = "Query (${transaction.queryParams.size})",
                 isSelected = activeSubTab == RequestSubTab.QUERY,
                 onClick = { onSubTabSelected(RequestSubTab.QUERY) }
+            )
+            SubTabChip(
+                label = "Cookies ($cookiesCount)",
+                isSelected = activeSubTab == RequestSubTab.COOKIES,
+                onClick = { onSubTabSelected(RequestSubTab.COOKIES) }
             )
             SubTabChip(
                 label = "Body",
@@ -261,19 +268,6 @@ private fun RequestTabContent(
                         }
                     }
                 }
-
-                // Cookies Section (if Cookie header present)
-                val cookieHeader = transaction.requestHeaders.entries.find { it.key.equals("cookie", ignoreCase = true) }?.value
-                if (!cookieHeader.isNullOrBlank()) {
-                    HorizontalDivider(color = themeColors.border)
-                    val cookies = parseCookieHeader(cookieHeader)
-                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        SectionHeader(title = "COOKIES (${cookies.size})")
-                        cookies.forEach { (name, valStr) ->
-                            GridRow(label = name, value = valStr, isMono = true)
-                        }
-                    }
-                }
             }
             RequestSubTab.QUERY -> {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -302,6 +296,39 @@ private fun RequestTabContent(
                     } else {
                         transaction.queryParams.forEach { (key, value) ->
                             GridRow(label = key, value = value.toString(), isMono = true)
+                        }
+                    }
+                }
+            }
+            RequestSubTab.COOKIES -> {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val cookieHeader = transaction.requestHeaders.entries.find { it.key.equals("cookie", ignoreCase = true) }?.value
+                    val cookies = if (!cookieHeader.isNullOrBlank()) parseCookieHeader(cookieHeader) else emptyMap()
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        SectionHeader(title = "REQUEST COOKIES (${cookies.size})")
+                        if (cookies.isNotEmpty() && !cookieHeader.isNullOrBlank()) {
+                            KNetCopyButton(
+                                textToCopy = cookieHeader,
+                                contentDescription = "Copy Cookie Header",
+                                size = 14.dp,
+                                tint = themeColors.textSecondary
+                            )
+                        }
+                    }
+
+                    if (cookies.isEmpty()) {
+                        Text(
+                            text = "No request cookies",
+                            style = typography.caption.copy(color = themeColors.textMuted)
+                        )
+                    } else {
+                        cookies.forEach { (name, value) ->
+                            GridRow(label = name, value = value, isMono = true)
                         }
                     }
                 }
@@ -392,6 +419,11 @@ private fun ResponseTabContent(
     val typography = KNetTheme.typography
     val shapes = KNetTheme.shapes
 
+    val parsedResponseCookies = remember(transaction.responseHeaders) {
+        val setCookieHeaders = transaction.responseHeaders.entries.filter { it.key.equals("set-cookie", ignoreCase = true) }.map { it.value }
+        setCookieHeaders.mapNotNull { parseSetCookieHeader(it) }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -403,13 +435,21 @@ private fun ResponseTabContent(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            for (subTab in ResponseSubTab.entries) {
-                SubTabChip(
-                    label = subTab.displayName,
-                    isSelected = activeSubTab == subTab,
-                    onClick = { onSubTabSelected(subTab) }
-                )
-            }
+            SubTabChip(
+                label = "Headers (${transaction.responseHeaders.size})",
+                isSelected = activeSubTab == ResponseSubTab.HEADERS,
+                onClick = { onSubTabSelected(ResponseSubTab.HEADERS) }
+            )
+            SubTabChip(
+                label = "Cookies (${parsedResponseCookies.size})",
+                isSelected = activeSubTab == ResponseSubTab.COOKIES,
+                onClick = { onSubTabSelected(ResponseSubTab.COOKIES) }
+            )
+            SubTabChip(
+                label = "Body",
+                isSelected = activeSubTab == ResponseSubTab.BODY,
+                onClick = { onSubTabSelected(ResponseSubTab.BODY) }
+            )
         }
 
         when (activeSubTab) {
@@ -445,6 +485,54 @@ private fun ResponseTabContent(
                     } else {
                         transaction.responseHeaders.forEach { (key, value) ->
                             GridRow(label = key, value = value, isMono = true)
+                        }
+                    }
+                }
+            }
+            ResponseSubTab.COOKIES -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        SectionHeader(title = "RESPONSE COOKIES (${parsedResponseCookies.size})")
+                    }
+
+                    if (parsedResponseCookies.isEmpty()) {
+                        Text(
+                            text = "No response cookies set",
+                            style = typography.caption.copy(color = themeColors.textMuted)
+                        )
+                    } else {
+                        parsedResponseCookies.forEach { cookie ->
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .border(1.dp, themeColors.border, shapes.small)
+                                    .background(themeColors.surfaceVariant)
+                                    .padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(6.dp)
+                            ) {
+                                GridRow(label = "Name", value = cookie.name, valueColor = themeColors.accent, isMono = true)
+                                GridRow(label = "Value", value = cookie.value, isMono = true)
+                                if (cookie.domain != null) GridRow(label = "Domain", value = cookie.domain, isMono = true)
+                                if (cookie.path != null) GridRow(label = "Path", value = cookie.path, isMono = true)
+                                if (cookie.expires != null) GridRow(label = "Expires", value = cookie.expires)
+                                if (cookie.maxAge != null) GridRow(label = "Max-Age", value = "${cookie.maxAge}s")
+                                if (cookie.secure || cookie.httpOnly) {
+                                    val attributes = buildList {
+                                        if (cookie.secure) add("Secure")
+                                        if (cookie.httpOnly) add("HttpOnly")
+                                    }.joinToString(", ")
+                                    GridRow(label = "Attributes", value = attributes)
+                                }
+                            }
                         }
                     }
                 }
@@ -491,6 +579,7 @@ private fun ResponseTabContent(
         }
     }
 }
+
 
 @Composable
 private fun TimelineTabContent(transaction: TrafficItemUiState) {
@@ -708,7 +797,7 @@ private fun GridRow(
     }
 }
 
-private fun parseCookieHeader(cookieHeader: String): Map<String, String> {
+internal fun parseCookieHeader(cookieHeader: String): Map<String, String> {
     return cookieHeader.split(";")
         .mapNotNull {
             val parts = it.trim().split("=", limit = 2)
@@ -716,6 +805,65 @@ private fun parseCookieHeader(cookieHeader: String): Map<String, String> {
         }
         .toMap()
 }
+
+internal data class ParsedResponseCookie(
+    val name: String,
+    val value: String,
+    val domain: String? = null,
+    val path: String? = null,
+    val expires: String? = null,
+    val maxAge: Long? = null,
+    val secure: Boolean = false,
+    val httpOnly: Boolean = false
+)
+
+internal fun parseSetCookieHeader(setCookieHeader: String): ParsedResponseCookie? {
+    if (setCookieHeader.isBlank()) return null
+    val parts = setCookieHeader.split(";")
+    val firstPart = parts.firstOrNull()?.trim() ?: return null
+    val firstEq = firstPart.indexOf('=')
+    if (firstEq == -1) return null
+    val name = firstPart.substring(0, firstEq).trim()
+    val value = firstPart.substring(firstEq + 1).trim()
+
+    var domain: String? = null
+    var path: String? = null
+    var expires: String? = null
+    var maxAge: Long? = null
+    var secure = false
+    var httpOnly = false
+
+    for (i in 1 until parts.size) {
+        val attribute = parts[i].trim()
+        val eqIndex = attribute.indexOf('=')
+        if (eqIndex == -1) {
+            val key = attribute.lowercase()
+            if (key == "secure") secure = true
+            if (key == "httponly") httpOnly = true
+        } else {
+            val key = attribute.substring(0, eqIndex).trim().lowercase()
+            val valStr = attribute.substring(eqIndex + 1).trim()
+            when (key) {
+                "domain" -> domain = valStr
+                "path" -> path = valStr
+                "expires" -> expires = valStr
+                "max-age" -> maxAge = valStr.toLongOrNull()
+            }
+        }
+    }
+
+    return ParsedResponseCookie(
+        name = name,
+        value = value,
+        domain = domain,
+        path = path,
+        expires = expires,
+        maxAge = maxAge,
+        secure = secure,
+        httpOnly = httpOnly
+    )
+}
+
 
 /**
  * Detects syntax highlighter language token from Content-Type MIME string.
@@ -746,4 +894,5 @@ internal fun formatBodyPayload(contentType: String?, rawBody: String): String {
         trimmed
     }
 }
+
 

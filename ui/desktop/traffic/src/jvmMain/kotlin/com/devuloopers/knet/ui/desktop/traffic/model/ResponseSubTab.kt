@@ -7,5 +7,6 @@ package com.devuloopers.knet.ui.desktop.traffic.model
  */
 public enum class ResponseSubTab(val displayName: String) {
     HEADERS("Headers"),
+    COOKIES("Cookies"),
     BODY("Body")
 }
