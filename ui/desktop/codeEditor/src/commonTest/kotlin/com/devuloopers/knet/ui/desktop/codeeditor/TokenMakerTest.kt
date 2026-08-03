@@ -1,40 +1,33 @@
 package com.devuloopers.knet.ui.desktop.codeeditor
 
-import com.devuloopers.knet.ui.desktop.codeeditor.syntax.tokenizer.TokenMaker
+import com.devuloopers.knet.ui.desktop.codeeditor.syntax.TokenMaker
+import com.devuloopers.knet.ui.desktop.codeeditor.syntax.TokenState
 import kotlin.test.Test
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
+import kotlin.test.assertEquals
 
-/**
- * Unit tests for [TokenMaker] — zero-allocation character classification utilities.
- */
+
 class TokenMakerTest {
 
     @Test
-    fun testZeroAllocationWhitespaceCheckReturnsTrueForWhitespace() {
-        val line = "    \"key\":    \"value\""
-        // Characters 0..3 are leading spaces (whitespace only)
-        assertTrue(
-            TokenMaker.isOnlyWhitespaceBetween(line, 0, 4),
-            "Leading spaces should be whitespace-only"
-        )
+    fun testMultilineCommentStatePropagation() {
+        val line1 = "/* Start multiline comment"
+        val line2 = "   Middle line of comment"
+        val line3 = "   End comment */ const x = 10"
+
+        val res1 = TokenMaker.tokenizeLine(line1, TokenState.NULL)
+        assertEquals(TokenState.IN_MULTILINE_COMMENT, res1.endState)
+
+        val res2 = TokenMaker.tokenizeLine(line2, res1.endState)
+        assertEquals(TokenState.IN_MULTILINE_COMMENT, res2.endState)
+
+        val res3 = TokenMaker.tokenizeLine(line3, res2.endState)
+        assertEquals(TokenState.NULL, res3.endState)
     }
 
     @Test
-    fun testZeroAllocationWhitespaceCheckReturnsFalseForNonWhitespace() {
-        val line = "\"key\": \"value\""
-        assertFalse(
-            TokenMaker.isOnlyWhitespaceBetween(line, 0, 5),
-            "Should detect non-whitespace characters in slice"
-        )
-    }
-
-    @Test
-    fun testEmptyRangeReturnsTrue() {
-        val line = "anything"
-        assertTrue(
-            TokenMaker.isOnlyWhitespaceBetween(line, 3, 3),
-            "Empty range should return true (no non-whitespace found)"
-        )
+    fun testSingleLineComment() {
+        val line = "// This is a single line comment"
+        val res = TokenMaker.tokenizeLine(line, TokenState.NULL)
+        assertEquals(TokenState.NULL, res.endState)
     }
 }

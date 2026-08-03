@@ -1,11 +1,23 @@
 package com.devuloopers.knet.ui.desktop.codeeditor.algorithm
 
-import com.devuloopers.knet.ui.desktop.codeeditor.model.FoldRegion
+/**
+ * Represents a collapsible block region in a code document.
+ *
+ * @property startLine The 0-indexed line where the fold starts (e.g. line containing '{' or '[').
+ * @property endLine The 0-indexed line where the fold ends (e.g. line containing '}' or ']').
+ * @property closingSymbol The character or string token indicating closing (e.g. "}", "]").
+ */
+data class FoldRegion(
+    val startLine: Int,
+    val endLine: Int,
+    val closingSymbol: String = "}"
+)
 
 /**
  * High-performance hierarchical code fold calculation and visual line mapping engine.
+ * Inspired by RSyntaxTextArea FoldManagerImpl.
  */
-internal object FoldManager {
+object FoldManager {
 
     /** Maximum line limit threshold for deep AST character-by-character fold scanning. */
     const val MAX_FOLD_LINE_THRESHOLD = 5000
@@ -18,6 +30,10 @@ internal object FoldManager {
 
     /**
      * Calculates nested foldable regions for structured code documents (JSON, XML, JS, Kotlin).
+     * Memoizes results by line hash and respects [MAX_FOLD_LINE_THRESHOLD] to prevent main-thread freezing.
+     *
+     * @param lines The list of text lines in the document.
+     * @return List of calculated [FoldRegion] instances.
      */
     fun calculateFolds(lines: List<String>): List<FoldRegion> {
         if (lines.size <= 1 || lines.size > MAX_FOLD_LINE_THRESHOLD) {
@@ -77,7 +93,13 @@ internal object FoldManager {
     }
 
     /**
-     * Maps virtualized LazyColumn visual item indices to 0-indexed document model line numbers.
+     * Maps virtualized LazyColumn visual item indices to 0-indexed document model line numbers,
+     * skipping lines contained within active collapsed folds.
+     *
+     * @param totalLines Total number of lines in the document.
+     * @param collapsedStartLines Set of 0-indexed start line indices that are currently collapsed.
+     * @param foldRegions List of all available [FoldRegion] blocks.
+     * @return List of document line indices to render.
      */
     fun buildVisualLineMap(
         totalLines: Int,
@@ -88,6 +110,7 @@ internal object FoldManager {
             return (0 until totalLines).toList()
         }
 
+        // Map startLine -> endLine for active collapsed folds
         val activeCollapsedMap = foldRegions
             .filter { it.startLine in collapsedStartLines }
             .associate { it.startLine to it.endLine }
@@ -99,6 +122,7 @@ internal object FoldManager {
             visibleLines.add(lineIndex)
             val endFold = activeCollapsedMap[lineIndex]
             if (endFold != null && endFold > lineIndex) {
+                // Skip hidden lines inside collapsed fold
                 lineIndex = endFold
             } else {
                 lineIndex++

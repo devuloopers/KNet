@@ -8,16 +8,16 @@ import java.nio.file.Path
  * Holds system paths, environment definitions, and feature toggles.
  * Constructed via [DesktopConfiguration.load].
  */
-public data class DesktopConfiguration(
+data class DesktopConfiguration(
     val environment: Environment = Environment.DEVELOPMENT,
     val appDirectory: Path = Path.of(System.getProperty("user.home"), ".knet"),
     val databaseDirectory: Path = appDirectory.resolve("database"),
     val logDirectory: Path = appDirectory.resolve("logs")
 ) {
-    public companion object {
+    companion object {
         /**
          * Loads and constructs the global [DesktopConfiguration] instance.
          */
-        public fun load(): DesktopConfiguration = DesktopConfiguration()
+        fun load(): DesktopConfiguration = DesktopConfiguration()
     }
 }

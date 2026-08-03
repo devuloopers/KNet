@@ -19,16 +19,19 @@ class TransactionRecorder(
 
     suspend fun recordRequest(request: HttpRequest): HttpTransaction {
         val requestBodyPath = payloadStore.savePayload(request.id, "req", request.body)
+        val requestBodySize = request.body?.size?.toLong() ?: 0L
         val entity = HttpTransactionEntity(
             id = request.id,
             url = request.url,
             method = request.method,
             requestHeadersJson = HttpTransactionMapper.serializeHeaders(request.headers),
             requestBodyPath = requestBodyPath,
+            requestBodySize = requestBodySize,
             responseStatusCode = null,
             responseStatusText = null,
             responseHeadersJson = null,
             responseBodyPath = null,
+            responseBodySize = 0L,
             durationMs = 0,
             timestamp = request.timestamp
         )
@@ -52,16 +55,19 @@ class TransactionRecorder(
         val entity = transactionDao.getTransactionById(transactionId) ?: return false
         val responseBodyPath = payloadStore.savePayload(transactionId, "res", response.body)
 
+        val responseBodySize = response.body?.size?.toLong() ?: 0L
         val updated = HttpTransactionEntity(
             id = entity.id,
             url = entity.url,
             method = entity.method,
             requestHeadersJson = entity.requestHeadersJson,
             requestBodyPath = entity.requestBodyPath,
+            requestBodySize = entity.requestBodySize,
             responseStatusCode = response.statusCode,
             responseStatusText = response.statusText,
             responseHeadersJson = HttpTransactionMapper.serializeHeaders(response.headers),
             responseBodyPath = responseBodyPath,
+            responseBodySize = responseBodySize,
             durationMs = durationMs,
             timestamp = entity.timestamp,
             timingDnsMs = timings.dnsMs,

@@ -2,8 +2,10 @@ package com.devuloopers.knet.data.desktop.mapper
 
 import com.devuloopers.knet.domain.network.model.HttpRequest
 import com.devuloopers.knet.domain.network.model.HttpResponse
+import com.devuloopers.knet.domain.network.model.HttpTimings
 import com.devuloopers.knet.domain.network.model.HttpTransaction
 import com.devuloopers.knet.storage.traffic.entity.HttpTransactionEntity
+import java.io.File
 
 /**
  * Maps between SQLite Room transaction entities and Domain network transaction models.
@@ -14,6 +16,8 @@ public object TransactionMapper {
         val reqHeadersList = parseHeadersString(entity.requestHeadersJson)
         val resHeadersList = parseHeadersString(entity.responseHeadersJson ?: "")
 
+        // Body bytes are intentionally NOT read here. Payload files are loaded on-demand
+        // via LiveTrafficRepository.loadTransactionBody() when the user opens the inspector.
         val request = HttpRequest(
             id = entity.id,
             method = entity.method,
@@ -24,12 +28,25 @@ public object TransactionMapper {
             timestamp = entity.timestamp
         )
 
-        val response = HttpResponse(
-            statusCode = entity.responseStatusCode ?: 0,
-            statusText = entity.responseStatusText ?: "",
-            headers = resHeadersList,
-            body = null,
-            timestamp = entity.timestamp
+        val statusCode = entity.responseStatusCode
+        val response = if (statusCode != null && statusCode > 0) {
+            HttpResponse(
+                statusCode = statusCode,
+                statusText = entity.responseStatusText ?: "",
+                headers = resHeadersList,
+                body = null,
+                timestamp = entity.timestamp
+            )
+        } else {
+            null
+        }
+
+        val timings = HttpTimings(
+            dnsMs = entity.timingDnsMs,
+            tcpMs = entity.timingTcpMs,
+            tlsMs = entity.timingTlsMs,
+            ttfbMs = entity.timingTtfbMs,
+            downloadMs = entity.timingDownloadMs
         )
 
         return HttpTransaction(
@@ -38,8 +55,37 @@ public object TransactionMapper {
             response = response,
             requestBodyPath = entity.requestBodyPath,
             responseBodyPath = entity.responseBodyPath,
+            requestBodySize = entity.requestBodySize,
+            responseBodySize = entity.responseBodySize,
             durationMs = entity.durationMs,
-            timestamp = entity.timestamp
+            timestamp = entity.timestamp,
+            timings = timings
+        )
+    }
+
+    public fun mapDomainToEntity(domain: HttpTransaction): HttpTransactionEntity {
+        val reqHeadersStr = domain.request.headers.joinToString(";\n") { "${it.first}: ${it.second}" }
+        val resHeadersStr = domain.response?.headers?.joinToString(";\n") { "${it.first}: ${it.second}" } ?: ""
+
+        return HttpTransactionEntity(
+            id = domain.id,
+            url = domain.request.url,
+            method = domain.request.method,
+            requestHeadersJson = reqHeadersStr,
+            requestBodyPath = domain.requestBodyPath,
+            requestBodySize = domain.requestBodySize,
+            responseStatusCode = domain.response?.statusCode,
+            responseStatusText = domain.response?.statusText,
+            responseHeadersJson = resHeadersStr,
+            responseBodyPath = domain.responseBodyPath,
+            responseBodySize = domain.responseBodySize,
+            durationMs = domain.durationMs,
+            timestamp = domain.timestamp,
+            timingDnsMs = domain.timings.dnsMs,
+            timingTcpMs = domain.timings.tcpMs,
+            timingTlsMs = domain.timings.tlsMs,
+            timingTtfbMs = domain.timings.ttfbMs,
+            timingDownloadMs = domain.timings.downloadMs
         )
     }
 
@@ -51,5 +97,19 @@ public object TransactionMapper {
                 val parts = line.split(":", limit = 2)
                 parts[0].trim() to (parts.getOrNull(1)?.trim() ?: "")
             }
+    }
+
+    private fun readBodyFromPath(path: String?): ByteArray? {
+        if (path.isNullOrBlank()) return null
+        val file = File(path)
+        return if (file.exists() && file.length() > 0) {
+            try {
+                file.readBytes()
+            } catch (_: Exception) {
+                null
+            }
+        } else {
+            null
+        }
     }
 }

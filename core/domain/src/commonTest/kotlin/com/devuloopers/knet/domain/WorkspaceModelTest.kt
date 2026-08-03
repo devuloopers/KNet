@@ -45,7 +45,7 @@ class WorkspaceModelTest {
         assertEquals(260f, defaultSettings.sidebarWidthDp)
         assertEquals(180f, defaultSettings.bottomTrayHeightDp)
 
-        val updatedSettings = defaultSettings.copy(
+        val updatedSettings = WorkspaceLayoutSettings(
             isTrafficFeedVisible = false,
             trafficFeedWidthDp = 500f,
             sidebarWidthDp = 300f

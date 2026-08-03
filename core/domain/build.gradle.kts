@@ -13,6 +13,12 @@ kotlin {
                 api(project(":core:logger"))
             }
         }
+        val jvmMain by getting {
+            dependencies {
+                implementation(libs.brotli.dec)
+                implementation(libs.zstd.jni)
+            }
+        }
         val commonTest by getting {
             dependencies {
                 implementation(kotlin("test"))

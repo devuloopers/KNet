@@ -11,10 +11,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.devuloopers.knet.ui.core.theme.KNetColors
+import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 /**
  * Top application menu bar composable (File, Edit, View, Tools, Help).
@@ -27,11 +25,14 @@ public fun MenuBar(
     menus: Map<String, List<MenuItem>> = emptyMap(),
     modifier: Modifier = Modifier
 ) {
+    val themeColors = KNetTheme.colors
+    val typography = KNetTheme.typography
+
     Row(
         modifier = modifier
             .fillMaxWidth()
             .height(24.dp)
-            .background(KNetColors.BackgroundDark)
+            .background(themeColors.background)
             .padding(horizontal = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -45,9 +46,7 @@ public fun MenuBar(
         defaultCategories.forEach { category ->
             Text(
                 text = category,
-                color = KNetColors.TextSecondary,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Normal,
+                style = typography.bodySmall.copy(color = themeColors.textSecondary),
                 modifier = Modifier
                     .clickable { /* Popup category menu */ }
                     .padding(horizontal = 4.dp, vertical = 2.dp)

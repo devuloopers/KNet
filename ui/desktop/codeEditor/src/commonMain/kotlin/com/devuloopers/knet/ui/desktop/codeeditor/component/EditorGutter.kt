@@ -29,110 +29,124 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.CollapsedFoldState
+import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.DocumentLayoutMap
+import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.FoldRegion
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.getOriginalLineNumber
-import com.devuloopers.knet.ui.desktop.codeeditor.model.FoldRegion
+import com.devuloopers.knet.ui.desktop.codeeditor.theme.CodeEditorTokens
 import com.devuloopers.knet.ui.desktop.codeeditor.theme.EditorColors
-import com.devuloopers.knet.ui.desktop.codeeditor.theme.EditorTokens
 
+/**
+ * 2-Column Structural Gutter Slot rendering absolute Y-offset line numbers and fold controls.
+ *
+ * @param lineCount Number of displayed logical lines.
+ * @param activeLineIndex 0-indexed line containing active caret (or -1 if read-only).
+ * @param lineTopOffsetsDp Calculated vertical Y-offsets for each line.
+ * @param collapsedFolds Active map of collapsed fold states.
+ * @param foldStartLines Map of fold start line to [FoldRegion].
+ * @param isFoldingEnabled True if fold arrows are visible and interactive.
+ * @param isIconArrowStyle True if material arrow icons are used (read-only view), false if text arrows are used (editable mode).
+ * @param layoutMap Single Source of Truth [DocumentLayoutMap] instance.
+ * @param onToggleFold Callback executed when fold arrow is clicked.
+ */
 @Composable
-internal fun EditorGutter(
+fun EditorGutter(
     lineCount: Int,
     activeLineIndex: Int,
     lineTopOffsetsDp: List<Dp>,
     collapsedFolds: Map<Int, CollapsedFoldState>,
     foldStartLines: Map<Int, FoldRegion>,
     isFoldingEnabled: Boolean,
-    isIconArrowStyle: Boolean,
+    isIconArrowStyle: Boolean = false,
+    layoutMap: DocumentLayoutMap? = null,
     onToggleFold: (Int) -> Unit
 ) {
-    val dynamicMinWidth = when {
-        lineCount >= 10000 -> 36.dp
-        lineCount >= 1000 -> 30.dp
-        else -> EditorTokens.GutterNumberMinWidth
+    val gutterWidth = if (isFoldingEnabled) {
+        16.dp + 4.dp + CodeEditorTokens.GutterNumberMinWidth
+    } else {
+        CodeEditorTokens.GutterNumberMinWidth
     }
 
     Box(
         modifier = Modifier
-            .padding(end = EditorTokens.GutterPaddingEnd)
+            .padding(top = 0.dp, end = CodeEditorTokens.GutterPaddingEnd)
+            .width(gutterWidth)
     ) {
-        if (lineTopOffsetsDp.size >= lineCount) {
-            for (i in 0 until lineCount) {
-                val topDp = lineTopOffsetsDp[i]
-                val isActive = i == activeLineIndex
-                val displayLineNumber = getOriginalLineNumber(i, collapsedFolds)
-                val isFoldStart = isFoldingEnabled && foldStartLines.containsKey(i)
-                val isCollapsed = collapsedFolds.containsKey(i)
+        (0 until lineCount).forEach { index ->
+            val isActiveLine = index == activeLineIndex
+            val isCurrentlyCollapsed = collapsedFolds.containsKey(index)
+            val canCollapse = foldStartLines.containsKey(index)
+            val showFoldArrow = isFoldingEnabled && (isCurrentlyCollapsed || canCollapse)
+            val topOffset = lineTopOffsetsDp.getOrNull(index) ?: (index * 18).dp
 
-                Row(
-                    modifier = Modifier
-                        .offset(y = topDp)
-                        .height(EditorTokens.GutterLineHeightDp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
+            Row(
+                verticalAlignment = Alignment.Top,
+                horizontalArrangement = Arrangement.Start,
+                modifier = Modifier
+                    .offset(y = topOffset)
+                    .fillMaxWidth()
+                    .height(CodeEditorTokens.GutterLineHeightDp)
+            ) {
+                if (isFoldingEnabled) {
                     Box(
-                        modifier = Modifier.size(EditorTokens.FoldArrowBoxSize),
-                        contentAlignment = Alignment.Center
+                        modifier = Modifier
+                            .width(16.dp)
+                            .height(CodeEditorTokens.GutterLineHeightDp),
+                        contentAlignment = Alignment.TopCenter
                     ) {
-                        if (isFoldStart) {
+                        if (showFoldArrow) {
                             if (isIconArrowStyle) {
                                 Icon(
-                                    imageVector = if (isCollapsed) Icons.AutoMirrored.Filled.KeyboardArrowRight else Icons.Default.KeyboardArrowDown,
-                                    contentDescription = if (isCollapsed) "Expand block" else "Collapse block",
-                                    tint = EditorColors.FoldIconTint,
+                                    imageVector = if (isCurrentlyCollapsed) {
+                                        Icons.AutoMirrored.Filled.KeyboardArrowRight
+                                    } else {
+                                        Icons.Default.KeyboardArrowDown
+                                    },
+                                    contentDescription = if (isCurrentlyCollapsed) "Expand" else "Collapse",
+                                    tint = if (isCurrentlyCollapsed) EditorColors.ActiveBlue else EditorColors.TextSecondary,
                                     modifier = Modifier
-                                        .size(14.dp)
+                                        .size(12.dp)
                                         .pointerHoverIcon(PointerIcon.Hand)
-                                        .clickable { onToggleFold(i) }
+                                        .clickable { onToggleFold(index) }
                                 )
                             } else {
                                 Text(
-                                    text = if (isCollapsed) "{+}" else "{-}",
-                                    color = EditorColors.FoldIconTint,
-                                    fontSize = 9.sp,
-                                    fontFamily = FontFamily.Monospace,
-                                    fontWeight = FontWeight.Bold,
+                                    text = if (isCurrentlyCollapsed) "►" else "▼",
+                                    color = if (isCurrentlyCollapsed) EditorColors.ActiveBlue else Color(0xFF6E7681),
+                                    style = CodeEditorTokens.editorTextStyle().copy(
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isCurrentlyCollapsed) EditorColors.ActiveBlue else Color(0xFF6E7681)
+                                    ),
                                     modifier = Modifier
                                         .pointerHoverIcon(PointerIcon.Hand)
-                                        .clickable { onToggleFold(i) }
+                                        .clickable { onToggleFold(index) }
                                 )
                             }
                         }
                     }
 
-                    Spacer(modifier = Modifier.width(EditorTokens.FoldArrowPaddingEnd))
-
-                    Text(
-                        text = displayLineNumber.toString(),
-                        color = if (isActive) EditorColors.ActiveLineNumber else EditorColors.InactiveLineNumber,
-                        fontFamily = FontFamily.Monospace,
-                        fontSize = EditorTokens.FontSize,
-                        lineHeight = EditorTokens.LineHeight,
-                        fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
-                        textAlign = TextAlign.End,
-                        modifier = Modifier.width(dynamicMinWidth)
-                    )
+                    Spacer(modifier = Modifier.width(4.dp))
                 }
-            }
-        } else {
-            for (i in 0 until lineCount) {
-                val isActive = i == activeLineIndex
-                val displayLineNumber = getOriginalLineNumber(i, collapsedFolds)
 
-                Row(
-                    modifier = Modifier.height(EditorTokens.GutterLineHeightDp),
-                    verticalAlignment = Alignment.CenterVertically
+                Box(
+                    modifier = Modifier
+                        .width(CodeEditorTokens.GutterNumberMinWidth)
+                        .height(CodeEditorTokens.GutterLineHeightDp),
+                    contentAlignment = Alignment.TopEnd
                 ) {
-                    Spacer(modifier = Modifier.width(EditorTokens.FoldArrowBoxSize + EditorTokens.FoldArrowPaddingEnd))
-
+                    val originalLineNum = if (layoutMap != null) {
+                        getOriginalLineNumber(index, layoutMap)
+                    } else {
+                        getOriginalLineNumber(index, collapsedFolds)
+                    }
                     Text(
-                        text = displayLineNumber.toString(),
-                        color = if (isActive) EditorColors.ActiveLineNumber else EditorColors.InactiveLineNumber,
+                        text = originalLineNum.toString(),
+                        color = if (isActiveLine) EditorColors.ActiveBlue else Color(0xFF484F58),
                         fontFamily = FontFamily.Monospace,
-                        fontSize = EditorTokens.FontSize,
-                        lineHeight = EditorTokens.LineHeight,
-                        fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Normal,
-                        textAlign = TextAlign.End,
-                        modifier = Modifier.width(dynamicMinWidth)
+                        fontWeight = if (isActiveLine) FontWeight.Bold else FontWeight.Normal,
+                        style = CodeEditorTokens.editorTextStyle(),
+                        textAlign = TextAlign.End
                     )
                 }
             }

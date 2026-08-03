@@ -94,6 +94,8 @@ object HttpTransactionMapper {
             response = response,
             requestBodyPath = entity.requestBodyPath,
             responseBodyPath = entity.responseBodyPath,
+            requestBodySize = entity.requestBodySize,
+            responseBodySize = entity.responseBodySize,
             durationMs = entity.durationMs,
             timestamp = entity.timestamp,
             timings = timings

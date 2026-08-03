@@ -1,5 +1,9 @@
 package com.devuloopers.knet.domain.util
 
+import com.devuloopers.knet.domain.network.decoder.BodyDecoder
+import com.devuloopers.knet.domain.network.decoder.BodyTextDecoder
+import com.devuloopers.knet.domain.network.decoder.DecodedTextResult
+import com.devuloopers.knet.domain.network.decoder.MediaTypeInspector
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 
@@ -7,43 +11,27 @@ import kotlinx.serialization.json.JsonElement
  * Pure Kotlin Multiplatform utility functions for decoding and formatting HTTP request/response body payloads.
  */
 
-private val BINARY_CONTENT_TYPES = setOf(
-    "application/x-protobuf",
-    "application/protobuf",
-    "application/vnd.google.protobuf",
-    "application/octet-stream",
-    "application/grpc",
-    "image/",
-    "audio/",
-    "video/",
-    "font/"
-)
-
 /**
- * Returns true if the Content-Type indicates a non-text binary payload.
+ * Returns true if the Content-Type indicates a non-text binary payload category.
  */
 fun isBinaryContentType(contentType: String?): Boolean {
-    if (contentType == null) return false
-    val lower = contentType.lowercase()
-    return BINARY_CONTENT_TYPES.any { lower.contains(it) }
+    return MediaTypeInspector.inspectCategory(contentType) != null
 }
 
 /**
- * Safely decodes a byte array into a UTF-8 string payload.
+ * Safely decodes a byte array into a UTF-8 string payload, executing transport Content-Encoding decompression.
  */
 fun decodeBodyToText(
     body: ByteArray?,
     headers: List<Pair<String, String>> = emptyList()
 ): String {
-    if (body == null || body.isEmpty()) return ""
-    val contentType = headers.firstOrNull { it.first.equals("Content-Type", ignoreCase = true) }?.second
-    if (isBinaryContentType(contentType)) {
-        return "[Binary Payload - ${body.size} bytes]"
-    }
-    return try {
-        body.decodeToString()
-    } catch (_: Throwable) {
-        "[Binary Data - ${body.size} bytes]"
+    val decodedBodyResult = BodyDecoder.decode(body, headers)
+    return when (val textResult = BodyTextDecoder.decode(decodedBodyResult, headers)) {
+        is DecodedTextResult.Success -> textResult.text
+        is DecodedTextResult.BinaryKnownType -> "[Binary Payload - ${textResult.size} B (${textResult.category.name})]"
+        is DecodedTextResult.BinaryUnknownType -> "[Binary Payload - ${textResult.size} B]"
+        is DecodedTextResult.UnsupportedEncoding -> "[Unsupported Content-Encoding: '${textResult.encoding}' (${textResult.size} B)]"
+        is DecodedTextResult.DecodingError -> "[Decompression Failed (${textResult.encoding}): ${textResult.errorMessage}]"
     }
 }
 

@@ -23,7 +23,11 @@ public object DatabaseFactory {
             factory = { KNetDatabase_Impl() }
         )
         builder.setDriver(BundledSQLiteDriver())
-        builder.addMigrations(DatabaseMigrations.MIGRATION_1_2, DatabaseMigrations.MIGRATION_3_4)
+        builder.addMigrations(
+            DatabaseMigrations.MIGRATION_1_2,
+            DatabaseMigrations.MIGRATION_3_4,
+            DatabaseMigrations.MIGRATION_4_5
+        )
         builder.fallbackToDestructiveMigration(dropAllTables = true)
         return builder.build()
     }

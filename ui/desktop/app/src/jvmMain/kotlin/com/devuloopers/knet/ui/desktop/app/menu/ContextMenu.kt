@@ -11,12 +11,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
-import com.devuloopers.knet.ui.core.theme.KNetColors
-import com.devuloopers.knet.ui.core.theme.KNetShapes
+import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 /**
  * Generic context popup menu primitive component.
@@ -31,11 +28,15 @@ public fun ContextMenu(
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val themeColors = KNetTheme.colors
+    val typography = KNetTheme.typography
+    val shapes = KNetTheme.shapes
+
     Popup(onDismissRequest = onDismiss) {
         Column(
             modifier = modifier
-                .background(KNetColors.SurfaceDark, KNetShapes.Medium)
-                .border(1.dp, KNetColors.BorderDark, KNetShapes.Medium)
+                .background(themeColors.surface, shapes.medium)
+                .border(1.dp, themeColors.border, shapes.medium)
                 .padding(vertical = 4.dp)
         ) {
             items.forEach { item ->
@@ -51,16 +52,13 @@ public fun ContextMenu(
                 ) {
                     Text(
                         text = item.label,
-                        color = if (item.isEnabled) KNetColors.TextPrimary else KNetColors.TextMuted,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Normal,
+                        style = typography.bodySmall.copy(color = if (item.isEnabled) themeColors.textPrimary else themeColors.textMuted),
                         modifier = Modifier.weight(1f)
                     )
                     if (item.shortcut != null) {
                         Text(
                             text = item.shortcut,
-                            color = KNetColors.TextMuted,
-                            fontSize = 10.sp
+                            style = typography.caption.copy(color = themeColors.textMuted)
                         )
                     }
                 }

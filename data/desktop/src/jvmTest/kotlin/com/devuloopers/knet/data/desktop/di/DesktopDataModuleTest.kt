@@ -12,6 +12,6 @@ class DesktopDataModuleTest {
     @Test
     fun testDesktopDataModuleExposesSubModules() {
         assertTrue(DesktopDataModule.all.isNotEmpty(), "DesktopDataModule.all must not be empty")
-        assertEquals(3, DesktopDataModule.all.size, "DesktopDataModule.all must contain datasource, runtime, and repositories modules")
+        assertEquals(4, DesktopDataModule.all.size, "DesktopDataModule.all must contain datasource, runtime, repositories, and useCases modules")
     }
 }

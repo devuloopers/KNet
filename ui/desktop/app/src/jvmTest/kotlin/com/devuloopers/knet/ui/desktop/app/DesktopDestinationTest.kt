@@ -11,7 +11,6 @@ class DesktopDestinationTest {
 
     @Test
     fun `verify all desktop destinations exist`() {
-        assertNotNull(DesktopDestination.Workspace)
         assertNotNull(DesktopDestination.Traffic)
         assertNotNull(DesktopDestination.Inspector)
         assertNotNull(DesktopDestination.ApiStudio)

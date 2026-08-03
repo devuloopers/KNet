@@ -7,21 +7,21 @@ import java.util.concurrent.CopyOnWriteArrayList
  * Manages Desktop application shutdown hooks and resource cleanup.
  * Decoupled from specific repository, proxy, or database implementations.
  */
-public object ApplicationLifecycle {
+object ApplicationLifecycle {
 
     private val resources = CopyOnWriteArrayList<ShutdownAware>()
 
     /**
      * Registers a [ShutdownAware] resource for cleanup during application shutdown.
      */
-    public fun registerResource(resource: ShutdownAware) {
+    fun registerResource(resource: ShutdownAware) {
         resources.add(resource)
     }
 
     /**
      * Installs JVM runtime shutdown hook to trigger resource cleanup when process terminates.
      */
-    public fun installShutdownHook() {
+    fun installShutdownHook() {
         Runtime.getRuntime().addShutdownHook(Thread {
             shutdown()
         })
@@ -30,7 +30,7 @@ public object ApplicationLifecycle {
     /**
      * Executes resource cleanup in reverse registration order.
      */
-    public fun shutdown() {
+    fun shutdown() {
         KNetLogger.info(tag = "ApplicationLifecycle") { "Desktop application shutdown sequence initiated." }
         resources.reversed().forEach { resource ->
             try {

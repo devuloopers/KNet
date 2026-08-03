@@ -1,11 +1,14 @@
 package com.devuloopers.knet.engine.proxy.handler
 
-import com.devuloopers.knet.engine.certificate.CertificateAuthority
-import com.devuloopers.knet.engine.certificate.CertificateCache
-import com.devuloopers.knet.engine.proxy.mapper.HttpMapper
 import com.devuloopers.knet.core.logger.KNetLogger
 import com.devuloopers.knet.domain.network.model.HttpTimings
 import com.devuloopers.knet.domain.network.model.ProxyTrafficListener
+import com.devuloopers.knet.engine.certificate.CertificateAuthority
+import com.devuloopers.knet.engine.certificate.CertificateCache
+import com.devuloopers.knet.engine.proxy.dns.NettyDnsResolver
+import com.devuloopers.knet.engine.proxy.mapper.HttpMapper
+import com.devuloopers.knet.engine.proxy.ssl.ProxyTrustManager
+import com.devuloopers.knet.engine.proxy.timing.NetworkTimingCollector
 import io.netty.bootstrap.Bootstrap
 import io.netty.channel.Channel
 import io.netty.channel.ChannelHandlerContext
@@ -13,20 +16,13 @@ import io.netty.channel.ChannelInitializer
 import io.netty.channel.SimpleChannelInboundHandler
 import io.netty.channel.socket.SocketChannel
 import io.netty.channel.socket.nio.NioSocketChannel
-import io.netty.handler.codec.http.DefaultFullHttpRequest
-import io.netty.handler.codec.http.DefaultFullHttpResponse
-import io.netty.handler.codec.http.FullHttpRequest
-import io.netty.handler.codec.http.FullHttpResponse
-import io.netty.handler.codec.http.HttpClientCodec
-import io.netty.handler.codec.http.HttpHeaderNames
-import io.netty.handler.codec.http.HttpHeaderValues
-import io.netty.handler.codec.http.HttpObjectAggregator
-import io.netty.handler.codec.http.HttpResponseStatus
-import io.netty.handler.codec.http.HttpServerCodec
-import io.netty.handler.codec.http.HttpVersion
+import io.netty.handler.codec.http.*
 import io.netty.handler.ssl.SslContextBuilder
-import io.netty.handler.ssl.util.InsecureTrustManagerFactory
 import io.netty.util.AttributeKey
+import io.netty.util.ReferenceCountUtil
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import java.net.InetAddress
 import java.net.URI
 
@@ -40,7 +36,8 @@ private const val TAG = "ProxyEngine"
 class KNetProxyHandler(
     private val ca: CertificateAuthority,
     private val certCache: CertificateCache,
-    private val listener: ProxyTrafficListener? = null
+    private val listener: ProxyTrafficListener? = null,
+    private val strictSsl: Boolean = false
 ) : SimpleChannelInboundHandler<FullHttpRequest>() {
 
     companion object {
@@ -50,18 +47,20 @@ class KNetProxyHandler(
         private val TX_ID_ATTR = AttributeKey.valueOf<String>("knet.txId")
     }
 
-    override fun channelRead0(context: ChannelHandlerContext, msg: FullHttpRequest) {
-        if (msg.method().name() == "CONNECT") {
-            handleConnect(context, msg)
+    override fun channelActive(context: ChannelHandlerContext) {
+        println("[ENGINE_DEBUG] 🔌 Client TCP socket connected: ${context.channel().remoteAddress()}")
+        super.channelActive(context)
+    }
+
+    override fun channelRead0(context: ChannelHandlerContext, request: FullHttpRequest) {
+        println("[ENGINE_DEBUG] 📩 Intercepted Request: ${request.method()} ${request.uri()}")
+        if (request.method() == HttpMethod.CONNECT) {
+            handleConnect(context, request)
         } else {
-            handleRequest(context, msg)
+            handleRequest(context, request)
         }
     }
 
-    /**
-     * Intercepts and handles HTTPS CONNECT requests from clients.
-     * Establishes dynamic TLS context using CertificateCache and swaps HTTP codecs.
-     */
     private fun handleConnect(context: ChannelHandlerContext, request: FullHttpRequest) {
         val uri = request.uri()
         val parts = uri.split(":")
@@ -72,7 +71,11 @@ class KNetProxyHandler(
         context.channel().attr(PORT_ATTR).set(port)
         context.channel().attr(SSL_ATTR).set(true)
 
-        val response = DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK)
+        val response = DefaultFullHttpResponse(
+            HttpVersion.HTTP_1_1,
+            HttpResponseStatus(200, "Connection Established")
+        )
+        response.headers().set("Proxy-Agent", "KNet")
         context.writeAndFlush(response).addListener { future ->
             if (future.isSuccess) {
                 val pipeline = context.pipeline()
@@ -91,9 +94,6 @@ class KNetProxyHandler(
         }
     }
 
-    /**
-     * Relays plaintext HTTP or decrypted HTTPS client requests to the remote target server.
-     */
     private fun handleRequest(context: ChannelHandlerContext, request: FullHttpRequest) {
         val channel = context.channel()
         val isSsl = channel.attr(SSL_ATTR).get() ?: false
@@ -103,7 +103,7 @@ class KNetProxyHandler(
         if (targetHost == null) {
             val uri = request.uri()
             if (uri.startsWith("http://")) {
-                val urlObj = URI.create(uri).toURL()
+                val urlObj = URI.create(uri)
                 targetHost = urlObj.host
                 targetPort = if (urlObj.port != -1) urlObj.port else 80
             } else {
@@ -117,24 +117,23 @@ class KNetProxyHandler(
         }
 
         if (targetHost == null) {
-            context.writeAndFlush(DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.BAD_REQUEST))
+            KNetLogger.error(TAG) { "Failed to extract target host for request ${request.uri()}" }
+            val errResponse = DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.BAD_REQUEST)
+            context.writeAndFlush(errResponse)
             return
         }
 
-        val mappedRequest = HttpMapper.mapRequest(request, targetHost, isSsl)
-        KNetLogger.info(TAG) { "KNet Proxy Captured: ${mappedRequest.method} ${mappedRequest.url}" }
-
-        context.channel().attr(TX_ID_ATTR).set(mappedRequest.id)
-        listener?.onRequestCaptured(mappedRequest)
-
-        val relativeUri = if (request.uri().startsWith("http://") || request.uri().startsWith("https://")) {
-            val urlObj = URI.create(request.uri()).toURL()
-            val path = urlObj.path.ifEmpty { "/" }
-            val query = urlObj.query
-            if (query != null) "$path?$query" else path
+        val relativeUri = if (request.uri().startsWith("http://")) {
+            val uriObj = URI.create(request.uri())
+            val rawPath = uriObj.rawPath.ifEmpty { "/" }
+            if (uriObj.rawQuery != null) "$rawPath?${uriObj.rawQuery}" else rawPath
         } else {
             request.uri()
         }
+
+        val mappedRequest = HttpMapper.mapRequest(request, isSsl, targetHost, targetPort, relativeUri)
+        KNetLogger.info(TAG) { "KNet Proxy Intercepted: ${mappedRequest.method} ${mappedRequest.url}" }
+        listener?.onRequestCaptured(mappedRequest)
 
         val outboundRequest = DefaultFullHttpRequest(
             request.protocolVersion(),
@@ -144,62 +143,70 @@ class KNetProxyHandler(
         )
         outboundRequest.headers().set(request.headers())
         outboundRequest.headers().remove("Proxy-Connection")
+        outboundRequest.headers().set(
+            HttpHeaderNames.HOST,
+            if (targetPort == 80 || targetPort == 443) targetHost else "$targetHost:$targetPort"
+        )
 
-        val dnsStartTime = System.currentTimeMillis()
-        try {
-            InetAddress.getByName(targetHost)
-        } catch (_: Exception) {
-            // Fall back if DNS lookup fails
-        }
-        val dnsDuration = (System.currentTimeMillis() - dnsStartTime).coerceAtLeast(0L)
+        val timingCollector = NetworkTimingCollector()
+        timingCollector.markDnsStart()
 
-        val connectStartTime = System.currentTimeMillis()
-        var connectEndTime = connectStartTime
-        val sslDurationHolder = longArrayOf(0L)
+        CoroutineScope(Dispatchers.IO).launch {
+            val resolvedHost = try {
+                val addr = InetAddress.getByName(targetHost)
+                timingCollector.markDnsEnd()
+                addr.hostAddress
+            } catch (_: Exception) {
+                timingCollector.markDnsEnd()
+                targetHost
+            }
 
-        val clientBootstrap = Bootstrap()
-        clientBootstrap.group(context.channel().eventLoop())
-            .channel(NioSocketChannel::class.java)
-            .handler(object : ChannelInitializer<SocketChannel>() {
-                override fun initChannel(ch: SocketChannel) {
-                    val pipeline = ch.pipeline()
+            context.channel().eventLoop().execute {
+                timingCollector.markTcpStart()
 
-                    if (isSsl) {
-                        val sslCtx = SslContextBuilder.forClient()
-                            .trustManager(InsecureTrustManagerFactory.INSTANCE)
-                            .build()
-                        val sslHandler = sslCtx.newHandler(ch.alloc(), targetHost, targetPort)
-                        sslHandler.handshakeFuture().addListener { handshakeFuture ->
-                            if (handshakeFuture.isSuccess) {
-                                val sslEndTime = System.currentTimeMillis()
-                                sslDurationHolder[0] = (sslEndTime - connectEndTime).coerceAtLeast(0L)
+                val clientBootstrap = Bootstrap()
+                clientBootstrap.group(context.channel().eventLoop())
+                    .channel(NioSocketChannel::class.java)
+                    .resolver(NettyDnsResolver.resolverGroup)
+                    .handler(object : ChannelInitializer<SocketChannel>() {
+                        override fun initChannel(ch: SocketChannel) {
+                            val pipeline = ch.pipeline()
+
+                            if (isSsl) {
+                                timingCollector.markTlsStart()
+                                val sslCtx = SslContextBuilder.forClient()
+                                    .trustManager(ProxyTrustManager.getTrustManagerFactory(strictSsl))
+                                    .build()
+                                val sslHandler = sslCtx.newHandler(ch.alloc(), targetHost, targetPort)
+                                sslHandler.handshakeFuture().addListener { handshakeFuture ->
+                                    if (handshakeFuture.isSuccess) {
+                                        timingCollector.markTlsEnd()
+                                    }
+                                }
+                                pipeline.addLast("ssl", sslHandler)
                             }
+                            pipeline.addLast("httpCodec", HttpClientCodec())
+                            pipeline.addLast(
+                                "outboundHandler",
+                                KNetOutboundHandler(
+                                    clientChannel = context.channel(),
+                                    request = outboundRequest,
+                                    listener = listener,
+                                    transactionId = mappedRequest.id,
+                                    timingCollector = timingCollector
+                                )
+                            )
                         }
-                        pipeline.addLast("ssl", sslHandler)
-                    }
-                    pipeline.addLast("httpCodec", HttpClientCodec())
-                    pipeline.addLast("aggregator", HttpObjectAggregator(10 * 1024 * 1024))
-                    pipeline.addLast(
-                        "outboundHandler",
-                        KNetOutboundHandler(
-                            clientChannel = context.channel(),
-                            request = outboundRequest,
-                            listener = listener,
-                            transactionId = mappedRequest.id,
-                            getDnsDuration = { dnsDuration },
-                            getTcpDuration = { (connectEndTime - connectStartTime).coerceAtLeast(0L) },
-                            getSslDuration = { sslDurationHolder[0] }
-                        )
-                    )
-                }
-            })
+                    })
 
-        clientBootstrap.connect(targetHost, targetPort).addListener { future ->
-            connectEndTime = System.currentTimeMillis()
-            if (!future.isSuccess) {
-                KNetLogger.error(TAG, future.cause()) { "KNet Proxy Failed to connect to $targetHost:$targetPort" }
-                val errResponse = DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.BAD_GATEWAY)
-                context.writeAndFlush(errResponse)
+                clientBootstrap.connect(resolvedHost, targetPort).addListener { future ->
+                    timingCollector.markTcpEnd()
+                    if (!future.isSuccess) {
+                        KNetLogger.error(TAG, future.cause()) { "KNet Proxy Failed to connect to $targetHost:$targetPort" }
+                        val errResponse = DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.BAD_GATEWAY)
+                        context.writeAndFlush(errResponse)
+                    }
+                }
             }
         }
     }
@@ -215,59 +222,100 @@ class KNetProxyHandler(
 }
 
 /**
- * Netty outbound client connection handler.
- * Fires the request to the remote server, listens to the response, maps it, and writes it back to the client.
+ * Netty outbound client connection handler supporting real-time chunked response streaming.
+ * Streams HttpResponse and HttpContent to client channel while accumulating body bytes
+ * for proxy inspection. Chunked responses arrive as separate HttpContent messages;
+ * this handler buffers them in a [java.io.ByteArrayOutputStream] and merges the
+ * accumulated body into the mapped [com.devuloopers.knet.domain.network.model.HttpResponse]
+ * on [io.netty.handler.codec.http.LastHttpContent] before firing [ProxyTrafficListener.onResponseCaptured].
  */
 class KNetOutboundHandler(
     private val clientChannel: Channel,
     private val request: FullHttpRequest,
     private val listener: ProxyTrafficListener? = null,
     private val transactionId: String,
-    private val getDnsDuration: () -> Long = { 0L },
-    private val getTcpDuration: () -> Long = { 0L },
-    private val getSslDuration: () -> Long = { 0L }
-) : SimpleChannelInboundHandler<FullHttpResponse>() {
+    private val timingCollector: NetworkTimingCollector = NetworkTimingCollector()
+) : SimpleChannelInboundHandler<HttpObject>() {
 
-    private var requestSentTime: Long = System.currentTimeMillis()
+    private var mappedResponse: com.devuloopers.knet.domain.network.model.HttpResponse? = null
+    private var isKeepAlive: Boolean = true
+
+    /** Accumulates body bytes from chunked HttpContent messages for inspection capture. */
+    private val responseBodyBuffer = java.io.ByteArrayOutputStream()
 
     override fun channelActive(context: ChannelHandlerContext) {
-        requestSentTime = System.currentTimeMillis()
-        context.writeAndFlush(request)
+        timingCollector.markRequestSent()
+        context.writeAndFlush(request).addListener {
+            timingCollector.markRequestSent()
+        }
     }
 
-    override fun channelRead0(context: ChannelHandlerContext, msg: FullHttpResponse) {
-        val responseReceivedTime = System.currentTimeMillis()
-        val mappedResponse = HttpMapper.mapResponse(msg)
-        KNetLogger.info(TAG) { "KNet Proxy Response: ${mappedResponse.statusCode} ${mappedResponse.statusText}" }
+    override fun channelRead0(context: ChannelHandlerContext, msg: HttpObject) {
+        when (msg) {
+            is HttpResponse -> {
+                timingCollector.markFirstByteReceived()
 
-        val dnsDuration = getDnsDuration()
-        val tcpDuration = getTcpDuration()
-        val tlsDuration = getSslDuration()
-        val ttfbDuration = (responseReceivedTime - requestSentTime).coerceAtLeast(0L)
-        val downloadDuration = (System.currentTimeMillis() - responseReceivedTime).coerceAtLeast(0L)
+                if (msg is FullHttpResponse) {
+                    mappedResponse = HttpMapper.mapResponse(msg)
+                } else {
+                    mappedResponse = HttpMapper.mapResponseHeaders(msg)
+                }
+                isKeepAlive = HttpUtil.isKeepAlive(msg)
+                KNetLogger.info(TAG) { "KNet Proxy Response Headers: ${msg.status()}" }
 
-        val totalDuration = dnsDuration + tcpDuration + tlsDuration + ttfbDuration + downloadDuration
+                if (!isKeepAlive) {
+                    msg.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE)
+                }
+                clientChannel.writeAndFlush(ReferenceCountUtil.retain(msg))
+            }
 
-        val timings = HttpTimings(
-            dnsMs = dnsDuration,
-            tcpMs = tcpDuration,
-            tlsMs = tlsDuration,
-            ttfbMs = ttfbDuration,
-            downloadMs = downloadDuration
-        )
+            is HttpContent -> {
+                // Accumulate body chunk bytes for inspection capture before forwarding
+                val chunk = msg.content()
+                if (chunk.readableBytes() > 0) {
+                    val bytes = ByteArray(chunk.readableBytes())
+                    chunk.getBytes(chunk.readerIndex(), bytes)
+                    responseBodyBuffer.write(bytes)
+                }
 
-        listener?.onResponseCaptured(
-            transactionId = transactionId,
-            response = mappedResponse,
-            durationMs = totalDuration,
-            timings = timings
-        )
+                clientChannel.writeAndFlush(ReferenceCountUtil.retain(msg))
 
-        msg.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE)
+                if (msg is LastHttpContent) {
+                    timingCollector.markLastByteReceived()
 
-        clientChannel.writeAndFlush(msg.retain()).addListener {
-            context.close()
-            clientChannel.close()
+                    val timings = timingCollector.getTimings()
+                    val totalDuration = timingCollector.getTotalDuration()
+
+                    // Merge accumulated chunked body bytes into the mapped response.
+                    // For FullHttpResponse, body is already extracted by mapResponse();
+                    // for chunked responses, mapResponseHeaders() left body = null.
+                    val accumulatedBody = responseBodyBuffer.toByteArray().takeIf { it.isNotEmpty() }
+                    val finalResponse = mappedResponse?.let { response ->
+                        com.devuloopers.knet.domain.network.model.HttpResponse(
+                            statusCode = response.statusCode,
+                            statusText = response.statusText,
+                            headers = response.headers,
+                            body = response.body ?: accumulatedBody,
+                            timestamp = response.timestamp
+                        )
+                    }
+                    responseBodyBuffer.reset()
+
+                    finalResponse?.let { response ->
+                        listener?.onResponseCaptured(
+                            transactionId = transactionId,
+                            response = response,
+                            durationMs = totalDuration,
+                            timings = timings
+                        )
+                    }
+
+                    if (!isKeepAlive) {
+                        context.close()
+                        clientChannel.close()
+                    }
+                }
+            }
         }
     }
 

@@ -1,23 +1,15 @@
 package com.devuloopers.knet.ui.desktop.app.navigation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import com.devuloopers.knet.ui.desktop.apistudio.view.ApiStudioScreen
-import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.ApiStudioViewModel
-import com.devuloopers.knet.ui.desktop.certificate.view.CertificateManagerScreen
-import com.devuloopers.knet.ui.desktop.certificate.viewmodel.CertificateViewModel
-import com.devuloopers.knet.ui.desktop.inspector.view.InspectorPanel
-import com.devuloopers.knet.ui.desktop.inspector.viewmodel.InspectorViewModel
-import com.devuloopers.knet.ui.desktop.scripting.view.ScriptingScreen
-import com.devuloopers.knet.ui.desktop.scripting.viewmodel.ScriptingViewModel
-import com.devuloopers.knet.ui.desktop.traffic.view.TrafficScreen
-import com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficViewModel
-import com.devuloopers.knet.ui.desktop.workspace.layout.WorkspaceLayout
-import com.devuloopers.knet.ui.desktop.workspace.viewmodel.WorkspaceViewModel
-import org.koin.compose.viewmodel.koinViewModel
+import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 /**
- * Composable host routing navigation selections explicitly to their feature module screens.
+ * Slot-driven NavigationHost composable routing active destinations in the Desktop Application Framework.
  *
  * @param destination Currently active target screen.
  * @param modifier Layout modifier.
@@ -27,39 +19,25 @@ public fun NavigationHost(
     destination: DesktopDestination,
     modifier: Modifier = Modifier
 ) {
-    when (destination) {
-        DesktopDestination.Workspace -> {
-            val viewModel: WorkspaceViewModel = koinViewModel()
-            WorkspaceLayout(viewModel = viewModel, modifier = modifier)
+    val themeColors = KNetTheme.colors
+    val typography = KNetTheme.typography
+
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        val label = when (destination) {
+            DesktopDestination.Traffic -> "Live Traffic Feed (Awaiting Feature Migration Phase)"
+            DesktopDestination.Inspector -> "Transaction Inspector (Awaiting Feature Migration Phase)"
+            DesktopDestination.ApiStudio -> "API Request Studio (Awaiting Feature Migration Phase)"
+            DesktopDestination.Scripting -> "Automation Scripting Studio (Awaiting Feature Migration Phase)"
+            DesktopDestination.Certificate -> "CA Certificates Manager (Awaiting Feature Migration Phase)"
+            DesktopDestination.Settings -> "Application Settings (Awaiting Feature Migration Phase)"
         }
 
-        DesktopDestination.Traffic -> {
-            val viewModel: TrafficViewModel = koinViewModel()
-            TrafficScreen(viewModel = viewModel, modifier = modifier)
-        }
-
-        DesktopDestination.Inspector -> {
-            val viewModel: InspectorViewModel = koinViewModel()
-            InspectorPanel(viewModel = viewModel, modifier = modifier)
-        }
-
-        DesktopDestination.ApiStudio -> {
-            val viewModel: ApiStudioViewModel = koinViewModel()
-            ApiStudioScreen(viewModel = viewModel, modifier = modifier)
-        }
-
-        DesktopDestination.Scripting -> {
-            val viewModel: ScriptingViewModel = koinViewModel()
-            ScriptingScreen(viewModel = viewModel, modifier = modifier)
-        }
-
-        DesktopDestination.Certificate -> {
-            val viewModel: CertificateViewModel = koinViewModel()
-            CertificateManagerScreen(viewModel = viewModel, modifier = modifier)
-        }
-
-        DesktopDestination.Settings -> {
-            SettingsPlaceholderScreen()
-        }
+        Text(
+            text = label,
+            style = typography.titleMedium.copy(color = themeColors.textSecondary)
+        )
     }
 }

@@ -1,21 +1,37 @@
 package com.devuloopers.knet.data.desktop.di
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
+import com.devuloopers.knet.core.http.client.KNetApiClient
+import com.devuloopers.knet.core.http.execution.HttpExecutor
 import com.devuloopers.knet.data.desktop.apistudio.autocomplete.ProxyHistoryHeaderLookup
 import com.devuloopers.knet.data.desktop.apistudio.repository.CollectionsRepositoryImpl
 import com.devuloopers.knet.data.desktop.core.KNetCoreRepository
 import com.devuloopers.knet.data.desktop.inspector.repository.InspectorRepositoryImpl
 import com.devuloopers.knet.data.desktop.traffic.repository.LiveTrafficRepositoryImpl
+import com.devuloopers.knet.data.desktop.proxy.repository.ProxyEngineRepositoryImpl
 import com.devuloopers.knet.data.desktop.rules.repository.RulesRepositoryImpl
 import com.devuloopers.knet.data.desktop.runtime.CertificateRuntimeRepository
 import com.devuloopers.knet.data.desktop.runtime.ProxyRuntimeRepository
 import com.devuloopers.knet.data.desktop.runtime.SessionRuntimeRepository
 import com.devuloopers.knet.data.desktop.workspace.repository.WidgetPreferencesRepositoryImpl
 import com.devuloopers.knet.domain.collection.repository.CollectionsRepository
+import com.devuloopers.knet.domain.collection.usecase.SaveLiveTransactionToCollectionUseCase
 import com.devuloopers.knet.domain.inspector.repository.InspectorRepository
+import com.devuloopers.knet.domain.proxy.repository.ProxyEngineRepository
+import com.devuloopers.knet.domain.proxy.usecase.ObserveProxyEngineStateUseCase
+import com.devuloopers.knet.domain.proxy.usecase.StartProxyEngineUseCase
+import com.devuloopers.knet.domain.proxy.usecase.StopProxyEngineUseCase
 import com.devuloopers.knet.domain.rules.repository.RulesRepository
+import com.devuloopers.knet.domain.rules.usecase.GetRulesUseCase
+import com.devuloopers.knet.domain.rules.usecase.SaveRuleUseCase
+import com.devuloopers.knet.domain.rules.usecase.ToggleRuleUseCase
 import com.devuloopers.knet.domain.traffic.repository.LiveTrafficRepository
+import com.devuloopers.knet.domain.traffic.usecase.ClearLiveTrafficUseCase
+import com.devuloopers.knet.domain.traffic.usecase.GetLiveTrafficUseCase
+import com.devuloopers.knet.domain.traffic.usecase.LoadTransactionBodyUseCase
 import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
+import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
+import com.devuloopers.knet.domain.workspace.usecase.SaveWorkspaceLayoutUseCase
 import com.devuloopers.knet.storage.database.DatabaseFactory
 import com.devuloopers.knet.storage.database.KNetDatabase
 import org.koin.core.module.Module
@@ -25,7 +41,7 @@ import okio.Path.Companion.toPath
 
 /**
  * Desktop Data Layer Koin Dependency Injection Registry.
- * Organizes runtime, datasource, and repository modules.
+ * Organizes runtime, datasource, repository, and usecase modules.
  */
 public object DesktopDataModule {
 
@@ -60,6 +76,8 @@ public object DesktopDataModule {
         single {
             KNetCoreRepository(get(), get(), get())
         }
+        single { KNetApiClient() }
+        single<HttpExecutor> { get<KNetApiClient>() }
     }
 
     public val repositories: Module = module {
@@ -68,10 +86,26 @@ public object DesktopDataModule {
             CollectionsRepositoryImpl(db.collectionDao())
         }
         single<LiveTrafficRepository> { LiveTrafficRepositoryImpl(get()) }
+        single<ProxyEngineRepository> { ProxyEngineRepositoryImpl(get(), get()) }
         single<InspectorRepository> { InspectorRepositoryImpl(get()) }
         single<RulesRepository> { RulesRepositoryImpl() }
         single<WidgetPreferencesRepository> { WidgetPreferencesRepositoryImpl(get()) }
         single { ProxyHistoryHeaderLookup(get()) }
+    }
+
+    public val useCases: Module = module {
+        factory { GetWorkspaceLayoutUseCase(get()) }
+        factory { SaveWorkspaceLayoutUseCase(get()) }
+        factory { GetLiveTrafficUseCase(get()) }
+        factory { ClearLiveTrafficUseCase(get()) }
+        factory { LoadTransactionBodyUseCase(get()) }
+        factory { StartProxyEngineUseCase(get()) }
+        factory { StopProxyEngineUseCase(get()) }
+        factory { ObserveProxyEngineStateUseCase(get()) }
+        factory { GetRulesUseCase(get()) }
+        factory { SaveRuleUseCase(get()) }
+        factory { ToggleRuleUseCase(get()) }
+        factory { SaveLiveTransactionToCollectionUseCase(get()) }
     }
 
     /**
@@ -80,6 +114,7 @@ public object DesktopDataModule {
     public val all: List<Module> = listOf(
         datasource,
         runtime,
-        repositories
+        repositories,
+        useCases
     )
 }

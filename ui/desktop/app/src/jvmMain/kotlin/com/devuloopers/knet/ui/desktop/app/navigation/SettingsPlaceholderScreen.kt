@@ -18,12 +18,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.devuloopers.knet.ui.core.theme.KNetColors
-import com.devuloopers.knet.ui.core.theme.KNetShapes
+import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 /**
  * Centered placeholder screen displaying Application Settings information.
@@ -32,18 +28,22 @@ import com.devuloopers.knet.ui.core.theme.KNetShapes
 public fun SettingsPlaceholderScreen(
     modifier: Modifier = Modifier
 ) {
+    val themeColors = KNetTheme.colors
+    val typography = KNetTheme.typography
+    val shapes = KNetTheme.shapes
+
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(KNetColors.BackgroundDark)
+            .background(themeColors.background)
             .padding(24.dp),
         contentAlignment = Alignment.Center
     ) {
         Box(
             modifier = Modifier
                 .width(420.dp)
-                .background(KNetColors.SurfaceDark, KNetShapes.Medium)
-                .border(1.dp, KNetColors.BorderDark, KNetShapes.Medium)
+                .background(themeColors.surface, shapes.medium)
+                .border(1.dp, themeColors.border, shapes.medium)
                 .padding(32.dp),
             contentAlignment = Alignment.Center
         ) {
@@ -54,7 +54,7 @@ public fun SettingsPlaceholderScreen(
                 Icon(
                     imageVector = Icons.Default.Settings,
                     contentDescription = "Settings Icon",
-                    tint = KNetColors.ActiveBlue,
+                    tint = themeColors.accent,
                     modifier = Modifier.size(48.dp)
                 )
 
@@ -62,19 +62,14 @@ public fun SettingsPlaceholderScreen(
 
                 Text(
                     text = "Application Settings",
-                    color = Color.White,
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold
+                    style = typography.titleLarge.copy(color = themeColors.textPrimary)
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Text(
-                    text = "Configure local proxy server port, upstream proxy chaining, payload cache limits, and dark theme.",
-                    color = KNetColors.TextSecondary,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Normal,
-                    lineHeight = 16.sp
+                    text = "Configure local proxy server port, upstream proxy chaining, payload cache limits, and theme mode.",
+                    style = typography.bodySmall.copy(color = themeColors.textSecondary)
                 )
             }
         }

@@ -15,6 +15,7 @@ import io.netty.handler.codec.http.HttpObjectAggregator
 import io.netty.handler.codec.http.HttpServerCodec
 import io.netty.handler.logging.LogLevel
 import io.netty.handler.logging.LoggingHandler
+import io.netty.util.ResourceLeakDetector
 import java.net.InetSocketAddress
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
@@ -60,6 +61,8 @@ class KNetProxyServer(
             throw IllegalStateException("KNetProxyServer is already running.")
         }
 
+        ResourceLeakDetector.setLevel(ResourceLeakDetector.Level.ADVANCED)
+
         bossGroup = NioEventLoopGroup(1)
         workerGroup = NioEventLoopGroup()
 
@@ -80,7 +83,7 @@ class KNetProxyServer(
                 }
             })
 
-        val channelFuture = bootstrap.bind(InetSocketAddress(port)).sync()
+        val channelFuture = bootstrap.bind(InetSocketAddress("0.0.0.0", port)).sync()
         serverChannel = channelFuture.channel()
     }
 

@@ -5,6 +5,9 @@ import androidx.room.PrimaryKey
 
 /**
  * Room database entity representing a single intercepted HTTP transaction.
+ *
+ * Body payload sizes are stored as dedicated columns so that [formattedSize] can be
+ * computed from metadata alone without reading body files from disk.
  */
 @Entity
 public data class HttpTransactionEntity(
@@ -13,10 +16,12 @@ public data class HttpTransactionEntity(
     val method: String,
     val requestHeadersJson: String,
     val requestBodyPath: String?,
+    val requestBodySize: Long = 0L,
     val responseStatusCode: Int?,
     val responseStatusText: String?,
     val responseHeadersJson: String?,
     val responseBodyPath: String?,
+    val responseBodySize: Long = 0L,
     val durationMs: Long,
     val timestamp: Long,
     val timingDnsMs: Long = 0L,

@@ -1,19 +1,10 @@
 package com.devuloopers.knet.ui.desktop.app.toolbar
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.devuloopers.knet.ui.core.theme.KNetColors
+import com.devuloopers.knet.ui.core.components.toolbar.KNetToolbar
+import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.app.navigation.DesktopDestination
 
 /**
@@ -29,24 +20,17 @@ public fun Toolbar(
     onDestinationSelected: (DesktopDestination) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(34.dp)
-            .background(KNetColors.BackgroundDark)
-            .padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
+    val themeColors = KNetTheme.colors
+    val typography = KNetTheme.typography
+
+    KNetToolbar(modifier = modifier) {
         Text(
             text = "KNet — Desktop Proxy Studio",
-            color = androidx.compose.ui.graphics.Color.White,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold
+            style = typography.titleSmall.copy(color = themeColors.textPrimary),
+            modifier = Modifier.weight(1f)
         )
 
         val destinationLabel = when (currentDestination) {
-            DesktopDestination.Workspace -> "Workspace"
             DesktopDestination.Traffic -> "Live Traffic"
             DesktopDestination.Inspector -> "Inspector"
             DesktopDestination.ApiStudio -> "API Studio"
@@ -57,9 +41,7 @@ public fun Toolbar(
 
         Text(
             text = destinationLabel,
-            color = KNetColors.ActiveBlue,
-            fontSize = 11.sp,
-            fontWeight = FontWeight.SemiBold
+            style = typography.labelMedium.copy(color = themeColors.accent)
         )
     }
 }

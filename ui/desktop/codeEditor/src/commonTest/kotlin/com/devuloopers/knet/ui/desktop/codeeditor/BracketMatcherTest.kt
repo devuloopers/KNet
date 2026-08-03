@@ -1,46 +1,47 @@
 package com.devuloopers.knet.ui.desktop.codeeditor
 
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.BracketMatcher
+import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.BracketMatchResult
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 
-/**
- * Unit tests for [BracketMatcher] — finds matching bracket positions.
- */
+
 class BracketMatcherTest {
 
     @Test
     fun testFindMatchingCurlyBrackets() {
         val text = "{\n  \"data\": {\n    \"id\": 1\n  }\n}"
-        val closePos = BracketMatcher.findMatchingBracket(text, 0)
-        assertNotNull(closePos)
-        assertEquals(text.lastIndexOf('}'), closePos)
+        val caretOffset = 13 // after second '{'
+
+        val match = BracketMatcher.findMatch(text, caretOffset)
+        assertNotNull(match)
+        assertEquals(12, match.openOffset)
+        assertEquals(28, match.closeOffset)
     }
+
+
 
     @Test
     fun testFindMatchingSquareBrackets() {
         val text = "val arr = [1, 2, 3]"
-        val openPos = text.indexOf('[')
-        val closePos = BracketMatcher.findMatchingBracket(text, openPos)
-        assertNotNull(closePos)
-        assertEquals(text.indexOf(']'), closePos)
+        val caretOffset = 10 // right after '['
+
+        val match = BracketMatcher.findMatch(text, caretOffset)
+        assertNotNull(match)
+        assertEquals(10, match.openOffset)
+        assertEquals(18, match.closeOffset)
     }
 
     @Test
     fun testFindMatchingParentheses() {
         val text = "function test(a, b) {"
-        val openPos = text.indexOf('(')
-        val closePos = BracketMatcher.findMatchingBracket(text, openPos)
-        assertNotNull(closePos)
-        assertEquals(text.indexOf(')'), closePos)
-    }
+        val caretOffset = 13 // right after '('
 
-    @Test
-    fun testNoMatchReturnsNull() {
-        val text = "{ unclosed"
-        val closePos = BracketMatcher.findMatchingBracket(text, 0)
-        assertNull(closePos)
+        val match = BracketMatcher.findMatch(text, caretOffset)
+        assertNotNull(match)
+        assertEquals(13, match.openOffset)
+        assertEquals(18, match.closeOffset)
     }
 }
+

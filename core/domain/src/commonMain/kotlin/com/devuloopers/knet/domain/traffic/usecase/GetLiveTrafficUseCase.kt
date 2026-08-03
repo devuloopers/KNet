@@ -6,7 +6,6 @@ import com.devuloopers.knet.domain.traffic.model.ProtocolFilter
 import com.devuloopers.knet.domain.traffic.model.TrafficItemUiState
 import com.devuloopers.knet.domain.traffic.model.UriDetails
 import com.devuloopers.knet.domain.traffic.repository.LiveTrafficRepository
-import com.devuloopers.knet.domain.util.decodeBodyToText
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOn
@@ -16,6 +15,10 @@ import java.net.URI
 /**
  * Domain UseCase that filters, formats, and transforms raw domain [HttpTransaction] streams
  * into immutable [LiveTrafficUiState] models off the main thread.
+ *
+ * Body payloads are intentionally omitted from the UI state produced by this use case.
+ * Body bytes are disk files and must only be read on-demand via [LoadTransactionBodyUseCase]
+ * when the user selects a row in the inspector.
  *
  * @property repository The live traffic repository contract.
  */
@@ -106,17 +109,18 @@ class GetLiveTrafficUseCase(
         val sizeText = if (tx.response == null) {
             "-"
         } else {
-            val totalBytes = (tx.request.body?.size ?: 0) + (tx.response.body?.size ?: 0)
+            // Sizes are stored at capture time in dedicated DB columns — never computed from body bytes.
+            val totalBytes = tx.requestBodySize + tx.responseBodySize
             when {
                 totalBytes >= 1024 * 1024 -> "%.2f MB".format(totalBytes / (1024.0 * 1024.0))
                 totalBytes >= 1024 -> "%.2f KB".format(totalBytes / 1024.0)
-                else -> "$totalBytes B"
+                totalBytes > 0L -> "$totalBytes B"
+                else -> "0 B"
             }
         }
 
-        val reqBodyText = decodeBodyToText(tx.request.body, tx.request.headers)
-        val resBodyText = decodeBodyToText(tx.response?.body, tx.response?.headers ?: emptyList())
-
+        // Body bytes are intentionally omitted here — disk I/O is deferred to LoadTransactionBodyUseCase.
+        // The inspector panel calls that use case when the user selects this row.
         return TrafficItemUiState(
             id = sequentialId,
             transactionId = tx.id,
@@ -128,8 +132,8 @@ class GetLiveTrafficUseCase(
             formattedTime = if (tx.response == null) "-" else "$durationMs ms",
             formattedSize = sizeText,
             dateGroup = "Today",
-            requestBody = reqBodyText,
-            responseBody = resBodyText,
+            requestBody = "",
+            responseBody = "",
             queryParams = uriDetails.queryParams,
             requestHeaders = tx.request.headers.toMap(),
             responseHeaders = tx.response?.headers?.toMap() ?: emptyMap(),

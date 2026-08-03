@@ -6,11 +6,6 @@ package com.devuloopers.knet.ui.desktop.app.navigation
 public sealed interface DesktopDestination {
 
     /**
-     * Workspace Explorer panel hosting collections, environments, and history.
-     */
-    public data object Workspace : DesktopDestination
-
-    /**
      * Live Traffic Explorer screen hosting real-time transaction tables and filters.
      */
     public data object Traffic : DesktopDestination

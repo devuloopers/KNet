@@ -11,11 +11,8 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.devuloopers.knet.ui.core.theme.KNetColors
-import com.devuloopers.knet.ui.core.theme.KNetShapes
+import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 /**
  * Host composable rendering toolbar actions.
@@ -28,16 +25,20 @@ public fun ToolbarHost(
     actions: List<ToolbarAction>,
     modifier: Modifier = Modifier
 ) {
+    val themeColors = KNetTheme.colors
+    val typography = KNetTheme.typography
+    val shapes = KNetTheme.shapes
+
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         actions.forEach { action ->
-            val textColor = action.color ?: KNetColors.ActiveBlue
+            val textColor = action.color ?: themeColors.accent
             Row(
                 modifier = Modifier
-                    .background(KNetColors.FieldDark, KNetShapes.Small)
+                    .background(themeColors.surfaceVariant, shapes.small)
                     .clickable(enabled = action.isEnabled) { action.onClick() }
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -53,9 +54,7 @@ public fun ToolbarHost(
                 }
                 Text(
                     text = action.label,
-                    color = textColor,
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Bold
+                    style = typography.labelSmall.copy(color = textColor)
                 )
             }
         }

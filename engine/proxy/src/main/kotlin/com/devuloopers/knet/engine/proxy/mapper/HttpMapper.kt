@@ -15,17 +15,26 @@ object HttpMapper {
 
     /**
      * Maps Netty's [FullHttpRequest] to KNet's domain [HttpRequest] model.
-     *
-     * @param nettyReq The Netty request object.
-     * @param host The target host.
-     * @param isSsl True if request is HTTPS.
-     * @return Mapped [HttpRequest] instance.
      */
     fun mapRequest(nettyReq: FullHttpRequest, host: String, isSsl: Boolean): HttpRequest {
+        return mapRequest(nettyReq, isSsl, host, if (isSsl) 443 else 80, nettyReq.uri())
+    }
+
+    /**
+     * Maps Netty's [FullHttpRequest] to KNet's domain [HttpRequest] model with explicit port and relative URI.
+     */
+    fun mapRequest(
+        nettyReq: FullHttpRequest,
+        isSsl: Boolean,
+        host: String,
+        port: Int,
+        relativeUri: String
+    ): HttpRequest {
         val headers = mapHeaders(nettyReq.headers())
         val body = extractBody(nettyReq.content())
         val scheme = if (isSsl) "https" else "http"
-        val fullUrl = if (nettyReq.uri().startsWith("http")) nettyReq.uri() else "$scheme://$host${nettyReq.uri()}"
+        val portSuffix = if ((isSsl && port == 443) || (!isSsl && port == 80)) "" else ":$port"
+        val fullUrl = if (nettyReq.uri().startsWith("http")) nettyReq.uri() else "$scheme://$host$portSuffix$relativeUri"
         return HttpRequest(
             id = UUID.randomUUID().toString(),
             method = nettyReq.method().name(),
@@ -39,9 +48,6 @@ object HttpMapper {
 
     /**
      * Maps Netty's [FullHttpResponse] to KNet's domain [HttpResponse] model.
-     *
-     * @param nettyRes The Netty response object.
-     * @return Mapped [HttpResponse] instance.
      */
     fun mapResponse(nettyRes: FullHttpResponse): HttpResponse {
         val headers = mapHeaders(nettyRes.headers())
@@ -51,6 +57,20 @@ object HttpMapper {
             statusText = nettyRes.status().reasonPhrase(),
             headers = headers,
             body = body,
+            timestamp = System.currentTimeMillis()
+        )
+    }
+
+    /**
+     * Maps Netty's streaming [io.netty.handler.codec.http.HttpResponse] headers to KNet's domain [HttpResponse] model.
+     */
+    fun mapResponseHeaders(nettyRes: io.netty.handler.codec.http.HttpResponse): HttpResponse {
+        val headers = mapHeaders(nettyRes.headers())
+        return HttpResponse(
+            statusCode = nettyRes.status().code(),
+            statusText = nettyRes.status().reasonPhrase(),
+            headers = headers,
+            body = null,
             timestamp = System.currentTimeMillis()
         )
     }

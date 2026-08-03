@@ -36,4 +36,16 @@ public object DatabaseMigrations {
             connection.execSQL("ALTER TABLE saved_requests ADD COLUMN scriptLanguage TEXT NOT NULL DEFAULT 'JAVASCRIPT'")
         }
     }
+
+    /**
+     * Migration v4 → v5: adds body size metadata columns to [HttpTransactionEntity].
+     * Sizes default to 0 for all existing rows; they will be populated correctly for
+     * any transactions captured after this migration.
+     */
+    public val MIGRATION_4_5: Migration = object : Migration(4, 5) {
+        override fun migrate(connection: SQLiteConnection) {
+            connection.execSQL("ALTER TABLE HttpTransactionEntity ADD COLUMN requestBodySize INTEGER NOT NULL DEFAULT 0")
+            connection.execSQL("ALTER TABLE HttpTransactionEntity ADD COLUMN responseBodySize INTEGER NOT NULL DEFAULT 0")
+        }
+    }
 }

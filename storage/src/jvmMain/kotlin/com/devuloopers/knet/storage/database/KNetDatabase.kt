@@ -19,7 +19,7 @@ import com.devuloopers.knet.storage.traffic.entity.HttpTransactionEntity
         CollectionFolderEntity::class,
         SavedRequestEntity::class
     ],
-    version = 4
+    version = 5
 )
 public abstract class KNetDatabase : RoomDatabase() {
 

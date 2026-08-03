@@ -1,0 +1,24 @@
+{
+  "transactionId": "TXN-9024185-KNET",
+  "clientInfo": {
+    "appName": "KNet Network Inspector",
+    "version": "1.0.0",
+    "platform": "Desktop JVM",
+    "environment": "Development"
+  },
+  "payloadDetails": {
+    "itemCount": 3,
+    "items": [
+      { "id": 1, "name": "HTTP Interceptor Rule", "enabled": true },
+      { "id": 2, "name": "SSL MITM Certificate", "enabled": true },
+      { "id": 3, "name": "5-Phase Socket Diagnostic", "enabled": true }
+    ]
+  },
+  "requestTimings": {
+    "dnsMs": 12,
+    "tcpMs": 24,
+    "tlsMs": 45,
+    "ttfbMs": 88
+  },
+  "timestamp": "2026-08-03T10:34:00Z"
+}

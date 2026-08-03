@@ -1,40 +1,31 @@
 package com.devuloopers.knet.ui.desktop.app.statusbar
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import com.devuloopers.knet.ui.core.theme.KNetColors
+import com.devuloopers.knet.ui.core.components.statusbar.KNetStatusBar
+import com.devuloopers.knet.ui.core.components.statusbar.StatusItem
+import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 /**
  * Status bar footer container composable hosting status items.
  *
- * @param leftItems Status items aligned to the left.
- * @param rightItems Status items aligned to the right.
  * @param modifier Layout modifier.
  */
 @Composable
 public fun StatusBar(
-    leftItems: List<StatusItem> = emptyList(),
-    rightItems: List<StatusItem> = emptyList(),
     modifier: Modifier = Modifier
 ) {
-    Row(
-        modifier = modifier
-            .fillMaxWidth()
-            .height(24.dp)
-            .background(KNetColors.BackgroundDark)
-            .padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        StatusBarHost(items = leftItems)
-        StatusBarHost(items = rightItems)
+    val themeColors = KNetTheme.colors
+    val typography = KNetTheme.typography
+
+    KNetStatusBar(modifier = modifier) {
+        StatusItem(text = "Proxy Engine: Active (8080)")
+        Text(
+            text = "SSL/TLS MITM: Ready",
+            style = typography.bodySmall.copy(color = themeColors.semantic.success),
+            modifier = Modifier.weight(1f)
+        )
+        StatusItem(text = "Memory: 64MB / 512MB")
     }
 }

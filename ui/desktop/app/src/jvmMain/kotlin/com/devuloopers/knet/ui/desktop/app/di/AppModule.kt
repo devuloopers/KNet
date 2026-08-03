@@ -1,23 +1,22 @@
 package com.devuloopers.knet.ui.desktop.app.di
 
-import com.devuloopers.knet.ui.desktop.apistudio.di.apiStudioUiModule
-import com.devuloopers.knet.ui.desktop.certificate.di.certificateUiModule
-import com.devuloopers.knet.ui.desktop.inspector.di.inspectorUiModule
-import com.devuloopers.knet.ui.desktop.scripting.di.scriptingUiModule
-import com.devuloopers.knet.ui.desktop.traffic.di.trafficUiModule
-import com.devuloopers.knet.ui.desktop.workspace.di.workspaceUiModule
+import com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficViewModel
+import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
 /**
- * Koin module aggregating all desktop-specific UI modules.
+ * Koin module aggregating desktop application UI framework dependencies.
+ * Uses the recommended Koin viewModel DSL to scope TrafficViewModel to the ViewModelStoreOwner lifecycle.
  */
 public val desktopAppUiModule = module {
-    includes(
-        workspaceUiModule,
-        trafficUiModule,
-        inspectorUiModule,
-        apiStudioUiModule,
-        scriptingUiModule,
-        certificateUiModule
-    )
+    viewModel {
+        TrafficViewModel(
+            getLiveTrafficUseCase = get(),
+            clearLiveTrafficUseCase = get(),
+            startProxyEngineUseCase = get(),
+            stopProxyEngineUseCase = get(),
+            observeProxyEngineStateUseCase = get(),
+            loadTransactionBodyUseCase = get()
+        )
+    }
 }

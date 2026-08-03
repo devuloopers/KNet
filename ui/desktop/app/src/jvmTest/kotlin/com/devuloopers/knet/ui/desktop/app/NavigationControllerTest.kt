@@ -18,8 +18,8 @@ class NavigationControllerTest {
 
     @Test
     fun `verify initial destination can be configured`() {
-        val controller = NavigationController(DesktopDestination.Workspace)
-        assertEquals(DesktopDestination.Workspace, controller.currentDestination.value)
+        val controller = NavigationController(DesktopDestination.ApiStudio)
+        assertEquals(DesktopDestination.ApiStudio, controller.currentDestination.value)
     }
 
     @Test
