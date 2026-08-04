@@ -31,21 +31,23 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.devuloopers.knet.domain.traffic.model.MethodFilter
+import com.devuloopers.knet.domain.traffic.model.ProtocolFilter
+import com.devuloopers.knet.domain.traffic.model.StatusFilter
 import com.devuloopers.knet.ui.core.components.divider.VerticalDivider
 import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdown
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.traffic.model.ColumnVisibilityState
-
 import com.devuloopers.knet.ui.desktop.traffic.model.TrafficColumn
 
 /**
  * Immutable State DTO for TrafficFilterBar.
  */
 public data class TrafficFilterBarState(
-    val selectedProtocol: String = "ALL",
-    val selectedMethod: String = "ALL",
-    val selectedStatus: String = "ALL",
+    val selectedProtocol: ProtocolFilter = ProtocolFilter.ALL,
+    val selectedMethod: MethodFilter = MethodFilter.ALL,
+    val selectedStatus: StatusFilter = StatusFilter.ALL,
     val totalCount: Int = 0,
     val httpCount: Int = 0,
     val httpsCount: Int = 0,
@@ -58,9 +60,9 @@ public data class TrafficFilterBarState(
  * Action Callbacks DTO for TrafficFilterBar.
  */
 public data class TrafficFilterBarActions(
-    val onProtocolSelected: (String) -> Unit = {},
-    val onMethodSelected: (String) -> Unit = {},
-    val onStatusSelected: (String) -> Unit = {},
+    val onProtocolSelected: (ProtocolFilter) -> Unit = {},
+    val onMethodSelected: (MethodFilter) -> Unit = {},
+    val onStatusSelected: (StatusFilter) -> Unit = {},
     val onToggleColumn: (TrafficColumn) -> Unit = {}
 )
 
@@ -101,13 +103,13 @@ public fun TrafficFilterBar(
             Text(
                 text = "All ${state.totalCount}",
                 style = typography.labelMedium.copy(
-                    color = if (state.selectedProtocol == "ALL") themeColors.accent else themeColors.textSecondary,
+                    color = if (state.selectedProtocol == ProtocolFilter.ALL) themeColors.accent else themeColors.textSecondary,
                     fontWeight = FontWeight.Medium
                 ),
                 maxLines = 1,
                 softWrap = false,
                 modifier = Modifier
-                    .clickable { actions.onProtocolSelected("ALL") }
+                    .clickable { actions.onProtocolSelected(ProtocolFilter.ALL) }
                     .handCursor()
                     .padding(horizontal = spacing.xs, vertical = spacing.xs)
             )
@@ -117,8 +119,8 @@ public fun TrafficFilterBar(
                 label = "HTTP",
                 count = state.httpCount,
                 countColor = themeColors.semantic.success,
-                isSelected = state.selectedProtocol == "HTTP",
-                onClick = { actions.onProtocolSelected("HTTP") }
+                isSelected = state.selectedProtocol == ProtocolFilter.HTTP,
+                onClick = { actions.onProtocolSelected(ProtocolFilter.HTTP) }
             )
 
             // "HTTPS" Chip
@@ -126,8 +128,8 @@ public fun TrafficFilterBar(
                 label = "HTTPS",
                 count = state.httpsCount,
                 countColor = themeColors.semantic.info,
-                isSelected = state.selectedProtocol == "HTTPS",
-                onClick = { actions.onProtocolSelected("HTTPS") }
+                isSelected = state.selectedProtocol == ProtocolFilter.HTTPS,
+                onClick = { actions.onProtocolSelected(ProtocolFilter.HTTPS) }
             )
 
             // "WS" Chip
@@ -135,8 +137,8 @@ public fun TrafficFilterBar(
                 label = "WS",
                 count = state.wsCount,
                 countColor = themeColors.semantic.warning,
-                isSelected = state.selectedProtocol == "WS",
-                onClick = { actions.onProtocolSelected("WS") }
+                isSelected = state.selectedProtocol == ProtocolFilter.WEBSOCKET,
+                onClick = { actions.onProtocolSelected(ProtocolFilter.WEBSOCKET) }
             )
 
             // "Other" Chip
@@ -144,8 +146,8 @@ public fun TrafficFilterBar(
                 label = "Other",
                 count = state.otherCount,
                 countColor = themeColors.semantic.error,
-                isSelected = state.selectedProtocol == "OTHER",
-                onClick = { actions.onProtocolSelected("OTHER") }
+                isSelected = state.selectedProtocol == ProtocolFilter.OTHER,
+                onClick = { actions.onProtocolSelected(ProtocolFilter.OTHER) }
             )
 
             // Vertical Divider
@@ -159,21 +161,27 @@ public fun TrafficFilterBar(
             // Dropdowns — KNetDropdown from :ui:core with category placeholder headers
             KNetDropdown(
                 placeholder = "Method",
-                selectedItem = state.selectedMethod,
+                selectedItem = state.selectedMethod.label,
                 items = methodOptions,
-                onItemSelected = { actions.onMethodSelected(it) }
+                onItemSelected = { selectedLabel ->
+                    MethodFilter.entries.find { it.label == selectedLabel }?.let { actions.onMethodSelected(it) }
+                }
             )
             KNetDropdown(
                 placeholder = "Status",
-                selectedItem = state.selectedStatus,
+                selectedItem = state.selectedStatus.label,
                 items = statusOptions,
-                onItemSelected = { actions.onStatusSelected(it) }
+                onItemSelected = { selectedLabel ->
+                    StatusFilter.entries.find { it.label == selectedLabel }?.let { actions.onStatusSelected(it) }
+                }
             )
             KNetDropdown(
                 placeholder = "Protocol",
-                selectedItem = state.selectedProtocol,
+                selectedItem = state.selectedProtocol.label,
                 items = protocolOptions,
-                onItemSelected = { actions.onProtocolSelected(it) }
+                onItemSelected = { selectedLabel ->
+                    ProtocolFilter.entries.find { it.label == selectedLabel }?.let { actions.onProtocolSelected(it) }
+                }
             )
         }
 
@@ -308,6 +316,7 @@ private fun FilterCountChip(
 }
 
 /** Filter option datasets for TrafficFilterBar dropdowns. */
-private val methodOptions = listOf("ALL", "GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS")
-private val statusOptions = listOf("ALL", "2xx", "3xx", "4xx", "5xx")
-private val protocolOptions = listOf("ALL", "HTTP", "HTTPS", "WebSocket")
+private val methodOptions = MethodFilter.entries.map { it.label }
+private val statusOptions = StatusFilter.entries.map { it.label }
+private val protocolOptions = ProtocolFilter.entries.map { it.label }
+

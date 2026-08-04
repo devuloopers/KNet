@@ -1,6 +1,9 @@
 package com.devuloopers.knet.ui.desktop.traffic.model
 
 import com.devuloopers.knet.domain.proxy.model.ProxyEngineState
+import com.devuloopers.knet.domain.traffic.model.MethodFilter
+import com.devuloopers.knet.domain.traffic.model.ProtocolFilter
+import com.devuloopers.knet.domain.traffic.model.StatusFilter
 import com.devuloopers.knet.domain.traffic.model.TrafficItemUiState
 
 /**
@@ -41,9 +44,9 @@ enum class PreviewFormatMode {
  * @property captureState Current proxy capture lifecycle state.
  * @property engineState Current proxy engine state (Stopped, Starting, Running, Stopping, Error).
  * @property searchQuery Live search filter query text.
- * @property selectedProtocolFilter Active protocol filter chip (e.g., "ALL", "HTTP", "HTTPS", "WS", "OTHER").
- * @property selectedMethodFilter Active HTTP method dropdown filter (e.g., "ALL", "GET", "POST").
- * @property selectedStatusFilter Active HTTP status dropdown filter (e.g., "ALL", "2XX", "3XX", "4XX", "5XX").
+ * @property selectedProtocolFilter Active protocol filter chip (e.g., [ProtocolFilter.ALL], [ProtocolFilter.HTTP], [ProtocolFilter.HTTPS]).
+ * @property selectedMethodFilter Active HTTP method dropdown filter (e.g., [MethodFilter.ALL], [MethodFilter.GET], [MethodFilter.POST]).
+ * @property selectedStatusFilter Active HTTP status dropdown filter (e.g., [StatusFilter.ALL], [StatusFilter.STATUS_2XX], [StatusFilter.STATUS_3XX]).
  * @property autoScroll Whether auto-scrolling to newest transaction is enabled.
  * @property activeInspectorTab Currently selected inspection tab.
  * @property activeRequestSubTab Currently selected request sub-tab (Headers, Query, Body).
@@ -57,9 +60,9 @@ data class TrafficState(
     val captureState: CaptureState = CaptureState.STOPPED,
     val engineState: ProxyEngineState = ProxyEngineState.Stopped,
     val searchQuery: String = "",
-    val selectedProtocolFilter: String = "ALL",
-    val selectedMethodFilter: String = "ALL",
-    val selectedStatusFilter: String = "ALL",
+    val selectedProtocolFilter: ProtocolFilter = ProtocolFilter.ALL,
+    val selectedMethodFilter: MethodFilter = MethodFilter.ALL,
+    val selectedStatusFilter: StatusFilter = StatusFilter.ALL,
     val autoScroll: Boolean = true,
     val activeInspectorTab: InspectorTab = InspectorTab.OVERVIEW,
     val activeRequestSubTab: RequestSubTab = RequestSubTab.HEADERS,

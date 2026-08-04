@@ -5,11 +5,12 @@ package com.devuloopers.knet.domain.traffic.model
  *
  * @property label User-facing display label for UI rendering.
  */
-enum class ProtocolFilter(val label: String) {
+public enum class ProtocolFilter(val label: String) {
     ALL("All"),
     HTTP("HTTP"),
     HTTPS("HTTPS"),
     WEBSOCKET("WebSocket"),
     HTTP_2("HTTP/2"),
-    GRPC("gRPC")
+    GRPC("gRPC"),
+    OTHER("Other")
 }

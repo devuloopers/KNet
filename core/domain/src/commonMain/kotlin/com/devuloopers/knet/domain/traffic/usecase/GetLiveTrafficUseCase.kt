@@ -91,6 +91,8 @@ class GetLiveTrafficUseCase(
             ProtocolFilter.GRPC -> reqHeaders["content-type"]?.contains("grpc", ignoreCase = true) == true ||
                     resHeaders["content-type"]?.contains("grpc", ignoreCase = true) == true ||
                     tx.request.url.contains("grpc", ignoreCase = true)
+            ProtocolFilter.OTHER -> scheme.lowercase() != "http" && scheme.lowercase() != "https" &&
+                    !scheme.contains("ws") && !tx.request.protocol.contains("2")
         }
     }
 

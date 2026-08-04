@@ -6,9 +6,7 @@ import com.devuloopers.knet.domain.proxy.model.ProxyEngineState
 import com.devuloopers.knet.domain.proxy.usecase.ObserveProxyEngineStateUseCase
 import com.devuloopers.knet.domain.proxy.usecase.StartProxyEngineUseCase
 import com.devuloopers.knet.domain.proxy.usecase.StopProxyEngineUseCase
-import com.devuloopers.knet.domain.traffic.model.LiveTrafficUiState
-import com.devuloopers.knet.domain.traffic.model.ProtocolFilter
-import com.devuloopers.knet.domain.traffic.model.TrafficItemUiState
+import com.devuloopers.knet.domain.traffic.model.*
 import com.devuloopers.knet.domain.traffic.usecase.ClearLiveTrafficUseCase
 import com.devuloopers.knet.domain.traffic.usecase.GetLiveTrafficUseCase
 import com.devuloopers.knet.domain.traffic.usecase.LoadTransactionBodyUseCase
@@ -325,9 +323,9 @@ class TrafficViewModel(
     private fun applyFilters(
         transactions: List<TrafficItemUiState>,
         query: String,
-        protocol: String,
-        method: String,
-        status: String
+        protocol: ProtocolFilter,
+        method: MethodFilter,
+        status: StatusFilter
     ): List<TrafficItemUiState> {
         return transactions.filter { item ->
             val matchesQuery = query.isBlank() ||
@@ -336,30 +334,35 @@ class TrafficViewModel(
                     item.method.contains(query, ignoreCase = true) ||
                     item.status.toString().contains(query)
 
-            val matchesProtocol = when (protocol.uppercase()) {
-                "ALL" -> true
-                "HTTP" -> item.protocol.startsWith("HTTP/1")
-                "HTTPS" -> item.protocol.startsWith("HTTP/2") || item.protocol.equals("HTTPS", ignoreCase = true)
-                "WS", "WEBSOCKET" -> item.method.equals("WS", ignoreCase = true) || item.protocol.equals(
+            val matchesProtocol = when (protocol) {
+                ProtocolFilter.ALL -> true
+                ProtocolFilter.HTTP -> item.protocol.startsWith("HTTP/1")
+                ProtocolFilter.HTTPS -> item.protocol.startsWith("HTTP/2") || item.protocol.equals(
+                    "HTTPS",
+                    ignoreCase = true
+                )
+
+                ProtocolFilter.WEBSOCKET -> item.method.equals("WS", ignoreCase = true) || item.protocol.equals(
                     "WS",
                     ignoreCase = true
                 )
 
-                else -> true
+                ProtocolFilter.HTTP_2 -> item.protocol.contains("2")
+                ProtocolFilter.GRPC -> item.path.contains("grpc", ignoreCase = true)
+                ProtocolFilter.OTHER -> !item.protocol.startsWith("HTTP/1") && !item.protocol.startsWith("HTTP/2") && !item.protocol.equals(
+                    "HTTPS",
+                    ignoreCase = true
+                ) && !item.method.equals("WS", ignoreCase = true) && !item.protocol.equals("WS", ignoreCase = true)
             }
 
-            val matchesMethod = when (method.uppercase()) {
-                "ALL" -> true
-                else -> item.method.equals(method, ignoreCase = true)
+            val matchesMethod = when (method) {
+                MethodFilter.ALL -> true
+                else -> item.method.equals(method.name, ignoreCase = true)
             }
 
-            val matchesStatus = when (status.uppercase()) {
-                "ALL" -> true
-                "2XX" -> item.status in 200..299
-                "3XX" -> item.status in 300..399
-                "4XX" -> item.status in 400..499
-                "5XX" -> item.status in 500..599
-                else -> true
+            val matchesStatus = when (status) {
+                StatusFilter.ALL -> true
+                else -> status.range?.contains(item.status) ?: true
             }
 
             matchesQuery && matchesProtocol && matchesMethod && matchesStatus
@@ -374,9 +377,9 @@ class TrafficViewModel(
             captureState = CaptureState.STOPPED,
             engineState = ProxyEngineState.Stopped,
             searchQuery = "",
-            selectedProtocolFilter = "ALL",
-            selectedMethodFilter = "ALL",
-            selectedStatusFilter = "ALL",
+            selectedProtocolFilter = ProtocolFilter.ALL,
+            selectedMethodFilter = MethodFilter.ALL,
+            selectedStatusFilter = StatusFilter.ALL,
             autoScroll = true,
             activeInspectorTab = InspectorTab.OVERVIEW,
             previewFormatMode = PreviewFormatMode.PRETTY
