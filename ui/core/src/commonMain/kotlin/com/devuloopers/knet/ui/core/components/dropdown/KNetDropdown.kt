@@ -15,6 +15,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,11 +30,30 @@ import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 /**
+ * Cohesive data model for colorful dropdown menu options.
+ *
+ * @property label The display text/name of the dropdown option (e.g. "GET", "POST", "JSON").
+ * @property color Optional text color tag for the option. Defaults to [Color.Unspecified].
+ */
+@Immutable
+public data class KNetDropdownOption(
+    val label: String,
+    val color: Color = Color.Unspecified
+)
+
+/**
  * Standardized Desktop Dropdown Selection Component primitive.
  * Displays a high-density IDE selection control and popup menu styled strictly with :ui:core tokens.
+ * Supports custom per-item colors for HTTP method tags and category badges.
  *
+ * @param selectedItem Currently selected item value.
+ * @param items List of available selection items.
+ * @param onItemSelected Callback when an item is selected.
  * @param placeholder Header label displayed when default/all state is active (e.g., "Method", "Status", "Protocol").
- * @param defaultItem The item representing the unselected/all state (defaults to "ALL" or items.firstOrNull()).
+ * @param defaultItem The item representing the unselected/all state.
+ * @param enabled Whether the dropdown trigger is interactive.
+ * @param itemText Selector function transforming item [T] into display String text.
+ * @param itemColor Optional selector function resolving text [Color] for item [T].
  */
 @Composable
 public fun <T> KNetDropdown(
@@ -44,7 +64,8 @@ public fun <T> KNetDropdown(
     placeholder: String? = null,
     defaultItem: T? = items.firstOrNull(),
     enabled: Boolean = true,
-    itemText: (T) -> String = { it.toString() }
+    itemText: (T) -> String = { it.toString() },
+    itemColor: ((T) -> Color?)? = null
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -60,6 +81,15 @@ public fun <T> KNetDropdown(
         placeholder
     } else {
         itemText(selectedItem)
+    }
+
+    val selectedTextColor = remember(selectedItem, isDefaultSelected, itemColor) {
+        if (isDefaultSelected) {
+            themeColors.textSecondary
+        } else {
+            val customColor = itemColor?.invoke(selectedItem)
+            if (customColor != null && customColor != Color.Unspecified) customColor else themeColors.textPrimary
+        }
     }
 
     Box(modifier = modifier) {
@@ -78,8 +108,8 @@ public fun <T> KNetDropdown(
             Text(
                 text = displayText,
                 style = typography.labelMedium.copy(
-                    color = if (isDefaultSelected) themeColors.textSecondary else themeColors.textPrimary,
-                    fontWeight = FontWeight.Medium
+                    color = selectedTextColor,
+                    fontWeight = FontWeight.Bold
                 ),
                 maxLines = 1
             )
@@ -101,13 +131,22 @@ public fun <T> KNetDropdown(
         ) {
             items.forEach { item ->
                 val isSelected = item == selectedItem
+                val customColor = itemColor?.invoke(item)
+                val resolvedColor = if (customColor != null && customColor != Color.Unspecified) {
+                    customColor
+                } else if (isSelected) {
+                    themeColors.accent
+                } else {
+                    themeColors.textPrimary
+                }
+
                 DropdownMenuItem(
                     text = {
                         Text(
                             text = itemText(item),
                             style = typography.bodySmall.copy(
-                                color = if (isSelected) themeColors.accent else themeColors.textPrimary,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                color = resolvedColor,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
                             )
                         )
                     },
@@ -122,4 +161,28 @@ public fun <T> KNetDropdown(
             }
         }
     }
+}
+
+/**
+ * Convenient overload for lists of [KNetDropdownOption].
+ */
+@Composable
+public fun KNetDropdownOptions(
+    selectedOption: KNetDropdownOption,
+    options: List<KNetDropdownOption>,
+    onOptionSelected: (KNetDropdownOption) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String? = null,
+    enabled: Boolean = true
+) {
+    KNetDropdown(
+        selectedItem = selectedOption,
+        items = options,
+        onItemSelected = onOptionSelected,
+        modifier = modifier,
+        placeholder = placeholder,
+        enabled = enabled,
+        itemText = { it.label },
+        itemColor = { it.color }
+    )
 }

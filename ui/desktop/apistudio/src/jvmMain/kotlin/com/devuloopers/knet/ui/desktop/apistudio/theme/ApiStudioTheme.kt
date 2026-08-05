@@ -1,26 +1,27 @@
 package com.devuloopers.knet.ui.desktop.apistudio.theme
 
 import androidx.compose.ui.graphics.Color
+import com.devuloopers.knet.ui.core.foundation.theme.HttpMethodColors
 
 /**
  * Color tokens for HTTP method badges and syntax highlighting in API Studio.
  */
 public object ApiStudioColors {
-    // HTTP Method Colors
-    val GetText: Color = Color(0xFF99D595)
-    val GetBackground: Color = Color(0x2699D595)
+    // HTTP Method Colors delegated to :ui:core design system
+    val GetText: Color get() = HttpMethodColors.GetText
+    val GetBackground: Color get() = HttpMethodColors.GetBackground
 
-    val PostText: Color = Color(0xFFE2CC9B)
-    val PostBackground: Color = Color(0x26E2CC9B)
+    val PostText: Color get() = HttpMethodColors.PostText
+    val PostBackground: Color get() = HttpMethodColors.PostBackground
 
-    val PutText: Color = Color(0xFF89B4FA)
-    val PutBackground: Color = Color(0x2689B4FA)
+    val PutText: Color get() = HttpMethodColors.PutText
+    val PutBackground: Color get() = HttpMethodColors.PutBackground
 
-    val DeleteText: Color = Color(0xFFFFB4AB)
-    val DeleteBackground: Color = Color(0x26FFB4AB)
+    val DeleteText: Color get() = HttpMethodColors.DeleteText
+    val DeleteBackground: Color get() = HttpMethodColors.DeleteBackground
 
-    val DefaultMethodText: Color = Color(0xFFC3C6D2)
-    val DefaultMethodBackground: Color = Color(0x26C3C6D2)
+    val DefaultMethodText: Color get() = HttpMethodColors.DefaultMethodText
+    val DefaultMethodBackground: Color get() = HttpMethodColors.DefaultMethodBackground
 
     // Code Syntax Highlighting Colors
     val CodeKey: Color = Color(0xFF89B4FA)
@@ -32,19 +33,6 @@ public object ApiStudioColors {
     val LineNumberGutter: Color = Color(0xFF0C0E12)
     val LineNumberText: Color = Color(0xFF424750)
 
-    fun getMethodTextColor(method: String): Color = when (method.uppercase()) {
-        "GET" -> GetText
-        "POST" -> PostText
-        "PUT" -> PutText
-        "DELETE" -> DeleteText
-        else -> DefaultMethodText
-    }
-
-    fun getMethodBackgroundColor(method: String): Color = when (method.uppercase()) {
-        "GET" -> GetBackground
-        "POST" -> PostBackground
-        "PUT" -> PutBackground
-        "DELETE" -> DeleteBackground
-        else -> DefaultMethodBackground
-    }
+    fun getMethodTextColor(method: String): Color = HttpMethodColors.getMethodTextColor(method)
+    fun getMethodBackgroundColor(method: String): Color = HttpMethodColors.getMethodBackgroundColor(method)
 }

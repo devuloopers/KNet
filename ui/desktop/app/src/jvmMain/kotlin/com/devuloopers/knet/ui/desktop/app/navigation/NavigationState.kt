@@ -31,18 +31,33 @@ public class NavigationState {
      * True when the mouse pointer is anywhere over the 64dp rail or 240dp overlay surface.
      */
     public var isExpanded: Boolean by mutableStateOf(false)
+        private set
+
+    private var isCollapsedOnClick: Boolean = false
 
     /**
      * Triggers pointer entry into the navigation hover region.
      */
     public fun onPointerEnter() {
-        isExpanded = true
+        if (!isCollapsedOnClick) {
+            isExpanded = true
+        }
     }
 
     /**
      * Triggers pointer exit from the entire navigation hover region.
      */
     public fun onPointerExit() {
+        isCollapsedOnClick = false
+        isExpanded = false
+    }
+
+    /**
+     * Triggers automatic collapse when a navigation menu item is clicked.
+     * Suppresses re-expansion until mouse pointer exits the navigation rail.
+     */
+    public fun onItemClick() {
+        isCollapsedOnClick = true
         isExpanded = false
     }
 

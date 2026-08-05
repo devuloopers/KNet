@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -26,6 +28,7 @@ import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.divider.HorizontalDivider
 import com.devuloopers.knet.ui.core.components.keyvalue.KNetKeyValueEditor
 import com.devuloopers.knet.ui.core.components.keyvalue.KeyValueEntry
+import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
@@ -72,6 +75,14 @@ public fun RequestPayloadEditor(
             )
         )
     }
+    var cookieEntries by remember {
+        mutableStateOf(
+            listOf(
+                KeyValueEntry("c1", "session_id", "s%3A91283hsd89234jsdf89")
+            )
+        )
+    }
+    var authState by remember { mutableStateOf(com.devuloopers.knet.ui.desktop.apistudio.model.AuthState()) }
 
     Column(modifier = modifier.fillMaxSize()) {
         // Request Sub-Tabs Bar
@@ -169,6 +180,51 @@ public fun RequestPayloadEditor(
                         languageHint = "json",
                         modifier = Modifier.fillMaxSize()
                     )
+                }
+                RequestSubTab.AUTH -> {
+                    AuthEditorView(
+                        state = authState,
+                        onStateChange = { authState = it },
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+                RequestSubTab.COOKIES -> {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(spacing.md)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.padding(bottom = spacing.md)
+                        ) {
+                            Icon(
+                                imageVector = KNetIcons.Info,
+                                contentDescription = "Info",
+                                modifier = Modifier.size(14.dp),
+                                tint = themeColors.textMuted
+                            )
+                            Text(
+                                text = "Cookies configured here are automatically formatted into the 'Cookie' header when sending the request.",
+                                style = typography.caption.copy(color = themeColors.textMuted)
+                            )
+                        }
+
+                        KNetKeyValueEditor(
+                            entries = cookieEntries,
+                            onEntryChange = { idx, updated ->
+                                cookieEntries = cookieEntries.toMutableList().apply { set(idx, updated) }
+                            },
+                            onAddEntry = {
+                                cookieEntries = cookieEntries + KeyValueEntry("c_${System.currentTimeMillis()}", "", "")
+                            },
+                            onRemoveEntry = { idx ->
+                                cookieEntries = cookieEntries.toMutableList().apply { removeAt(idx) }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
                 else -> {
                     Box(

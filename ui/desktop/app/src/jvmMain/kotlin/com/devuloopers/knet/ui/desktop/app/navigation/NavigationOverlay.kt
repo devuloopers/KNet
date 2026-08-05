@@ -110,7 +110,10 @@ public fun NavigationOverlay(
                 isExpanded = navigationState.isExpanded,
                 labelAlpha = presentation.labelAlpha,
                 labelOffset = presentation.labelOffset,
-                onSelect = { onDestinationSelected(info.destination) }
+                onSelect = {
+                    navigationState.onItemClick()
+                    onDestinationSelected(info.destination)
+                }
             )
         }
 
@@ -128,7 +131,10 @@ public fun NavigationOverlay(
                 isExpanded = navigationState.isExpanded,
                 labelAlpha = presentation.labelAlpha,
                 labelOffset = presentation.labelOffset,
-                onSelect = { onDestinationSelected(info.destination) }
+                onSelect = {
+                    navigationState.onItemClick()
+                    onDestinationSelected(info.destination)
+                }
             )
         }
 
@@ -142,7 +148,10 @@ public fun NavigationOverlay(
                 isExpanded = navigationState.isExpanded,
                 labelAlpha = presentation.labelAlpha,
                 labelOffset = presentation.labelOffset,
-                onSelect = { onDestinationSelected(info.destination) }
+                onSelect = {
+                    navigationState.onItemClick()
+                    onDestinationSelected(info.destination)
+                }
             )
         }
 

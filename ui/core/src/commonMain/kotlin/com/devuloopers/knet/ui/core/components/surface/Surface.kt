@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -31,7 +32,8 @@ public fun KNetSurface(
             modifier = modifier
                 .clip(shape)
                 .background(color)
-                .thenIf(border != null) { border(border!!) }
+                .thenIf(border != null) { border(border!!) },
+            contentAlignment = Alignment.Center
         ) {
             content()
         }

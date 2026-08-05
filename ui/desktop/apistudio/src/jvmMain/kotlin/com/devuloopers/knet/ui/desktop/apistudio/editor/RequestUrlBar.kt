@@ -30,6 +30,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdown
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
@@ -54,8 +55,6 @@ public fun RequestUrlBar(
     val typography = KNetTheme.typography
     val spacing = KNetTheme.spacing
 
-    var isDropdownExpanded by remember { mutableStateOf(false) }
-
     Row(
         modifier = modifier
             .fillMaxWidth()
@@ -74,55 +73,12 @@ public fun RequestUrlBar(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Method Dropdown Selector
-            Box {
-                Row(
-                    modifier = Modifier
-                        .fillMaxHeight()
-                        .background(Color(0xFF0C0E12))
-                        .clickable { isDropdownExpanded = true }
-                        .handCursor()
-                        .padding(horizontal = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = method,
-                        style = typography.codeMedium.copy(
-                            color = ApiStudioColors.getMethodTextColor(method),
-                            fontWeight = FontWeight.Bold
-                        )
-                    )
-                    Icon(
-                        imageVector = KNetIcons.ChevronDown,
-                        contentDescription = "Select Method",
-                        modifier = Modifier.size(16.dp),
-                        tint = Color(0xFFC3C6D2)
-                    )
-                }
-
-                DropdownMenu(
-                    expanded = isDropdownExpanded,
-                    onDismissRequest = { isDropdownExpanded = false }
-                ) {
-                    httpMethods.forEach { item ->
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = item,
-                                    style = typography.codeMedium.copy(
-                                        color = ApiStudioColors.getMethodTextColor(item),
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                )
-                            },
-                            onClick = {
-                                onMethodChanged(item)
-                                isDropdownExpanded = false
-                            }
-                        )
-                    }
-                }
-            }
+            KNetDropdown(
+                selectedItem = method,
+                items = httpMethods,
+                onItemSelected = onMethodChanged,
+                itemColor = { ApiStudioColors.getMethodTextColor(it) }
+            )
 
             // Divider line between Method and URL input
             Box(

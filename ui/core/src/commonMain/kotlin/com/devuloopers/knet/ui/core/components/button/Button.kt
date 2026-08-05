@@ -4,6 +4,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ProvideTextStyle
@@ -50,7 +51,9 @@ public fun KNetButton(
         shape = shapes.small
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = KNetTheme.spacing.sm),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = KNetTheme.spacing.sm),
             horizontalArrangement = Arrangement.Center,
             verticalAlignment = Alignment.CenterVertically
         ) {

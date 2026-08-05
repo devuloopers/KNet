@@ -37,6 +37,7 @@ import com.devuloopers.knet.domain.traffic.model.StatusFilter
 import com.devuloopers.knet.ui.core.components.divider.VerticalDivider
 import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdown
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
+import com.devuloopers.knet.ui.core.foundation.theme.HttpMethodColors
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.traffic.model.ColumnVisibilityState
 import com.devuloopers.knet.ui.desktop.traffic.model.TrafficColumn
@@ -165,7 +166,8 @@ public fun TrafficFilterBar(
                 items = methodOptions,
                 onItemSelected = { selectedLabel ->
                     MethodFilter.entries.find { it.label == selectedLabel }?.let { actions.onMethodSelected(it) }
-                }
+                },
+                itemColor = { label -> HttpMethodColors.getMethodTextColor(label) }
             )
             KNetDropdown(
                 placeholder = "Status",
