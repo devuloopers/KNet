@@ -102,33 +102,15 @@ public enum class ResponseSubTab(
  */
 @Composable
 public fun ResponseInspectorView(
-    statusCode: Int = 200,
-    statusText: String = "OK",
-    durationMs: Long = 124L,
-    sizeBytes: Long = 4966L,
+    statusCode: Int = 0,
+    statusText: String = "",
+    durationMs: Long = 0L,
+    sizeBytes: Long = 0L,
     responseBody: String = "",
-    headers: Map<String, String> = mapOf(
-        "Content-Type" to "application/json; charset=utf-8",
-        "Content-Length" to "4966",
-        "Server" to "KNet/1.0 Netty",
-        "Date" to "Tue, 04 Aug 2026 11:22:00 GMT"
-    ),
-    cookies: Map<String, String> = mapOf(
-        "sessionId" to "s_98a7f6c5e4; Path=/; Secure; HttpOnly",
-        "theme" to "dark; Path=/"
-    ),
-    testResults: List<TestResult> = listOf(
-        TestResult("Status code is 200", true),
-        TestResult("Response time is less than 500ms", true),
-        TestResult("Content-Type header is present", true)
-    ),
-    consoleLogs: List<String> = listOf(
-        "[INFO] Preparing POST request to https://api.knet.dev/v1/users/create",
-        "[INFO] Pre-request script executed cleanly (0 ms)",
-        "[NET] Connection established in 42 ms",
-        "[NET] Received response: 200 OK (4966 bytes)",
-        "[TEST] Executed 3 test assertions (Passed: 3/3)"
-    ),
+    headers: Map<String, String> = emptyMap(),
+    cookies: Map<String, String> = emptyMap(),
+    testResults: List<TestResult> = emptyList(),
+    consoleLogs: List<String> = emptyList(),
     modifier: Modifier = Modifier
 ) {
     val themeColors = KNetTheme.colors
@@ -138,35 +120,54 @@ public fun ResponseInspectorView(
     var activeSubTab by remember { mutableStateOf(ResponseSubTab.BODY) }
     val currentConsoleLogs = remember(consoleLogs) { mutableStateListOf(*consoleLogs.toTypedArray()) }
 
+    val hasResponse = remember(statusCode, responseBody) {
+        statusCode > 0 || responseBody.isNotBlank()
+    }
+
     val formattedSize = remember(sizeBytes) {
         val kb = sizeBytes / 1024.0
         "${(kb * 100).toInt() / 100.0} KB"
     }
 
-    val displayBody = remember(responseBody) {
-        responseBody.ifBlank {
-            """
-            {
-              "status": "success",
-              "data": {
-                "id": "usr_98a7f6c5e4",
-                "username": "dev_admin",
-                "created_at": "2023-10-27T14:32:11Z",
-                "metadata": {
-                  "last_login": null,
-                  "login_count": 0
-                }
-              }
-            }
-            """.trimIndent()
-        }
-    }
+    val displayBody = responseBody
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(themeColors.surface)
-    ) {
+    if (!hasResponse) {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .background(themeColors.surface),
+            contentAlignment = Alignment.Center
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(24.dp)
+            ) {
+                Icon(
+                    imageVector = KNetIcons.Send,
+                    contentDescription = "No Response",
+                    modifier = Modifier.size(36.dp),
+                    tint = themeColors.textMuted
+                )
+                Text(
+                    text = "No Response Received Yet",
+                    style = typography.titleMedium.copy(
+                        color = themeColors.textPrimary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                )
+                Text(
+                    text = "Enter a request URL and click 'Send' to execute the request.",
+                    style = typography.bodySmall.copy(color = themeColors.textMuted)
+                )
+            }
+        }
+    } else {
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .background(themeColors.surface)
+        ) {
         // 1. Response Summary Bar (Horizontally scrollable for desktop responsiveness)
         val summaryScrollState = rememberScrollState()
         Row(
@@ -456,4 +457,5 @@ public fun ResponseInspectorView(
             }
         }
     }
+}
 }

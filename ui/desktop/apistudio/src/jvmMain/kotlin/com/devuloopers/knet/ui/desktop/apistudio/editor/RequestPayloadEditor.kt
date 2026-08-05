@@ -61,31 +61,19 @@ public fun RequestPayloadEditor(
     val spacing = KNetTheme.spacing
 
     var activeSubTab by remember { mutableStateOf(RequestSubTab.BODY) }
-    var paramEntries by remember {
-        mutableStateOf(
-            listOf(
-                KeyValueEntry("p1", "page", "1"),
-                KeyValueEntry("p2", "sort", "desc")
-            )
-        )
-    }
+    var paramEntries by remember { mutableStateOf(emptyList<KeyValueEntry>()) }
     var headerEntries by remember {
         mutableStateOf(
             listOf(
                 KeyValueEntry("h1", "Content-Type", "application/json"),
-                KeyValueEntry("h2", "Accept", "application/json"),
-                KeyValueEntry("h3", "Authorization", "Bearer eyJhbGciOi..."),
-                KeyValueEntry("h4", "User-Agent", "KNet/1.0.0")
+                KeyValueEntry("h2", "Accept", "*/*"),
+                KeyValueEntry("h3", "Accept-Encoding", "gzip, deflate, br"),
+                KeyValueEntry("h4", "Connection", "keep-alive"),
+                KeyValueEntry("h5", "User-Agent", "KNet/1.0.0")
             )
         )
     }
-    var cookieEntries by remember {
-        mutableStateOf(
-            listOf(
-                KeyValueEntry("c1", "session_id", "s%3A91283hsd89234jsdf89")
-            )
-        )
-    }
+    var cookieEntries by remember { mutableStateOf(emptyList<KeyValueEntry>()) }
     var authState by remember { mutableStateOf(com.devuloopers.knet.ui.desktop.apistudio.model.AuthState()) }
     var bodyState by remember {
         mutableStateOf(
@@ -95,15 +83,7 @@ public fun RequestPayloadEditor(
             )
         )
     }
-    var scriptState by remember {
-        mutableStateOf(
-            ScriptState(
-                testScript = """pm.test("Status code is 200", function () {
-    pm.response.to.have.status(200);
-});""".trimIndent()
-            )
-        )
-    }
+    var scriptState by remember { mutableStateOf(ScriptState()) }
 
     Column(modifier = modifier.fillMaxSize()) {
         // Request Sub-Tabs Bar

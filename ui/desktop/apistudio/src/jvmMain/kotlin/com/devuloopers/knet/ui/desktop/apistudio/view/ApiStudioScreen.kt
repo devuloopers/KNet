@@ -89,18 +89,17 @@ public fun ApiStudioScreen(
     val spacing = KNetTheme.spacing
 
     var selectedEnvironment by remember { mutableStateOf("Production") }
-    var selectedRequestId by remember { mutableStateOf<String?>("r5") }
+    var selectedRequestId by remember { mutableStateOf<String?>(null) }
     var tabs by remember {
         mutableStateOf(
             listOf(
-                RequestTab("tab_1", "Create User Account", method = "POST", isDirty = true),
-                RequestTab("tab_2", "Get User Profile", method = "GET")
+                RequestTab("tab_1", "New Request", method = "GET")
             )
         )
     }
     var activeTabId by remember { mutableStateOf("tab_1") }
-    var currentMethod by remember { mutableStateOf("POST") }
-    var currentUrl by remember { mutableStateOf("https://api.knet.dev/v1/users/create") }
+    var currentMethod by remember { mutableStateOf("GET") }
+    var currentUrl by remember { mutableStateOf("") }
     var bodyPayload by remember { mutableStateOf("") }
 
     Row(modifier = modifier.fillMaxSize().background(themeColors.surface)) {
