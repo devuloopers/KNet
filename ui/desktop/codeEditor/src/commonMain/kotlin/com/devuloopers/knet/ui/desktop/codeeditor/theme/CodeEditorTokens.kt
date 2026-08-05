@@ -2,6 +2,7 @@ package com.devuloopers.knet.ui.desktop.codeeditor.theme
 
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.LineHeightStyle
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
@@ -18,14 +19,14 @@ object CodeEditorTokens {
      * Monospace font size for all editor text: code, line numbers, and placeholder hints.
      * All three must share the same value to ensure vertical rhythm consistency.
      */
-    val FontSize = 11.sp
+    val FontSize = 12.sp
 
     /**
      * Vertical line height for all editor text rows.
-     * Must match [LineHeightDp] exactly (18.sp ≈ 18.dp at 1x density).
+     * Must match [GutterLineHeightDp] (16.sp ≈ 16.dp at 1x density).
      * Controls the height of BasicTextField lines and gutter rows.
      */
-    val LineHeight = 18.sp
+    val LineHeight = 16.sp
 
     // ─── Gutter Layout ───────────────────────────────────────────────────────────
 
@@ -33,7 +34,7 @@ object CodeEditorTokens {
      * Fixed pixel height of each gutter Row.
      * Must match [LineHeight] exactly to guarantee 1:1 line number ↔ code line alignment.
      */
-    val GutterLineHeightDp = 18.dp
+    val GutterLineHeightDp = 16.dp
 
     /**
      * Minimum width of the line number text area. Auto-expands for 4-digit line numbers (1000+).
@@ -77,12 +78,15 @@ object CodeEditorTokens {
     /**
      * Returns the canonical [TextStyle] used for all editor text renderings.
      */
-    fun editorTextStyle(): TextStyle = TextStyle(
-        fontSize = FontSize,
-        lineHeight = LineHeight,
+    fun editorTextStyle(
+        fontSize: TextUnit = FontSize,
+        lineHeight: TextUnit = LineHeight
+    ): TextStyle = TextStyle(
+        fontSize = fontSize,
+        lineHeight = lineHeight,
         lineHeightStyle = LineHeightStyle(
-            alignment = LineHeightStyle.Alignment.Top,
-            trim = LineHeightStyle.Trim.None
+            alignment = LineHeightStyle.Alignment.Center,
+            trim = LineHeightStyle.Trim.Both
         )
     )
 }

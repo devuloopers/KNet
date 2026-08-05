@@ -25,5 +25,7 @@ class ResponsePresentationTest {
         assertEquals(120, presentation.durationMs)
         assertEquals(512, presentation.sizeBytes)
         assertEquals("application/json", presentation.mimeType)
+        assertEquals(0, presentation.testResults.size)
+        assertEquals(0, presentation.consoleLogs.size)
     }
 }

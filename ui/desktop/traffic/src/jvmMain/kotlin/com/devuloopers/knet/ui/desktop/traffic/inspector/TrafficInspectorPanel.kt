@@ -1,5 +1,7 @@
 package com.devuloopers.knet.ui.desktop.traffic.inspector
 
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -77,6 +79,7 @@ public fun TrafficInspectorPanel(
                     .height(44.dp)
                     .background(themeColors.surface)
                     .border(width = 1.dp, color = themeColors.border)
+                    .horizontalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(24.dp)
@@ -205,7 +208,9 @@ private fun RequestTabContent(
 
         // 2. Request Sub-Menu Bar
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -401,7 +406,10 @@ private fun SubTabChip(
             style = typography.labelMedium.copy(
                 color = if (isSelected) themeColors.textPrimary else themeColors.textSecondary,
                 fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
-            )
+            ),
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Clip
         )
     }
 }
@@ -431,7 +439,9 @@ private fun ResponseTabContent(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -757,7 +767,10 @@ private fun InspectorTabButton(
             style = typography.bodyMedium.copy(
                 color = if (isSelected) themeColors.textPrimary else themeColors.textSecondary,
                 fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
-            )
+            ),
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Clip
         )
 
         Box(

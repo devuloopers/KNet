@@ -38,6 +38,11 @@ import com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarFolderItem
 import com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarRequestItem
 import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.ApiStudioViewModel
 
+private val mockUnsavedRequests = listOf(
+    SidebarRequestItem("u1", "Draft Ping Check", "GET", "https://api.knet.dev/v1/ping"),
+    SidebarRequestItem("u2", "Quick Auth Scratch", "POST", "https://auth.knet.dev/login")
+)
+
 private val mockCollections = listOf(
     SidebarFolderItem(
         id = "f1",
@@ -101,6 +106,7 @@ public fun ApiStudioScreen(
     Row(modifier = modifier.fillMaxSize().background(themeColors.surface)) {
         // Left Pane: Collections Sidebar
         CollectionsSidebar(
+            unsavedRequests = mockUnsavedRequests,
             collections = mockCollections,
             selectedRequestId = selectedRequestId,
             onRequestSelected = { item ->

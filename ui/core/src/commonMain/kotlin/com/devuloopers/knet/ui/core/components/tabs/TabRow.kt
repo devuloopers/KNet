@@ -21,6 +21,8 @@ import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
+import androidx.compose.ui.text.style.TextOverflow
+
 @Composable
 public fun KNetTab(
     title: String,
@@ -59,6 +61,9 @@ public fun KNetTab(
         Text(
             text = title,
             style = typography.labelSmall.copy(color = textColor),
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Clip,
             modifier = Modifier.padding(end = 4.dp)
         )
         if (onClose != null) {
@@ -98,10 +103,12 @@ public fun KNetTabRow(
     content: @Composable () -> Unit
 ) {
     val themeColors = KNetTheme.colors
+    val scrollState = rememberScrollState()
 
     Row(
         modifier = modifier
             .background(themeColors.surfaceVariant)
+            .horizontalScroll(scrollState)
             .padding(2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

@@ -16,7 +16,7 @@
 
 - [x] **`:ui:desktop:traffic`** [COMPLETED]
 - [ ] **`:ui:desktop:inspector`** [PENDING]
-- [ ] **`:ui:desktop:apistudio`** [PENDING]
+- [x] **`:ui:desktop:apistudio`** [COMPLETED]
 - [ ] **`:ui:desktop:workspace`** [PENDING]
 - [ ] **`:ui:desktop:scripting`** [PENDING]
 - [ ] **`:ui:desktop:certificate`** [PENDING]

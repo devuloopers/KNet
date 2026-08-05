@@ -46,8 +46,8 @@ public object KNetIcons {
     public val List: ImageVector = Icons.AutoMirrored.Filled.List
     public val Folder: ImageVector = Icons.Default.Folder
     public val FolderOpen: ImageVector = Icons.Default.FolderOpen
-    public val Download: ImageVector = Icons.Default.Refresh
-    public val History: ImageVector = Icons.Default.Refresh
+    public val Download: ImageVector = Icons.AutoMirrored.Filled.List
+    public val History: ImageVector = Icons.AutoMirrored.Filled.List
     public val Save: ImageVector = Icons.Default.Check
     public val Code: ImageVector = Icons.Default.Edit
     public val Send: ImageVector = Icons.AutoMirrored.Filled.Send

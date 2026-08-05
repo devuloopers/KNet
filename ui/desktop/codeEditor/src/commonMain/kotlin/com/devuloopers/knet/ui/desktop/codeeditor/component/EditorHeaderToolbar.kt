@@ -3,28 +3,34 @@ package com.devuloopers.knet.ui.desktop.codeeditor.component
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.input.pointer.PointerIcon
-import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.desktop.codeeditor.theme.EditorColors
 
 /**
  * Configurable Header Toolbar displaying total line count indicators, truncation badges, and Copy/Fold action controls.
+ *
+ * Employs horizontal scroll and single-line text stability to ensure fold action controls
+ * and indicators never get squished, wrapped, or unresponsive during window/panel resizing.
  *
  * @param totalLines Total line count in the full document.
  * @param showLineCountHeader True if line count indicator is displayed.
@@ -52,9 +58,12 @@ fun EditorHeaderToolbar(
 ) {
     if (!showLineCountHeader && (!showFoldActionsHeader || !hasFoldRegions) && !isHighPerformanceMode && !isTruncated) return
 
+    val scrollState = rememberScrollState()
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .horizontalScroll(scrollState)
             .padding(bottom = 6.dp),
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
@@ -70,7 +79,10 @@ fun EditorHeaderToolbar(
                         text = lineCountLabel,
                         color = EditorColors.TextSecondary,
                         fontSize = 10.sp,
-                        fontFamily = FontFamily.Monospace
+                        fontFamily = FontFamily.Monospace,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip
                     )
                 }
 
@@ -88,7 +100,10 @@ fun EditorHeaderToolbar(
                             color = Color(0xFF3FB950),
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace
+                            fontFamily = FontFamily.Monospace,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Clip
                         )
                         if (onCopyAll != null) {
                             Text(
@@ -97,9 +112,13 @@ fun EditorHeaderToolbar(
                                 fontSize = 9.sp,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Monospace,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Clip,
                                 modifier = Modifier
-                                    .pointerHoverIcon(PointerIcon.Hand)
-                                    .clickable { onCopyAll() }
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .clickable(onClick = onCopyAll)
+                                    .handCursor()
                             )
                         }
                     }
@@ -116,7 +135,10 @@ fun EditorHeaderToolbar(
                             color = Color(0xFF3FB950),
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace
+                            fontFamily = FontFamily.Monospace,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Clip
                         )
                     }
                 }
@@ -139,23 +161,33 @@ fun EditorHeaderToolbar(
                     color = EditorColors.ActiveBlue,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Clip,
                     modifier = Modifier
-                        .pointerHoverIcon(PointerIcon.Hand)
-                        .clickable { onExpandAll() }
+                        .clip(RoundedCornerShape(4.dp))
+                        .clickable(onClick = onExpandAll)
+                        .handCursor()
                 )
                 Text(
                     text = "|",
                     color = EditorColors.TextSecondary.copy(alpha = 0.4f),
-                    fontSize = 10.sp
+                    fontSize = 10.sp,
+                    maxLines = 1,
+                    softWrap = false
                 )
                 Text(
                     text = "Collapse All",
                     color = EditorColors.ActiveBlue,
                     fontSize = 10.sp,
                     fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Clip,
                     modifier = Modifier
-                        .pointerHoverIcon(PointerIcon.Hand)
-                        .clickable { onCollapseAll() }
+                        .clip(RoundedCornerShape(4.dp))
+                        .clickable(onClick = onCollapseAll)
+                        .handCursor()
                 )
             }
         }

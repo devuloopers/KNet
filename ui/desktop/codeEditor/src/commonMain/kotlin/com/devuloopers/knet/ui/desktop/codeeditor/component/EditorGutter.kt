@@ -76,7 +76,7 @@ fun EditorGutter(
             val isCurrentlyCollapsed = collapsedFolds.containsKey(index)
             val canCollapse = foldStartLines.containsKey(index)
             val showFoldArrow = isFoldingEnabled && (isCurrentlyCollapsed || canCollapse)
-            val topOffset = lineTopOffsetsDp.getOrNull(index) ?: (index * 18).dp
+            val topOffset = lineTopOffsetsDp.getOrNull(index) ?: (index.toFloat() * CodeEditorTokens.GutterLineHeightDp.value).dp
 
             Row(
                 verticalAlignment = Alignment.Top,

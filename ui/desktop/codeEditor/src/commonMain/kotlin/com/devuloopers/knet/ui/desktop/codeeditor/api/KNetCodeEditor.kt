@@ -60,6 +60,7 @@ import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.performFoldToggle
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.rememberAutoScrollController
 import com.devuloopers.knet.ui.desktop.codeeditor.syntax.FsmTokenMakerVisualTransformation
 import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
+import com.devuloopers.knet.ui.desktop.codeeditor.theme.CodeEditorStyle
 import com.devuloopers.knet.ui.desktop.codeeditor.theme.CodeEditorTokens
 import com.devuloopers.knet.ui.desktop.codeeditor.theme.EditorColors
 import com.devuloopers.knet.ui.desktop.codeeditor.component.ContextMenuItem
@@ -96,6 +97,7 @@ fun KNetCodeEditor(
     document: PreparedDocument,
     mode: EditorMode = EditorMode.ReadOnly,
     modifier: Modifier = Modifier,
+    style: CodeEditorStyle = CodeEditorStyle(),
     searchQuery: String = "",
     isFoldingEnabled: Boolean = true,
     showLineCountHeader: Boolean = true,
@@ -107,6 +109,7 @@ fun KNetCodeEditor(
         document = document,
         mode = mode,
         modifier = modifier,
+        style = style,
         languageHint = document.statistics.language,
         searchQuery = searchQuery,
         isFoldingEnabled = isFoldingEnabled,
@@ -121,6 +124,7 @@ fun KNetCodeEditor(
     code: String,
     mode: EditorMode,
     modifier: Modifier = Modifier,
+    style: CodeEditorStyle = CodeEditorStyle(),
     document: PreparedDocument? = null,
     languageHint: String? = null,
     bodyFormat: BodyFormat? = null,
@@ -152,6 +156,7 @@ fun KNetCodeEditor(
             EditableCodeEditor(
                 code = code,
                 mode = mode,
+                style = style,
                 collapsedFolds = collapsedFolds,
                 onCollapsedFoldsChange = { collapsedFolds = it },
                 getFullText = ::getFullText,
@@ -166,6 +171,7 @@ fun KNetCodeEditor(
             ReadOnlyCodeViewer(
                 code = code,
                 document = document,
+                style = style,
                 languageHint = languageHint,
                 bodyFormat = bodyFormat,
                 searchQuery = searchQuery,
@@ -186,6 +192,7 @@ fun KNetCodeEditor(
 private fun EditableCodeEditor(
     code: String,
     mode: EditorMode.Editable,
+    style: CodeEditorStyle,
     collapsedFolds: Map<Int, CollapsedFoldState>,
     onCollapsedFoldsChange: (Map<Int, CollapsedFoldState>) -> Unit,
     getFullText: (String) -> String,
@@ -284,7 +291,7 @@ private fun EditableCodeEditor(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF0D1117), RoundedCornerShape(6.dp))
+            .background(style.backgroundColor, RoundedCornerShape(6.dp))
             .border(1.dp, EditorColors.BorderDark.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
             .padding(CodeEditorTokens.ContainerPadding)
     ) {
@@ -371,7 +378,10 @@ private fun EditableCodeEditor(
                     },
                     visualTransformation = if (isHighPerformanceMode) VisualTransformation.None else tokenTransformation,
                     cursorBrush = SolidColor(EditorColors.ActiveBlue),
-                    textStyle = CodeEditorTokens.editorTextStyle().copy(
+                    textStyle = CodeEditorTokens.editorTextStyle(
+                        fontSize = style.fontSize,
+                        lineHeight = style.lineHeight
+                    ).copy(
                         color = mode.textColor,
                         fontFamily = FontFamily.Monospace
                     ),
@@ -383,7 +393,10 @@ private fun EditableCodeEditor(
                                     text = mode.placeholder,
                                     color = EditorColors.TextSecondary.copy(alpha = 0.4f),
                                     fontFamily = FontFamily.Monospace,
-                                    style = CodeEditorTokens.editorTextStyle()
+                                    style = CodeEditorTokens.editorTextStyle(
+                                        fontSize = style.fontSize,
+                                        lineHeight = style.lineHeight
+                                    )
                                 )
                             }
                             innerTextField()
@@ -400,6 +413,7 @@ private fun EditableCodeEditor(
 private fun ReadOnlyCodeViewer(
     code: String,
     document: PreparedDocument?,
+    style: CodeEditorStyle,
     languageHint: String?,
     bodyFormat: BodyFormat?,
     searchQuery: String,
@@ -673,7 +687,10 @@ private fun ReadOnlyCodeViewer(
                         readOnly = true,
                         visualTransformation = if (isHighPerformanceMode) VisualTransformation.None else tokenTransformation,
                         cursorBrush = SolidColor(EditorColors.ActiveBlue),
-                        textStyle = CodeEditorTokens.editorTextStyle().copy(
+                        textStyle = CodeEditorTokens.editorTextStyle(
+                            fontSize = style.fontSize,
+                            lineHeight = style.lineHeight
+                        ).copy(
                             color = Color.White,
                             fontFamily = FontFamily.Monospace
                         ),

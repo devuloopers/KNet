@@ -3,6 +3,7 @@ package com.devuloopers.knet.ui.core.components.input
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.VisualTransformation
 
 /**
@@ -23,6 +24,8 @@ public data class InputFieldConfig(
     val showHoverPopupOnOverflow: Boolean = true,
     val hoverDebounceMs: Long = 350L,
     val autoSelectAllOnFocus: Boolean = false,
+    val backgroundColor: Color? = null,
+    val borderColor: Color? = null,
     val visualTransformation: VisualTransformation = VisualTransformation.None,
     val keyboardOptions: KeyboardOptions = KeyboardOptions.Default
 ) {

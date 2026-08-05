@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -92,7 +93,8 @@ public fun KNetTextField(
     val density = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
 
-    val borderColor = if (state.isError) themeColors.semantic.error else themeColors.border
+    val backgroundColor = config.backgroundColor ?: themeColors.surfaceVariant
+    val borderColor = config.borderColor ?: if (state.isError) themeColors.semantic.error else themeColors.border
     val textStyle = typography.bodySmall.copy(color = themeColors.textPrimary)
 
     var containerWidthPx by remember { mutableStateOf(0) }
@@ -124,13 +126,17 @@ public fun KNetTextField(
     val isPassword = config.visualTransformation is PasswordVisualTransformation
     val shouldShowPopup = config.showHoverPopupOnOverflow && !isPassword && isHovered && isMouseStationary && isOverflowing && value.isNotEmpty()
 
-    Column(modifier = modifier) {
+    Column(
+        modifier = Modifier
+            .height(dimensions.inputHeightStandard)
+            .then(modifier)
+    ) {
         // Outer Box receives all pointer events so that the popup appearing/disappearing
         // does not cause spurious Enter/Exit events on inner children, preventing flicker.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(dimensions.inputHeightStandard)
+                .fillMaxHeight()
                 .onSizeChanged { containerWidthPx = it.width }
                 .onPointerEvent(PointerEventType.Enter) {
                     isHovered = true
@@ -151,8 +157,8 @@ public fun KNetTextField(
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(shapes.small)
-                    .background(themeColors.surfaceVariant)
-                    .border(1.dp, borderColor, shapes.small)
+                    .background(backgroundColor)
+                    .then(if (borderColor != androidx.compose.ui.graphics.Color.Transparent) Modifier.border(1.dp, borderColor, shapes.small) else Modifier)
                     .textCursor(),
                 enabled = state.enabled,
                 readOnly = state.readOnly,
@@ -164,7 +170,7 @@ public fun KNetTextField(
                 decorationBox = { innerTextField ->
                     Row(
                         modifier = Modifier
-                            .fillMaxWidth()
+                            .fillMaxSize()
                             .padding(horizontal = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -172,7 +178,7 @@ public fun KNetTextField(
                             slots.prefix.invoke()
                         }
                         Box(
-                            modifier = Modifier.weight(1f),
+                            modifier = Modifier.weight(1f).fillMaxHeight(),
                             contentAlignment = Alignment.CenterStart
                         ) {
                             if (value.isEmpty() && config.placeholder.isNotEmpty()) {

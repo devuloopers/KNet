@@ -12,11 +12,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -67,10 +65,23 @@ public enum class SidebarMode {
 
 /**
  * Leftmost Collections Sidebar component for KNet API Studio.
+ *
+ * Organized into two top-level collapsible dropdown sections:
+ * 1. **Unsaved Sessions**: Transient ad-hoc scratch requests.
+ * 2. **Saved Collections**: Persistent user-created collections and sub-folders.
+ *
+ * @param unsavedRequests List of active unsaved scratch request items.
+ * @param collections List of saved collection folder items.
+ * @param selectedRequestId Id of currently selected request item.
+ * @param onRequestSelected Callback when a request item is clicked.
+ * @param onImportClicked Callback when Import action is triggered.
+ * @param onNewCollectionClicked Callback when New Collection action is triggered.
+ * @param modifier Composable modifier applied to sidebar layout root.
  */
 @Composable
 public fun CollectionsSidebar(
-    collections: List<SidebarFolderItem>,
+    unsavedRequests: List<SidebarRequestItem> = emptyList(),
+    collections: List<SidebarFolderItem> = emptyList(),
     selectedRequestId: String?,
     onRequestSelected: (SidebarRequestItem) -> Unit,
     onImportClicked: () -> Unit = {},
@@ -83,6 +94,9 @@ public fun CollectionsSidebar(
     val spacing = KNetTheme.spacing
 
     var searchQuery by remember { mutableStateOf("") }
+    var isUnsavedSectionExpanded by remember { mutableStateOf(true) }
+    var isSavedSectionExpanded by remember { mutableStateOf(true) }
+
     var expandedFolders by remember {
         mutableStateOf(collections.associate { it.id to it.isExpanded })
     }
@@ -110,12 +124,6 @@ public fun CollectionsSidebar(
 
             Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                 KNetIconButton(
-                    onClick = onImportClicked,
-                    icon = KNetIcons.Download,
-                    contentDescription = "Import",
-                    tint = themeColors.textSecondary
-                )
-                KNetIconButton(
                     onClick = onNewCollectionClicked,
                     icon = KNetIcons.Add,
                     contentDescription = "New Collection",
@@ -134,15 +142,23 @@ public fun CollectionsSidebar(
             )
         }
 
+        HorizontalDivider(color = themeColors.border, modifier = Modifier.padding(vertical = spacing.xs))
 
-
-        // 4. Tree View Area
+        // 3. Dual-Section Tree Area
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = spacing.xs)
         ) {
+            // Filter Unsaved Requests
+            val filteredUnsaved = unsavedRequests.filter {
+                searchQuery.isBlank() ||
+                        it.name.contains(searchQuery, ignoreCase = true) ||
+                        it.url.contains(searchQuery, ignoreCase = true)
+            }
+
+            // Filter Saved Folders
             val filteredFolders = collections.mapNotNull { folder ->
                 val matchingRequests = folder.requests.filter {
                     searchQuery.isBlank() ||
@@ -154,68 +170,146 @@ public fun CollectionsSidebar(
                 } else null
             }
 
-            if (filteredFolders.isEmpty()) {
+            if (filteredUnsaved.isEmpty() && filteredFolders.isEmpty()) {
                 Box(
                     modifier = Modifier.fillMaxWidth().padding(spacing.lg),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "No collections found",
+                        text = "No collections or sessions found",
                         style = typography.caption.copy(color = themeColors.textMuted)
                     )
                 }
             } else {
-                filteredFolders.forEach { folder ->
-                    val isExpanded = expandedFolders[folder.id] ?: true
-
-                    // Folder Node using TreeNode
+                // ─── Dropdown 1: Unsaved Sessions ─────────────────────────────────────
+                if (filteredUnsaved.isNotEmpty() || searchQuery.isBlank()) {
                     TreeNode(
-                        label = "${folder.name} (${folder.requests.size})",
-                        onClick = {
-                            expandedFolders = expandedFolders.toMutableMap().apply {
-                                put(folder.id, !isExpanded)
-                            }
-                        },
+                        label = "Unsaved Sessions (${filteredUnsaved.size})",
+                        onClick = { isUnsavedSectionExpanded = !isUnsavedSectionExpanded },
                         depth = 0,
-                        isExpanded = isExpanded,
-                        hasChildren = folder.requests.isNotEmpty(),
-                        onToggleExpand = {
-                            expandedFolders = expandedFolders.toMutableMap().apply {
-                                put(folder.id, !isExpanded)
-                            }
-                        },
-                        icon = if (isExpanded) KNetIcons.FolderOpen else KNetIcons.Folder
+                        isExpanded = isUnsavedSectionExpanded,
+                        hasChildren = filteredUnsaved.isNotEmpty(),
+                        onToggleExpand = { isUnsavedSectionExpanded = !isUnsavedSectionExpanded },
+                        icon = if (isUnsavedSectionExpanded) KNetIcons.FolderOpen else KNetIcons.Folder
                     )
 
-                    // Child Requests
-                    if (isExpanded) {
-                        folder.requests.forEach { req ->
-                            val isSelected = req.id == selectedRequestId
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(28.dp)
-                                    .clip(shapes.small)
-                                    .background(if (isSelected) themeColors.interaction.selectedOverlay else Color.Transparent)
-                                    .clickable { onRequestSelected(req) }
-                                    .handCursor()
-                                    .padding(start = 24.dp, end = 8.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                KNetBadge(
-                                    text = req.method,
-                                    containerColor = ApiStudioColors.getMethodBackgroundColor(req.method),
-                                    contentColor = ApiStudioColors.getMethodTextColor(req.method)
+                    if (isUnsavedSectionExpanded) {
+                        if (filteredUnsaved.isEmpty()) {
+                            Text(
+                                text = "No active unsaved sessions",
+                                style = typography.caption.copy(color = themeColors.textMuted),
+                                modifier = Modifier.padding(start = 28.dp, top = 4.dp, bottom = 4.dp)
+                            )
+                        } else {
+                            filteredUnsaved.forEach { req ->
+                                val isSelected = req.id == selectedRequestId
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(28.dp)
+                                        .clip(shapes.small)
+                                        .background(if (isSelected) themeColors.interaction.selectedOverlay else Color.Transparent)
+                                        .clickable { onRequestSelected(req) }
+                                        .handCursor()
+                                        .padding(start = 24.dp, end = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    KNetBadge(
+                                        text = req.method,
+                                        containerColor = ApiStudioColors.getMethodBackgroundColor(req.method),
+                                        contentColor = ApiStudioColors.getMethodTextColor(req.method)
+                                    )
+                                    Text(
+                                        text = req.name,
+                                        style = typography.bodySmall.copy(
+                                            color = if (isSelected) themeColors.accent else themeColors.textPrimary,
+                                            fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
+                                        ),
+                                        maxLines = 1
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    HorizontalDivider(color = themeColors.border.copy(alpha = 0.5f), modifier = Modifier.padding(vertical = spacing.xs))
+                }
+
+                // ─── Dropdown 2: Saved Collections ─────────────────────────────────────
+                if (filteredFolders.isNotEmpty() || searchQuery.isBlank()) {
+                    TreeNode(
+                        label = "Saved Collections (${filteredFolders.size})",
+                        onClick = { isSavedSectionExpanded = !isSavedSectionExpanded },
+                        depth = 0,
+                        isExpanded = isSavedSectionExpanded,
+                        hasChildren = filteredFolders.isNotEmpty(),
+                        onToggleExpand = { isSavedSectionExpanded = !isSavedSectionExpanded },
+                        icon = if (isSavedSectionExpanded) KNetIcons.FolderOpen else KNetIcons.Folder
+                    )
+
+                    if (isSavedSectionExpanded) {
+                        if (filteredFolders.isEmpty()) {
+                            Text(
+                                text = "No saved collections",
+                                style = typography.caption.copy(color = themeColors.textMuted),
+                                modifier = Modifier.padding(start = 28.dp, top = 4.dp, bottom = 4.dp)
+                            )
+                        } else {
+                            filteredFolders.forEach { folder ->
+                                val isExpanded = expandedFolders[folder.id] ?: true
+
+                                // Folder Node inside Saved Collections
+                                TreeNode(
+                                    label = "${folder.name} (${folder.requests.size})",
+                                    onClick = {
+                                        expandedFolders = expandedFolders.toMutableMap().apply {
+                                            put(folder.id, !isExpanded)
+                                        }
+                                    },
+                                    depth = 1,
+                                    isExpanded = isExpanded,
+                                    hasChildren = folder.requests.isNotEmpty(),
+                                    onToggleExpand = {
+                                        expandedFolders = expandedFolders.toMutableMap().apply {
+                                            put(folder.id, !isExpanded)
+                                        }
+                                    },
+                                    icon = if (isExpanded) KNetIcons.FolderOpen else KNetIcons.Folder
                                 )
-                                Text(
-                                    text = req.name,
-                                    style = typography.bodySmall.copy(
-                                        color = if (isSelected) themeColors.accent else themeColors.textPrimary,
-                                        fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
-                                    ),
-                                    maxLines = 1
-                                )
+
+                                // Nested Requests in Folder
+                                if (isExpanded) {
+                                    folder.requests.forEach { req ->
+                                        val isSelected = req.id == selectedRequestId
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(28.dp)
+                                                .clip(shapes.small)
+                                                .background(if (isSelected) themeColors.interaction.selectedOverlay else Color.Transparent)
+                                                .clickable { onRequestSelected(req) }
+                                                .handCursor()
+                                                .padding(start = 36.dp, end = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            KNetBadge(
+                                                text = req.method,
+                                                containerColor = ApiStudioColors.getMethodBackgroundColor(req.method),
+                                                contentColor = ApiStudioColors.getMethodTextColor(req.method)
+                                            )
+                                            Text(
+                                                text = req.name,
+                                                style = typography.bodySmall.copy(
+                                                    color = if (isSelected) themeColors.accent else themeColors.textPrimary,
+                                                    fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
+                                                ),
+                                                maxLines = 1
+                                            )
+                                        }
+                                    }
+                                }
                             }
                         }
                     }
