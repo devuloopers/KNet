@@ -3,12 +3,15 @@ package com.devuloopers.knet.ui.core.foundation.icons
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FolderOpen
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowRight
@@ -41,4 +44,11 @@ public object KNetIcons {
     public val Warning: ImageVector = Icons.Default.Warning
     public val Back: ImageVector = Icons.AutoMirrored.Filled.ArrowBack
     public val List: ImageVector = Icons.AutoMirrored.Filled.List
+    public val Folder: ImageVector = Icons.Default.Folder
+    public val FolderOpen: ImageVector = Icons.Default.FolderOpen
+    public val Download: ImageVector = Icons.Default.Refresh
+    public val History: ImageVector = Icons.Default.Refresh
+    public val Save: ImageVector = Icons.Default.Check
+    public val Code: ImageVector = Icons.Default.Edit
+    public val Send: ImageVector = Icons.AutoMirrored.Filled.Send
 }

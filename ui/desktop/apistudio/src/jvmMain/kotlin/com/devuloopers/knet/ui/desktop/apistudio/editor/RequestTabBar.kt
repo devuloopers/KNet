@@ -1,33 +1,35 @@
 package com.devuloopers.knet.ui.desktop.apistudio.editor
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.devuloopers.knet.ui.core.badge.MethodBadge
-import com.devuloopers.knet.ui.core.theme.KNetColors
-import com.devuloopers.knet.ui.core.theme.KNetShapes
+import com.devuloopers.knet.ui.core.components.badge.KNetBadge
+import com.devuloopers.knet.ui.core.components.button.KNetIconButton
+import com.devuloopers.knet.ui.core.components.tabs.ScrollableTabRow
+import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
+import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
+import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.apistudio.model.RequestTab
+import com.devuloopers.knet.ui.desktop.apistudio.theme.ApiStudioColors
 
 /**
- * Multi-tab header switcher bar for active HTTP request tabs in API Studio.
- *
- * @param tabs List of open request tabs.
- * @param activeTabId Currently selected tab ID.
- * @param onTabSelected Callback when a tab is selected.
- * @param onTabClosed Callback when a tab close 'x' is clicked.
- * @param onNewTabClicked Callback when '+' new tab button is clicked.
- * @param modifier Layout modifier.
+ * Top horizontal request tab bar for switching open API requests in API Studio.
  */
 @Composable
 public fun RequestTabBar(
@@ -38,51 +40,78 @@ public fun RequestTabBar(
     onNewTabClicked: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val themeColors = KNetTheme.colors
+    val typography = KNetTheme.typography
+
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(32.dp)
-            .background(KNetColors.BackgroundDark)
-            .padding(horizontal = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+            .height(40.dp)
+            .background(themeColors.surfaceVariant)
+            .border(width = 1.dp, color = themeColors.border),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        tabs.forEach { tab ->
-            val isActive = tab.id == activeTabId
-            Row(
-                modifier = Modifier
-                    .background(
-                        color = if (isActive) KNetColors.SurfaceDark else KNetColors.BackgroundDark,
-                        shape = KNetShapes.Small
+        ScrollableTabRow(
+            modifier = Modifier.weight(1f)
+        ) {
+            tabs.forEach { tab ->
+                val isSelected = tab.id == activeTabId
+
+                Row(
+                    modifier = Modifier
+                        .height(36.dp)
+                        .widthIn(min = 180.dp, max = 240.dp)
+                        .background(if (isSelected) themeColors.surface else Color.Transparent)
+                        .border(width = 1.dp, color = themeColors.border)
+                        .clickable { onTabSelected(tab.id) }
+                        .handCursor()
+                        .padding(horizontal = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    KNetBadge(
+                        text = tab.method,
+                        containerColor = ApiStudioColors.getMethodBackgroundColor(tab.method),
+                        contentColor = ApiStudioColors.getMethodTextColor(tab.method)
                     )
-                    .clickable { onTabSelected(tab.id) }
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                MethodBadge(method = tab.method)
-                Text(
-                    text = tab.title,
-                    color = if (isActive) KNetColors.TextPrimary else KNetColors.TextSecondary,
-                    fontSize = 11.sp,
-                    fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
-                )
-                Text(
-                    text = "×",
-                    color = KNetColors.TextMuted,
-                    fontSize = 12.sp,
-                    modifier = Modifier.clickable { onTabClosed(tab.id) }
-                )
+
+                    Text(
+                        text = tab.title,
+                        style = typography.bodySmall.copy(
+                            color = if (isSelected) themeColors.textPrimary else themeColors.textSecondary,
+                            fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
+                        ),
+                        maxLines = 1,
+                        modifier = Modifier.weight(1f)
+                    )
+
+                    if (tab.isDirty) {
+                        Box(
+                            modifier = Modifier
+                                .size(6.dp)
+                                .background(themeColors.accent, shape = KNetTheme.shapes.pill)
+                        )
+                    }
+
+                    Icon(
+                        imageVector = KNetIcons.Close,
+                        contentDescription = "Close Tab",
+                        modifier = Modifier
+                            .size(14.dp)
+                            .clickable { onTabClosed(tab.id) }
+                            .handCursor(),
+                        tint = themeColors.textMuted
+                    )
+                }
             }
         }
 
-        Text(
-            text = "+",
-            color = KNetColors.TextSecondary,
-            fontSize = 14.sp,
-            modifier = Modifier
-                .clickable { onNewTabClicked() }
-                .padding(horizontal = 8.dp)
+        KNetIconButton(
+            onClick = onNewTabClicked,
+            icon = KNetIcons.Add,
+            contentDescription = "New Tab",
+            modifier = Modifier.padding(horizontal = 4.dp),
+            tint = themeColors.textSecondary
         )
     }
 }

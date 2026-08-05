@@ -6,34 +6,235 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntRect
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
-import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupPositionProvider
+import androidx.compose.ui.window.PopupProperties
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+
 import com.devuloopers.knet.ui.core.foundation.pointer.textCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 /**
- * High-density single line text input field.
+ * A [PopupPositionProvider] that positions the popup content directly below the anchor composable,
+ * aligned with its left edge and offset vertically by [offsetPx] pixels.
+ *
+ * Uses absolute screen coordinates ([anchorBounds]) ensuring stable positioning regardless of
+ * any parent layout structure.
+ */
+private class BelowAnchorPopupPositionProvider(
+    private val offsetPx: Int
+) : PopupPositionProvider {
+    override fun calculatePosition(
+        anchorBounds: IntRect,
+        windowSize: IntSize,
+        layoutDirection: LayoutDirection,
+        popupContentSize: IntSize
+    ): IntOffset {
+        val x = anchorBounds.left
+        val y = anchorBounds.bottom + offsetPx
+        return IntOffset(x, y)
+    }
+}
+
+/**
+ * High-density single line text input field using cohesive parameter objects (< 7 parameters total).
+ * Supports precision text overflow hover popups anchored below the field when text exceeds viewport bounds.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+public fun KNetTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    config: InputFieldConfig = InputFieldConfig.Default,
+    state: InputFieldState = InputFieldState.Default,
+    slots: InputFieldSlots = InputFieldSlots.Empty
+) {
+    val themeColors = KNetTheme.colors
+    val typography = KNetTheme.typography
+    val shapes = KNetTheme.shapes
+    val dimensions = KNetTheme.dimensions
+    val density = LocalDensity.current
+    val coroutineScope = rememberCoroutineScope()
+
+    val borderColor = if (state.isError) themeColors.semantic.error else themeColors.border
+    val textStyle = typography.bodySmall.copy(color = themeColors.textPrimary)
+
+    var containerWidthPx by remember { mutableStateOf(0) }
+    var isHovered by remember { mutableStateOf(false) }
+    var isMouseStationary by remember { mutableStateOf(false) }
+    var hoverJob by remember { mutableStateOf<Job?>(null) }
+
+    fun resetHoverTimer() {
+        isMouseStationary = false
+        hoverJob?.cancel()
+        if (isHovered) {
+            hoverJob = coroutineScope.launch {
+                delay(config.hoverDebounceMs)
+                isMouseStationary = true
+            }
+        }
+    }
+
+    // Measure exact text width reactively
+    val textMeasurer = rememberTextMeasurer()
+    val textWidthPx = remember(value, textStyle) {
+        if (value.isEmpty()) 0 else textMeasurer.measure(text = value, style = textStyle).size.width
+    }
+    val paddingPx = with(density) { 16.dp.toPx() }
+    val isOverflowing = remember(textWidthPx, containerWidthPx, paddingPx) {
+        containerWidthPx > 0 && textWidthPx > (containerWidthPx - paddingPx)
+    }
+
+    val isPassword = config.visualTransformation is PasswordVisualTransformation
+    val shouldShowPopup = config.showHoverPopupOnOverflow && !isPassword && isHovered && isMouseStationary && isOverflowing && value.isNotEmpty()
+
+    Column(modifier = modifier) {
+        // Outer Box receives all pointer events so that the popup appearing/disappearing
+        // does not cause spurious Enter/Exit events on inner children, preventing flicker.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(dimensions.inputHeightStandard)
+                .onSizeChanged { containerWidthPx = it.width }
+                .onPointerEvent(PointerEventType.Enter) {
+                    isHovered = true
+                    resetHoverTimer()
+                }
+                .onPointerEvent(PointerEventType.Move) {
+                    if (isHovered) resetHoverTimer()
+                }
+                .onPointerEvent(PointerEventType.Exit) {
+                    isHovered = false
+                    isMouseStationary = false
+                    hoverJob?.cancel()
+                }
+        ) {
+            BasicTextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(shapes.small)
+                    .background(themeColors.surfaceVariant)
+                    .border(1.dp, borderColor, shapes.small)
+                    .textCursor(),
+                enabled = state.enabled,
+                readOnly = state.readOnly,
+                singleLine = true,
+                textStyle = textStyle,
+                cursorBrush = SolidColor(themeColors.accent),
+                visualTransformation = config.visualTransformation,
+                keyboardOptions = config.keyboardOptions,
+                decorationBox = { innerTextField ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (slots.prefix != null) {
+                            slots.prefix.invoke()
+                        }
+                        Box(
+                            modifier = Modifier.weight(1f),
+                            contentAlignment = Alignment.CenterStart
+                        ) {
+                            if (value.isEmpty() && config.placeholder.isNotEmpty()) {
+                                Text(
+                                    text = config.placeholder,
+                                    style = typography.bodySmall.copy(color = themeColors.textMuted)
+                                )
+                            }
+                            innerTextField()
+                        }
+                        if (slots.suffix != null) {
+                            slots.suffix.invoke()
+                        }
+                    }
+                }
+            )
+
+            // Precision Overflow Popup anchored directly below the left edge of the input field.
+            // Uses BelowAnchorPopupPositionProvider for stable absolute screen-coordinate positioning.
+            // .pointerInput(Unit){} on the popup Box absorbs all pointer events so that mouse movement
+            // over the popup tooltip does not fire an Exit event on the parent, preventing flicker.
+            if (shouldShowPopup) {
+                Popup(
+                    popupPositionProvider = remember(density) {
+                        BelowAnchorPopupPositionProvider(with(density) { 4.dp.roundToPx() })
+                    },
+                    properties = PopupProperties(
+                        focusable = false,
+                        dismissOnBackPress = false,
+                        dismissOnClickOutside = false
+                    )
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .pointerInput(Unit) {}
+                            .widthIn(max = 600.dp)
+                            .clip(shapes.small)
+                            .background(themeColors.surface)
+                            .border(1.dp, themeColors.border, shapes.small)
+                            .padding(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Text(
+                            text = value,
+                            style = typography.bodySmall.copy(color = themeColors.textPrimary)
+                        )
+                    }
+                }
+            }
+        }
+
+        if (config.supportingText != null) {
+            Text(
+                text = config.supportingText,
+                style = typography.caption.copy(color = if (state.isError) themeColors.semantic.error else themeColors.textMuted),
+                modifier = Modifier.padding(top = 2.dp, start = 4.dp)
+            )
+        }
+    }
+}
+
+/**
+ * Convenience inline overload for simple single-line fields with discrete arguments.
  */
 @Composable
 public fun KNetTextField(
@@ -50,67 +251,26 @@ public fun KNetTextField(
     visualTransformation: VisualTransformation = VisualTransformation.None,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default
 ) {
-    val themeColors = KNetTheme.colors
-    val typography = KNetTheme.typography
-    val shapes = KNetTheme.shapes
-    val dimensions = KNetTheme.dimensions
-
-    val borderColor = if (isError) themeColors.semantic.error else themeColors.border
-
-    Column(modifier = modifier) {
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(dimensions.inputHeightStandard)
-                .clip(shapes.small)
-                .background(themeColors.surfaceVariant)
-                .border(1.dp, borderColor, shapes.small)
-                .textCursor(),
+    KNetTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier,
+        config = InputFieldConfig(
+            placeholder = placeholder,
+            supportingText = supportingText,
+            visualTransformation = visualTransformation,
+            keyboardOptions = keyboardOptions
+        ),
+        state = InputFieldState(
             enabled = enabled,
             readOnly = readOnly,
-            singleLine = true,
-            textStyle = typography.bodySmall.copy(color = themeColors.textPrimary),
-            cursorBrush = SolidColor(themeColors.accent),
-            visualTransformation = visualTransformation,
-            keyboardOptions = keyboardOptions,
-            decorationBox = { innerTextField ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    if (prefix != null) {
-                        prefix()
-                    }
-                    Box(
-                        modifier = Modifier.weight(1f),
-                        contentAlignment = Alignment.CenterStart
-                    ) {
-                        if (value.isEmpty() && placeholder.isNotEmpty()) {
-                            Text(
-                                text = placeholder,
-                                style = typography.bodySmall.copy(color = themeColors.textMuted)
-                            )
-                        }
-                        innerTextField()
-                    }
-                    if (suffix != null) {
-                        suffix()
-                    }
-                }
-            }
+            isError = isError
+        ),
+        slots = InputFieldSlots(
+            prefix = prefix,
+            suffix = suffix
         )
-        if (supportingText != null) {
-            Text(
-                text = supportingText,
-                style = typography.caption.copy(color = if (isError) themeColors.semantic.error else themeColors.textMuted),
-                modifier = Modifier.padding(top = 2.dp, start = 4.dp)
-            )
-        }
-    }
+    )
 }
 
 /**
@@ -165,15 +325,16 @@ public fun KNetPasswordField(
     placeholder: String = "Password",
     enabled: Boolean = true
 ) {
-    var passwordVisible by remember { mutableStateOf(false) }
-
     KNetTextField(
         value = value,
         onValueChange = onValueChange,
         modifier = modifier,
-        placeholder = placeholder,
-        enabled = enabled,
-        visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation()
+        config = InputFieldConfig(
+            placeholder = placeholder,
+            visualTransformation = PasswordVisualTransformation(),
+            showHoverPopupOnOverflow = false
+        ),
+        state = InputFieldState(enabled = enabled)
     )
 }
 

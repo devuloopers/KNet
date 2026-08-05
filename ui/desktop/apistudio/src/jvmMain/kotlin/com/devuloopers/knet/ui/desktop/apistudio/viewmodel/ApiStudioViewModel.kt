@@ -76,7 +76,7 @@ class ApiStudioViewModel(
 
         viewModelScope.launch {
             try {
-                val headerMap = currentEditor.headers.associate { it.key to it.value }
+                val headerMap = currentEditor.headers.toMap()
                 val result = apiClient.execute(
                     url = currentEditor.url,
                     method = currentEditor.method,

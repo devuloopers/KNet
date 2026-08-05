@@ -50,6 +50,11 @@ public fun KNetWorkspaceHost(
                 modifier = modifier
             )
         }
+        DesktopDestination.ApiStudio -> {
+            com.devuloopers.knet.ui.desktop.apistudio.view.ApiStudioScreen(
+                modifier = modifier
+            )
+        }
         else -> {
             PlaceholderWorkspaceScreen(
                 destination = destination,

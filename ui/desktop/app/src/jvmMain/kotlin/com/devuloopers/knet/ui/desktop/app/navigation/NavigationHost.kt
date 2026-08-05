@@ -22,22 +22,29 @@ public fun NavigationHost(
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
 
-    Box(
-        modifier = modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        val label = when (destination) {
-            DesktopDestination.Traffic -> "Live Traffic Feed (Awaiting Feature Migration Phase)"
-            DesktopDestination.Inspector -> "Transaction Inspector (Awaiting Feature Migration Phase)"
-            DesktopDestination.ApiStudio -> "API Request Studio (Awaiting Feature Migration Phase)"
-            DesktopDestination.Scripting -> "Automation Scripting Studio (Awaiting Feature Migration Phase)"
-            DesktopDestination.Certificate -> "CA Certificates Manager (Awaiting Feature Migration Phase)"
-            DesktopDestination.Settings -> "Application Settings (Awaiting Feature Migration Phase)"
+    when (destination) {
+        DesktopDestination.ApiStudio -> {
+            com.devuloopers.knet.ui.desktop.apistudio.view.ApiStudioScreen(modifier = modifier)
         }
+        else -> {
+            Box(
+                modifier = modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center
+            ) {
+                val label = when (destination) {
+                    DesktopDestination.Traffic -> "Live Traffic Feed (Awaiting Feature Migration Phase)"
+                    DesktopDestination.Inspector -> "Transaction Inspector (Awaiting Feature Migration Phase)"
+                    DesktopDestination.Scripting -> "Automation Scripting Studio (Awaiting Feature Migration Phase)"
+                    DesktopDestination.Certificate -> "CA Certificates Manager (Awaiting Feature Migration Phase)"
+                    DesktopDestination.Settings -> "Application Settings (Awaiting Feature Migration Phase)"
+                    else -> ""
+                }
 
-        Text(
-            text = label,
-            style = typography.titleMedium.copy(color = themeColors.textSecondary)
-        )
+                Text(
+                    text = label,
+                    style = typography.titleMedium.copy(color = themeColors.textSecondary)
+                )
+            }
+        }
     }
 }
