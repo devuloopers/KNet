@@ -9,6 +9,7 @@ import com.devuloopers.knet.ui.desktop.apistudio.model.ExecutionState
 import com.devuloopers.knet.ui.desktop.apistudio.model.RequestTab
 import com.devuloopers.knet.ui.desktop.apistudio.model.ResponsePresentation
 import com.devuloopers.knet.ui.desktop.apistudio.model.TestResult
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -28,13 +29,86 @@ class ApiStudioViewModel(
     private val formatResponseBodyUseCase: FormatResponseBodyUseCase
 ) : ViewModel() {
 
+    public companion object {
+        /**
+         * Minimum visual loading duration in milliseconds to prevent single-frame
+         * visual flickering on ultra-fast responses (< 200ms).
+         */
+        public const val MIN_LOADING_DURATION_MS: Long = 200L
+    }
+
     private val _uiState = MutableStateFlow(ApiStudioState())
     val uiState: StateFlow<ApiStudioState> = _uiState.asStateFlow()
 
+    /**
+     * Updates the target request URL string in UDF state and automatically synchronizes
+     * parsed query parameters into the Params table state.
+     *
+     * @param url The raw URL string input from the URL bar (e.g. "http://localhost:9090/api/get?foo=bar").
+     */
     fun updateUrl(url: String) {
-        _uiState.update { it.copy(editorState = it.editorState.copy(url = url)) }
+        val parsedParams = parseQueryParamsFromUrl(url)
+        _uiState.update { state ->
+            state.copy(
+                editorState = state.editorState.copy(
+                    url = url,
+                    queryParams = parsedParams
+                )
+            )
+        }
     }
 
+    /**
+     * Updates query parameter key-value pairs in UDF state and automatically reconstructs
+     * the target URL string in the URL bar to reflect parameter changes in real time.
+     *
+     * @param queryParams Key-value pairs representing request query parameters.
+     */
+    fun updateQueryParams(queryParams: List<Pair<String, String>>) {
+        _uiState.update { state ->
+            val currentUrl = state.editorState.url
+            val baseUrl = if (currentUrl.contains("?")) currentUrl.substringBefore("?") else currentUrl
+            val activeParams = queryParams.filter { it.first.isNotBlank() }
+            val newUrl = if (activeParams.isNotEmpty()) {
+                val queryString = activeParams.joinToString("&") { "${it.first}=${it.second}" }
+                "$baseUrl?$queryString"
+            } else {
+                baseUrl
+            }
+            state.copy(
+                editorState = state.editorState.copy(
+                    url = newUrl,
+                    queryParams = queryParams
+                )
+            )
+        }
+    }
+
+    /**
+     * Helper function parsing a raw URL string into key-value query parameter pairs.
+     *
+     * @param url Target URL string containing optional `?key=value` query string.
+     * @return List of key-value pairs extracted from query string.
+     */
+    private fun parseQueryParamsFromUrl(url: String): List<Pair<String, String>> {
+        if (!url.contains("?")) return emptyList()
+        val queryString = url.substringAfter("?").substringBefore("#")
+        if (queryString.isBlank()) return emptyList()
+        return queryString.split("&").mapNotNull { pair ->
+            val parts = pair.split("=", limit = 2)
+            val key = parts.getOrNull(0)?.trim() ?: ""
+            if (key.isNotBlank()) {
+                val value = parts.getOrNull(1)?.trim() ?: ""
+                key to value
+            } else null
+        }
+    }
+
+    /**
+     * Updates HTTP method in UDF state and synchronizes active tab header display.
+     *
+     * @param method Selected HTTP method string (GET, POST, PUT, DELETE, etc.).
+     */
     fun updateMethod(method: String) {
         _uiState.update { state ->
             val updatedTabs = state.tabs.map {
@@ -43,6 +117,92 @@ class ApiStudioViewModel(
             state.copy(
                 editorState = state.editorState.copy(method = method),
                 tabs = updatedTabs
+            )
+        }
+    }
+
+    /**
+     * Updates request headers in UDF state.
+     *
+     * @param headers List of header key-value pairs.
+     */
+    fun updateHeaders(headers: List<Pair<String, String>>) {
+        _uiState.update { it.copy(editorState = it.editorState.copy(headers = headers)) }
+    }
+
+    /**
+     * Updates request body payload text content in UDF state.
+     *
+     * @param bodyPayload Raw request body string content.
+     */
+    fun updateBodyPayload(bodyPayload: String) {
+        _uiState.update { it.copy(editorState = it.editorState.copy(bodyPayload = bodyPayload)) }
+    }
+
+    /**
+     * Updates request body type (JSON, Form, Raw, None) in UDF state.
+     *
+     * @param bodyType Selected body mode representation string.
+     */
+    fun updateBodyType(bodyType: String) {
+        _uiState.update { it.copy(editorState = it.editorState.copy(bodyType = bodyType)) }
+    }
+
+    /**
+     * Updates authentication configuration type and credential token in UDF state.
+     *
+     * @param authType Selected authentication type (No Auth, Bearer Token, Basic Auth).
+     * @param authToken Credential token string.
+     */
+    fun updateAuth(authType: String, authToken: String) {
+        _uiState.update {
+            it.copy(editorState = it.editorState.copy(authType = authType, authToken = authToken))
+        }
+    }
+
+    /**
+     * Updates request cookies in UDF state.
+     *
+     * @param cookies List of cookie key-value pairs.
+     */
+    fun updateCookies(cookies: List<Pair<String, String>>) {
+        _uiState.update { it.copy(editorState = it.editorState.copy(cookies = cookies)) }
+    }
+
+    /**
+     * Updates pre-request and test scripts in UDF state.
+     *
+     * @param preRequestScript Script code executed before request execution.
+     * @param testScript Script code executed after response receipt.
+     */
+    fun updateScripts(preRequestScript: String, testScript: String) {
+        _uiState.update {
+            it.copy(
+                editorState = it.editorState.copy(
+                    preRequestScript = preRequestScript,
+                    testScript = testScript
+                )
+            )
+        }
+    }
+
+    /**
+     * Updates the active sub-tab selection (PARAMS, AUTH, HEADERS, BODY, COOKIES, SCRIPTS) in UDF state.
+     *
+     * @param subTabName Name of the active sub-tab.
+     */
+    fun updateActiveSubTab(subTabName: String) {
+        _uiState.update { it.copy(editorState = it.editorState.copy(activeSubTab = subTabName)) }
+    }
+
+    /**
+     * Clears current HTTP response presentation state and resets execution status to IDLE.
+     */
+    fun clearResponse() {
+        _uiState.update { state ->
+            state.copy(
+                responsePresentation = null,
+                executionState = ExecutionState.IDLE
             )
         }
     }
@@ -81,6 +241,8 @@ class ApiStudioViewModel(
     fun executeRequest() {
         val currentEditor = _uiState.value.editorState
         _uiState.update { it.copy(executionState = ExecutionState.EXECUTING, errorMessage = null) }
+
+        val executionStartTime = System.currentTimeMillis()
 
         viewModelScope.launch {
             try {
@@ -133,19 +295,6 @@ class ApiStudioViewModel(
                     mimeType = detectedMime
                 )
 
-                val testResults = listOf(
-                    TestResult("Status code is 200", result.statusCode == 200),
-                    TestResult("Response time is less than 500ms", result.latencyMs < 500L, if (result.latencyMs >= 500L) "Latency exceeded limit: ${result.latencyMs}ms" else null),
-                    TestResult("Content-Type header is present", result.headers.keys.any { it.equals("content-type", ignoreCase = true) })
-                )
-                val consoleLogs = listOf(
-                    "[INFO] Preparing ${currentEditor.method} request to ${currentEditor.url}",
-                    "[INFO] Pre-request script executed cleanly (0 ms)",
-                    "[NET] Connection established",
-                    "[NET] Received response: ${result.statusCode} ${result.statusText} (${result.responseSizeBytes} bytes)",
-                    "[TEST] Executed 3 test assertions (Passed: ${testResults.count { it.passed }}/${testResults.size})"
-                )
-
                 val presentation = ResponsePresentation(
                     statusCode = result.statusCode,
                     statusText = result.statusText,
@@ -155,9 +304,15 @@ class ApiStudioViewModel(
                     headers = result.headers,
                     cookies = result.cookies,
                     body = formattedBody,
-                    testResults = testResults,
-                    consoleLogs = consoleLogs
+                    testResults = emptyList(),
+                    consoleLogs = emptyList()
                 )
+
+                // Enforce minimum visual loading duration window to prevent UI flickering on ultra-fast responses (< 200ms)
+                val elapsedMs = System.currentTimeMillis() - executionStartTime
+                if (elapsedMs < MIN_LOADING_DURATION_MS) {
+                    delay(MIN_LOADING_DURATION_MS - elapsedMs)
+                }
 
                 _uiState.update {
                     it.copy(
@@ -167,6 +322,11 @@ class ApiStudioViewModel(
                     )
                 }
             } catch (e: Exception) {
+                val elapsedMs = System.currentTimeMillis() - executionStartTime
+                if (elapsedMs < MIN_LOADING_DURATION_MS) {
+                    delay(MIN_LOADING_DURATION_MS - elapsedMs)
+                }
+
                 _uiState.update {
                     it.copy(
                         executionState = ExecutionState.ERROR,

@@ -32,6 +32,7 @@ import com.devuloopers.knet.ui.desktop.apistudio.editor.RequestPayloadEditor
 import com.devuloopers.knet.ui.desktop.apistudio.editor.RequestTabBar
 import com.devuloopers.knet.ui.desktop.apistudio.editor.RequestUrlBar
 import com.devuloopers.knet.ui.desktop.apistudio.model.ApiStudioState
+import com.devuloopers.knet.ui.desktop.apistudio.model.ExecutionState
 import com.devuloopers.knet.ui.desktop.apistudio.model.RequestTab
 import com.devuloopers.knet.ui.desktop.apistudio.response.ResponseInspectorView
 import com.devuloopers.knet.ui.desktop.apistudio.sidebar.CollectionsSidebar
@@ -102,9 +103,16 @@ public fun ApiStudioScreen(
         )
     }
     var activeTabId by remember { mutableStateOf("tab_1") }
-    var currentMethod by remember { mutableStateOf("GET") }
-    var currentUrl by remember { mutableStateOf("") }
-    var bodyPayload by remember { mutableStateOf("") }
+    val currentMethod = uiState.editorState.method
+    val currentUrl = uiState.editorState.url
+    val bodyPayload = uiState.editorState.bodyPayload
+    val activeSubTabEnum = remember(uiState.editorState.activeSubTab) {
+        try {
+            com.devuloopers.knet.ui.desktop.apistudio.editor.RequestSubTab.valueOf(uiState.editorState.activeSubTab)
+        } catch (_: Exception) {
+            com.devuloopers.knet.ui.desktop.apistudio.editor.RequestSubTab.BODY
+        }
+    }
 
     Row(modifier = modifier.fillMaxSize().background(themeColors.surface)) {
         // Left Pane: Collections Sidebar
@@ -114,8 +122,6 @@ public fun ApiStudioScreen(
             selectedRequestId = selectedRequestId,
             onRequestSelected = { item ->
                 selectedRequestId = item.id
-                currentMethod = item.method
-                currentUrl = item.url
                 viewModel?.updateMethod(item.method)
                 viewModel?.updateUrl(item.url)
             }
@@ -136,23 +142,30 @@ public fun ApiStudioScreen(
                         method = currentMethod,
                         url = currentUrl,
                         onMethodChanged = {
-                            currentMethod = it
                             viewModel?.updateMethod(it)
                         },
                         onUrlChanged = {
-                            currentUrl = it
                             viewModel?.updateUrl(it)
                         },
                         onSendClicked = {
                             viewModel?.executeRequest()
-                        }
+                        },
+                        isExecuting = uiState.executionState == ExecutionState.EXECUTING
                     )
 
                     HorizontalDivider(color = themeColors.border)
 
                     RequestPayloadEditor(
                         bodyPayload = bodyPayload,
-                        onBodyPayloadChanged = { bodyPayload = it }
+                        onBodyPayloadChanged = { viewModel?.updateBodyPayload(it) },
+                        queryParams = uiState.editorState.queryParams,
+                        onQueryParamsChanged = { viewModel?.updateQueryParams(it) },
+                        headers = uiState.editorState.headers,
+                        onHeadersChanged = { viewModel?.updateHeaders(it) },
+                        cookies = uiState.editorState.cookies,
+                        onCookiesChanged = { viewModel?.updateCookies(it) },
+                        activeSubTab = activeSubTabEnum,
+                        onSubTabSelected = { viewModel?.updateActiveSubTab(it.name) }
                     )
                 }
             },
@@ -169,6 +182,7 @@ public fun ApiStudioScreen(
                     cookies = presentation?.cookies ?: emptyMap(),
                     testResults = presentation?.testResults ?: emptyList(),
                     consoleLogs = presentation?.consoleLogs ?: emptyList(),
+                    onClearResponse = { viewModel?.clearResponse() },
                     modifier = paneModifier
                 )
             },

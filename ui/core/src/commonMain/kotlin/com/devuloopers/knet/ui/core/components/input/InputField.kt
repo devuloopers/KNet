@@ -184,7 +184,10 @@ public fun KNetTextField(
                             if (value.isEmpty() && config.placeholder.isNotEmpty()) {
                                 Text(
                                     text = config.placeholder,
-                                    style = typography.bodySmall.copy(color = themeColors.textMuted)
+                                    style = typography.bodySmall.copy(color = themeColors.textMuted),
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                 )
                             }
                             innerTextField()

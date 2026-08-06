@@ -22,6 +22,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.devuloopers.knet.ui.core.components.button.ButtonVariant
+import com.devuloopers.knet.ui.core.components.button.KNetButton
 import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdown
 import com.devuloopers.knet.ui.core.components.input.InputFieldConfig
 import com.devuloopers.knet.ui.core.components.input.KNetTextField
@@ -34,7 +36,15 @@ private val httpMethods = listOf("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"
 
 /**
  * Modern, high-density URL authoring bar featuring:
- * Sleek Method Dropdown Box + Seamless Monospaced URL TextField with Overflow Hover Dialog + Action Send Button.
+ * Sleek Method Dropdown Box + Seamless Monospaced URL TextField with Overflow Hover Dialog + Action Send KNetButton with loading support.
+ *
+ * @param method Active HTTP method string (GET, POST, PUT, DELETE, etc.).
+ * @param url Target request URL string.
+ * @param onMethodChanged Callback when HTTP method selection changes.
+ * @param onUrlChanged Callback when URL text input changes.
+ * @param onSendClicked Callback when Send button is clicked.
+ * @param isExecuting Reactive execution loading toggle (renders inline spinner on Send button).
+ * @param modifier Layout modifier.
  */
 @Composable
 public fun RequestUrlBar(
@@ -43,6 +53,7 @@ public fun RequestUrlBar(
     onMethodChanged: (String) -> Unit,
     onUrlChanged: (String) -> Unit,
     onSendClicked: () -> Unit,
+    isExecuting: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val themeColors = KNetTheme.colors
@@ -99,32 +110,32 @@ public fun RequestUrlBar(
             )
         }
 
-        // Modern Action Send Button
-        Row(
-            modifier = Modifier
-                .height(40.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(themeColors.accent)
-                .clickable(onClick = onSendClicked)
-                .handCursor()
-                .padding(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
+        // Modern Action Send Button using KNetButton with native loading state support
+        KNetButton(
+            onClick = onSendClicked,
+            variant = ButtonVariant.Primary,
+            loading = isExecuting,
+            modifier = Modifier.height(40.dp)
         ) {
-            Text(
-                text = "Send",
-                style = typography.titleMedium.copy(
-                    color = themeColors.surface,
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            ) {
+                Text(
+                    text = if (isExecuting) "Sending..." else "Send",
+                    style = typography.titleMedium.copy(
+                        fontWeight = FontWeight.SemiBold
+                    )
                 )
-            )
-            Icon(
-                imageVector = KNetIcons.Send,
-                contentDescription = "Send Request",
-                modifier = Modifier.size(16.dp),
-                tint = themeColors.surface
-            )
+                if (!isExecuting) {
+                    Icon(
+                        imageVector = KNetIcons.Send,
+                        contentDescription = "Send Request",
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
         }
     }
 }

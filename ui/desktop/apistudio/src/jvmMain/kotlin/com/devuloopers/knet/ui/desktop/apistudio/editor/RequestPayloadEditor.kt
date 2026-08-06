@@ -34,36 +34,61 @@ import com.devuloopers.knet.ui.core.components.keyvalue.KeyValueEntry
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import com.devuloopers.knet.ui.desktop.apistudio.editor.AuthEditorView
+import com.devuloopers.knet.ui.desktop.apistudio.editor.BodyEditorView
+import com.devuloopers.knet.ui.desktop.apistudio.editor.ScriptEditorView
+import com.devuloopers.knet.ui.desktop.apistudio.model.AuthState
 import com.devuloopers.knet.ui.desktop.apistudio.model.BodyMode
 import com.devuloopers.knet.ui.desktop.apistudio.model.BodyState
 import com.devuloopers.knet.ui.desktop.apistudio.model.ScriptState
 
+/**
+ * Closed set of request authoring sub-tabs ordered according to standard developer workflow:
+ * Params -> Auth -> Headers -> Body -> Cookies -> Scripts.
+ */
 public enum class RequestSubTab {
     PARAMS,
-    HEADERS,
     AUTH,
+    HEADERS,
     BODY,
     COOKIES,
     SCRIPTS
 }
 
 /**
- * Request authoring payload editor with sub-tabs bar and KNetKeyValueEditor / CodeEditorView area.
+ * Request authoring payload editor component hosting sub-tabs bar and input panels.
+ *
+ * @param bodyPayload Raw request body payload content string.
+ * @param onBodyPayloadChanged Callback when body payload text changes.
+ * @param queryParams Key-value pairs of request query parameters.
+ * @param onQueryParamsChanged Callback when query parameters are modified in the Params table.
+ * @param modifier Layout modifier.
  */
 @Composable
 public fun RequestPayloadEditor(
     bodyPayload: String,
     onBodyPayloadChanged: (String) -> Unit,
+    queryParams: List<Pair<String, String>> = emptyList(),
+    onQueryParamsChanged: (List<Pair<String, String>>) -> Unit = {},
+    headers: List<Pair<String, String>> = emptyList(),
+    onHeadersChanged: (List<Pair<String, String>>) -> Unit = {},
+    cookies: List<Pair<String, String>> = emptyList(),
+    onCookiesChanged: (List<Pair<String, String>>) -> Unit = {},
+    activeSubTab: RequestSubTab = RequestSubTab.BODY,
+    onSubTabSelected: (RequestSubTab) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
     val spacing = KNetTheme.spacing
 
-    var activeSubTab by remember { mutableStateOf(RequestSubTab.BODY) }
-    var paramEntries by remember { mutableStateOf(emptyList<KeyValueEntry>()) }
-    var headerEntries by remember {
-        mutableStateOf(
+    val paramEntries = remember(queryParams) {
+        queryParams.mapIndexed { index, (paramKey, paramValue) ->
+            KeyValueEntry("param_$index", paramKey, paramValue)
+        }
+    }
+    val headerEntries = remember(headers) {
+        if (headers.isEmpty()) {
             listOf(
                 KeyValueEntry("h1", "Content-Type", "application/json"),
                 KeyValueEntry("h2", "Accept", "*/*"),
@@ -71,10 +96,18 @@ public fun RequestPayloadEditor(
                 KeyValueEntry("h4", "Connection", "keep-alive"),
                 KeyValueEntry("h5", "User-Agent", "KNet/1.0.0")
             )
-        )
+        } else {
+            headers.mapIndexed { index, (headerKey, headerValue) ->
+                KeyValueEntry("header_$index", headerKey, headerValue)
+            }
+        }
     }
-    var cookieEntries by remember { mutableStateOf(emptyList<KeyValueEntry>()) }
-    var authState by remember { mutableStateOf(com.devuloopers.knet.ui.desktop.apistudio.model.AuthState()) }
+    val cookieEntries = remember(cookies) {
+        cookies.mapIndexed { index, (cookieKey, cookieValue) ->
+            KeyValueEntry("cookie_$index", cookieKey, cookieValue)
+        }
+    }
+    var authState by remember { mutableStateOf(AuthState()) }
     var bodyState by remember {
         mutableStateOf(
             BodyState(
@@ -97,19 +130,21 @@ public fun RequestPayloadEditor(
         ) {
             RequestSubTab.entries.forEach { subTab ->
                 val isSelected = subTab == activeSubTab
-                // Resolve dynamic label — Body tab label reflects active body mode
+                // Resolve dynamic label — Body tab label reflects active body mode, Params & Headers reflect counts
+                val activeParamsCount = queryParams.count { it.first.isNotBlank() }
+                val activeHeadersCount = headerEntries.count { it.key.isNotBlank() }
                 val tabLabel = when (subTab) {
-                    RequestSubTab.PARAMS -> "Params"
-                    RequestSubTab.HEADERS -> "Headers (4)"
+                    RequestSubTab.PARAMS -> if (activeParamsCount > 0) "Params ($activeParamsCount)" else "Params"
+                    RequestSubTab.HEADERS -> "Headers ($activeHeadersCount)"
                     RequestSubTab.AUTH -> "Auth"
                     RequestSubTab.BODY -> bodyState.mode.tabLabel
-                    RequestSubTab.COOKIES -> "Cookies"
+                    RequestSubTab.COOKIES -> if (cookies.isNotEmpty()) "Cookies (${cookies.size})" else "Cookies"
                     RequestSubTab.SCRIPTS -> "Scripts"
                 }
                 Column(
                     modifier = Modifier
                         .width(IntrinsicSize.Max)
-                        .clickable { activeSubTab = subTab }
+                        .clickable { onSubTabSelected(subTab) }
                         .handCursor()
                         .padding(top = 8.dp, bottom = 0.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
@@ -143,14 +178,17 @@ public fun RequestPayloadEditor(
                 RequestSubTab.PARAMS -> {
                     KNetKeyValueEditor(
                         entries = paramEntries,
-                        onEntryChange = { idx, updated ->
-                            paramEntries = paramEntries.toMutableList().apply { set(idx, updated) }
+                        onEntryChange = { entryIndex, updatedEntry ->
+                            val updatedEntries = paramEntries.toMutableList().apply { set(entryIndex, updatedEntry) }
+                            onQueryParamsChanged(updatedEntries.map { it.key to it.value })
                         },
                         onAddEntry = {
-                            paramEntries = paramEntries + KeyValueEntry("p_${System.currentTimeMillis()}", "", "")
+                            val updatedList = queryParams + ("" to "")
+                            onQueryParamsChanged(updatedList)
                         },
-                        onRemoveEntry = { idx ->
-                            paramEntries = paramEntries.toMutableList().apply { removeAt(idx) }
+                        onRemoveEntry = { targetIndex ->
+                            val updatedList = queryParams.toMutableList().apply { removeAt(targetIndex) }
+                            onQueryParamsChanged(updatedList)
                         },
                         modifier = Modifier.padding(spacing.md)
                     )
@@ -158,14 +196,17 @@ public fun RequestPayloadEditor(
                 RequestSubTab.HEADERS -> {
                     KNetKeyValueEditor(
                         entries = headerEntries,
-                        onEntryChange = { idx, updated ->
-                            headerEntries = headerEntries.toMutableList().apply { set(idx, updated) }
+                        onEntryChange = { entryIndex, updatedEntry ->
+                            val updatedEntries = headerEntries.toMutableList().apply { set(entryIndex, updatedEntry) }
+                            onHeadersChanged(updatedEntries.map { it.key to it.value })
                         },
                         onAddEntry = {
-                            headerEntries = headerEntries + KeyValueEntry("h_${System.currentTimeMillis()}", "", "")
+                            val updatedList = headers + ("" to "")
+                            onHeadersChanged(updatedList)
                         },
-                        onRemoveEntry = { idx ->
-                            headerEntries = headerEntries.toMutableList().apply { removeAt(idx) }
+                        onRemoveEntry = { targetIndex ->
+                            val updatedList = headers.toMutableList().apply { removeAt(targetIndex) }
+                            onHeadersChanged(updatedList)
                         },
                         modifier = Modifier.padding(spacing.md)
                     )
@@ -173,11 +214,11 @@ public fun RequestPayloadEditor(
                 RequestSubTab.BODY -> {
                     BodyEditorView(
                         state = bodyState,
-                        onStateChange = { updated ->
-                            bodyState = updated
+                        onStateChange = { updatedBodyState ->
+                            bodyState = updatedBodyState
                             // Propagate payload text changes to parent callback for text-based modes
-                            if (updated.mode != BodyMode.FORM_DATA && updated.mode != BodyMode.X_WWW_FORM_URLENCODED) {
-                                onBodyPayloadChanged(updated.payloadText)
+                            if (updatedBodyState.mode != BodyMode.FORM_DATA && updatedBodyState.mode != BodyMode.X_WWW_FORM_URLENCODED) {
+                                onBodyPayloadChanged(updatedBodyState.payloadText)
                             }
                         },
                         modifier = Modifier.fillMaxSize()
@@ -186,7 +227,7 @@ public fun RequestPayloadEditor(
                 RequestSubTab.AUTH -> {
                     AuthEditorView(
                         state = authState,
-                        onStateChange = { authState = it },
+                        onStateChange = { updatedAuthState -> authState = updatedAuthState },
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -215,14 +256,17 @@ public fun RequestPayloadEditor(
 
                         KNetKeyValueEditor(
                             entries = cookieEntries,
-                            onEntryChange = { idx, updated ->
-                                cookieEntries = cookieEntries.toMutableList().apply { set(idx, updated) }
+                            onEntryChange = { entryIndex, updatedEntry ->
+                                val updatedEntries = cookieEntries.toMutableList().apply { set(entryIndex, updatedEntry) }
+                                onCookiesChanged(updatedEntries.map { it.key to it.value })
                             },
                             onAddEntry = {
-                                cookieEntries = cookieEntries + KeyValueEntry("c_${System.currentTimeMillis()}", "", "")
+                                val updatedList = cookies + ("" to "")
+                                onCookiesChanged(updatedList)
                             },
-                            onRemoveEntry = { idx ->
-                                cookieEntries = cookieEntries.toMutableList().apply { removeAt(idx) }
+                            onRemoveEntry = { targetIndex ->
+                                val updatedList = cookies.toMutableList().apply { removeAt(targetIndex) }
+                                onCookiesChanged(updatedList)
                             },
                             modifier = Modifier.fillMaxWidth()
                         )

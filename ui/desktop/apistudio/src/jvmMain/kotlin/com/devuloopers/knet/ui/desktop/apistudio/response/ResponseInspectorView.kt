@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.devuloopers.knet.ui.core.components.badge.KNetHttpStatusBadge
 import com.devuloopers.knet.ui.core.components.button.KNetCopyButton
 import com.devuloopers.knet.ui.core.components.button.KNetCopyDropdownButton
 import com.devuloopers.knet.ui.core.components.button.KNetCopyOption
@@ -111,6 +112,7 @@ public fun ResponseInspectorView(
     cookies: Map<String, String> = emptyMap(),
     testResults: List<TestResult> = emptyList(),
     consoleLogs: List<String> = emptyList(),
+    onClearResponse: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val themeColors = KNetTheme.colors
@@ -183,25 +185,11 @@ public fun ResponseInspectorView(
                 horizontalArrangement = Arrangement.spacedBy(spacing.md),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Status Pill
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = KNetIcons.Check,
-                        contentDescription = "Success Status",
-                        modifier = Modifier.size(18.dp),
-                        tint = ApiStudioColors.GetText
-                    )
-                    Text(
-                        text = "$statusCode $statusText",
-                        style = typography.titleSmall.copy(
-                            color = ApiStudioColors.GetText,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    )
-                }
+                // Strongly-typed HTTP Status Badge (RFC 9110 compliant)
+                KNetHttpStatusBadge(
+                    statusCode = statusCode,
+                    statusText = statusText
+                )
 
                 VerticalDivider(color = themeColors.border, modifier = Modifier.height(16.dp))
 
@@ -279,7 +267,7 @@ public fun ResponseInspectorView(
         }
     }
 
-            // Quick Action: Declaratively Driven Segmented Format Toggle + Copy Button
+            // Quick Action: Declaratively Driven Segmented Format Toggle + Copy Button + Clear Response Button
             Row(
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically
@@ -295,14 +283,34 @@ public fun ResponseInspectorView(
                     textToCopy = activeTextToCopy,
                     copiedText = "Copied as ${activeFormatType.label.lowercase()}"
                 )
+                KNetIconButton(
+                    icon = KNetIcons.Delete,
+                    onClick = onClearResponse,
+                    contentDescription = "Clear Response",
+                    tint = themeColors.textMuted
+                )
             }
         }
 
         HorizontalDivider(color = themeColors.border)
 
+        val visibleSubTabs = remember(testResults, currentConsoleLogs) {
+            ResponseSubTab.entries.filter { subTab ->
+                when (subTab) {
+                    ResponseSubTab.BODY, ResponseSubTab.HEADERS, ResponseSubTab.COOKIES -> true
+                    ResponseSubTab.TEST_RESULTS -> testResults.isNotEmpty()
+                    ResponseSubTab.CONSOLE -> currentConsoleLogs.isNotEmpty()
+                }
+            }
+        }
+
+        if (activeSubTab !in visibleSubTabs) {
+            activeSubTab = ResponseSubTab.BODY
+        }
+
         // 2. Responsive Scrollable Sub-Tabs Bar
         ScrollableTabRow(modifier = Modifier.fillMaxWidth()) {
-            ResponseSubTab.entries.forEach { subTab ->
+            visibleSubTabs.forEach { subTab ->
                 val labelWithBadge = when (subTab) {
                     ResponseSubTab.BODY -> "Body"
                     ResponseSubTab.HEADERS -> "Headers (${headers.size})"

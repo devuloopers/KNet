@@ -15,5 +15,6 @@ public data class RequestEditorState(
     val bodyType: String = "None",
     val bodyPayload: String = "",
     val preRequestScript: String = "",
-    val testScript: String = ""
+    val testScript: String = "",
+    val activeSubTab: String = "BODY"
 )
