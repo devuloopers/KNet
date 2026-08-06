@@ -17,6 +17,7 @@ data class ApiExecutionResult(
     val statusCode: Int,
     val statusText: String,
     val headers: Map<String, String>,
+    val cookies: Map<String, String> = emptyMap(),
     val responseBody: String,
     val latencyMs: Long,
     val responseSizeBytes: Long,

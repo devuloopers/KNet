@@ -1,0 +1,22 @@
+package com.devuloopers.knet.domain.clientNetwork.decoder
+
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
+import java.util.zip.GZIPInputStream
+
+/**
+ * JVM strategy implementation for GZIP content decompression.
+ */
+public class GzipContentDecoder : ContentDecoder {
+    override val encoding: ContentEncoding = ContentEncoding.GZIP
+
+    override fun decompress(bytes: ByteArray): ByteArray {
+        ByteArrayInputStream(bytes).use { bais ->
+            GZIPInputStream(bais).use { gzis ->
+                val baos = ByteArrayOutputStream()
+                gzis.copyTo(baos)
+                return baos.toByteArray()
+            }
+        }
+    }
+}

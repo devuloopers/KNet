@@ -1,8 +1,7 @@
 package com.devuloopers.knet.engine.proxy.handler
 
 import com.devuloopers.knet.core.logger.KNetLogger
-import com.devuloopers.knet.domain.network.model.HttpTimings
-import com.devuloopers.knet.domain.network.model.ProxyTrafficListener
+import com.devuloopers.knet.domain.clientNetwork.model.ProxyTrafficListener
 import com.devuloopers.knet.engine.certificate.CertificateAuthority
 import com.devuloopers.knet.engine.certificate.CertificateCache
 import com.devuloopers.knet.engine.proxy.dns.NettyDnsResolver
@@ -226,7 +225,7 @@ class KNetProxyHandler(
  * Streams HttpResponse and HttpContent to client channel while accumulating body bytes
  * for proxy inspection. Chunked responses arrive as separate HttpContent messages;
  * this handler buffers them in a [java.io.ByteArrayOutputStream] and merges the
- * accumulated body into the mapped [com.devuloopers.knet.domain.network.model.HttpResponse]
+ * accumulated body into the mapped [com.devuloopers.knet.domain.clientNetwork.model.HttpResponse]
  * on [io.netty.handler.codec.http.LastHttpContent] before firing [ProxyTrafficListener.onResponseCaptured].
  */
 class KNetOutboundHandler(
@@ -237,7 +236,7 @@ class KNetOutboundHandler(
     private val timingCollector: NetworkTimingCollector = NetworkTimingCollector()
 ) : SimpleChannelInboundHandler<HttpObject>() {
 
-    private var mappedResponse: com.devuloopers.knet.domain.network.model.HttpResponse? = null
+    private var mappedResponse: com.devuloopers.knet.domain.clientNetwork.model.HttpResponse? = null
     private var isKeepAlive: Boolean = true
 
     /** Accumulates body bytes from chunked HttpContent messages for inspection capture. */
@@ -291,7 +290,7 @@ class KNetOutboundHandler(
                     // for chunked responses, mapResponseHeaders() left body = null.
                     val accumulatedBody = responseBodyBuffer.toByteArray().takeIf { it.isNotEmpty() }
                     val finalResponse = mappedResponse?.let { response ->
-                        com.devuloopers.knet.domain.network.model.HttpResponse(
+                        com.devuloopers.knet.domain.clientNetwork.model.HttpResponse(
                             statusCode = response.statusCode,
                             statusText = response.statusText,
                             headers = response.headers,

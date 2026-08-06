@@ -1,7 +1,7 @@
 package com.devuloopers.knet.data.desktop.runtime
 
 import com.devuloopers.knet.core.logger.KNetLogger
-import com.devuloopers.knet.domain.network.model.ProxyTrafficListener
+import com.devuloopers.knet.domain.clientNetwork.model.ProxyTrafficListener
 import com.devuloopers.knet.engine.certificate.CertificateAuthority
 import com.devuloopers.knet.engine.certificate.CertificateCache
 import com.devuloopers.knet.engine.proxy.KNetProxyServer

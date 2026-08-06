@@ -1,9 +1,9 @@
 package com.devuloopers.knet.domain.util
 
-import com.devuloopers.knet.domain.network.decoder.BodyDecoder
-import com.devuloopers.knet.domain.network.decoder.BodyTextDecoder
-import com.devuloopers.knet.domain.network.decoder.DecodedTextResult
-import com.devuloopers.knet.domain.network.decoder.MediaTypeInspector
+import com.devuloopers.knet.domain.clientNetwork.decoder.BodyDecoder
+import com.devuloopers.knet.domain.clientNetwork.decoder.BodyTextDecoder
+import com.devuloopers.knet.domain.clientNetwork.decoder.DecodedTextResult
+import com.devuloopers.knet.domain.clientNetwork.decoder.MediaTypeInspector
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 

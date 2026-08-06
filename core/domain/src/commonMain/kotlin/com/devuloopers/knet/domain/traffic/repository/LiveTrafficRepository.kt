@@ -1,6 +1,6 @@
 package com.devuloopers.knet.domain.traffic.repository
 
-import com.devuloopers.knet.domain.network.model.HttpTransaction
+import com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction
 import com.devuloopers.knet.domain.traffic.model.TransactionBody
 import kotlinx.coroutines.flow.Flow
 

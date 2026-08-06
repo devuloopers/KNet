@@ -3,7 +3,7 @@ package com.devuloopers.knet.engine.proxy
 import com.devuloopers.knet.engine.certificate.CertificateAuthority
 import com.devuloopers.knet.engine.certificate.CertificateCache
 import com.devuloopers.knet.engine.proxy.handler.KNetProxyHandler
-import com.devuloopers.knet.domain.network.model.ProxyTrafficListener
+import com.devuloopers.knet.domain.clientNetwork.model.ProxyTrafficListener
 import io.netty.bootstrap.ServerBootstrap
 import io.netty.channel.Channel
 import io.netty.channel.ChannelInitializer

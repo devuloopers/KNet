@@ -1,6 +1,6 @@
 package com.devuloopers.knet.engine.interceptor
 
-import com.devuloopers.knet.domain.network.model.HttpResponse
+import com.devuloopers.knet.domain.clientNetwork.model.HttpResponse
 import io.netty.buffer.Unpooled
 import io.netty.handler.codec.http.DefaultFullHttpResponse
 import io.netty.handler.codec.http.FullHttpResponse

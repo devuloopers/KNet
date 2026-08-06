@@ -5,10 +5,10 @@ import com.devuloopers.knet.domain.collection.model.ApiRequestBody
 import com.devuloopers.knet.domain.collection.model.CollectionFolder
 import com.devuloopers.knet.domain.collection.model.HttpMethod
 import com.devuloopers.knet.domain.collection.model.SavedApiRequest
-import com.devuloopers.knet.domain.network.model.HttpRequest
-import com.devuloopers.knet.domain.network.model.HttpResponse
-import com.devuloopers.knet.domain.network.model.HttpTimings
-import com.devuloopers.knet.domain.network.model.HttpTransaction
+import com.devuloopers.knet.domain.clientNetwork.model.HttpRequest
+import com.devuloopers.knet.domain.clientNetwork.model.HttpResponse
+import com.devuloopers.knet.domain.clientNetwork.model.HttpTimings
+import com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction
 import com.devuloopers.knet.domain.rules.model.RuleModel
 import com.devuloopers.knet.domain.rules.repository.RulesRepository
 import kotlinx.coroutines.flow.Flow

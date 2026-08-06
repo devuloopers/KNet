@@ -1,6 +1,6 @@
 package com.devuloopers.knet.domain.traffic.model
 
-import com.devuloopers.knet.domain.network.model.HttpTimings
+import com.devuloopers.knet.domain.clientNetwork.model.HttpTimings
 
 /**
  * Immutable pre-calculated display state model for a single traffic feed row.

@@ -1,6 +1,6 @@
 package com.devuloopers.knet.engine.session.export
 
-import com.devuloopers.knet.domain.network.model.HttpTransaction
+import com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction
 
 /**
  * Utility generating executable cURL command line strings from HTTP transactions.

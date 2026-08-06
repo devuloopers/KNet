@@ -1,9 +1,9 @@
 package com.devuloopers.knet.engine.session
 
-import com.devuloopers.knet.domain.network.model.HttpRequest
-import com.devuloopers.knet.domain.network.model.HttpResponse
-import com.devuloopers.knet.domain.network.model.HttpTimings
-import com.devuloopers.knet.domain.network.model.HttpTransaction
+import com.devuloopers.knet.domain.clientNetwork.model.HttpRequest
+import com.devuloopers.knet.domain.clientNetwork.model.HttpResponse
+import com.devuloopers.knet.domain.clientNetwork.model.HttpTimings
+import com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction
 import java.io.File
 
 object TestFixtures {

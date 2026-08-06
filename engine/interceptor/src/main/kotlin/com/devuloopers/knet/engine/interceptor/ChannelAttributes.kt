@@ -1,6 +1,6 @@
 package com.devuloopers.knet.engine.interceptor
 
-import com.devuloopers.knet.domain.network.model.HttpRequest
+import com.devuloopers.knet.domain.clientNetwork.model.HttpRequest
 import io.netty.util.AttributeKey
 
 /**

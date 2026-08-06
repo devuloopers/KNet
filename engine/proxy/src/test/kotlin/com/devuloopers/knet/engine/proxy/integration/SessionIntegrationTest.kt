@@ -1,9 +1,9 @@
 package com.devuloopers.knet.engine.proxy.integration
 
-import com.devuloopers.knet.domain.network.model.HttpRequest
-import com.devuloopers.knet.domain.network.model.HttpResponse
-import com.devuloopers.knet.domain.network.model.HttpTimings
-import com.devuloopers.knet.domain.network.model.ProxyTrafficListener
+import com.devuloopers.knet.domain.clientNetwork.model.HttpRequest
+import com.devuloopers.knet.domain.clientNetwork.model.HttpResponse
+import com.devuloopers.knet.domain.clientNetwork.model.HttpTimings
+import com.devuloopers.knet.domain.clientNetwork.model.ProxyTrafficListener
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Test

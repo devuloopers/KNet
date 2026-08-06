@@ -3,8 +3,8 @@ package com.devuloopers.knet.data.desktop.core
 import com.devuloopers.knet.data.desktop.runtime.CertificateRuntimeRepository
 import com.devuloopers.knet.data.desktop.runtime.ProxyRuntimeRepository
 import com.devuloopers.knet.data.desktop.runtime.SessionRuntimeRepository
-import com.devuloopers.knet.domain.network.model.HttpTransaction
-import com.devuloopers.knet.domain.network.model.ProxyTrafficListener
+import com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction
+import com.devuloopers.knet.domain.clientNetwork.model.ProxyTrafficListener
 import kotlinx.coroutines.flow.Flow
 
 /**

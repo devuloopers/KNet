@@ -3,11 +3,11 @@ package com.devuloopers.knet.data.desktop.proxy.repository
 import com.devuloopers.knet.core.logger.KNetLogger
 import com.devuloopers.knet.data.desktop.mapper.TransactionMapper
 import com.devuloopers.knet.data.desktop.runtime.ProxyRuntimeRepository
-import com.devuloopers.knet.domain.network.model.HttpRequest
-import com.devuloopers.knet.domain.network.model.HttpResponse
-import com.devuloopers.knet.domain.network.model.HttpTimings
-import com.devuloopers.knet.domain.network.model.HttpTransaction
-import com.devuloopers.knet.domain.network.model.ProxyTrafficListener
+import com.devuloopers.knet.domain.clientNetwork.model.HttpRequest
+import com.devuloopers.knet.domain.clientNetwork.model.HttpResponse
+import com.devuloopers.knet.domain.clientNetwork.model.HttpTimings
+import com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction
+import com.devuloopers.knet.domain.clientNetwork.model.ProxyTrafficListener
 import com.devuloopers.knet.domain.proxy.model.ProxyEngineState
 import com.devuloopers.knet.domain.proxy.repository.ProxyEngineRepository
 import com.devuloopers.knet.storage.database.KNetDatabase

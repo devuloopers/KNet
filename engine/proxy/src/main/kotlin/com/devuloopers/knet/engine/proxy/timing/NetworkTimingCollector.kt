@@ -1,6 +1,6 @@
 package com.devuloopers.knet.engine.proxy.timing
 
-import com.devuloopers.knet.domain.network.model.HttpTimings
+import com.devuloopers.knet.domain.clientNetwork.model.HttpTimings
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 

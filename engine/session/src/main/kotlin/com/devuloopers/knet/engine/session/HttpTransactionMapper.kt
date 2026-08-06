@@ -1,8 +1,8 @@
 package com.devuloopers.knet.engine.session
 
-import com.devuloopers.knet.domain.network.model.HttpRequest
-import com.devuloopers.knet.domain.network.model.HttpResponse
-import com.devuloopers.knet.domain.network.model.HttpTransaction
+import com.devuloopers.knet.domain.clientNetwork.model.HttpRequest
+import com.devuloopers.knet.domain.clientNetwork.model.HttpResponse
+import com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction
 import com.devuloopers.knet.storage.traffic.entity.HttpTransactionEntity
 
 /**
@@ -80,7 +80,7 @@ object HttpTransactionMapper {
             null
         }
 
-        val timings = com.devuloopers.knet.domain.network.model.HttpTimings(
+        val timings = com.devuloopers.knet.domain.clientNetwork.model.HttpTimings(
             dnsMs = entity.timingDnsMs,
             tcpMs = entity.timingTcpMs,
             tlsMs = entity.timingTlsMs,

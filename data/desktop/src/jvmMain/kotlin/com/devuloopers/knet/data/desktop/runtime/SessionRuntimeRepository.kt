@@ -1,6 +1,6 @@
 package com.devuloopers.knet.data.desktop.runtime
 
-import com.devuloopers.knet.domain.network.model.HttpTransaction
+import com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction
 import com.devuloopers.knet.engine.session.FilePayloadStore
 import com.devuloopers.knet.engine.session.SessionManager
 import com.devuloopers.knet.storage.database.KNetDatabase

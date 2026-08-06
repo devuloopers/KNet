@@ -2,7 +2,7 @@ package com.devuloopers.knet.data.desktop.inspector.repository
 
 import com.devuloopers.knet.data.desktop.mapper.TransactionMapper
 import com.devuloopers.knet.domain.inspector.repository.InspectorRepository
-import com.devuloopers.knet.domain.network.model.HttpTransaction
+import com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction
 import com.devuloopers.knet.storage.database.KNetDatabase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map

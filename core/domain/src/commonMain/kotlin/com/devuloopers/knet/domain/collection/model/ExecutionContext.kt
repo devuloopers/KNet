@@ -1,6 +1,6 @@
 package com.devuloopers.knet.domain.collection.model
 
-import com.devuloopers.knet.domain.collection.usecase.ExecutionResult
+import com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult
 import com.devuloopers.knet.domain.workspace.model.EnvironmentStore
 
 /**

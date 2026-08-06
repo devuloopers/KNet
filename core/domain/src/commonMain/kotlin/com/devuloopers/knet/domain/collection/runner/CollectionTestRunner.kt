@@ -2,7 +2,7 @@ package com.devuloopers.knet.domain.collection.runner
 
 import com.devuloopers.knet.domain.collection.model.SavedApiRequest
 import com.devuloopers.knet.domain.collection.model.TestAssertionResult
-import com.devuloopers.knet.domain.collection.usecase.ExecutionResult
+import com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult
 import com.devuloopers.knet.domain.scripting.model.ScriptLanguage
 import com.devuloopers.knet.domain.workspace.model.EnvironmentStore
 

@@ -5,7 +5,7 @@ package com.devuloopers.knet.domain.traffic.model
  *
  * Request and response headers are included so the body decoder can apply the correct
  * Content-Encoding decompression (Gzip, Brotli, Deflate, Zstd) without needing the
- * full [com.devuloopers.knet.domain.network.model.HttpTransaction].
+ * full [com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction].
  *
  * @property requestBody Raw byte array of the request body payload, or null if absent.
  * @property requestHeaders Request headers list for Content-Type and Content-Encoding lookup.

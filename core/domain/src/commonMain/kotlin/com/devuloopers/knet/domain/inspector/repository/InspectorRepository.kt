@@ -1,6 +1,6 @@
 package com.devuloopers.knet.domain.inspector.repository
 
-import com.devuloopers.knet.domain.network.model.HttpTransaction
+import com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction
 import kotlinx.coroutines.flow.Flow
 
 /**

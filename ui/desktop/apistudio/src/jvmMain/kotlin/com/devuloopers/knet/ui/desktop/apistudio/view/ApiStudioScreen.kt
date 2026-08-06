@@ -31,12 +31,14 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.apistudio.editor.RequestPayloadEditor
 import com.devuloopers.knet.ui.desktop.apistudio.editor.RequestTabBar
 import com.devuloopers.knet.ui.desktop.apistudio.editor.RequestUrlBar
+import com.devuloopers.knet.ui.desktop.apistudio.model.ApiStudioState
 import com.devuloopers.knet.ui.desktop.apistudio.model.RequestTab
 import com.devuloopers.knet.ui.desktop.apistudio.response.ResponseInspectorView
 import com.devuloopers.knet.ui.desktop.apistudio.sidebar.CollectionsSidebar
 import com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarFolderItem
 import com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarRequestItem
 import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.ApiStudioViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 
 private val mockUnsavedRequests = listOf(
     SidebarRequestItem("u1", "Draft Ping Check", "GET", "https://api.knet.dev/v1/ping"),
@@ -88,6 +90,8 @@ public fun ApiStudioScreen(
     val typography = KNetTheme.typography
     val spacing = KNetTheme.spacing
 
+    val uiState by (viewModel?.uiState ?: MutableStateFlow(ApiStudioState())).collectAsState()
+
     var selectedEnvironment by remember { mutableStateOf("Production") }
     var selectedRequestId by remember { mutableStateOf<String?>(null) }
     var tabs by remember {
@@ -112,6 +116,8 @@ public fun ApiStudioScreen(
                 selectedRequestId = item.id
                 currentMethod = item.method
                 currentUrl = item.url
+                viewModel?.updateMethod(item.method)
+                viewModel?.updateUrl(item.url)
             }
         )
 
@@ -129,8 +135,14 @@ public fun ApiStudioScreen(
                     RequestUrlBar(
                         method = currentMethod,
                         url = currentUrl,
-                        onMethodChanged = { currentMethod = it },
-                        onUrlChanged = { currentUrl = it },
+                        onMethodChanged = {
+                            currentMethod = it
+                            viewModel?.updateMethod(it)
+                        },
+                        onUrlChanged = {
+                            currentUrl = it
+                            viewModel?.updateUrl(it)
+                        },
                         onSendClicked = {
                             viewModel?.executeRequest()
                         }
@@ -146,11 +158,17 @@ public fun ApiStudioScreen(
             },
             secondPane = { paneModifier ->
                 // Right Pane: Response Inspector
+                val presentation = uiState.responsePresentation
                 ResponseInspectorView(
-                    statusCode = 200,
-                    statusText = "OK",
-                    durationMs = 124,
-                    sizeBytes = 4966,
+                    statusCode = presentation?.statusCode ?: 0,
+                    statusText = presentation?.statusText ?: "",
+                    durationMs = presentation?.durationMs ?: 0L,
+                    sizeBytes = presentation?.sizeBytes ?: 0L,
+                    responseBody = presentation?.body ?: "",
+                    headers = presentation?.headers ?: emptyMap(),
+                    cookies = presentation?.cookies ?: emptyMap(),
+                    testResults = presentation?.testResults ?: emptyList(),
+                    consoleLogs = presentation?.consoleLogs ?: emptyList(),
                     modifier = paneModifier
                 )
             },

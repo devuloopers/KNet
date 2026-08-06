@@ -1,6 +1,6 @@
 package com.devuloopers.knet.engine.proxy.timing
 
-import com.devuloopers.knet.domain.network.model.HttpTimings
+import com.devuloopers.knet.domain.clientNetwork.model.HttpTimings
 import org.junit.Assert.assertEquals
 import org.junit.Test
 

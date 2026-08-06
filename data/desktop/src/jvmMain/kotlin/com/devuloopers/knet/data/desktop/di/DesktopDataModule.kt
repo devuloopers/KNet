@@ -3,6 +3,7 @@ package com.devuloopers.knet.data.desktop.di
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.devuloopers.knet.core.http.client.KNetApiClient
 import com.devuloopers.knet.core.http.execution.HttpExecutor
+import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor as DomainHttpExecutor
 import com.devuloopers.knet.data.desktop.apistudio.autocomplete.ProxyHistoryHeaderLookup
 import com.devuloopers.knet.data.desktop.apistudio.repository.CollectionsRepositoryImpl
 import com.devuloopers.knet.data.desktop.core.KNetCoreRepository
@@ -77,7 +78,10 @@ public object DesktopDataModule {
             KNetCoreRepository(get(), get(), get())
         }
         single { KNetApiClient() }
+        // Core HTTP executor binding (used by core.http layer)
         single<HttpExecutor> { get<KNetApiClient>() }
+        // Domain HTTP executor binding (used by domain UseCases such as ExecuteClientApiRequestUseCase)
+        single<DomainHttpExecutor> { get<KNetApiClient>() }
     }
 
     public val repositories: Module = module {

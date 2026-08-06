@@ -3,7 +3,7 @@ package com.devuloopers.knet.core.http.client
 import com.devuloopers.knet.core.http.config.HttpClientConfiguration
 import com.devuloopers.knet.core.http.cookie.CookieStore
 import com.devuloopers.knet.core.http.cookie.MemoryCookieStore
-import com.devuloopers.knet.core.http.execution.HttpExecutor
+import com.devuloopers.knet.core.http.execution.HttpExecutor as CoreHttpExecutor
 import com.devuloopers.knet.core.http.interceptor.HttpInterceptor
 import com.devuloopers.knet.core.http.model.ApiExecutionResult
 import com.devuloopers.knet.core.http.model.AuthType
@@ -11,6 +11,7 @@ import com.devuloopers.knet.core.http.model.HttpMetrics
 import com.devuloopers.knet.core.http.model.RequestBodyType
 import com.devuloopers.knet.core.http.routing.DefaultProxyRoutingStrategy
 import com.devuloopers.knet.core.http.routing.ProxyRoutingStrategy
+import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor as DomainHttpExecutor
 import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
 import com.devuloopers.knet.domain.collection.model.SavedApiRequest
 import io.ktor.client.HttpClient
@@ -38,7 +39,7 @@ import kotlinx.coroutines.ensureActive
 /**
  * Reusable Postman-style API Request Dispatcher powered by Ktor 3.5.1 Client.
  *
- * Implements [HttpExecutor] and [AutoCloseable] for 100% pure Kotlin Multiplatform execution.
+ * Implements [DomainHttpExecutor] and [AutoCloseable] for 100% pure Kotlin Multiplatform execution.
  *
  * @param proxyPort Optional proxy port to route outgoing calls through KNet's proxy engine.
  * @param routingStrategy Strategy dictating proxy routing attempt and fallback criteria.
@@ -53,7 +54,7 @@ open class KNetApiClient(
     private val cookieStore: CookieStore = MemoryCookieStore(),
     private val interceptors: List<HttpInterceptor> = emptyList(),
     private val customEngine: HttpClientEngine? = null
-) : HttpExecutor {
+) : CoreHttpExecutor, DomainHttpExecutor {
 
     private val directHttpClient: HttpClient by lazy {
         createHttpClient(isProxy = false)
@@ -116,6 +117,66 @@ open class KNetApiClient(
             formParameters = emptyMap(),
             authType = authType,
             authToken = authToken
+        )
+    }
+
+    override suspend fun execute(
+        url: String,
+        method: com.devuloopers.knet.domain.collection.model.HttpMethod,
+        customMethod: String?,
+        headers: Map<String, String>,
+        body: String,
+        bodyType: com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType,
+        formParameters: Map<String, String>,
+        auth: ApiRequestAuth,
+        proxyPort: Int?
+    ): com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult {
+        val methodString = if (method == com.devuloopers.knet.domain.collection.model.HttpMethod.CUSTOM && !customMethod.isNullOrBlank()) {
+            customMethod
+        } else {
+            method.name
+        }
+
+        val requestBodyType = when (bodyType) {
+            com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.JSON -> RequestBodyType.JSON
+            com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.XML -> RequestBodyType.XML
+            com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.FORM_DATA,
+            com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.X_WWW_FORM_URLENCODED -> RequestBodyType.FORM_URLENCODED
+            com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.MULTIPART -> RequestBodyType.MULTIPART
+            com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.GRAPHQL -> RequestBodyType.GRAPHQL
+            com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.RAW_TEXT -> RequestBodyType.RAW_TEXT
+            com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.NONE -> RequestBodyType.NONE
+        }
+
+        val (mappedAuthType, authToken) = when (auth) {
+            is ApiRequestAuth.Bearer -> AuthType.BEARER_TOKEN to auth.token
+            is ApiRequestAuth.Basic -> AuthType.BASIC_AUTH to "${auth.username}:${auth.password}"
+            is ApiRequestAuth.ApiKey -> AuthType.API_KEY to auth.value
+            is ApiRequestAuth.OAuth2 -> AuthType.BEARER_TOKEN to auth.token
+            else -> AuthType.NONE to ""
+        }
+
+        val result = execute(
+            url = url,
+            method = methodString,
+            headers = headers,
+            body = body,
+            bodyType = requestBodyType,
+            formParameters = formParameters,
+            authType = mappedAuthType,
+            authToken = authToken
+        )
+
+        return com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult(
+            statusCode = result.statusCode,
+            statusText = result.statusText,
+            headers = result.headers,
+            cookies = result.cookies,
+            responseBody = result.responseBody,
+            latencyMs = result.latencyMs,
+            responseSizeBytes = result.responseSizeBytes,
+            isSuccess = result.isSuccess,
+            errorMessage = result.errorMessage
         )
     }
 
@@ -253,7 +314,7 @@ open class KNetApiClient(
                         }
                         setBody(formParams.formUrlEncode())
                     }
-                    RequestBodyType.MULTIPART, RequestBodyType.NONE -> { }
+                    RequestBodyType.NONE -> { }
                 }
             }
         }
@@ -262,9 +323,32 @@ open class KNetApiClient(
         val responseText = response.bodyAsText()
         val responseBytes = response.readRawBytes()
 
+        val host = try { Url(url).host } catch (_: Exception) { "" }
         val responseHeadersMap = mutableMapOf<String, String>()
+        val responseCookiesMap = mutableMapOf<String, String>()
+
         response.headers.forEach { key, values ->
-            responseHeadersMap[key] = values.joinToString(", ")
+            val valueString = values.joinToString(", ")
+            responseHeadersMap[key] = valueString
+            if (key.equals("set-cookie", ignoreCase = true)) {
+                values.forEach { setCookieRaw ->
+                    try {
+                        val cookie = io.ktor.http.parseServerSetCookieHeader(setCookieRaw)
+                        if (host.isNotBlank()) {
+                            cookieStore.storeCookie(host, cookie)
+                            responseCookiesMap[cookie.name] = cookie.value
+                        }
+                    } catch (_: Exception) { }
+                }
+            }
+        }
+
+        if (host.isNotBlank()) {
+            cookieStore.getCookies(host).forEach { cookie ->
+                if (!responseCookiesMap.containsKey(cookie.name)) {
+                    responseCookiesMap[cookie.name] = cookie.value
+                }
+            }
         }
 
         val metrics = HttpMetrics(
@@ -276,6 +360,7 @@ open class KNetApiClient(
             statusCode = response.status.value,
             statusText = response.status.description,
             headers = responseHeadersMap,
+            cookies = responseCookiesMap,
             responseBody = responseText,
             latencyMs = latency,
             responseSizeBytes = responseBytes.size.toLong(),
@@ -293,6 +378,15 @@ open class KNetApiClient(
         headers.forEach { (k, v) ->
             if (k.isNotBlank() && v.isNotBlank()) {
                 builder.header(k, v)
+            }
+        }
+
+        val host = try { Url(builder.url.buildString()).host } catch (_: Exception) { "" }
+        if (host.isNotBlank()) {
+            val storedCookies = cookieStore.getCookies(host)
+            if (storedCookies.isNotEmpty() && !headers.keys.any { it.equals("cookie", ignoreCase = true) }) {
+                val cookieString = storedCookies.joinToString("; ") { "${it.name}=${it.value}" }
+                builder.header("Cookie", cookieString)
             }
         }
 

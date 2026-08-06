@@ -6,7 +6,7 @@ import com.devuloopers.knet.domain.collection.model.RequestHeader
 import com.devuloopers.knet.domain.collection.model.SavedApiRequest
 import com.devuloopers.knet.domain.collection.model.defaultHeaders
 import com.devuloopers.knet.domain.collection.repository.CollectionsRepository
-import com.devuloopers.knet.domain.network.model.HttpTransaction
+import com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 

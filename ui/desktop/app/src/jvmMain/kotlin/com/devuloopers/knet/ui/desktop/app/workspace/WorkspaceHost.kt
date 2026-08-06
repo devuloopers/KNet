@@ -30,6 +30,8 @@ import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.app.navigation.DesktopDestination
+import com.devuloopers.knet.ui.desktop.apistudio.view.ApiStudioScreen
+import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.ApiStudioViewModel
 import com.devuloopers.knet.ui.desktop.traffic.view.TrafficScreen
 import com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficViewModel
 import org.koin.compose.viewmodel.koinViewModel
@@ -51,7 +53,9 @@ public fun KNetWorkspaceHost(
             )
         }
         DesktopDestination.ApiStudio -> {
-            com.devuloopers.knet.ui.desktop.apistudio.view.ApiStudioScreen(
+            val apiStudioViewModel: ApiStudioViewModel = koinViewModel()
+            ApiStudioScreen(
+                viewModel = apiStudioViewModel,
                 modifier = modifier
             )
         }

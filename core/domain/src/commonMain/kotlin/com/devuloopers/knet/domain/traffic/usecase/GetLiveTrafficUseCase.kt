@@ -1,6 +1,6 @@
 package com.devuloopers.knet.domain.traffic.usecase
 
-import com.devuloopers.knet.domain.network.model.HttpTransaction
+import com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction
 import com.devuloopers.knet.domain.traffic.model.LiveTrafficUiState
 import com.devuloopers.knet.domain.traffic.model.ProtocolFilter
 import com.devuloopers.knet.domain.traffic.model.TrafficItemUiState

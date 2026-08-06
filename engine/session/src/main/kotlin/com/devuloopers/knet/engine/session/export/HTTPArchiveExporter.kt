@@ -1,6 +1,6 @@
 package com.devuloopers.knet.engine.session.export
 
-import com.devuloopers.knet.domain.network.model.HttpTransaction
+import com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction
 import kotlinx.serialization.json.Json
 import java.text.SimpleDateFormat
 import java.util.Date

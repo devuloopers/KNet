@@ -1,7 +1,6 @@
 package com.devuloopers.knet.engine.interceptor
 
 import com.devuloopers.knet.engine.proxy.mapper.HttpMapper
-import com.devuloopers.knet.domain.network.model.HttpRequest
 import io.netty.channel.ChannelDuplexHandler
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelPromise

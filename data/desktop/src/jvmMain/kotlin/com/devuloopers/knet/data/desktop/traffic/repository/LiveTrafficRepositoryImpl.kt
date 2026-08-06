@@ -2,7 +2,7 @@ package com.devuloopers.knet.data.desktop.traffic.repository
 
 import com.devuloopers.knet.core.logger.KNetLogger
 import com.devuloopers.knet.data.desktop.mapper.TransactionMapper
-import com.devuloopers.knet.domain.network.model.HttpTransaction
+import com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction
 import com.devuloopers.knet.domain.traffic.model.TransactionBody
 import com.devuloopers.knet.domain.traffic.repository.LiveTrafficRepository
 import com.devuloopers.knet.storage.database.KNetDatabase
