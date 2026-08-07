@@ -9,13 +9,17 @@ kotlin {
         val commonMain by getting {
             dependencies {
                 api(libs.ktor.client.core)
-                api(libs.ktor.client.cio)
                 api(libs.ktor.client.content.negotiation)
                 api(libs.ktor.serialization.kotlinx.json)
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.kotlinx.serialization.json)
                 api(project(":core:domain"))
                 api(project(":core:logger"))
+            }
+        }
+        val jvmMain by getting {
+            dependencies {
+                implementation(libs.ktor.client.okhttp)
             }
         }
         val commonTest by getting {

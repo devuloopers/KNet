@@ -12,11 +12,13 @@ import com.devuloopers.knet.core.http.model.RequestBodyType
 import com.devuloopers.knet.core.http.routing.DefaultProxyRoutingStrategy
 import com.devuloopers.knet.core.http.routing.ProxyRoutingStrategy
 import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor as DomainHttpExecutor
+import com.devuloopers.knet.domain.clientNetwork.model.ProxyTrafficListener
+import com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction
+import com.devuloopers.knet.domain.clientNetwork.model.KNetHeaders
 import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
 import com.devuloopers.knet.domain.collection.model.SavedApiRequest
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
-import io.ktor.client.engine.cio.CIO
 import io.ktor.client.plugins.HttpRequestRetry
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.forms.formData
@@ -46,6 +48,7 @@ import kotlinx.coroutines.ensureActive
  * @param configuration Configuration options for timeouts, retries, and redirects.
  * @param cookieStore Cookie storage instance.
  * @param customEngine Optional custom Ktor engine (e.g. MockEngine for testing).
+ * @param proxyTrafficListener Optional listener to manually capture proxy traffic failures.
  */
 open class KNetApiClient(
     private val proxyPort: Int? = null,
@@ -53,18 +56,41 @@ open class KNetApiClient(
     private val configuration: HttpClientConfiguration = HttpClientConfiguration(),
     private val cookieStore: CookieStore = MemoryCookieStore(),
     private val interceptors: List<HttpInterceptor> = emptyList(),
-    private val customEngine: HttpClientEngine? = null
+    private val customEngine: HttpClientEngine? = null,
+    private val proxyTrafficListener: ProxyTrafficListener? = null
 ) : CoreHttpExecutor, DomainHttpExecutor {
 
+    private val proxyHttpClients = java.util.concurrent.ConcurrentHashMap<Int, HttpClient>()
+
     private val directHttpClient: HttpClient by lazy {
-        createHttpClient(isProxy = false)
+        createHttpClient(targetProxyPort = null)
     }
 
     private val proxyHttpClient: HttpClient? by lazy {
-        proxyPort?.let { createHttpClient(isProxy = true) }
+        proxyPort?.let { getProxyHttpClient(it) }
     }
 
-    private fun createHttpClient(isProxy: Boolean): HttpClient {
+    /**
+     * Retrieves or creates a thread-safe cached Ktor [HttpClient] instance configured
+     * to route traffic through the specified local [port] proxy endpoint.
+     *
+     * @param port The target HTTP proxy port number.
+     * @return Cached or newly created [HttpClient] configured for proxy interception.
+     */
+    private fun getProxyHttpClient(port: Int): HttpClient {
+        return proxyHttpClients.getOrPut(port) {
+            createHttpClient(targetProxyPort = port)
+        }
+    }
+
+    /**
+     * Constructs a Ktor [HttpClient] configured with timeouts, retries, redirect behavior,
+     * and optional proxy routing settings.
+     *
+     * @param targetProxyPort Optional proxy port integer; when non-null and > 0, configures the CIO engine HTTP proxy.
+     * @return Configured [HttpClient] instance.
+     */
+    private fun createHttpClient(targetProxyPort: Int?): HttpClient {
         val engineFactory = customEngine
         val block: io.ktor.client.HttpClientConfig<*>.() -> Unit = {
             install(HttpTimeout) {
@@ -83,10 +109,10 @@ open class KNetApiClient(
         return if (engineFactory != null) {
             HttpClient(engineFactory, block)
         } else {
-            HttpClient(CIO) {
-                if (isProxy && proxyPort != null) {
+            HttpClient(getKNetHttpEngine()) {
+                if (targetProxyPort != null && targetProxyPort > 0) {
                     engine {
-                        proxy = io.ktor.client.engine.ProxyBuilder.http(Url("http://127.0.0.1:$proxyPort"))
+                        proxy = io.ktor.client.engine.ProxyBuilder.http(Url("http://127.0.0.1:$targetProxyPort"))
                     }
                 }
                 block()
@@ -164,7 +190,8 @@ open class KNetApiClient(
             bodyType = requestBodyType,
             formParameters = formParameters,
             authType = mappedAuthType,
-            authToken = authToken
+            authToken = authToken,
+            proxyPort = proxyPort
         )
 
         return com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult(
@@ -176,7 +203,8 @@ open class KNetApiClient(
             latencyMs = result.latencyMs,
             responseSizeBytes = result.responseSizeBytes,
             isSuccess = result.isSuccess,
-            errorMessage = result.errorMessage
+            errorMessage = result.errorMessage,
+            failureReason = result.failureReason
         )
     }
 
@@ -188,7 +216,8 @@ open class KNetApiClient(
         bodyType: RequestBodyType,
         formParameters: Map<String, String>,
         authType: AuthType,
-        authToken: String
+        authToken: String,
+        proxyPort: Int?
     ): ApiExecutionResult {
         currentCoroutineContext().ensureActive()
 
@@ -203,8 +232,29 @@ open class KNetApiClient(
             currentBody = intercepted.body
         }
 
-        val attemptProxy = routingStrategy.shouldAttemptProxy(proxyPort)
-        val initialClient = if (attemptProxy) (proxyHttpClient ?: directHttpClient) else directHttpClient
+        val effectiveProxyPort = proxyPort ?: this.proxyPort
+        val attemptProxy = routingStrategy.shouldAttemptProxy(effectiveProxyPort)
+        val targetProxyClient = if (attemptProxy && effectiveProxyPort != null) getProxyHttpClient(effectiveProxyPort) else null
+        val initialClient = targetProxyClient ?: directHttpClient
+
+        var currentTransactionId: String? = null
+        if (attemptProxy && targetProxyClient != null && proxyTrafficListener != null) {
+            currentTransactionId = io.ktor.util.generateNonce()
+            val pendingHttpRequest = com.devuloopers.knet.domain.clientNetwork.model.HttpRequest(
+                id = currentTransactionId,
+                method = method,
+                url = currentUrl,
+                protocol = "HTTP/1.1",
+                headers = currentHeaders.map { it.key to it.value },
+                body = if (currentBody.isNotEmpty()) currentBody.encodeToByteArray() else null,
+                timestamp = System.currentTimeMillis()
+            )
+            proxyTrafficListener.onRequestCaptured(pendingHttpRequest)
+
+            val headersWithId = currentHeaders.toMutableMap()
+            headersWithId[KNetHeaders.HEADER_TRANSACTION_ID] = currentTransactionId
+            currentHeaders = headersWithId
+        }
 
         val rawResult = try {
             dispatchWithClient(
@@ -221,19 +271,50 @@ open class KNetApiClient(
         } catch (exception: Exception) {
             currentCoroutineContext().ensureActive()
 
-            if (attemptProxy && initialClient !== directHttpClient && routingStrategy.isProxyConnectionFailure(exception, proxyPort)) {
-                dispatchWithClient(
-                    client = directHttpClient,
-                    url = currentUrl,
-                    method = method,
-                    headers = currentHeaders,
-                    body = currentBody,
-                    bodyType = bodyType,
-                    formParameters = formParameters,
-                    authType = authType,
-                    authToken = authToken
-                )
+            if (attemptProxy && initialClient !== directHttpClient && routingStrategy.isProxyConnectionFailure(exception, effectiveProxyPort)) {
+                try {
+                    dispatchWithClient(
+                        client = directHttpClient,
+                        url = currentUrl,
+                        method = method,
+                        headers = currentHeaders,
+                        body = currentBody,
+                        bodyType = bodyType,
+                        formParameters = formParameters,
+                        authType = authType,
+                        authToken = authToken
+                    )
+                } catch (fallbackException: Exception) {
+                    if (proxyTrafficListener != null && effectiveProxyPort != null) {
+                        recordSyntheticProxyFailure(currentTransactionId, currentUrl, method, currentHeaders, currentBody, fallbackException)
+                    }
+                    val reason = com.devuloopers.knet.core.http.util.NetworkExceptionClassifier.classify(
+                        exception = fallbackException,
+                        targetUrl = currentUrl,
+                        timeoutMs = configuration.timeoutMillis
+                    )
+                    ApiExecutionResult(
+                        statusCode = 0,
+                        statusText = "Execution Error",
+                        headers = emptyMap(),
+                        responseBody = "",
+                        latencyMs = 0L,
+                        responseSizeBytes = 0L,
+                        isSuccess = false,
+                        errorMessage = fallbackException.message ?: fallbackException.toString(),
+                        failureReason = reason,
+                        metrics = HttpMetrics(totalTimeMs = 0L)
+                    )
+                }
             } else {
+                if (attemptProxy && initialClient !== directHttpClient && proxyTrafficListener != null && effectiveProxyPort != null) {
+                    recordSyntheticProxyFailure(currentTransactionId, currentUrl, method, currentHeaders, currentBody, exception)
+                }
+                val reason = com.devuloopers.knet.core.http.util.NetworkExceptionClassifier.classify(
+                    exception = exception,
+                    targetUrl = currentUrl,
+                    timeoutMs = configuration.timeoutMillis
+                )
                 ApiExecutionResult(
                     statusCode = 0,
                     statusText = "Execution Error",
@@ -243,6 +324,7 @@ open class KNetApiClient(
                     responseSizeBytes = 0L,
                     isSuccess = false,
                     errorMessage = exception.message ?: exception.toString(),
+                    failureReason = reason,
                     metrics = HttpMetrics(totalTimeMs = 0L)
                 )
             }
@@ -421,10 +503,60 @@ open class KNetApiClient(
         }
     }
 
+    private fun recordSyntheticProxyFailure(
+        transactionId: String?,
+        url: String,
+        method: String,
+        headers: Map<String, String>,
+        body: String,
+        exception: Exception
+    ) {
+        val finalTransactionId = transactionId ?: io.ktor.util.generateNonce()
+        val timestamp = System.currentTimeMillis()
+        val httpRequest = com.devuloopers.knet.domain.clientNetwork.model.HttpRequest(
+            id = finalTransactionId,
+            method = method,
+            url = url,
+            protocol = "HTTP/1.1",
+            headers = headers.map { it.key to it.value },
+            body = if (body.isNotEmpty()) body.encodeToByteArray() else null,
+            timestamp = timestamp
+        )
+        val httpResponse = com.devuloopers.knet.domain.clientNetwork.model.HttpResponse(
+            statusCode = 502,
+            statusText = "Bad Gateway",
+            headers = listOf(KNetHeaders.HEADER_PROXY_ERROR to (exception.message ?: "Unknown Error")),
+            body = ("Proxy Connection Failed: " + (exception.message ?: "Unknown Error")).encodeToByteArray(),
+            timestamp = timestamp
+        )
+        val transaction = com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction(
+            id = finalTransactionId,
+            request = httpRequest,
+            response = httpResponse,
+            requestBodyPath = null,
+            responseBodyPath = null,
+            requestBodySize = httpRequest.body?.size?.toLong() ?: 0L,
+            responseBodySize = httpResponse.body?.size?.toLong() ?: 0L,
+            durationMs = 0L,
+            timestamp = timestamp,
+            timings = com.devuloopers.knet.domain.clientNetwork.model.HttpTimings(
+                dnsMs = 0L,
+                tcpMs = 0L,
+                tlsMs = 0L,
+                ttfbMs = 0L,
+                downloadMs = 0L,
+                isReusedConnection = false
+            )
+        )
+        proxyTrafficListener?.onTransactionCaptured(transaction)
+    }
+
     override fun close() {
         if (customEngine == null) {
             directHttpClient.close()
             proxyHttpClient?.close()
+            proxyHttpClients.values.forEach { it.close() }
+            proxyHttpClients.clear()
         }
     }
 }

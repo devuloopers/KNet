@@ -2,6 +2,7 @@ package com.devuloopers.knet.engine.proxy.mapper
 
 import com.devuloopers.knet.domain.clientNetwork.model.HttpRequest
 import com.devuloopers.knet.domain.clientNetwork.model.HttpResponse
+import com.devuloopers.knet.domain.clientNetwork.model.KNetHeaders
 import io.netty.buffer.ByteBuf
 import io.netty.handler.codec.http.FullHttpRequest
 import io.netty.handler.codec.http.FullHttpResponse
@@ -30,13 +31,18 @@ object HttpMapper {
         port: Int,
         relativeUri: String
     ): HttpRequest {
+        val transactionId = nettyReq.headers().get(KNetHeaders.HEADER_TRANSACTION_ID) ?: UUID.randomUUID().toString()
+        if (nettyReq.headers().contains(KNetHeaders.HEADER_TRANSACTION_ID)) {
+            nettyReq.headers().remove(KNetHeaders.HEADER_TRANSACTION_ID)
+        }
+
         val headers = mapHeaders(nettyReq.headers())
         val body = extractBody(nettyReq.content())
         val scheme = if (isSsl) "https" else "http"
         val portSuffix = if ((isSsl && port == 443) || (!isSsl && port == 80)) "" else ":$port"
         val fullUrl = if (nettyReq.uri().startsWith("http")) nettyReq.uri() else "$scheme://$host$portSuffix$relativeUri"
         return HttpRequest(
-            id = UUID.randomUUID().toString(),
+            id = transactionId,
             method = nettyReq.method().name(),
             url = fullUrl,
             protocol = nettyReq.protocolVersion().text(),

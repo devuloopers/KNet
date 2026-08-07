@@ -10,7 +10,7 @@ import org.koin.dsl.module
  * Uses the recommended Koin viewModel DSL to scope TrafficViewModel to the ViewModelStoreOwner lifecycle.
  * Includes [apiStudioUiModule] which provides [ApiStudioViewModel] and its required UseCases.
  */
-public val desktopAppUiModule = module {
+val desktopAppUiModule = module {
     includes(apiStudioUiModule)
     viewModel {
         TrafficViewModel(

@@ -103,7 +103,7 @@ class TrafficViewModel(
         when (intent) {
             is TrafficIntent.StartCapture -> {
                 viewModelScope.launch {
-                    startProxyEngineUseCase?.execute(8080)
+                    startProxyEngineUseCase?.execute(StartProxyEngineUseCase.DEFAULT_PORT)
                 }
             }
 

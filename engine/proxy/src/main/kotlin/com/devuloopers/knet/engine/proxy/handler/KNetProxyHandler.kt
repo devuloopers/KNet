@@ -9,6 +9,7 @@ import com.devuloopers.knet.engine.proxy.mapper.HttpMapper
 import com.devuloopers.knet.engine.proxy.ssl.ProxyTrustManager
 import com.devuloopers.knet.engine.proxy.timing.NetworkTimingCollector
 import io.netty.bootstrap.Bootstrap
+import io.netty.buffer.Unpooled
 import io.netty.channel.Channel
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelInitializer
@@ -177,9 +178,29 @@ class KNetProxyHandler(
                                     .trustManager(ProxyTrustManager.getTrustManagerFactory(strictSsl))
                                     .build()
                                 val sslHandler = sslCtx.newHandler(ch.alloc(), targetHost, targetPort)
-                                sslHandler.handshakeFuture().addListener { handshakeFuture ->
+                                 sslHandler.handshakeFuture().addListener { handshakeFuture ->
                                     if (handshakeFuture.isSuccess) {
                                         timingCollector.markTlsEnd()
+                                    } else {
+                                        val causeMsg = handshakeFuture.cause()?.message ?: "SSL/TLS Handshake failed for $targetHost"
+                                        KNetLogger.error(TAG, handshakeFuture.cause()) { "SSL Handshake Failed for $targetHost: $causeMsg" }
+
+                                        val errBodyBytes = "502 Bad Gateway: SSL Handshake Failed ($causeMsg)".toByteArray(Charsets.UTF_8)
+                                        val errResponse = DefaultFullHttpResponse(
+                                            HttpVersion.HTTP_1_1,
+                                            HttpResponseStatus.BAD_GATEWAY,
+                                            Unpooled.copiedBuffer(errBodyBytes)
+                                        )
+                                        errResponse.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=UTF-8")
+                                        errResponse.headers().set(HttpHeaderNames.CONTENT_LENGTH, errBodyBytes.size)
+
+                                        val mappedErr = HttpMapper.mapResponse(errResponse)
+                                        listener?.onResponseCaptured(
+                                            transactionId = mappedRequest.id,
+                                            response = mappedErr,
+                                            durationMs = timingCollector.getTotalDuration(),
+                                            timings = timingCollector.getTimings()
+                                        )
                                     }
                                 }
                                 pipeline.addLast("ssl", sslHandler)
@@ -201,8 +222,26 @@ class KNetProxyHandler(
                 clientBootstrap.connect(resolvedHost, targetPort).addListener { future ->
                     timingCollector.markTcpEnd()
                     if (!future.isSuccess) {
-                        KNetLogger.error(TAG, future.cause()) { "KNet Proxy Failed to connect to $targetHost:$targetPort" }
-                        val errResponse = DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.BAD_GATEWAY)
+                        val causeMessage = future.cause()?.message ?: "Could not resolve or establish connection to $targetHost:$targetPort"
+                        KNetLogger.error(TAG, future.cause()) { "KNet Proxy Failed to connect to $targetHost:$targetPort - $causeMessage" }
+
+                        val errBodyBytes = "502 Bad Gateway: $causeMessage".toByteArray(Charsets.UTF_8)
+                        val errResponse = DefaultFullHttpResponse(
+                            HttpVersion.HTTP_1_1,
+                            HttpResponseStatus.BAD_GATEWAY,
+                            Unpooled.copiedBuffer(errBodyBytes)
+                        )
+                        errResponse.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=UTF-8")
+                        errResponse.headers().set(HttpHeaderNames.CONTENT_LENGTH, errBodyBytes.size)
+
+                        val mappedErr = HttpMapper.mapResponse(errResponse)
+                        listener?.onResponseCaptured(
+                            transactionId = mappedRequest.id,
+                            response = mappedErr,
+                            durationMs = timingCollector.getTotalDuration(),
+                            timings = timingCollector.getTimings()
+                        )
+
                         context.writeAndFlush(errResponse)
                     }
                 }
@@ -324,6 +363,27 @@ class KNetOutboundHandler(
         } else {
             KNetLogger.error(TAG, cause) { "KNet Outbound Exception: ${cause.message}" }
         }
+
+        if (mappedResponse == null) {
+            val causeMessage = cause.message ?: "Outbound Proxy Exception: ${cause::class.simpleName}"
+            val errBodyBytes = "502 Bad Gateway: $causeMessage".toByteArray(Charsets.UTF_8)
+            val errResponse = DefaultFullHttpResponse(
+                HttpVersion.HTTP_1_1,
+                HttpResponseStatus.BAD_GATEWAY,
+                Unpooled.copiedBuffer(errBodyBytes)
+            )
+            errResponse.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=UTF-8")
+            errResponse.headers().set(HttpHeaderNames.CONTENT_LENGTH, errBodyBytes.size)
+
+            val mappedErr = HttpMapper.mapResponse(errResponse)
+            listener?.onResponseCaptured(
+                transactionId = transactionId,
+                response = mappedErr,
+                durationMs = timingCollector.getTotalDuration(),
+                timings = timingCollector.getTimings()
+            )
+        }
+
         context.close()
         clientChannel.close()
     }

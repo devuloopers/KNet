@@ -191,12 +191,14 @@ private fun TableRowItem(
         else -> themeColors.textSecondary
     }
 
-    val statusColor = when (item.status) {
-        in 200..299 -> themeColors.semantic.success
-        in 300..399 -> themeColors.semantic.warning
-        in 400..499 -> themeColors.semantic.error
-        in 500..599 -> themeColors.semantic.error
-        101 -> themeColors.semantic.info
+    val isCompleted = item.formattedTime != "-"
+
+    val statusColor = when {
+        item.status in 200..299 -> themeColors.semantic.success
+        item.status in 300..399 -> themeColors.semantic.warning
+        item.status in 400..599 -> themeColors.semantic.error
+        item.status == 101 -> themeColors.semantic.info
+        isCompleted && item.status == 0 -> themeColors.semantic.error
         else -> themeColors.textSecondary
     }
 
@@ -286,7 +288,11 @@ private fun TableRowItem(
         if (columnVisibility.isVisible(TrafficColumn.STATUS)) {
             Box(modifier = Modifier.width(64.dp), contentAlignment = Alignment.CenterStart) {
                 Text(
-                    text = if (item.status > 0) "${item.status}" else "-",
+                    text = when {
+                        item.status > 0 -> "${item.status}"
+                        isCompleted -> "ERR"
+                        else -> "-"
+                    },
                     style = typography.codeSmall.copy(color = statusColor, fontWeight = FontWeight.Medium)
                 )
             }

@@ -31,6 +31,16 @@ interface LiveTrafficRepository {
     suspend fun loadTransactionBody(transactionId: String): TransactionBody
 
     /**
+     * Records a synthetic HTTP transaction directly into the traffic feed.
+     *
+     * Used by API Studio to persist direct (non-proxy) request/response pairs or
+     * execution failures so they appear in the Traffic monitor regardless of proxy state.
+     *
+     * @param transaction The fully-formed [HttpTransaction] to persist and stream.
+     */
+    suspend fun recordTransaction(transaction: HttpTransaction)
+
+    /**
      * Clears all recorded transaction records and payload storage.
      */
     fun clearSession()

@@ -1,4 +1,4 @@
-package com.devuloopers.knet.ui.desktop.apistudio
+﻿package com.devuloopers.knet.ui.desktop.apistudio
 
 import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor
 import com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult
@@ -7,11 +7,17 @@ import com.devuloopers.knet.domain.clientNetwork.usecase.ExecuteClientApiRequest
 import com.devuloopers.knet.domain.clientNetwork.usecase.FormatResponseBodyUseCase
 import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
 import com.devuloopers.knet.domain.collection.model.HttpMethod
+import com.devuloopers.knet.domain.proxy.model.ProxyEngineState
+import com.devuloopers.knet.domain.proxy.repository.ProxyEngineRepository
+import com.devuloopers.knet.domain.proxy.usecase.ObserveProxyEngineStateUseCase
+import com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction
 import com.devuloopers.knet.ui.desktop.apistudio.model.ApiStudioState
 import com.devuloopers.knet.ui.desktop.apistudio.model.ExecutionState
 import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.ApiStudioViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -61,6 +67,25 @@ class TestHttpExecutor : HttpExecutor {
     override fun close() { }
 }
 
+/**
+ * Test factory that creates an [ObserveProxyEngineStateUseCase] stub backed by a
+ * [MutableStateFlow] emitting the given [initialState].
+ * Defaults to [ProxyEngineState.Stopped] so tests run without proxy routing by default.
+ */
+fun createTestObserveProxyEngineStateUseCase(
+    initialState: ProxyEngineState = ProxyEngineState.Stopped
+): ObserveProxyEngineStateUseCase {
+    val stateFlow = MutableStateFlow(initialState)
+    return ObserveProxyEngineStateUseCase(
+        repository = object : ProxyEngineRepository {
+            override fun engineState(): Flow<ProxyEngineState> = stateFlow
+            override suspend fun start(port: Int) { stateFlow.value = ProxyEngineState.Running(port) }
+            override suspend fun stop() { stateFlow.value = ProxyEngineState.Stopped }
+        }
+    )
+}
+
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class ApiStudioViewModelTest {
 
@@ -92,7 +117,9 @@ class ApiStudioViewModelTest {
         val formatResponseBodyUseCase = FormatResponseBodyUseCase()
         val viewModel = ApiStudioViewModel(
             executeUseCase = executeUseCase,
-            formatResponseBodyUseCase = formatResponseBodyUseCase
+            formatResponseBodyUseCase = formatResponseBodyUseCase,
+            observeProxyEngineStateUseCase = createTestObserveProxyEngineStateUseCase(),
+            ioDispatcher = testDispatcher
         )
 
         viewModel.updateUrl("https://api.example.com/v1/users")
@@ -114,7 +141,9 @@ class ApiStudioViewModelTest {
         val testExecutor = TestHttpExecutor()
         val viewModel = ApiStudioViewModel(
             executeUseCase = ExecuteClientApiRequestUseCase(testExecutor),
-            formatResponseBodyUseCase = FormatResponseBodyUseCase()
+            formatResponseBodyUseCase = FormatResponseBodyUseCase(),
+            observeProxyEngineStateUseCase = createTestObserveProxyEngineStateUseCase(),
+            ioDispatcher = testDispatcher
         )
 
         // 1. Typing URL with query parameters parses into queryParams list
@@ -142,7 +171,9 @@ class ApiStudioViewModelTest {
         val testExecutor = TestHttpExecutor()
         val viewModel = ApiStudioViewModel(
             executeUseCase = ExecuteClientApiRequestUseCase(testExecutor),
-            formatResponseBodyUseCase = FormatResponseBodyUseCase()
+            formatResponseBodyUseCase = FormatResponseBodyUseCase(),
+            observeProxyEngineStateUseCase = createTestObserveProxyEngineStateUseCase(),
+            ioDispatcher = testDispatcher
         )
 
         // 1. Parse complex URL with 5 multiple query parameters
@@ -193,7 +224,9 @@ class ApiStudioViewModelTest {
         val testExecutor = TestHttpExecutor()
         val viewModel = ApiStudioViewModel(
             executeUseCase = ExecuteClientApiRequestUseCase(testExecutor),
-            formatResponseBodyUseCase = FormatResponseBodyUseCase()
+            formatResponseBodyUseCase = FormatResponseBodyUseCase(),
+            observeProxyEngineStateUseCase = createTestObserveProxyEngineStateUseCase(),
+            ioDispatcher = testDispatcher
         )
 
         viewModel.updateMethod("POST")
@@ -229,7 +262,9 @@ class ApiStudioViewModelTest {
         val testExecutor = TestHttpExecutor()
         val viewModel = ApiStudioViewModel(
             executeUseCase = ExecuteClientApiRequestUseCase(testExecutor),
-            formatResponseBodyUseCase = FormatResponseBodyUseCase()
+            formatResponseBodyUseCase = FormatResponseBodyUseCase(),
+            observeProxyEngineStateUseCase = createTestObserveProxyEngineStateUseCase(),
+            ioDispatcher = testDispatcher
         )
 
         viewModel.executeRequest()
@@ -249,7 +284,9 @@ class ApiStudioViewModelTest {
         val testExecutor = TestHttpExecutor()
         val viewModel = ApiStudioViewModel(
             executeUseCase = ExecuteClientApiRequestUseCase(testExecutor),
-            formatResponseBodyUseCase = FormatResponseBodyUseCase()
+            formatResponseBodyUseCase = FormatResponseBodyUseCase(),
+            observeProxyEngineStateUseCase = createTestObserveProxyEngineStateUseCase(),
+            ioDispatcher = testDispatcher
         )
 
         viewModel.executeRequest()
@@ -263,5 +300,53 @@ class ApiStudioViewModelTest {
         testDispatcher.scheduler.advanceUntilIdle()
         assertEquals(ExecutionState.SUCCESS, viewModel.uiState.value.executionState)
         assertNotNull(viewModel.uiState.value.responsePresentation)
+    }
+
+    @Test
+    fun `executeRequest with invalid host populates executionState ERROR and HostNotFound failure reason`() = runTest {
+        val failingExecutor = object : HttpExecutor {
+            override suspend fun execute(
+                url: String,
+                method: HttpMethod,
+                customMethod: String?,
+                headers: Map<String, String>,
+                body: String,
+                bodyType: RequestBodyType,
+                formParameters: Map<String, String>,
+                auth: ApiRequestAuth,
+                proxyPort: Int?
+            ): ExecutionResult {
+                val reason = com.devuloopers.knet.domain.clientNetwork.model.NetworkFailureReason.HostNotFound(
+                    host = "api.example.com",
+                    detail = "api.example.com: No such host is known"
+                )
+                return ExecutionResult(
+                    statusCode = 0,
+                    statusText = "Execution Error",
+                    isSuccess = false,
+                    errorMessage = "api.example.com: No such host is known",
+                    failureReason = reason
+                )
+            }
+            override fun close() { }
+        }
+
+        val viewModel = ApiStudioViewModel(
+            executeUseCase = ExecuteClientApiRequestUseCase(failingExecutor),
+            formatResponseBodyUseCase = FormatResponseBodyUseCase(),
+            observeProxyEngineStateUseCase = createTestObserveProxyEngineStateUseCase(),
+            ioDispatcher = testDispatcher
+        )
+
+        viewModel.updateUrl("https://api.example.com/v1/users")
+        viewModel.executeRequest()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(ExecutionState.ERROR, state.executionState)
+        assertNotNull(state.responsePresentation)
+        assertEquals(0, state.responsePresentation?.statusCode)
+        assertTrue(state.responsePresentation?.failureReason is com.devuloopers.knet.domain.clientNetwork.model.NetworkFailureReason.HostNotFound)
+        assertEquals("api.example.com", (state.responsePresentation?.failureReason as com.devuloopers.knet.domain.clientNetwork.model.NetworkFailureReason.HostNotFound).host)
     }
 }

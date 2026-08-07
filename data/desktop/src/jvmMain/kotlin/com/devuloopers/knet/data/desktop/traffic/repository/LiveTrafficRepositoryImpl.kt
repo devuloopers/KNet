@@ -61,6 +61,28 @@ public class LiveTrafficRepositoryImpl(
         }
     }
 
+    /**
+     * Persists a synthetic [HttpTransaction] record to the Room DB so that API Studio
+     * direct (non-proxy) requests and failures appear in the live Traffic feed.
+     *
+     * Runs on [Dispatchers.IO] — safe to call from any coroutine context.
+     */
+    override suspend fun recordTransaction(transaction: HttpTransaction) {
+        withContext(Dispatchers.IO) {
+            try {
+                val entity = TransactionMapper.mapDomainToEntity(transaction)
+                database.httpTransactionDao().insert(entity)
+                KNetLogger.info(tag = "KNet_Traffic_Record") {
+                    "💾 DIRECT RECORD [id=${transaction.id}]: ${transaction.request.method} ${transaction.request.url} → ${transaction.response?.statusCode}"
+                }
+            } catch (e: Exception) {
+                KNetLogger.error(tag = "KNet_Traffic_Record", throwable = e) {
+                    "Failed to record direct transaction: ${e.message}"
+                }
+            }
+        }
+    }
+
     override fun clearSession() {
         scope.launch {
             database.httpTransactionDao().clearAll()

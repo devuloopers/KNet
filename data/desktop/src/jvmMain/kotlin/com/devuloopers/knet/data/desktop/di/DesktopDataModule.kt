@@ -15,6 +15,7 @@ import com.devuloopers.knet.data.desktop.runtime.CertificateRuntimeRepository
 import com.devuloopers.knet.data.desktop.runtime.ProxyRuntimeRepository
 import com.devuloopers.knet.data.desktop.runtime.SessionRuntimeRepository
 import com.devuloopers.knet.data.desktop.workspace.repository.WidgetPreferencesRepositoryImpl
+import com.devuloopers.knet.domain.clientNetwork.model.ProxyTrafficListener
 import com.devuloopers.knet.domain.collection.repository.CollectionsRepository
 import com.devuloopers.knet.domain.collection.usecase.SaveLiveTransactionToCollectionUseCase
 import com.devuloopers.knet.domain.inspector.repository.InspectorRepository
@@ -30,6 +31,7 @@ import com.devuloopers.knet.domain.traffic.repository.LiveTrafficRepository
 import com.devuloopers.knet.domain.traffic.usecase.ClearLiveTrafficUseCase
 import com.devuloopers.knet.domain.traffic.usecase.GetLiveTrafficUseCase
 import com.devuloopers.knet.domain.traffic.usecase.LoadTransactionBodyUseCase
+import com.devuloopers.knet.domain.traffic.usecase.RecordClientTransactionUseCase
 import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
 import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
 import com.devuloopers.knet.domain.workspace.usecase.SaveWorkspaceLayoutUseCase
@@ -77,7 +79,10 @@ public object DesktopDataModule {
         single {
             KNetCoreRepository(get(), get(), get())
         }
-        single { KNetApiClient() }
+        single { 
+            val proxyEngineRepository = get<ProxyEngineRepository>() as ProxyTrafficListener
+            KNetApiClient(proxyTrafficListener = proxyEngineRepository)
+        }
         // Core HTTP executor binding (used by core.http layer)
         single<HttpExecutor> { get<KNetApiClient>() }
         // Domain HTTP executor binding (used by domain UseCases such as ExecuteClientApiRequestUseCase)
@@ -110,6 +115,7 @@ public object DesktopDataModule {
         factory { SaveRuleUseCase(get()) }
         factory { ToggleRuleUseCase(get()) }
         factory { SaveLiveTransactionToCollectionUseCase(get()) }
+        factory { RecordClientTransactionUseCase(get()) }
     }
 
     /**

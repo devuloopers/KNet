@@ -20,7 +20,7 @@ class MetricsTest {
             respond(content = "Response Payload Data", status = HttpStatusCode.OK, headers = headersOf())
         }
 
-        val client = KNetApiClient(customEngine = mockEngine)
+        val client: com.devuloopers.knet.core.http.execution.HttpExecutor = KNetApiClient(customEngine = mockEngine)
         val result = client.execute("https://api.knet.dev/metrics")
 
         assertEquals(200, result.statusCode)

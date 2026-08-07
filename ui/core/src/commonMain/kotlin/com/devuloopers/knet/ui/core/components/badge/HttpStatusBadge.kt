@@ -45,6 +45,7 @@ public enum class HttpStatusCategory(
             in 300..399 -> REDIRECTION
             in 400..499 -> CLIENT_ERROR
             in 500..599 -> SERVER_ERROR
+            0 -> CLIENT_ERROR
             else -> UNKNOWN
         }
     }
@@ -66,6 +67,12 @@ public fun KNetHttpStatusBadge(
     val category = HttpStatusCategory.fromCode(statusCode)
     val typography = KNetTheme.typography
 
+    val displayText = when {
+        statusCode == 0 -> statusText.ifBlank { "ERR" }
+        statusText.isNotBlank() -> "$statusCode $statusText"
+        else -> "$statusCode"
+    }
+
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -73,12 +80,12 @@ public fun KNetHttpStatusBadge(
     ) {
         Icon(
             imageVector = category.icon,
-            contentDescription = "HTTP Status $statusCode",
+            contentDescription = "HTTP Status $displayText",
             modifier = Modifier.size(18.dp),
             tint = category.color
         )
         Text(
-            text = if (statusText.isNotBlank()) "$statusCode $statusText" else "$statusCode",
+            text = displayText,
             style = typography.titleSmall.copy(
                 color = category.color,
                 fontWeight = FontWeight.SemiBold

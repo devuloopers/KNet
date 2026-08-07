@@ -12,6 +12,8 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
+import com.devuloopers.knet.core.http.execution.HttpExecutor
+
 class ProxyRoutingTest {
 
     @Test
@@ -34,7 +36,7 @@ class ProxyRoutingTest {
             respond(content = "Direct Response", status = HttpStatusCode.OK, headers = headersOf())
         }
 
-        val client = KNetApiClient(proxyPort = null, customEngine = mockEngine)
+        val client: HttpExecutor = KNetApiClient(proxyPort = null, customEngine = mockEngine)
         val result = client.execute("https://api.knet.dev/data")
 
         assertEquals(200, result.statusCode)

@@ -1,5 +1,7 @@
 package com.devuloopers.knet.ui.desktop.apistudio.model
 
+import com.devuloopers.knet.domain.clientNetwork.model.NetworkFailureReason
+
 /**
  * Represents a single test assertion result (e.g. from post-response script).
  *
@@ -26,5 +28,6 @@ public data class ResponsePresentation(
     val cookies: Map<String, String> = emptyMap(),
     val body: String = "",
     val testResults: List<TestResult> = emptyList(),
-    val consoleLogs: List<String> = emptyList()
+    val consoleLogs: List<String> = emptyList(),
+    val failureReason: NetworkFailureReason? = null
 )

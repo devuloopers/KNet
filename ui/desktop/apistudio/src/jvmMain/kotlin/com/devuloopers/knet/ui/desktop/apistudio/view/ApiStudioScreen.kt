@@ -33,8 +33,10 @@ import com.devuloopers.knet.ui.desktop.apistudio.editor.RequestTabBar
 import com.devuloopers.knet.ui.desktop.apistudio.editor.RequestUrlBar
 import com.devuloopers.knet.ui.desktop.apistudio.model.ApiStudioState
 import com.devuloopers.knet.ui.desktop.apistudio.model.ExecutionState
-import com.devuloopers.knet.ui.desktop.apistudio.model.RequestTab
+import com.devuloopers.knet.ui.desktop.apistudio.response.ResponseInspectorActions
+import com.devuloopers.knet.ui.desktop.apistudio.response.ResponseInspectorState
 import com.devuloopers.knet.ui.desktop.apistudio.response.ResponseInspectorView
+import com.devuloopers.knet.ui.desktop.apistudio.model.RequestTab
 import com.devuloopers.knet.ui.desktop.apistudio.sidebar.CollectionsSidebar
 import com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarFolderItem
 import com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarRequestItem
@@ -172,7 +174,7 @@ public fun ApiStudioScreen(
             secondPane = { paneModifier ->
                 // Right Pane: Response Inspector
                 val presentation = uiState.responsePresentation
-                ResponseInspectorView(
+                val inspectorState = ResponseInspectorState(
                     statusCode = presentation?.statusCode ?: 0,
                     statusText = presentation?.statusText ?: "",
                     durationMs = presentation?.durationMs ?: 0L,
@@ -182,7 +184,15 @@ public fun ApiStudioScreen(
                     cookies = presentation?.cookies ?: emptyMap(),
                     testResults = presentation?.testResults ?: emptyList(),
                     consoleLogs = presentation?.consoleLogs ?: emptyList(),
-                    onClearResponse = { viewModel?.clearResponse() },
+                    executionState = uiState.executionState,
+                    failureReason = presentation?.failureReason,
+                    errorMessage = uiState.errorMessage
+                )
+                ResponseInspectorView(
+                    state = inspectorState,
+                    actions = ResponseInspectorActions(
+                        onClearResponse = { viewModel?.clearResponse() }
+                    ),
                     modifier = paneModifier
                 )
             },

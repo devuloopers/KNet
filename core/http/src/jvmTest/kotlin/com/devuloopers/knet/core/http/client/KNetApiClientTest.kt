@@ -2,6 +2,7 @@ package com.devuloopers.knet.core.http.client
 
 import com.devuloopers.knet.core.http.model.AuthType
 import com.devuloopers.knet.core.http.model.RequestBodyType
+import com.devuloopers.knet.domain.clientNetwork.model.KNetHeaders
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -70,5 +71,37 @@ class KNetApiClientTest {
         assertEquals(0, result.statusCode)
         assertFalse(result.isSuccess)
         assertNotNull(result.errorMessage)
+    }
+
+    @Test
+    fun testExecuteProxyDnsFailureTriggersTrafficListener() = runBlocking {
+        var interceptedTransaction: com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction? = null
+        
+        val proxyTrafficListener = object : com.devuloopers.knet.domain.clientNetwork.model.ProxyTrafficListener {
+            override fun onTransactionCaptured(transaction: com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction) {
+                interceptedTransaction = transaction
+            }
+        }
+
+        val clientWithListener = KNetApiClient(proxyTrafficListener = proxyTrafficListener)
+        
+        // Execute request to an unreachable domain with proxy turned ON (proxyPort = 59997)
+        val result = clientWithListener.execute(
+            url = "http://unreachable-domain-that-does-not-exist.local",
+            method = "GET",
+            proxyPort = 59997 // Proxy ON but pointing to non-existent port
+        )
+
+        // The execution result itself should still return the error properly
+        assertEquals(0, result.statusCode)
+        assertFalse(result.isSuccess)
+
+        // BUT our listener should have ALSO intercepted it as a 502 Bad Gateway!
+        assertNotNull("Proxy traffic listener was not invoked!", interceptedTransaction)
+        assertEquals(502, interceptedTransaction?.response?.statusCode)
+        assertEquals("Bad Gateway", interceptedTransaction?.response?.statusText)
+        assertTrue(interceptedTransaction?.response?.headers?.any { it.first == KNetHeaders.HEADER_PROXY_ERROR } == true)
+        
+        clientWithListener.close()
     }
 }

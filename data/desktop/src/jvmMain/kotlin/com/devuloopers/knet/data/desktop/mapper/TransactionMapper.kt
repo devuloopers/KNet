@@ -29,7 +29,7 @@ public object TransactionMapper {
         )
 
         val statusCode = entity.responseStatusCode
-        val response = if (statusCode != null && statusCode > 0) {
+        val response = if (statusCode != null) {
             HttpResponse(
                 statusCode = statusCode,
                 statusText = entity.responseStatusText ?: "",

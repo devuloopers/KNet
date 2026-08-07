@@ -21,6 +21,17 @@ interface HttpExecutor : AutoCloseable {
 
     /**
      * Executes an HTTP call with fine-grained parameter specification.
+     *
+     * @param url Target HTTP/HTTPS URL string.
+     * @param method HTTP method name string (GET, POST, PUT, DELETE, etc.).
+     * @param headers Map of HTTP request header key-value pairs.
+     * @param body Request body payload content string.
+     * @param bodyType Strongly-typed request body format enum.
+     * @param formParameters Key-value form parameters for form requests.
+     * @param authType Strongly-typed authentication scheme enum.
+     * @param authToken Authentication credential/token string.
+     * @param proxyPort Optional proxy port for local HTTP proxy interception.
+     * @return [ApiExecutionResult] containing response data, headers, cookies, timing metrics, and status code.
      */
     suspend fun execute(
         url: String,
@@ -30,6 +41,7 @@ interface HttpExecutor : AutoCloseable {
         bodyType: RequestBodyType = RequestBodyType.NONE,
         formParameters: Map<String, String> = emptyMap(),
         authType: AuthType = AuthType.NONE,
-        authToken: String = ""
+        authToken: String = "",
+        proxyPort: Int? = null
     ): ApiExecutionResult
 }

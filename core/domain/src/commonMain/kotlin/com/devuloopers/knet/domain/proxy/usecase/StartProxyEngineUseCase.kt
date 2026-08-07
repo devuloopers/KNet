@@ -8,7 +8,17 @@ import com.devuloopers.knet.domain.proxy.repository.ProxyEngineRepository
 public class StartProxyEngineUseCase(
     private val repository: ProxyEngineRepository
 ) {
-    public suspend fun execute(port: Int = 8080) {
+    public companion object {
+        /**
+         * Default local proxy port used by KNet's Netty MITM proxy engine.
+         * All consumers (TrafficViewModel, ApiStudioViewModel, etc.) must reference
+         * this constant as the single source of truth for the proxy port.
+         */
+        public const val DEFAULT_PORT: Int = 8080
+    }
+
+    public suspend fun execute(port: Int = DEFAULT_PORT) {
         repository.start(port)
     }
 }
+

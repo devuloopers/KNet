@@ -49,9 +49,9 @@ class ApiExecutionResultTest {
 
     @Test
     fun testIsSuccessPropertyForRanges() {
-        val res201 = ApiExecutionResult(201, "Created", emptyMap(), "", 10L, 0L)
-        val res204 = ApiExecutionResult(204, "No Content", emptyMap(), "", 10L, 0L)
-        val res404 = ApiExecutionResult(404, "Not Found", emptyMap(), "", 10L, 0L)
+        val res201 = ApiExecutionResult(statusCode = 201, statusText = "Created", headers = emptyMap(), responseBody = "", latencyMs = 10L, responseSizeBytes = 0L)
+        val res204 = ApiExecutionResult(statusCode = 204, statusText = "No Content", headers = emptyMap(), responseBody = "", latencyMs = 10L, responseSizeBytes = 0L)
+        val res404 = ApiExecutionResult(statusCode = 404, statusText = "Not Found", headers = emptyMap(), responseBody = "", latencyMs = 10L, responseSizeBytes = 0L)
 
         assertTrue(res201.isSuccess)
         assertTrue(res204.isSuccess)

@@ -1,5 +1,7 @@
 package com.devuloopers.knet.core.http.model
 
+import com.devuloopers.knet.domain.clientNetwork.model.NetworkFailureReason
+
 /**
  * Result data class returned after executing an HTTP request.
  *
@@ -11,6 +13,7 @@ package com.devuloopers.knet.core.http.model
  * @property responseSizeBytes Size of response payload content in bytes.
  * @property isSuccess True if status code is in 2xx range; false otherwise.
  * @property errorMessage Error description if execution failed before completion.
+ * @property failureReason Strongly-typed network failure classification, or null on success.
  * @property metrics Fine-grained network socket timing metrics.
  */
 data class ApiExecutionResult(
@@ -23,5 +26,6 @@ data class ApiExecutionResult(
     val responseSizeBytes: Long,
     val isSuccess: Boolean = statusCode in 200..299,
     val errorMessage: String? = null,
+    val failureReason: NetworkFailureReason? = null,
     val metrics: HttpMetrics = HttpMetrics(totalTimeMs = latencyMs)
 )

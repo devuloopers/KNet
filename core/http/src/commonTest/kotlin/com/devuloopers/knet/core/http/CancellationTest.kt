@@ -13,6 +13,8 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
+import com.devuloopers.knet.core.http.execution.HttpExecutor
+
 class CancellationTest {
 
     @Test
@@ -22,7 +24,7 @@ class CancellationTest {
             respond(content = "Delayed", status = HttpStatusCode.OK, headers = headersOf())
         }
 
-        val client = KNetApiClient(customEngine = mockEngine)
+        val client: HttpExecutor = KNetApiClient(customEngine = mockEngine)
         var isCancelled = false
 
         val job = launch {

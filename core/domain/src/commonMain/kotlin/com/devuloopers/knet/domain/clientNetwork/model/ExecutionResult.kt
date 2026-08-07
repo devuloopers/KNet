@@ -12,6 +12,7 @@ package com.devuloopers.knet.domain.clientNetwork.model
  * @property responseSizeBytes Payload size in bytes.
  * @property isSuccess True if status code is in 2xx range; false otherwise.
  * @property errorMessage Optional failure description if execution throws an exception.
+ * @property failureReason Strongly-typed network execution failure category, or null on success.
  */
 public data class ExecutionResult(
     val statusCode: Int,
@@ -22,5 +23,6 @@ public data class ExecutionResult(
     val latencyMs: Long = 0L,
     val responseSizeBytes: Long = 0L,
     val isSuccess: Boolean = statusCode in 200..299,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val failureReason: NetworkFailureReason? = null
 )

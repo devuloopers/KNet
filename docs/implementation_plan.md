@@ -17,6 +17,11 @@
 - [x] **`:ui:desktop:traffic`** [COMPLETED]
 - [ ] **`:ui:desktop:inspector`** [PENDING]
 - [x] **`:ui:desktop:apistudio`** [COMPLETED]
+  - [x] HTTP request/response authoring & layout framework
+  - [x] Clear Response action button
+  - [x] 200ms loading window anti-flicker protection for ultra-fast endpoints
+  - [x] Strongly-typed `KNetHttpStatusBadge` (RFC 9110 compliant)
+  - [x] Dynamic Proxy Traffic Interception & Routing (`ProxyEngineState.Running(port)`)
 - [ ] **`:ui:desktop:workspace`** [PENDING]
 - [ ] **`:ui:desktop:scripting`** [PENDING]
 - [ ] **`:ui:desktop:certificate`** [PENDING]

@@ -157,15 +157,38 @@ private fun OverviewTabContent(transaction: TrafficItemUiState) {
             endpoint = "https://${transaction.host}${transaction.path}"
         )
 
+        val isCompleted = transaction.formattedTime != "-"
+        val isError = isCompleted && (transaction.status == 0 || transaction.status in 400..599)
+
+        val statusValue = when {
+            transaction.status > 0 -> "${transaction.status} ${transaction.statusText}"
+            isCompleted -> "ERR (${transaction.statusText.ifEmpty { "Connection Error" }})"
+            else -> "In Progress..."
+        }
+
+        val statusColor = when {
+            transaction.status in 200..299 -> themeColors.semantic.success
+            transaction.status in 300..399 -> themeColors.semantic.warning
+            isError -> themeColors.semantic.error
+            else -> themeColors.textPrimary
+        }
+
         Column(
             modifier = Modifier.fillMaxWidth(),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             GridRow(
                 label = "Status",
-                value = if (transaction.status > 0) "${transaction.status} ${transaction.statusText}" else "In Progress...",
-                valueColor = if (transaction.status in 200..299) themeColors.semantic.success else themeColors.textPrimary
+                value = statusValue,
+                valueColor = statusColor
             )
+            if (isError && transaction.statusText.isNotBlank()) {
+                GridRow(
+                    label = "Error Detail",
+                    value = transaction.statusText,
+                    valueColor = themeColors.semantic.error
+                )
+            }
             GridRow(label = "Protocol", value = transaction.protocol)
             GridRow(label = "Remote IP", value = "${transaction.host}:443", isMono = true)
             GridRow(label = "Time", value = transaction.dateGroup.ifEmpty { "N/A" })

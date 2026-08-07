@@ -4,29 +4,45 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.domain.clientNetwork.usecase.ExecuteClientApiRequestUseCase
 import com.devuloopers.knet.domain.clientNetwork.usecase.FormatResponseBodyUseCase
+import com.devuloopers.knet.domain.proxy.model.ProxyEngineState
+import com.devuloopers.knet.domain.proxy.usecase.ObserveProxyEngineStateUseCase
 import com.devuloopers.knet.ui.desktop.apistudio.model.ApiStudioState
 import com.devuloopers.knet.ui.desktop.apistudio.model.ExecutionState
 import com.devuloopers.knet.ui.desktop.apistudio.model.RequestTab
 import com.devuloopers.knet.ui.desktop.apistudio.model.ResponsePresentation
 import com.devuloopers.knet.ui.desktop.apistudio.model.TestResult
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * ViewModel managing UDF state for HTTP API request authoring and execution.
+ *
+ * Observes proxy engine state and automatically routes requests through KNet's
+ * local Netty proxy when it is active (`proxyPort != null`). When the proxy is
+ * off, requests are executed directly via Ktor with no Traffic recording â€”
+ * Traffic feed ownership belongs exclusively to the proxy pipeline.
  *
  * Dependencies are provided by Koin via [com.devuloopers.knet.ui.desktop.apistudio.di.apiStudioUiModule].
  *
  * @param executeUseCase Use case for executing client HTTP API requests.
  * @param formatResponseBodyUseCase Use case for formatting raw response bodies.
+ * @param observeProxyEngineStateUseCase Use case for observing the live KNet proxy engine state.
  */
 class ApiStudioViewModel(
     private val executeUseCase: ExecuteClientApiRequestUseCase,
-    private val formatResponseBodyUseCase: FormatResponseBodyUseCase
+    private val formatResponseBodyUseCase: FormatResponseBodyUseCase,
+    observeProxyEngineStateUseCase: ObserveProxyEngineStateUseCase,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
     public companion object {
@@ -39,6 +55,20 @@ class ApiStudioViewModel(
 
     private val _uiState = MutableStateFlow(ApiStudioState())
     val uiState: StateFlow<ApiStudioState> = _uiState.asStateFlow()
+
+    /**
+     * Derived StateFlow of the active proxy port.
+     * Emits the port carried by [ProxyEngineState.Running] when the proxy is active, null otherwise.
+     * Ensures API Studio requests are routed through the proxy and appear in the Traffic monitor
+     * without duplicating the port number across the codebase.
+     */
+    private val activeProxyPort: StateFlow<Int?> = observeProxyEngineStateUseCase.execute()
+        .map { engineState -> (engineState as? ProxyEngineState.Running)?.port }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = null
+        )
 
     /**
      * Updates the target request URL string in UDF state and automatically synchronizes
@@ -202,7 +232,8 @@ class ApiStudioViewModel(
         _uiState.update { state ->
             state.copy(
                 responsePresentation = null,
-                executionState = ExecutionState.IDLE
+                executionState = ExecutionState.IDLE,
+                errorMessage = null
             )
         }
     }
@@ -246,54 +277,64 @@ class ApiStudioViewModel(
 
         viewModelScope.launch {
             try {
-                val headerMap = currentEditor.headers.toMap()
-                val queryParamMap = currentEditor.queryParams.toMap()
-                val cookieMap = currentEditor.cookies.toMap()
+                val (result, formattedBody, detectedMime) = withContext(ioDispatcher) {
+                    val headerMap = currentEditor.headers.toMap()
+                    val queryParamMap = currentEditor.queryParams.toMap()
+                    val cookieMap = currentEditor.cookies.toMap()
 
-                val authConfig = when (currentEditor.authType.lowercase()) {
-                    "bearer token", "bearer" -> com.devuloopers.knet.domain.collection.model.ApiRequestAuth.Bearer(currentEditor.authToken)
-                    "api key", "apikey" -> com.devuloopers.knet.domain.collection.model.ApiRequestAuth.ApiKey(value = currentEditor.authToken)
-                    "basic auth", "basic" -> {
-                        val parts = currentEditor.authToken.split(":", limit = 2)
-                        com.devuloopers.knet.domain.collection.model.ApiRequestAuth.Basic(
-                            username = parts.getOrNull(0) ?: "",
-                            password = parts.getOrNull(1) ?: ""
-                        )
+                    val authConfig = when (currentEditor.authType.lowercase()) {
+                        "bearer token", "bearer" -> com.devuloopers.knet.domain.collection.model.ApiRequestAuth.Bearer(currentEditor.authToken)
+                        "api key", "apikey" -> com.devuloopers.knet.domain.collection.model.ApiRequestAuth.ApiKey(value = currentEditor.authToken)
+                        "basic auth", "basic" -> {
+                            val parts = currentEditor.authToken.split(":", limit = 2)
+                            com.devuloopers.knet.domain.collection.model.ApiRequestAuth.Basic(
+                                username = parts.getOrNull(0) ?: "",
+                                password = parts.getOrNull(1) ?: ""
+                            )
+                        }
+                        else -> com.devuloopers.knet.domain.collection.model.ApiRequestAuth.None
                     }
-                    else -> com.devuloopers.knet.domain.collection.model.ApiRequestAuth.None
+
+                    val httpMethodEnum = try {
+                        com.devuloopers.knet.domain.collection.model.HttpMethod.valueOf(currentEditor.method.uppercase())
+                    } catch (_: Exception) {
+                        com.devuloopers.knet.domain.collection.model.HttpMethod.GET
+                    }
+
+                    val bodyTypeEnum = when (currentEditor.bodyType.uppercase()) {
+                        "JSON" -> com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.JSON
+                        "XML" -> com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.XML
+                        "FORM", "FORM_DATA" -> com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.FORM_DATA
+                        "GRAPHQL" -> com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.GRAPHQL
+                        "RAW", "RAW_TEXT" -> com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.RAW_TEXT
+                        else -> com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.NONE
+                    }
+
+                    // When proxy is active (activeProxyPort != null), the request is routed
+                    // through the local KNet Netty proxy (127.0.0.1:port). The proxy pipeline
+                    // intercepts the traffic and writes it to the Traffic feed automatically.
+                    // When the proxy is off, the request is sent directly via Ktor with no
+                    // Traffic recording â€” the Traffic feed belongs exclusively to the proxy pipeline.
+                    val res = executeUseCase(
+                        url = currentEditor.url,
+                        method = httpMethodEnum,
+                        headers = headerMap,
+                        queryParams = queryParamMap,
+                        cookies = cookieMap,
+                        body = if (bodyTypeEnum != com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.NONE) currentEditor.bodyPayload else "",
+                        bodyType = bodyTypeEnum,
+                        auth = authConfig,
+                        proxyPort = activeProxyPort.value
+                    )
+
+                    val mime = com.devuloopers.knet.domain.util.MimeTypeUtils.extractFromHeaders(res.headers)
+                    val bodyText = formatResponseBodyUseCase.execute(
+                        rawBody = res.responseBody,
+                        mimeType = mime
+                    )
+
+                    Triple(res, bodyText, mime)
                 }
-
-                val httpMethodEnum = try {
-                    com.devuloopers.knet.domain.collection.model.HttpMethod.valueOf(currentEditor.method.uppercase())
-                } catch (_: Exception) {
-                    com.devuloopers.knet.domain.collection.model.HttpMethod.GET
-                }
-
-                val bodyTypeEnum = when (currentEditor.bodyType.uppercase()) {
-                    "JSON" -> com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.JSON
-                    "XML" -> com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.XML
-                    "FORM", "FORM_DATA" -> com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.FORM_DATA
-                    "GRAPHQL" -> com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.GRAPHQL
-                    "RAW", "RAW_TEXT" -> com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.RAW_TEXT
-                    else -> com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.NONE
-                }
-
-                val result = executeUseCase(
-                    url = currentEditor.url,
-                    method = httpMethodEnum,
-                    headers = headerMap,
-                    queryParams = queryParamMap,
-                    cookies = cookieMap,
-                    body = if (bodyTypeEnum != com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.NONE) currentEditor.bodyPayload else "",
-                    bodyType = bodyTypeEnum,
-                    auth = authConfig
-                )
-
-                val detectedMime = com.devuloopers.knet.domain.util.MimeTypeUtils.extractFromHeaders(result.headers)
-                val formattedBody = formatResponseBodyUseCase.execute(
-                    rawBody = result.responseBody,
-                    mimeType = detectedMime
-                )
 
                 val presentation = ResponsePresentation(
                     statusCode = result.statusCode,
@@ -305,10 +346,11 @@ class ApiStudioViewModel(
                     cookies = result.cookies,
                     body = formattedBody,
                     testResults = emptyList(),
-                    consoleLogs = emptyList()
+                    consoleLogs = emptyList(),
+                    failureReason = result.failureReason
                 )
 
-                // Enforce minimum visual loading duration window to prevent UI flickering on ultra-fast responses (< 200ms)
+                // Enforce minimum visual loading duration to prevent single-frame flickering
                 val elapsedMs = System.currentTimeMillis() - executionStartTime
                 if (elapsedMs < MIN_LOADING_DURATION_MS) {
                     delay(MIN_LOADING_DURATION_MS - elapsedMs)
