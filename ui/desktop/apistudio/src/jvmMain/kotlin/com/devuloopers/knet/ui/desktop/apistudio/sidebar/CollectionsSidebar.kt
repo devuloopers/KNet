@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -31,6 +32,8 @@ import com.devuloopers.knet.ui.core.components.badge.KNetBadge
 import com.devuloopers.knet.ui.core.components.button.KNetIconButton
 import com.devuloopers.knet.ui.core.components.divider.HorizontalDivider
 import com.devuloopers.knet.ui.core.components.input.KNetInputField
+import com.devuloopers.knet.ui.core.components.menu.ContextMenuItem
+import com.devuloopers.knet.ui.core.components.menu.KNetContextMenuArea
 import com.devuloopers.knet.ui.core.components.treeview.TreeNode
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
@@ -41,11 +44,21 @@ public data class SidebarRequestItem(
     val id: String,
     val name: String,
     val method: String,
-    val url: String = ""
+    val url: String = "",
+    val headers: List<Pair<String, String>> = emptyList(),
+    val bodyPayload: String = "",
+    val bodyType: String = "NONE",
+    val preRequestScript: String = "",
+    val testScript: String = "",
+    /** Non-null when this item belongs to a saved collection. Used for in-place edit routing. */
+    val collectionId: String? = null,
+    /** Non-null when this item belongs to a saved collection folder. Used for in-place edit routing. */
+    val folderId: String? = null
 )
 
 public data class SidebarFolderItem(
     val id: String,
+    val collectionId: String = id,
     val name: String,
     val requests: List<SidebarRequestItem> = emptyList(),
     val isExpanded: Boolean = true
@@ -84,6 +97,13 @@ public fun CollectionsSidebar(
     collections: List<SidebarFolderItem> = emptyList(),
     selectedRequestId: String?,
     onRequestSelected: (SidebarRequestItem) -> Unit,
+    onSaveUnsavedRequest: (SidebarRequestItem) -> Unit = {},
+    onDeleteUnsavedRequest: (SidebarRequestItem) -> Unit = {},
+    onNewUnsavedSessionClicked: () -> Unit = {},
+    onRenameCollection: (SidebarFolderItem) -> Unit = {},
+    onDeleteCollection: (SidebarFolderItem) -> Unit = {},
+    onRenameSavedRequest: (SidebarRequestItem) -> Unit = {},
+    onDeleteSavedRequest: (SidebarRequestItem) -> Unit = {},
     onImportClicked: () -> Unit = {},
     onNewCollectionClicked: () -> Unit = {},
     modifier: Modifier = Modifier
@@ -190,7 +210,16 @@ public fun CollectionsSidebar(
                         isExpanded = isUnsavedSectionExpanded,
                         hasChildren = filteredUnsaved.isNotEmpty(),
                         onToggleExpand = { isUnsavedSectionExpanded = !isUnsavedSectionExpanded },
-                        icon = if (isUnsavedSectionExpanded) KNetIcons.FolderOpen else KNetIcons.Folder
+                        icon = if (isUnsavedSectionExpanded) KNetIcons.FolderOpen else KNetIcons.Folder,
+                        trailingContent = {
+                            KNetIconButton(
+                                onClick = onNewUnsavedSessionClicked,
+                                icon = KNetIcons.Add,
+                                contentDescription = "New Unsaved Session",
+                                tint = themeColors.textSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     )
 
                     if (isUnsavedSectionExpanded) {
@@ -203,31 +232,47 @@ public fun CollectionsSidebar(
                         } else {
                             filteredUnsaved.forEach { req ->
                                 val isSelected = req.id == selectedRequestId
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(28.dp)
-                                        .clip(shapes.small)
-                                        .background(if (isSelected) themeColors.interaction.selectedOverlay else Color.Transparent)
-                                        .clickable { onRequestSelected(req) }
-                                        .handCursor()
-                                        .padding(start = 24.dp, end = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    KNetBadge(
-                                        text = req.method,
-                                        containerColor = ApiStudioColors.getMethodBackgroundColor(req.method),
-                                        contentColor = ApiStudioColors.getMethodTextColor(req.method)
+                                
+                                val contextMenuItems = listOf(
+                                    ContextMenuItem(
+                                        label = "Save Request",
+                                        icon = KNetIcons.Save,
+                                        onClick = { onSaveUnsavedRequest(req) }
+                                    ),
+                                    ContextMenuItem(
+                                        label = "Delete Session",
+                                        icon = KNetIcons.Delete,
+                                        onClick = { onDeleteUnsavedRequest(req) }
                                     )
-                                    Text(
-                                        text = req.name,
-                                        style = typography.bodySmall.copy(
-                                            color = if (isSelected) themeColors.accent else themeColors.textPrimary,
-                                            fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
-                                        ),
-                                        maxLines = 1
-                                    )
+                                )
+
+                                KNetContextMenuArea(items = contextMenuItems) {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .height(28.dp)
+                                            .clip(shapes.small)
+                                            .background(if (isSelected) themeColors.interaction.selectedOverlay else Color.Transparent)
+                                            .clickable { onRequestSelected(req) }
+                                            .handCursor()
+                                            .padding(start = 24.dp, end = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        KNetBadge(
+                                            text = req.method,
+                                            containerColor = ApiStudioColors.getMethodBackgroundColor(req.method),
+                                            contentColor = ApiStudioColors.getMethodTextColor(req.method)
+                                        )
+                                        Text(
+                                            text = req.name,
+                                            style = typography.bodySmall.copy(
+                                                color = if (isSelected) themeColors.accent else themeColors.textPrimary,
+                                                fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
+                                            ),
+                                            maxLines = 1
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -245,7 +290,16 @@ public fun CollectionsSidebar(
                         isExpanded = isSavedSectionExpanded,
                         hasChildren = filteredFolders.isNotEmpty(),
                         onToggleExpand = { isSavedSectionExpanded = !isSavedSectionExpanded },
-                        icon = if (isSavedSectionExpanded) KNetIcons.FolderOpen else KNetIcons.Folder
+                        icon = if (isSavedSectionExpanded) KNetIcons.FolderOpen else KNetIcons.Folder,
+                        trailingContent = {
+                            KNetIconButton(
+                                onClick = onNewCollectionClicked,
+                                icon = KNetIcons.Add,
+                                contentDescription = "New Collection",
+                                tint = themeColors.textSecondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
                     )
 
                     if (isSavedSectionExpanded) {
@@ -259,54 +313,85 @@ public fun CollectionsSidebar(
                             filteredFolders.forEach { folder ->
                                 val isExpanded = expandedFolders[folder.id] ?: true
 
-                                // Folder Node inside Saved Collections
-                                TreeNode(
-                                    label = "${folder.name} (${folder.requests.size})",
-                                    onClick = {
-                                        expandedFolders = expandedFolders.toMutableMap().apply {
-                                            put(folder.id, !isExpanded)
-                                        }
-                                    },
-                                    depth = 1,
-                                    isExpanded = isExpanded,
-                                    hasChildren = folder.requests.isNotEmpty(),
-                                    onToggleExpand = {
-                                        expandedFolders = expandedFolders.toMutableMap().apply {
-                                            put(folder.id, !isExpanded)
-                                        }
-                                    },
-                                    icon = if (isExpanded) KNetIcons.FolderOpen else KNetIcons.Folder
+                                val collectionMenuItems = listOf(
+                                    ContextMenuItem(
+                                        label = "Rename",
+                                        icon = KNetIcons.Edit,
+                                        onClick = { onRenameCollection(folder) }
+                                    ),
+                                    ContextMenuItem(
+                                        label = "Delete",
+                                        icon = KNetIcons.Delete,
+                                        onClick = { onDeleteCollection(folder) }
+                                    )
                                 )
+
+                                // Folder Node inside Saved Collections
+                                KNetContextMenuArea(items = collectionMenuItems) {
+                                    TreeNode(
+                                        label = "${folder.name} (${folder.requests.size})",
+                                        onClick = {
+                                            expandedFolders = expandedFolders.toMutableMap().apply {
+                                                put(folder.id, !isExpanded)
+                                            }
+                                        },
+                                        depth = 1,
+                                        isExpanded = isExpanded,
+                                        hasChildren = folder.requests.isNotEmpty(),
+                                        onToggleExpand = {
+                                            expandedFolders = expandedFolders.toMutableMap().apply {
+                                                put(folder.id, !isExpanded)
+                                            }
+                                        },
+                                        icon = if (isExpanded) KNetIcons.FolderOpen else KNetIcons.Folder
+                                    )
+                                }
 
                                 // Nested Requests in Folder
                                 if (isExpanded) {
                                     folder.requests.forEach { req ->
                                         val isSelected = req.id == selectedRequestId
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(28.dp)
-                                                .clip(shapes.small)
-                                                .background(if (isSelected) themeColors.interaction.selectedOverlay else Color.Transparent)
-                                                .clickable { onRequestSelected(req) }
-                                                .handCursor()
-                                                .padding(start = 36.dp, end = 8.dp),
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                        ) {
-                                            KNetBadge(
-                                                text = req.method,
-                                                containerColor = ApiStudioColors.getMethodBackgroundColor(req.method),
-                                                contentColor = ApiStudioColors.getMethodTextColor(req.method)
+
+                                        val savedRequestMenuItems = listOf(
+                                            ContextMenuItem(
+                                                label = "Rename",
+                                                icon = KNetIcons.Edit,
+                                                onClick = { onRenameSavedRequest(req) }
+                                            ),
+                                            ContextMenuItem(
+                                                label = "Delete",
+                                                icon = KNetIcons.Delete,
+                                                onClick = { onDeleteSavedRequest(req) }
                                             )
-                                            Text(
-                                                text = req.name,
-                                                style = typography.bodySmall.copy(
-                                                    color = if (isSelected) themeColors.accent else themeColors.textPrimary,
-                                                    fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
-                                                ),
-                                                maxLines = 1
-                                            )
+                                        )
+
+                                        KNetContextMenuArea(items = savedRequestMenuItems) {
+                                            Row(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .height(28.dp)
+                                                    .clip(shapes.small)
+                                                    .background(if (isSelected) themeColors.interaction.selectedOverlay else Color.Transparent)
+                                                    .clickable { onRequestSelected(req) }
+                                                    .handCursor()
+                                                    .padding(start = 36.dp, end = 8.dp),
+                                                verticalAlignment = Alignment.CenterVertically,
+                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                            ) {
+                                                KNetBadge(
+                                                    text = req.method,
+                                                    containerColor = ApiStudioColors.getMethodBackgroundColor(req.method),
+                                                    contentColor = ApiStudioColors.getMethodTextColor(req.method)
+                                                )
+                                                Text(
+                                                    text = req.name,
+                                                    style = typography.bodySmall.copy(
+                                                        color = if (isSelected) themeColors.accent else themeColors.textPrimary,
+                                                        fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
+                                                    ),
+                                                    maxLines = 1
+                                                )
+                                            }
                                         }
                                     }
                                 }

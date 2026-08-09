@@ -107,3 +107,15 @@ Do not use primitive strings or generic fallback types when the closed set or ex
    * If an API supports unknown or custom extensions alongside standard values, use a sealed hierarchy containing standard enum values and a typed custom fallback variant.
 3. **No Magic Strings Across Boundaries**:
    * Do not pass primitive strings across module boundaries, strategy interfaces, or viewmodel UI states when a strongly-typed contract can be used.
+
+---
+
+## No Emoji Rule
+
+Do not use emojis anywhere in the project codebase, log statements, terminal debug prints, comments, or UI texts.
+
+### Guidelines:
+1. **Strictly Prohibited**:
+   * Emojis are strictly prohibited in all code files, log outputs (`KNetLogger`), console prints (`println`), exception messages, code comments, documentation, and UI strings.
+2. **Clean Professional Text**:
+   * Always use clean, professional, plain text descriptors (e.g. `[REQUEST]`, `[RESPONSE]`, `[INSERT PENDING]`, `[UPDATE COMPLETED]`) instead of emoji icons.

@@ -28,6 +28,25 @@ public interface CollectionDao {
     @Query("DELETE FROM api_collections WHERE id = :id")
     public suspend fun deleteCollection(id: String)
 
+    @Query("DELETE FROM collection_folders WHERE collectionId = :collectionId")
+    public suspend fun deleteFoldersForCollection(collectionId: String)
+
+    @Query("DELETE FROM saved_requests WHERE collectionId = :collectionId")
+    public suspend fun deleteRequestsForCollection(collectionId: String)
+
+    @Transaction
+    public suspend fun deleteCollectionCascadeTx(id: String) {
+        deleteCollection(id)
+        deleteFoldersForCollection(id)
+        deleteRequestsForCollection(id)
+    }
+
+    @Query("SELECT * FROM collection_folders ORDER BY orderIndex ASC")
+    public fun getAllFoldersFlow(): Flow<List<CollectionFolderEntity>>
+
+    @Query("SELECT * FROM saved_requests")
+    public fun getAllRequestsFlow(): Flow<List<SavedRequestEntity>>
+
     @Query("SELECT * FROM collection_folders WHERE collectionId = :collectionId ORDER BY orderIndex ASC")
     public suspend fun getFoldersForCollection(collectionId: String): List<CollectionFolderEntity>
 

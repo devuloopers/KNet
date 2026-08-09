@@ -19,6 +19,8 @@ import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
+import androidx.compose.foundation.layout.Spacer
+
 @Composable
 public fun TreeNode(
     label: String,
@@ -29,7 +31,8 @@ public fun TreeNode(
     hasChildren: Boolean = false,
     onToggleExpand: (() -> Unit)? = null,
     icon: ImageVector? = null,
-    selected: Boolean = false
+    selected: Boolean = false,
+    trailingContent: (@Composable () -> Unit)? = null
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -69,5 +72,9 @@ public fun TreeNode(
             text = label,
             style = typography.bodySmall.copy(color = themeColors.textPrimary)
         )
+        if (trailingContent != null) {
+            Spacer(modifier = Modifier.weight(1f))
+            trailingContent()
+        }
     }
 }

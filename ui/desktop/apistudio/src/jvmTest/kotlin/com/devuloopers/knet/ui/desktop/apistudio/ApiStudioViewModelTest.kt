@@ -1,4 +1,4 @@
-﻿package com.devuloopers.knet.ui.desktop.apistudio
+package com.devuloopers.knet.ui.desktop.apistudio
 
 import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor
 import com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult
@@ -267,6 +267,7 @@ class ApiStudioViewModelTest {
             ioDispatcher = testDispatcher
         )
 
+        viewModel.updateUrl("https://api.example.com/v1/users")
         viewModel.executeRequest()
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -289,6 +290,7 @@ class ApiStudioViewModelTest {
             ioDispatcher = testDispatcher
         )
 
+        viewModel.updateUrl("https://api.example.com/v1/users")
         viewModel.executeRequest()
         assertEquals(ExecutionState.EXECUTING, viewModel.uiState.value.executionState)
 
@@ -301,6 +303,7 @@ class ApiStudioViewModelTest {
         assertEquals(ExecutionState.SUCCESS, viewModel.uiState.value.executionState)
         assertNotNull(viewModel.uiState.value.responsePresentation)
     }
+
 
     @Test
     fun `executeRequest with invalid host populates executionState ERROR and HostNotFound failure reason`() = runTest {

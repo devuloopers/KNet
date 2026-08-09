@@ -11,6 +11,9 @@ import io.netty.channel.EventLoopGroup
 import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.SocketChannel
 import io.netty.channel.socket.nio.NioServerSocketChannel
+import io.netty.channel.group.ChannelGroup
+import io.netty.channel.group.DefaultChannelGroup
+import io.netty.util.concurrent.GlobalEventExecutor
 import io.netty.handler.codec.http.HttpObjectAggregator
 import io.netty.handler.codec.http.HttpServerCodec
 import io.netty.handler.logging.LogLevel
@@ -48,6 +51,7 @@ class KNetProxyServer(
     private var bossGroup: EventLoopGroup? = null
     private var workerGroup: EventLoopGroup? = null
     private var serverChannel: Channel? = null
+    private val activeChannels: ChannelGroup = DefaultChannelGroup(GlobalEventExecutor.INSTANCE)
 
     /**
      * Starts the Netty proxy server.
@@ -72,6 +76,7 @@ class KNetProxyServer(
             .handler(LoggingHandler(LogLevel.DEBUG))
             .childHandler(object : ChannelInitializer<SocketChannel>() {
                 override fun initChannel(ch: SocketChannel) {
+                    activeChannels.add(ch)
                     val pipeline = ch.pipeline()
 
                     pipeline.addLast("httpCodec", HttpServerCodec())
@@ -88,6 +93,14 @@ class KNetProxyServer(
     }
 
     /**
+     * Flushes and closes all active client channels connected to the proxy.
+     * Called when host network interface switches occur to prevent stale socket connections.
+     */
+    fun flushActiveChannels() {
+        activeChannels.close()
+    }
+
+    /**
      * Stops the Netty proxy server.
      * Releases event loops, closes open connection channels, and releases port bindings.
      */
@@ -97,6 +110,7 @@ class KNetProxyServer(
             return
         }
 
+        flushActiveChannels()
         serverChannel?.close()?.syncUninterruptibly()
         serverChannel = null
 

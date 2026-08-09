@@ -2,6 +2,7 @@ package com.devuloopers.knet.ui.desktop.traffic.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.devuloopers.knet.domain.network.usecase.ObserveLocalIpUseCase
 import com.devuloopers.knet.domain.proxy.model.ProxyEngineState
 import com.devuloopers.knet.domain.proxy.usecase.ObserveProxyEngineStateUseCase
 import com.devuloopers.knet.domain.proxy.usecase.StartProxyEngineUseCase
@@ -28,7 +29,8 @@ class TrafficViewModel(
     private val startProxyEngineUseCase: StartProxyEngineUseCase? = null,
     private val stopProxyEngineUseCase: StopProxyEngineUseCase? = null,
     observeProxyEngineStateUseCase: ObserveProxyEngineStateUseCase? = null,
-    private val loadTransactionBodyUseCase: LoadTransactionBodyUseCase? = null
+    private val loadTransactionBodyUseCase: LoadTransactionBodyUseCase? = null,
+    observeLocalIpUseCase: ObserveLocalIpUseCase? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(createInitialState())
@@ -56,6 +58,17 @@ class TrafficViewModel(
                             engineState = state,
                             captureState = capState
                         )
+                    }
+                }
+            }
+        }
+
+        // 2. Observe Reactive Host Local IP Address
+        observeLocalIpUseCase?.let { useCase ->
+            viewModelScope.launch {
+                useCase.execute().collect { ip ->
+                    _uiState.update { current ->
+                        current.copy(localIpAddress = ip)
                     }
                 }
             }

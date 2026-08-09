@@ -20,5 +20,10 @@ data class WorkspaceLayoutSettings(
     val isNotesTagsVisible: Boolean = false,
     val trafficFeedWidthDp: Float = 600f,
     val sidebarWidthDp: Float = 260f,
-    val bottomTrayHeightDp: Float = 180f
+    val bottomTrayHeightDp: Float = 180f,
+    val activeRequestSubTab: String = "BODY",
+    val activeScriptPhase: String = "PRE_REQUEST",
+    val activeResponseSubTab: String = "BODY",
+    val activeSessionId: String = "",
+    val scriptLanguage: String = "JAVASCRIPT"
 )

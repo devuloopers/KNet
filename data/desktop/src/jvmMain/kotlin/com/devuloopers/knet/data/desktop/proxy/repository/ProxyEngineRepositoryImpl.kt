@@ -21,13 +21,19 @@ import com.devuloopers.knet.engine.session.FilePayloadStore
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
+import com.devuloopers.knet.core.logger.LogTags
+import com.devuloopers.knet.engine.proxy.network.LocalIpResolver
+
+import kotlinx.coroutines.Job
+
 /**
  * Desktop implementation of [ProxyEngineRepository] managing Netty lifecycle and 2-phase request/response correlation.
  * Correlates intercepted requests and responses into a single evolving [HttpTransaction] and persists to [KNetDatabase].
  */
 public class ProxyEngineRepositoryImpl(
     private val proxyRuntimeRepository: ProxyRuntimeRepository,
-    private val database: KNetDatabase
+    private val database: KNetDatabase,
+    private val localIpResolver: LocalIpResolver? = null
 ) : ProxyEngineRepository, ProxyTrafficListener {
 
     private val scope = CoroutineScope(Dispatchers.IO)
@@ -36,28 +42,45 @@ public class ProxyEngineRepositoryImpl(
     private val payloadStore = FilePayloadStore(
         File(System.getProperty("user.home"), ".knet/payloads").apply { mkdirs() }
     )
+    private var networkObservationJob: Job? = null
+    private var currentObservedIp: String? = null
 
     override suspend fun start(port: Int) {
         if (_engineState.value is ProxyEngineState.Running || _engineState.value is ProxyEngineState.Starting) {
-            KNetLogger.warn(tag = "KNet_Proxy_Capture") { "Proxy engine is already starting or running." }
+            KNetLogger.warn(tag = LogTags.PROXY) { "Proxy engine is already starting or running." }
             return
         }
 
         _engineState.value = ProxyEngineState.Starting
         try {
             proxyRuntimeRepository.startProxy(port = port, trafficListener = this)
+            val ip = localIpResolver?.getLocalIpAddress() ?: "127.0.0.1"
+            currentObservedIp = ip
             _engineState.value = ProxyEngineState.Running(port)
-            KNetLogger.info(tag = "KNet_Proxy_Capture") { "Proxy engine successfully started on port $port." }
+            KNetLogger.info(tag = LogTags.PROXY) { "Proxy engine successfully started at http://$ip:$port." }
+
+            networkObservationJob?.cancel()
+            networkObservationJob = scope.launch {
+                localIpResolver?.observeLocalIpAddress()?.collect { newIp ->
+                    val previousIp = currentObservedIp
+                    currentObservedIp = newIp
+                    if (previousIp != null && previousIp != newIp) {
+                        KNetLogger.info(tag = LogTags.PROXY) {
+                            "Network interface transition detected: Active IP updated from $previousIp to $newIp. Flushing active proxy channels."
+                        }
+                        proxyRuntimeRepository.flushActiveChannels()
+                    }
+                }
+            }
         } catch (e: Exception) {
-            KNetLogger.error(tag = "KNet_Proxy_Capture", throwable = e) { "Failed to start proxy engine." }
+            KNetLogger.error(tag = LogTags.PROXY, throwable = e) { "Failed to start proxy engine on port $port." }
             _engineState.value = ProxyEngineState.Error(e.message ?: "Failed to bind to port $port.")
         }
     }
 
     override fun onRequestCaptured(request: HttpRequest) {
-        println("[ENGINE_DEBUG] 📥 ProxyEngineRepositoryImpl.onRequestCaptured: ${request.method} ${request.url} (id=${request.id})")
-        KNetLogger.info(tag = "KNet_Proxy_Capture") {
-            "📥 REQUEST [id=${request.id}]: ${request.method} ${request.url}"
+        KNetLogger.info(tag = LogTags.PROXY) {
+            "REQUEST [id=${request.id}]: ${request.method} ${request.url}"
         }
 
         pendingRequests[request.id] = request
@@ -76,16 +99,13 @@ public class ProxyEngineRepositoryImpl(
         )
         scope.launch {
             try {
-                println("[ENGINE_DEBUG] 💾 Room DB inserting pending: id=${pendingTx.id}, url=${pendingTx.request.url}")
-                KNetLogger.info(tag = "KNet_Proxy_RoomDB") {
-                    "💾 INSERT PENDING [id=${pendingTx.id}]: ${pendingTx.request.method} ${pendingTx.request.url}"
+                KNetLogger.info(tag = LogTags.PROXY) {
+                    "INSERT PENDING [id=${pendingTx.id}]: ${pendingTx.request.method} ${pendingTx.request.url}"
                 }
                 val entity = TransactionMapper.mapDomainToEntity(pendingTx)
                 database.httpTransactionDao().insert(entity)
-                println("[ENGINE_DEBUG] ✅ Room DB insert pending SUCCESS: id=${pendingTx.id}")
             } catch (e: Exception) {
-                println("[ENGINE_DEBUG] ❌ Room DB insert pending FAILED: ${e.message}")
-                KNetLogger.error(tag = "KNet_Proxy_RoomDB", throwable = e) {
+                KNetLogger.error(tag = LogTags.PROXY, throwable = e) {
                     "Failed to persist pending request: ${e.message}"
                 }
             }
@@ -98,9 +118,8 @@ public class ProxyEngineRepositoryImpl(
         durationMs: Long,
         timings: HttpTimings
     ) {
-        println("[ENGINE_DEBUG] 📤 ProxyEngineRepositoryImpl.onResponseCaptured: Status ${response.statusCode} (id=$transactionId)")
-        KNetLogger.info(tag = "KNet_Proxy_Capture") {
-            "📤 RESPONSE [id=$transactionId]: Status ${response.statusCode} ${response.statusText} (${durationMs}ms)"
+        KNetLogger.info(tag = LogTags.PROXY) {
+            "RESPONSE [id=$transactionId]: Status ${response.statusCode} ${response.statusText} (${durationMs}ms)"
         }
 
         val request = pendingRequests.remove(transactionId)
@@ -132,16 +151,13 @@ public class ProxyEngineRepositoryImpl(
 
         scope.launch {
             try {
-                println("[ENGINE_DEBUG] 💾 Room DB updating completed: id=${completedTx.id}, status=${response.statusCode}")
-                KNetLogger.info(tag = "KNet_Proxy_RoomDB") {
-                    "💾 UPDATE COMPLETED [id=${completedTx.id}]: Status ${response.statusCode} (${durationMs}ms)"
+                KNetLogger.info(tag = LogTags.PROXY) {
+                    "UPDATE COMPLETED [id=${completedTx.id}]: Status ${response.statusCode} (${durationMs}ms)"
                 }
                 val entity = TransactionMapper.mapDomainToEntity(completedTx)
                 database.httpTransactionDao().insert(entity)
-                println("[ENGINE_DEBUG] ✅ Room DB update completed SUCCESS: id=${completedTx.id}")
             } catch (e: Exception) {
-                println("[ENGINE_DEBUG] ❌ Room DB update completed FAILED: ${e.message}")
-                KNetLogger.error(tag = "KNet_Proxy_RoomDB", throwable = e) {
+                KNetLogger.error(tag = LogTags.PROXY, throwable = e) {
                     "Failed to update completed transaction: ${e.message}"
                 }
             }
@@ -162,7 +178,7 @@ public class ProxyEngineRepositoryImpl(
                 val entity = TransactionMapper.mapDomainToEntity(txToSave)
                 database.httpTransactionDao().insert(entity)
             } catch (e: Exception) {
-                KNetLogger.error(tag = "KNet_Proxy_RoomDB", throwable = e) {
+                KNetLogger.error(tag = LogTags.PROXY, throwable = e) {
                     "Failed to persist captured transaction: ${e.message}"
                 }
             }
@@ -177,12 +193,15 @@ public class ProxyEngineRepositoryImpl(
 
         _engineState.value = ProxyEngineState.Stopping
         try {
+            networkObservationJob?.cancel()
+            networkObservationJob = null
+            currentObservedIp = null
             proxyRuntimeRepository.stopProxy()
             pendingRequests.clear()
             _engineState.value = ProxyEngineState.Stopped
-            KNetLogger.info(tag = "KNet_Proxy_Capture") { "Proxy engine successfully stopped." }
+            KNetLogger.info(tag = LogTags.PROXY) { "Proxy engine successfully stopped." }
         } catch (e: Exception) {
-            KNetLogger.error(tag = "KNet_Proxy_Capture", throwable = e) { "Error stopping proxy engine." }
+            KNetLogger.error(tag = LogTags.PROXY, throwable = e) { "Error stopping proxy engine." }
             _engineState.value = ProxyEngineState.Error(e.message ?: "Failed to stop proxy engine.")
         }
     }

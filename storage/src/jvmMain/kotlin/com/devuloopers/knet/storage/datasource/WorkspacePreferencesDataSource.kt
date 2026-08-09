@@ -8,6 +8,8 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
+import androidx.datastore.preferences.core.stringPreferencesKey
+
 /**
  * DataStore preferences datasource for persisting workspace panel layout settings.
  */
@@ -23,6 +25,11 @@ public class WorkspacePreferencesDataSource(
         private val keyTrafficWidth = floatPreferencesKey("traffic_feed_width_dp")
         private val keySidebarWidth = floatPreferencesKey("sidebar_width_dp")
         private val keyTrayHeight = floatPreferencesKey("bottom_tray_height_dp")
+        private val keyRequestSubTab = stringPreferencesKey("active_request_sub_tab")
+        private val keyScriptPhase = stringPreferencesKey("active_script_phase")
+        private val keyResponseSubTab = stringPreferencesKey("active_response_sub_tab")
+        private val keyActiveSessionId = stringPreferencesKey("active_session_id")
+        private val keyScriptLanguage = stringPreferencesKey("script_language")
     }
 
     public val settingsFlow: Flow<Map<String, Any>> = dataStore.data.map { preferences ->
@@ -34,7 +41,12 @@ public class WorkspacePreferencesDataSource(
             "isNotesTagsVisible" to (preferences[keyNotesTags] ?: false),
             "trafficFeedWidthDp" to (preferences[keyTrafficWidth] ?: 600f),
             "sidebarWidthDp" to (preferences[keySidebarWidth] ?: 260f),
-            "bottomTrayHeightDp" to (preferences[keyTrayHeight] ?: 180f)
+            "bottomTrayHeightDp" to (preferences[keyTrayHeight] ?: 180f),
+            "activeRequestSubTab" to (preferences[keyRequestSubTab] ?: "BODY"),
+            "activeScriptPhase" to (preferences[keyScriptPhase] ?: "PRE_REQUEST"),
+            "activeResponseSubTab" to (preferences[keyResponseSubTab] ?: "BODY"),
+            "activeSessionId" to (preferences[keyActiveSessionId] ?: ""),
+            "scriptLanguage" to (preferences[keyScriptLanguage] ?: "JAVASCRIPT")
         )
     }
 
@@ -49,6 +61,11 @@ public class WorkspacePreferencesDataSource(
                 "trafficFeedWidthDp" -> preferences[keyTrafficWidth] = value as Float
                 "sidebarWidthDp" -> preferences[keySidebarWidth] = value as Float
                 "bottomTrayHeightDp" -> preferences[keyTrayHeight] = value as Float
+                "activeRequestSubTab" -> preferences[keyRequestSubTab] = value as String
+                "activeScriptPhase" -> preferences[keyScriptPhase] = value as String
+                "activeResponseSubTab" -> preferences[keyResponseSubTab] = value as String
+                "activeSessionId" -> preferences[keyActiveSessionId] = value as String
+                "scriptLanguage" -> preferences[keyScriptLanguage] = value as String
             }
         }
     }

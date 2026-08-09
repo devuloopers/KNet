@@ -9,6 +9,7 @@ import com.devuloopers.knet.domain.collection.repository.CollectionsRepository
 import com.devuloopers.knet.storage.apistudio.dao.CollectionDao
 import com.devuloopers.knet.storage.apistudio.entity.CollectionFolderEntity
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 
 /**
@@ -23,12 +24,50 @@ public class CollectionsRepositoryImpl(
     }
 
     override fun observeCollections(): Flow<List<ApiCollection>> {
-        return collectionDao.getAllCollectionsFlow().map { collectionEntities ->
-            collectionEntities
-                .filter { it.id != UNSAVED_COLLECTION_ID }
-                .map { entity ->
-                    CollectionMapper.mapEntityToDomain(entity)
+        return combine(
+            collectionDao.getAllCollectionsFlow(),
+            collectionDao.getAllFoldersFlow(),
+            collectionDao.getAllRequestsFlow()
+        ) { collectionEntities, folderEntities, requestEntities ->
+            val nonUnsavedCollections = collectionEntities.filter { it.id != UNSAVED_COLLECTION_ID }
+            val foldersByCollection = folderEntities.groupBy { it.collectionId }
+            val requestsByFolder = requestEntities.groupBy { it.folderId }
+            val requestsByCollection = requestEntities.groupBy { it.collectionId }
+
+            nonUnsavedCollections.map { colEntity ->
+                val colFolders = foldersByCollection[colEntity.id] ?: emptyList()
+                val domainFolders = if (colFolders.isNotEmpty()) {
+                    colFolders.map { folderEntity ->
+                        val folderRequests = requestsByFolder[folderEntity.id] ?: emptyList()
+                        CollectionFolder(
+                            id = folderEntity.id,
+                            name = folderEntity.name,
+                            isExpanded = folderEntity.isExpanded,
+                            requests = folderRequests.map { RequestMapper.mapEntityToDomain(it) }
+                        )
+                    }
+                } else {
+                    val directRequests = requestsByCollection[colEntity.id] ?: emptyList()
+                    if (directRequests.isNotEmpty()) {
+                        listOf(
+                            CollectionFolder(
+                                id = colEntity.id,
+                                name = colEntity.name,
+                                isExpanded = true,
+                                requests = directRequests.map { RequestMapper.mapEntityToDomain(it) }
+                            )
+                        )
+                    } else {
+                        emptyList()
+                    }
                 }
+
+                ApiCollection(
+                    id = colEntity.id,
+                    name = colEntity.name,
+                    folders = domainFolders
+                )
+            }
         }
     }
 
@@ -44,7 +83,7 @@ public class CollectionsRepositoryImpl(
     }
 
     override suspend fun deleteCollection(collectionId: String) {
-        collectionDao.deleteCollection(collectionId)
+        collectionDao.deleteCollectionCascadeTx(collectionId)
     }
 
     override suspend fun saveFolder(collectionId: String, folder: CollectionFolder) {

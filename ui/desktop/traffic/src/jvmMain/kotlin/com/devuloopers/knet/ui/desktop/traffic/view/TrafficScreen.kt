@@ -33,12 +33,13 @@ public fun TrafficScreen(
     val state by viewModel.uiState.collectAsState()
     val themeColors = KNetTheme.colors
 
-    val toolbarState = remember(state.captureState, state.engineState, state.autoScroll, state.searchQuery) {
+    val toolbarState = remember(state.captureState, state.engineState, state.autoScroll, state.searchQuery, state.localIpAddress) {
         TrafficToolbarState(
             captureState = state.captureState,
             engineState = state.engineState,
             autoScroll = state.autoScroll,
-            searchQuery = state.searchQuery
+            searchQuery = state.searchQuery,
+            localIpAddress = state.localIpAddress
         )
     }
 

@@ -1,10 +1,10 @@
 package com.devuloopers.knet.core.http.client
 
 import io.ktor.client.engine.HttpClientEngineFactory
-import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.engine.cio.CIO
 
 /**
  * JVM specific provider for Ktor's [HttpClientEngineFactory].
- * Uses OkHttp as it properly supports HTTP proxies with target domain delegation.
+ * Uses CIO (Coroutine I/O) engine.
  */
-actual fun getKNetHttpEngine(): HttpClientEngineFactory<*> = OkHttp
+actual fun getKNetHttpEngine(): HttpClientEngineFactory<*> = CIO

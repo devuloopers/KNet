@@ -1,6 +1,7 @@
 package com.devuloopers.knet.data.desktop.traffic.repository
 
 import com.devuloopers.knet.core.logger.KNetLogger
+import com.devuloopers.knet.core.logger.LogTags
 import com.devuloopers.knet.data.desktop.mapper.TransactionMapper
 import com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction
 import com.devuloopers.knet.domain.traffic.model.TransactionBody
@@ -28,9 +29,8 @@ public class LiveTrafficRepositoryImpl(
     private val scope = CoroutineScope(Dispatchers.IO)
 
     override val transactionsFlow: Flow<List<HttpTransaction>> = database.httpTransactionDao().getAllTransactionsFlow().map { entities ->
-        println("[ENGINE_DEBUG] 🔔 Room DB transactionsFlow emitted ${entities.size} entities to UI")
-        KNetLogger.info(tag = "KNet_Traffic_Flow") {
-            "🔔 ROOM FLOW EMITTED: ${entities.size} transaction records from HttpTransactionDao"
+        KNetLogger.info(tag = LogTags.TRAFFIC) {
+            "ROOM FLOW EMITTED: ${entities.size} transaction records from HttpTransactionDao"
         }
         // mapEntityToDomain sets body = null — no disk I/O in this hot path.
         entities.map { TransactionMapper.mapEntityToDomain(it) }

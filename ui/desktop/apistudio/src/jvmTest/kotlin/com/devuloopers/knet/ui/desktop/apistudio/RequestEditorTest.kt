@@ -12,7 +12,7 @@ class RequestEditorTest {
     @Test
     fun `RequestEditorState default values are set`() {
         val state = RequestEditorState()
-        assertEquals("https://api.example.com/v1/users", state.url)
+        assertEquals("", state.url)
         assertEquals("GET", state.method)
         assertEquals("No Auth", state.authType)
         assertEquals("None", state.bodyType)

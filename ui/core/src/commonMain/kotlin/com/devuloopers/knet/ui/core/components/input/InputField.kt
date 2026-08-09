@@ -33,6 +33,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.IntOffset
@@ -79,8 +80,8 @@ private class BelowAnchorPopupPositionProvider(
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 public fun KNetTextField(
-    value: String,
-    onValueChange: (String) -> Unit,
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
     modifier: Modifier = Modifier,
     config: InputFieldConfig = InputFieldConfig.Default,
     state: InputFieldState = InputFieldState.Default,
@@ -115,8 +116,8 @@ public fun KNetTextField(
 
     // Measure exact text width reactively
     val textMeasurer = rememberTextMeasurer()
-    val textWidthPx = remember(value, textStyle) {
-        if (value.isEmpty()) 0 else textMeasurer.measure(text = value, style = textStyle).size.width
+    val textWidthPx = remember(value.text, textStyle) {
+        if (value.text.isEmpty()) 0 else textMeasurer.measure(text = value.text, style = textStyle).size.width
     }
     val paddingPx = with(density) { 16.dp.toPx() }
     val isOverflowing = remember(textWidthPx, containerWidthPx, paddingPx) {
@@ -124,15 +125,13 @@ public fun KNetTextField(
     }
 
     val isPassword = config.visualTransformation is PasswordVisualTransformation
-    val shouldShowPopup = config.showHoverPopupOnOverflow && !isPassword && isHovered && isMouseStationary && isOverflowing && value.isNotEmpty()
+    val shouldShowPopup = config.showHoverPopupOnOverflow && !isPassword && isHovered && isMouseStationary && isOverflowing && value.text.isNotEmpty()
 
     Column(
         modifier = Modifier
             .height(dimensions.inputHeightStandard)
             .then(modifier)
     ) {
-        // Outer Box receives all pointer events so that the popup appearing/disappearing
-        // does not cause spurious Enter/Exit events on inner children, preventing flicker.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -181,7 +180,7 @@ public fun KNetTextField(
                             modifier = Modifier.weight(1f).fillMaxHeight(),
                             contentAlignment = Alignment.CenterStart
                         ) {
-                            if (value.isEmpty() && config.placeholder.isNotEmpty()) {
+                            if (value.text.isEmpty() && config.placeholder.isNotEmpty()) {
                                 Text(
                                     text = config.placeholder,
                                     style = typography.bodySmall.copy(color = themeColors.textMuted),
@@ -199,10 +198,6 @@ public fun KNetTextField(
                 }
             )
 
-            // Precision Overflow Popup anchored directly below the left edge of the input field.
-            // Uses BelowAnchorPopupPositionProvider for stable absolute screen-coordinate positioning.
-            // .pointerInput(Unit){} on the popup Box absorbs all pointer events so that mouse movement
-            // over the popup tooltip does not fire an Exit event on the parent, preventing flicker.
             if (shouldShowPopup) {
                 Popup(
                     popupPositionProvider = remember(density) {
@@ -224,7 +219,7 @@ public fun KNetTextField(
                             .padding(horizontal = 10.dp, vertical = 6.dp)
                     ) {
                         Text(
-                            text = value,
+                            text = value.text,
                             style = typography.bodySmall.copy(color = themeColors.textPrimary)
                         )
                     }
@@ -240,6 +235,34 @@ public fun KNetTextField(
             )
         }
     }
+}
+
+/**
+ * Convenience String overload for KNetTextField.
+ */
+@Composable
+public fun KNetTextField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    config: InputFieldConfig = InputFieldConfig.Default,
+    state: InputFieldState = InputFieldState.Default,
+    slots: InputFieldSlots = InputFieldSlots.Empty
+) {
+    var tfv by remember { mutableStateOf(TextFieldValue(text = value)) }
+    val currentTfv = if (tfv.text == value) tfv else TextFieldValue(text = value)
+
+    KNetTextField(
+        value = currentTfv,
+        onValueChange = { newTfv ->
+            tfv = newTfv
+            onValueChange(newTfv.text)
+        },
+        modifier = modifier,
+        config = config,
+        state = state,
+        slots = slots
+    )
 }
 
 /**
@@ -280,6 +303,87 @@ public fun KNetTextField(
             suffix = suffix
         )
     )
+}
+
+/**
+ * Convenience inline overload for simple single-line fields with discrete arguments (TextFieldValue).
+ */
+@Composable
+public fun KNetTextField(
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = "",
+    prefix: (@Composable () -> Unit)? = null,
+    suffix: (@Composable () -> Unit)? = null,
+    supportingText: String? = null,
+    enabled: Boolean = true,
+    readOnly: Boolean = false,
+    isError: Boolean = false,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default
+) {
+    KNetTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier,
+        config = InputFieldConfig(
+            placeholder = placeholder,
+            supportingText = supportingText,
+            visualTransformation = visualTransformation,
+            keyboardOptions = keyboardOptions
+        ),
+        state = InputFieldState(
+            enabled = enabled,
+            readOnly = readOnly,
+            isError = isError
+        ),
+        slots = InputFieldSlots(
+            prefix = prefix,
+            suffix = suffix
+        )
+    )
+}
+
+/**
+ * High-density input field wrapper alias (TextFieldValue variant).
+ */
+@Composable
+public fun KNetInputField(
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = "",
+    enabled: Boolean = true,
+    readOnly: Boolean = false,
+    singleLine: Boolean = true,
+    isError: Boolean = false,
+    visualTransformation: VisualTransformation = VisualTransformation.None,
+    keyboardOptions: KeyboardOptions = KeyboardOptions.Default
+) {
+    if (singleLine) {
+        KNetTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = modifier,
+            placeholder = placeholder,
+            enabled = enabled,
+            readOnly = readOnly,
+            isError = isError,
+            visualTransformation = visualTransformation,
+            keyboardOptions = keyboardOptions
+        )
+    } else {
+        KNetMultilineField(
+            value = value.text,
+            onValueChange = { onValueChange(TextFieldValue(it)) },
+            modifier = modifier,
+            placeholder = placeholder,
+            enabled = enabled,
+            readOnly = readOnly,
+            isError = isError
+        )
+    }
 }
 
 /**

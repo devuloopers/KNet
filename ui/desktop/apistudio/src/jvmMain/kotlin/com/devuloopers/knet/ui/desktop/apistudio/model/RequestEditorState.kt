@@ -4,7 +4,7 @@ package com.devuloopers.knet.ui.desktop.apistudio.model
  * Data DTO representing current request editor fields.
  */
 public data class RequestEditorState(
-    val url: String = "https://api.example.com/v1/users",
+    val url: String = "",
     val method: String = "GET",
     val queryParams: List<Pair<String, String>> = emptyList(),
     val headers: List<Pair<String, String>> = emptyList(),
@@ -16,5 +16,10 @@ public data class RequestEditorState(
     val bodyPayload: String = "",
     val preRequestScript: String = "",
     val testScript: String = "",
-    val activeSubTab: String = "BODY"
+    val scriptLanguage: String = "JAVASCRIPT",
+    val activeSubTab: String = "BODY",
+    val activeScriptPhase: String = "PRE_REQUEST",
+    val activeResponseSubTab: String = "BODY",
+    val linkedUnsavedId: String? = null
 )
+

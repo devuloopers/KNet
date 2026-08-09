@@ -69,7 +69,8 @@ data class TrafficState(
     val activeResponseSubTab: ResponseSubTab = ResponseSubTab.BODY,
     val previewFormatMode: PreviewFormatMode = PreviewFormatMode.PRETTY,
     val columnVisibility: ColumnVisibilityState = ColumnVisibilityState(),
-    val preparedState: InspectorPreparedState = InspectorPreparedState()
+    val preparedState: InspectorPreparedState = InspectorPreparedState(),
+    val localIpAddress: String = "127.0.0.1"
 ) {
     /**
      * Selected transaction UI model matching [selectedTransactionId].

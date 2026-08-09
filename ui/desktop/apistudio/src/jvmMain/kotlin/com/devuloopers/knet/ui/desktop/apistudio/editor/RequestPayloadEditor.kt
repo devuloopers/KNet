@@ -37,9 +37,11 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.apistudio.editor.AuthEditorView
 import com.devuloopers.knet.ui.desktop.apistudio.editor.BodyEditorView
 import com.devuloopers.knet.ui.desktop.apistudio.editor.ScriptEditorView
+import com.devuloopers.knet.engine.script.api.ScriptLanguage
 import com.devuloopers.knet.ui.desktop.apistudio.model.AuthState
 import com.devuloopers.knet.ui.desktop.apistudio.model.BodyMode
 import com.devuloopers.knet.ui.desktop.apistudio.model.BodyState
+import com.devuloopers.knet.ui.desktop.apistudio.model.ScriptPhase
 import com.devuloopers.knet.ui.desktop.apistudio.model.ScriptState
 
 /**
@@ -74,8 +76,16 @@ public fun RequestPayloadEditor(
     onHeadersChanged: (List<Pair<String, String>>) -> Unit = {},
     cookies: List<Pair<String, String>> = emptyList(),
     onCookiesChanged: (List<Pair<String, String>>) -> Unit = {},
+    preRequestScript: String = "",
+    onPreRequestScriptChanged: (String) -> Unit = {},
+    testScript: String = "",
+    onTestScriptChanged: (String) -> Unit = {},
     activeSubTab: RequestSubTab = RequestSubTab.BODY,
     onSubTabSelected: (RequestSubTab) -> Unit = {},
+    activeScriptPhase: ScriptPhase = ScriptPhase.PRE_REQUEST,
+    onScriptPhaseSelected: (ScriptPhase) -> Unit = {},
+    scriptLanguage: ScriptLanguage = ScriptLanguage.JAVASCRIPT,
+    onScriptLanguageChanged: (ScriptLanguage) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val themeColors = KNetTheme.colors
@@ -116,7 +126,14 @@ public fun RequestPayloadEditor(
             )
         )
     }
-    var scriptState by remember { mutableStateOf(ScriptState()) }
+    val scriptState = remember(preRequestScript, testScript, activeScriptPhase, scriptLanguage) {
+        ScriptState(
+            preRequestScript = preRequestScript,
+            testScript = testScript,
+            scriptLanguage = scriptLanguage,
+            activePhase = activeScriptPhase
+        )
+    }
 
     Column(modifier = modifier.fillMaxSize()) {
         // Request Sub-Tabs Bar
@@ -275,7 +292,20 @@ public fun RequestPayloadEditor(
                 RequestSubTab.SCRIPTS -> {
                     ScriptEditorView(
                         state = scriptState,
-                        onStateChange = { scriptState = it },
+                        onStateChange = { updatedState ->
+                            if (updatedState.activePhase != activeScriptPhase) {
+                                onScriptPhaseSelected(updatedState.activePhase)
+                            }
+                            if (updatedState.scriptLanguage != scriptLanguage) {
+                                onScriptLanguageChanged(updatedState.scriptLanguage)
+                            }
+                            if (updatedState.preRequestScript != preRequestScript) {
+                                onPreRequestScriptChanged(updatedState.preRequestScript)
+                            }
+                            if (updatedState.testScript != testScript) {
+                                onTestScriptChanged(updatedState.testScript)
+                            }
+                        },
                         modifier = Modifier.fillMaxSize()
                     )
                 }

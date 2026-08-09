@@ -79,12 +79,25 @@ class GraalJsScriptEngine : ScriptEngine {
                     var pm = {
                         environment: {
                             set: function(k, v) { __bridge.setEnv(String(k), String(v)); },
-                            get: function(k) { return __bridge.getEnv(String(k)); }
+                            get: function(k) { return __bridge.getEnv(String(k)); },
+                            has: function(k) { return __bridge.hasEnv(String(k)); },
+                            unset: function(k) { __bridge.unsetEnv(String(k)); }
+                        },
+                        variables: {
+                            set: function(k, v) { __bridge.setEnv(String(k), String(v)); },
+                            get: function(k) { return __bridge.getEnv(String(k)); },
+                            has: function(k) { return __bridge.hasEnv(String(k)); }
                         },
                         request: {
                             url: "${request.url}",
                             method: "${request.method}",
-                            headers: {}
+                            headers: {
+                                add: function(headerObj) {
+                                    if (headerObj && headerObj.key) {
+                                        this[headerObj.key] = headerObj.value;
+                                    }
+                                }
+                            }
                         },
                         response: {
                             code: ${response?.statusCode ?: 0},

@@ -31,7 +31,8 @@ public data class TrafficToolbarState(
     val captureState: CaptureState = CaptureState.STOPPED,
     val engineState: ProxyEngineState = ProxyEngineState.Stopped,
     val autoScroll: Boolean = true,
-    val searchQuery: String = ""
+    val searchQuery: String = "",
+    val localIpAddress: String = "127.0.0.1"
 )
 
 /**
@@ -133,7 +134,7 @@ public fun TrafficToolbar(
                     horizontalArrangement = Arrangement.spacedBy(spacing.xs)
                 ) {
                     val (dotColor, statusText) = when (val engine = state.engineState) {
-                        is ProxyEngineState.Running -> themeColors.semantic.success to "Running (8080)"
+                        is ProxyEngineState.Running -> themeColors.semantic.success to "Running (${state.localIpAddress}:8080)"
                         is ProxyEngineState.Starting -> themeColors.accent to "Starting..."
                         is ProxyEngineState.Stopping -> themeColors.textMuted to "Stopping..."
                         is ProxyEngineState.Stopped -> themeColors.textMuted to "Stopped"

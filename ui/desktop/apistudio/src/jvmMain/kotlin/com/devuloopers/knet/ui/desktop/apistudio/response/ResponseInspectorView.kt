@@ -337,6 +337,8 @@ private fun NetworkExecutionErrorView(
 public fun ResponseInspectorView(
     state: ResponseInspectorState,
     actions: ResponseInspectorActions = ResponseInspectorActions(),
+    activeSubTab: ResponseSubTab = ResponseSubTab.BODY,
+    onSubTabSelected: (ResponseSubTab) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val themeColors = KNetTheme.colors
@@ -353,7 +355,7 @@ public fun ResponseInspectorView(
     val testResults = state.testResults
     val onClearResponse = actions.onClearResponse
 
-    var activeSubTab by remember { mutableStateOf(ResponseSubTab.BODY) }
+    var localActiveSubTab by remember(activeSubTab) { mutableStateOf(activeSubTab) }
     val currentConsoleLogs = remember(state.consoleLogs) { mutableStateListOf(*state.consoleLogs.toTypedArray()) }
 
     val formattedSize = remember(state.sizeBytes) {
@@ -543,8 +545,8 @@ public fun ResponseInspectorView(
             }
         }
 
-        if (activeSubTab !in visibleSubTabs) {
-            activeSubTab = ResponseSubTab.BODY
+        if (localActiveSubTab !in visibleSubTabs) {
+            localActiveSubTab = ResponseSubTab.BODY
         }
 
         // 2. Responsive Scrollable Sub-Tabs Bar
@@ -559,8 +561,11 @@ public fun ResponseInspectorView(
                 }
                 KNetTab(
                     title = labelWithBadge,
-                    selected = subTab == activeSubTab,
-                    onClick = { activeSubTab = subTab }
+                    selected = subTab == localActiveSubTab,
+                    onClick = {
+                        localActiveSubTab = subTab
+                        onSubTabSelected(subTab)
+                    }
                 )
             }
         }
@@ -569,7 +574,7 @@ public fun ResponseInspectorView(
 
         // 3. Response Content Viewer
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            when (activeSubTab) {
+            when (localActiveSubTab) {
                 ResponseSubTab.BODY -> {
                     KNetCodeEditor(
                         code = displayBody,

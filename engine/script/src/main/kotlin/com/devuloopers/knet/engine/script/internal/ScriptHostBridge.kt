@@ -44,8 +44,12 @@ class ScriptHostBridge(
      * @param value Environment variable value text.
      */
     @HostAccess.Export
-    fun setEnv(key: String, value: String) {
-        environment.set(key, value)
+    fun setEnv(key: String, value: String?) {
+        if (value == null) {
+            environment.remove(key)
+        } else {
+            environment.set(key, value)
+        }
     }
 
     /**
@@ -57,5 +61,21 @@ class ScriptHostBridge(
     @HostAccess.Export
     fun getEnv(key: String): String? {
         return environment.get(key)
+    }
+
+    /**
+     * Checks if an environment variable exists.
+     */
+    @HostAccess.Export
+    fun hasEnv(key: String): Boolean {
+        return environment.get(key) != null
+    }
+
+    /**
+     * Removes an environment variable.
+     */
+    @HostAccess.Export
+    fun unsetEnv(key: String) {
+        environment.remove(key)
     }
 }

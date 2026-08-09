@@ -53,6 +53,7 @@ public fun RequestUrlBar(
     onMethodChanged: (String) -> Unit,
     onUrlChanged: (String) -> Unit,
     onSendClicked: () -> Unit,
+    onSaveClicked: () -> Unit = {},
     isExecuting: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -102,12 +103,32 @@ public fun RequestUrlBar(
                     .weight(1f)
                     .fillMaxHeight(),
                 config = InputFieldConfig(
-                    placeholder = "https://api.knet.dev/v1/resource",
+                    placeholder = "URL",
                     backgroundColor = Color.Transparent,
                     borderColor = Color.Transparent,
                     showHoverPopupOnOverflow = true
                 )
             )
+        }
+
+        // Action Save Button
+        KNetButton(
+            onClick = onSaveClicked,
+            variant = ButtonVariant.Secondary,
+            modifier = Modifier.height(40.dp)
+        ) {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(horizontal = 8.dp)
+            ) {
+                Text(
+                    text = "Save",
+                    style = typography.titleMedium.copy(
+                        fontWeight = FontWeight.SemiBold
+                    )
+                )
+            }
         }
 
         // Modern Action Send Button using KNetButton with native loading state support
@@ -139,3 +160,4 @@ public fun RequestUrlBar(
         }
     }
 }
+

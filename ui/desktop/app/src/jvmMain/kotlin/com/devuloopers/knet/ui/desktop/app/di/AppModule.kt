@@ -19,7 +19,8 @@ val desktopAppUiModule = module {
             startProxyEngineUseCase = get(),
             stopProxyEngineUseCase = get(),
             observeProxyEngineStateUseCase = get(),
-            loadTransactionBodyUseCase = get()
+            loadTransactionBodyUseCase = get(),
+            observeLocalIpUseCase = get()
         )
     }
 }

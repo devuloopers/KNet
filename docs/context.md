@@ -84,7 +84,7 @@ KNet/
 ├── proxyEngine/               # Netty NIO proxy & timing collectors
 ├── sessionManager/            # Live flow buffering & transaction mapping
 ├── testingServer/             # Test server suite
-└── docs/                      # implementation_plan.md (Phase 1: IN PROGRESS)
+└── docs/                      # Project documentation (context.md)
 ```
 
 ---
@@ -195,7 +195,6 @@ KNet/
 │   └── desktop/                # Desktop launcher & composition root
 ├── data/                       # Data repository implementations
 ├── docs/
-│   ├── implementation_plan.md  # Architecture specs & feature strategy docs
 │   └── context.md              # Project context (this file)
 ├── domain/                     # Pure Kotlin business models & usecases
 ├── gradle/

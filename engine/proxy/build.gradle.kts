@@ -11,6 +11,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
 
     testImplementation(kotlin("test-junit"))
+    testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(project(":testingServer"))
     testImplementation(libs.spring.boot.starter.webflux)
 }

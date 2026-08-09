@@ -37,6 +37,11 @@ import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
 import com.devuloopers.knet.domain.workspace.usecase.SaveWorkspaceLayoutUseCase
 import com.devuloopers.knet.storage.database.DatabaseFactory
 import com.devuloopers.knet.storage.database.KNetDatabase
+import com.devuloopers.knet.data.desktop.network.repository.NetworkRepositoryImpl
+import com.devuloopers.knet.domain.network.repository.NetworkRepository
+import com.devuloopers.knet.domain.network.usecase.GetLocalIpUseCase
+import com.devuloopers.knet.domain.network.usecase.ObserveLocalIpUseCase
+import com.devuloopers.knet.engine.proxy.network.LocalIpResolver
 import org.koin.core.module.Module
 import org.koin.dsl.module
 import java.io.File
@@ -87,6 +92,7 @@ public object DesktopDataModule {
         single<HttpExecutor> { get<KNetApiClient>() }
         // Domain HTTP executor binding (used by domain UseCases such as ExecuteClientApiRequestUseCase)
         single<DomainHttpExecutor> { get<KNetApiClient>() }
+        single { LocalIpResolver() }
     }
 
     public val repositories: Module = module {
@@ -95,10 +101,11 @@ public object DesktopDataModule {
             CollectionsRepositoryImpl(db.collectionDao())
         }
         single<LiveTrafficRepository> { LiveTrafficRepositoryImpl(get()) }
-        single<ProxyEngineRepository> { ProxyEngineRepositoryImpl(get(), get()) }
+        single<ProxyEngineRepository> { ProxyEngineRepositoryImpl(get(), get(), get()) }
         single<InspectorRepository> { InspectorRepositoryImpl(get()) }
         single<RulesRepository> { RulesRepositoryImpl() }
         single<WidgetPreferencesRepository> { WidgetPreferencesRepositoryImpl(get()) }
+        single<NetworkRepository> { NetworkRepositoryImpl(get()) }
         single { ProxyHistoryHeaderLookup(get()) }
     }
 
@@ -116,6 +123,8 @@ public object DesktopDataModule {
         factory { ToggleRuleUseCase(get()) }
         factory { SaveLiveTransactionToCollectionUseCase(get()) }
         factory { RecordClientTransactionUseCase(get()) }
+        factory { ObserveLocalIpUseCase(get()) }
+        factory { GetLocalIpUseCase(get()) }
     }
 
     /**

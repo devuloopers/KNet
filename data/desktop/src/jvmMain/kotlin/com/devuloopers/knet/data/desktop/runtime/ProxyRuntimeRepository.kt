@@ -1,6 +1,7 @@
 package com.devuloopers.knet.data.desktop.runtime
 
 import com.devuloopers.knet.core.logger.KNetLogger
+import com.devuloopers.knet.core.logger.LogTags
 import com.devuloopers.knet.domain.clientNetwork.model.ProxyTrafficListener
 import com.devuloopers.knet.engine.certificate.CertificateAuthority
 import com.devuloopers.knet.engine.certificate.CertificateCache
@@ -20,10 +21,10 @@ class ProxyRuntimeRepository(
      */
     fun startProxy(port: Int = 8080, trafficListener: ProxyTrafficListener) {
         if (proxyServer != null) {
-            KNetLogger.warn(tag = "ProxyRuntimeRepository") { "Proxy server is already running." }
+            KNetLogger.warn(tag = LogTags.PROXY) { "Proxy server is already running." }
             return
         }
-        KNetLogger.info(tag = "ProxyRuntimeRepository") { "Starting Netty proxy server on port $port..." }
+        KNetLogger.info(tag = LogTags.PROXY) { "Starting Netty proxy server on port $port..." }
         val server = KNetProxyServer(
             port = port,
             ca = certificateAuthority,
@@ -35,11 +36,18 @@ class ProxyRuntimeRepository(
     }
 
     /**
+     * Flushes active client connection channels.
+     */
+    fun flushActiveChannels() {
+        proxyServer?.flushActiveChannels()
+    }
+
+    /**
      * Stops the running proxy server.
      */
     fun stopProxy() {
         proxyServer?.let { server ->
-            KNetLogger.info(tag = "ProxyRuntimeRepository") { "Stopping Netty proxy server..." }
+            KNetLogger.info(tag = LogTags.PROXY) { "Stopping Netty proxy server..." }
             server.stop()
             proxyServer = null
         }

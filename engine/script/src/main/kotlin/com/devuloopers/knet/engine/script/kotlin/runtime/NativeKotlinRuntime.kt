@@ -60,6 +60,15 @@ class NativeKotlinRuntime(
             engine.setBindings(bindings, javax.script.ScriptContext.ENGINE_SCOPE)
 
             val headerScript = """
+                object console {
+                    fun log(msg: Any?) {
+                        com.devuloopers.knet.engine.script.internal.ResultCollectorHolder.get()?.addLog(msg?.toString() ?: "null")
+                    }
+                    fun info(msg: Any?) = log(msg)
+                    fun warn(msg: Any?) = log(msg)
+                    fun error(msg: Any?) = log(msg)
+                }
+                fun println(msg: Any?) = console.log(msg)
                 class ExpectValue(val value: Any?) {
                     fun toNotBeNull(): Boolean = value != null && value.toString().isNotBlank()
                     fun toBe(expected: Any?): Boolean = value == expected

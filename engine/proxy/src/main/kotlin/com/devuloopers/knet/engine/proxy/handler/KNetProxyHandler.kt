@@ -48,12 +48,10 @@ class KNetProxyHandler(
     }
 
     override fun channelActive(context: ChannelHandlerContext) {
-        println("[ENGINE_DEBUG] 🔌 Client TCP socket connected: ${context.channel().remoteAddress()}")
         super.channelActive(context)
     }
 
     override fun channelRead0(context: ChannelHandlerContext, request: FullHttpRequest) {
-        println("[ENGINE_DEBUG] 📩 Intercepted Request: ${request.method()} ${request.uri()}")
         if (request.method() == HttpMethod.CONNECT) {
             handleConnect(context, request)
         } else {
