@@ -11,9 +11,9 @@ package com.devuloopers.knet.core.http.config
  * @property useCookies Whether HTTP session cookies are enabled and retained.
  */
 data class HttpClientConfiguration(
-    val timeoutMillis: Long = 30_000L,
-    val connectTimeoutMillis: Long = 10_000L,
-    val retryCount: Int = 3,
+    val timeoutMillis: Long = com.devuloopers.knet.domain.clientNetwork.model.NetworkTimeouts.DEFAULT_TIMEOUT_MS,
+    val connectTimeoutMillis: Long = com.devuloopers.knet.domain.clientNetwork.model.NetworkTimeouts.DEFAULT_TIMEOUT_MS,
+    val retryCount: Int = 0,
     val followRedirects: Boolean = true,
     val verifySsl: Boolean = true,
     val useCookies: Boolean = true

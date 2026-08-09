@@ -199,6 +199,7 @@ private fun TableRowItem(
         item.status in 400..599 -> themeColors.semantic.error
         item.status == 101 -> themeColors.semantic.info
         isCompleted && item.status == 0 -> themeColors.semantic.error
+        !isCompleted && item.status == 0 -> androidx.compose.ui.graphics.Color(0xFFFAB387)
         else -> themeColors.textSecondary
     }
 
@@ -286,12 +287,12 @@ private fun TableRowItem(
 
         // Status
         if (columnVisibility.isVisible(TrafficColumn.STATUS)) {
-            Box(modifier = Modifier.width(64.dp), contentAlignment = Alignment.CenterStart) {
+            Box(modifier = Modifier.width(84.dp), contentAlignment = Alignment.CenterStart) {
                 Text(
                     text = when {
                         item.status > 0 -> "${item.status}"
                         isCompleted -> "ERR"
-                        else -> "-"
+                        else -> "In Progress"
                     },
                     style = typography.codeSmall.copy(color = statusColor, fontWeight = FontWeight.Medium)
                 )

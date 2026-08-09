@@ -285,7 +285,7 @@ open class KNetApiClient(
                         authToken = authToken
                     )
                 } catch (fallbackException: Exception) {
-                    if (proxyTrafficListener != null && effectiveProxyPort != null) {
+                    if (attemptProxy && proxyTrafficListener != null && effectiveProxyPort != null) {
                         recordSyntheticProxyFailure(currentTransactionId, currentUrl, method, currentHeaders, currentBody, fallbackException)
                     }
                     val reason = com.devuloopers.knet.core.http.util.NetworkExceptionClassifier.classify(

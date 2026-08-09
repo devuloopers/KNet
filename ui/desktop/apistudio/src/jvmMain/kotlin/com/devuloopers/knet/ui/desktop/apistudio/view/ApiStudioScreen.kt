@@ -329,6 +329,7 @@ public fun ApiStudioScreen(
                                 }
                             },
                             activeSubTab = activeSubTabEnum,
+                            onSubTabSelected = { viewModel?.updateActiveSubTab(it.name) },
                             scriptLanguage = try {
                                 com.devuloopers.knet.engine.script.api.ScriptLanguage.valueOf(uiState.editorState.scriptLanguage.uppercase())
                             } catch (_: Exception) {

@@ -11,9 +11,9 @@ class ConfigurationTest {
     fun testHttpClientConfigurationDefaults() {
         val config = HttpClientConfiguration()
 
-        assertEquals(30_000L, config.timeoutMillis)
-        assertEquals(10_000L, config.connectTimeoutMillis)
-        assertEquals(3, config.retryCount)
+        assertEquals(com.devuloopers.knet.domain.clientNetwork.model.NetworkTimeouts.DEFAULT_TIMEOUT_MS, config.timeoutMillis)
+        assertEquals(com.devuloopers.knet.domain.clientNetwork.model.NetworkTimeouts.DEFAULT_TIMEOUT_MS, config.connectTimeoutMillis)
+        assertEquals(0, config.retryCount)
         assertTrue(config.followRedirects)
         assertTrue(config.verifySsl)
         assertTrue(config.useCookies)

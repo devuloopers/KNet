@@ -165,6 +165,7 @@ class KNetProxyHandler(
                 val clientBootstrap = Bootstrap()
                 clientBootstrap.group(context.channel().eventLoop())
                     .channel(NioSocketChannel::class.java)
+                    .option(io.netty.channel.ChannelOption.CONNECT_TIMEOUT_MILLIS, com.devuloopers.knet.domain.clientNetwork.model.NetworkTimeouts.DEFAULT_TIMEOUT_INT_MS)
                     .resolver(NettyDnsResolver.resolverGroup)
                     .handler(object : ChannelInitializer<SocketChannel>() {
                         override fun initChannel(ch: SocketChannel) {

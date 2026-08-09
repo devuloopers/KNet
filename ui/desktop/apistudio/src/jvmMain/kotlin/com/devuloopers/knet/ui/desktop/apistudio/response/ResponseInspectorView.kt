@@ -117,11 +117,13 @@ public data class ResponseInspectorState(
     val failureReason: NetworkFailureReason? = null,
     val errorMessage: String? = null
 ) {
-    /** True if a valid HTTP response status code or body content was received. */
-    val hasResponse: Boolean get() = statusCode > 0 || responseBody.isNotBlank()
+    val isGatewayError: Boolean get() = statusCode == 502 || statusCode == 503 || statusCode == 504
 
-    /** True if an execution error or network failure occurred. */
-    val isError: Boolean get() = executionState == ExecutionState.ERROR || failureReason != null || (statusCode == 0 && !errorMessage.isNullOrBlank())
+    /** True if a valid HTTP response status code or body content was received from an end server. */
+    val hasResponse: Boolean get() = (statusCode > 0 || responseBody.isNotBlank()) && !isGatewayError
+
+    /** True if an execution error, network failure, or proxy/gateway transport error occurred. */
+    val isError: Boolean get() = executionState == ExecutionState.ERROR || failureReason != null || isGatewayError || (statusCode == 0 && !errorMessage.isNullOrBlank())
 }
 
 /**
@@ -365,15 +367,14 @@ public fun ResponseInspectorView(
 
     val displayBody = state.responseBody
 
-    if (!state.hasResponse) {
-        if (state.isError) {
-            NetworkExecutionErrorView(
-                failureReason = state.failureReason,
-                errorMessage = state.errorMessage,
-                onClearResponse = actions.onClearResponse,
-                modifier = modifier
-            )
-        } else {
+    if (state.isError) {
+        NetworkExecutionErrorView(
+            failureReason = state.failureReason,
+            errorMessage = state.errorMessage ?: state.responseBody.ifBlank { state.statusText.takeIf { it.isNotBlank() } },
+            onClearResponse = actions.onClearResponse,
+            modifier = modifier
+        )
+    } else if (!state.hasResponse) {
             Box(
                 modifier = modifier
                     .fillMaxSize()
@@ -404,7 +405,6 @@ public fun ResponseInspectorView(
                     )
                 }
             }
-        }
     } else {
         Column(
             modifier = modifier

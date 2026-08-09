@@ -575,7 +575,7 @@ public class ApiStudioViewModel(
                     // Post-response Test Script Execution
                     var uiTestResults = emptyList<com.devuloopers.knet.ui.desktop.apistudio.model.TestResult>()
 
-                    if (currentEditor.testScript.isNotBlank()) {
+                    if (currentEditor.testScript.isNotBlank() && res.failureReason == null && res.statusCode !in setOf(502, 503, 504)) {
                         val scriptReq = com.devuloopers.knet.engine.script.api.ScriptRequestModel(
                             url = currentEditor.url,
                             method = currentEditor.method,
