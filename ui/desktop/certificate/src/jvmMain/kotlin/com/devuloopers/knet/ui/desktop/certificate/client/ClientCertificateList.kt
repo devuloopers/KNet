@@ -1,76 +1,173 @@
 package com.devuloopers.knet.ui.desktop.certificate.client
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.devuloopers.knet.ui.core.theme.KNetColors
+import com.devuloopers.knet.ui.core.components.badge.KNetBadge
+import com.devuloopers.knet.ui.core.components.empty.EmptyState
+import com.devuloopers.knet.ui.core.components.surface.KNetSurface
+import com.devuloopers.knet.ui.core.components.switch.KNetSwitch
+import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import com.devuloopers.knet.ui.desktop.certificate.model.CertificateFormat
 import com.devuloopers.knet.ui.desktop.certificate.model.ClientCertificate
 
-/**
- * ClientCertificateList displays the imported client certificate keys.
- */
 @Composable
-public fun ClientCertificateList(
+fun ClientCertificateList(
     certificates: List<ClientCertificate>,
     selectedCertificate: ClientCertificate?,
     onSelect: (ClientCertificate) -> Unit,
+    onToggleEnabled: (String, Boolean) -> Unit,
     onDelete: (ClientCertificate) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Column(modifier = modifier.padding(12.dp)) {
-        Text(
-            text = "Client mTLS Certificates (${certificates.size})",
-            color = KNetColors.TextPrimary,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(bottom = 6.dp)
+    if (certificates.isEmpty()) {
+        EmptyState(
+            message = "No Client Certificates Registered. Import a PKCS#12 or PEM certificate to authenticate mTLS connections.",
+            modifier = modifier.fillMaxSize()
         )
-        LazyColumn {
+    } else {
+        LazyColumn(
+            modifier = modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(vertical = 8.dp)
+        ) {
             items(certificates) { cert ->
-                val isSelected = cert.alias == selectedCertificate?.alias
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onSelect(cert) }
-                        .padding(vertical = 6.dp)
-                ) {
+                ClientCertificateCard(
+                    cert = cert,
+                    isSelected = cert.alias == selectedCertificate?.alias,
+                    onClick = { onSelect(cert) },
+                    onToggleEnabled = { onToggleEnabled(cert.alias, !cert.enabled) },
+                    onDelete = { onDelete(cert) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ClientCertificateCard(
+    cert: ClientCertificate,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    onToggleEnabled: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val themeColors = KNetTheme.colors
+    val typography = KNetTheme.typography
+    val shapes = KNetTheme.shapes
+
+    val borderColor = if (isSelected) themeColors.accent else themeColors.border
+    val backgroundColor = if (isSelected) themeColors.surfaceVariant.copy(alpha = 0.5f) else themeColors.surfaceVariant
+    val expiryColor = when {
+        cert.daysUntilExpiration > 30 -> themeColors.semantic.success
+        cert.daysUntilExpiration > 7 -> themeColors.semantic.warning
+        else -> themeColors.semantic.error
+    }
+
+    KNetSurface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .clickable(onClick = onClick),
+        color = backgroundColor,
+        border = BorderStroke(1.dp, borderColor),
+        shape = shapes.medium
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Circular avatar
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(themeColors.surface, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.WorkspacePremium,
+                    contentDescription = null,
+                    tint = themeColors.textPrimary,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(16.dp))
+
+            // Details
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = cert.alias,
-                        color = if (isSelected) KNetColors.ActiveBlue else KNetColors.TextPrimary,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.weight(1f)
+                        style = typography.titleSmall.copy(fontWeight = FontWeight.Bold),
+                        color = if (isSelected) themeColors.accent else themeColors.textPrimary
                     )
-                    Text(
-                        text = "Expires: ${cert.expiration}",
-                        color = KNetColors.TextSecondary,
-                        fontSize = 11.sp
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = "Delete",
-                        tint = KNetColors.ErrorRed,
-                        modifier = Modifier.clickable { onDelete(cert) }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    KNetBadge(
+                        text = cert.format.name,
+                        containerColor = if (cert.format == CertificateFormat.PKCS12) Color(0xFFC0C1FF).copy(alpha = 0.2f) else themeColors.surface,
+                        contentColor = if (cert.format == CertificateFormat.PKCS12) Color(0xFFC0C1FF) else themeColors.textSecondary
                     )
                 }
+                
+                Spacer(modifier = Modifier.height(4.dp))
+                
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Public,
+                        contentDescription = null,
+                        tint = themeColors.textSecondary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = cert.host,
+                        style = typography.bodySmall,
+                        color = themeColors.textSecondary
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(4.dp))
+                
+                Text(
+                    text = "Expires in ${cert.daysUntilExpiration} days",
+                    style = typography.labelSmall,
+                    color = expiryColor
+                )
+            }
+
+            // Actions
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                KNetSwitch(
+                    checked = cert.enabled,
+                    onCheckedChange = { onToggleEnabled() }
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Icon(
+                    imageVector = Icons.Default.Delete,
+                    contentDescription = "Delete",
+                    tint = themeColors.semantic.error,
+                    modifier = Modifier
+                        .size(20.dp)
+                        .clickable(onClick = onDelete)
+                )
             }
         }
     }

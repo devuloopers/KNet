@@ -15,6 +15,7 @@ kotlin {
                 implementation(project(":core:logger"))
                 implementation(project(":ui:desktop:traffic"))
                 implementation(project(":ui:desktop:apistudio"))
+                implementation(project(":ui:desktop:certificate"))
                 implementation(libs.koin.core)
                 implementation(libs.koin.compose)
                 implementation(libs.koin.compose.viewmodel)

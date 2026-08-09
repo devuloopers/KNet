@@ -107,6 +107,14 @@ public interface CertificateManager {
     public fun deleteClientCertificate(alias: String)
 
     /**
+     * Toggles the enabled status of an imported client certificate identity.
+     *
+     * @param alias Unique alias descriptor of the certificate.
+     * @param enabled The new active toggle state.
+     */
+    public fun toggleCertificateEnabled(alias: String, enabled: Boolean)
+
+    /**
      * Lists all registered hostname matching rules.
      *
      * @return List of active [EngineMtlsRule] configurations.

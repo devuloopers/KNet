@@ -14,6 +14,10 @@ public data class CertificateState(
     val isExportDialogVisible: Boolean = false,
     val isRuleDialogVisible: Boolean = false,
     val isLoading: Boolean = false,
-    val errorMessage: String? = null
+    val errorMessage: String? = null,
+    val activeTab: CertificateTab = CertificateTab.CLIENT_CERTS,
+    val activeSidebarItem: CertificateSidebarItem = CertificateSidebarItem.ROOT_CAS,
+    val searchQuery: String = ""
 )
- public val DialogOffset: Int = 100
+
+public val DialogOffset: Int = 100

@@ -35,6 +35,8 @@ import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.ApiStudioViewModel
 import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.CollectionsViewModel
 import com.devuloopers.knet.ui.desktop.traffic.view.TrafficScreen
 import com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficViewModel
+import com.devuloopers.knet.ui.desktop.certificate.view.CertificateManagerScreen
+import com.devuloopers.knet.ui.desktop.certificate.viewmodel.CertificateViewModel
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
@@ -59,6 +61,13 @@ public fun KNetWorkspaceHost(
             ApiStudioScreen(
                 viewModel = apiStudioViewModel,
                 collectionsViewModel = collectionsViewModel,
+                modifier = modifier
+            )
+        }
+        DesktopDestination.Certificate -> {
+            val certificateViewModel: CertificateViewModel = koinViewModel()
+            CertificateManagerScreen(
+                viewModel = certificateViewModel,
                 modifier = modifier
             )
         }

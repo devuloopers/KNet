@@ -16,4 +16,8 @@ public sealed interface CertificateIntent {
     public data class SetImportDialogVisible(val visible: Boolean) : CertificateIntent
     public data class SetExportDialogVisible(val visible: Boolean) : CertificateIntent
     public data class SetRuleDialogVisible(val visible: Boolean) : CertificateIntent
+    public data class SwitchTab(val tab: CertificateTab) : CertificateIntent
+    public data class SwitchSidebarItem(val item: CertificateSidebarItem) : CertificateIntent
+    public data class ToggleCertificateEnabled(val alias: String, val enabled: Boolean) : CertificateIntent
+    public data class Search(val query: String) : CertificateIntent
 }

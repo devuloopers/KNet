@@ -6,36 +6,17 @@ import com.devuloopers.knet.domain.collection.model.ApiCollection
 import com.devuloopers.knet.domain.collection.model.CollectionFolder
 import com.devuloopers.knet.domain.collection.model.HttpMethod
 import com.devuloopers.knet.domain.collection.model.SavedApiRequest
-import com.devuloopers.knet.domain.collection.usecase.CreateCollectionUseCase
-import com.devuloopers.knet.domain.collection.usecase.DeleteCollectionUseCase
-import com.devuloopers.knet.domain.collection.usecase.DeleteSavedSessionUseCase
-import com.devuloopers.knet.domain.collection.usecase.DeleteUnsavedRequestUseCase
-import com.devuloopers.knet.domain.collection.usecase.ObserveCollectionsUseCase
-import com.devuloopers.knet.domain.collection.usecase.ObserveUnsavedRequestsUseCase
-import com.devuloopers.knet.domain.collection.usecase.RenameCollectionUseCase
-import com.devuloopers.knet.domain.collection.usecase.SaveRequestToCollectionUseCase
-import com.devuloopers.knet.domain.collection.usecase.SaveUnsavedRequestUseCase
-import com.devuloopers.knet.domain.collection.usecase.UpdateRequestInCollectionUseCase
+import com.devuloopers.knet.domain.collection.usecase.*
 import com.devuloopers.knet.ui.desktop.apistudio.dialog.CollectionSaveMode
 import com.devuloopers.knet.ui.desktop.apistudio.model.CollectionsState
 import com.devuloopers.knet.ui.desktop.apistudio.model.RequestDomainConverter.toDomainSavedRequest
 import com.devuloopers.knet.ui.desktop.apistudio.model.RequestEditorState
 import com.devuloopers.knet.ui.desktop.apistudio.model.SidebarTreeMapper
-import com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarFolderItem
 import com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarRequestItem
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -110,6 +91,7 @@ class CollectionsViewModel(
                     is AutoSaveIntent.Unsaved -> {
                         saveUnsavedRequestUseCase?.execute(intent.savedReq)
                     }
+
                     is AutoSaveIntent.Saved -> {
                         updateRequestInCollectionUseCase?.execute(
                             collectionId = intent.collectionId,
@@ -162,7 +144,13 @@ class CollectionsViewModel(
             ?: requestId
 
         val savedReq = editorState.toDomainSavedRequest(id = requestId, name = currentSavedName)
-        autoSaveFlow.tryEmit(AutoSaveIntent.Saved(collectionId = collectionId, folderId = folderId, savedReq = savedReq))
+        autoSaveFlow.tryEmit(
+            AutoSaveIntent.Saved(
+                collectionId = collectionId,
+                folderId = folderId,
+                savedReq = savedReq
+            )
+        )
     }
 
     /**

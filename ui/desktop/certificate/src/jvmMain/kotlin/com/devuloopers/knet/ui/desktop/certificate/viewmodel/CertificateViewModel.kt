@@ -10,6 +10,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * ViewModel managing Certificate manager status, trust wizards, client identities, and mTLS rules.
@@ -19,10 +21,11 @@ import kotlinx.coroutines.launch
  * @property certificateManager The engine facade instance injected via constructor.
  */
 class CertificateViewModel(
-    private val certificateManager: CertificateManager
+    private val certificateManager: CertificateManager,
+    private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
-    private val _uiState: MutableStateFlow<CertificateState> = MutableStateFlow(CertificateState())
+    private val _uiState: MutableStateFlow<CertificateState> = MutableStateFlow(CertificateState(isLoading = true))
 
     /**
      * Exposes the read-only unidirectional state flow for UI mapping.
@@ -40,41 +43,55 @@ class CertificateViewModel(
         _uiState.update { it.copy(isLoading = true) }
         viewModelScope.launch {
             try {
-                val statusStr = certificateManager.getCaStatus()
+                val statusStr = withContext(ioDispatcher) { certificateManager.getCaStatus() }
                 val caStatus = try {
                     CaStatus.valueOf(statusStr)
                 } catch (_: Exception) {
                     CaStatus.INVALID
                 }
 
-                val caDetails = CaDetails(
-                    subject = certificateManager.getCaSubject(),
-                    issuer = certificateManager.getCaIssuer(),
-                    serialNumber = certificateManager.getCaSerialNumber(),
-                    signatureAlgorithm = certificateManager.getCaSignatureAlgorithm(),
-                    validFrom = certificateManager.getCaValidFrom(),
-                    validUntil = certificateManager.getCaValidUntil(),
-                    sha1Fingerprint = certificateManager.getCaSha1Fingerprint(),
-                    sha256Fingerprint = certificateManager.getCaSha256Fingerprint()
-                )
-
-                val certs = certificateManager.getClientCertificates().map { c ->
-                    ClientCertificate(
-                        alias = c.alias,
-                        subject = c.subject,
-                        host = c.host,
-                        expiration = c.expiration,
-                        enabled = c.enabled
+                val caDetails = withContext(ioDispatcher) {
+                    CaDetails(
+                        subject = certificateManager.getCaSubject(),
+                        issuer = certificateManager.getCaIssuer(),
+                        serialNumber = certificateManager.getCaSerialNumber(),
+                        signatureAlgorithm = certificateManager.getCaSignatureAlgorithm(),
+                        validFrom = certificateManager.getCaValidFrom(),
+                        validUntil = certificateManager.getCaValidUntil(),
+                        sha1Fingerprint = certificateManager.getCaSha1Fingerprint(),
+                        sha256Fingerprint = certificateManager.getCaSha256Fingerprint()
                     )
                 }
 
-                val rules = certificateManager.getMtlsRules().map { r ->
-                    MtlsRule(
-                        ruleName = r.ruleName,
-                        hostPattern = r.hostPattern,
-                        certificateAlias = r.certificateAlias,
-                        enabled = r.enabled
-                    )
+                val certs = withContext(ioDispatcher) {
+                    certificateManager.getClientCertificates().map { c ->
+                        ClientCertificate(
+                            alias = c.alias,
+                            subject = c.subject,
+                            host = c.host,
+                            expiration = c.expiration,
+                            enabled = c.enabled,
+                            format = try { CertificateFormat.valueOf(c.format) } catch (_: Exception) { CertificateFormat.PKCS12 },
+                            daysUntilExpiration = c.daysUntilExpiration,
+                            subjectDn = c.subjectDn,
+                            issuerDn = c.issuerDn,
+                            serialNumber = c.serialNumber,
+                            sanList = c.sanList,
+                            publicKeyAlgorithm = c.publicKeyAlgorithm,
+                            sha256Fingerprint = c.sha256Fingerprint
+                        )
+                    }
+                }
+
+                val rules = withContext(ioDispatcher) {
+                    certificateManager.getMtlsRules().map { r ->
+                        MtlsRule(
+                            ruleName = r.ruleName,
+                            hostPattern = r.hostPattern,
+                            certificateAlias = r.certificateAlias,
+                            enabled = r.enabled
+                        )
+                    }
                 }
 
                 _uiState.update {
@@ -110,7 +127,7 @@ class CertificateViewModel(
                 CertificateIntent.InstallTrust -> {
                     _uiState.update { it.copy(trustState = TrustInstallationState.INSTALLING) }
                     try {
-                        val success = certificateManager.installRootCertificate()
+                        val success = withContext(ioDispatcher) { certificateManager.installRootCertificate() }
                         if (success) {
                             _uiState.update { it.copy(trustState = TrustInstallationState.INSTALLED) }
                         } else {
@@ -133,9 +150,25 @@ class CertificateViewModel(
 
                 is CertificateIntent.ImportCertificate -> {
                     try {
-                        certificateManager.importClientCertificate(intent.path, intent.alias)
-                        val certs = certificateManager.getClientCertificates().map { c ->
-                            ClientCertificate(c.alias, c.subject, c.host, c.expiration, c.enabled)
+                        val certs = withContext(ioDispatcher) {
+                            certificateManager.importClientCertificate(intent.path, intent.alias)
+                            certificateManager.getClientCertificates().map { c ->
+                                ClientCertificate(
+                                    alias = c.alias,
+                                    subject = c.subject,
+                                    host = c.host,
+                                    expiration = c.expiration,
+                                    enabled = c.enabled,
+                                    format = try { CertificateFormat.valueOf(c.format) } catch (_: Exception) { CertificateFormat.PKCS12 },
+                                    daysUntilExpiration = c.daysUntilExpiration,
+                                    subjectDn = c.subjectDn,
+                                    issuerDn = c.issuerDn,
+                                    serialNumber = c.serialNumber,
+                                    sanList = c.sanList,
+                                    publicKeyAlgorithm = c.publicKeyAlgorithm,
+                                    sha256Fingerprint = c.sha256Fingerprint
+                                )
+                            }
                         }
                         _uiState.update {
                             it.copy(
@@ -151,7 +184,7 @@ class CertificateViewModel(
 
                 is CertificateIntent.ExportCertificate -> {
                     try {
-                        certificateManager.exportClientCertificate(intent.alias, intent.destinationPath)
+                        withContext(ioDispatcher) { certificateManager.exportClientCertificate(intent.alias, intent.destinationPath) }
                         _uiState.update {
                             it.copy(
                                 isExportDialogVisible = false,
@@ -167,7 +200,21 @@ class CertificateViewModel(
                     try {
                         certificateManager.deleteClientCertificate(intent.alias)
                         val certs = certificateManager.getClientCertificates().map { c ->
-                            ClientCertificate(c.alias, c.subject, c.host, c.expiration, c.enabled)
+                            ClientCertificate(
+                                alias = c.alias,
+                                subject = c.subject,
+                                host = c.host,
+                                expiration = c.expiration,
+                                enabled = c.enabled,
+                                format = try { CertificateFormat.valueOf(c.format) } catch (_: Exception) { CertificateFormat.PKCS12 },
+                                daysUntilExpiration = c.daysUntilExpiration,
+                                subjectDn = c.subjectDn,
+                                issuerDn = c.issuerDn,
+                                serialNumber = c.serialNumber,
+                                sanList = c.sanList,
+                                publicKeyAlgorithm = c.publicKeyAlgorithm,
+                                sha256Fingerprint = c.sha256Fingerprint
+                            )
                         }
                         _uiState.update {
                             it.copy(
@@ -262,6 +309,44 @@ class CertificateViewModel(
 
                 is CertificateIntent.SetRuleDialogVisible -> {
                     _uiState.update { it.copy(isRuleDialogVisible = intent.visible) }
+                }
+
+                is CertificateIntent.SwitchTab -> {
+                    _uiState.update { it.copy(activeTab = intent.tab) }
+                }
+
+                is CertificateIntent.SwitchSidebarItem -> {
+                    _uiState.update { it.copy(activeSidebarItem = intent.item) }
+                }
+
+                is CertificateIntent.ToggleCertificateEnabled -> {
+                    try {
+                        certificateManager.toggleCertificateEnabled(intent.alias, intent.enabled)
+                        val certs = certificateManager.getClientCertificates().map { c ->
+                            ClientCertificate(
+                                alias = c.alias,
+                                subject = c.subject,
+                                host = c.host,
+                                expiration = c.expiration,
+                                enabled = c.enabled,
+                                format = try { CertificateFormat.valueOf(c.format) } catch (_: Exception) { CertificateFormat.PKCS12 },
+                                daysUntilExpiration = c.daysUntilExpiration,
+                                subjectDn = c.subjectDn,
+                                issuerDn = c.issuerDn,
+                                serialNumber = c.serialNumber,
+                                sanList = c.sanList,
+                                publicKeyAlgorithm = c.publicKeyAlgorithm,
+                                sha256Fingerprint = c.sha256Fingerprint
+                            )
+                        }
+                        _uiState.update { it.copy(clientCertificates = certs) }
+                    } catch (e: Exception) {
+                        _uiState.update { it.copy(errorMessage = e.message) }
+                    }
+                }
+
+                is CertificateIntent.Search -> {
+                    _uiState.update { it.copy(searchQuery = intent.query) }
                 }
             }
         }

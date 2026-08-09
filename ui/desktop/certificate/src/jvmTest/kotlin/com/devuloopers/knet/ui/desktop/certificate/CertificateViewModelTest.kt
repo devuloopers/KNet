@@ -63,6 +63,14 @@ public class FakeCertificateManager : CertificateManager {
         clientCertificates.removeAll { it.alias == alias }
     }
 
+    override fun toggleCertificateEnabled(alias: String, enabled: Boolean) {
+        val index = clientCertificates.indexOfFirst { it.alias == alias }
+        if (index != -1) {
+            val existing = clientCertificates[index]
+            clientCertificates[index] = existing.copy(enabled = enabled)
+        }
+    }
+
     override fun getMtlsRules(): List<EngineMtlsRule> = mtlsRules.toList()
 
     override fun addMtlsRule(rule: EngineMtlsRule) {
@@ -99,7 +107,7 @@ public class CertificateViewModelTest {
     public fun setUp() {
         Dispatchers.setMain(testDispatcher)
         certificateManager = FakeCertificateManager()
-        viewModel = CertificateViewModel(certificateManager)
+        viewModel = CertificateViewModel(certificateManager, testDispatcher)
     }
 
     /**
@@ -156,6 +164,7 @@ public class CertificateViewModelTest {
     public fun testImportAndDeleteCertificateIntents() = runTest {
         // Import
         viewModel.processIntent(CertificateIntent.ImportCertificate(path = "/path/to/cert", alias = "test-alias"))
+        advanceUntilIdle()
         var state = viewModel.uiState.value
         assertEquals(1, state.clientCertificates.size)
         assertEquals("test-alias", state.clientCertificates[0].alias)
@@ -163,17 +172,20 @@ public class CertificateViewModelTest {
 
         // Export
         viewModel.processIntent(CertificateIntent.ExportCertificate(alias = "test-alias", destinationPath = "/destination/path"))
+        advanceUntilIdle()
         state = viewModel.uiState.value
         assertFalse(state.isExportDialogVisible)
 
         // Select
         viewModel.processIntent(CertificateIntent.SelectCertificate(cert = state.clientCertificates[0]))
+        advanceUntilIdle()
         state = viewModel.uiState.value
         assertNotNull(state.selectedCertificate)
         assertEquals("test-alias", state.selectedCertificate.alias)
 
         // Delete
         viewModel.processIntent(CertificateIntent.DeleteCertificate(alias = "test-alias"))
+        advanceUntilIdle()
         state = viewModel.uiState.value
         assertTrue(state.clientCertificates.isEmpty())
         assertNull(state.selectedCertificate)
@@ -190,6 +202,7 @@ public class CertificateViewModelTest {
 
         // Add
         viewModel.processIntent(CertificateIntent.AddRule(rule = rule))
+        advanceUntilIdle()
         var state = viewModel.uiState.value
         assertEquals(1, state.mtlsRules.size)
         assertEquals("my-rule", state.mtlsRules[0].ruleName)
@@ -198,12 +211,14 @@ public class CertificateViewModelTest {
         // Edit
         val updatedRule = rule.copy(hostPattern = "*.knet.io")
         viewModel.processIntent(CertificateIntent.EditRule(rule = updatedRule))
+        advanceUntilIdle()
         state = viewModel.uiState.value
         assertEquals(1, state.mtlsRules.size)
         assertEquals("*.knet.io", state.mtlsRules[0].hostPattern)
 
         // Remove
         viewModel.processIntent(CertificateIntent.RemoveRule(ruleName = "my-rule"))
+        advanceUntilIdle()
         state = viewModel.uiState.value
         assertTrue(state.mtlsRules.isEmpty())
     }

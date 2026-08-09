@@ -59,13 +59,13 @@ public interface CollectionDao {
     @Query("DELETE FROM collection_folders WHERE id = :id")
     public suspend fun deleteFolder(id: String)
 
-    @Query("SELECT * FROM saved_requests WHERE folderId = :folderId")
+    @Query("SELECT * FROM saved_requests WHERE folderId = :folderId ORDER BY id ASC")
     public suspend fun getRequestsForFolder(folderId: String): List<SavedRequestEntity>
 
-    @Query("SELECT * FROM saved_requests WHERE collectionId = :collectionId")
+    @Query("SELECT * FROM saved_requests WHERE collectionId = :collectionId ORDER BY id ASC")
     public suspend fun getRequestsForCollection(collectionId: String): List<SavedRequestEntity>
 
-    @Query("SELECT * FROM saved_requests WHERE collectionId = :collectionId")
+    @Query("SELECT * FROM saved_requests WHERE collectionId = :collectionId ORDER BY id ASC")
     public fun getRequestsForCollectionFlow(collectionId: String): Flow<List<SavedRequestEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
