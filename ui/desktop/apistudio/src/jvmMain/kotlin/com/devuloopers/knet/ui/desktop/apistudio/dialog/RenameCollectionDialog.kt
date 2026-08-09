@@ -27,6 +27,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
 import com.devuloopers.knet.ui.core.components.input.KNetInputField
@@ -89,10 +94,18 @@ public fun RenameCollectionDialog(
                     KNetInputField(
                         value = textFieldValue,
                         onValueChange = { textFieldValue = it },
-                        placeholder = "Collection Name",
+                        placeholder = "Collection Name...",
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(focusRequester)
+                            .onKeyEvent { keyEvent ->
+                                if (keyEvent.type == KeyEventType.KeyDown && (keyEvent.key == Key.Enter || keyEvent.key == Key.NumPadEnter)) {
+                                    if (textFieldValue.text.isNotBlank()) {
+                                        onConfirm(textFieldValue.text)
+                                        true
+                                    } else false
+                                } else false
+                            }
                     )
                 }
 

@@ -58,13 +58,55 @@ public enum class RequestSubTab {
 }
 
 /**
+ * Cohesive event callbacks parameter object for [RequestPayloadEditor].
+ */
+public data class RequestPayloadEditorActions(
+    val onBodyPayloadChanged: (String) -> Unit = {},
+    val onQueryParamsChanged: (List<Pair<String, String>>) -> Unit = {},
+    val onHeadersChanged: (List<Pair<String, String>>) -> Unit = {},
+    val onCookiesChanged: (List<Pair<String, String>>) -> Unit = {},
+    val onAuthStateChanged: (AuthState) -> Unit = {},
+    val onPreRequestScriptChanged: (String) -> Unit = {},
+    val onTestScriptChanged: (String) -> Unit = {},
+    val onSubTabSelected: (RequestSubTab) -> Unit = {},
+    val onScriptPhaseSelected: (ScriptPhase) -> Unit = {},
+    val onScriptLanguageChanged: (ScriptLanguage) -> Unit = {}
+)
+
+/**
+ * Cohesive overload for [RequestPayloadEditor] accepting [RequestEditorState] and [RequestPayloadEditorActions].
+ */
+@Composable
+public fun RequestPayloadEditor(
+    state: com.devuloopers.knet.ui.desktop.apistudio.model.RequestEditorState,
+    actions: RequestPayloadEditorActions = RequestPayloadEditorActions(),
+    modifier: Modifier = Modifier
+) {
+    RequestPayloadEditor(
+        bodyPayload = state.bodyPayload,
+        onBodyPayloadChanged = actions.onBodyPayloadChanged,
+        queryParams = state.queryParams,
+        onQueryParamsChanged = actions.onQueryParamsChanged,
+        headers = state.headers,
+        onHeadersChanged = actions.onHeadersChanged,
+        cookies = state.cookies,
+        onCookiesChanged = actions.onCookiesChanged,
+        authState = state.authState,
+        onAuthStateChanged = actions.onAuthStateChanged,
+        preRequestScript = state.preRequestScript,
+        onPreRequestScriptChanged = actions.onPreRequestScriptChanged,
+        testScript = state.testScript,
+        onTestScriptChanged = actions.onTestScriptChanged,
+        activeSubTab = state.activeSubTab,
+        onSubTabSelected = actions.onSubTabSelected,
+        activeScriptPhase = state.activeScriptPhase,
+        scriptLanguage = try { ScriptLanguage.valueOf(state.scriptLanguage) } catch (_: Exception) { ScriptLanguage.JAVASCRIPT },
+        modifier = modifier
+    )
+}
+
+/**
  * Request authoring payload editor component hosting sub-tabs bar and input panels.
- *
- * @param bodyPayload Raw request body payload content string.
- * @param onBodyPayloadChanged Callback when body payload text changes.
- * @param queryParams Key-value pairs of request query parameters.
- * @param onQueryParamsChanged Callback when query parameters are modified in the Params table.
- * @param modifier Layout modifier.
  */
 @Composable
 public fun RequestPayloadEditor(
@@ -76,6 +118,8 @@ public fun RequestPayloadEditor(
     onHeadersChanged: (List<Pair<String, String>>) -> Unit = {},
     cookies: List<Pair<String, String>> = emptyList(),
     onCookiesChanged: (List<Pair<String, String>>) -> Unit = {},
+    authState: AuthState = AuthState(),
+    onAuthStateChanged: (AuthState) -> Unit = {},
     preRequestScript: String = "",
     onPreRequestScriptChanged: (String) -> Unit = {},
     testScript: String = "",
@@ -98,18 +142,8 @@ public fun RequestPayloadEditor(
         }
     }
     val headerEntries = remember(headers) {
-        if (headers.isEmpty()) {
-            listOf(
-                KeyValueEntry("h1", "Content-Type", "application/json"),
-                KeyValueEntry("h2", "Accept", "*/*"),
-                KeyValueEntry("h3", "Accept-Encoding", "gzip, deflate, br"),
-                KeyValueEntry("h4", "Connection", "keep-alive"),
-                KeyValueEntry("h5", "User-Agent", "KNet/1.0.0")
-            )
-        } else {
-            headers.mapIndexed { index, (headerKey, headerValue) ->
-                KeyValueEntry("header_$index", headerKey, headerValue)
-            }
+        headers.mapIndexed { index, (headerKey, headerValue) ->
+            KeyValueEntry("header_$index", headerKey, headerValue)
         }
     }
     val cookieEntries = remember(cookies) {
@@ -117,8 +151,7 @@ public fun RequestPayloadEditor(
             KeyValueEntry("cookie_$index", cookieKey, cookieValue)
         }
     }
-    var authState by remember { mutableStateOf(AuthState()) }
-    var bodyState by remember {
+    var bodyState by remember(bodyPayload) {
         mutableStateOf(
             BodyState(
                 mode = BodyMode.JSON,
@@ -244,7 +277,7 @@ public fun RequestPayloadEditor(
                 RequestSubTab.AUTH -> {
                     AuthEditorView(
                         state = authState,
-                        onStateChange = { updatedAuthState -> authState = updatedAuthState },
+                        onStateChange = onAuthStateChanged,
                         modifier = Modifier.fillMaxSize()
                     )
                 }

@@ -119,3 +119,18 @@ Do not use emojis anywhere in the project codebase, log statements, terminal deb
    * Emojis are strictly prohibited in all code files, log outputs (`KNetLogger`), console prints (`println`), exception messages, code comments, documentation, and UI strings.
 2. **Clean Professional Text**:
    * Always use clean, professional, plain text descriptors (e.g. `[REQUEST]`, `[RESPONSE]`, `[INSERT PENDING]`, `[UPDATE COMPLETED]`) instead of emoji icons.
+
+---
+
+## No Blocking Coroutine Calls Rule
+
+`runBlocking` is strictly prohibited in application production code.
+
+### Guidelines:
+1. **Test Code Only**:
+   * `runBlocking` (or `runTest`) must ONLY be used inside test sources (`src/commonTest`, `src/jvmTest`).
+2. **Prohibited in Production**:
+   * `runBlocking` must NEVER be used in production application code, ViewModels, Use Cases, Repositories, or UI composables.
+3. **Asynchronous Execution**:
+   * Always use coroutine scopes (`viewModelScope`, `CoroutineScope(Dispatchers.IO).launch`, etc.) or reactive flows (`Flow`, `StateFlow`) for asynchronous operations.
+

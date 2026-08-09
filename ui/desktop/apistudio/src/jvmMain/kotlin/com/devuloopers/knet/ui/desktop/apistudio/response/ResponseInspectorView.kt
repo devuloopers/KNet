@@ -358,7 +358,7 @@ public fun ResponseInspectorView(
     val onClearResponse = actions.onClearResponse
 
     var localActiveSubTab by remember(activeSubTab) { mutableStateOf(activeSubTab) }
-    val currentConsoleLogs = remember(state.consoleLogs) { mutableStateListOf(*state.consoleLogs.toTypedArray()) }
+    val currentConsoleLogs = state.consoleLogs
 
     val formattedSize = remember(state.sizeBytes) {
         val kb = state.sizeBytes / 1024.0
@@ -576,10 +576,20 @@ public fun ResponseInspectorView(
         Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             when (localActiveSubTab) {
                 ResponseSubTab.BODY -> {
+                    val responseLanguageHint = remember(headers) {
+                        val contentType = headers["Content-Type"] ?: headers["content-type"] ?: ""
+                        when {
+                            contentType.contains("json", ignoreCase = true) -> "json"
+                            contentType.contains("html", ignoreCase = true) -> "html"
+                            contentType.contains("xml", ignoreCase = true) -> "xml"
+                            contentType.contains("javascript", ignoreCase = true) -> "javascript"
+                            else -> "plain"
+                        }
+                    }
                     KNetCodeEditor(
                         code = displayBody,
                         mode = EditorMode.ReadOnly,
-                        languageHint = "json",
+                        languageHint = responseLanguageHint,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -644,7 +654,10 @@ public fun ResponseInspectorView(
                                             style = typography.bodySmall.copy(
                                                 color = themeColors.textPrimary,
                                                 fontWeight = FontWeight.Medium
-                                            )
+                                            ),
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                         )
                                         if (!res.passed && !res.errorMessage.isNullOrBlank()) {
                                             Text(

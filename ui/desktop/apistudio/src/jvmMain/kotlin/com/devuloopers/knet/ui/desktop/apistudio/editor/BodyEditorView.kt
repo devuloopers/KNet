@@ -97,7 +97,10 @@ public fun BodyEditorView(
                         style = typography.caption.copy(
                             color = if (isSelected) themeColors.accent else themeColors.textSecondary,
                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-                        )
+                        ),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                     )
                 }
             }
@@ -161,9 +164,9 @@ public fun BodyEditorView(
                 // Multipart form-data key-value grid
                 KNetKeyValueEditor(
                     entries = state.formDataEntries,
-                    onEntryChange = { index, updated ->
-                        val updated = state.formDataEntries.toMutableList().apply { set(index, updated) }
-                        onStateChange(state.copy(formDataEntries = updated))
+                    onEntryChange = { index, updatedEntry ->
+                        val updatedList = state.formDataEntries.toMutableList().apply { set(index, updatedEntry) }
+                        onStateChange(state.copy(formDataEntries = updatedList))
                     },
                     onAddEntry = {
                         onStateChange(

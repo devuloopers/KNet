@@ -13,6 +13,7 @@ import com.devuloopers.knet.domain.collection.usecase.SaveRequestToCollectionUse
 import com.devuloopers.knet.domain.collection.usecase.SaveUnsavedRequestUseCase
 import com.devuloopers.knet.domain.collection.usecase.UpdateRequestInCollectionUseCase
 import com.devuloopers.knet.domain.proxy.usecase.ObserveProxyEngineStateUseCase
+import com.devuloopers.knet.ui.desktop.apistudio.usecase.ExecuteScriptedApiRequestUseCase
 import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.ApiStudioViewModel
 import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.CollectionsViewModel
 import org.koin.core.module.dsl.viewModel
@@ -27,6 +28,7 @@ import org.koin.dsl.module
 public val apiStudioUiModule = module {
     factory { ExecuteClientApiRequestUseCase(get()) }
     factory { FormatResponseBodyUseCase() }
+    factory { ExecuteScriptedApiRequestUseCase(get(), get()) }
     factory { ObserveCollectionsUseCase(get()) }
     factory { ObserveUnsavedRequestsUseCase(get()) }
     factory { SaveUnsavedRequestUseCase(get()) }
@@ -40,8 +42,7 @@ public val apiStudioUiModule = module {
 
     viewModel {
         ApiStudioViewModel(
-            executeUseCase = get(),
-            formatResponseBodyUseCase = get(),
+            executeScriptedUseCase = get(),
             observeProxyEngineStateUseCase = get(),
             widgetPreferencesRepository = get()
         )

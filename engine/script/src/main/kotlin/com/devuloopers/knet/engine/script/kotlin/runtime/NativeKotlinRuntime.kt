@@ -5,21 +5,24 @@ import com.devuloopers.knet.engine.script.api.ScriptExecutionResult
 import com.devuloopers.knet.engine.script.api.ScriptRequestModel
 import com.devuloopers.knet.engine.script.api.ScriptResponseModel
 import com.devuloopers.knet.engine.script.internal.BindingsProvider
-import com.devuloopers.knet.engine.script.internal.CompiledScriptCache
 import com.devuloopers.knet.engine.script.internal.ExceptionFormatter
 import com.devuloopers.knet.engine.script.internal.ResultCollector
 import com.devuloopers.knet.engine.script.internal.ResultCollectorHolder
-import javax.script.Compilable
 import javax.script.ScriptEngineManager
 import javax.script.SimpleBindings
 
 /**
  * Production-grade Native Kotlin Runtime executing dynamic Kotlin (.kts) scripts
- * via JSR-223 bytecode compilation with compiled script caching.
+ * via JSR-223 direct evaluation.
+ *
+ * Note: Compiled script caching via [javax.script.Compilable] was intentionally removed.
+ * The Kotlin JSR-223 engine bakes the first [SimpleBindings] snapshot into the compiled
+ * [javax.script.CompiledScript] object. On subsequent calls with a fresh [EnvironmentStore],
+ * the compiled script ignores the new bindings and reads from the stale first-run snapshot.
+ * Using [javax.script.ScriptEngine.eval] directly avoids this binding reuse entirely,
+ * guaranteeing every execution receives a fresh environment.
  */
-class NativeKotlinRuntime(
-    private val scriptCache: CompiledScriptCache = CompiledScriptCache()
-) : KotlinRuntime {
+class NativeKotlinRuntime : KotlinRuntime {
 
     private val engineManager = ScriptEngineManager()
 
@@ -90,17 +93,8 @@ class NativeKotlinRuntime(
 
             val fullScript = "$headerScript\n$code"
 
-            val compilableEngine = engine as? Compilable
-            if (compilableEngine != null) {
-                val compiled = scriptCache.get(fullScript) ?: run {
-                    val c = compilableEngine.compile(fullScript)
-                    scriptCache.put(fullScript, c)
-                    c
-                }
-                compiled.eval(bindings)
-            } else {
-                engine.eval(fullScript, bindings)
-            }
+            // Always eval directly — never use CompiledScript.eval() which bakes in stale bindings.
+            engine.eval(fullScript, bindings)
 
             ScriptExecutionResult.Success(
                 request = request,

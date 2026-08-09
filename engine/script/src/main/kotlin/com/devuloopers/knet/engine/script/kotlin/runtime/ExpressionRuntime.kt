@@ -57,7 +57,7 @@ class ExpressionRuntime : KotlinRuntime {
                     }
                     localVariables[varName] = varVal
                 } else if (trimmed.startsWith("request.headers[") && trimmed.contains("=")) {
-                    val key = trimmed.substringAfter("request.headers[\"").substringAfter("request.headers['").substringBefore("\"").substringBefore("'")
+                    val key = extractKey(trimmed, "request.headers[")
                     val rawVal = trimmed.substringAfter("=").trim().removeSurrounding("\"").removeSurrounding("'")
                     val resolvedVal = localVariables[rawVal] ?: rawVal
                     if (key.isNotBlank()) {
@@ -72,7 +72,7 @@ class ExpressionRuntime : KotlinRuntime {
                         environment.set(key, resolvedVal)
                     }
                 } else if (trimmed.startsWith("env[") && trimmed.contains("=")) {
-                    val key = trimmed.substringAfter("env[\"").substringAfter("env['").substringBefore("\"").substringBefore("'")
+                    val key = extractKey(trimmed, "env[")
                     val rawVal = trimmed.substringAfter("=").trim().removeSurrounding("\"").removeSurrounding("'")
                     val resolvedVal = localVariables[rawVal] ?: rawVal
                     if (key.isNotBlank()) {
@@ -151,6 +151,19 @@ class ExpressionRuntime : KotlinRuntime {
                 }
             }
 
+            if (trimmed.contains("!=")) {
+                val leftExpr = trimmed.substringBefore("!=").trim()
+                val rightExpr = trimmed.substringAfter("!=").trim().removeSurrounding("\"").removeSurrounding("'")
+                val actualVal = resolveValue(leftExpr, request, response, environment, localVariables)
+                val expectedVal = if (rightExpr == "null") null else (resolveValue(rightExpr, request, response, environment, localVariables) ?: rightExpr)
+
+                return if (actualVal != expectedVal && (rightExpr != "null" || !actualVal.isNullOrBlank())) {
+                    true to null
+                } else {
+                    false to "Assertion failed: Expected '$leftExpr' not to equal '$rightExpr', but got '${actualVal ?: "null"}'"
+                }
+            }
+
             if (trimmed.contains("==")) {
                 val leftExpr = trimmed.substringBefore("==").trim()
                 val rightExpr = trimmed.substringAfter("==").trim().removeSurrounding("\"").removeSurrounding("'")
@@ -209,19 +222,19 @@ class ExpressionRuntime : KotlinRuntime {
         val cleaned = expr.replace("environment[", "env[").replace("environment.get(", "env.get(").removePrefix("context.").trim()
         return when {
             cleaned.contains("env[") -> {
-                val key = cleaned.substringAfter("env[\"").substringAfter("env['").substringBefore("\"").substringBefore("'").substringBefore("]")
+                val key = extractKey(cleaned, "env[")
                 environment[key]
             }
             cleaned.contains("env.get(") -> {
-                val key = cleaned.substringAfter("env.get(\"").substringAfter("env.get('").substringBefore("\"").substringBefore("'").substringBefore(")")
+                val key = extractKey(cleaned, "env.get(")
                 environment[key]
             }
             cleaned.contains("request.headers[") -> {
-                val key = cleaned.substringAfter("request.headers[\"").substringAfter("request.headers['").substringBefore("\"").substringBefore("'").substringBefore("]")
+                val key = extractKey(cleaned, "request.headers[")
                 request.headers[key]
             }
             cleaned.contains("response.headers[") -> {
-                val key = cleaned.substringAfter("response.headers[\"").substringAfter("response.headers['").substringBefore("\"").substringBefore("'").substringBefore("]")
+                val key = extractKey(cleaned, "response.headers[")
                 response?.headers?.get(key)
             }
             cleaned == "response.statusCode" || cleaned == "statusCode" -> response?.statusCode?.toString()
@@ -230,5 +243,22 @@ class ExpressionRuntime : KotlinRuntime {
             cleaned == "request.method" || cleaned == "method" -> request.method
             else -> localVariables[cleaned] ?: cleaned.removeSurrounding("\"").removeSurrounding("'")
         }
+    }
+
+    /**
+     * Extracts a bracket-enclosed or parenthesis-enclosed string key from an expression.
+     *
+     * Handles both double-quote and single-quote styles:
+     * - `env["auth_token"]` -> `auth_token`
+     * - `env['auth_token']`  -> `auth_token`
+     * - `env.get("auth_token")` -> `auth_token`
+     *
+     * @param expr The full expression string to parse.
+     * @param prefix The prefix to skip before extracting the key (e.g. `"env["`, `"env.get("`)
+     * @return The extracted key string with surrounding quotes removed.
+     */
+    private fun extractKey(expr: String, prefix: String): String {
+        val inner = expr.substringAfter(prefix).substringBefore("]").substringBefore(")").trim()
+        return inner.removeSurrounding("\"").removeSurrounding("'")
     }
 }

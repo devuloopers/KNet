@@ -94,7 +94,10 @@ public fun ScriptEditorView(
                             style = typography.caption.copy(
                                 color = if (isSelected) themeColors.accent else themeColors.textSecondary,
                                 fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-                            )
+                            ),
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                         )
                     }
                 }

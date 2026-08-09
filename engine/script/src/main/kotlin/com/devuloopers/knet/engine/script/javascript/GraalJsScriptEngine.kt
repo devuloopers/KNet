@@ -128,6 +128,7 @@ class GraalJsScriptEngine : ScriptEngine {
                             return expect(actual);
                         }
                     };
+                    var test = pm.test;
                 """.trimIndent()
 
                 activeContext.eval("js", pmPolyfill)

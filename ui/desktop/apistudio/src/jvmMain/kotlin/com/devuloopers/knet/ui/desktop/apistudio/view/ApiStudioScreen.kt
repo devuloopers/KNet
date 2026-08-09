@@ -66,7 +66,7 @@ public fun ApiStudioScreen(
         }
     }
 
-    LaunchedEffect(collectionsState.unsavedRequests, collectionsState.collections, uiState.sessionContext) {
+    LaunchedEffect(uiState.sessionContext) {
         val context = uiState.sessionContext
         val targetSessionId = when (context) {
             is SessionContext.UnsavedDraft -> context.sessionId
@@ -95,7 +95,7 @@ public fun ApiStudioScreen(
                 val savedMatch = findInFolder(collectionsState.collections)
                 if (savedMatch != null) {
                     selectedRequestId = savedMatch.id
-                    viewModel?.updateLinkedUnsavedId(savedMatch.id, savedMatch.name)
+                    viewModel?.updateLinkedUnsavedId(null, savedMatch.name)
                     viewModel?.updateMethod(savedMatch.method)
                     viewModel?.updateUrl(savedMatch.url)
                     viewModel?.updateHeaders(savedMatch.headers)
@@ -110,13 +110,7 @@ public fun ApiStudioScreen(
     val currentMethod = uiState.editorState.method
     val currentUrl = uiState.editorState.url
     val bodyPayload = uiState.editorState.bodyPayload
-    val activeSubTabEnum = remember(uiState.editorState.activeSubTab) {
-        try {
-            com.devuloopers.knet.ui.desktop.apistudio.editor.RequestSubTab.valueOf(uiState.editorState.activeSubTab)
-        } catch (_: Exception) {
-            com.devuloopers.knet.ui.desktop.apistudio.editor.RequestSubTab.BODY
-        }
-    }
+    val activeSubTabEnum = uiState.editorState.activeSubTab
 
     Box(modifier = modifier.fillMaxSize()) {
         Row(modifier = Modifier.fillMaxSize().background(themeColors.surface)) {
@@ -150,6 +144,7 @@ public fun ApiStudioScreen(
                     viewModel?.updateBodyPayload(item.bodyPayload)
                     viewModel?.updateBodyType(item.bodyType)
                     viewModel?.updateScripts(item.preRequestScript, item.testScript)
+                    viewModel?.updateAuthState(item.authState)
                 },
                 onSaveUnsavedRequest = { item ->
                     selectedRequestId = item.id
@@ -161,6 +156,7 @@ public fun ApiStudioScreen(
                     viewModel?.updateBodyPayload(item.bodyPayload)
                     viewModel?.updateBodyType(item.bodyType)
                     viewModel?.updateScripts(item.preRequestScript, item.testScript)
+                    viewModel?.updateAuthState(item.authState)
                     collectionsViewModel?.openSaveDialog()
                 },
                 onDeleteUnsavedRequest = { item ->
@@ -220,9 +216,9 @@ public fun ApiStudioScreen(
                             url = currentUrl,
                             onMethodChanged = { newMethod ->
                                 viewModel?.updateMethod(newMethod)
-                                when (val ctx = uiState.sessionContext) {
+                                when (val context = uiState.sessionContext) {
                                     is SessionContext.SavedRequest -> collectionsViewModel?.triggerSavedRequestAutoSave(
-                                        requestId = ctx.requestId, collectionId = ctx.collectionId, folderId = ctx.folderId,
+                                        requestId = context.requestId, collectionId = context.collectionId, folderId = context.folderId,
                                         editorState = uiState.editorState.copy(method = newMethod)
                                     )
                                     else -> collectionsViewModel?.triggerUnsavedAutoSave(
@@ -233,9 +229,9 @@ public fun ApiStudioScreen(
                             },
                             onUrlChanged = { newUrl ->
                                 viewModel?.updateUrl(newUrl)
-                                when (val ctx = uiState.sessionContext) {
+                                when (val context = uiState.sessionContext) {
                                     is SessionContext.SavedRequest -> collectionsViewModel?.triggerSavedRequestAutoSave(
-                                        requestId = ctx.requestId, collectionId = ctx.collectionId, folderId = ctx.folderId,
+                                        requestId = context.requestId, collectionId = context.collectionId, folderId = context.folderId,
                                         editorState = uiState.editorState.copy(url = newUrl)
                                     )
                                     else -> collectionsViewModel?.triggerUnsavedAutoSave(
@@ -259,9 +255,9 @@ public fun ApiStudioScreen(
                             bodyPayload = bodyPayload,
                             onBodyPayloadChanged = { newBody ->
                                 viewModel?.updateBodyPayload(newBody)
-                                when (val ctx = uiState.sessionContext) {
+                                when (val context = uiState.sessionContext) {
                                     is SessionContext.SavedRequest -> collectionsViewModel?.triggerSavedRequestAutoSave(
-                                        requestId = ctx.requestId, collectionId = ctx.collectionId, folderId = ctx.folderId,
+                                        requestId = context.requestId, collectionId = context.collectionId, folderId = context.folderId,
                                         editorState = uiState.editorState.copy(bodyPayload = newBody)
                                     )
                                     else -> collectionsViewModel?.triggerUnsavedAutoSave(
@@ -273,9 +269,9 @@ public fun ApiStudioScreen(
                             queryParams = uiState.editorState.queryParams,
                             onQueryParamsChanged = { newParams ->
                                 viewModel?.updateQueryParams(newParams)
-                                when (val ctx = uiState.sessionContext) {
+                                when (val context = uiState.sessionContext) {
                                     is SessionContext.SavedRequest -> collectionsViewModel?.triggerSavedRequestAutoSave(
-                                        requestId = ctx.requestId, collectionId = ctx.collectionId, folderId = ctx.folderId,
+                                        requestId = context.requestId, collectionId = context.collectionId, folderId = context.folderId,
                                         editorState = uiState.editorState.copy(queryParams = newParams)
                                     )
                                     else -> collectionsViewModel?.triggerUnsavedAutoSave(
@@ -287,9 +283,9 @@ public fun ApiStudioScreen(
                             headers = uiState.editorState.headers,
                             onHeadersChanged = { newHeaders ->
                                 viewModel?.updateHeaders(newHeaders)
-                                when (val ctx = uiState.sessionContext) {
+                                when (val context = uiState.sessionContext) {
                                     is SessionContext.SavedRequest -> collectionsViewModel?.triggerSavedRequestAutoSave(
-                                        requestId = ctx.requestId, collectionId = ctx.collectionId, folderId = ctx.folderId,
+                                        requestId = context.requestId, collectionId = context.collectionId, folderId = context.folderId,
                                         editorState = uiState.editorState.copy(headers = newHeaders)
                                     )
                                     else -> collectionsViewModel?.triggerUnsavedAutoSave(
@@ -300,12 +296,26 @@ public fun ApiStudioScreen(
                             },
                             cookies = uiState.editorState.cookies,
                             onCookiesChanged = { viewModel?.updateCookies(it) },
+                            authState = uiState.editorState.authState,
+                            onAuthStateChanged = { newAuth ->
+                                viewModel?.updateAuthState(newAuth)
+                                when (val context = uiState.sessionContext) {
+                                    is SessionContext.SavedRequest -> collectionsViewModel?.triggerSavedRequestAutoSave(
+                                        requestId = context.requestId, collectionId = context.collectionId, folderId = context.folderId,
+                                        editorState = uiState.editorState.copy(authState = newAuth)
+                                    )
+                                    else -> collectionsViewModel?.triggerUnsavedAutoSave(
+                                        editorState = uiState.editorState.copy(authState = newAuth),
+                                        onLinkedIdAssigned = { id, title -> viewModel?.updateLinkedUnsavedId(id, title) }
+                                    )
+                                }
+                            },
                             preRequestScript = uiState.editorState.preRequestScript,
                             onPreRequestScriptChanged = { newScript ->
                                 viewModel?.updatePreRequestScript(newScript)
-                                when (val ctx = uiState.sessionContext) {
+                                when (val context = uiState.sessionContext) {
                                     is SessionContext.SavedRequest -> collectionsViewModel?.triggerSavedRequestAutoSave(
-                                        requestId = ctx.requestId, collectionId = ctx.collectionId, folderId = ctx.folderId,
+                                        requestId = context.requestId, collectionId = context.collectionId, folderId = context.folderId,
                                         editorState = uiState.editorState.copy(preRequestScript = newScript)
                                     )
                                     else -> collectionsViewModel?.triggerUnsavedAutoSave(
@@ -317,9 +327,9 @@ public fun ApiStudioScreen(
                             testScript = uiState.editorState.testScript,
                             onTestScriptChanged = { newScript ->
                                 viewModel?.updateTestScript(newScript)
-                                when (val ctx = uiState.sessionContext) {
+                                when (val context = uiState.sessionContext) {
                                     is SessionContext.SavedRequest -> collectionsViewModel?.triggerSavedRequestAutoSave(
-                                        requestId = ctx.requestId, collectionId = ctx.collectionId, folderId = ctx.folderId,
+                                        requestId = context.requestId, collectionId = context.collectionId, folderId = context.folderId,
                                         editorState = uiState.editorState.copy(testScript = newScript)
                                     )
                                     else -> collectionsViewModel?.triggerUnsavedAutoSave(
@@ -330,6 +340,8 @@ public fun ApiStudioScreen(
                             },
                             activeSubTab = activeSubTabEnum,
                             onSubTabSelected = { viewModel?.updateActiveSubTab(it.name) },
+                            activeScriptPhase = uiState.editorState.activeScriptPhase,
+                            onScriptPhaseSelected = { viewModel?.updateActiveScriptPhase(it.name) },
                             scriptLanguage = try {
                                 com.devuloopers.knet.engine.script.api.ScriptLanguage.valueOf(uiState.editorState.scriptLanguage.uppercase())
                             } catch (_: Exception) {
@@ -356,11 +368,7 @@ public fun ApiStudioScreen(
                         failureReason = presentation?.failureReason,
                         errorMessage = uiState.errorMessage
                     )
-                    val activeResponseSubTabEnum = try {
-                        com.devuloopers.knet.ui.desktop.apistudio.response.ResponseSubTab.valueOf(uiState.editorState.activeResponseSubTab.uppercase())
-                    } catch (_: Exception) {
-                        com.devuloopers.knet.ui.desktop.apistudio.response.ResponseSubTab.BODY
-                    }
+                    val activeResponseSubTabEnum = uiState.editorState.activeResponseSubTab
                     ResponseInspectorView(
                         state = inspectorState,
                         actions = ResponseInspectorActions(

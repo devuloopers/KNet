@@ -17,6 +17,18 @@ public data class TestResult(
 
 /**
  * Presentation model formatting HTTP responses for UI preview.
+ *
+ * @property statusCode HTTP status code (e.g. 200, 404, 500).
+ * @property statusText HTTP status textual description (e.g. "OK", "Not Found").
+ * @property durationMs Round-trip execution time in milliseconds.
+ * @property sizeBytes Total response payload size in bytes.
+ * @property mimeType Detected MIME content-type string (e.g. "application/json").
+ * @property headers Map of response header name to value.
+ * @property cookies Map of response cookie name to value.
+ * @property body Formatted raw string content of response payload.
+ * @property testResults List of post-response assertion results.
+ * @property consoleLogs List of console log output messages generated during script execution.
+ * @property failureReason Diagnostic network failure reason if transport error occurred.
  */
 public data class ResponsePresentation(
     val statusCode: Int = 200,

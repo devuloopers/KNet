@@ -50,6 +50,7 @@ public data class SidebarRequestItem(
     val bodyType: String = "NONE",
     val preRequestScript: String = "",
     val testScript: String = "",
+    val authState: com.devuloopers.knet.ui.desktop.apistudio.model.AuthState = com.devuloopers.knet.ui.desktop.apistudio.model.AuthState(),
     /** Non-null when this item belongs to a saved collection. Used for in-place edit routing. */
     val collectionId: String? = null,
     /** Non-null when this item belongs to a saved collection folder. Used for in-place edit routing. */
@@ -77,19 +78,51 @@ public enum class SidebarMode {
 }
 
 /**
+ * Cohesive event callbacks parameter object for [CollectionsSidebar].
+ */
+public data class CollectionsSidebarActions(
+    val onRequestSelected: (SidebarRequestItem) -> Unit = {},
+    val onSaveUnsavedRequest: (SidebarRequestItem) -> Unit = {},
+    val onDeleteUnsavedRequest: (SidebarRequestItem) -> Unit = {},
+    val onNewUnsavedSessionClicked: () -> Unit = {},
+    val onRenameCollection: (SidebarFolderItem) -> Unit = {},
+    val onDeleteCollection: (SidebarFolderItem) -> Unit = {},
+    val onRenameSavedRequest: (SidebarRequestItem) -> Unit = {},
+    val onDeleteSavedRequest: (SidebarRequestItem) -> Unit = {},
+    val onImportClicked: () -> Unit = {},
+    val onNewCollectionClicked: () -> Unit = {}
+)
+
+/**
+ * Cohesive parameter object overload for [CollectionsSidebar].
+ */
+@Composable
+public fun CollectionsSidebar(
+    state: com.devuloopers.knet.ui.desktop.apistudio.model.CollectionsState,
+    actions: CollectionsSidebarActions = CollectionsSidebarActions(),
+    selectedRequestId: String?,
+    modifier: Modifier = Modifier.width(256.dp)
+) {
+    CollectionsSidebar(
+        unsavedRequests = state.unsavedRequests,
+        collections = state.collections,
+        selectedRequestId = selectedRequestId,
+        onRequestSelected = actions.onRequestSelected,
+        onSaveUnsavedRequest = actions.onSaveUnsavedRequest,
+        onDeleteUnsavedRequest = actions.onDeleteUnsavedRequest,
+        onNewUnsavedSessionClicked = actions.onNewUnsavedSessionClicked,
+        onRenameCollection = actions.onRenameCollection,
+        onDeleteCollection = actions.onDeleteCollection,
+        onRenameSavedRequest = actions.onRenameSavedRequest,
+        onDeleteSavedRequest = actions.onDeleteSavedRequest,
+        onImportClicked = actions.onImportClicked,
+        onNewCollectionClicked = actions.onNewCollectionClicked,
+        modifier = modifier
+    )
+}
+
+/**
  * Leftmost Collections Sidebar component for KNet API Studio.
- *
- * Organized into two top-level collapsible dropdown sections:
- * 1. **Unsaved Sessions**: Transient ad-hoc scratch requests.
- * 2. **Saved Collections**: Persistent user-created collections and sub-folders.
- *
- * @param unsavedRequests List of active unsaved scratch request items.
- * @param collections List of saved collection folder items.
- * @param selectedRequestId Id of currently selected request item.
- * @param onRequestSelected Callback when a request item is clicked.
- * @param onImportClicked Callback when Import action is triggered.
- * @param onNewCollectionClicked Callback when New Collection action is triggered.
- * @param modifier Composable modifier applied to sidebar layout root.
  */
 @Composable
 public fun CollectionsSidebar(
@@ -106,7 +139,7 @@ public fun CollectionsSidebar(
     onDeleteSavedRequest: (SidebarRequestItem) -> Unit = {},
     onImportClicked: () -> Unit = {},
     onNewCollectionClicked: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier.width(256.dp)
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -123,7 +156,6 @@ public fun CollectionsSidebar(
 
     Column(
         modifier = modifier
-            .width(256.dp)
             .fillMaxHeight()
             .background(themeColors.surfaceVariant)
             .border(width = 1.dp, color = themeColors.border)
@@ -270,7 +302,9 @@ public fun CollectionsSidebar(
                                                 color = if (isSelected) themeColors.accent else themeColors.textPrimary,
                                                 fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
                                             ),
-                                            maxLines = 1
+                                            maxLines = 1,
+                                            softWrap = false,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                         )
                                     }
                                 }
@@ -389,7 +423,9 @@ public fun CollectionsSidebar(
                                                         color = if (isSelected) themeColors.accent else themeColors.textPrimary,
                                                         fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
                                                     ),
-                                                    maxLines = 1
+                                                    maxLines = 1,
+                                                    softWrap = false,
+                                                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                                 )
                                             }
                                         }

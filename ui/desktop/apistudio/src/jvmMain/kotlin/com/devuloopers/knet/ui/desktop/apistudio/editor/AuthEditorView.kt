@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
@@ -72,7 +73,7 @@ public fun AuthEditorView(
                     val selectedType = AuthType.entries.find { it.label == selectedLabel } ?: AuthType.NO_AUTH
                     onStateChange(state.copy(authType = selectedType))
                 },
-                modifier = Modifier.width(220.dp)
+                modifier = Modifier.widthIn(min = 180.dp, max = 240.dp)
             )
         }
 
@@ -254,7 +255,7 @@ public fun AuthEditorView(
                                 val loc = ApiKeyLocation.entries.find { it.label == selectedLabel } ?: ApiKeyLocation.HEADER
                                 onStateChange(state.copy(apiKeyLocation = loc))
                             },
-                            modifier = Modifier.width(180.dp)
+                            modifier = Modifier.widthIn(min = 140.dp, max = 200.dp)
                         )
                     }
                 }

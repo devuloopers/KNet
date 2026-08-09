@@ -28,6 +28,11 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
 import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdown
@@ -113,6 +118,18 @@ public fun SaveRequestDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(focusRequester)
+                            .onKeyEvent { keyEvent ->
+                                val isConfirmEnabled = requestName.isNotBlank() && (
+                                    saveMode == CollectionSaveMode.EXISTING_COLLECTION && selectedCollectionId != null ||
+                                    saveMode == CollectionSaveMode.NEW_COLLECTION && newCollectionName.isNotBlank()
+                                )
+                                if (keyEvent.type == KeyEventType.KeyDown && (keyEvent.key == Key.Enter || keyEvent.key == Key.NumPadEnter)) {
+                                    if (isConfirmEnabled) {
+                                        onConfirm(requestName, saveMode, selectedCollectionId, newCollectionName)
+                                        true
+                                    } else false
+                                } else false
+                            }
                     )
                 }
 

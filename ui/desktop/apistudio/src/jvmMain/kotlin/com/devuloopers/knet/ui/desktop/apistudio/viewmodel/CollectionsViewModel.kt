@@ -2,23 +2,49 @@ package com.devuloopers.knet.ui.desktop.apistudio.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.devuloopers.knet.domain.collection.model.*
-import com.devuloopers.knet.domain.collection.usecase.*
+import com.devuloopers.knet.domain.collection.model.ApiCollection
+import com.devuloopers.knet.domain.collection.model.CollectionFolder
+import com.devuloopers.knet.domain.collection.model.HttpMethod
+import com.devuloopers.knet.domain.collection.model.SavedApiRequest
+import com.devuloopers.knet.domain.collection.usecase.CreateCollectionUseCase
+import com.devuloopers.knet.domain.collection.usecase.DeleteCollectionUseCase
+import com.devuloopers.knet.domain.collection.usecase.DeleteSavedSessionUseCase
+import com.devuloopers.knet.domain.collection.usecase.DeleteUnsavedRequestUseCase
+import com.devuloopers.knet.domain.collection.usecase.ObserveCollectionsUseCase
+import com.devuloopers.knet.domain.collection.usecase.ObserveUnsavedRequestsUseCase
+import com.devuloopers.knet.domain.collection.usecase.RenameCollectionUseCase
+import com.devuloopers.knet.domain.collection.usecase.SaveRequestToCollectionUseCase
+import com.devuloopers.knet.domain.collection.usecase.SaveUnsavedRequestUseCase
+import com.devuloopers.knet.domain.collection.usecase.UpdateRequestInCollectionUseCase
 import com.devuloopers.knet.ui.desktop.apistudio.dialog.CollectionSaveMode
 import com.devuloopers.knet.ui.desktop.apistudio.model.CollectionsState
+import com.devuloopers.knet.ui.desktop.apistudio.model.RequestDomainConverter.toDomainSavedRequest
 import com.devuloopers.knet.ui.desktop.apistudio.model.RequestEditorState
+import com.devuloopers.knet.ui.desktop.apistudio.model.SidebarTreeMapper
 import com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarFolderItem
 import com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarRequestItem
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * Dedicated ViewModel managing UDF state for API collections sidebar, unsaved request sessions,
  * and collection promotion modal dialogs.
  *
- * SRP: Completely decoupled from HTTP network execution and payload formatting.
+ * SRP: Strictly presentation UDF state management. Tree model mapping and DTO conversion
+ * are delegated to [SidebarTreeMapper] and [RequestDomainConverter].
  *
  * @param observeCollectionsUseCase Use case for observing saved API collections from Room DB.
  * @param observeUnsavedRequestsUseCase Use case for observing active unsaved request sessions.
@@ -28,8 +54,11 @@ import kotlinx.coroutines.launch
  * @param deleteCollectionUseCase Use case for deleting saved API collections.
  * @param renameCollectionUseCase Use case for renaming saved API collections.
  * @param saveRequestToCollectionUseCase Use case for promoting unsaved sessions into persistent collections.
+ * @param updateRequestInCollectionUseCase Use case for updating saved requests.
+ * @param deleteSavedSessionUseCase Use case for deleting saved sessions.
  * @param ioDispatcher Coroutine dispatcher for database storage I/O.
  */
+@OptIn(FlowPreview::class)
 class CollectionsViewModel(
     private val observeCollectionsUseCase: ObserveCollectionsUseCase? = null,
     private val observeUnsavedRequestsUseCase: ObserveUnsavedRequestsUseCase? = null,
@@ -47,128 +76,77 @@ class CollectionsViewModel(
     private val _uiState = MutableStateFlow(CollectionsState())
     val uiState: StateFlow<CollectionsState> = _uiState.asStateFlow()
 
+    private sealed interface AutoSaveIntent {
+        data class Unsaved(val savedReq: SavedApiRequest) : AutoSaveIntent
+        data class Saved(val collectionId: String, val folderId: String, val savedReq: SavedApiRequest) : AutoSaveIntent
+    }
+
+    private val autoSaveFlow = MutableSharedFlow<AutoSaveIntent>(extraBufferCapacity = 64)
+
     init {
-        // Observe persistent saved collections flow from Room DB
-        observeCollectionsUseCase?.execute()?.onEach { collectionList ->
-            val sidebarFolders = collectionList.flatMap { collection ->
-                if (collection.folders.isNotEmpty()) {
-                    collection.folders.map { folder ->
-                        val displayName =
-                            if (collection.folders.size <= 1 || folder.name == "Requests" || folder.name == collection.name) {
-                                collection.name
-                            } else {
-                                folder.name
-                            }
-                        SidebarFolderItem(
-                            id = folder.id,
-                            collectionId = collection.id,
-                            name = displayName,
-                            isExpanded = folder.isExpanded,
-                            requests = folder.requests.map { req ->
-                                SidebarRequestItem(
-                                    id = req.id,
-                                    name = req.name,
-                                    method = req.methodString,
-                                    url = req.url,
-                                    headers = req.headers.map { it.key to it.value },
-                                    bodyPayload = req.body.content,
-                                    bodyType = req.body.type,
-                                    preRequestScript = req.scripts.preRequest,
-                                    testScript = req.scripts.test,
-                                    collectionId = collection.id,
-                                    folderId = folder.id
-                                )
-                            }
+        // Observe persistent saved collections flow from Room DB via SidebarTreeMapper
+        observeCollectionsUseCase?.execute()
+            ?.map { SidebarTreeMapper.toSidebarFolders(it) }
+            ?.flowOn(ioDispatcher)
+            ?.onEach { sidebarFolders ->
+                _uiState.update { it.copy(collections = sidebarFolders) }
+            }
+            ?.launchIn(viewModelScope)
+
+        // Observe active unsaved request session flow from Room DB via SidebarTreeMapper
+        observeUnsavedRequestsUseCase?.execute()
+            ?.map { SidebarTreeMapper.toSidebarUnsavedRequests(it) }
+            ?.flowOn(ioDispatcher)
+            ?.onEach { sidebarItems ->
+                _uiState.update { it.copy(unsavedRequests = sidebarItems) }
+            }
+            ?.launchIn(viewModelScope)
+
+        // Debounced reactive auto-save pipeline
+        autoSaveFlow
+            .debounce(500.milliseconds)
+            .onEach { intent ->
+                when (intent) {
+                    is AutoSaveIntent.Unsaved -> {
+                        saveUnsavedRequestUseCase?.execute(intent.savedReq)
+                    }
+                    is AutoSaveIntent.Saved -> {
+                        updateRequestInCollectionUseCase?.execute(
+                            collectionId = intent.collectionId,
+                            folderId = intent.folderId,
+                            request = intent.savedReq
                         )
                     }
-                } else {
-                    listOf(
-                        SidebarFolderItem(
-                            id = collection.id,
-                            collectionId = collection.id,
-                            name = collection.name,
-                            isExpanded = true,
-                            requests = emptyList()
-                        )
-                    )
                 }
             }
-            _uiState.update { it.copy(collections = sidebarFolders) }
-        }?.launchIn(viewModelScope)
-
-        // Observe active unsaved request session flow from Room DB
-        observeUnsavedRequestsUseCase?.execute()?.onEach { unsavedList ->
-            val sidebarItems = unsavedList.map { req ->
-                SidebarRequestItem(
-                    id = req.id,
-                    name = req.name,
-                    method = req.methodString,
-                    url = req.url,
-                    headers = req.headers.map { it.key to it.value },
-                    bodyPayload = req.body.content,
-                    bodyType = req.body.type,
-                    preRequestScript = req.scripts.preRequest,
-                    testScript = req.scripts.test
-                )
-            }
-            _uiState.update { it.copy(unsavedRequests = sidebarItems) }
-        }?.launchIn(viewModelScope)
+            .flowOn(ioDispatcher)
+            .launchIn(viewModelScope)
     }
 
     /**
-     * Auto-saves or updates an unsaved request draft in persistent storage when the user edits request parameters.
-     *
-     * @param editorState Current active request editor state.
-     * @param onLinkedIdAssigned Callback fired if a new unsaved session ID is generated.
+     * Auto-saves or updates an unsaved request draft in persistent storage.
      */
     fun triggerUnsavedAutoSave(
         editorState: RequestEditorState,
         onLinkedIdAssigned: (String, String) -> Unit
     ) {
         val currentUnsavedRequests = _uiState.value.unsavedRequests
-
-        // Eagerly generate and assign the session ID to provide instant UI feedback
         val effectiveLinkedId = editorState.linkedUnsavedId ?: "unsaved_${System.currentTimeMillis()}"
         val sessionName = if (editorState.linkedUnsavedId != null) {
             currentUnsavedRequests.find { it.id == effectiveLinkedId }?.name
                 ?: "Unsaved Session ${currentUnsavedRequests.size + 1}"
         } else {
             val name = "Unsaved Session ${currentUnsavedRequests.size + 1}"
-            onLinkedIdAssigned(effectiveLinkedId, name) // Instantly update UI on first keystroke
+            onLinkedIdAssigned(effectiveLinkedId, name)
             name
         }
 
-        viewModelScope.launch(ioDispatcher) {
-            val httpMethodEnum = try {
-                HttpMethod.valueOf(editorState.method.uppercase())
-            } catch (_: Exception) {
-                HttpMethod.GET
-            }
-
-            val savedReq = SavedApiRequest(
-                id = effectiveLinkedId,
-                name = sessionName,
-                method = httpMethodEnum,
-                url = editorState.url,
-                headers = editorState.headers.map { RequestHeader(it.first, it.second) },
-                body = ApiRequestBody(content = editorState.bodyPayload, type = editorState.bodyType),
-                scripts = ApiRequestScripts(preRequest = editorState.preRequestScript, test = editorState.testScript)
-            )
-
-            saveUnsavedRequestUseCase?.execute(savedReq)
-        }
+        val savedReq = editorState.toDomainSavedRequest(id = effectiveLinkedId, name = sessionName)
+        autoSaveFlow.tryEmit(AutoSaveIntent.Unsaved(savedReq))
     }
 
     /**
-     * Auto-saves edits to a **saved collection request** in-place directly to Room DB.
-     *
-     * This is invoked when the user edits a field while a [SessionContext.SavedRequest] is active.
-     * It performs a targeted upsert of the existing request record and never creates any unsaved session.
-     *
-     * @param requestId The ID of the saved request being edited.
-     * @param collectionId The ID of the parent collection.
-     * @param folderId The ID of the parent folder.
-     * @param editorState The current editor state to persist.
+     * Auto-saves edits to a saved collection request in-place.
      */
     fun triggerSavedRequestAutoSave(
         requestId: String,
@@ -176,43 +154,19 @@ class CollectionsViewModel(
         folderId: String,
         editorState: RequestEditorState
     ) {
-        viewModelScope.launch(ioDispatcher) {
-            val httpMethodEnum = try {
-                HttpMethod.valueOf(editorState.method.uppercase())
-            } catch (_: Exception) {
-                HttpMethod.GET
-            }
+        val currentSavedName = _uiState.value.collections
+            .flatMap { folder -> folder.requests }
+            .find { request -> request.id == requestId }
+            ?.name
+            ?: editorState.linkedUnsavedId
+            ?: requestId
 
-            // Look up existing request name from active UI state to preserve human-readable title
-            val currentSavedName = _uiState.value.collections
-                .flatMap { folder -> folder.requests }
-                .find { request -> request.id == requestId }
-                ?.name
-                ?: editorState.linkedUnsavedId
-                ?: requestId
-
-            val savedReq = SavedApiRequest(
-                id = requestId,
-                name = currentSavedName,
-                method = httpMethodEnum,
-                url = editorState.url,
-                headers = editorState.headers.map { RequestHeader(it.first, it.second) },
-                body = ApiRequestBody(content = editorState.bodyPayload, type = editorState.bodyType),
-                scripts = ApiRequestScripts(preRequest = editorState.preRequestScript, test = editorState.testScript)
-            )
-
-            updateRequestInCollectionUseCase?.execute(
-                collectionId = collectionId,
-                folderId = folderId,
-                request = savedReq
-            )
-        }
+        val savedReq = editorState.toDomainSavedRequest(id = requestId, name = currentSavedName)
+        autoSaveFlow.tryEmit(AutoSaveIntent.Saved(collectionId = collectionId, folderId = folderId, savedReq = savedReq))
     }
 
     /**
-     * Creates a new empty unsaved session and persists it into storage.
-     *
-     * @param onSuccess Callback executed passing (newUnsavedId, sessionName).
+     * Creates a new empty unsaved session.
      */
     fun createEmptyUnsavedSession(onSuccess: (String, String) -> Unit) {
         val currentUnsavedRequests = _uiState.value.unsavedRequests
@@ -233,48 +187,28 @@ class CollectionsViewModel(
         }
     }
 
-    /**
-     * Deletes an unsaved request session.
-     */
     fun deleteUnsavedRequest(requestId: String) {
         viewModelScope.launch(ioDispatcher) {
             deleteUnsavedRequestUseCase?.execute(requestId)
         }
     }
 
-    /**
-     * Opens the Save Request Dialog modal.
-     */
     fun openSaveDialog() {
         _uiState.update { it.copy(isSaveDialogOpen = true) }
     }
 
-    /**
-     * Closes the Save Request Dialog modal.
-     */
     fun closeSaveDialog() {
         _uiState.update { it.copy(isSaveDialogOpen = false) }
     }
 
-    /**
-     * Opens the Create Collection Dialog modal.
-     */
     fun openCreateCollectionDialog() {
         _uiState.update { it.copy(isCreateCollectionDialogOpen = true) }
     }
 
-    /**
-     * Closes the Create Collection Dialog modal.
-     */
     fun closeCreateCollectionDialog() {
         _uiState.update { it.copy(isCreateCollectionDialogOpen = false) }
     }
 
-    /**
-     * Creates a new API collection suite.
-     *
-     * @param collectionName Name of the new collection.
-     */
     fun createCollection(collectionName: String) {
         viewModelScope.launch(ioDispatcher) {
             createCollectionUseCase?.execute(collectionName)
@@ -282,18 +216,12 @@ class CollectionsViewModel(
         }
     }
 
-    /**
-     * Deletes a saved API collection by ID.
-     */
     fun deleteCollection(collectionId: String) {
         viewModelScope.launch(ioDispatcher) {
             deleteCollectionUseCase?.execute(collectionId)
         }
     }
 
-    /**
-     * Opens the Rename Collection Dialog modal.
-     */
     fun openRenameDialog(collectionId: String, currentName: String) {
         _uiState.update {
             it.copy(
@@ -304,9 +232,6 @@ class CollectionsViewModel(
         }
     }
 
-    /**
-     * Closes the Rename Collection Dialog modal.
-     */
     fun closeRenameDialog() {
         _uiState.update {
             it.copy(
@@ -317,9 +242,6 @@ class CollectionsViewModel(
         }
     }
 
-    /**
-     * Renames a saved API collection suite.
-     */
     fun renameCollection(collectionId: String, newName: String) {
         viewModelScope.launch(ioDispatcher) {
             renameCollectionUseCase?.execute(collectionId, newName)
@@ -333,11 +255,6 @@ class CollectionsViewModel(
         }
     }
 
-    /**
-     * Opens the Rename Request Dialog modal for a saved collection request.
-     *
-     * @param request The saved request item to rename.
-     */
     fun openRenameRequestDialog(request: SidebarRequestItem) {
         _uiState.update {
             it.copy(
@@ -347,9 +264,6 @@ class CollectionsViewModel(
         }
     }
 
-    /**
-     * Closes the Rename Request Dialog modal.
-     */
     fun closeRenameRequestDialog() {
         _uiState.update {
             it.copy(
@@ -359,33 +273,12 @@ class CollectionsViewModel(
         }
     }
 
-    /**
-     * Renames a saved API request item inside a collection folder.
-     *
-     * @param request The request item being renamed.
-     * @param newName The new title to assign.
-     */
     fun renameSavedRequest(request: SidebarRequestItem, newName: String) {
         val collectionId = request.collectionId ?: return
         val folderId = request.folderId ?: collectionId
 
         viewModelScope.launch(ioDispatcher) {
-            val httpMethodEnum = try {
-                HttpMethod.valueOf(request.method.uppercase())
-            } catch (_: Exception) {
-                HttpMethod.GET
-            }
-
-            val savedReq = SavedApiRequest(
-                id = request.id,
-                name = newName.trim(),
-                method = httpMethodEnum,
-                url = request.url,
-                headers = request.headers.map { RequestHeader(it.first, it.second) },
-                body = ApiRequestBody(content = request.bodyPayload, type = request.bodyType),
-                scripts = ApiRequestScripts(preRequest = request.preRequestScript, test = request.testScript)
-            )
-
+            val savedReq = request.toDomainSavedRequest(overrideName = newName)
             updateRequestInCollectionUseCase?.execute(
                 collectionId = collectionId,
                 folderId = folderId,
@@ -401,27 +294,12 @@ class CollectionsViewModel(
         }
     }
 
-    /**
-     * Deletes a saved API request item from persistent storage.
-     *
-     * @param requestId The ID of the saved request record to delete.
-     */
     fun deleteSavedRequest(requestId: String) {
         viewModelScope.launch(ioDispatcher) {
             deleteSavedSessionUseCase?.execute(requestId)
         }
     }
 
-    /**
-     * Saves or promotes the current active request session into a persistent collection.
-     *
-     * @param requestName Title of the saved request.
-     * @param mode Target save mode (NEW_COLLECTION or EXISTING_COLLECTION).
-     * @param selectedCollectionId Id of existing target collection folder if mode is EXISTING_COLLECTION.
-     * @param newCollectionName Name of newly created collection if mode is NEW_COLLECTION.
-     * @param currentEditor Current editor state containing URL, method, headers, etc.
-     * @param onSaved Callback fired upon successful promotion passing saved request ID.
-     */
     fun saveRequestToCollection(
         requestName: String,
         mode: CollectionSaveMode,
@@ -431,22 +309,7 @@ class CollectionsViewModel(
         onSaved: (String) -> Unit = {}
     ) {
         val linkedId = currentEditor.linkedUnsavedId ?: "unsaved_${System.currentTimeMillis()}"
-
-        val httpMethodEnum = try {
-            HttpMethod.valueOf(currentEditor.method.uppercase())
-        } catch (_: Exception) {
-            HttpMethod.GET
-        }
-
-        val request = SavedApiRequest(
-            id = "req_${System.currentTimeMillis()}",
-            name = requestName,
-            method = httpMethodEnum,
-            url = currentEditor.url,
-            headers = currentEditor.headers.map { RequestHeader(it.first, it.second) },
-            body = ApiRequestBody(content = currentEditor.bodyPayload, type = currentEditor.bodyType),
-            scripts = ApiRequestScripts(preRequest = currentEditor.preRequestScript, test = currentEditor.testScript)
-        )
+        val request = currentEditor.toDomainSavedRequest(id = "req_${System.currentTimeMillis()}", name = requestName)
 
         viewModelScope.launch(ioDispatcher) {
             when (mode) {
