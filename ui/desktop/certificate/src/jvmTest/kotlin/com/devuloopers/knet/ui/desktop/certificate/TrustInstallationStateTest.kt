@@ -18,10 +18,11 @@ public class TrustInstallationStateTest {
     @Test
     public fun testTrustInstallationStateEnumValues() {
         val states = TrustInstallationState.entries
+        assertTrue(states.contains(TrustInstallationState.CHECKING))
         assertTrue(states.contains(TrustInstallationState.IDLE))
         assertTrue(states.contains(TrustInstallationState.INSTALLING))
         assertTrue(states.contains(TrustInstallationState.INSTALLED))
         assertTrue(states.contains(TrustInstallationState.FAILED))
-        assertEquals(4, states.size)
+        assertEquals(5, states.size)
     }
 }

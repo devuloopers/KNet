@@ -47,26 +47,46 @@ fun CertificateCenterPanel(
             onTabSelected = { onIntent(CertificateIntent.SwitchTab(it)) }
         )
 
-        // Action Bar (Search + Import/Add buttons)
+        // Action Bar (Search + Refresh + Import/Add buttons)
         CertificateActionBar(
             activeTab = uiState.activeTab,
             searchQuery = uiState.searchQuery,
             onSearchChange = { onIntent(CertificateIntent.Search(it)) },
             onImportClick = { onIntent(CertificateIntent.SetImportDialogVisible(true)) },
-            onAddRuleClick = { onIntent(CertificateIntent.SetRuleDialogVisible(true)) }
+            onAddRuleClick = { onIntent(CertificateIntent.SetRuleDialogVisible(true)) },
+            onRefreshClick = { onIntent(CertificateIntent.Refresh) }
         )
 
+        // Summary Metrics Bar
+        CertificateMetricsBar(
+            certificates = uiState.clientCertificates,
+            mtlsRules = uiState.mtlsRules
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
         // Content
-        Box(modifier = Modifier.weight(1f).fillMaxWidth().padding(horizontal = 16.dp)) {
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+        ) {
             when (uiState.activeTab) {
                 CertificateTab.CLIENT_CERTS -> {
-                    ClientCertificateList(
-                        certificates = filteredCerts,
-                        selectedCertificate = uiState.selectedCertificate,
-                        onSelect = { onIntent(CertificateIntent.SelectCertificate(it)) },
-                        onToggleEnabled = { alias, enabled -> onIntent(CertificateIntent.ToggleCertificateEnabled(alias, enabled)) },
-                        onDelete = { onIntent(CertificateIntent.DeleteCertificate(it.alias)) }
-                    )
+                    if (filteredCerts.isEmpty()) {
+                        CertificateEmptyState(
+                            onImportClick = { onIntent(CertificateIntent.SetImportDialogVisible(true)) }
+                        )
+                    } else {
+                        ClientCertificateList(
+                            certificates = filteredCerts,
+                            selectedCertificate = uiState.selectedCertificate,
+                            onSelect = { onIntent(CertificateIntent.SelectCertificate(it)) },
+                            onToggleEnabled = { alias, enabled -> onIntent(CertificateIntent.ToggleCertificateEnabled(alias, enabled)) },
+                            onDelete = { onIntent(CertificateIntent.DeleteCertificate(it.alias)) }
+                        )
+                    }
                 }
                 CertificateTab.DOMAIN_RULES -> {
                     MtlsRuleList(

@@ -1,9 +1,12 @@
 package com.devuloopers.knet.ui.desktop.certificate.overview
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.certificate.model.CaDetails
@@ -17,6 +20,7 @@ fun CertificateSidebar(
     modifier: Modifier = Modifier
 ) {
     val themeColors = KNetTheme.colors
+    val typography = KNetTheme.typography
 
     Column(
         modifier = modifier
@@ -27,15 +31,40 @@ fun CertificateSidebar(
     ) {
         SystemTrustHeader()
 
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        ActiveRootCaCard(caDetails = caDetails)
-        
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        WindowsTrustStatusRow(
-            trustState = trustState,
-            onInstallClicked = onInstallTrustClick
-        )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .border(
+                    width = 1.dp,
+                    color = themeColors.border,
+                    shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
+                )
+                .padding(16.dp)
+        ) {
+            Column {
+                Text(
+                    text = "TRUST STATUS",
+                    style = typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                    color = themeColors.textSecondary
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                ActiveRootCaCard(caDetails = caDetails)
+                
+                Spacer(modifier = Modifier.height(12.dp))
+
+                WindowsTrustStatusRow(
+                    trustState = trustState,
+                    onInstallClicked = onInstallTrustClick
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                ClientCertificatesInfoCard()
+            }
+        }
     }
 }

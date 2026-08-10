@@ -61,9 +61,10 @@ public fun CertificateManagerScreen(
         if (uiState.isImportDialogVisible) {
             ImportClientCertificateDialog(
                 onDismiss = { viewModel.processIntent(CertificateIntent.SetImportDialogVisible(false)) },
-                onImport = { alias, path ->
-                    viewModel.processIntent(CertificateIntent.ImportCertificate(path = path, alias = alias))
-                }
+                onImport = { alias, path, passphrase ->
+                    viewModel.processIntent(CertificateIntent.ImportCertificate(path = path, alias = alias, passphrase = passphrase))
+                },
+                errorMessage = uiState.errorMessage
             )
         }
 

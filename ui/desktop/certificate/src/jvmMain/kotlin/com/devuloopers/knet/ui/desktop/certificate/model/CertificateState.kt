@@ -6,7 +6,7 @@ package com.devuloopers.knet.ui.desktop.certificate.model
 public data class CertificateState(
     val caStatus: CaStatus = CaStatus.MISSING,
     val caDetails: CaDetails = CaDetails(),
-    val trustState: TrustInstallationState = TrustInstallationState.IDLE,
+    val trustState: TrustInstallationState = TrustInstallationState.CHECKING,
     val clientCertificates: List<ClientCertificate> = emptyList(),
     val mtlsRules: List<MtlsRule> = emptyList(),
     val selectedCertificate: ClientCertificate? = null,

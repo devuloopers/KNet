@@ -15,6 +15,8 @@ import com.devuloopers.knet.data.desktop.runtime.CertificateRuntimeRepository
 import com.devuloopers.knet.data.desktop.runtime.ProxyRuntimeRepository
 import com.devuloopers.knet.data.desktop.runtime.SessionRuntimeRepository
 import com.devuloopers.knet.data.desktop.workspace.repository.WidgetPreferencesRepositoryImpl
+import com.devuloopers.knet.engine.certificate.CertificateManager
+import com.devuloopers.knet.engine.certificate.CertificateManagerImpl
 import com.devuloopers.knet.domain.clientNetwork.model.ProxyTrafficListener
 import com.devuloopers.knet.domain.collection.repository.CollectionsRepository
 import com.devuloopers.knet.domain.collection.usecase.SaveLiveTransactionToCollectionUseCase
@@ -73,9 +75,22 @@ public object DesktopDataModule {
             val baseDir = File(System.getProperty("user.home"), ".knet")
             CertificateRuntimeRepository(baseDir)
         }
+        single<CertificateManager> {
+            val certRepo: CertificateRuntimeRepository = get()
+            val certificatesDir = java.io.File(System.getProperty("user.home"), ".knet/certificates")
+            CertificateManagerImpl(
+                ca = certRepo.certificateAuthority,
+                certificatesDir = certificatesDir
+            )
+        }
         single {
             val certRepo: CertificateRuntimeRepository = get()
-            ProxyRuntimeRepository(certRepo.certificateAuthority, certRepo.certificateCache)
+            val certificateManager: CertificateManager = get()
+            ProxyRuntimeRepository(
+                certificateAuthority = certRepo.certificateAuthority,
+                certificateCache = certRepo.certificateCache,
+                keyManagerProvider = certificateManager::getKeyManagerFactory
+            )
         }
         single {
             val baseDir = File(System.getProperty("user.home"), ".knet")

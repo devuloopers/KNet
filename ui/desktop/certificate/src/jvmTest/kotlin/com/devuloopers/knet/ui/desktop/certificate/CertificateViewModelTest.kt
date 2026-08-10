@@ -44,9 +44,11 @@ public class FakeCertificateManager : CertificateManager {
 
     override fun installRootCertificate(): Boolean = true
 
+    override fun isCaTrustedByOs(): Boolean = true
+
     override fun getClientCertificates(): List<EngineClientCertificate> = clientCertificates.toList()
 
-    override fun importClientCertificate(path: String, alias: String) {
+    override fun importClientCertificate(path: String, alias: String, passphrase: String) {
         clientCertificates.add(
             EngineClientCertificate(
                 alias = alias,
@@ -87,6 +89,8 @@ public class FakeCertificateManager : CertificateManager {
     override fun deleteMtlsRule(ruleName: String) {
         mtlsRules.removeAll { it.ruleName == ruleName }
     }
+
+    override fun getKeyManagerFactory(host: String): javax.net.ssl.KeyManagerFactory? = null
 }
 
 /**

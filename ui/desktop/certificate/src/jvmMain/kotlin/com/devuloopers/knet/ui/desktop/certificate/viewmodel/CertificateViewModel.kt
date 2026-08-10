@@ -5,12 +5,12 @@ import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.engine.certificate.CertificateManager
 import com.devuloopers.knet.engine.certificate.EngineMtlsRule
 import com.devuloopers.knet.ui.desktop.certificate.model.*
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
@@ -19,6 +19,7 @@ import kotlinx.coroutines.withContext
  * It delegates all PKI and mutual TLS configurations directly to the engine's [CertificateManager].
  *
  * @property certificateManager The engine facade instance injected via constructor.
+ * @property ioDispatcher Coroutine dispatcher for asynchronous I/O operations (defaults to [Dispatchers.IO]).
  */
 class CertificateViewModel(
     private val certificateManager: CertificateManager,
@@ -71,7 +72,7 @@ class CertificateViewModel(
                             host = c.host,
                             expiration = c.expiration,
                             enabled = c.enabled,
-                            format = try { CertificateFormat.valueOf(c.format) } catch (_: Exception) { CertificateFormat.PKCS12 },
+                            format = CertificateFormat.fromString(c.format),
                             daysUntilExpiration = c.daysUntilExpiration,
                             subjectDn = c.subjectDn,
                             issuerDn = c.issuerDn,
@@ -94,12 +95,21 @@ class CertificateViewModel(
                     }
                 }
 
+                val detectedTrustState = withContext(ioDispatcher) {
+                    if (certificateManager.isCaTrustedByOs()) {
+                        TrustInstallationState.INSTALLED
+                    } else {
+                        TrustInstallationState.IDLE
+                    }
+                }
+
                 _uiState.update {
                     it.copy(
                         caStatus = caStatus,
                         caDetails = caDetails,
                         clientCertificates = certs,
                         mtlsRules = rules,
+                        trustState = detectedTrustState,
                         isLoading = false,
                         errorMessage = null
                     )
@@ -117,6 +127,7 @@ class CertificateViewModel(
 
     /**
      * Processes incoming user actions (intents) asynchronously by delegating to the certificate engine.
+     * All disk operations and heavy parsing tasks are explicitly dispatched to [ioDispatcher].
      *
      * @param intent The [CertificateIntent] UI user action model to execute.
      */
@@ -151,7 +162,7 @@ class CertificateViewModel(
                 is CertificateIntent.ImportCertificate -> {
                     try {
                         val certs = withContext(ioDispatcher) {
-                            certificateManager.importClientCertificate(intent.path, intent.alias)
+                            certificateManager.importClientCertificate(intent.path, intent.alias, intent.passphrase)
                             certificateManager.getClientCertificates().map { c ->
                                 ClientCertificate(
                                     alias = c.alias,
@@ -159,7 +170,7 @@ class CertificateViewModel(
                                     host = c.host,
                                     expiration = c.expiration,
                                     enabled = c.enabled,
-                                    format = try { CertificateFormat.valueOf(c.format) } catch (_: Exception) { CertificateFormat.PKCS12 },
+                                    format = CertificateFormat.fromString(c.format),
                                     daysUntilExpiration = c.daysUntilExpiration,
                                     subjectDn = c.subjectDn,
                                     issuerDn = c.issuerDn,
@@ -184,7 +195,12 @@ class CertificateViewModel(
 
                 is CertificateIntent.ExportCertificate -> {
                     try {
-                        withContext(ioDispatcher) { certificateManager.exportClientCertificate(intent.alias, intent.destinationPath) }
+                        withContext(ioDispatcher) {
+                            certificateManager.exportClientCertificate(
+                                intent.alias,
+                                intent.destinationPath
+                            )
+                        }
                         _uiState.update {
                             it.copy(
                                 isExportDialogVisible = false,
@@ -198,23 +214,25 @@ class CertificateViewModel(
 
                 is CertificateIntent.DeleteCertificate -> {
                     try {
-                        certificateManager.deleteClientCertificate(intent.alias)
-                        val certs = certificateManager.getClientCertificates().map { c ->
-                            ClientCertificate(
-                                alias = c.alias,
-                                subject = c.subject,
-                                host = c.host,
-                                expiration = c.expiration,
-                                enabled = c.enabled,
-                                format = try { CertificateFormat.valueOf(c.format) } catch (_: Exception) { CertificateFormat.PKCS12 },
-                                daysUntilExpiration = c.daysUntilExpiration,
-                                subjectDn = c.subjectDn,
-                                issuerDn = c.issuerDn,
-                                serialNumber = c.serialNumber,
-                                sanList = c.sanList,
-                                publicKeyAlgorithm = c.publicKeyAlgorithm,
-                                sha256Fingerprint = c.sha256Fingerprint
-                            )
+                        val certs = withContext(ioDispatcher) {
+                            certificateManager.deleteClientCertificate(intent.alias)
+                            certificateManager.getClientCertificates().map { c ->
+                                ClientCertificate(
+                                    alias = c.alias,
+                                    subject = c.subject,
+                                    host = c.host,
+                                    expiration = c.expiration,
+                                    enabled = c.enabled,
+                                    format = CertificateFormat.fromString(c.format),
+                                    daysUntilExpiration = c.daysUntilExpiration,
+                                    subjectDn = c.subjectDn,
+                                    issuerDn = c.issuerDn,
+                                    serialNumber = c.serialNumber,
+                                    sanList = c.sanList,
+                                    publicKeyAlgorithm = c.publicKeyAlgorithm,
+                                    sha256Fingerprint = c.sha256Fingerprint
+                                )
+                            }
                         }
                         _uiState.update {
                             it.copy(
@@ -230,16 +248,18 @@ class CertificateViewModel(
 
                 is CertificateIntent.AddRule -> {
                     try {
-                        certificateManager.addMtlsRule(
-                            EngineMtlsRule(
-                                ruleName = intent.rule.ruleName,
-                                hostPattern = intent.rule.hostPattern,
-                                certificateAlias = intent.rule.certificateAlias,
-                                enabled = intent.rule.enabled
+                        val rules = withContext(ioDispatcher) {
+                            certificateManager.addMtlsRule(
+                                EngineMtlsRule(
+                                    ruleName = intent.rule.ruleName,
+                                    hostPattern = intent.rule.hostPattern,
+                                    certificateAlias = intent.rule.certificateAlias,
+                                    enabled = intent.rule.enabled
+                                )
                             )
-                        )
-                        val rules = certificateManager.getMtlsRules().map { r ->
-                            MtlsRule(r.ruleName, r.hostPattern, r.certificateAlias, r.enabled)
+                            certificateManager.getMtlsRules().map { r ->
+                                MtlsRule(r.ruleName, r.hostPattern, r.certificateAlias, r.enabled)
+                            }
                         }
                         _uiState.update {
                             it.copy(
@@ -255,16 +275,18 @@ class CertificateViewModel(
 
                 is CertificateIntent.EditRule -> {
                     try {
-                        certificateManager.editMtlsRule(
-                            EngineMtlsRule(
-                                ruleName = intent.rule.ruleName,
-                                hostPattern = intent.rule.hostPattern,
-                                certificateAlias = intent.rule.certificateAlias,
-                                enabled = intent.rule.enabled
+                        val rules = withContext(ioDispatcher) {
+                            certificateManager.editMtlsRule(
+                                EngineMtlsRule(
+                                    ruleName = intent.rule.ruleName,
+                                    hostPattern = intent.rule.hostPattern,
+                                    certificateAlias = intent.rule.certificateAlias,
+                                    enabled = intent.rule.enabled
+                                )
                             )
-                        )
-                        val rules = certificateManager.getMtlsRules().map { r ->
-                            MtlsRule(r.ruleName, r.hostPattern, r.certificateAlias, r.enabled)
+                            certificateManager.getMtlsRules().map { r ->
+                                MtlsRule(r.ruleName, r.hostPattern, r.certificateAlias, r.enabled)
+                            }
                         }
                         _uiState.update {
                             it.copy(
@@ -280,9 +302,11 @@ class CertificateViewModel(
 
                 is CertificateIntent.RemoveRule -> {
                     try {
-                        certificateManager.deleteMtlsRule(intent.ruleName)
-                        val rules = certificateManager.getMtlsRules().map { r ->
-                            MtlsRule(r.ruleName, r.hostPattern, r.certificateAlias, r.enabled)
+                        val rules = withContext(ioDispatcher) {
+                            certificateManager.deleteMtlsRule(intent.ruleName)
+                            certificateManager.getMtlsRules().map { r ->
+                                MtlsRule(r.ruleName, r.hostPattern, r.certificateAlias, r.enabled)
+                            }
                         }
                         _uiState.update {
                             it.copy(
@@ -321,23 +345,25 @@ class CertificateViewModel(
 
                 is CertificateIntent.ToggleCertificateEnabled -> {
                     try {
-                        certificateManager.toggleCertificateEnabled(intent.alias, intent.enabled)
-                        val certs = certificateManager.getClientCertificates().map { c ->
-                            ClientCertificate(
-                                alias = c.alias,
-                                subject = c.subject,
-                                host = c.host,
-                                expiration = c.expiration,
-                                enabled = c.enabled,
-                                format = try { CertificateFormat.valueOf(c.format) } catch (_: Exception) { CertificateFormat.PKCS12 },
-                                daysUntilExpiration = c.daysUntilExpiration,
-                                subjectDn = c.subjectDn,
-                                issuerDn = c.issuerDn,
-                                serialNumber = c.serialNumber,
-                                sanList = c.sanList,
-                                publicKeyAlgorithm = c.publicKeyAlgorithm,
-                                sha256Fingerprint = c.sha256Fingerprint
-                            )
+                        val certs = withContext(ioDispatcher) {
+                            certificateManager.toggleCertificateEnabled(intent.alias, intent.enabled)
+                            certificateManager.getClientCertificates().map { c ->
+                                ClientCertificate(
+                                    alias = c.alias,
+                                    subject = c.subject,
+                                    host = c.host,
+                                    expiration = c.expiration,
+                                    enabled = c.enabled,
+                                    format = CertificateFormat.fromString(c.format),
+                                    daysUntilExpiration = c.daysUntilExpiration,
+                                    subjectDn = c.subjectDn,
+                                    issuerDn = c.issuerDn,
+                                    serialNumber = c.serialNumber,
+                                    sanList = c.sanList,
+                                    publicKeyAlgorithm = c.publicKeyAlgorithm,
+                                    sha256Fingerprint = c.sha256Fingerprint
+                                )
+                            }
                         }
                         _uiState.update { it.copy(clientCertificates = certs) }
                     } catch (e: Exception) {

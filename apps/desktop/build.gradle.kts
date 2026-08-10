@@ -19,6 +19,9 @@ kotlin {
 
 dependencies {
     implementation(project(":ui:desktop:app"))
+    implementation(project(":ui:desktop:traffic"))
+    implementation(project(":ui:desktop:apistudio"))
+    implementation(project(":ui:desktop:certificate"))
     implementation(project(":core:domain"))
     implementation(project(":core:logger"))
     implementation(project(":core:serialization"))

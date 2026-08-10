@@ -37,6 +37,7 @@ class KNetProxyHandler(
     private val ca: CertificateAuthority,
     private val certCache: CertificateCache,
     private val listener: ProxyTrafficListener? = null,
+    private val keyManagerProvider: com.devuloopers.knet.engine.proxy.tls.KeyManagerProvider? = null,
     private val strictSsl: Boolean = false
 ) : SimpleChannelInboundHandler<FullHttpRequest>() {
 
@@ -173,9 +174,15 @@ class KNetProxyHandler(
 
                             if (isSsl) {
                                 timingCollector.markTlsStart()
-                                val sslCtx = SslContextBuilder.forClient()
+                                val sslCtxBuilder = SslContextBuilder.forClient()
                                     .trustManager(ProxyTrustManager.getTrustManagerFactory(strictSsl))
-                                    .build()
+
+                                val kmf = keyManagerProvider?.getKeyManagerFactory(targetHost)
+                                if (kmf != null) {
+                                    sslCtxBuilder.keyManager(kmf)
+                                }
+
+                                val sslCtx = sslCtxBuilder.build()
                                 val sslHandler = sslCtx.newHandler(ch.alloc(), targetHost, targetPort)
                                  sslHandler.handshakeFuture().addListener { handshakeFuture ->
                                     if (handshakeFuture.isSuccess) {

@@ -6,7 +6,7 @@ package com.devuloopers.knet.ui.desktop.certificate.model
 public sealed interface CertificateIntent {
     public object Refresh : CertificateIntent
     public object InstallTrust : CertificateIntent
-    public data class ImportCertificate(val path: String, val alias: String) : CertificateIntent
+    public data class ImportCertificate(val path: String, val alias: String, val passphrase: String = "") : CertificateIntent
     public data class ExportCertificate(val alias: String, val destinationPath: String) : CertificateIntent
     public data class DeleteCertificate(val alias: String) : CertificateIntent
     public data class AddRule(val rule: MtlsRule) : CertificateIntent

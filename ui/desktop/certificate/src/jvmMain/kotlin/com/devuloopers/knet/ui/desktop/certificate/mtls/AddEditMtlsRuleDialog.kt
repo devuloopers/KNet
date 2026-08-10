@@ -12,6 +12,8 @@ import com.devuloopers.knet.ui.core.components.dialog.KNetDialog
 import com.devuloopers.knet.ui.core.components.input.InputFieldConfig
 import com.devuloopers.knet.ui.core.components.input.KNetTextField
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import com.devuloopers.knet.ui.core.components.chip.KNetTag
+import com.devuloopers.knet.ui.core.components.dropdown.KNetSearchableDropdown
 import com.devuloopers.knet.ui.desktop.certificate.model.ClientCertificate
 import com.devuloopers.knet.ui.desktop.certificate.model.MtlsRule
 
@@ -25,7 +27,7 @@ fun AddEditMtlsRuleDialog(
 ) {
     var ruleName by remember { mutableStateOf(initialRule?.ruleName ?: "") }
     var hostPattern by remember { mutableStateOf(initialRule?.hostPattern ?: "") }
-    var certAlias by remember { mutableStateOf(initialRule?.certificateAlias ?: availableCertificates.firstOrNull()?.alias ?: "") }
+    var certAlias by remember { mutableStateOf(initialRule?.certificateAlias ?: "") }
 
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -72,11 +74,30 @@ fun AddEditMtlsRuleDialog(
                 color = themeColors.textSecondary
             )
             Spacer(modifier = Modifier.height(4.dp))
-            KNetTextField(
-                value = certAlias,
-                onValueChange = { certAlias = it },
+            KNetSearchableDropdown(
+                selectedItem = availableCertificates.firstOrNull { it.alias == certAlias },
+                items = availableCertificates,
+                onItemSelected = { selectedCert ->
+                    certAlias = selectedCert.alias
+                },
                 modifier = Modifier.fillMaxWidth(),
-                config = InputFieldConfig(placeholder = "Certificate alias")
+                placeholder = "Select Certificate...",
+                itemText = { it.alias },
+                itemContent = { cert ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = cert.alias,
+                            style = typography.bodyMedium,
+                            color = themeColors.textPrimary
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        KNetTag(text = cert.format.name)
+                    }
+                }
             )
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -95,7 +116,7 @@ fun AddEditMtlsRuleDialog(
                 Spacer(modifier = Modifier.width(8.dp))
                 KNetButton(
                     onClick = {
-                        if (ruleName.isNotBlank() && hostPattern.isNotBlank()) {
+                        if (ruleName.isNotBlank() && hostPattern.isNotBlank() && certAlias.isNotBlank()) {
                             onSave(
                                 MtlsRule(
                                     ruleName = ruleName,
@@ -106,7 +127,7 @@ fun AddEditMtlsRuleDialog(
                             )
                         }
                     },
-                    enabled = ruleName.isNotBlank() && hostPattern.isNotBlank(),
+                    enabled = ruleName.isNotBlank() && hostPattern.isNotBlank() && certAlias.isNotBlank(),
                     variant = ButtonVariant.Primary
                 ) {
                     Text("Save Rule")

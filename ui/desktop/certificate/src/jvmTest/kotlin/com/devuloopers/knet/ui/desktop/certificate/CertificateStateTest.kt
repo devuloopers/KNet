@@ -23,7 +23,7 @@ public class CertificateStateTest {
     public fun testCertificateStateDefaultValues() {
         val state = CertificateState()
         assertEquals(CaStatus.MISSING, state.caStatus)
-        assertEquals(TrustInstallationState.IDLE, state.trustState)
+        assertEquals(TrustInstallationState.CHECKING, state.trustState)
         assertTrue(state.clientCertificates.isEmpty())
         assertTrue(state.mtlsRules.isEmpty())
         assertNull(state.selectedCertificate)

@@ -1,12 +1,15 @@
 package com.devuloopers.knet.engine.certificate
 
+import com.devuloopers.knet.engine.certificate.CertificateAuthority.Companion.DEFAULT_CA_CN
+import com.devuloopers.knet.engine.certificate.CertificateAuthority.Companion.DEFAULT_ORG
+import com.devuloopers.knet.engine.certificate.CertificateAuthority.Companion.DEFAULT_VALIDITY_DAYS
 import org.bouncycastle.asn1.oiw.OIWObjectIdentifiers
+import org.bouncycastle.asn1.pkcs.PrivateKeyInfo
 import org.bouncycastle.asn1.x500.X500Name
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier
 import org.bouncycastle.asn1.x509.BasicConstraints
 import org.bouncycastle.asn1.x509.Extension
 import org.bouncycastle.asn1.x509.KeyUsage
-import org.bouncycastle.asn1.pkcs.PrivateKeyInfo
 import org.bouncycastle.cert.X509CertificateHolder
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter
 import org.bouncycastle.cert.jcajce.JcaX509ExtensionUtils
@@ -18,17 +21,14 @@ import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter
 import org.bouncycastle.openssl.jcajce.JcaPEMWriter
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
 import org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder
-import java.io.File
-import java.io.Reader
-import java.io.StringReader
-import java.io.StringWriter
-import java.io.Writer
+import java.io.*
 import java.math.BigInteger
 import java.security.KeyPairGenerator
 import java.security.PrivateKey
+import java.security.SecureRandom
 import java.security.Security
 import java.security.cert.X509Certificate
-import java.util.Date
+import java.util.*
 
 /**
  * Represents the Certificate Authority (CA) used by KNet to intercept and decrypt HTTPS traffic.
@@ -99,7 +99,7 @@ class CertificateAuthority(
             val keyPair = keyGen.generateKeyPair()
 
             val subjectDN = X500Name("CN=$commonName, O=$org, C=US")
-            val serial = BigInteger.valueOf(System.currentTimeMillis())
+            val serial = BigInteger(160, SecureRandom())
             val notBefore = Date()
             val notAfter = Date(System.currentTimeMillis() + validityDays * 24L * 60L * 60L * 1000L)
 

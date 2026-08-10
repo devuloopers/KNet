@@ -12,7 +12,8 @@ import com.devuloopers.knet.engine.proxy.KNetProxyServer
  */
 class ProxyRuntimeRepository(
     private val certificateAuthority: CertificateAuthority,
-    private val certificateCache: CertificateCache
+    private val certificateCache: CertificateCache,
+    private val keyManagerProvider: com.devuloopers.knet.engine.proxy.tls.KeyManagerProvider? = null
 ) {
     private var proxyServer: KNetProxyServer? = null
 
@@ -29,7 +30,8 @@ class ProxyRuntimeRepository(
             port = port,
             ca = certificateAuthority,
             certCache = certificateCache,
-            listener = trafficListener
+            listener = trafficListener,
+            keyManagerProvider = keyManagerProvider
         )
         server.start()
         proxyServer = server

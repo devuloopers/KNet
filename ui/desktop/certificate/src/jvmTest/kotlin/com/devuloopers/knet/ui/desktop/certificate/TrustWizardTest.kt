@@ -17,6 +17,7 @@ public class TrustWizardTest {
     @Test
     public fun testTrustWizardStateLabels() {
         val states = listOf(
+            TrustInstallationState.CHECKING,
             TrustInstallationState.IDLE,
             TrustInstallationState.INSTALLING,
             TrustInstallationState.INSTALLED,
@@ -25,6 +26,7 @@ public class TrustWizardTest {
 
         val labels = states.map { state ->
             when (state) {
+                TrustInstallationState.CHECKING -> "Verifying system keystore..."
                 TrustInstallationState.IDLE -> "Trust Certificate Authority"
                 TrustInstallationState.INSTALLING -> "Integrating with system keystore..."
                 TrustInstallationState.INSTALLED -> "Certificate Trusted Successfully!"
@@ -32,9 +34,10 @@ public class TrustWizardTest {
             }
         }
 
-        assertEquals("Trust Certificate Authority", labels[0])
-        assertEquals("Integrating with system keystore...", labels[1])
-        assertEquals("Certificate Trusted Successfully!", labels[2])
-        assertEquals("Installation Failed. Retry?", labels[3])
+        assertEquals("Verifying system keystore...", labels[0])
+        assertEquals("Trust Certificate Authority", labels[1])
+        assertEquals("Integrating with system keystore...", labels[2])
+        assertEquals("Certificate Trusted Successfully!", labels[3])
+        assertEquals("Installation Failed. Retry?", labels[4])
     }
 }

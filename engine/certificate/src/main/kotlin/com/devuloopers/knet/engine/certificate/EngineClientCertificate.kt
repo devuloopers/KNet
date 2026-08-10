@@ -1,5 +1,7 @@
 package com.devuloopers.knet.engine.certificate
 
+import kotlinx.serialization.Serializable
+
 /**
  * Domain-level representation of an imported client certificate used for mutual TLS authentication.
  *
@@ -16,7 +18,9 @@ package com.devuloopers.knet.engine.certificate
  * @property sanList Subject Alternative Names list.
  * @property publicKeyAlgorithm Public key algorithm description.
  * @property sha256Fingerprint SHA-256 fingerprint hex string.
+ * @property filePath Absolute file path of saved keypair on disk.
  */
+@Serializable
 public data class EngineClientCertificate(
     val alias: String,
     val subject: String,
@@ -30,5 +34,6 @@ public data class EngineClientCertificate(
     val serialNumber: String = "",
     val sanList: List<String> = emptyList(),
     val publicKeyAlgorithm: String = "RSA 2048-bit",
-    val sha256Fingerprint: String = ""
+    val sha256Fingerprint: String = "",
+    val filePath: String = ""
 )

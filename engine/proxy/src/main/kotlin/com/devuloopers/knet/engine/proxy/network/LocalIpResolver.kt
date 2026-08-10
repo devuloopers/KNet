@@ -34,12 +34,11 @@ public class LocalIpResolver {
                 socket.connect(java.net.InetAddress.getByName("8.8.8.8"), 10002)
                 val hostAddress = socket.localAddress?.hostAddress
                 if (!hostAddress.isNullOrBlank() && hostAddress != "0.0.0.0" && hostAddress != "127.0.0.1") {
-                    KNetLogger.debug(LogTags.PROXY) { "Resolved active host local IP [$hostAddress] via OS routing table" }
                     return hostAddress
                 }
             }
-        } catch (exception: Exception) {
-            KNetLogger.debug(LogTags.PROXY) { "OS routing table IP lookup fallback triggered: ${exception.message}" }
+        } catch (_: Exception) {
+            // Fallback to network interface scanning if OS routing table lookup fails
         }
 
         // 2. Fallback: Scan active network interfaces for site-local IPv4 addresses (192.168.x.x, 10.x.x.x)
@@ -51,12 +50,9 @@ public class LocalIpResolver {
                 .filterNot { it.isLoopbackAddress }
                 .toList()
 
-            val resolvedIp = addresses.firstOrNull { it.isSiteLocalAddress }?.hostAddress
+            addresses.firstOrNull { it.isSiteLocalAddress }?.hostAddress
                 ?: addresses.firstOrNull()?.hostAddress
                 ?: "127.0.0.1"
-
-            KNetLogger.debug(LogTags.PROXY) { "Resolved host local IP [$resolvedIp] via network interface scan" }
-            resolvedIp
         } catch (exception: Exception) {
             KNetLogger.error(LogTags.PROXY, exception) { "Failed to resolve host network interfaces: ${exception.message}" }
             "127.0.0.1"

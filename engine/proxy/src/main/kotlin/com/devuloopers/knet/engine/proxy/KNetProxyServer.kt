@@ -1,24 +1,24 @@
 package com.devuloopers.knet.engine.proxy
 
+import com.devuloopers.knet.domain.clientNetwork.model.ProxyTrafficListener
 import com.devuloopers.knet.engine.certificate.CertificateAuthority
 import com.devuloopers.knet.engine.certificate.CertificateCache
 import com.devuloopers.knet.engine.proxy.handler.KNetProxyHandler
-import com.devuloopers.knet.domain.clientNetwork.model.ProxyTrafficListener
 import io.netty.bootstrap.ServerBootstrap
 import io.netty.channel.Channel
 import io.netty.channel.ChannelInitializer
 import io.netty.channel.EventLoopGroup
+import io.netty.channel.group.ChannelGroup
+import io.netty.channel.group.DefaultChannelGroup
 import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.SocketChannel
 import io.netty.channel.socket.nio.NioServerSocketChannel
-import io.netty.channel.group.ChannelGroup
-import io.netty.channel.group.DefaultChannelGroup
-import io.netty.util.concurrent.GlobalEventExecutor
 import io.netty.handler.codec.http.HttpObjectAggregator
 import io.netty.handler.codec.http.HttpServerCodec
 import io.netty.handler.logging.LogLevel
 import io.netty.handler.logging.LoggingHandler
 import io.netty.util.ResourceLeakDetector
+import io.netty.util.concurrent.GlobalEventExecutor
 import java.net.InetSocketAddress
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
@@ -36,7 +36,8 @@ class KNetProxyServer(
     val port: Int = 8080,
     private val ca: CertificateAuthority,
     private val certCache: CertificateCache,
-    private val listener: ProxyTrafficListener? = null
+    private val listener: ProxyTrafficListener? = null,
+    private val keyManagerProvider: com.devuloopers.knet.engine.proxy.tls.KeyManagerProvider? = null
 ) {
 
     companion object {
@@ -84,7 +85,7 @@ class KNetProxyServer(
 
                     pipelineInitializers.forEach { it(pipeline) }
 
-                    pipeline.addLast("proxyHandler", KNetProxyHandler(ca, certCache, listener))
+                    pipeline.addLast("proxyHandler", KNetProxyHandler(ca, certCache, listener, keyManagerProvider))
                 }
             })
 

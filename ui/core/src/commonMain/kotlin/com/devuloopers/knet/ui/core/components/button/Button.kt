@@ -76,7 +76,6 @@ public fun KNetButton(
     KNetSurface(
         modifier = modifier
             .height(buttonHeight)
-            .wrapContentWidth()
             .clip(shapes.small)
             .animateContentSize(animationSpec = tween(durationMillis = 150))
             .clickable(enabled = isClickable, onClick = onClick)
@@ -91,7 +90,9 @@ public fun KNetButton(
             transitionSpec = {
                 fadeIn(animationSpec = tween(150)) togetherWith fadeOut(animationSpec = tween(150))
             },
-            label = "KNetButtonLoadingContent"
+            label = "KNetButtonLoadingContent",
+            modifier = Modifier.fillMaxHeight(),
+            contentAlignment = Alignment.Center
         ) { isLoading ->
             Row(
                 modifier = Modifier
