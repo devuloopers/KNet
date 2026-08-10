@@ -14,7 +14,6 @@ class DesktopDestinationTest {
         assertNotNull(DesktopDestination.Traffic)
         assertNotNull(DesktopDestination.Inspector)
         assertNotNull(DesktopDestination.ApiStudio)
-        assertNotNull(DesktopDestination.Scripting)
         assertNotNull(DesktopDestination.Certificate)
         assertNotNull(DesktopDestination.Settings)
     }

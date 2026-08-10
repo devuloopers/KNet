@@ -5,12 +5,12 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
+import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.stringPreferencesKey
 import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
 import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-
-import androidx.datastore.preferences.core.stringPreferencesKey
 
 /**
  * Desktop implementation of [WidgetPreferencesRepository].
@@ -33,6 +33,10 @@ class WidgetPreferencesRepositoryImpl(
         private val keyResponseSubTab = stringPreferencesKey("active_response_sub_tab")
         private val keyActiveSessionId = stringPreferencesKey("active_session_id")
         private val keyScriptLanguage = stringPreferencesKey("script_language")
+        private val keyProxyPort = intPreferencesKey("proxy_port")
+        private val keyAutoClearTraffic = booleanPreferencesKey("auto_clear_traffic_startup")
+        private val keyTheme = stringPreferencesKey("theme")
+        private val keyMaxPayloadMb = intPreferencesKey("max_payload_mb")
     }
 
     override val settingsFlow: Flow<WorkspaceLayoutSettings> = dataStore.data.map { preferences ->
@@ -49,7 +53,11 @@ class WidgetPreferencesRepositoryImpl(
             activeScriptPhase = preferences[keyScriptPhase] ?: "PRE_REQUEST",
             activeResponseSubTab = preferences[keyResponseSubTab] ?: "BODY",
             activeSessionId = preferences[keyActiveSessionId] ?: "",
-            scriptLanguage = preferences[keyScriptLanguage] ?: "JAVASCRIPT"
+            scriptLanguage = preferences[keyScriptLanguage] ?: "JAVASCRIPT",
+            proxyPort = preferences[keyProxyPort] ?: 8080,
+            autoClearTrafficOnStartup = preferences[keyAutoClearTraffic] ?: false,
+            theme = preferences[keyTheme] ?: "DARK",
+            maxPayloadMb = preferences[keyMaxPayloadMb] ?: 10
         )
     }
 
@@ -68,6 +76,10 @@ class WidgetPreferencesRepositoryImpl(
             preferences[keyResponseSubTab] = settings.activeResponseSubTab
             preferences[keyActiveSessionId] = settings.activeSessionId
             preferences[keyScriptLanguage] = settings.scriptLanguage
+            preferences[keyProxyPort] = settings.proxyPort
+            preferences[keyAutoClearTraffic] = settings.autoClearTrafficOnStartup
+            preferences[keyTheme] = settings.theme
+            preferences[keyMaxPayloadMb] = settings.maxPayloadMb
         }
     }
 }

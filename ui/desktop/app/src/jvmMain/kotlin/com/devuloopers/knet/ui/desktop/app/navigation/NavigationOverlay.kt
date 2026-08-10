@@ -71,8 +71,7 @@ public fun NavigationOverlay(
     )
 
     val middleSection = listOf(
-        NavigationDestinationInfo(DesktopDestination.Certificate, "Certificates", Icons.Default.Lock, "Ctrl+3"),
-        NavigationDestinationInfo(DesktopDestination.Scripting, "Scripting", Icons.Default.Code, "Ctrl+4")
+        NavigationDestinationInfo(DesktopDestination.Certificate, "Certificates", Icons.Default.Lock, "Ctrl+3")
     )
 
     val bottomSection = listOf(

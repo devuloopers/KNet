@@ -50,13 +50,16 @@ class CertificateManagerImpl(
     private val certsFile: File? = certificatesDir?.let { File(it, "client_certs.json") }
     private val rulesFile: File? = certificatesDir?.let { File(it, "mtls_rules.json") }
 
+    private val clientCertStore = CertificateStore(certsFile)
+    private val mtlsRuleStore = CertificateStore(rulesFile)
+
     init {
         certificatesDir?.mkdirs()
         clientCertificates = Collections.synchronizedList(
-            CertificateStoreSerializer.loadClientCertificates(certsFile).toMutableList()
+            clientCertStore.loadClientCertificates().toMutableList()
         )
         mtlsRules = Collections.synchronizedList(
-            CertificateStoreSerializer.loadMtlsRules(rulesFile).toMutableList()
+            mtlsRuleStore.loadMtlsRules().toMutableList()
         )
 
         // Pre-warm KeyManagerFactory instances for persisted certificates that do not require a passphrase
@@ -254,11 +257,11 @@ class CertificateManagerImpl(
     }
 
     private fun persistClientCertificates() {
-        CertificateStoreSerializer.persistClientCertificates(certsFile, clientCertificates)
+        clientCertStore.persistClientCertificates(clientCertificates)
     }
 
     private fun persistMtlsRules() {
-        CertificateStoreSerializer.persistMtlsRules(rulesFile, mtlsRules)
+        mtlsRuleStore.persistMtlsRules(mtlsRules)
     }
 
     private fun tryParseCertificate(file: File, alias: String, passphrase: String): EngineClientCertificate {

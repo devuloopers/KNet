@@ -71,6 +71,13 @@ public fun KNetWorkspaceHost(
                 modifier = modifier
             )
         }
+        DesktopDestination.Settings -> {
+            val settingsViewModel: com.devuloopers.knet.ui.desktop.settings.viewmodel.SettingsViewModel = koinViewModel()
+            com.devuloopers.knet.ui.desktop.settings.view.SettingsScreen(
+                viewModel = settingsViewModel,
+                modifier = modifier
+            )
+        }
         else -> {
             PlaceholderWorkspaceScreen(
                 destination = destination,
@@ -103,8 +110,6 @@ private fun PlaceholderWorkspaceScreen(
                 DesktopDestination.ApiStudio -> Triple("API Testing Studio", "API request authoring, collections, and environment variables.", Icons.Default.Build)
                 DesktopDestination.Inspector -> Triple("Transaction Inspector", "Header, query parameters, timeline, and payload metadata view.", Icons.Default.Info)
                 DesktopDestination.Certificate -> Triple("PKI Certificates Manager", "Root certificate generation, trust stores, and CA management.", Icons.Default.Lock)
-                DesktopDestination.Scripting -> Triple("Automation Scripting Console", "JavaScript/Kotlin automation script execution environment.", Icons.Default.PlayArrow)
-                DesktopDestination.Settings -> Triple("Application Settings", "Proxy port configuration, upstream proxy chaining, and themes.", Icons.Default.Settings)
                 else -> Triple("KNet Workspace", "Developer suite workspace.", Icons.Default.Info)
             }
 

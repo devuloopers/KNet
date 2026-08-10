@@ -21,11 +21,6 @@ public sealed interface DesktopDestination {
     public data object ApiStudio : DesktopDestination
 
     /**
-     * Automation scripting console and code execution environment.
-     */
-    public data object Scripting : DesktopDestination
-
-    /**
      * PKI root certificates and CA trust manager dashboard.
      */
     public data object Certificate : DesktopDestination

@@ -134,7 +134,7 @@ public fun TrafficToolbar(
                     horizontalArrangement = Arrangement.spacedBy(spacing.xs)
                 ) {
                     val (dotColor, statusText) = when (val engine = state.engineState) {
-                        is ProxyEngineState.Running -> themeColors.semantic.success to "Running (${state.localIpAddress}:8080)"
+                        is ProxyEngineState.Running -> themeColors.semantic.success to "Running (${state.localIpAddress}:${engine.port})"
                         is ProxyEngineState.Starting -> themeColors.accent to "Starting..."
                         is ProxyEngineState.Stopping -> themeColors.textMuted to "Stopping..."
                         is ProxyEngineState.Stopped -> themeColors.textMuted to "Stopped"

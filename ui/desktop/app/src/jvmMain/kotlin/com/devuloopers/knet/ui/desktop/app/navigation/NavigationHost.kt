@@ -7,6 +7,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import com.devuloopers.knet.ui.desktop.settings.view.SettingsScreen
+import com.devuloopers.knet.ui.desktop.settings.viewmodel.SettingsViewModel
+import org.koin.compose.viewmodel.koinViewModel
 
 /**
  * Slot-driven NavigationHost composable routing active destinations in the Desktop Application Framework.
@@ -26,6 +29,10 @@ public fun NavigationHost(
         DesktopDestination.ApiStudio -> {
             com.devuloopers.knet.ui.desktop.apistudio.view.ApiStudioScreen(modifier = modifier)
         }
+        DesktopDestination.Settings -> {
+            val settingsViewModel: SettingsViewModel = koinViewModel()
+            SettingsScreen(viewModel = settingsViewModel, modifier = modifier)
+        }
         else -> {
             Box(
                 modifier = modifier.fillMaxSize(),
@@ -34,10 +41,8 @@ public fun NavigationHost(
                 val label = when (destination) {
                     DesktopDestination.Traffic -> "Live Traffic Feed (Awaiting Feature Migration Phase)"
                     DesktopDestination.Inspector -> "Transaction Inspector (Awaiting Feature Migration Phase)"
-                    DesktopDestination.Scripting -> "Automation Scripting Studio (Awaiting Feature Migration Phase)"
                     DesktopDestination.Certificate -> "CA Certificates Manager (Awaiting Feature Migration Phase)"
-                    DesktopDestination.Settings -> "Application Settings (Awaiting Feature Migration Phase)"
-                    else -> ""
+                    DesktopDestination.ApiStudio -> ""
                 }
 
                 Text(

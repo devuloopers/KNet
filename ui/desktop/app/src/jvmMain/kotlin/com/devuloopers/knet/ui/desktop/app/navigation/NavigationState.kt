@@ -92,10 +92,6 @@ public class NavigationState {
                 onDestinationSelected(DesktopDestination.Certificate)
                 true
             }
-            isModifierPressed && keyEvent.key == Key.Four -> {
-                onDestinationSelected(DesktopDestination.Scripting)
-                true
-            }
             isModifierPressed && keyEvent.key == Key.Comma -> {
                 onDestinationSelected(DesktopDestination.Settings)
                 true

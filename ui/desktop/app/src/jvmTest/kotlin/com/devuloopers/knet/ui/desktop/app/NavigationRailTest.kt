@@ -19,15 +19,13 @@ class NavigationRailTest {
             DesktopDestination.Traffic,
             DesktopDestination.ApiStudio,
             DesktopDestination.Certificate,
-            DesktopDestination.Scripting,
             DesktopDestination.Settings
         )
 
-        assertEquals(5, destinations.size)
+        assertEquals(4, destinations.size)
         assertTrue(destinations.contains(DesktopDestination.Traffic))
         assertTrue(destinations.contains(DesktopDestination.ApiStudio))
         assertTrue(destinations.contains(DesktopDestination.Certificate))
-        assertTrue(destinations.contains(DesktopDestination.Scripting))
         assertTrue(destinations.contains(DesktopDestination.Settings))
     }
 

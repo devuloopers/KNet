@@ -1,3 +1,6 @@
+@file:OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
+
+
 package com.devuloopers.knet.ui.desktop.traffic.viewmodel
 
 import androidx.lifecycle.ViewModel
@@ -12,13 +15,17 @@ import com.devuloopers.knet.domain.traffic.usecase.ClearLiveTrafficUseCase
 import com.devuloopers.knet.domain.traffic.usecase.GetLiveTrafficUseCase
 import com.devuloopers.knet.domain.traffic.usecase.LoadTransactionBodyUseCase
 import com.devuloopers.knet.domain.util.decodeBodyToText
+import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
 import com.devuloopers.knet.engine.formatter.formatters.JsonBodyFormatter
 import com.devuloopers.knet.ui.desktop.codeeditor.service.DocumentPreparationService
 import com.devuloopers.knet.ui.desktop.traffic.model.*
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlin.time.Duration.Companion.milliseconds
 
 /**
  * ViewModel managing live traffic feed state, proxy engine lifecycle observation, filtering, and inspection selection.
@@ -30,20 +37,134 @@ class TrafficViewModel(
     private val stopProxyEngineUseCase: StopProxyEngineUseCase? = null,
     observeProxyEngineStateUseCase: ObserveProxyEngineStateUseCase? = null,
     private val loadTransactionBodyUseCase: LoadTransactionBodyUseCase? = null,
-    observeLocalIpUseCase: ObserveLocalIpUseCase? = null
+    observeLocalIpUseCase: ObserveLocalIpUseCase? = null,
+    private val widgetPreferencesRepository: WidgetPreferencesRepository? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(createInitialState())
     val uiState: StateFlow<TrafficState> = _uiState.asStateFlow()
 
-    private var preparationJob: Job? = null
     private val preparedStateCache = object : LinkedHashMap<String, InspectorPreparedState>(64, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, InspectorPreparedState>?): Boolean {
             return size > 64
         }
     }
 
+    private val _isCapturing = MutableStateFlow(false)
+
     init {
+        // Auto-clear traffic feed on startup if configured in settings
+        widgetPreferencesRepository?.let { repo ->
+            viewModelScope.launch {
+                val settings = repo.settingsFlow.firstOrNull()
+                if (settings?.autoClearTrafficOnStartup == true) {
+                    clearLiveTrafficUseCase?.execute()
+                }
+            }
+        }
+
+        // Reactive Dynamic Proxy Port Re-binding via flatMapLatest
+        viewModelScope.launch {
+            _isCapturing.flatMapLatest { isCapturing ->
+                if (isCapturing) {
+                    val portFlow = widgetPreferencesRepository?.settingsFlow
+                        ?.map { it.proxyPort }
+                        ?.distinctUntilChanged()
+
+                    if (portFlow != null) {
+                        flow {
+                            var isFirst = true
+                            portFlow.collect { port ->
+                                if (!isFirst) {
+                                    delay(500.milliseconds)
+                                }
+                                isFirst = false
+                                emit(port)
+                            }
+                        }
+                    } else {
+                        flowOf(StartProxyEngineUseCase.DEFAULT_PORT)
+                    }
+                } else {
+                    emptyFlow()
+                }
+            }.collect { port ->
+                if (_uiState.value.engineState !is ProxyEngineState.Stopped) {
+                    stopProxyEngineUseCase?.execute()
+                }
+                startProxyEngineUseCase?.execute(port)
+            }
+        }
+
+        // Reactive Transaction Payload Preparation via flatMapLatest
+        viewModelScope.launch {
+            _uiState
+                .map { it.selectedTransaction }
+                .distinctUntilChanged()
+                .flatMapLatest { tx ->
+                    flow {
+                        if (tx == null) {
+                            emit(InspectorPreparedState())
+                            return@flow
+                        }
+
+                        val cached = synchronized(preparedStateCache) { preparedStateCache[tx.transactionId] }
+                        if (cached != null) {
+                            emit(cached)
+                            return@flow
+                        }
+
+                        emit(
+                            InspectorPreparedState(
+                                transactionId = tx.transactionId,
+                                isPreparing = true
+                            )
+                        )
+
+                        val prepared = kotlinx.coroutines.withContext(Dispatchers.Default) {
+                            val body = loadTransactionBodyUseCase?.execute(tx.transactionId)
+
+                            val reqBodyText = body?.let { decodeBodyToText(it.requestBody, it.requestHeaders) } ?: ""
+                            val respBodyText = body?.let { decodeBodyToText(it.responseBody, it.responseHeaders) } ?: ""
+
+                            val reqLang = detectLanguage(tx.requestHeaders["Content-Type"])
+                            val reqFormatted = formatPayload(tx.requestHeaders["Content-Type"], reqBodyText)
+                            val reqDoc = DocumentPreparationService.prepare(
+                                rawText = reqBodyText,
+                                formattedText = reqFormatted,
+                                language = reqLang
+                            )
+
+                            val respLang = detectLanguage(tx.responseHeaders["Content-Type"])
+                            val respFormatted = formatPayload(tx.responseHeaders["Content-Type"], respBodyText)
+                            val respDoc = DocumentPreparationService.prepare(
+                                rawText = respBodyText,
+                                formattedText = respFormatted,
+                                language = respLang
+                            )
+
+                            val state = InspectorPreparedState(
+                                transactionId = tx.transactionId,
+                                requestBody = reqDoc,
+                                responseBody = respDoc,
+                                isPreparing = false
+                            )
+
+                            synchronized(preparedStateCache) {
+                                preparedStateCache[tx.transactionId] = state
+                            }
+
+                            state
+                        }
+
+                        emit(prepared)
+                    }
+                }
+                .collect { prepared ->
+                    _uiState.update { it.copy(preparedState = prepared) }
+                }
+        }
+
         // 1. Observe Proxy Engine State
         observeProxyEngineStateUseCase?.let { useCase ->
             viewModelScope.launch {
@@ -83,14 +204,11 @@ class TrafficViewModel(
                             _uiState.update { current ->
                                 val selectedId =
                                     current.selectedTransactionId ?: liveState.items.firstOrNull()?.transactionId
-                                val updated = current.copy(
+                                current.copy(
                                     transactions = liveState.items,
                                     filteredTransactions = liveState.items,
                                     selectedTransactionId = selectedId
                                 )
-                                val selectedTx = updated.selectedTransaction
-                                prepareTransaction(selectedTx)
-                                updated
                             }
                         }
 
@@ -115,12 +233,11 @@ class TrafficViewModel(
     fun processIntent(intent: TrafficIntent) {
         when (intent) {
             is TrafficIntent.StartCapture -> {
-                viewModelScope.launch {
-                    startProxyEngineUseCase?.execute(StartProxyEngineUseCase.DEFAULT_PORT)
-                }
+                _isCapturing.value = true
             }
 
             is TrafficIntent.StopCapture -> {
+                _isCapturing.value = false
                 viewModelScope.launch {
                     stopProxyEngineUseCase?.execute()
                 }
@@ -207,8 +324,6 @@ class TrafficViewModel(
 
             is TrafficIntent.SelectTransaction -> {
                 _uiState.update { it.copy(selectedTransactionId = intent.id) }
-                val targetTx = _uiState.value.selectedTransaction
-                prepareTransaction(targetTx)
             }
 
             is TrafficIntent.SelectInspectorTab -> {
@@ -230,77 +345,6 @@ class TrafficViewModel(
             is TrafficIntent.ToggleColumn -> {
                 _uiState.update { current ->
                     current.copy(columnVisibility = current.columnVisibility.toggle(intent.column))
-                }
-            }
-        }
-    }
-
-    private fun prepareTransaction(tx: TrafficItemUiState?) {
-        if (tx == null) {
-            _uiState.update { it.copy(preparedState = InspectorPreparedState()) }
-            return
-        }
-
-        val cached = synchronized(preparedStateCache) { preparedStateCache[tx.transactionId] }
-        if (cached != null) {
-            _uiState.update { it.copy(preparedState = cached) }
-            return
-        }
-
-        preparationJob?.cancel()
-        _uiState.update {
-            it.copy(
-                preparedState = InspectorPreparedState(
-                    transactionId = tx.transactionId,
-                    isPreparing = true
-                )
-            )
-        }
-
-        preparationJob = viewModelScope.launch(Dispatchers.Default) {
-            // Lazily load body bytes from disk only now that the user has selected this row.
-            val body = loadTransactionBodyUseCase?.execute(tx.transactionId)
-
-            val reqBodyText = body?.let {
-                decodeBodyToText(it.requestBody, it.requestHeaders)
-            } ?: ""
-
-            val respBodyText = body?.let {
-                decodeBodyToText(it.responseBody, it.responseHeaders)
-            } ?: ""
-
-            val reqLang = detectLanguage(tx.requestHeaders["Content-Type"])
-            val reqFormatted = formatPayload(tx.requestHeaders["Content-Type"], reqBodyText)
-            val reqDoc = DocumentPreparationService.prepare(
-                rawText = reqBodyText,
-                formattedText = reqFormatted,
-                language = reqLang
-            )
-
-            val respLang = detectLanguage(tx.responseHeaders["Content-Type"])
-            val respFormatted = formatPayload(tx.responseHeaders["Content-Type"], respBodyText)
-            val respDoc = DocumentPreparationService.prepare(
-                rawText = respBodyText,
-                formattedText = respFormatted,
-                language = respLang
-            )
-
-            val prepared = InspectorPreparedState(
-                transactionId = tx.transactionId,
-                requestBody = reqDoc,
-                responseBody = respDoc,
-                isPreparing = false
-            )
-
-            synchronized(preparedStateCache) {
-                preparedStateCache[tx.transactionId] = prepared
-            }
-
-            _uiState.update { current ->
-                if (current.selectedTransactionId == tx.transactionId) {
-                    current.copy(preparedState = prepared)
-                } else {
-                    current
                 }
             }
         }

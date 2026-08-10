@@ -34,7 +34,6 @@ public fun Toolbar(
             DesktopDestination.Traffic -> "Live Traffic"
             DesktopDestination.Inspector -> "Inspector"
             DesktopDestination.ApiStudio -> "API Studio"
-            DesktopDestination.Scripting -> "Scripting Console"
             DesktopDestination.Certificate -> "Certificates Manager"
             DesktopDestination.Settings -> "Settings"
         }
