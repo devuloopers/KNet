@@ -48,7 +48,10 @@ public fun MainWindow(
                 KNetNotificationHost()
             }
         ) {
-            KNetWorkspaceHost(destination = destination)
+            KNetWorkspaceHost(
+                destination = destination,
+                onNavigateToDestination = { appState.navigationController.navigate(it) }
+            )
         }
     }
 }

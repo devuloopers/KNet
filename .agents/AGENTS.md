@@ -134,3 +134,16 @@ Do not use emojis anywhere in the project codebase, log statements, terminal deb
 3. **Asynchronous Execution**:
    * Always use coroutine scopes (`viewModelScope`, `CoroutineScope(Dispatchers.IO).launch`, etc.) or reactive flows (`Flow`, `StateFlow`) for asynchronous operations.
 
+---
+
+## Clean Architecture & Koin DI Rule
+
+Strict adherence to KNet Clean Architecture and Koin Dependency Injection patterns is mandatory.
+
+### Guidelines:
+1. **Always Use Domain UseCases**:
+   * ViewModels must NEVER bypass domain UseCases to inject repositories directly. All domain operations and preference persistence must be encapsulated within dedicated UseCases (e.g., `GetWorkspaceLayoutUseCase`, `SaveWorkspaceLayoutUseCase`).
+2. **No Default Instantiation in Primary Constructor**:
+   * ViewModel primary constructors must NEVER specify default fallback instantiations for injected dependencies (e.g., `useCase: MyUseCase = MyUseCase()`). All dependencies must be explicitly defined and provided by Koin DI modules (`module { factory { ... } }`).
+
+

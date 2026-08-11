@@ -96,10 +96,18 @@ class ApiStudioExecutionPipelineE2ETest {
             override suspend fun stop() {}
         }
 
+        val (getLayoutUseCase, saveLayoutUseCase) = createTestLayoutUseCases()
+
         return ApiStudioViewModel(
-            executeUseCase = ExecuteClientApiRequestUseCase(executor),
-            formatResponseBodyUseCase = FormatResponseBodyUseCase(),
+            executeScriptedUseCase = com.devuloopers.knet.ui.desktop.apistudio.usecase.ExecuteScriptedApiRequestUseCase(
+                executeUseCase = com.devuloopers.knet.domain.clientNetwork.usecase.ExecuteClientApiRequestUseCase(executor),
+                formatResponseBodyUseCase = com.devuloopers.knet.domain.clientNetwork.usecase.FormatResponseBodyUseCase(),
+                ioDispatcher = testDispatcher
+            ),
             observeProxyEngineStateUseCase = ObserveProxyEngineStateUseCase(proxyRepo),
+            getWorkspaceLayoutUseCase = getLayoutUseCase,
+            saveWorkspaceLayoutUseCase = saveLayoutUseCase,
+            importRequestToStudioUseCase = com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCase(),
             ioDispatcher = testDispatcher
         )
     }

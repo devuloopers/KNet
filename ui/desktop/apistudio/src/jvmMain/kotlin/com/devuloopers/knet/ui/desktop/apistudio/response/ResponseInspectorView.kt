@@ -48,6 +48,7 @@ import com.devuloopers.knet.ui.core.components.tabs.ScrollableTabRow
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.domain.clientNetwork.model.NetworkFailureReason
+import com.devuloopers.knet.domain.network.model.NetworkResponseSpec
 import com.devuloopers.knet.ui.desktop.apistudio.model.ExecutionState
 import com.devuloopers.knet.ui.desktop.apistudio.model.TestResult
 import com.devuloopers.knet.ui.desktop.apistudio.theme.ApiStudioColors
@@ -343,384 +344,42 @@ public fun ResponseInspectorView(
     onSubTabSelected: (ResponseSubTab) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val themeColors = KNetTheme.colors
-    val typography = KNetTheme.typography
-    val spacing = KNetTheme.spacing
+    val headerPairs = remember(state.headers) { state.headers.map { it.key to it.value } }
+    val cookiePairs = remember(state.cookies) { state.cookies.map { it.key to it.value } }
 
-    val statusCode = state.statusCode
-    val statusText = state.statusText
-    val durationMs = state.durationMs
-    val sizeBytes = state.sizeBytes
-    val responseBody = state.responseBody
-    val headers = state.headers
-    val cookies = state.cookies
-    val testResults = state.testResults
-    val onClearResponse = actions.onClearResponse
-
-    var localActiveSubTab by remember(activeSubTab) { mutableStateOf(activeSubTab) }
-    val currentConsoleLogs = state.consoleLogs
-
-    val formattedSize = remember(state.sizeBytes) {
-        val kb = state.sizeBytes / 1024.0
-        "${(kb * 100).toInt() / 100.0} KB"
-    }
-
-    val displayBody = state.responseBody
-
-    if (state.isError) {
-        NetworkExecutionErrorView(
+    val spec = remember(state) {
+        NetworkResponseSpec(
+            statusCode = state.statusCode,
+            statusText = state.statusText,
+            durationMs = state.durationMs,
+            sizeBytes = state.sizeBytes,
+            responseBody = state.responseBody,
+            headers = headerPairs,
+            cookies = cookiePairs,
             failureReason = state.failureReason,
-            errorMessage = state.errorMessage ?: state.responseBody.ifBlank { state.statusText.takeIf { it.isNotBlank() } },
-            onClearResponse = actions.onClearResponse,
-            modifier = modifier
+            errorMessage = state.errorMessage
         )
-    } else if (!state.hasResponse) {
-            Box(
-                modifier = modifier
-                    .fillMaxSize()
-                    .background(themeColors.surface),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.padding(24.dp)
-                ) {
-                    Icon(
-                        imageVector = KNetIcons.Send,
-                        contentDescription = "No Response",
-                        modifier = Modifier.size(36.dp),
-                        tint = themeColors.textMuted
-                    )
-                    Text(
-                        text = "No Response Received Yet",
-                        style = typography.titleMedium.copy(
-                            color = themeColors.textPrimary,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                    )
-                    Text(
-                        text = "Enter a request URL and click 'Send' to execute the request.",
-                        style = typography.bodySmall.copy(color = themeColors.textMuted)
-                    )
-                }
-            }
-    } else {
-        Column(
-            modifier = modifier
-                .fillMaxSize()
-                .background(themeColors.surface)
-        ) {
-        // 1. Response Summary Bar (Horizontally scrollable for desktop responsiveness)
-        val summaryScrollState = rememberScrollState()
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp)
-                .horizontalScroll(summaryScrollState)
-                .padding(horizontal = spacing.md),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(spacing.md),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Strongly-typed HTTP Status Badge (RFC 9110 compliant)
-                KNetHttpStatusBadge(
-                    statusCode = statusCode,
-                    statusText = statusText
-                )
-
-                VerticalDivider(color = themeColors.border, modifier = Modifier.height(16.dp))
-
-                // Time & Size Metrics
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(spacing.md),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(
-                            text = "Time:",
-                            style = typography.caption.copy(color = themeColors.textSecondary)
-                        )
-                        Text(
-                            text = "$durationMs ms",
-                            style = typography.codeSmall.copy(color = themeColors.textPrimary)
-                        )
-                    }
-
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        Text(
-                            text = "Size:",
-                            style = typography.caption.copy(color = themeColors.textSecondary)
-                        )
-                        Text(
-                            text = formattedSize,
-                            style = typography.codeSmall.copy(color = themeColors.textPrimary)
-                        )
-                    }
-                }
-            }
-
-    var selectedFormatIndex by remember(activeSubTab) { mutableStateOf(0) }
-
-    val activeFormatType = remember(activeSubTab, selectedFormatIndex) {
-        val formats = activeSubTab.supportedCopyFormats
-        if (selectedFormatIndex in formats.indices) formats[selectedFormatIndex] else formats.first()
     }
 
-    val formatToJsonObject: (Map<String, String>) -> String = { map ->
-        if (map.isEmpty()) "{}"
-        else map.entries.joinToString(
-            separator = ",\n  ",
-            prefix = "{\n  ",
-            postfix = "\n}"
-        ) { (k, v) -> "\"$k\": \"$v\"" }
+    val mappedSubTab = when (activeSubTab) {
+        ResponseSubTab.BODY -> com.devuloopers.knet.ui.desktop.codeeditor.inspector.InspectorResponseSubTab.BODY
+        ResponseSubTab.HEADERS -> com.devuloopers.knet.ui.desktop.codeeditor.inspector.InspectorResponseSubTab.HEADERS
+        ResponseSubTab.COOKIES -> com.devuloopers.knet.ui.desktop.codeeditor.inspector.InspectorResponseSubTab.COOKIES
+        else -> com.devuloopers.knet.ui.desktop.codeeditor.inspector.InspectorResponseSubTab.BODY
     }
 
-    val activeTextToCopy = remember(activeSubTab, activeFormatType, displayBody, headers, cookies, testResults, currentConsoleLogs) {
-        when (activeSubTab) {
-            ResponseSubTab.BODY -> displayBody
-            ResponseSubTab.HEADERS -> if (activeFormatType == CopyFormatType.RAW) {
-                headers.entries.joinToString("\n") { "${it.key}: ${it.value}" }
-            } else {
-                formatToJsonObject(headers)
+    com.devuloopers.knet.ui.desktop.codeeditor.inspector.KNetResponseInspector(
+        spec = spec,
+        activeSubTab = mappedSubTab,
+        onSubTabSelected = { newSubTab ->
+            val legacyTab = when (newSubTab) {
+                com.devuloopers.knet.ui.desktop.codeeditor.inspector.InspectorResponseSubTab.BODY -> ResponseSubTab.BODY
+                com.devuloopers.knet.ui.desktop.codeeditor.inspector.InspectorResponseSubTab.HEADERS -> ResponseSubTab.HEADERS
+                com.devuloopers.knet.ui.desktop.codeeditor.inspector.InspectorResponseSubTab.COOKIES -> ResponseSubTab.COOKIES
             }
-            ResponseSubTab.COOKIES -> if (activeFormatType == CopyFormatType.RAW) {
-                cookies.entries.joinToString("\n") { "${it.key}=${it.value}" }
-            } else {
-                formatToJsonObject(cookies)
-            }
-            ResponseSubTab.TEST_RESULTS -> {
-                val passedCount = testResults.count { it.passed }
-                buildString {
-                    appendLine("TEST RESULTS ($passedCount/${testResults.size} Passed)")
-                    appendLine("-".repeat(40))
-                    testResults.forEach { res ->
-                        val status = if (res.passed) "[PASS]" else "[FAIL]"
-                        val err = if (!res.passed && !res.errorMessage.isNullOrBlank()) " - ${res.errorMessage}" else ""
-                        appendLine("$status ${res.name}$err")
-                    }
-                }
-            }
-            ResponseSubTab.CONSOLE -> currentConsoleLogs.joinToString("\n")
-        }
-    }
-
-            // Quick Action: Declaratively Driven Segmented Format Toggle + Copy Button + Clear Response Button
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (activeSubTab.isMultiFormatCopy) {
-                    KNetSegmentedButton(
-                        options = activeSubTab.supportedCopyFormats.map { it.label },
-                        selectedIndex = selectedFormatIndex,
-                        onOptionSelected = { selectedFormatIndex = it }
-                    )
-                }
-                KNetCopyButton(
-                    textToCopy = activeTextToCopy,
-                    copiedText = "Copied as ${activeFormatType.label.lowercase()}"
-                )
-                KNetIconButton(
-                    icon = KNetIcons.Delete,
-                    onClick = onClearResponse,
-                    contentDescription = "Clear Response",
-                    tint = themeColors.textMuted
-                )
-            }
-        }
-
-        HorizontalDivider(color = themeColors.border)
-
-        val visibleSubTabs = remember(testResults, currentConsoleLogs) {
-            ResponseSubTab.entries.filter { subTab ->
-                when (subTab) {
-                    ResponseSubTab.BODY, ResponseSubTab.HEADERS, ResponseSubTab.COOKIES -> true
-                    ResponseSubTab.TEST_RESULTS -> testResults.isNotEmpty()
-                    ResponseSubTab.CONSOLE -> currentConsoleLogs.isNotEmpty()
-                }
-            }
-        }
-
-        if (localActiveSubTab !in visibleSubTabs) {
-            localActiveSubTab = ResponseSubTab.BODY
-        }
-
-        // 2. Responsive Scrollable Sub-Tabs Bar
-        ScrollableTabRow(modifier = Modifier.fillMaxWidth()) {
-            visibleSubTabs.forEach { subTab ->
-                val labelWithBadge = when (subTab) {
-                    ResponseSubTab.BODY -> "Body"
-                    ResponseSubTab.HEADERS -> "Headers (${headers.size})"
-                    ResponseSubTab.COOKIES -> "Cookies (${cookies.size})"
-                    ResponseSubTab.TEST_RESULTS -> "Test Results (${testResults.count { it.passed }}/${testResults.size})"
-                    ResponseSubTab.CONSOLE -> "Console (${currentConsoleLogs.size})"
-                }
-                KNetTab(
-                    title = labelWithBadge,
-                    selected = subTab == localActiveSubTab,
-                    onClick = {
-                        localActiveSubTab = subTab
-                        onSubTabSelected(subTab)
-                    }
-                )
-            }
-        }
-
-        HorizontalDivider(color = themeColors.border)
-
-        // 3. Response Content Viewer
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            when (localActiveSubTab) {
-                ResponseSubTab.BODY -> {
-                    val responseLanguageHint = remember(headers) {
-                        val contentType = headers["Content-Type"] ?: headers["content-type"] ?: ""
-                        when {
-                            contentType.contains("json", ignoreCase = true) -> "json"
-                            contentType.contains("html", ignoreCase = true) -> "html"
-                            contentType.contains("xml", ignoreCase = true) -> "xml"
-                            contentType.contains("javascript", ignoreCase = true) -> "javascript"
-                            else -> "plain"
-                        }
-                    }
-                    KNetCodeEditor(
-                        code = displayBody,
-                        mode = EditorMode.ReadOnly,
-                        languageHint = responseLanguageHint,
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-                ResponseSubTab.HEADERS -> {
-                    val headerEntries = remember(headers) {
-                        headers.entries.mapIndexed { idx, (k, v) -> KeyValueEntry("h_$idx", k, v) }
-                    }
-                    KNetReadOnlyKeyValueViewer(
-                        entries = headerEntries,
-                        keyHeader = "HEADER NAME",
-                        valueHeader = "VALUE",
-                        modifier = Modifier.padding(spacing.md)
-                    )
-                }
-                ResponseSubTab.COOKIES -> {
-                    val cookieEntries = remember(cookies) {
-                        cookies.entries.mapIndexed { idx, (k, v) -> KeyValueEntry("c_$idx", k, v) }
-                    }
-                    KNetReadOnlyKeyValueViewer(
-                        entries = cookieEntries,
-                        keyHeader = "COOKIE NAME",
-                        valueHeader = "VALUE",
-                        modifier = Modifier.padding(spacing.md)
-                    )
-                }
-                ResponseSubTab.TEST_RESULTS -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .padding(spacing.md),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        val passedCount = testResults.count { it.passed }
-                        Text(
-                            text = "PASSING TESTS ($passedCount/${testResults.size})",
-                            style = typography.caption.copy(
-                                color = if (passedCount == testResults.size) ApiStudioColors.GetText else themeColors.semantic.warning,
-                                fontWeight = FontWeight.Bold
-                            )
-                        )
-                        LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                            items(testResults) { res ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clip(RoundedCornerShape(4.dp))
-                                        .background(themeColors.surfaceVariant)
-                                        .border(1.dp, themeColors.border, RoundedCornerShape(4.dp))
-                                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = if (res.passed) KNetIcons.Check else KNetIcons.Close,
-                                        contentDescription = if (res.passed) "Passed" else "Failed",
-                                        modifier = Modifier.size(16.dp),
-                                        tint = if (res.passed) ApiStudioColors.GetText else themeColors.semantic.error
-                                    )
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = res.name,
-                                            style = typography.bodySmall.copy(
-                                                color = themeColors.textPrimary,
-                                                fontWeight = FontWeight.Medium
-                                            ),
-                                            maxLines = 1,
-                                            softWrap = false,
-                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                                        )
-                                        if (!res.passed && !res.errorMessage.isNullOrBlank()) {
-                                            Text(
-                                                text = res.errorMessage,
-                                                style = typography.caption.copy(color = themeColors.semantic.error)
-                                            )
-                                        }
-                                    }
-                                    Text(
-                                        text = if (res.passed) "PASS" else "FAIL",
-                                        style = typography.caption.copy(
-                                            color = if (res.passed) ApiStudioColors.GetText else themeColors.semantic.error,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-                ResponseSubTab.CONSOLE -> {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .background(Color(0xFF0F0F17))
-                            .padding(spacing.md)
-                    ) {
-
-                        if (currentConsoleLogs.isEmpty()) {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "No console output logged.",
-                                    style = typography.caption.copy(color = themeColors.textMuted)
-                                )
-                            }
-                        } else {
-                            LazyColumn(
-                                modifier = Modifier.fillMaxSize(),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                items(currentConsoleLogs) { log ->
-                                    Text(
-                                        text = log,
-                                        style = typography.codeSmall.copy(
-                                            color = when {
-                                                log.contains("[ERROR]") -> themeColors.semantic.error
-                                                log.contains("[TEST]") -> ApiStudioColors.GetText
-                                                log.contains("[NET]") -> Color(0xFF89B4FA)
-                                                else -> themeColors.textPrimary
-                                            },
-                                            fontSize = 12.sp
-                                        )
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
+            onSubTabSelected(legacyTab)
+        },
+        onClearResponse = actions.onClearResponse,
+        modifier = modifier
+    )
 }

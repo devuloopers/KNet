@@ -11,6 +11,11 @@ import com.devuloopers.knet.domain.proxy.model.ProxyEngineState
 import com.devuloopers.knet.domain.proxy.repository.ProxyEngineRepository
 import com.devuloopers.knet.domain.proxy.usecase.ObserveProxyEngineStateUseCase
 import com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction
+import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
+import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
+import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
+import com.devuloopers.knet.domain.workspace.usecase.SaveWorkspaceLayoutUseCase
+import com.devuloopers.knet.ui.desktop.apistudio.usecase.ExecuteScriptedApiRequestUseCase
 import com.devuloopers.knet.ui.desktop.apistudio.model.ApiStudioState
 import com.devuloopers.knet.ui.desktop.apistudio.model.ExecutionState
 import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.ApiStudioViewModel
@@ -85,11 +90,42 @@ fun createTestObserveProxyEngineStateUseCase(
     )
 }
 
+fun createTestLayoutUseCases(
+    initialSettings: WorkspaceLayoutSettings = WorkspaceLayoutSettings()
+): Pair<GetWorkspaceLayoutUseCase, SaveWorkspaceLayoutUseCase> {
+    val stateFlow = MutableStateFlow(initialSettings)
+    val repo = object : WidgetPreferencesRepository {
+        override val settingsFlow: Flow<WorkspaceLayoutSettings> = stateFlow
+        override suspend fun saveSettings(settings: WorkspaceLayoutSettings) {
+            stateFlow.value = settings
+        }
+    }
+    return GetWorkspaceLayoutUseCase(repo) to SaveWorkspaceLayoutUseCase(repo)
+}
+
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ApiStudioViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
+
+    private fun createTestViewModel(
+        executeUseCase: ExecuteClientApiRequestUseCase
+    ): ApiStudioViewModel {
+        val (getLayoutUseCase, saveLayoutUseCase) = createTestLayoutUseCases()
+        return ApiStudioViewModel(
+            executeScriptedUseCase = ExecuteScriptedApiRequestUseCase(
+                executeUseCase = executeUseCase,
+                formatResponseBodyUseCase = FormatResponseBodyUseCase(),
+                ioDispatcher = testDispatcher
+            ),
+            observeProxyEngineStateUseCase = createTestObserveProxyEngineStateUseCase(),
+            getWorkspaceLayoutUseCase = getLayoutUseCase,
+            saveWorkspaceLayoutUseCase = saveLayoutUseCase,
+            importRequestToStudioUseCase = com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCase(),
+            ioDispatcher = testDispatcher
+        )
+    }
 
     @BeforeTest
     fun setUp() {
@@ -113,14 +149,7 @@ class ApiStudioViewModelTest {
     @Test
     fun `executeRequest maps queryParams headers cookies auth and updates response presentation`() = runTest {
         val testExecutor = TestHttpExecutor()
-        val executeUseCase = ExecuteClientApiRequestUseCase(testExecutor)
-        val formatResponseBodyUseCase = FormatResponseBodyUseCase()
-        val viewModel = ApiStudioViewModel(
-            executeUseCase = executeUseCase,
-            formatResponseBodyUseCase = formatResponseBodyUseCase,
-            observeProxyEngineStateUseCase = createTestObserveProxyEngineStateUseCase(),
-            ioDispatcher = testDispatcher
-        )
+        val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(testExecutor))
 
         viewModel.updateUrl("https://api.example.com/v1/users")
         viewModel.updateMethod("POST")
@@ -139,12 +168,7 @@ class ApiStudioViewModelTest {
     @Test
     fun `updateUrl and updateQueryParams sync bi-directionally`() = runTest {
         val testExecutor = TestHttpExecutor()
-        val viewModel = ApiStudioViewModel(
-            executeUseCase = ExecuteClientApiRequestUseCase(testExecutor),
-            formatResponseBodyUseCase = FormatResponseBodyUseCase(),
-            observeProxyEngineStateUseCase = createTestObserveProxyEngineStateUseCase(),
-            ioDispatcher = testDispatcher
-        )
+        val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(testExecutor))
 
         // 1. Typing URL with query parameters parses into queryParams list
         viewModel.updateUrl("http://localhost:9090/api/get?user=anant&role=admin")
@@ -169,12 +193,7 @@ class ApiStudioViewModelTest {
     @Test
     fun `updateUrl and updateQueryParams handle multiple query parameters accurately`() = runTest {
         val testExecutor = TestHttpExecutor()
-        val viewModel = ApiStudioViewModel(
-            executeUseCase = ExecuteClientApiRequestUseCase(testExecutor),
-            formatResponseBodyUseCase = FormatResponseBodyUseCase(),
-            observeProxyEngineStateUseCase = createTestObserveProxyEngineStateUseCase(),
-            ioDispatcher = testDispatcher
-        )
+        val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(testExecutor))
 
         // 1. Parse complex URL with 5 multiple query parameters
         val multiQueryUrl = "http://localhost:9090/api/search?q=kotlin&category=mobile&page=1&limit=25&active=true"
@@ -222,12 +241,7 @@ class ApiStudioViewModelTest {
     @Test
     fun `all editor fields method headers body auth cookies scripts and activeSubTab are preserved in ViewModel state`() = runTest {
         val testExecutor = TestHttpExecutor()
-        val viewModel = ApiStudioViewModel(
-            executeUseCase = ExecuteClientApiRequestUseCase(testExecutor),
-            formatResponseBodyUseCase = FormatResponseBodyUseCase(),
-            observeProxyEngineStateUseCase = createTestObserveProxyEngineStateUseCase(),
-            ioDispatcher = testDispatcher
-        )
+        val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(testExecutor))
 
         viewModel.updateMethod("POST")
         viewModel.updateUrl("http://localhost:9090/api/post?debug=true")
@@ -260,12 +274,7 @@ class ApiStudioViewModelTest {
     @Test
     fun `clearResponse resets responsePresentation to null and executionState to IDLE`() = runTest {
         val testExecutor = TestHttpExecutor()
-        val viewModel = ApiStudioViewModel(
-            executeUseCase = ExecuteClientApiRequestUseCase(testExecutor),
-            formatResponseBodyUseCase = FormatResponseBodyUseCase(),
-            observeProxyEngineStateUseCase = createTestObserveProxyEngineStateUseCase(),
-            ioDispatcher = testDispatcher
-        )
+        val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(testExecutor))
 
         viewModel.updateUrl("https://api.example.com/v1/users")
         viewModel.executeRequest()
@@ -283,12 +292,7 @@ class ApiStudioViewModelTest {
     @Test
     fun `executeRequest enforces minimum visual loading duration window for ultra fast responses`() = runTest {
         val testExecutor = TestHttpExecutor()
-        val viewModel = ApiStudioViewModel(
-            executeUseCase = ExecuteClientApiRequestUseCase(testExecutor),
-            formatResponseBodyUseCase = FormatResponseBodyUseCase(),
-            observeProxyEngineStateUseCase = createTestObserveProxyEngineStateUseCase(),
-            ioDispatcher = testDispatcher
-        )
+        val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(testExecutor))
 
         viewModel.updateUrl("https://api.example.com/v1/users")
         viewModel.executeRequest()
@@ -334,12 +338,7 @@ class ApiStudioViewModelTest {
             override fun close() { }
         }
 
-        val viewModel = ApiStudioViewModel(
-            executeUseCase = ExecuteClientApiRequestUseCase(failingExecutor),
-            formatResponseBodyUseCase = FormatResponseBodyUseCase(),
-            observeProxyEngineStateUseCase = createTestObserveProxyEngineStateUseCase(),
-            ioDispatcher = testDispatcher
-        )
+        val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(failingExecutor))
 
         viewModel.updateUrl("https://api.example.com/v1/users")
         viewModel.executeRequest()
@@ -351,5 +350,32 @@ class ApiStudioViewModelTest {
         assertEquals(0, state.responsePresentation?.statusCode)
         assertTrue(state.responsePresentation?.failureReason is com.devuloopers.knet.domain.clientNetwork.model.NetworkFailureReason.HostNotFound)
         assertEquals("api.example.com", (state.responsePresentation?.failureReason as com.devuloopers.knet.domain.clientNetwork.model.NetworkFailureReason.HostNotFound).host)
+    }
+
+    @Test
+    fun importRequestSpec_createsNewTabAndPopulatesEditorState() = runTest(testDispatcher) {
+        val testExecutor = TestHttpExecutor()
+        val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(testExecutor))
+
+        val spec = com.devuloopers.knet.domain.network.model.NetworkRequestSpec(
+            method = HttpMethod.POST,
+            url = "https://api.example.com/v1/orders",
+            headers = listOf("Authorization" to "Bearer secret_token"),
+            queryParams = listOf("filter" to "active"),
+            bodyPayload = "{\"item\": \"laptop\"}",
+            cookies = listOf("session" to "xyz123")
+        )
+
+        val initialTabCount = viewModel.uiState.value.tabs.size
+        viewModel.importRequestSpec(spec, title = "Create Order")
+
+        val state = viewModel.uiState.value
+        assertEquals(initialTabCount + 1, state.tabs.size)
+        assertEquals("POST", state.editorState.method)
+        assertEquals("https://api.example.com/v1/orders", state.editorState.url)
+        assertEquals(listOf("Authorization" to "Bearer secret_token"), state.editorState.headers)
+        assertEquals(listOf("filter" to "active"), state.editorState.queryParams)
+        assertEquals("{\"item\": \"laptop\"}", state.editorState.bodyPayload)
+        assertEquals(listOf("session" to "xyz123"), state.editorState.cookies)
     }
 }

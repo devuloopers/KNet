@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -170,7 +171,7 @@ public fun KNetKeyValueEditor(
  * @param modifier Composable layout modifier.
  * @param keyHeader Column header label for the key column (default: "HEADER NAME").
  * @param valueHeader Column header label for the value column (default: "VALUE").
- * @param emptyMessage Fallback text displayed when [entries] is empty.
+ * @param allowMultiLine True to allow long values (like User-Agent or tokens) to wrap vertically across multiple lines.
  */
 @Composable
 public fun KNetReadOnlyKeyValueViewer(
@@ -178,24 +179,19 @@ public fun KNetReadOnlyKeyValueViewer(
     modifier: Modifier = Modifier,
     keyHeader: String = "HEADER NAME",
     valueHeader: String = "VALUE",
-    emptyMessage: String = "No data available."
+    emptyMessage: String = "No data available.",
+    allowMultiLine: Boolean = true
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
 
     Column(modifier = modifier.fillMaxWidth()) {
         if (entries.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 16.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = emptyMessage,
-                    style = typography.bodySmall.copy(color = themeColors.textMuted)
-                )
-            }
+            com.devuloopers.knet.ui.core.components.placeholder.KNetEmptyStatePlaceholder(
+                title = "No Items Available",
+                subtitle = emptyMessage,
+                modifier = Modifier.fillMaxSize()
+            )
         } else {
             // Table Header Row
             Row(
@@ -234,8 +230,8 @@ public fun KNetReadOnlyKeyValueViewer(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(if (index % 2 == 1) themeColors.surfaceVariant.copy(alpha = 0.3f) else Color.Transparent)
-                            .padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = if (allowMultiLine) Alignment.Top else Alignment.CenterVertically
                     ) {
                         Text(
                             text = entry.key,
@@ -244,20 +240,20 @@ public fun KNetReadOnlyKeyValueViewer(
                                 fontWeight = FontWeight.SemiBold
                             ),
                             modifier = Modifier.weight(0.4f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            maxLines = if (allowMultiLine) Int.MAX_VALUE else 1,
+                            overflow = if (allowMultiLine) TextOverflow.Clip else TextOverflow.Ellipsis
                         )
                         Row(
                             modifier = Modifier.weight(0.6f),
                             horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            verticalAlignment = if (allowMultiLine) Alignment.Top else Alignment.CenterVertically
                         ) {
                             Text(
                                 text = entry.value,
                                 style = typography.codeSmall.copy(color = themeColors.textSecondary),
                                 modifier = Modifier.weight(1f).padding(end = 8.dp),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                maxLines = if (allowMultiLine) Int.MAX_VALUE else 1,
+                                overflow = if (allowMultiLine) TextOverflow.Clip else TextOverflow.Ellipsis
                             )
                             KNetCopyButton(textToCopy = entry.value)
                         }

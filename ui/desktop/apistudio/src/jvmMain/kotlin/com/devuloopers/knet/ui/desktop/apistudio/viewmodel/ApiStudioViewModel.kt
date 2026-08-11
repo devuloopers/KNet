@@ -2,12 +2,19 @@ package com.devuloopers.knet.ui.desktop.apistudio.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCase
 import com.devuloopers.knet.domain.clientNetwork.model.MimeType
 import com.devuloopers.knet.domain.clientNetwork.usecase.ExecuteClientApiRequestUseCase
 import com.devuloopers.knet.domain.clientNetwork.usecase.FormatResponseBodyUseCase
+import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
+import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
 import com.devuloopers.knet.domain.proxy.model.ProxyEngineState
 import com.devuloopers.knet.domain.proxy.usecase.ObserveProxyEngineStateUseCase
 import com.devuloopers.knet.domain.util.UrlQueryStringParser
+import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
+import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
+import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
+import com.devuloopers.knet.domain.workspace.usecase.SaveWorkspaceLayoutUseCase
 import com.devuloopers.knet.ui.desktop.apistudio.editor.RequestSubTab
 import com.devuloopers.knet.ui.desktop.apistudio.model.*
 import com.devuloopers.knet.ui.desktop.apistudio.response.ResponseSubTab
@@ -29,35 +36,19 @@ import kotlin.time.Duration.Companion.milliseconds
  *
  * @param executeScriptedUseCase Presentation UseCase for executing scripted HTTP API requests.
  * @param observeProxyEngineStateUseCase Use case for observing live KNet proxy engine state.
- * @param widgetPreferencesRepository Workspace preferences DataStore repository.
+ * @param getWorkspaceLayoutUseCase Domain UseCase providing workspace layout settings stream.
+ * @param saveWorkspaceLayoutUseCase Domain UseCase persisting updated workspace layout settings.
+ * @param importRequestToStudioUseCase Domain UseCase validating and normalizing imported request specs.
  * @param ioDispatcher Coroutine dispatcher for background thread dispatching.
  */
 class ApiStudioViewModel(
     private val executeScriptedUseCase: ExecuteScriptedApiRequestUseCase,
     observeProxyEngineStateUseCase: ObserveProxyEngineStateUseCase,
-    private val widgetPreferencesRepository: com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository? = null,
+    private val getWorkspaceLayoutUseCase: GetWorkspaceLayoutUseCase,
+    private val saveWorkspaceLayoutUseCase: SaveWorkspaceLayoutUseCase,
+    private val importRequestToStudioUseCase: ImportRequestToStudioUseCase,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
-
-    /**
-     * Backward-compatible overload constructor for testing and legacy instantiation.
-     */
-    constructor(
-        executeUseCase: ExecuteClientApiRequestUseCase,
-        formatResponseBodyUseCase: FormatResponseBodyUseCase,
-        observeProxyEngineStateUseCase: ObserveProxyEngineStateUseCase,
-        widgetPreferencesRepository: com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository? = null,
-        ioDispatcher: CoroutineDispatcher = Dispatchers.IO
-    ) : this(
-        executeScriptedUseCase = ExecuteScriptedApiRequestUseCase(
-            executeUseCase,
-            formatResponseBodyUseCase,
-            ioDispatcher
-        ),
-        observeProxyEngineStateUseCase = observeProxyEngineStateUseCase,
-        widgetPreferencesRepository = widgetPreferencesRepository,
-        ioDispatcher = ioDispatcher
-    )
 
     companion object {
         /**
@@ -70,7 +61,7 @@ class ApiStudioViewModel(
     val uiState: StateFlow<ApiStudioState> = _uiState.asStateFlow()
 
     init {
-        widgetPreferencesRepository?.settingsFlow?.onEach { settings ->
+        getWorkspaceLayoutUseCase.execute().onEach { settings ->
             val parsedSubTab = RequestSubTab.entries.find {
                 it.name.equals(settings.activeRequestSubTab, ignoreCase = true)
             } ?: RequestSubTab.BODY
@@ -94,7 +85,7 @@ class ApiStudioViewModel(
                     )
                 )
             }
-        }?.launchIn(viewModelScope)
+        }.launchIn(viewModelScope)
     }
 
     /**
@@ -235,9 +226,9 @@ class ApiStudioViewModel(
     fun updateActiveSubTab(subTab: RequestSubTab) {
         _uiState.update { it.copy(editorState = it.editorState.copy(activeSubTab = subTab)) }
         viewModelScope.launch(ioDispatcher) {
-            val currentSettings = widgetPreferencesRepository?.settingsFlow?.firstOrNull()
-                ?: com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings()
-            widgetPreferencesRepository?.saveSettings(currentSettings.copy(activeRequestSubTab = subTab.name))
+            val currentSettings = getWorkspaceLayoutUseCase.execute().firstOrNull()
+                ?: WorkspaceLayoutSettings()
+            saveWorkspaceLayoutUseCase.execute(currentSettings.copy(activeRequestSubTab = subTab.name))
         }
     }
 
@@ -254,9 +245,9 @@ class ApiStudioViewModel(
     fun updateActiveScriptPhase(phase: ScriptPhase) {
         _uiState.update { it.copy(editorState = it.editorState.copy(activeScriptPhase = phase)) }
         viewModelScope.launch(ioDispatcher) {
-            val currentSettings = widgetPreferencesRepository?.settingsFlow?.firstOrNull()
-                ?: com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings()
-            widgetPreferencesRepository?.saveSettings(currentSettings.copy(activeScriptPhase = phase.name))
+            val currentSettings = getWorkspaceLayoutUseCase.execute().firstOrNull()
+                ?: WorkspaceLayoutSettings()
+            saveWorkspaceLayoutUseCase.execute(currentSettings.copy(activeScriptPhase = phase.name))
         }
     }
 
@@ -270,19 +261,18 @@ class ApiStudioViewModel(
     fun updateScriptLanguage(language: String) {
         _uiState.update { it.copy(editorState = it.editorState.copy(scriptLanguage = language)) }
         viewModelScope.launch(ioDispatcher) {
-            val repository = widgetPreferencesRepository ?: return@launch
-            val currentSettings = repository.settingsFlow.firstOrNull()
-                ?: com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings()
-            repository.saveSettings(currentSettings.copy(scriptLanguage = language))
+            val currentSettings = getWorkspaceLayoutUseCase.execute().firstOrNull()
+                ?: WorkspaceLayoutSettings()
+            saveWorkspaceLayoutUseCase.execute(currentSettings.copy(scriptLanguage = language))
         }
     }
 
     fun updateActiveResponseSubTab(tab: ResponseSubTab) {
         _uiState.update { it.copy(editorState = it.editorState.copy(activeResponseSubTab = tab)) }
         viewModelScope.launch(ioDispatcher) {
-            val currentSettings = widgetPreferencesRepository?.settingsFlow?.firstOrNull()
-                ?: com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings()
-            widgetPreferencesRepository?.saveSettings(currentSettings.copy(activeResponseSubTab = tab.name))
+            val currentSettings = getWorkspaceLayoutUseCase.execute().firstOrNull()
+                ?: WorkspaceLayoutSettings()
+            saveWorkspaceLayoutUseCase.execute(currentSettings.copy(activeResponseSubTab = tab.name))
         }
     }
 
@@ -329,6 +319,45 @@ class ApiStudioViewModel(
     }
 
     /**
+     * Imports a captured strongly-typed [com.devuloopers.knet.domain.network.model.NetworkRequestSpec] into a new unsaved session draft tab in API Studio.
+     *
+     * @param spec Strongly-typed domain network request specification.
+     * @param title Optional custom tab display title.
+     */
+    fun importRequestSpec(
+        spec: NetworkRequestSpec,
+        title: String? = null
+    ) {
+        val importedResult = importRequestToStudioUseCase.execute(spec, title)
+        val normalizedSpec = importedResult.spec
+        val newId = "tab_${System.currentTimeMillis()}"
+        val newTab = RequestTab(newId, importedResult.displayTitle, method = normalizedSpec.methodString)
+        val mappedAuthState = normalizedSpec.auth.toAuthState()
+
+        _uiState.update { state ->
+            val importedEditorState = RequestEditorState(
+                method = normalizedSpec.methodString,
+                url = normalizedSpec.url,
+                headers = normalizedSpec.headers,
+                queryParams = normalizedSpec.queryParams,
+                bodyPayload = normalizedSpec.bodyPayload,
+                cookies = normalizedSpec.cookies,
+                authState = mappedAuthState,
+                authType = mappedAuthState.authType.label,
+                authToken = mappedAuthState.bearerToken,
+                activeSubTab = state.editorState.activeSubTab,
+                activeScriptPhase = state.editorState.activeScriptPhase,
+                activeResponseSubTab = state.editorState.activeResponseSubTab
+            )
+            state.copy(
+                tabs = state.tabs + newTab,
+                activeTabId = newId,
+                editorState = importedEditorState
+            )
+        }
+    }
+
+    /**
      * Updates active tab's title and linked unsaved session ID.
      */
     fun updateLinkedUnsavedId(unsavedId: String?, title: String) {
@@ -365,10 +394,15 @@ class ApiStudioViewModel(
 
     private fun saveSessionContextToPreferences(context: SessionContext) {
         viewModelScope.launch(ioDispatcher) {
-            val repository = widgetPreferencesRepository ?: return@launch
-            val currentSettings = repository.settingsFlow.firstOrNull()
-                ?: com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings()
-            repository.saveSettings(currentSettings.copy(activeSessionId = SessionContextSerializer.serialize(context)))
+            val currentSettings = getWorkspaceLayoutUseCase.execute().firstOrNull()
+                ?: WorkspaceLayoutSettings()
+            saveWorkspaceLayoutUseCase.execute(
+                currentSettings.copy(
+                    activeSessionId = SessionContextSerializer.serialize(
+                        context
+                    )
+                )
+            )
         }
     }
 

@@ -1,9 +1,11 @@
 package com.devuloopers.knet.ui.desktop.apistudio.model
 
+import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
+
 /**
  * Standard authentication types supported in KNet API Studio.
  */
-public enum class AuthType(val label: String) {
+enum class AuthType(val label: String) {
     NO_AUTH("No Auth"),
     BEARER_TOKEN("Bearer Token"),
     BASIC_AUTH("Basic Auth"),
@@ -14,7 +16,7 @@ public enum class AuthType(val label: String) {
 /**
  * Target location for API Key authorization credentials.
  */
-public enum class ApiKeyLocation(val label: String) {
+enum class ApiKeyLocation(val label: String) {
     HEADER("Header"),
     QUERY_PARAMS("Query Params")
 }
@@ -22,7 +24,7 @@ public enum class ApiKeyLocation(val label: String) {
 /**
  * State DTO holding authorization configuration for API Studio requests.
  */
-public data class AuthState(
+data class AuthState(
     val authType: AuthType = AuthType.NO_AUTH,
     val bearerToken: String = "",
     val basicUsername: String = "",
@@ -31,3 +33,34 @@ public data class AuthState(
     val apiKeyValue: String = "",
     val apiKeyLocation: ApiKeyLocation = ApiKeyLocation.HEADER
 )
+
+/**
+ * Extension mapper converting domain [com.devuloopers.knet.domain.collection.model.ApiRequestAuth] model into UI presentation [AuthState].
+ *
+ * @return Mapped UI presentation [AuthState].
+ */
+fun ApiRequestAuth.toAuthState(): AuthState = when (this) {
+    is ApiRequestAuth.Bearer -> AuthState(
+        authType = AuthType.BEARER_TOKEN,
+        bearerToken = token
+    )
+
+    is ApiRequestAuth.Basic -> AuthState(
+        authType = AuthType.BASIC_AUTH,
+        basicUsername = username,
+        basicPassword = password
+    )
+
+    is ApiRequestAuth.ApiKey -> AuthState(
+        authType = AuthType.API_KEY,
+        apiKeyName = name,
+        apiKeyValue = value,
+        apiKeyLocation = if (location.contains(
+                "Query",
+                ignoreCase = true
+            )
+        ) ApiKeyLocation.QUERY_PARAMS else ApiKeyLocation.HEADER
+    )
+
+    else -> AuthState(authType = AuthType.NO_AUTH)
+}

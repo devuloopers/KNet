@@ -19,6 +19,8 @@ import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.CollectionsViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
+import com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCase
+
 /**
  * Koin Dependency Injection module for `:ui:desktop:apistudio`.
  *
@@ -29,6 +31,7 @@ public val apiStudioUiModule = module {
     factory { ExecuteClientApiRequestUseCase(get()) }
     factory { FormatResponseBodyUseCase() }
     factory { ExecuteScriptedApiRequestUseCase(get(), get()) }
+    factory { ImportRequestToStudioUseCase() }
     factory { ObserveCollectionsUseCase(get()) }
     factory { ObserveUnsavedRequestsUseCase(get()) }
     factory { SaveUnsavedRequestUseCase(get()) }
@@ -44,7 +47,9 @@ public val apiStudioUiModule = module {
         ApiStudioViewModel(
             executeScriptedUseCase = get(),
             observeProxyEngineStateUseCase = get(),
-            widgetPreferencesRepository = get()
+            getWorkspaceLayoutUseCase = get(),
+            saveWorkspaceLayoutUseCase = get(),
+            importRequestToStudioUseCase = get()
         )
     }
 

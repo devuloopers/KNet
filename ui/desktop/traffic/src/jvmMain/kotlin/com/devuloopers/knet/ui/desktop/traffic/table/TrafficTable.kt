@@ -34,6 +34,10 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.traffic.model.ColumnVisibilityState
 import com.devuloopers.knet.ui.desktop.traffic.model.TrafficColumn
 
+import com.devuloopers.knet.ui.core.components.menu.ContextMenuItem
+import com.devuloopers.knet.ui.core.components.menu.KNetContextMenuArea
+import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
+
 /**
  * High-density virtualized traffic feed table using standardized :ui:core table primitives and tokens.
  */
@@ -45,7 +49,8 @@ public fun TrafficTable(
     onSelectTransaction: (String) -> Unit,
     formattedTotalSize: String,
     modifier: Modifier = Modifier,
-    columnVisibility: ColumnVisibilityState = ColumnVisibilityState()
+    columnVisibility: ColumnVisibilityState = ColumnVisibilityState(),
+    onSendToApiStudio: (TrafficItemUiState) -> Unit = {}
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -102,13 +107,26 @@ public fun TrafficTable(
                         items = transactions,
                         key = { it.transactionId }
                     ) { item ->
-                        TableRowItem(
-                            item = item,
-                            isSelected = item.transactionId == selectedId,
-                            columnVisibility = columnVisibility,
-                            todayDate = todayDateState.value,
-                            onClick = { onSelectTransaction(item.transactionId) }
-                        )
+                        val contextMenuItems = remember(item) {
+                            listOf(
+                                ContextMenuItem(
+                                    label = "Send to API Studio",
+                                    icon = KNetIcons.Send
+                                ) {
+                                    onSendToApiStudio(item)
+                                }
+                            )
+                        }
+
+                        KNetContextMenuArea(items = contextMenuItems) {
+                            TableRowItem(
+                                item = item,
+                                isSelected = item.transactionId == selectedId,
+                                columnVisibility = columnVisibility,
+                                todayDate = todayDateState.value,
+                                onClick = { onSelectTransaction(item.transactionId) }
+                            )
+                        }
                     }
                 }
             }

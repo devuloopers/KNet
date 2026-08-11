@@ -7,7 +7,7 @@ package com.devuloopers.knet.ui.desktop.traffic.model
  */
 public enum class RequestSubTab(val displayName: String) {
     HEADERS("Headers"),
-    QUERY("Query"),
+    PARAMS("Params"),
     COOKIES("Cookies"),
     BODY("Body")
 }

@@ -1,23 +1,7 @@
 package com.devuloopers.knet.ui.desktop.traffic.inspector
 
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.*
+import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -26,8 +10,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.devuloopers.knet.domain.collection.model.HttpMethod
+import com.devuloopers.knet.domain.network.model.NetworkResponseSpec
 import com.devuloopers.knet.domain.traffic.model.TrafficItemUiState
 import com.devuloopers.knet.engine.formatter.formatters.JsonBodyFormatter
 import com.devuloopers.knet.ui.core.components.button.KNetCopyButton
@@ -37,18 +24,18 @@ import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
 import com.devuloopers.knet.ui.desktop.codeeditor.api.KNetCodeEditor
+import com.devuloopers.knet.ui.desktop.codeeditor.inspector.InspectorRequestSubTab
+import com.devuloopers.knet.ui.desktop.codeeditor.inspector.InspectorResponseSubTab
+import com.devuloopers.knet.ui.desktop.codeeditor.inspector.KNetRequestEditorView
+import com.devuloopers.knet.ui.desktop.codeeditor.inspector.KNetResponseInspector
 import com.devuloopers.knet.ui.desktop.http.components.EndpointCard
-import com.devuloopers.knet.ui.desktop.traffic.model.InspectorPreparedState
-import com.devuloopers.knet.ui.desktop.traffic.model.InspectorTab
-import com.devuloopers.knet.ui.desktop.traffic.model.PreviewFormatMode
-import com.devuloopers.knet.ui.desktop.traffic.model.RequestSubTab
-import com.devuloopers.knet.ui.desktop.traffic.model.ResponseSubTab
+import com.devuloopers.knet.ui.desktop.traffic.model.*
 
 /**
  * 500dp Right-Docked Inspection Panel bound strictly to :ui:core design tokens and primitives.
  */
 @Composable
-public fun TrafficInspectorPanel(
+fun TrafficInspectorPanel(
     selectedTransaction: TrafficItemUiState?,
     activeTab: InspectorTab,
     activeRequestSubTab: RequestSubTab = RequestSubTab.HEADERS,
@@ -59,27 +46,21 @@ public fun TrafficInspectorPanel(
     onRequestSubTabSelected: (RequestSubTab) -> Unit = {},
     onResponseSubTabSelected: (ResponseSubTab) -> Unit = {},
     onPreviewModeSelected: (PreviewFormatMode) -> Unit,
+    onSendToApiStudio: (TrafficItemUiState) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
-    val dimensions = KNetTheme.dimensions
+    KNetTheme.dimensions
 
     KNetSurface(
-        modifier = modifier
-            .fillMaxSize()
-            .border(width = 1.dp, color = themeColors.border),
-        color = themeColors.surface
+        modifier = modifier.fillMaxSize().border(width = 1.dp, color = themeColors.border), color = themeColors.surface
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             // Sub-Tabs Header
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(44.dp)
-                    .background(themeColors.surface)
-                    .border(width = 1.dp, color = themeColors.border)
-                    .horizontalScroll(rememberScrollState())
+                modifier = Modifier.fillMaxWidth().height(44.dp).background(themeColors.surface)
+                    .border(width = 1.dp, color = themeColors.border).horizontalScroll(rememberScrollState())
                     .padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(24.dp)
@@ -87,30 +68,25 @@ public fun TrafficInspectorPanel(
                 InspectorTabButton(
                     label = "Overview",
                     isSelected = activeTab == InspectorTab.OVERVIEW,
-                    onClick = { onTabSelected(InspectorTab.OVERVIEW) }
-                )
+                    onClick = { onTabSelected(InspectorTab.OVERVIEW) })
                 InspectorTabButton(
                     label = "Request",
                     isSelected = activeTab == InspectorTab.REQUEST,
-                    onClick = { onTabSelected(InspectorTab.REQUEST) }
-                )
+                    onClick = { onTabSelected(InspectorTab.REQUEST) })
                 InspectorTabButton(
                     label = "Response",
                     isSelected = activeTab == InspectorTab.RESPONSE,
-                    onClick = { onTabSelected(InspectorTab.RESPONSE) }
-                )
+                    onClick = { onTabSelected(InspectorTab.RESPONSE) })
                 InspectorTabButton(
                     label = "Timeline",
                     isSelected = activeTab == InspectorTab.TIMELINE,
-                    onClick = { onTabSelected(InspectorTab.TIMELINE) }
-                )
+                    onClick = { onTabSelected(InspectorTab.TIMELINE) })
             }
 
             // Tab Content Body
             if (selectedTransaction == null) {
                 Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+                    modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = "Select a transaction to inspect details",
@@ -120,20 +96,84 @@ public fun TrafficInspectorPanel(
             } else {
                 when (activeTab) {
                     InspectorTab.OVERVIEW -> OverviewTabContent(selectedTransaction)
-                    InspectorTab.REQUEST -> RequestTabContent(
-                        transaction = selectedTransaction,
-                        activeSubTab = activeRequestSubTab,
-                        preparedState = preparedState,
-                        onSubTabSelected = onRequestSubTabSelected
-                    )
-                    InspectorTab.RESPONSE -> ResponseTabContent(
-                        transaction = selectedTransaction,
-                        activeSubTab = activeResponseSubTab,
-                        previewMode = previewMode,
-                        preparedState = preparedState,
-                        onSubTabSelected = onResponseSubTabSelected,
-                        onPreviewModeSelected = onPreviewModeSelected
-                    )
+                    InspectorTab.REQUEST -> {
+                        val requestSpec = remember(selectedTransaction, preparedState) {
+                            val reqBody =
+                                preparedState.requestBody.formattedText.ifBlank { preparedState.requestBody.rawText }
+                                    .ifBlank { selectedTransaction.requestBody }
+                            val headerPairs = selectedTransaction.requestHeaders.map { it.key to it.value }
+                            val queryParamsList = selectedTransaction.queryParams.map { it.key to it.value.toString() }
+                            val parsedMethod = try {
+                                HttpMethod.valueOf(selectedTransaction.method.uppercase())
+                            } catch (_: Exception) {
+                                HttpMethod.CUSTOM
+                            }
+                            val targetUrl =
+                                if (selectedTransaction.host.isNotBlank()) "https://${selectedTransaction.host}${selectedTransaction.path}" else selectedTransaction.path
+
+                            com.devuloopers.knet.domain.network.model.NetworkRequestSpec(
+                                method = parsedMethod,
+                                customMethod = if (parsedMethod == HttpMethod.CUSTOM) selectedTransaction.method else null,
+                                url = targetUrl,
+                                headers = headerPairs,
+                                queryParams = queryParamsList,
+                                bodyPayload = reqBody,
+                                timestamp = selectedTransaction.timestamp
+                            )
+                        }
+                        val mappedReqSubTab = when (activeRequestSubTab) {
+                            RequestSubTab.HEADERS -> InspectorRequestSubTab.HEADERS
+                            RequestSubTab.PARAMS -> InspectorRequestSubTab.PARAMS
+                            RequestSubTab.COOKIES -> InspectorRequestSubTab.COOKIES
+                            RequestSubTab.BODY -> InspectorRequestSubTab.BODY
+                        }
+                        KNetRequestEditorView(
+                            spec = requestSpec, activeSubTab = mappedReqSubTab, onSubTabSelected = { newSubTab ->
+                                val legacyTab = when (newSubTab) {
+                                    InspectorRequestSubTab.HEADERS -> RequestSubTab.HEADERS
+                                    InspectorRequestSubTab.COOKIES -> RequestSubTab.COOKIES
+                                    InspectorRequestSubTab.PARAMS -> RequestSubTab.PARAMS
+                                    InspectorRequestSubTab.BODY -> RequestSubTab.BODY
+                                }
+                                onRequestSubTabSelected(legacyTab)
+                            }, 
+                            onOpenInApiStudio = { onSendToApiStudio(selectedTransaction) },
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
+
+                    InspectorTab.RESPONSE -> {
+                        val responseSpec = remember(selectedTransaction, preparedState) {
+                            val resBody =
+                                preparedState.responseBody.formattedText.ifBlank { preparedState.responseBody.rawText }
+                                    .ifBlank { selectedTransaction.responseBody }
+                            val headerPairs = selectedTransaction.responseHeaders.map { it.key to it.value }
+                            NetworkResponseSpec(
+                                statusCode = selectedTransaction.status,
+                                statusText = selectedTransaction.statusText,
+                                durationMs = parseDurationMs(selectedTransaction.formattedTime),
+                                sizeBytes = parseSizeBytes(selectedTransaction.formattedSize),
+                                responseBody = resBody,
+                                headers = headerPairs
+                            )
+                        }
+                        val mappedResSubTab = when (activeResponseSubTab) {
+                            ResponseSubTab.HEADERS -> InspectorResponseSubTab.HEADERS
+                            ResponseSubTab.COOKIES -> InspectorResponseSubTab.COOKIES
+                            ResponseSubTab.BODY -> InspectorResponseSubTab.BODY
+                        }
+                        KNetResponseInspector(
+                            spec = responseSpec, activeSubTab = mappedResSubTab, onSubTabSelected = { newSubTab ->
+                                val legacyTab = when (newSubTab) {
+                                    InspectorResponseSubTab.HEADERS -> ResponseSubTab.HEADERS
+                                    InspectorResponseSubTab.COOKIES -> ResponseSubTab.COOKIES
+                                    else -> ResponseSubTab.BODY
+                                }
+                                onResponseSubTabSelected(legacyTab)
+                            }, modifier = Modifier.fillMaxSize()
+                        )
+                    }
+
                     InspectorTab.TIMELINE -> TimelineTabContent(selectedTransaction)
                 }
             }
@@ -141,20 +181,26 @@ public fun TrafficInspectorPanel(
     }
 }
 
+private fun parseDurationMs(formattedTime: String): Long {
+    val numeric = formattedTime.filter { it.isDigit() }
+    return numeric.toLongOrNull() ?: 0L
+}
+
+private fun parseSizeBytes(formattedSize: String): Long {
+    val numeric = formattedSize.filter { it.isDigit() }
+    return numeric.toLongOrNull() ?: 0L
+}
+
 @Composable
 private fun OverviewTabContent(transaction: TrafficItemUiState) {
     val themeColors = KNetTheme.colors
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(24.dp)
     ) {
         EndpointCard(
-            method = transaction.method,
-            endpoint = "https://${transaction.host}${transaction.path}"
+            method = transaction.method, endpoint = "https://${transaction.host}${transaction.path}"
         )
 
         val isCompleted = transaction.formattedTime != "-"
@@ -174,19 +220,14 @@ private fun OverviewTabContent(transaction: TrafficItemUiState) {
         }
 
         Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             GridRow(
-                label = "Status",
-                value = statusValue,
-                valueColor = statusColor
+                label = "Status", value = statusValue, valueColor = statusColor
             )
             if (isError && transaction.statusText.isNotBlank()) {
                 GridRow(
-                    label = "Error Detail",
-                    value = transaction.statusText,
-                    valueColor = themeColors.semantic.error
+                    label = "Error Detail", value = transaction.statusText, valueColor = themeColors.semantic.error
                 )
             }
             GridRow(label = "Protocol", value = transaction.protocol)
@@ -212,53 +253,45 @@ private fun RequestTabContent(
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
-    val shapes = KNetTheme.shapes
+    KNetTheme.shapes
 
     val isBodyTab = activeSubTab == RequestSubTab.BODY
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .then(if (!isBodyTab) Modifier.verticalScroll(rememberScrollState()) else Modifier)
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize()
+            .then(if (!isBodyTab) Modifier.verticalScroll(rememberScrollState()) else Modifier).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         // 1. Endpoint Summary Card
         EndpointCard(
-            method = transaction.method,
-            endpoint = "https://${transaction.host}${transaction.path}"
+            method = transaction.method, endpoint = "https://${transaction.host}${transaction.path}"
         )
 
         // 2. Request Sub-Menu Bar
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            val cookieHeader = transaction.requestHeaders.entries.find { it.key.equals("cookie", ignoreCase = true) }?.value
+            val cookieHeader =
+                transaction.requestHeaders.entries.find { it.key.equals("cookie", ignoreCase = true) }?.value
             val cookiesCount = if (!cookieHeader.isNullOrBlank()) parseCookieHeader(cookieHeader).size else 0
             SubTabChip(
                 label = "Headers (${transaction.requestHeaders.size})",
                 isSelected = activeSubTab == RequestSubTab.HEADERS,
-                onClick = { onSubTabSelected(RequestSubTab.HEADERS) }
-            )
+                onClick = { onSubTabSelected(RequestSubTab.HEADERS) })
             SubTabChip(
-                label = "Query (${transaction.queryParams.size})",
-                isSelected = activeSubTab == RequestSubTab.QUERY,
-                onClick = { onSubTabSelected(RequestSubTab.QUERY) }
-            )
+                label = "Params (${transaction.queryParams.size})",
+                isSelected = activeSubTab == RequestSubTab.PARAMS,
+                onClick = { onSubTabSelected(RequestSubTab.PARAMS) })
             SubTabChip(
                 label = "Cookies ($cookiesCount)",
                 isSelected = activeSubTab == RequestSubTab.COOKIES,
-                onClick = { onSubTabSelected(RequestSubTab.COOKIES) }
-            )
+                onClick = { onSubTabSelected(RequestSubTab.COOKIES) })
             SubTabChip(
                 label = "Body",
                 isSelected = activeSubTab == RequestSubTab.BODY,
-                onClick = { onSubTabSelected(RequestSubTab.BODY) }
-            )
+                onClick = { onSubTabSelected(RequestSubTab.BODY) })
         }
 
         HorizontalDivider(color = themeColors.border)
@@ -287,8 +320,7 @@ private fun RequestTabContent(
 
                     if (transaction.requestHeaders.isEmpty()) {
                         Text(
-                            text = "No request headers",
-                            style = typography.caption.copy(color = themeColors.textMuted)
+                            text = "No request headers", style = typography.caption.copy(color = themeColors.textMuted)
                         )
                     } else {
                         transaction.requestHeaders.forEach { (key, value) ->
@@ -297,7 +329,8 @@ private fun RequestTabContent(
                     }
                 }
             }
-            RequestSubTab.QUERY -> {
+
+            RequestSubTab.PARAMS -> {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     val queryText = transaction.queryParams.entries.joinToString("\n") { "${it.key}: ${it.value}" }
                     Row(
@@ -328,9 +361,11 @@ private fun RequestTabContent(
                     }
                 }
             }
+
             RequestSubTab.COOKIES -> {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val cookieHeader = transaction.requestHeaders.entries.find { it.key.equals("cookie", ignoreCase = true) }?.value
+                    val cookieHeader =
+                        transaction.requestHeaders.entries.find { it.key.equals("cookie", ignoreCase = true) }?.value
                     val cookies = if (!cookieHeader.isNullOrBlank()) parseCookieHeader(cookieHeader) else emptyMap()
 
                     Row(
@@ -351,8 +386,7 @@ private fun RequestTabContent(
 
                     if (cookies.isEmpty()) {
                         Text(
-                            text = "No request cookies",
-                            style = typography.caption.copy(color = themeColors.textMuted)
+                            text = "No request cookies", style = typography.caption.copy(color = themeColors.textMuted)
                         )
                     } else {
                         cookies.forEach { (name, value) ->
@@ -361,13 +395,11 @@ private fun RequestTabContent(
                     }
                 }
             }
+
             RequestSubTab.BODY -> {
                 val reqText = preparedState.requestBody.formattedText.ifBlank { preparedState.requestBody.rawText }
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -399,9 +431,7 @@ private fun RequestTabContent(
                         KNetCodeEditor(
                             document = preparedState.requestBody,
                             mode = EditorMode.ReadOnly,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f)
+                            modifier = Modifier.fillMaxWidth().weight(1f)
                         )
                     }
                 }
@@ -412,9 +442,7 @@ private fun RequestTabContent(
 
 @Composable
 private fun SubTabChip(
-    label: String,
-    isSelected: Boolean,
-    onClick: () -> Unit
+    label: String, isSelected: Boolean, onClick: () -> Unit
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -422,23 +450,14 @@ private fun SubTabChip(
     val spacing = KNetTheme.spacing
 
     Box(
-        modifier = Modifier
-            .clip(shapes.small)
-            .background(if (isSelected) themeColors.border else themeColors.surfaceVariant)
-            .clickable { onClick() }
-            .padding(horizontal = spacing.sm, vertical = spacing.xs)
-            .handCursor(),
-        contentAlignment = Alignment.Center
-    ) {
+        modifier = Modifier.clip(shapes.small)
+        .background(if (isSelected) themeColors.border else themeColors.surfaceVariant).clickable { onClick() }
+        .padding(horizontal = spacing.sm, vertical = spacing.xs).handCursor(), contentAlignment = Alignment.Center) {
         Text(
-            text = label,
-            style = typography.labelMedium.copy(
+            text = label, style = typography.labelMedium.copy(
                 color = if (isSelected) themeColors.textPrimary else themeColors.textSecondary,
                 fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
-            ),
-            maxLines = 1,
-            softWrap = false,
-            overflow = TextOverflow.Clip
+            ), maxLines = 1, softWrap = false, overflow = TextOverflow.Clip
         )
     }
 }
@@ -457,49 +476,42 @@ private fun ResponseTabContent(
     val shapes = KNetTheme.shapes
 
     val parsedResponseCookies = remember(transaction.responseHeaders) {
-        val setCookieHeaders = transaction.responseHeaders.entries.filter { it.key.equals("set-cookie", ignoreCase = true) }.map { it.value }
+        val setCookieHeaders =
+            transaction.responseHeaders.entries.filter { it.key.equals("set-cookie", ignoreCase = true) }
+                .map { it.value }
         setCookieHeaders.mapNotNull { parseSetCookieHeader(it) }
     }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+        modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
+            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             SubTabChip(
                 label = "Headers (${transaction.responseHeaders.size})",
                 isSelected = activeSubTab == ResponseSubTab.HEADERS,
-                onClick = { onSubTabSelected(ResponseSubTab.HEADERS) }
-            )
+                onClick = { onSubTabSelected(ResponseSubTab.HEADERS) })
             SubTabChip(
                 label = "Cookies (${parsedResponseCookies.size})",
                 isSelected = activeSubTab == ResponseSubTab.COOKIES,
-                onClick = { onSubTabSelected(ResponseSubTab.COOKIES) }
-            )
+                onClick = { onSubTabSelected(ResponseSubTab.COOKIES) })
             SubTabChip(
                 label = "Body",
                 isSelected = activeSubTab == ResponseSubTab.BODY,
-                onClick = { onSubTabSelected(ResponseSubTab.BODY) }
-            )
+                onClick = { onSubTabSelected(ResponseSubTab.BODY) })
         }
 
         when (activeSubTab) {
             ResponseSubTab.HEADERS -> {
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState()),
+                    modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    val headersText = transaction.responseHeaders.entries.joinToString("\n") { "${it.key}: ${it.value}" }
+                    val headersText =
+                        transaction.responseHeaders.entries.joinToString("\n") { "${it.key}: ${it.value}" }
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -518,8 +530,7 @@ private fun ResponseTabContent(
 
                     if (transaction.responseHeaders.isEmpty()) {
                         Text(
-                            text = "No response headers",
-                            style = typography.caption.copy(color = themeColors.textMuted)
+                            text = "No response headers", style = typography.caption.copy(color = themeColors.textMuted)
                         )
                     } else {
                         transaction.responseHeaders.forEach { (key, value) ->
@@ -528,11 +539,10 @@ private fun ResponseTabContent(
                     }
                 }
             }
+
             ResponseSubTab.COOKIES -> {
                 Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState()),
+                    modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
                     Row(
@@ -551,16 +561,17 @@ private fun ResponseTabContent(
                     } else {
                         parsedResponseCookies.forEach { cookie ->
                             Column(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .border(1.dp, themeColors.border, shapes.small)
-                                    .background(themeColors.surfaceVariant)
-                                    .padding(12.dp),
+                                modifier = Modifier.fillMaxWidth().border(1.dp, themeColors.border, shapes.small)
+                                    .background(themeColors.surfaceVariant).padding(12.dp),
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
                             ) {
-                                GridRow(label = "Name", value = cookie.name, valueColor = themeColors.accent, isMono = true)
+                                GridRow(
+                                    label = "Name", value = cookie.name, valueColor = themeColors.accent, isMono = true
+                                )
                                 GridRow(label = "Value", value = cookie.value, isMono = true)
-                                if (cookie.domain != null) GridRow(label = "Domain", value = cookie.domain, isMono = true)
+                                if (cookie.domain != null) GridRow(
+                                    label = "Domain", value = cookie.domain, isMono = true
+                                )
                                 if (cookie.path != null) GridRow(label = "Path", value = cookie.path, isMono = true)
                                 if (cookie.expires != null) GridRow(label = "Expires", value = cookie.expires)
                                 if (cookie.maxAge != null) GridRow(label = "Max-Age", value = "${cookie.maxAge}s")
@@ -576,13 +587,11 @@ private fun ResponseTabContent(
                     }
                 }
             }
+
             ResponseSubTab.BODY -> {
                 val respText = preparedState.responseBody.formattedText.ifBlank { preparedState.responseBody.rawText }
                 Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.fillMaxWidth().weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -614,9 +623,7 @@ private fun ResponseTabContent(
                         KNetCodeEditor(
                             document = preparedState.responseBody,
                             mode = EditorMode.ReadOnly,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f)
+                            modifier = Modifier.fillMaxWidth().weight(1f)
                         )
                     }
                 }
@@ -635,10 +642,7 @@ private fun TimelineTabContent(transaction: TrafficItemUiState) {
     val totalMs = timings.totalTimeMs.coerceAtLeast(1L)
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Row(
@@ -649,9 +653,7 @@ private fun TimelineTabContent(transaction: TrafficItemUiState) {
             SectionHeader(title = "NETWORK TIMING BREAKDOWN")
             if (timings.isReusedConnection || (timings.dnsMs == 0L && timings.tcpMs == 0L && timings.tlsMs == 0L)) {
                 Box(
-                    modifier = Modifier
-                        .clip(shapes.pill)
-                        .background(Color(0xFF313244))
+                    modifier = Modifier.clip(shapes.pill).background(Color(0xFF313244))
                         .padding(horizontal = 8.dp, vertical = 2.dp)
                 ) {
                     Text(
@@ -663,40 +665,23 @@ private fun TimelineTabContent(transaction: TrafficItemUiState) {
         }
 
         TimelineWaterfallRow(
-            label = "DNS Resolution",
-            durationMs = timings.dnsMs,
-            totalMs = totalMs,
-            color = Color(0xFF89B4FA)
+            label = "DNS Resolution", durationMs = timings.dnsMs, totalMs = totalMs, color = Color(0xFF89B4FA)
         )
         TimelineWaterfallRow(
-            label = "TCP Connect",
-            durationMs = timings.tcpMs,
-            totalMs = totalMs,
-            color = Color(0xFF89DCEB)
+            label = "TCP Connect", durationMs = timings.tcpMs, totalMs = totalMs, color = Color(0xFF89DCEB)
         )
         TimelineWaterfallRow(
-            label = "TLS Handshake",
-            durationMs = timings.tlsMs,
-            totalMs = totalMs,
-            color = Color(0xFFA6E3A1)
+            label = "TLS Handshake", durationMs = timings.tlsMs, totalMs = totalMs, color = Color(0xFFA6E3A1)
         )
         TimelineWaterfallRow(
-            label = "TTFB (Wait)",
-            durationMs = timings.ttfbMs,
-            totalMs = totalMs,
-            color = Color(0xFFF9E2AF)
+            label = "TTFB (Wait)", durationMs = timings.ttfbMs, totalMs = totalMs, color = Color(0xFFF9E2AF)
         )
         TimelineWaterfallRow(
-            label = "Content Download",
-            durationMs = timings.downloadMs,
-            totalMs = totalMs,
-            color = Color(0xFF74C7EC)
+            label = "Content Download", durationMs = timings.downloadMs, totalMs = totalMs, color = Color(0xFF74C7EC)
         )
 
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -705,7 +690,7 @@ private fun TimelineTabContent(transaction: TrafficItemUiState) {
                 style = typography.bodySmall.copy(color = themeColors.textSecondary, fontWeight = FontWeight.Bold)
             )
             Text(
-                text = "${totalMs} ms",
+                text = "$totalMs ms",
                 style = typography.bodySmall.copy(color = themeColors.accent, fontWeight = FontWeight.Bold)
             )
         }
@@ -714,10 +699,7 @@ private fun TimelineTabContent(transaction: TrafficItemUiState) {
 
 @Composable
 private fun TimelineWaterfallRow(
-    label: String,
-    durationMs: Long,
-    totalMs: Long,
-    color: Color
+    label: String, durationMs: Long, totalMs: Long, color: Color
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -725,8 +707,7 @@ private fun TimelineWaterfallRow(
     val fraction = (durationMs.toFloat() / totalMs.toFloat()).coerceIn(0.02f, 1.0f)
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+        modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = label,
@@ -735,28 +716,18 @@ private fun TimelineWaterfallRow(
         )
 
         Box(
-            modifier = Modifier
-                .weight(1f)
-                .height(18.dp)
-                .background(Color(0xFF1E1E2E), shape = shapes.small)
-                .padding(horizontal = 2.dp),
-            contentAlignment = Alignment.CenterStart
+            modifier = Modifier.weight(1f).height(18.dp).background(Color(0xFF1E1E2E), shape = shapes.small)
+                .padding(horizontal = 2.dp), contentAlignment = Alignment.CenterStart
         ) {
             Box(
-                modifier = Modifier
-                    .fillMaxHeight(0.7f)
-                    .fillMaxWidth(fraction)
-                    .clip(shapes.small)
-                    .background(color)
+                modifier = Modifier.fillMaxHeight(0.7f).fillMaxWidth(fraction).clip(shapes.small).background(color)
             )
         }
 
         Text(
-            text = "${durationMs} ms",
+            text = "$durationMs ms",
             style = typography.codeSmall.copy(color = themeColors.textPrimary),
-            modifier = Modifier
-                .width(64.dp)
-                .padding(start = 8.dp)
+            modifier = Modifier.width(64.dp).padding(start = 8.dp)
         )
     }
 }
@@ -767,19 +738,15 @@ private fun SectionHeader(title: String) {
     val themeColors = KNetTheme.colors
 
     Text(
-        text = title,
-        style = typography.caption.copy(
-            color = themeColors.textSecondary,
-            fontWeight = FontWeight.SemiBold
+        text = title, style = typography.caption.copy(
+            color = themeColors.textSecondary, fontWeight = FontWeight.SemiBold
         )
     )
 }
 
 @Composable
 private fun InspectorTabButton(
-    label: String,
-    isSelected: Boolean,
-    onClick: () -> Unit
+    label: String, isSelected: Boolean, onClick: () -> Unit
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -787,33 +754,20 @@ private fun InspectorTabButton(
     val spacing = KNetTheme.spacing
 
     Column(
-        modifier = Modifier
-            .padding(vertical = 4.dp)
-            .clip(shapes.small)
-            .background(if (isSelected) themeColors.surfaceVariant else Color.Transparent)
-            .clickable { onClick() }
-            .padding(horizontal = spacing.md, vertical = 4.dp)
-            .handCursor(),
+        modifier = Modifier.padding(vertical = 4.dp).clip(shapes.small)
+        .background(if (isSelected) themeColors.surfaceVariant else Color.Transparent).clickable { onClick() }
+        .padding(horizontal = spacing.md, vertical = 4.dp).handCursor(),
         verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
+        horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
-            text = label,
-            style = typography.bodyMedium.copy(
+            text = label, style = typography.bodyMedium.copy(
                 color = if (isSelected) themeColors.textPrimary else themeColors.textSecondary,
                 fontWeight = if (isSelected) FontWeight.Medium else FontWeight.Normal
-            ),
-            maxLines = 1,
-            softWrap = false,
-            overflow = TextOverflow.Clip
+            ), maxLines = 1, softWrap = false, overflow = TextOverflow.Clip
         )
 
         Box(
-            modifier = Modifier
-                .padding(top = 4.dp)
-                .width(28.dp)
-                .height(3.dp)
-                .clip(shapes.pill)
+            modifier = Modifier.padding(top = 4.dp).width(28.dp).height(3.dp).clip(shapes.pill)
                 .background(if (isSelected) themeColors.accent else Color.Transparent)
         )
     }
@@ -821,17 +775,13 @@ private fun InspectorTabButton(
 
 @Composable
 private fun GridRow(
-    label: String,
-    value: String,
-    valueColor: Color = KNetTheme.colors.textPrimary,
-    isMono: Boolean = false
+    label: String, value: String, valueColor: Color = KNetTheme.colors.textPrimary, isMono: Boolean = false
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically
+        modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
             text = label,
@@ -846,12 +796,10 @@ private fun GridRow(
 }
 
 internal fun parseCookieHeader(cookieHeader: String): Map<String, String> {
-    return cookieHeader.split(";")
-        .mapNotNull {
+    return cookieHeader.split(";").mapNotNull {
             val parts = it.trim().split("=", limit = 2)
             if (parts.size == 2) parts[0].trim() to parts[1].trim() else null
-        }
-        .toMap()
+        }.toMap()
 }
 
 internal data class ParsedResponseCookie(
@@ -935,7 +883,9 @@ private fun detectLanguageHint(contentType: String?): String {
 internal fun formatBodyPayload(contentType: String?, rawBody: String): String {
     if (rawBody.isBlank()) return ""
     val trimmed = rawBody.trimEnd()
-    val isJson = contentType.isNullOrBlank() || contentType.contains("json", ignoreCase = true) || trimmed.startsWith("{") || trimmed.startsWith("[")
+    val isJson = contentType.isNullOrBlank() || contentType.contains(
+        "json", ignoreCase = true
+    ) || trimmed.startsWith("{") || trimmed.startsWith("[")
     return if (isJson) {
         JsonBodyFormatter().prettyPrintJson(trimmed).trimEnd()
     } else {
