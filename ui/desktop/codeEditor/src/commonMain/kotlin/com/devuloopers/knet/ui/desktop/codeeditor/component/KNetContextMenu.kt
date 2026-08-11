@@ -32,6 +32,7 @@ import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
+import java.awt.datatransfer.StringSelection
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.IntOffset
@@ -201,8 +202,10 @@ fun rememberClipboardCopyAction(): (String) -> Unit {
     val coroutineScope = rememberCoroutineScope()
     return remember(clipboard, coroutineScope) {
         { text ->
-            coroutineScope.launch {
-                clipboard.setClipEntry(ClipEntry(AnnotatedString(text)))
+            if (text.isNotEmpty()) {
+                coroutineScope.launch {
+                    clipboard.setClipEntry(ClipEntry(StringSelection(text)))
+                }
             }
         }
     }

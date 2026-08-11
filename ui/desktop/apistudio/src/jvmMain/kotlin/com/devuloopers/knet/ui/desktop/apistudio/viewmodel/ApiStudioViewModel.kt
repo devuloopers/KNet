@@ -4,15 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCase
 import com.devuloopers.knet.domain.clientNetwork.model.MimeType
-import com.devuloopers.knet.domain.clientNetwork.usecase.ExecuteClientApiRequestUseCase
-import com.devuloopers.knet.domain.clientNetwork.usecase.FormatResponseBodyUseCase
-import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
 import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
 import com.devuloopers.knet.domain.proxy.model.ProxyEngineState
 import com.devuloopers.knet.domain.proxy.usecase.ObserveProxyEngineStateUseCase
 import com.devuloopers.knet.domain.util.UrlQueryStringParser
 import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
-import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
 import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
 import com.devuloopers.knet.domain.workspace.usecase.SaveWorkspaceLayoutUseCase
 import com.devuloopers.knet.ui.desktop.apistudio.editor.RequestSubTab

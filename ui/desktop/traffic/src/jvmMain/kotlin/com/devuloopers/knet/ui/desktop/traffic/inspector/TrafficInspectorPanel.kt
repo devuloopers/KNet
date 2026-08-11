@@ -163,14 +163,19 @@ fun TrafficInspectorPanel(
                             ResponseSubTab.BODY -> InspectorResponseSubTab.BODY
                         }
                         KNetResponseInspector(
-                            spec = responseSpec, activeSubTab = mappedResSubTab, onSubTabSelected = { newSubTab ->
+                            spec = responseSpec,
+                            preparedBody = preparedState.responseBody,
+                            isPreparing = preparedState.isPreparing,
+                            activeSubTab = mappedResSubTab,
+                            onSubTabSelected = { newSubTab ->
                                 val legacyTab = when (newSubTab) {
                                     InspectorResponseSubTab.HEADERS -> ResponseSubTab.HEADERS
                                     InspectorResponseSubTab.COOKIES -> ResponseSubTab.COOKIES
                                     else -> ResponseSubTab.BODY
                                 }
                                 onResponseSubTabSelected(legacyTab)
-                            }, modifier = Modifier.fillMaxSize()
+                            },
+                            modifier = Modifier.fillMaxSize()
                         )
                     }
 

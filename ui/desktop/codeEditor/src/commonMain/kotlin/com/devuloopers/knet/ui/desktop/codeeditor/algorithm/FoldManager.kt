@@ -30,13 +30,17 @@ object FoldManager {
 
     /**
      * Calculates nested foldable regions for structured code documents (JSON, XML, JS, Kotlin).
-     * Memoizes results by line hash and respects [MAX_FOLD_LINE_THRESHOLD] to prevent main-thread freezing.
+     * Memoizes results by line hash and optionally respects [MAX_FOLD_LINE_THRESHOLD] to prevent main-thread freezing.
      *
      * @param lines The list of text lines in the document.
+     * @param respectLineThreshold If true, returns empty list for documents exceeding [MAX_FOLD_LINE_THRESHOLD]. Pass false for off-thread background callers.
      * @return List of calculated [FoldRegion] instances.
      */
-    fun calculateFolds(lines: List<String>): List<FoldRegion> {
-        if (lines.size <= 1 || lines.size > MAX_FOLD_LINE_THRESHOLD) {
+    fun calculateFolds(
+        lines: List<String>,
+        respectLineThreshold: Boolean = true
+    ): List<FoldRegion> {
+        if (lines.size <= 1 || (respectLineThreshold && lines.size > MAX_FOLD_LINE_THRESHOLD)) {
             return emptyList()
         }
 

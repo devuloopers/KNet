@@ -33,6 +33,7 @@ import com.devuloopers.knet.ui.core.components.button.KNetIconButton
 import com.devuloopers.knet.ui.core.components.divider.VerticalDivider
 import com.devuloopers.knet.ui.core.components.keyvalue.KNetReadOnlyKeyValueViewer
 import com.devuloopers.knet.ui.core.components.keyvalue.KeyValueEntry
+import com.devuloopers.knet.ui.core.components.placeholder.KNetBodyLoadingPlaceholder
 import com.devuloopers.knet.ui.core.components.placeholder.KNetEmptyStatePlaceholder
 import com.devuloopers.knet.ui.core.components.tabs.KNetTab
 import com.devuloopers.knet.ui.core.components.tabs.ScrollableTabRow
@@ -40,6 +41,7 @@ import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
 import com.devuloopers.knet.ui.desktop.codeeditor.api.KNetCodeEditor
+import com.devuloopers.knet.ui.desktop.codeeditor.model.PreparedDocument
 
 /**
  * Closed set of sub-tabs supported by the unified [KNetResponseInspector].
@@ -57,6 +59,8 @@ public enum class InspectorResponseSubTab(val label: String) {
  * Implements Option B architecture (stateless composable powered directly by domain [NetworkResponseSpec]).
  *
  * @param spec Strongly-typed domain response specification.
+ * @param preparedBody Optional pre-processed document model produced asynchronously off-thread.
+ * @param isPreparing True if background body preparation is currently running.
  * @param activeSubTab Currently selected response sub-tab.
  * @param onSubTabSelected Event callback when user switches sub-tabs.
  * @param onClearResponse Optional event callback when user clears response output.
@@ -66,6 +70,8 @@ public enum class InspectorResponseSubTab(val label: String) {
 @Composable
 public fun KNetResponseInspector(
     spec: NetworkResponseSpec,
+    preparedBody: PreparedDocument? = null,
+    isPreparing: Boolean = false,
     activeSubTab: InspectorResponseSubTab = InspectorResponseSubTab.BODY,
     onSubTabSelected: (InspectorResponseSubTab) -> Unit = {},
     onClearResponse: (() -> Unit)? = null,
@@ -222,7 +228,25 @@ public fun KNetResponseInspector(
             ) {
                 when (localActiveTab) {
                     InspectorResponseSubTab.BODY -> {
-                        if (spec.responseBody.isBlank()) {
+                        if (isPreparing) {
+                            KNetBodyLoadingPlaceholder(
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else if (preparedBody != null) {
+                            val activeText = preparedBody.formattedText.ifBlank { preparedBody.rawText }
+                            if (activeText.isBlank() && preparedBody.previewText.isBlank()) {
+                                KNetEmptyStatePlaceholder(
+                                    title = "No Response Body",
+                                    subtitle = "This response returned no body payload (e.g. HTTP 204 No Content or HTTP 304 Not Modified)"
+                                )
+                            } else {
+                                KNetCodeEditor(
+                                    document = preparedBody,
+                                    mode = EditorMode.ReadOnly,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            }
+                        } else if (spec.responseBody.isBlank()) {
                             KNetEmptyStatePlaceholder(
                                 title = "No Response Body",
                                 subtitle = "This response returned no body payload (e.g. HTTP 204 No Content or HTTP 304 Not Modified)"

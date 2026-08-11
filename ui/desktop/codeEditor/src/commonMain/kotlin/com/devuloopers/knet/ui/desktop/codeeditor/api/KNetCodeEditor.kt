@@ -32,9 +32,13 @@ import com.devuloopers.knet.ui.desktop.codeeditor.syntax.FsmTokenMakerVisualTran
 import com.devuloopers.knet.ui.desktop.codeeditor.theme.CodeEditorStyle
 import com.devuloopers.knet.ui.desktop.codeeditor.theme.CodeEditorTokens
 import com.devuloopers.knet.ui.desktop.codeeditor.theme.EditorColors
+import androidx.compose.ui.text.AnnotatedString
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.devuloopers.knet.ui.core.components.placeholder.KNetBodyLoadingPlaceholder
+import com.devuloopers.knet.ui.desktop.codeeditor.syntax.TokenMaker
+import com.devuloopers.knet.ui.desktop.codeeditor.syntax.CodeHighlighterRegistry
 
 /** Maximum displayed line preview threshold (10,000 lines) for zero-latency 100k+ line responses. */
 const val LARGE_PAYLOAD_LINE_THRESHOLD = 10000
@@ -143,9 +147,6 @@ fun KNetCodeEditor(
                 languageHint = languageHint,
                 bodyFormat = bodyFormat,
                 searchQuery = searchQuery,
-                collapsedFolds = collapsedFolds,
-                onCollapsedFoldsChange = { collapsedFolds = it },
-                getFullText = ::getFullText,
                 isFoldingEnabled = isFoldingEnabled,
                 showLineCountHeader = showLineCountHeader,
                 showFoldActionsHeader = showFoldActionsHeader,
@@ -450,20 +451,16 @@ private fun ReadOnlyCodeViewer(
     languageHint: String?,
     bodyFormat: BodyFormat?,
     searchQuery: String,
-    collapsedFolds: Map<Int, CollapsedFoldState>,
-    onCollapsedFoldsChange: (Map<Int, CollapsedFoldState>) -> Unit,
-    getFullText: (String) -> String,
     isFoldingEnabled: Boolean,
     showLineCountHeader: Boolean,
     showFoldActionsHeader: Boolean,
     isWordWrapEnabled: Boolean,
     modifier: Modifier
 ) {
-    val density = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
     val isSearching = searchQuery.isNotBlank()
+    val copyAction = rememberClipboardCopyAction()
 
-    // Offload heavy line splitting, 100k+ truncation, and byte metrics to background CPU thread
     val payloadState by produceState<ProcessedPayloadState?>(
         initialValue = null,
         key1 = code,
@@ -517,107 +514,21 @@ private fun ReadOnlyCodeViewer(
         )
     }
 
-    var textFieldValue by remember(activePayload.displayedText) {
-        mutableStateOf(
-            TextFieldValue(
-                text = activePayload.displayedText,
-                selection = TextRange.Zero
-            )
-        )
-    }
-
-    var lineTopOffsetsDp by remember { mutableStateOf<List<Dp>>(emptyList()) }
+    var rawLinesState by remember { mutableStateOf<List<String>?>(null) }
+    var foldRegionsState by remember { mutableStateOf<List<FoldRegion>>(emptyList()) }
+    var collapsedFoldStartLines by remember { mutableStateOf<Set<Int>>(emptySet()) }
 
     LaunchedEffect(activePayload.displayedText) {
-        textFieldValue = TextFieldValue(text = activePayload.displayedText, selection = TextRange.Zero)
-        onCollapsedFoldsChange(emptyMap())
-    }
-
-    val lineCount = remember(textFieldValue.text) {
-        textFieldValue.text.count { it == '\n' } + 1
-    }
-
-    val isHighPerformanceMode = remember(activePayload.totalLineCount, code.length) {
-        activePayload.totalLineCount > LARGE_PAYLOAD_LINE_THRESHOLD || code.length > LARGE_PAYLOAD_BYTE_THRESHOLD
-    }
-
-    val layoutMap = remember(activePayload.totalLineCount, collapsedFolds) {
-        DocumentLayoutMap.build(activePayload.totalLineCount, collapsedFolds)
-    }
-
-    val foldRegions =
-        remember(activePayload.displayedText, isHighPerformanceMode, isFoldingEnabled, isSearching, document) {
-            if (isFoldingEnabled && !isSearching && !isHighPerformanceMode) {
-                document?.folding ?: FoldManager.calculateFolds(textFieldValue.text.lines())
-            } else {
-                emptyList()
-            }
+        rawLinesState = null
+        collapsedFoldStartLines = emptySet()
+        val lines = withContext(Dispatchers.Default) {
+            activePayload.displayedText.split("\n")
         }
-    val foldStartLines = remember(foldRegions, layoutMap) {
-        foldRegions.mapNotNull { region ->
-            layoutMap.toDisplayedLine(region.startLine)?.let { dispIdx -> dispIdx to region }
-        }.toMap()
-    }
-
-    val verticalScrollState = rememberScrollState()
-    val horizontalScrollState = rememberScrollState()
-    val copyAction = rememberClipboardCopyAction()
-    val tokenTransformation = remember { FsmTokenMakerVisualTransformation() }
-
-    val autoScrollController = rememberAutoScrollController()
-    var containerHeightPx by remember { mutableStateOf(0f) }
-    val thresholdPx = with(density) { autoScrollController.activationZoneDp.toPx() }
-
-    fun toggleFold(lineIndex: Int) {
-        val updatedText = performFoldToggle(
-            lineIndex = lineIndex,
-            displayedText = textFieldValue.text,
-            collapsedFolds = collapsedFolds,
-            foldStartLines = foldStartLines,
-            onCollapsedFoldsChange = onCollapsedFoldsChange
-        )
-        textFieldValue = TextFieldValue(updatedText, selection = TextRange.Zero)
-    }
-
-    val customTextContextMenu = remember(code, foldRegions, collapsedFolds, textFieldValue) {
-        object : TextContextMenu {
-            @Composable
-            override fun Area(
-                textManager: TextContextMenu.TextManager,
-                state: ContextMenuState,
-                content: @Composable () -> Unit
-            ) {
-                val selectedText = textManager.selectedText.text.ifEmpty {
-                    if (!textFieldValue.selection.collapsed) {
-                        val min = minOf(textFieldValue.selection.start, textFieldValue.selection.end)
-                        val max = maxOf(textFieldValue.selection.start, textFieldValue.selection.end)
-                        if (min in 0..textFieldValue.text.length && max in 0..textFieldValue.text.length) {
-                            textFieldValue.text.substring(min, max)
-                        } else ""
-                    } else ""
-                }
-                val hasSelection = selectedText.isNotBlank()
-                val menuItems = mutableListOf<ContextMenuItem>()
-
-                if (hasSelection) {
-                    menuItems.add(
-                        ContextMenuItem(
-                            label = "Copy Selected Text",
-                            shortcut = "Ctrl+C",
-                            onClick = {
-                                copyAction(selectedText)
-                            }
-                        )
-                    )
-                }
-
-                KNetContextMenuArea(
-                    items = menuItems,
-                    modifier = Modifier.fillMaxSize(),
-                    content = content
-                )
-            }
+        rawLinesState = lines
+        val folds = document?.folding ?: withContext(Dispatchers.Default) {
+            FoldManager.calculateFolds(lines, respectLineThreshold = false)
         }
+        foldRegionsState = folds
     }
 
     Column(
@@ -630,8 +541,8 @@ private fun ReadOnlyCodeViewer(
             totalLines = activePayload.totalLineCount,
             showLineCountHeader = showLineCountHeader,
             showFoldActionsHeader = showFoldActionsHeader && !isSearching,
-            hasFoldRegions = foldRegions.isNotEmpty(),
-            isHighPerformanceMode = isHighPerformanceMode,
+            hasFoldRegions = foldRegionsState.isNotEmpty(),
+            isHighPerformanceMode = false,
             isTruncated = activePayload.isTruncated,
             displayedLines = activePayload.displayedLineCount,
             onCopyAll = {
@@ -640,109 +551,37 @@ private fun ReadOnlyCodeViewer(
                 }
             },
             onExpandAll = {
-                onCollapsedFoldsChange(emptyMap())
-                textFieldValue = TextFieldValue(code, selection = TextRange.Zero)
+                collapsedFoldStartLines = emptySet()
             },
             onCollapseAll = {
-                val (collapsedText, newFolds) = collapseAllFolds(code)
-                onCollapsedFoldsChange(newFolds)
-                textFieldValue = TextFieldValue(collapsedText, selection = TextRange.Zero)
+                collapsedFoldStartLines = foldRegionsState.map { it.startLine }.toSet()
             }
         )
 
-        val scrollbarStyle = remember {
-            ScrollbarStyle(
-                minimalHeight = 24.dp,
-                thickness = 8.dp,
-                shape = RoundedCornerShape(4.dp),
-                hoverDurationMillis = 150,
-                unhoverColor = EditorColors.BorderDark.copy(alpha = 0.5f),
-                hoverColor = EditorColors.ActiveBlue
-            )
-        }
-
-        CompositionLocalProvider(LocalTextContextMenu provides customTextContextMenu) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .onSizeChanged { containerHeightPx = it.height.toFloat() }
-                        .pointerInput(Unit) {
-                            awaitPointerEventScope {
-                                while (true) {
-                                    val event = awaitPointerEvent(PointerEventPass.Initial)
-                                    val isPressed = event.buttons.isPrimaryPressed
-                                    if (isPressed && event.changes.isNotEmpty()) {
-                                        val pointerY = event.changes.first().position.y
-                                        autoScrollController.handleDragPointer(
-                                            mouseY = pointerY,
-                                            containerHeightPx = containerHeightPx,
-                                            thresholdPx = thresholdPx,
-                                            scrollState = verticalScrollState
-                                        )
-                                    } else {
-                                        autoScrollController.stop()
-                                    }
-                                }
-                            }
-                        }
-                        .verticalScroll(verticalScrollState)
-                ) {
-                    EditorGutter(
-                        lineCount = lineCount,
-                        activeLineIndex = -1,
-                        lineTopOffsetsDp = lineTopOffsetsDp,
-                        collapsedFolds = collapsedFolds,
-                        foldStartLines = foldStartLines,
-                        isFoldingEnabled = isFoldingEnabled && !isSearching && !isHighPerformanceMode,
-                        isIconArrowStyle = true,
-                        layoutMap = layoutMap,
-                        onToggleFold = ::toggleFold
-                    )
-
-                    Box(
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxHeight()
-                            .then(if (!isWordWrapEnabled) Modifier.horizontalScroll(horizontalScrollState) else Modifier)
-                    ) {
-                        BasicTextField(
-                            value = textFieldValue,
-                            onValueChange = { newValue ->
-                                textFieldValue = newValue
-                            },
-                            onTextLayout = { layoutResult ->
-                                val (measuredTops, _) = measureLineLayoutOffsets(layoutResult, density)
-                                lineTopOffsetsDp = measuredTops
-                            },
-                            readOnly = true,
-                            visualTransformation = if (isHighPerformanceMode) VisualTransformation.None else tokenTransformation,
-                            cursorBrush = SolidColor(EditorColors.ActiveBlue),
-                            textStyle = CodeEditorTokens.editorTextStyle(
-                                fontSize = style.fontSize,
-                                lineHeight = style.lineHeight
-                            ).copy(
-                                color = Color.White,
-                                fontFamily = FontFamily.Monospace
-                            ),
-                            modifier = Modifier.fillMaxSize(),
-                            decorationBox = { innerTextField ->
-                                Box(contentAlignment = Alignment.TopStart) {
-                                    innerTextField()
-                                }
-                            }
-                        )
+        val currentRawLines = rawLinesState
+        if (currentRawLines != null) {
+            LazyReadOnlyBody(
+                rawLines = currentRawLines,
+                foldRegions = foldRegionsState,
+                collapsedFoldStartLines = collapsedFoldStartLines,
+                onToggleFold = { lineIndex ->
+                    collapsedFoldStartLines = if (lineIndex in collapsedFoldStartLines) {
+                        collapsedFoldStartLines - lineIndex
+                    } else {
+                        collapsedFoldStartLines + lineIndex
                     }
-                }
-
-                VerticalScrollbar(
-                    adapter = rememberScrollbarAdapter(verticalScrollState),
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .fillMaxHeight(),
-                    style = scrollbarStyle
-                )
-            }
+                },
+                isFoldingEnabled = isFoldingEnabled && !isSearching,
+                isWordWrapEnabled = isWordWrapEnabled,
+                languageHint = document?.statistics?.language ?: languageHint,
+                fontSize = style.fontSize,
+                lineHeight = style.lineHeight,
+                modifier = Modifier.weight(1f).fillMaxWidth()
+            )
+        } else {
+            KNetBodyLoadingPlaceholder(
+                modifier = Modifier.weight(1f).fillMaxWidth()
+            )
         }
     }
 }
