@@ -118,7 +118,22 @@ class KNetProxyHandler(
         if (targetHost == null) {
             KNetLogger.error(TAG) { "Failed to extract target host for request ${request.uri()}" }
             val errResponse = DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.BAD_REQUEST)
-            context.writeAndFlush(errResponse)
+            context.writeAndFlush(errResponse).addListener { context.close() }
+            return
+        }
+
+        val localBoundPort = (context.channel().localAddress() as? java.net.InetSocketAddress)?.port ?: -1
+        if (isSelfTarget(targetHost, targetPort, localBoundPort)) {
+            KNetLogger.warn(TAG) { "[SELF PROXY GUARD] Blocked recursive self-proxy connection to $targetHost:$targetPort" }
+            val errBody = "400 Bad Request: Recursive Self-Proxy Connection Blocked".toByteArray(Charsets.UTF_8)
+            val errResponse = DefaultFullHttpResponse(
+                HttpVersion.HTTP_1_1,
+                HttpResponseStatus.BAD_REQUEST,
+                Unpooled.copiedBuffer(errBody)
+            )
+            errResponse.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=UTF-8")
+            errResponse.headers().set(HttpHeaderNames.CONTENT_LENGTH, errBody.size)
+            context.writeAndFlush(errResponse).addListener { context.close() }
             return
         }
 
@@ -207,6 +222,8 @@ class KNetProxyHandler(
                                             durationMs = timingCollector.getTotalDuration(),
                                             timings = timingCollector.getTimings()
                                         )
+
+                                        context.writeAndFlush(errResponse).addListener { context.close() }
                                     }
                                 }
                                 pipeline.addLast("ssl", sslHandler)
@@ -248,7 +265,7 @@ class KNetProxyHandler(
                             timings = timingCollector.getTimings()
                         )
 
-                        context.writeAndFlush(errResponse)
+                        context.writeAndFlush(errResponse).addListener { context.close() }
                     }
                 }
             }
@@ -262,6 +279,39 @@ class KNetProxyHandler(
             KNetLogger.error(TAG, cause) { "KNet Proxy Exception: ${cause.message}" }
         }
         context.close()
+    }
+
+    /**
+     * Determines whether a target host and port represent a recursive self-proxy loop to KNet itself.
+     */
+    private fun isSelfTarget(targetHost: String, targetPort: Int, localBoundPort: Int): Boolean {
+        val isLocalHost = targetHost == "127.0.0.1" ||
+                targetHost == "localhost" ||
+                targetHost.equals("knet.local", ignoreCase = true) ||
+                isLocalMachineIp(targetHost)
+
+        return isLocalHost && (targetPort == localBoundPort || targetPort == 8080)
+    }
+
+    /**
+     * Checks if the given host string corresponds to a local machine network interface IP.
+     */
+    private fun isLocalMachineIp(host: String): Boolean {
+        return try {
+            val interfaces = java.net.NetworkInterface.getNetworkInterfaces()
+            while (interfaces.hasMoreElements()) {
+                val iface = interfaces.nextElement()
+                val addrs = iface.inetAddresses
+                while (addrs.hasMoreElements()) {
+                    if (addrs.nextElement().hostAddress == host) {
+                        return true
+                    }
+                }
+            }
+            false
+        } catch (_: Exception) {
+            false
+        }
     }
 }
 
@@ -354,8 +404,10 @@ class KNetOutboundHandler(
                         )
                     }
 
+                    // Always close the one-shot outbound remote server channel to release socket file descriptor
+                    context.close()
+
                     if (!isKeepAlive) {
-                        context.close()
                         clientChannel.close()
                     }
                 }

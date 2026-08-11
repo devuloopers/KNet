@@ -12,6 +12,7 @@ kotlin {
             dependencies {
                 implementation(project(":ui:core"))
                 implementation(project(":engine:certificate"))
+                implementation(project(":engine:portal"))
                 implementation(project(":core:domain"))
                 implementation(project(":core:logger"))
                 implementation(libs.compose.runtime)

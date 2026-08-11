@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KNet Mobile Setup Center</title>
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --card-bg: #1e293b;
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --accent-color: #6366f1;
+            --accent-hover: #4f46e5;
+            --border-color: #334155;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            margin: 0;
+            padding: 24px 16px;
+            display: flex;
+            justify-content: center;
+        }
+        .container {
+            max-width: 540px;
+            width: 100%;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .header h1 {
+            font-size: 24px;
+            margin: 0 0 8px 0;
+            color: var(--text-primary);
+        }
+        .header p {
+            color: var(--text-secondary);
+            font-size: 14px;
+            margin: 0;
+        }
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .card-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-top: 0;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+        }
+        .btn {
+            display: block;
+            width: 100%;
+            background-color: var(--accent-color);
+            color: #ffffff;
+            text-align: center;
+            padding: 14px 0;
+            border-radius: 8px;
+            font-weight: 600;
+            font-size: 15px;
+            text-decoration: none;
+            transition: background-color 0.2s;
+            box-sizing: border-box;
+        }
+        .btn:hover {
+            background-color: var(--accent-hover);
+        }
+        ol {
+            margin: 0;
+            padding-left: 20px;
+            color: var(--text-secondary);
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        li {
+            margin-bottom: 8px;
+        }
+        .badge {
+            display: inline-block;
+            background-color: #312e81;
+            color: #c7d2fe;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-left: 8px;
+        }
+        .info-box {
+            background-color: #1e1b4b;
+            border-left: 4px solid var(--accent-color);
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #e0e7ff;
+            margin-top: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>[KNet Mobile Setup]</h1>
+            <p>Configure device proxy &amp; install Root CA certificate</p>
+        </div>
+
+        <div class="card">
+            <div class="card-title">[Proxy Server Info]</div>
+            <div class="info-box">
+                <strong>Host IP:</strong> {{DESKTOP_IP}}<br>
+                <strong>Port:</strong> {{PROXY_PORT}}
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-title">[Apple Setup Guide (iOS, iPadOS, macOS)] <span class="badge">Apple / Darwin</span></div>
+            <a href="/knet-ca.mobileconfig" class="btn">[Download Apple Profile (.mobileconfig)]</a>
+            <p style="color: var(--text-secondary); font-size: 13px; margin-top: 16px; margin-bottom: 8px;"><strong>Installation Steps:</strong></p>
+            <ol>
+                <li>Tap [Download Apple Profile] above and select <strong>Allow</strong>.</li>
+                <li>Open <strong>Settings &gt; Profile Downloaded &gt; Install</strong>.</li>
+                <li>Open <strong>Settings &gt; General &gt; About &gt; Certificate Trust Settings</strong>.</li>
+                <li>Toggle <strong>Full Trust for Root Certificates</strong> for KNet Root CA.</li>
+            </ol>
+        </div>
+
+        <div class="card">
+            <div class="card-title">[Android Setup Guide] <span class="badge">Android</span></div>
+            <a href="/knet-ca.crt" class="btn">[Download Android Certificate]</a>
+            <p style="color: var(--text-secondary); font-size: 13px; margin-top: 16px; margin-bottom: 8px;"><strong>Installation Steps:</strong></p>
+            <ol>
+                <li>Tap [Download Android Certificate] above.</li>
+                <li>Open <strong>Settings &gt; Security &gt; Encryption &amp; credentials</strong>.</li>
+                <li>Select <strong>Install a certificate &gt; CA certificate</strong> and pick `knet-ca.crt`.</li>
+            </ol>
+        </div>
+    </div>
+</body>
+</html>

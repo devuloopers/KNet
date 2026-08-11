@@ -22,6 +22,8 @@ kotlin {
                 implementation(project(":engine:session"))
                 implementation(project(":engine:traffic"))
                 implementation(project(":engine:interceptor"))
+                implementation(project(":engine:portal"))
+                implementation(libs.netty.all)
 
                 implementation(libs.datastore.preferences)
                 implementation(libs.kotlinx.coroutines.core)
