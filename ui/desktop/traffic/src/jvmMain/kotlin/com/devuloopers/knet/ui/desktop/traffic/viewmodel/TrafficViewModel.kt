@@ -19,12 +19,8 @@ import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesReposit
 import com.devuloopers.knet.engine.formatter.formatters.JsonBodyFormatter
 import com.devuloopers.knet.ui.desktop.codeeditor.service.DocumentPreparationService
 import com.devuloopers.knet.ui.desktop.traffic.model.*
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
-import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 
 /**

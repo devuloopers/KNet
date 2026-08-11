@@ -9,17 +9,12 @@ import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesReposit
 import com.devuloopers.knet.engine.certificate.CertificateManager
 import com.devuloopers.knet.ui.desktop.settings.model.SettingsIntent
 import com.devuloopers.knet.ui.desktop.settings.model.SettingsState
-import com.devuloopers.knet.ui.desktop.settings.model.SettingsTab
-import java.awt.Desktop
-import java.io.File
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.firstOrNull
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.awt.Desktop
+import java.io.File
 
 /**
  * ViewModel managing state and direct auto-save persistence for KNet Application Settings.
@@ -90,7 +85,12 @@ class SettingsViewModel(
                 }
 
                 is SettingsIntent.ToggleAutoClearTraffic -> {
-                    _uiState.update { it.copy(autoClearTrafficOnStartup = intent.enabled, message = "Saved to preferences") }
+                    _uiState.update {
+                        it.copy(
+                            autoClearTrafficOnStartup = intent.enabled,
+                            message = "Saved to preferences"
+                        )
+                    }
                     autoSaveSettings(_uiState.value)
                 }
 
