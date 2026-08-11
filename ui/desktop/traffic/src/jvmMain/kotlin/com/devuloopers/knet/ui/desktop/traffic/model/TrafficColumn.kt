@@ -13,12 +13,12 @@ public enum class TrafficColumn(
     val isDefaultVisible: Boolean = true
 ) {
     SERIAL_NUMBER("Serial Number (#)", isMandatory = false, isDefaultVisible = true),
-    TIMESTAMP("Timestamp", isMandatory = false, isDefaultVisible = false),
+    TIMESTAMP("Timestamp", isMandatory = false, isDefaultVisible = true),
     METHOD("Method", isMandatory = true, isDefaultVisible = true),
     HOST("Host", isMandatory = true, isDefaultVisible = true),
     PATH("Path", isMandatory = true, isDefaultVisible = true),
     STATUS("Status", isMandatory = false, isDefaultVisible = true),
     SIZE("Size", isMandatory = false, isDefaultVisible = true),
-    DURATION("Time (Duration)", isMandatory = false, isDefaultVisible = true),
+    DURATION("Duration", isMandatory = false, isDefaultVisible = true),
     TYPE("Type", isMandatory = false, isDefaultVisible = false)
 }

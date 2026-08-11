@@ -121,6 +121,8 @@ class GetLiveTrafficUseCase(
             }
         }
 
+        val formattedTimestamp = formatTimestamp(tx.request.timestamp)
+
         // Body bytes are intentionally omitted here — disk I/O is deferred to LoadTransactionBodyUseCase.
         // The inspector panel calls that use case when the user selects this row.
         return TrafficItemUiState(
@@ -131,6 +133,8 @@ class GetLiveTrafficUseCase(
             path = uriDetails.path,
             status = tx.response?.statusCode ?: 0,
             statusText = tx.response?.statusText ?: "Active",
+            timestamp = tx.request.timestamp,
+            formattedTimestamp = formattedTimestamp,
             formattedTime = if (tx.response == null) "-" else "$durationMs ms",
             formattedSize = sizeText,
             dateGroup = "Today",
@@ -142,5 +146,22 @@ class GetLiveTrafficUseCase(
             timings = tx.timings,
             isSelected = tx.id == selectedId
         )
+    }
+
+    private fun formatTimestamp(epochMillis: Long): String {
+        if (epochMillis <= 0L) return "-"
+        return try {
+            val txInstant = java.time.Instant.ofEpochMilli(epochMillis)
+            val txDateTime = java.time.LocalDateTime.ofInstant(txInstant, java.time.ZoneId.systemDefault())
+            val todayDate = java.time.LocalDate.now(java.time.ZoneId.systemDefault())
+
+            if (txDateTime.toLocalDate() == todayDate) {
+                txDateTime.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"))
+            } else {
+                txDateTime.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss - dd/MM"))
+            }
+        } catch (_: Throwable) {
+            "-"
+        }
     }
 }

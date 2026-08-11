@@ -15,6 +15,10 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -55,8 +59,19 @@ public fun TrafficTable(
         TableHeaderRow(columnVisibility = columnVisibility)
 
         val listState = androidx.compose.foundation.lazy.rememberLazyListState()
+        val todayDateState = remember { mutableStateOf(java.time.LocalDate.now()) }
 
-        androidx.compose.runtime.LaunchedEffect(transactions.size, autoScroll) {
+        LaunchedEffect(Unit) {
+            while (true) {
+                kotlinx.coroutines.delay(30_000L)
+                val currentLocalDate = java.time.LocalDate.now()
+                if (todayDateState.value != currentLocalDate) {
+                    todayDateState.value = currentLocalDate
+                }
+            }
+        }
+
+        LaunchedEffect(transactions.size, autoScroll) {
             if (autoScroll && transactions.isNotEmpty()) {
                 listState.scrollToItem(0)
             }
@@ -91,6 +106,7 @@ public fun TrafficTable(
                             item = item,
                             isSelected = item.transactionId == selectedId,
                             columnVisibility = columnVisibility,
+                            todayDate = todayDateState.value,
                             onClick = { onSelectTransaction(item.transactionId) }
                         )
                     }
@@ -122,10 +138,6 @@ public fun TrafficTable(
                     text = formattedTotalSize,
                     style = typography.caption.copy(color = themeColors.textSecondary)
                 )
-                Text(
-                    text = "Duration: 00:01:24",
-                    style = typography.caption.copy(color = themeColors.textSecondary)
-                )
             }
         }
     }
@@ -145,7 +157,7 @@ private fun TableHeaderRow(columnVisibility: ColumnVisibilityState) {
             KNetCell(text = "#", modifier = Modifier.width(48.dp), color = themeColors.textMuted)
         }
         if (columnVisibility.isVisible(TrafficColumn.TIMESTAMP)) {
-            KNetCell(text = "Time", modifier = Modifier.width(110.dp), color = themeColors.textMuted)
+            KNetCell(text = "Timestamp", modifier = Modifier.width(130.dp), color = themeColors.textMuted)
         }
         Box(modifier = Modifier.width(76.dp), contentAlignment = Alignment.CenterStart) {
             Text(text = "Method", style = typography.codeSmall.copy(color = themeColors.textMuted, fontWeight = FontWeight.Bold))
@@ -165,7 +177,7 @@ private fun TableHeaderRow(columnVisibility: ColumnVisibilityState) {
             KNetCell(text = "Size", modifier = Modifier.width(76.dp), color = themeColors.textMuted)
         }
         if (columnVisibility.isVisible(TrafficColumn.DURATION)) {
-            KNetCell(text = "Time", modifier = Modifier.width(76.dp), color = themeColors.textMuted)
+            KNetCell(text = "Duration", modifier = Modifier.width(76.dp), color = themeColors.textMuted)
         }
         if (columnVisibility.isVisible(TrafficColumn.TYPE)) {
             KNetCell(text = "Type", modifier = Modifier.width(64.dp), color = themeColors.textMuted)
@@ -178,6 +190,7 @@ private fun TableRowItem(
     item: TrafficItemUiState,
     isSelected: Boolean,
     columnVisibility: ColumnVisibilityState,
+    todayDate: java.time.LocalDate,
     onClick: () -> Unit
 ) {
     val themeColors = KNetTheme.colors
@@ -250,9 +263,10 @@ private fun TableRowItem(
 
         // Timestamp
         if (columnVisibility.isVisible(TrafficColumn.TIMESTAMP)) {
+            val formatted = formatTimestamp(item.timestamp, item.formattedTimestamp, item.dateGroup, todayDate)
             KNetCell(
-                text = item.dateGroup.takeLast(12).ifEmpty { "10:24:31.320" },
-                modifier = Modifier.width(110.dp),
+                text = formatted,
+                modifier = Modifier.width(130.dp),
                 color = themeColors.textSecondary
             )
         }
@@ -327,3 +341,25 @@ private fun TableRowItem(
         }
     }
 }
+
+private fun formatTimestamp(
+    epochMillis: Long,
+    fallbackFormatted: String,
+    fallbackGroup: String,
+    todayDate: java.time.LocalDate
+): String {
+    if (epochMillis <= 0L) return fallbackFormatted.ifEmpty { fallbackGroup }
+    return try {
+        val txInstant = java.time.Instant.ofEpochMilli(epochMillis)
+        val txDateTime = java.time.LocalDateTime.ofInstant(txInstant, java.time.ZoneId.systemDefault())
+
+        if (txDateTime.toLocalDate() == todayDate) {
+            txDateTime.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"))
+        } else {
+            txDateTime.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss - dd/MM"))
+        }
+    } catch (_: Throwable) {
+        fallbackFormatted.ifEmpty { fallbackGroup }
+    }
+}
+

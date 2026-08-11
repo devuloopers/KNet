@@ -13,7 +13,6 @@ import com.devuloopers.knet.ui.desktop.app.host.KNetApplicationScaffold
 import com.devuloopers.knet.ui.desktop.app.navigation.NavigationRail
 import com.devuloopers.knet.ui.desktop.app.notification.KNetNotificationHost
 import com.devuloopers.knet.ui.desktop.app.overlay.KNetOverlayHost
-import com.devuloopers.knet.ui.desktop.app.statusbar.KNetGlobalStatusBar
 import com.devuloopers.knet.ui.desktop.app.workspace.KNetWorkspaceHost
 
 /**
@@ -38,9 +37,6 @@ public fun MainWindow(
                     currentDestination = destination,
                     onDestinationSelected = { appState.navigationController.navigate(it) }
                 )
-            },
-            statusBar = {
-                KNetGlobalStatusBar()
             },
             dialogHost = {
                 KNetDialogHost()

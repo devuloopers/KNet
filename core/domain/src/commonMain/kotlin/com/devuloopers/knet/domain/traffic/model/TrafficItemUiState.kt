@@ -13,6 +13,8 @@ import com.devuloopers.knet.domain.clientNetwork.model.HttpTimings
  * @property status HTTP status code (e.g. 200, 404, 0 for active).
  * @property statusText Description of status code.
  * @property protocol Transport/Application protocol string (e.g. HTTP/1.1, HTTP/2, HTTPS, WS).
+ * @property timestamp Epoch millisecond timestamp when request was initiated.
+ * @property formattedTimestamp Formatted start timestamp string (e.g. "19:28:35" or "14:05:12 - 10/08").
  * @property formattedTime Display duration string (e.g. "120 ms").
  * @property formattedSize Display byte size (e.g. "1.2 KB").
  * @property dateGroup Formatted date header string.
@@ -32,6 +34,8 @@ data class TrafficItemUiState(
     val status: Int,
     val statusText: String,
     val protocol: String = "HTTP/2",
+    val timestamp: Long = 0L,
+    val formattedTimestamp: String = "",
     val formattedTime: String,
     val formattedSize: String,
     val dateGroup: String,
