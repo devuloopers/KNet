@@ -47,15 +47,20 @@ public class LiveTrafficRepositoryImpl(
     override suspend fun loadTransactionBody(transactionId: String): TransactionBody {
         return withContext(Dispatchers.IO) {
             val entity = database.httpTransactionDao().getTransactionById(transactionId)
-                ?: return@withContext TransactionBody.Empty
+            if (entity == null) {
+                KNetLogger.warn("LiveTrafficRepository") { "[LOAD BODY] Transaction entity null for id=$transactionId" }
+                return@withContext TransactionBody.Empty
+            }
 
             val requestHeaders = parseHeadersString(entity.requestHeadersJson)
             val responseHeaders = parseHeadersString(entity.responseHeadersJson ?: "")
+            val reqBody = readBodyFromPath(entity.requestBodyPath)
+            val resBody = readBodyFromPath(entity.responseBodyPath)
 
             TransactionBody(
-                requestBody = readBodyFromPath(entity.requestBodyPath),
+                requestBody = reqBody,
                 requestHeaders = requestHeaders,
-                responseBody = readBodyFromPath(entity.responseBodyPath),
+                responseBody = resBody,
                 responseHeaders = responseHeaders
             )
         }
@@ -73,7 +78,7 @@ public class LiveTrafficRepositoryImpl(
                 val entity = TransactionMapper.mapDomainToEntity(transaction)
                 database.httpTransactionDao().insert(entity)
                 KNetLogger.info(tag = "KNet_Traffic_Record") {
-                    "💾 DIRECT RECORD [id=${transaction.id}]: ${transaction.request.method} ${transaction.request.url} → ${transaction.response?.statusCode}"
+                    "[DIRECT RECORD] [id=${transaction.id}]: ${transaction.request.method} ${transaction.request.url} → ${transaction.response?.statusCode}"
                 }
             } catch (e: Exception) {
                 KNetLogger.error(tag = "KNet_Traffic_Record", throwable = e) {
@@ -91,7 +96,11 @@ public class LiveTrafficRepositoryImpl(
 
     private fun parseHeadersString(headersJson: String): List<Pair<String, String>> {
         if (headersJson.isBlank()) return emptyList()
-        return headersJson.split(";\n")
+        val trimmed = headersJson.trim()
+        if (trimmed.startsWith("[")) {
+            return com.devuloopers.knet.engine.session.HttpTransactionMapper.deserializeHeaders(trimmed)
+        }
+        return trimmed.split(";\n")
             .filter { it.contains(":") }
             .map { line ->
                 val parts = line.split(":", limit = 2)

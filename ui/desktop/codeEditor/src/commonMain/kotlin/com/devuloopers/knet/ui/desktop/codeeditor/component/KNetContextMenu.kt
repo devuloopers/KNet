@@ -26,16 +26,29 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.pointer.PointerButton
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Popup
+import androidx.compose.ui.window.PopupProperties
 import kotlinx.coroutines.launch
-import java.awt.datatransfer.StringSelection
 
 /**
  * Data class representing a single menu item in the editor context menu.
+ *
+ * @property label Human-readable menu item title.
+ * @property shortcut Optional keyboard shortcut indicator text (e.g. "Ctrl+C").
+ * @property icon Optional leading icon vector.
+ * @property isEnabled True if menu item can be clicked.
+ * @property onClick Interaction callback executed when clicked.
  */
 data class ContextMenuItem(
     val label: String,
@@ -47,7 +60,15 @@ data class ContextMenuItem(
 
 /**
  * Custom context menu container for KNetCodeEditor.
+ *
+ * Listens for right-click (`PointerButton.Secondary`) mouse events and opens a floating
+ * [Popup] anchored directly to mouse pointer coordinates when [items] is not empty.
+ *
+ * @param items List of context menu items to display.
+ * @param modifier Layout modifier applied to the container.
+ * @param content Wrapped target composable viewport.
  */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun KNetContextMenuArea(
     items: List<ContextMenuItem>,
@@ -55,22 +76,45 @@ fun KNetContextMenuArea(
     content: @Composable () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
+    var popupOffset by remember { mutableStateOf(IntOffset.Zero) }
 
-    Box(modifier = modifier) {
+    Box(
+        modifier = modifier.pointerInput(items) {
+            awaitPointerEventScope {
+                while (true) {
+                    val event = awaitPointerEvent()
+                    if (event.button == PointerButton.Secondary) {
+                        val change = event.changes.firstOrNull()
+                        if (change != null && items.isNotEmpty()) {
+                            popupOffset = IntOffset(change.position.x.toInt(), change.position.y.toInt())
+                            expanded = true
+                            change.consume()
+                        }
+                    }
+                }
+            }
+        }
+    ) {
         content()
 
-        if (expanded) {
-            Box(
-                modifier = Modifier
-                    .widthIn(min = 180.dp, max = 260.dp)
-                    .shadow(elevation = 8.dp, shape = RoundedCornerShape(8.dp))
-                    .background(Color(0xFF1E1E2E), shape = RoundedCornerShape(8.dp))
-                    .border(1.dp, Color(0xFF313244), shape = RoundedCornerShape(8.dp))
-                    .padding(vertical = 4.dp)
+        if (expanded && items.isNotEmpty()) {
+            Popup(
+                onDismissRequest = { expanded = false },
+                offset = popupOffset,
+                properties = PopupProperties(focusable = true)
             ) {
-                Column {
-                    items.forEach { item ->
-                        ContextMenuItemRow(item = item, onDismiss = { expanded = false })
+                Box(
+                    modifier = Modifier
+                        .widthIn(min = 180.dp, max = 260.dp)
+                        .shadow(elevation = 8.dp, shape = RoundedCornerShape(8.dp))
+                        .background(Color(0xFF1E1E2E), shape = RoundedCornerShape(8.dp))
+                        .border(1.dp, Color(0xFF313244), shape = RoundedCornerShape(8.dp))
+                        .padding(vertical = 4.dp)
+                ) {
+                    Column {
+                        items.forEach { item ->
+                            ContextMenuItemRow(item = item, onDismiss = { expanded = false })
+                        }
                     }
                 }
             }
@@ -78,6 +122,14 @@ fun KNetContextMenuArea(
     }
 }
 
+/**
+ * Internal composable rendering a single row inside [KNetContextMenuArea].
+ * Supports interactive mouse hover highlighting and shortcut badges.
+ *
+ * @param item Context menu item metadata.
+ * @param onDismiss Callback to dismiss the parent popup.
+ */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun ContextMenuItemRow(
     item: ContextMenuItem,
@@ -95,6 +147,8 @@ private fun ContextMenuItemRow(
         modifier = Modifier
             .fillMaxWidth()
             .background(backgroundColor)
+            .onPointerEvent(PointerEventType.Enter) { isHovered.value = true }
+            .onPointerEvent(PointerEventType.Exit) { isHovered.value = false }
             .clickable(enabled = item.isEnabled) {
                 item.onClick()
                 onDismiss()
@@ -135,7 +189,10 @@ private fun ContextMenuItemRow(
 }
 
 /**
- * Helper function to copy text to system clipboard using modern Compose Multiplatform Clipboard API.
+ * Helper function returning a clipboard copy lambda using modern Compose Multiplatform Clipboard API.
+ * Asynchronously writes text to system clipboard via coroutines.
+ *
+ * @return Asynchronous copy lambda accepting target string.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
@@ -145,7 +202,7 @@ fun rememberClipboardCopyAction(): (String) -> Unit {
     return remember(clipboard, coroutineScope) {
         { text ->
             coroutineScope.launch {
-                clipboard.setClipEntry(ClipEntry(StringSelection(text)))
+                clipboard.setClipEntry(ClipEntry(AnnotatedString(text)))
             }
         }
     }

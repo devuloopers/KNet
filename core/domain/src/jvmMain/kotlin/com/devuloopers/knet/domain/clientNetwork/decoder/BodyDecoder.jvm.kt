@@ -1,5 +1,7 @@
 package com.devuloopers.knet.domain.clientNetwork.decoder
 
+import com.devuloopers.knet.core.logger.KNetLogger
+
 /**
  * JVM implementation of [BodyDecoder] using composable SPI [ContentDecoder] strategy implementations.
  */

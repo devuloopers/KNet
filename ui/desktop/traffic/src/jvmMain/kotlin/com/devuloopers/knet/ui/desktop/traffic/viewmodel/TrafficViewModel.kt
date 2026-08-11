@@ -3,6 +3,7 @@
 
 package com.devuloopers.knet.ui.desktop.traffic.viewmodel
 
+import com.devuloopers.knet.core.logger.KNetLogger
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.domain.network.usecase.ObserveLocalIpUseCase
@@ -104,8 +105,9 @@ class TrafficViewModel(
                             return@flow
                         }
 
+                        val isPending = tx.status <= 0
                         val cached = synchronized(preparedStateCache) { preparedStateCache[tx.transactionId] }
-                        if (cached != null) {
+                        if (cached != null && (isPending || cached.responseBody.rawText.isNotBlank())) {
                             emit(cached)
                             return@flow
                         }
@@ -146,8 +148,10 @@ class TrafficViewModel(
                                 isPreparing = false
                             )
 
-                            synchronized(preparedStateCache) {
-                                preparedStateCache[tx.transactionId] = state
+                            if (!isPending) {
+                                synchronized(preparedStateCache) {
+                                    preparedStateCache[tx.transactionId] = state
+                                }
                             }
 
                             state

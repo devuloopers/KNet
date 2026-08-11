@@ -10,9 +10,9 @@ import java.io.File
 /**
  * Maps between SQLite Room transaction entities and Domain network transaction models.
  */
-public object TransactionMapper {
+object TransactionMapper {
 
-    public fun mapEntityToDomain(entity: HttpTransactionEntity): HttpTransaction {
+    fun mapEntityToDomain(entity: HttpTransactionEntity): HttpTransaction {
         val reqHeadersList = parseHeadersString(entity.requestHeadersJson)
         val resHeadersList = parseHeadersString(entity.responseHeadersJson ?: "")
 
@@ -63,7 +63,7 @@ public object TransactionMapper {
         )
     }
 
-    public fun mapDomainToEntity(domain: HttpTransaction): HttpTransactionEntity {
+    fun mapDomainToEntity(domain: HttpTransaction): HttpTransactionEntity {
         val reqHeadersStr = domain.request.headers.joinToString(";\n") { "${it.first}: ${it.second}" }
         val resHeadersStr = domain.response?.headers?.joinToString(";\n") { "${it.first}: ${it.second}" } ?: ""
 
@@ -91,7 +91,11 @@ public object TransactionMapper {
 
     private fun parseHeadersString(headersJson: String): List<Pair<String, String>> {
         if (headersJson.isBlank()) return emptyList()
-        return headersJson.split(";\n")
+        val trimmed = headersJson.trim()
+        if (trimmed.startsWith("[")) {
+            return com.devuloopers.knet.engine.session.HttpTransactionMapper.deserializeHeaders(trimmed)
+        }
+        return trimmed.split(";\n")
             .filter { it.contains(":") }
             .map { line ->
                 val parts = line.split(":", limit = 2)

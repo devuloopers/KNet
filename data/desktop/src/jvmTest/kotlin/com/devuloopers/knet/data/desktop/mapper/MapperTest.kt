@@ -85,4 +85,32 @@ class MapperTest {
         assertEquals(120L, mappedEntity.requestBodySize, "Request body size mapping should propagate correctly to Entity")
         assertEquals(450L, mappedEntity.responseBodySize, "Response body size mapping should propagate correctly to Entity")
     }
+
+    @Test
+    fun testTransactionMapperSupportsJsonHeaderArrays() {
+        val entity = HttpTransactionEntity(
+            id = "tx-600",
+            method = "GET",
+            url = "https://stg-04astra.cnbc.com/graphql",
+            requestHeadersJson = "[[\"User-Agent\",\"CNBC-Android/9.0.0\"],[\"Accept-Encoding\",\"gzip\"]]",
+            requestBodyPath = null,
+            requestBodySize = 0L,
+            responseStatusCode = 200,
+            responseStatusText = "OK",
+            responseHeadersJson = "[[\"Content-Type\",\"application/json\"],[\"Content-Encoding\",\"gzip\"]]",
+            responseBodyPath = null,
+            responseBodySize = 3470L,
+            durationMs = 507L,
+            timestamp = 1000L
+        )
+
+        val domain = TransactionMapper.mapEntityToDomain(entity)
+
+        assertEquals("tx-600", domain.id)
+        assertEquals(2, domain.request.headers.size)
+        assertEquals("gzip", domain.request.headers.firstOrNull { it.first.equals("Accept-Encoding", ignoreCase = true) }?.second)
+
+        assertEquals(2, domain.response?.headers?.size)
+        assertEquals("gzip", domain.response?.headers?.firstOrNull { it.first.equals("Content-Encoding", ignoreCase = true) }?.second)
+    }
 }

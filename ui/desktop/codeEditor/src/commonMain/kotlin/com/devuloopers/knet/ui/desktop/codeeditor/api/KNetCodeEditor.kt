@@ -1,33 +1,13 @@
 package com.devuloopers.knet.ui.desktop.codeeditor.api
 
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.*
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.ContextMenuState
 import androidx.compose.foundation.text.LocalTextContextMenu
 import androidx.compose.foundation.text.TextContextMenu
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -43,31 +23,18 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-
 import com.devuloopers.knet.engine.formatter.model.BodyFormat
+import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.*
+import com.devuloopers.knet.ui.desktop.codeeditor.component.*
+import com.devuloopers.knet.ui.desktop.codeeditor.component.ContextMenuItem
 import com.devuloopers.knet.ui.desktop.codeeditor.model.PreparedDocument
-import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.AutoIndentEngine
-import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.CollapsedFoldState
-import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.DocumentLayoutMap
-import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.FoldManager
-import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.UndoRedoStack
-import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.collapseAllFolds
-import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.measureLineLayoutOffsets
-import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.performFoldToggle
-import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.rememberAutoScrollController
 import com.devuloopers.knet.ui.desktop.codeeditor.syntax.FsmTokenMakerVisualTransformation
-import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
 import com.devuloopers.knet.ui.desktop.codeeditor.theme.CodeEditorStyle
 import com.devuloopers.knet.ui.desktop.codeeditor.theme.CodeEditorTokens
 import com.devuloopers.knet.ui.desktop.codeeditor.theme.EditorColors
-import com.devuloopers.knet.ui.desktop.codeeditor.component.ContextMenuItem
-import com.devuloopers.knet.ui.desktop.codeeditor.component.EditorGutter
-import com.devuloopers.knet.ui.desktop.codeeditor.component.EditorHeaderToolbar
-import com.devuloopers.knet.ui.desktop.codeeditor.component.KNetContextMenuArea
-import com.devuloopers.knet.ui.desktop.codeeditor.component.rememberClipboardCopyAction
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** Maximum displayed line preview threshold (10,000 lines) for zero-latency 100k+ line responses. */
 const val LARGE_PAYLOAD_LINE_THRESHOLD = 10000
@@ -167,6 +134,7 @@ fun KNetCodeEditor(
                 modifier = modifier
             )
         }
+
         is EditorMode.ReadOnly -> {
             ReadOnlyCodeViewer(
                 code = code,
@@ -188,6 +156,7 @@ fun KNetCodeEditor(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun EditableCodeEditor(
     code: String,
@@ -215,7 +184,6 @@ private fun EditableCodeEditor(
     }
 
     var lineTopOffsetsDp by remember { mutableStateOf<List<Dp>>(emptyList()) }
-    var lineHeightsDp by remember { mutableStateOf<List<Dp>>(emptyList()) }
 
     LaunchedEffect(code) {
         val currentFullText = getFullText(textFieldValue.text)
@@ -288,13 +256,57 @@ private fun EditableCodeEditor(
         mode.onCodeChange(getFullText(updatedText))
     }
 
-    Column(
-        modifier = modifier
-            .fillMaxSize()
-            .background(style.backgroundColor, RoundedCornerShape(6.dp))
-            .border(1.dp, EditorColors.BorderDark.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
-            .padding(CodeEditorTokens.ContainerPadding)
-    ) {
+    val copyAction = rememberClipboardCopyAction()
+
+    val customTextContextMenu = remember(textFieldValue) {
+        object : TextContextMenu {
+            @Composable
+            override fun Area(
+                textManager: TextContextMenu.TextManager,
+                state: ContextMenuState,
+                content: @Composable () -> Unit
+            ) {
+                val selectedText = textManager.selectedText.text.ifEmpty {
+                    if (!textFieldValue.selection.collapsed) {
+                        val min = minOf(textFieldValue.selection.start, textFieldValue.selection.end)
+                        val max = maxOf(textFieldValue.selection.start, textFieldValue.selection.end)
+                        if (min in 0..textFieldValue.text.length && max in 0..textFieldValue.text.length) {
+                            textFieldValue.text.substring(min, max)
+                        } else ""
+                    } else ""
+                }
+                val hasSelection = selectedText.isNotBlank()
+                val menuItems = mutableListOf<ContextMenuItem>()
+
+                if (hasSelection) {
+                    menuItems.add(
+                        ContextMenuItem(
+                            label = "Copy Selected Text",
+                            shortcut = "Ctrl+C",
+                            onClick = {
+                                copyAction(selectedText)
+                            }
+                        )
+                    )
+                }
+
+                KNetContextMenuArea(
+                    items = menuItems,
+                    modifier = Modifier.fillMaxSize(),
+                    content = content
+                )
+            }
+        }
+    }
+
+    CompositionLocalProvider(LocalTextContextMenu provides customTextContextMenu) {
+        Column(
+            modifier = modifier
+                .fillMaxSize()
+                .background(style.backgroundColor, RoundedCornerShape(6.dp))
+                .border(1.dp, EditorColors.BorderDark.copy(alpha = 0.5f), RoundedCornerShape(6.dp))
+                .padding(CodeEditorTokens.ContainerPadding)
+        ) {
         EditorHeaderToolbar(
             totalLines = totalLineCount,
             showLineCountHeader = showLineCountHeader,
@@ -316,96 +328,117 @@ private fun EditableCodeEditor(
             }
         )
 
-        Row(
-            modifier = Modifier
-                .fillMaxSize()
-                .onSizeChanged { containerHeightPx = it.height.toFloat() }
-                .pointerInput(Unit) {
-                    awaitPointerEventScope {
-                        while (true) {
-                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                            val isPressed = event.buttons.isPrimaryPressed
-                            if (isPressed && event.changes.isNotEmpty()) {
-                                val pointerY = event.changes.first().position.y
-                                autoScrollController.handleDragPointer(
-                                    mouseY = pointerY,
-                                    containerHeightPx = containerHeightPx,
-                                    thresholdPx = thresholdPx,
-                                    scrollState = verticalScrollState
-                                )
-                            } else {
-                                autoScrollController.stop()
-                            }
-                        }
-                    }
-                }
-                .verticalScroll(verticalScrollState)
-        ) {
-            EditorGutter(
-                lineCount = lineCount,
-                activeLineIndex = activeLineIndex,
-                lineTopOffsetsDp = lineTopOffsetsDp,
-                collapsedFolds = collapsedFolds,
-                foldStartLines = foldStartLines,
-                isFoldingEnabled = isFoldingEnabled && !isHighPerformanceMode,
-                isIconArrowStyle = false,
-                layoutMap = layoutMap,
-                onToggleFold = ::toggleFold
+        val scrollbarStyle = remember {
+            ScrollbarStyle(
+                minimalHeight = 24.dp,
+                thickness = 8.dp,
+                shape = RoundedCornerShape(4.dp),
+                hoverDurationMillis = 150,
+                unhoverColor = EditorColors.BorderDark.copy(alpha = 0.5f),
+                hoverColor = EditorColors.ActiveBlue
             )
+        }
 
-            Box(
+        Box(modifier = Modifier.fillMaxSize()) {
+            Row(
                 modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .then(if (!isWordWrapEnabled) Modifier.horizontalScroll(horizontalScrollState) else Modifier)
-            ) {
-                BasicTextField(
-                    value = textFieldValue,
-                    onValueChange = { newValue ->
-                        val autoIndentedValue = AutoIndentEngine.handleInsertBreak(
-                            oldValue = textFieldValue,
-                            newValue = newValue
-                        )
-                        val targetValue = autoIndentedValue ?: newValue
-                        textFieldValue = targetValue
-                        undoStack.push(targetValue.text)
-                        mode.onCodeChange(getFullText(targetValue.text))
-                    },
-                    onTextLayout = { layoutResult ->
-                        val (measuredTops, measuredHeights) = measureLineLayoutOffsets(layoutResult, density)
-                        lineTopOffsetsDp = measuredTops
-                        lineHeightsDp = measuredHeights
-                    },
-                    visualTransformation = if (isHighPerformanceMode) VisualTransformation.None else tokenTransformation,
-                    cursorBrush = SolidColor(EditorColors.ActiveBlue),
-                    textStyle = CodeEditorTokens.editorTextStyle(
-                        fontSize = style.fontSize,
-                        lineHeight = style.lineHeight
-                    ).copy(
-                        color = mode.textColor,
-                        fontFamily = FontFamily.Monospace
-                    ),
-                    modifier = Modifier.fillMaxSize(),
-                    decorationBox = { innerTextField ->
-                        Box(contentAlignment = Alignment.TopStart) {
-                            if (textFieldValue.text.isEmpty() && mode.placeholder.isNotEmpty()) {
-                                Text(
-                                    text = mode.placeholder,
-                                    color = EditorColors.TextSecondary.copy(alpha = 0.4f),
-                                    fontFamily = FontFamily.Monospace,
-                                    style = CodeEditorTokens.editorTextStyle(
-                                        fontSize = style.fontSize,
-                                        lineHeight = style.lineHeight
+                    .fillMaxSize()
+                    .onSizeChanged { containerHeightPx = it.height.toFloat() }
+                    .pointerInput(Unit) {
+                        awaitPointerEventScope {
+                            while (true) {
+                                val event = awaitPointerEvent(PointerEventPass.Initial)
+                                val isPressed = event.buttons.isPrimaryPressed
+                                if (isPressed && event.changes.isNotEmpty()) {
+                                    val pointerY = event.changes.first().position.y
+                                    autoScrollController.handleDragPointer(
+                                        mouseY = pointerY,
+                                        containerHeightPx = containerHeightPx,
+                                        thresholdPx = thresholdPx,
+                                        scrollState = verticalScrollState
                                     )
-                                )
+                                } else {
+                                    autoScrollController.stop()
+                                }
                             }
-                            innerTextField()
                         }
                     }
+                    .verticalScroll(verticalScrollState)
+            ) {
+                EditorGutter(
+                    lineCount = lineCount,
+                    activeLineIndex = activeLineIndex,
+                    lineTopOffsetsDp = lineTopOffsetsDp,
+                    collapsedFolds = collapsedFolds,
+                    foldStartLines = foldStartLines,
+                    isFoldingEnabled = isFoldingEnabled && !isHighPerformanceMode,
+                    isIconArrowStyle = false,
+                    layoutMap = layoutMap,
+                    onToggleFold = ::toggleFold
                 )
+
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight()
+                        .then(if (!isWordWrapEnabled) Modifier.horizontalScroll(horizontalScrollState) else Modifier)
+                ) {
+                    BasicTextField(
+                        value = textFieldValue,
+                        onValueChange = { newValue ->
+                            val autoIndentedValue = AutoIndentEngine.handleInsertBreak(
+                                oldValue = textFieldValue,
+                                newValue = newValue
+                            )
+                            val targetValue = autoIndentedValue ?: newValue
+                            textFieldValue = targetValue
+                            undoStack.push(targetValue.text)
+                            mode.onCodeChange(getFullText(targetValue.text))
+                        },
+                        onTextLayout = { layoutResult ->
+                            val (measuredTops, _) = measureLineLayoutOffsets(layoutResult, density)
+                            lineTopOffsetsDp = measuredTops
+                        },
+                        visualTransformation = if (isHighPerformanceMode) VisualTransformation.None else tokenTransformation,
+                        cursorBrush = SolidColor(EditorColors.ActiveBlue),
+                        textStyle = CodeEditorTokens.editorTextStyle(
+                            fontSize = style.fontSize,
+                            lineHeight = style.lineHeight
+                        ).copy(
+                            color = mode.textColor,
+                            fontFamily = FontFamily.Monospace
+                        ),
+                        modifier = Modifier.fillMaxSize(),
+                        decorationBox = { innerTextField ->
+                            Box(contentAlignment = Alignment.TopStart) {
+                                if (textFieldValue.text.isEmpty() && mode.placeholder.isNotEmpty()) {
+                                    Text(
+                                        text = mode.placeholder,
+                                        color = EditorColors.TextSecondary.copy(alpha = 0.4f),
+                                        fontFamily = FontFamily.Monospace,
+                                        style = CodeEditorTokens.editorTextStyle(
+                                            fontSize = style.fontSize,
+                                            lineHeight = style.lineHeight
+                                        )
+                                    )
+                                }
+                                innerTextField()
+                            }
+                        }
+                    )
+                }
             }
+
+            VerticalScrollbar(
+                adapter = rememberScrollbarAdapter(verticalScrollState),
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .fillMaxHeight(),
+                style = scrollbarStyle
+            )
         }
     }
+}
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -431,7 +464,12 @@ private fun ReadOnlyCodeViewer(
     val isSearching = searchQuery.isNotBlank()
 
     // Offload heavy line splitting, 100k+ truncation, and byte metrics to background CPU thread
-    val payloadState by produceState<ProcessedPayloadState?>(initialValue = null, key1 = code, key2 = searchQuery, key3 = document) {
+    val payloadState by produceState<ProcessedPayloadState?>(
+        initialValue = null,
+        key1 = code,
+        key2 = searchQuery,
+        key3 = document
+    ) {
         value = if (document != null && !isSearching) {
             ProcessedPayloadState(
                 displayedText = document.previewText,
@@ -489,7 +527,6 @@ private fun ReadOnlyCodeViewer(
     }
 
     var lineTopOffsetsDp by remember { mutableStateOf<List<Dp>>(emptyList()) }
-    var lineHeightsDp by remember { mutableStateOf<List<Dp>>(emptyList()) }
 
     LaunchedEffect(activePayload.displayedText) {
         textFieldValue = TextFieldValue(text = activePayload.displayedText, selection = TextRange.Zero)
@@ -508,13 +545,14 @@ private fun ReadOnlyCodeViewer(
         DocumentLayoutMap.build(activePayload.totalLineCount, collapsedFolds)
     }
 
-    val foldRegions = remember(activePayload.displayedText, isHighPerformanceMode, isFoldingEnabled, isSearching, document) {
-        if (isFoldingEnabled && !isSearching && !isHighPerformanceMode) {
-            if (document != null) document.folding else FoldManager.calculateFolds(textFieldValue.text.lines())
-        } else {
-            emptyList()
+    val foldRegions =
+        remember(activePayload.displayedText, isHighPerformanceMode, isFoldingEnabled, isSearching, document) {
+            if (isFoldingEnabled && !isSearching && !isHighPerformanceMode) {
+                document?.folding ?: FoldManager.calculateFolds(textFieldValue.text.lines())
+            } else {
+                emptyList()
+            }
         }
-    }
     val foldStartLines = remember(foldRegions, layoutMap) {
         foldRegions.mapNotNull { region ->
             layoutMap.toDisplayedLine(region.startLine)?.let { dispIdx -> dispIdx to region }
@@ -549,8 +587,16 @@ private fun ReadOnlyCodeViewer(
                 state: ContextMenuState,
                 content: @Composable () -> Unit
             ) {
-                val selectedText = textManager.selectedText.text
-                val hasSelection = selectedText.isNotEmpty()
+                val selectedText = textManager.selectedText.text.ifEmpty {
+                    if (!textFieldValue.selection.collapsed) {
+                        val min = minOf(textFieldValue.selection.start, textFieldValue.selection.end)
+                        val max = maxOf(textFieldValue.selection.start, textFieldValue.selection.end)
+                        if (min in 0..textFieldValue.text.length && max in 0..textFieldValue.text.length) {
+                            textFieldValue.text.substring(min, max)
+                        } else ""
+                    } else ""
+                }
+                val hasSelection = selectedText.isNotBlank()
                 val menuItems = mutableListOf<ContextMenuItem>()
 
                 if (hasSelection) {
@@ -559,33 +605,7 @@ private fun ReadOnlyCodeViewer(
                             label = "Copy Selected Text",
                             shortcut = "Ctrl+C",
                             onClick = {
-                                coroutineScope.launch(Dispatchers.IO) {
-                                    copyAction(selectedText)
-                                }
-                            }
-                        )
-                    )
-                }
-
-                menuItems.add(
-                    ContextMenuItem(
-                        label = "Copy Formatted Body",
-                        shortcut = if (!hasSelection) "Ctrl+C" else null,
-                        onClick = {
-                            coroutineScope.launch(Dispatchers.IO) {
-                                copyAction(code)
-                            }
-                        }
-                    )
-                )
-
-                if (foldRegions.isNotEmpty()) {
-                    menuItems.add(
-                        ContextMenuItem(
-                            label = "Expand All Blocks",
-                            onClick = {
-                                onCollapsedFoldsChange(emptyMap())
-                                textFieldValue = TextFieldValue(code, selection = TextRange.Zero)
+                                copyAction(selectedText)
                             }
                         )
                     )
@@ -630,78 +650,98 @@ private fun ReadOnlyCodeViewer(
             }
         )
 
+        val scrollbarStyle = remember {
+            ScrollbarStyle(
+                minimalHeight = 24.dp,
+                thickness = 8.dp,
+                shape = RoundedCornerShape(4.dp),
+                hoverDurationMillis = 150,
+                unhoverColor = EditorColors.BorderDark.copy(alpha = 0.5f),
+                hoverColor = EditorColors.ActiveBlue
+            )
+        }
+
         CompositionLocalProvider(LocalTextContextMenu provides customTextContextMenu) {
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .onSizeChanged { containerHeightPx = it.height.toFloat() }
-                    .pointerInput(Unit) {
-                        awaitPointerEventScope {
-                            while (true) {
-                                val event = awaitPointerEvent(PointerEventPass.Initial)
-                                val isPressed = event.buttons.isPrimaryPressed
-                                if (isPressed && event.changes.isNotEmpty()) {
-                                    val pointerY = event.changes.first().position.y
-                                    autoScrollController.handleDragPointer(
-                                        mouseY = pointerY,
-                                        containerHeightPx = containerHeightPx,
-                                        thresholdPx = thresholdPx,
-                                        scrollState = verticalScrollState
-                                    )
-                                } else {
-                                    autoScrollController.stop()
+            Box(modifier = Modifier.fillMaxSize()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .onSizeChanged { containerHeightPx = it.height.toFloat() }
+                        .pointerInput(Unit) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    val event = awaitPointerEvent(PointerEventPass.Initial)
+                                    val isPressed = event.buttons.isPrimaryPressed
+                                    if (isPressed && event.changes.isNotEmpty()) {
+                                        val pointerY = event.changes.first().position.y
+                                        autoScrollController.handleDragPointer(
+                                            mouseY = pointerY,
+                                            containerHeightPx = containerHeightPx,
+                                            thresholdPx = thresholdPx,
+                                            scrollState = verticalScrollState
+                                        )
+                                    } else {
+                                        autoScrollController.stop()
+                                    }
                                 }
                             }
                         }
-                    }
-                    .verticalScroll(verticalScrollState)
-            ) {
-                EditorGutter(
-                    lineCount = lineCount,
-                    activeLineIndex = -1,
-                    lineTopOffsetsDp = lineTopOffsetsDp,
-                    collapsedFolds = collapsedFolds,
-                    foldStartLines = foldStartLines,
-                    isFoldingEnabled = isFoldingEnabled && !isSearching && !isHighPerformanceMode,
-                    isIconArrowStyle = true,
-                    layoutMap = layoutMap,
-                    onToggleFold = ::toggleFold
-                )
-
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxHeight()
-                        .then(if (!isWordWrapEnabled) Modifier.horizontalScroll(horizontalScrollState) else Modifier)
+                        .verticalScroll(verticalScrollState)
                 ) {
-                    BasicTextField(
-                        value = textFieldValue,
-                        onValueChange = { newValue ->
-                            textFieldValue = newValue
-                        },
-                        onTextLayout = { layoutResult ->
-                            val (measuredTops, measuredHeights) = measureLineLayoutOffsets(layoutResult, density)
-                            lineTopOffsetsDp = measuredTops
-                            lineHeightsDp = measuredHeights
-                        },
-                        readOnly = true,
-                        visualTransformation = if (isHighPerformanceMode) VisualTransformation.None else tokenTransformation,
-                        cursorBrush = SolidColor(EditorColors.ActiveBlue),
-                        textStyle = CodeEditorTokens.editorTextStyle(
-                            fontSize = style.fontSize,
-                            lineHeight = style.lineHeight
-                        ).copy(
-                            color = Color.White,
-                            fontFamily = FontFamily.Monospace
-                        ),
-                        modifier = Modifier.fillMaxSize(),
-                        decorationBox = { innerTextField ->
-                            Box(contentAlignment = Alignment.TopStart) {
-                                innerTextField()
-                            }
-                        }
+                    EditorGutter(
+                        lineCount = lineCount,
+                        activeLineIndex = -1,
+                        lineTopOffsetsDp = lineTopOffsetsDp,
+                        collapsedFolds = collapsedFolds,
+                        foldStartLines = foldStartLines,
+                        isFoldingEnabled = isFoldingEnabled && !isSearching && !isHighPerformanceMode,
+                        isIconArrowStyle = true,
+                        layoutMap = layoutMap,
+                        onToggleFold = ::toggleFold
                     )
+
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .then(if (!isWordWrapEnabled) Modifier.horizontalScroll(horizontalScrollState) else Modifier)
+                    ) {
+                        BasicTextField(
+                            value = textFieldValue,
+                            onValueChange = { newValue ->
+                                textFieldValue = newValue
+                            },
+                            onTextLayout = { layoutResult ->
+                                val (measuredTops, _) = measureLineLayoutOffsets(layoutResult, density)
+                                lineTopOffsetsDp = measuredTops
+                            },
+                            readOnly = true,
+                            visualTransformation = if (isHighPerformanceMode) VisualTransformation.None else tokenTransformation,
+                            cursorBrush = SolidColor(EditorColors.ActiveBlue),
+                            textStyle = CodeEditorTokens.editorTextStyle(
+                                fontSize = style.fontSize,
+                                lineHeight = style.lineHeight
+                            ).copy(
+                                color = Color.White,
+                                fontFamily = FontFamily.Monospace
+                            ),
+                            modifier = Modifier.fillMaxSize(),
+                            decorationBox = { innerTextField ->
+                                Box(contentAlignment = Alignment.TopStart) {
+                                    innerTextField()
+                                }
+                            }
+                        )
+                    }
                 }
+
+                VerticalScrollbar(
+                    adapter = rememberScrollbarAdapter(verticalScrollState),
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .fillMaxHeight(),
+                    style = scrollbarStyle
+                )
             }
         }
     }

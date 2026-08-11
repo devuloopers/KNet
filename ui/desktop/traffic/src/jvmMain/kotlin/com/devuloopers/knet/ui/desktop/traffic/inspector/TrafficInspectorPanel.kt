@@ -362,6 +362,7 @@ private fun RequestTabContent(
                 }
             }
             RequestSubTab.BODY -> {
+                val reqText = preparedState.requestBody.formattedText.ifBlank { preparedState.requestBody.rawText }
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -374,9 +375,9 @@ private fun RequestTabContent(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         SectionHeader(title = "REQUEST BODY")
-                        if (transaction.requestBody.isNotBlank()) {
+                        if (reqText.isNotBlank()) {
                             KNetCopyButton(
-                                textToCopy = transaction.requestBody,
+                                textToCopy = reqText,
                                 contentDescription = "Copy Request Body",
                                 size = 14.dp,
                                 tint = themeColors.textSecondary
@@ -384,7 +385,12 @@ private fun RequestTabContent(
                         }
                     }
 
-                    if (transaction.requestBody.isBlank()) {
+                    if (preparedState.isPreparing) {
+                        Text(
+                            text = "Loading request body...",
+                            style = typography.caption.copy(color = themeColors.textMuted)
+                        )
+                    } else if (reqText.isBlank()) {
                         Text(
                             text = "No request body payload",
                             style = typography.caption.copy(color = themeColors.textMuted)
@@ -571,6 +577,7 @@ private fun ResponseTabContent(
                 }
             }
             ResponseSubTab.BODY -> {
+                val respText = preparedState.responseBody.formattedText.ifBlank { preparedState.responseBody.rawText }
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -583,9 +590,9 @@ private fun ResponseTabContent(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         SectionHeader(title = "RESPONSE BODY")
-                        if (transaction.responseBody.isNotBlank()) {
+                        if (respText.isNotBlank()) {
                             KNetCopyButton(
-                                textToCopy = transaction.responseBody,
+                                textToCopy = respText,
                                 contentDescription = "Copy Response Body",
                                 size = 14.dp,
                                 tint = themeColors.textSecondary
@@ -593,7 +600,12 @@ private fun ResponseTabContent(
                         }
                     }
 
-                    if (transaction.responseBody.isBlank()) {
+                    if (preparedState.isPreparing) {
+                        Text(
+                            text = "Loading response body...",
+                            style = typography.caption.copy(color = themeColors.textMuted)
+                        )
+                    } else if (respText.isBlank()) {
                         Text(
                             text = "No response body payload",
                             style = typography.caption.copy(color = themeColors.textMuted)
