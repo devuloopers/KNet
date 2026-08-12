@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.LocalTextContextMenu
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -148,10 +149,11 @@ fun LazyCodeBody(
         onSelectionChange = updateSelection
     )
 
-    KNetContextMenuArea(
-        items = contextMenuItems,
-        modifier = modifier.fillMaxSize()
-    ) {
+    CompositionLocalProvider(LocalTextContextMenu provides EmptyTextContextMenu) {
+        KNetContextMenuArea(
+            items = contextMenuItems,
+            modifier = modifier.fillMaxSize()
+        ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -241,4 +243,5 @@ fun LazyCodeBody(
             )
         }
     }
+}
 }

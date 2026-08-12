@@ -1,11 +1,29 @@
 package com.devuloopers.knet.ui.desktop.codeeditor.component
 
+import androidx.compose.foundation.ContextMenuState
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.text.TextContextMenu
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.DocumentBuffer
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.FoldRegion
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.SelectionEngine
 import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorSelection
+
+/**
+ * Empty implementation of Compose [TextContextMenu] used to suppress default white context menu popups on [BasicTextField].
+ */
+@OptIn(ExperimentalFoundationApi::class)
+object EmptyTextContextMenu : TextContextMenu {
+    @Composable
+    override fun Area(
+        textManager: TextContextMenu.TextManager,
+        state: ContextMenuState,
+        content: @Composable () -> Unit
+    ) {
+        content()
+    }
+}
 
 /**
  * Builds and remembers a list of fold-aware [ContextMenuItem] definitions for [LazyCodeBody].
