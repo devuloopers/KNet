@@ -35,6 +35,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.TextUnit
+import com.devuloopers.knet.ui.desktop.codeeditor.shortcut.LineKeyNavigationHandler
 import com.devuloopers.knet.ui.desktop.codeeditor.model.LineSelectionBounds
 import com.devuloopers.knet.ui.desktop.codeeditor.modifier.selectionHighlight
 import com.devuloopers.knet.ui.desktop.codeeditor.theme.CodeEditorTokens
@@ -186,57 +187,20 @@ fun EditableLineContent(
                     }
                 }
                 .onPreviewKeyEvent { keyEvent ->
-                    if (keyEvent.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                    val isCmdOrCtrl = keyEvent.isMetaPressed || keyEvent.isCtrlPressed
-                    if (isCmdOrCtrl && keyEvent.key == Key.Z) {
-                        if (keyEvent.isShiftPressed) {
-                            onRedo?.invoke()
-                        } else {
-                            onUndo?.invoke()
-                        }
-                        return@onPreviewKeyEvent true
-                    } else if (isCmdOrCtrl && keyEvent.key == Key.Y) {
-                        onRedo?.invoke()
-                        return@onPreviewKeyEvent true
-                    }
-
-                    val caretCol = fieldValue.selection.start
-                    val isCollapsed = fieldValue.selection.collapsed
-                    val textLen = fieldValue.text.length
-
-                    when (keyEvent.key) {
-                        Key.DirectionUp -> {
-                            onNavigateUp(caretCol)
-                            true
-                        }
-                        Key.DirectionDown -> {
-                            onNavigateDown(caretCol)
-                            true
-                        }
-                        Key.DirectionLeft -> {
-                            if (caretCol == 0 && isCollapsed) {
-                                onNavigateLeftAtStart()
-                                true
-                            } else false
-                        }
-                        Key.DirectionRight -> {
-                            if (caretCol == textLen && isCollapsed) {
-                                onNavigateRightAtEnd()
-                                true
-                            } else false
-                        }
-                        Key.Backspace -> {
-                            if (caretCol == 0 && isCollapsed) {
-                                onLineMerge()
-                                true
-                            } else false
-                        }
-                        Key.Enter -> {
-                            onLineSplit(caretCol)
-                            true
-                        }
-                        else -> false
-                    }
+                    LineKeyNavigationHandler.handleLineKeyEvent(
+                        keyEvent = keyEvent,
+                        caretCol = fieldValue.selection.start,
+                        isCollapsed = fieldValue.selection.collapsed,
+                        textLength = fieldValue.text.length,
+                        onNavigateUp = onNavigateUp,
+                        onNavigateDown = onNavigateDown,
+                        onNavigateLeftAtStart = onNavigateLeftAtStart,
+                        onNavigateRightAtEnd = onNavigateRightAtEnd,
+                        onLineMerge = onLineMerge,
+                        onLineSplit = onLineSplit,
+                        onUndo = onUndo,
+                        onRedo = onRedo
+                    )
                 }
         )
     }

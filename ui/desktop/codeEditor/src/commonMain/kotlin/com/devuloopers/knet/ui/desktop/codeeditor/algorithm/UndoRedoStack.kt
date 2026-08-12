@@ -1,6 +1,7 @@
 package com.devuloopers.knet.ui.desktop.codeeditor.algorithm
 
 import com.devuloopers.knet.ui.desktop.codeeditor.component.EditorCaretState
+import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorSelection
 
 /**
  * Describes the direction and type of a document edit for coalescing boundary detection.
@@ -33,12 +34,14 @@ enum class EditKind {
 /**
  * Single edit operation entry in the undo/redo stack.
  *
- * Stores both the text model mutation and the 2D cursor positions before and after the edit,
- * matching VS Code's `UndoRedoElement` and `SingleEditOperation` architecture.
+ * Stores both the text model mutation, the 2D cursor positions, and the active selection state
+ * before and after the edit, matching VS Code's `UndoRedoElement` architecture.
  *
  * @property text The document text content AFTER this edit.
  * @property beforeCaret 2D cursor position BEFORE this edit started.
  * @property afterCaret 2D cursor position AFTER this edit completed.
+ * @property beforeSelection Active selection range BEFORE this edit started (e.g. selection deleted via Backspace).
+ * @property afterSelection Active selection range AFTER this edit completed.
  * @property editKind The kind of edit for coalescing boundary detection.
  * @property timestamp System epoch timestamp when edit occurred.
  */
@@ -46,6 +49,8 @@ data class UndoRedoElement(
     val text: String,
     val beforeCaret: EditorCaretState,
     val afterCaret: EditorCaretState,
+    val beforeSelection: EditorSelection? = null,
+    val afterSelection: EditorSelection? = null,
     val editKind: EditKind,
     val timestamp: Long = currentSystemTimeMillis()
 )
@@ -59,32 +64,38 @@ internal fun currentSystemTimeMillis(): Long {
 }
 
 /**
- * Result object returned by [UndoRedoStack.undo] containing the reverted text and restored cursor position.
+ * Result object returned by [UndoRedoStack.undo] containing the reverted text, restored cursor position,
+ * and restored active text selection range.
  *
  * @property text Document text to restore.
  * @property caretState 2D cursor position to restore (the `beforeCaret` of the undone edit).
+ * @property selection Active selection range to restore (the `beforeSelection` of the undone edit).
  */
 data class UndoResult(
     val text: String,
-    val caretState: EditorCaretState
+    val caretState: EditorCaretState,
+    val selection: EditorSelection?
 )
 
 /**
- * Result object returned by [UndoRedoStack.redo] containing the redone text and restored cursor position.
+ * Result object returned by [UndoRedoStack.redo] containing the redone text, restored cursor position,
+ * and restored active text selection range.
  *
  * @property text Document text to re-apply.
  * @property caretState 2D cursor position to restore (the `afterCaret` of the redone edit).
+ * @property selection Active selection range to restore (the `afterSelection` of the redone edit).
  */
 data class RedoResult(
     val text: String,
-    val caretState: EditorCaretState
+    val caretState: EditorCaretState,
+    val selection: EditorSelection?
 )
 
 /**
  * A compound edit history stack for code editing with modern IDE-standard boundary-aware
- * transaction coalescing.
+ * transaction coalescing and selection restoration.
  *
- * Implements VS Code's `UndoRedoElement` before/after cursor restoration model combined with
+ * Implements VS Code's `UndoRedoElement` before/after cursor and selection restoration model combined with
  * IntelliJ IDEA's five-rule coalescing boundary detection:
  *
  * 1. **Whitespace boundary**: Inserting Space or Tab finalizes the previous word group.
@@ -93,11 +104,10 @@ data class RedoResult(
  * 4. **Cursor discontinuity**: A non-sequential cursor jump (mouse, arrow to different position) finalizes the group.
  * 5. **Time pause**: A gap of more than [coalesceTimeoutMs] milliseconds between keystrokes finalizes the group.
  *
- * The `pendingBeforeCaret` design (matching VS Code's `cursorUndo.ts`):
- * - [updatePendingBeforeCaret] is called on every cursor navigation or mouse click, so that the
- *   `beforeCaret` recorded for the NEXT push always reflects the position immediately before the
- *   user began an edit — not the position after [onValueChange] has already updated it.
- * - [push] uses [pendingBeforeCaret] as `beforeCaret` automatically; callers only supply `afterCaret`.
+ * The `pendingBeforeCaret` & `pendingBeforeSelection` design:
+ * - [updatePendingBeforeState] is called on every cursor navigation, mouse click, or selection drag, so that
+ *   the `beforeCaret` & `beforeSelection` recorded for the NEXT push always reflects the position immediately
+ *   before the user began an edit.
  *
  * @param maxStackSize Maximum number of edit entries to retain before evicting the oldest.
  * @param coalesceTimeoutMs Maximum time gap in milliseconds between edits that can still be coalesced.
@@ -112,18 +122,16 @@ class UndoRedoStack(
 
     /**
      * The cursor position that will be recorded as `beforeCaret` on the next [push].
-     * Updated via [updatePendingBeforeCaret] on every navigation event (arrow keys, mouse click).
      */
     private var pendingBeforeCaret: EditorCaretState = EditorCaretState(0, 0)
 
     /**
+     * The active text selection range that will be recorded as `beforeSelection` on the next [push].
+     */
+    private var pendingBeforeSelection: EditorSelection? = null
+
+    /**
      * When `true`, the next [push] call must start a fresh undo group regardless of other rules.
-     *
-     * This is set to `true` after a whitespace or delimiter character is inserted. Those characters
-     * are appended to the CURRENT group (e.g. `"hello "` stays in one entry), but the NEXT
-     * non-delimiter character (`"w"` in `"world"`) must start a new group.
-     *
-     * This matches VS Code and IntelliJ's word-level undo semantics precisely.
      */
     private var pendingGroupBreak: Boolean = false
 
@@ -145,39 +153,40 @@ class UndoRedoStack(
         initialText = startingText
         pointer = -1
         pendingBeforeCaret = EditorCaretState(0, 0)
+        pendingBeforeSelection = null
         pendingGroupBreak = false
     }
 
     /**
-     * Updates the cursor position that will be captured as `beforeCaret` for the next [push].
+     * Updates the cursor position and active selection state that will be captured as `beforeCaret`
+     * and `beforeSelection` for the next [push].
      *
-     * Must be called on every cursor navigation event (arrow keys, mouse click, undo/redo restore)
-     * so that the undo stack always knows the cursor position immediately before an edit begins.
-     * This mirrors VS Code's approach of capturing a cursor snapshot on every `onCursorPositionChanged` event.
+     * Must be called on every cursor navigation event (arrow keys, mouse click, selection drag)
+     * so that the undo stack always knows the state immediately before an edit begins.
      *
-     * @param caret The current cursor position after navigation.
+     * @param caret The current cursor position after navigation or selection change.
+     * @param selection The active text selection range, or `null` if no selection active.
      */
-    fun updatePendingBeforeCaret(caret: EditorCaretState) {
+    fun updatePendingBeforeState(caret: EditorCaretState, selection: EditorSelection? = null) {
         pendingBeforeCaret = caret
+        pendingBeforeSelection = selection
     }
 
     /**
      * Pushes a new document text mutation into the undo stack.
      *
-     * Uses [pendingBeforeCaret] as `beforeCaret` automatically — callers only need to supply
-     * the post-edit [afterCaret] position. This ensures `beforeCaret` is always the position
-     * the user was at BEFORE they started typing.
-     *
-     * Coalescing is governed by [shouldCoalesce], which implements all 5 modern IDE boundary rules.
-     * Structural edits ([EditKind.Structural]) always start their own undo group.
+     * Uses [pendingBeforeCaret] and [pendingBeforeSelection] automatically — callers only need
+     * to supply the post-edit [afterCaret] position and optional [afterSelection].
      *
      * @param newText Document text after mutation.
      * @param afterCaret Cursor position after mutation completed.
+     * @param afterSelection Selection range after mutation completed (usually `null`).
      * @param editKind The kind of edit. Defaults to [EditKind.Insertion] for normal typing.
      */
     fun push(
         newText: String,
         afterCaret: EditorCaretState,
+        afterSelection: EditorSelection? = null,
         editKind: EditKind = EditKind.Insertion
     ) {
         val currentText = if (pointer >= 0) history[pointer].text else initialText
@@ -191,10 +200,11 @@ class UndoRedoStack(
         if (pointer >= 0 && pointer == history.lastIndex) {
             val last = history[pointer]
             if (shouldCoalesce(last, newText, afterCaret, editKind, currentTime)) {
-                // Merge into the existing entry: update text and afterCaret, preserve beforeCaret
+                // Merge into the existing entry: update text and afterCaret, preserve beforeCaret and beforeSelection
                 history[pointer] = last.copy(
                     text = newText,
                     afterCaret = afterCaret,
+                    afterSelection = afterSelection,
                     editKind = editKind,
                     timestamp = currentTime
                 )
@@ -207,7 +217,20 @@ class UndoRedoStack(
             history.removeAt(history.lastIndex)
         }
 
-        history.add(UndoRedoElement(newText, pendingBeforeCaret, afterCaret, editKind, currentTime))
+        history.add(
+            UndoRedoElement(
+                text = newText,
+                beforeCaret = pendingBeforeCaret,
+                afterCaret = afterCaret,
+                beforeSelection = pendingBeforeSelection,
+                afterSelection = afterSelection,
+                editKind = editKind,
+                timestamp = currentTime
+            )
+        )
+
+        // Reset pending selection after pushing the edit
+        pendingBeforeSelection = null
 
         // Enforce maximum stack depth by evicting the oldest entry
         if (history.size > maxStackSize) {
@@ -218,12 +241,10 @@ class UndoRedoStack(
     }
 
     /**
-     * Reverts to previous text state and restores the `beforeCaret` cursor position.
+     * Reverts to previous text state and restores the `beforeCaret` cursor position and `beforeSelection`.
      *
-     * After undo, [pendingBeforeCaret] is updated internally so that any subsequent
-     * undo or navigation is tracked from the correct restored position.
-     *
-     * @return [UndoResult] containing reverted text and restored caret position, or `null` if cannot undo.
+     * @return [UndoResult] containing reverted text, restored caret position, and restored selection range,
+     * or `null` if cannot undo.
      */
     fun undo(): UndoResult? {
         if (!canUndo) return null
@@ -231,48 +252,31 @@ class UndoRedoStack(
         pointer--
         val prevText = if (pointer >= 0) history[pointer].text else initialText
         val restoredCaret = element.beforeCaret
+        val restoredSelection = element.beforeSelection
         pendingBeforeCaret = restoredCaret
-        return UndoResult(text = prevText, caretState = restoredCaret)
+        pendingBeforeSelection = restoredSelection
+        return UndoResult(text = prevText, caretState = restoredCaret, selection = restoredSelection)
     }
 
     /**
-     * Re-applies next text state and restores the `afterCaret` cursor position.
+     * Re-applies next text state and restores the `afterCaret` cursor position and `afterSelection`.
      *
-     * After redo, [pendingBeforeCaret] is updated internally so that any subsequent edit
-     * is tracked from the correct restored position.
-     *
-     * @return [RedoResult] containing redone text and restored caret position, or `null` if cannot redo.
+     * @return [RedoResult] containing redone text, restored caret position, and restored selection range,
+     * or `null` if cannot redo.
      */
     fun redo(): RedoResult? {
         if (!canRedo) return null
         pointer++
         val element = history[pointer]
         val restoredCaret = element.afterCaret
+        val restoredSelection = element.afterSelection
         pendingBeforeCaret = restoredCaret
-        return RedoResult(text = element.text, caretState = restoredCaret)
+        pendingBeforeSelection = restoredSelection
+        return RedoResult(text = element.text, caretState = restoredCaret, selection = restoredSelection)
     }
 
     /**
      * Determines whether a new edit should be coalesced (merged) into the most recent history entry.
-     *
-     * Implements all five modern IDE boundary rules:
-     *
-     * - **Rule 1 — Whitespace boundary**: A Space or Tab insertion is appended to the current group,
-     *   then [pendingGroupBreak] is set so the NEXT non-delimiter character starts a fresh group.
-     * - **Rule 2 — Delimiter boundary**: Punctuation is appended to the current group, then
-     *   [pendingGroupBreak] is set so the NEXT character starts a fresh group.
-     * - **Rule 3 — Direction change**: Switching between [EditKind.Insertion] and [EditKind.Deletion] breaks the group.
-     * - **Rule 4 — Cursor discontinuity**: Non-sequential cursor position (different line or column jump > 1) breaks the group.
-     * - **Rule 5 — Time pause**: Gap exceeding [coalesceTimeoutMs] breaks the group.
-     *
-     * Structural edits always return `false` (never coalesced).
-     *
-     * @param last The most recent history entry to evaluate coalescing against.
-     * @param newText The incoming document text after the new edit.
-     * @param afterCaret The cursor position after the new edit.
-     * @param editKind The kind of the incoming edit.
-     * @param currentTime The current system time in milliseconds.
-     * @return `true` if the new edit should be merged into [last]; `false` if it starts a new group.
      */
     private fun shouldCoalesce(
         last: UndoRedoElement,
@@ -281,39 +285,40 @@ class UndoRedoStack(
         editKind: EditKind,
         currentTime: Long
     ): Boolean {
-
+        // Structural edits always start a new undo group
         if (editKind == EditKind.Structural || last.editKind == EditKind.Structural) return false
 
+        // Edits with an active before-selection should not coalesce with typing
+        if (last.beforeSelection != null || pendingBeforeSelection != null) return false
+
+        // pendingGroupBreak: a whitespace or delimiter was appended to the previous group
         if (pendingGroupBreak) {
             pendingGroupBreak = false
             return false
         }
 
+        // Rule 5: Time pause exceeding threshold breaks the group
         if (currentTime - last.timestamp > coalesceTimeoutMs) return false
 
+        // Rule 3: Direction change between insertion and deletion breaks the group
         if (editKind != last.editKind) return false
 
+        // Rule 4: Cursor discontinuity — different line, or column jump greater than 1
         if (afterCaret.lineIndex != last.afterCaret.lineIndex) return false
-
         if (kotlin.math.abs(afterCaret.colIndex - last.afterCaret.colIndex) > 1) return false
 
+        // Rules 1 & 2: Whitespace and delimiter boundary (insertions only)
         if (editKind == EditKind.Insertion) {
             val insertedChar = newText.getOrNull(afterCaret.colIndex - 1)
             if (insertedChar != null && (insertedChar.isWhitespace() || isDelimiter(insertedChar))) {
                 pendingGroupBreak = true
-                return true // Append the delimiter to the current group
+                return true
             }
         }
 
         return true
     }
 
-    /**
-     * Returns `true` if the given character is a code delimiter that should break the current
-     * typing burst into a new undo transaction. Matches VS Code and IntelliJ's delimiter set.
-     *
-     * @param ch The character to evaluate.
-     */
     private fun isDelimiter(ch: Char): Boolean =
         ch in ";,.(){}[]=+-*/<>!&|^%~:`\""
 }

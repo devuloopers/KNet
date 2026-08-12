@@ -152,17 +152,22 @@ internal fun EditableCodeEditor(
             onCaretStateChange = { newCaret ->
                 caretState = newCaret
                 activeSelection = null
-                // Capture cursor position before any future edit, mirroring VS Code's onCursorPositionChanged snapshot
-                undoStack.updatePendingBeforeCaret(newCaret)
+                undoStack.updatePendingBeforeState(newCaret, selection = null)
             },
             selection = activeSelection,
-            onSelectionChange = { activeSelection = it },
+            onSelectionChange = { newSelection ->
+                activeSelection = newSelection
+                if (newSelection != null) {
+                    undoStack.updatePendingBeforeState(caretState, selection = newSelection)
+                }
+            },
             onUndo = {
                 val result = undoStack.undo()
                 if (result != null) {
                     documentBuffer.replaceAll(result.text.lines())
                     rawLines = documentBuffer.getLines()
                     caretState = result.caretState
+                    activeSelection = result.selection
                     mode.onCodeChange(result.text)
                 }
             },
@@ -172,6 +177,7 @@ internal fun EditableCodeEditor(
                     documentBuffer.replaceAll(result.text.lines())
                     rawLines = documentBuffer.getLines()
                     caretState = result.caretState
+                    activeSelection = result.selection
                     mode.onCodeChange(result.text)
                 }
             },
@@ -192,7 +198,7 @@ internal fun EditableCodeEditor(
                 undoStack.push(documentBuffer.toFullText(), afterCaret = newCaretState, editKind = EditKind.Structural)
                 rawLines = documentBuffer.getLines()
                 caretState = newCaretState
-                undoStack.updatePendingBeforeCaret(newCaretState)
+                undoStack.updatePendingBeforeState(newCaretState)
                 mode.onCodeChange(documentBuffer.toFullText())
             },
             onLineChanged = { lineIndex, newText ->
@@ -212,7 +218,7 @@ internal fun EditableCodeEditor(
                 undoStack.push(documentBuffer.toFullText(), afterCaret = newCaretState, editKind = EditKind.Structural)
                 rawLines = documentBuffer.getLines()
                 caretState = newCaretState
-                undoStack.updatePendingBeforeCaret(newCaretState)
+                undoStack.updatePendingBeforeState(newCaretState)
                 mode.onCodeChange(documentBuffer.toFullText())
             },
             onLineMerge = { lineIndex ->
@@ -223,7 +229,7 @@ internal fun EditableCodeEditor(
                     undoStack.push(documentBuffer.toFullText(), afterCaret = newCaretState, editKind = EditKind.Structural)
                     rawLines = documentBuffer.getLines()
                     caretState = newCaretState
-                    undoStack.updatePendingBeforeCaret(newCaretState)
+                    undoStack.updatePendingBeforeState(newCaretState)
                     mode.onCodeChange(documentBuffer.toFullText())
                 }
             },

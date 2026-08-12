@@ -9,6 +9,7 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.DocumentBuffer
+import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.FoldRegion
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.PasteEngine
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.SelectionEngine
 import com.devuloopers.knet.ui.desktop.codeeditor.component.EditorCaretState
@@ -36,6 +37,8 @@ object EditorShortcutHandler {
         rawLines: List<String>,
         selection: EditorSelection?,
         caretState: EditorCaretState?,
+        foldRegions: List<FoldRegion> = emptyList(),
+        collapsedFoldStartLines: Set<Int> = emptySet(),
         copyAction: (String) -> Unit,
         pasteAction: () -> String?,
         onDocumentLinesChanged: ((List<String>) -> Unit)?,
@@ -53,6 +56,8 @@ object EditorShortcutHandler {
             rawLines = rawLines,
             selection = selection,
             caretState = caretState,
+            foldRegions = foldRegions,
+            collapsedFoldStartLines = collapsedFoldStartLines,
             copyAction = copyAction,
             pasteAction = pasteAction,
             onDocumentLinesChanged = onDocumentLinesChanged,
@@ -73,6 +78,8 @@ object EditorShortcutHandler {
         rawLines: List<String>,
         selection: EditorSelection?,
         caretState: EditorCaretState?,
+        foldRegions: List<FoldRegion> = emptyList(),
+        collapsedFoldStartLines: Set<Int> = emptySet(),
         copyAction: (String) -> Unit,
         pasteAction: () -> String?,
         onDocumentLinesChanged: ((List<String>) -> Unit)?,
@@ -100,9 +107,14 @@ object EditorShortcutHandler {
                     }
                 }
                 Key.C -> {
-                    // Ctrl+C / Cmd+C: Copy selection or full current line
+                    // Ctrl+C / Cmd+C: Copy selection (fold-aware) or full current line
                     if (selection != null && !selection.isEmpty) {
-                        val textToCopy = SelectionEngine.extractSelectedText(DocumentBuffer(rawLines), selection)
+                        val textToCopy = SelectionEngine.extractSelectedText(
+                            buffer = DocumentBuffer(rawLines),
+                            selection = selection,
+                            foldRegions = foldRegions,
+                            collapsedFoldStartLines = collapsedFoldStartLines
+                        )
                         if (textToCopy.isNotEmpty()) {
                             copyAction(textToCopy)
                         }
@@ -114,14 +126,24 @@ object EditorShortcutHandler {
                     return true
                 }
                 Key.X -> {
-                    // Ctrl+X / Cmd+X: Cut selection or full current line
+                    // Ctrl+X / Cmd+X: Cut selection (fold-aware) or full current line
                     val buffer = DocumentBuffer(rawLines)
                     if (selection != null && !selection.isEmpty) {
-                        val textToCut = SelectionEngine.extractSelectedText(buffer, selection)
+                        val textToCut = SelectionEngine.extractSelectedText(
+                            buffer = buffer,
+                            selection = selection,
+                            foldRegions = foldRegions,
+                            collapsedFoldStartLines = collapsedFoldStartLines
+                        )
                         if (textToCut.isNotEmpty()) {
                             copyAction(textToCut)
                         }
-                        val newCaret = SelectionEngine.deleteSelectedText(buffer, selection)
+                        val newCaret = SelectionEngine.deleteSelectedText(
+                            buffer = buffer,
+                            selection = selection,
+                            foldRegions = foldRegions,
+                            collapsedFoldStartLines = collapsedFoldStartLines
+                        )
                         onDocumentLinesChanged?.invoke(buffer.getLines())
                         onSelectionChange(null)
                         onCaretStateChange?.invoke(newCaret)
@@ -147,7 +169,12 @@ object EditorShortcutHandler {
                         val buffer = DocumentBuffer(rawLines)
                         var activeCaret = caretState ?: EditorCaretState(0, 0)
                         if (selection != null && !selection.isEmpty) {
-                            activeCaret = SelectionEngine.deleteSelectedText(buffer, selection)
+                            activeCaret = SelectionEngine.deleteSelectedText(
+                                buffer = buffer,
+                                selection = selection,
+                                foldRegions = foldRegions,
+                                collapsedFoldStartLines = collapsedFoldStartLines
+                            )
                             onSelectionChange(null)
                         }
                         val newCaret = PasteEngine.applyPaste(
@@ -181,14 +208,17 @@ object EditorShortcutHandler {
         // Handle Backspace or Delete with active selection
         if ((key == Key.Backspace || key == Key.Delete) && selection != null && !selection.isEmpty) {
             val buffer = DocumentBuffer(rawLines)
-            val newCaret = SelectionEngine.deleteSelectedText(buffer, selection)
+            val newCaret = SelectionEngine.deleteSelectedText(
+                buffer = buffer,
+                selection = selection,
+                foldRegions = foldRegions,
+                collapsedFoldStartLines = collapsedFoldStartLines
+            )
             onDocumentLinesChanged?.invoke(buffer.getLines())
             onSelectionChange(null)
             onCaretStateChange?.invoke(newCaret)
             return true
         }
-
-
 
         return false
     }

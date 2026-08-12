@@ -1,52 +1,31 @@
 package com.devuloopers.knet.ui.desktop.codeeditor.component
 
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.ScrollbarStyle
-import androidx.compose.foundation.VerticalScrollbar
-import androidx.compose.foundation.background
+import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.LocalTextContextMenu
 import androidx.compose.foundation.text.TextContextMenu
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.pointer.PointerEventPass
-
 import androidx.compose.ui.input.pointer.PointerIcon
-import androidx.compose.ui.input.pointer.isPrimaryPressed
-import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.pointerHoverIcon
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.FoldRegion
-import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.LazyLine
-import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.LazyLineVisibilityEngine
-import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.LineFoldState
-import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.PointerHitTestEngine
-import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.rememberAutoScrollController
+import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.*
 import com.devuloopers.knet.ui.desktop.codeeditor.component.viewport.LazyCodeBodyContent
 import com.devuloopers.knet.ui.desktop.codeeditor.gesture.rememberSelectionGestureHandler
 import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorSelection
+import com.devuloopers.knet.ui.desktop.codeeditor.modifier.editorPointerInput
 import com.devuloopers.knet.ui.desktop.codeeditor.shortcut.EditorShortcutHandler
-
 import com.devuloopers.knet.ui.desktop.codeeditor.syntax.CodeHighlighterRegistry
 import com.devuloopers.knet.ui.desktop.codeeditor.theme.CodeEditorTokens
 import com.devuloopers.knet.ui.desktop.codeeditor.theme.EditorColors
@@ -131,36 +110,6 @@ fun LazyCodeBody(
 
     val copyAction = rememberClipboardCopyAction()
     val pasteAction = rememberClipboardPasteAction()
-    val customTextContextMenu = remember(copyAction) {
-        object : TextContextMenu {
-            @Composable
-            override fun Area(
-                textManager: TextContextMenu.TextManager,
-                state: androidx.compose.foundation.ContextMenuState,
-                content: @Composable () -> Unit
-            ) {
-                val selectedText = textManager.selectedText.text
-                val menuItems = mutableListOf<ContextMenuItem>()
-
-                if (selectedText.isNotBlank()) {
-                    menuItems.add(
-                        ContextMenuItem(
-                            label = "Copy Selected Text",
-                            shortcut = "Ctrl+C",
-                            onClick = { copyAction(selectedText) }
-                        )
-                    )
-                }
-
-                KNetContextMenuArea(
-                    items = menuItems,
-                    modifier = Modifier.fillMaxSize(),
-                    content = content
-                )
-            }
-        }
-    }
-
     val density = LocalDensity.current
     val lineHeightPx = remember(density, lineHeight) { with(density) { CodeEditorTokens.GutterLineHeightDp.toPx() } }
     val charWidthPx = remember(density, fontSize) { with(density) { (fontSize.value * 0.6f).sp.toPx() } }
@@ -178,80 +127,61 @@ fun LazyCodeBody(
     var containerHeightPx by remember { mutableStateOf(0f) }
     var containerWidthPx by remember { mutableStateOf(0f) }
 
-    var internalSelectionState by remember(rawLines) { mutableStateOf<EditorSelection?>(null) }
-    val effectiveSelection = selection ?: internalSelectionState
+    val internalSelectionState = remember(rawLines) { mutableStateOf<EditorSelection?>(null) }
+    val effectiveSelection = selection ?: internalSelectionState.value
     val currentSelectionState by rememberUpdatedState(effectiveSelection)
     val currentCaretState by rememberUpdatedState(caretState)
     val lineTextLayoutMap = remember { mutableMapOf<Int, TextLayoutResult>() }
 
     val updateSelection: (EditorSelection?) -> Unit = { newSel ->
-        internalSelectionState = newSel
+        internalSelectionState.value = newSel
         onSelectionChange?.invoke(newSel)
     }
 
-    CompositionLocalProvider(LocalTextContextMenu provides customTextContextMenu) {
+    val contextMenuItems = rememberEditorContextMenuItems(
+        rawLines = rawLines,
+        effectiveSelection = effectiveSelection,
+        foldRegions = foldRegions,
+        collapsedFoldStartLines = collapsedFoldStartLines,
+        mode = mode,
+        copyAction = copyAction,
+        pasteAction = pasteAction,
+        onDocumentLinesChanged = onDocumentLinesChanged,
+        onSelectionChange = updateSelection
+    )
+
+    KNetContextMenuArea(
+        items = contextMenuItems,
+        modifier = modifier.fillMaxSize()
+    ) {
         Box(
-            modifier = modifier
+            modifier = Modifier
                 .fillMaxSize()
                 .background(EditorColors.BackgroundDark)
                 .onSizeChanged { size ->
                     containerWidthPx = size.width.toFloat()
                     containerHeightPx = size.height.toFloat()
                 }
-                .pointerInput(rawLines, mode, containerHeightPx, containerWidthPx, gutterWidthPx) {
-                    awaitPointerEventScope {
-                        while (true) {
-                            val event = awaitPointerEvent(PointerEventPass.Initial)
-                            try {
-                                val activeWindow = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().activeWindow
-                                if (activeWindow != null && activeWindow.cursor.type != java.awt.Cursor.TEXT_CURSOR) {
-                                    activeWindow.cursor = java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.TEXT_CURSOR)
-                                }
-                            } catch (_: Throwable) {}
-
-                            val isPressed = event.buttons.isPrimaryPressed
-                            val isShiftPressed = event.keyboardModifiers.isShiftPressed
-
-                            if (isPressed && event.changes.isNotEmpty()) {
-                                val pos = event.changes.first().position
-
-                                autoScrollController.handleDragPointerLazy(
-                                    mouseY = pos.y,
-                                    containerHeightPx = containerHeightPx,
-                                    thresholdPx = autoScrollThresholdPx,
-                                    lazyListState = lazyListState
-                                )
-
-                                val (lineIndex, colIndex) = PointerHitTestEngine.calculatePointerLineAndCol(
-                                    pos = pos,
-                                    lazyListState = lazyListState,
-                                    rawLines = rawLines,
-                                    lineHeightPx = lineHeightPx,
-                                    charWidthPx = charWidthPx,
-                                    gutterWidthPx = gutterWidthPx,
-                                    containerWidthPx = containerWidthPx,
-                                    lineTextLayoutMap = lineTextLayoutMap
-                                )
-
-                                selectionGestureHandler.processPointerEvent(
-                                    targetLineIndex = lineIndex,
-                                    targetColIndex = colIndex,
-                                    lineText = rawLines.getOrElse(lineIndex) { "" },
-                                    isShiftPressed = isShiftPressed,
-                                    currentSelection = currentSelectionState,
-                                    caretState = currentCaretState,
-                                    onSelectionChange = updateSelection
-                                )
-                            } else {
-                                selectionGestureHandler.processPointerRelease(
-                                    isShiftPressed = isShiftPressed,
-                                    onSelectionChange = updateSelection
-                                )
-                                autoScrollController.stop()
-                            }
-                        }
-                    }
-                }
+                .editorPointerInput(
+                    rawLines = rawLines,
+                    visibleLines = visibleLines,
+                    foldRegions = foldRegions,
+                    collapsedFoldStartLines = collapsedFoldStartLines,
+                    mode = mode,
+                    containerHeightPx = containerHeightPx,
+                    containerWidthPx = containerWidthPx,
+                    gutterWidthPx = gutterWidthPx,
+                    lineHeightPx = lineHeightPx,
+                    charWidthPx = charWidthPx,
+                    autoScrollThresholdPx = autoScrollThresholdPx,
+                    lazyListState = lazyListState,
+                    lineTextLayoutMap = lineTextLayoutMap,
+                    selectionGestureHandler = selectionGestureHandler,
+                    autoScrollController = autoScrollController,
+                    currentSelectionState = currentSelectionState,
+                    currentCaretState = currentCaretState,
+                    updateSelection = updateSelection
+                )
                 .pointerHoverIcon(PointerIcon.Text)
                 .onPreviewKeyEvent { keyEvent ->
                     EditorShortcutHandler.processKeyEvent(
@@ -259,6 +189,8 @@ fun LazyCodeBody(
                         rawLines = rawLines,
                         selection = effectiveSelection,
                         caretState = caretState,
+                        foldRegions = foldRegions,
+                        collapsedFoldStartLines = collapsedFoldStartLines,
                         copyAction = copyAction,
                         pasteAction = pasteAction,
                         onDocumentLinesChanged = { updatedLines: List<String> ->
@@ -306,7 +238,8 @@ fun LazyCodeBody(
                 adapter = rememberScrollbarAdapter(lazyListState),
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
-                    .fillMaxHeight(),
+                    .fillMaxHeight()
+                    .pointerHoverIcon(PointerIcon.Default),
                 style = scrollbarStyle
             )
         }

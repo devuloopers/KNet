@@ -6,24 +6,44 @@ import com.devuloopers.knet.ui.desktop.codeeditor.model.LineSelectionBounds
 
 /**
  * Single-responsibility engine for extracting and manipulating multi-line selection ranges on a [DocumentBuffer].
+ *
+ * Supports fold-aware selection expansion so that copying, cutting, or deleting a selection containing
+ * a collapsed code block includes 100% of the block's text (header line + all hidden inner lines).
  */
 object SelectionEngine {
 
-
     /**
-     * Extracts text spanning across [selection] from [buffer].
+     * Extracts text spanning across [selection] from [buffer], expanding collapsed fold regions if present.
      *
      * @param buffer Document buffer to read from.
      * @param selection Multi-line or single-line selection range.
+     * @param foldRegions List of document fold regions.
+     * @param collapsedFoldStartLines Set of 0-indexed start lines currently collapsed.
      * @return Extracted text snippet joined by newlines.
      */
-    fun extractSelectedText(buffer: DocumentBuffer, selection: EditorSelection): String {
+    fun extractSelectedText(
+        buffer: DocumentBuffer,
+        selection: EditorSelection,
+        foldRegions: List<FoldRegion> = emptyList(),
+        collapsedFoldStartLines: Set<Int> = emptySet()
+    ): String {
         if (selection.isEmpty) return ""
         val lines = buffer.getLines()
-        val (startLine, startCol) = selection.normalizedStart
-        val (endLine, endCol) = selection.normalizedEnd
+        val (normStartLine, normStartCol) = selection.normalizedStart
+        val (normEndLine, normEndCol) = selection.normalizedEnd
 
-        if (startLine !in lines.indices || endLine !in lines.indices) return ""
+        if (normStartLine !in lines.indices || normEndLine !in lines.indices) return ""
+
+        // Expand fold range if selection starts on or covers collapsed fold regions
+        val (startLine, startCol, endLine, endCol) = resolveEffectiveSelectionBounds(
+            normStartLine = normStartLine,
+            normStartCol = normStartCol,
+            normEndLine = normEndLine,
+            normEndCol = normEndCol,
+            lines = lines,
+            foldRegions = foldRegions,
+            collapsedFoldStartLines = collapsedFoldStartLines
+        )
 
         if (startLine == endLine) {
             val line = lines[startLine]
@@ -53,21 +73,39 @@ object SelectionEngine {
     }
 
     /**
-     * Deletes the text spanning across [selection] from [buffer].
+     * Deletes the text spanning across [selection] from [buffer], expanding collapsed fold regions if present.
      *
      * @param buffer Document buffer to mutate.
      * @param selection Multi-line or single-line selection range to delete.
+     * @param foldRegions List of document fold regions.
+     * @param collapsedFoldStartLines Set of 0-indexed start lines currently collapsed.
      * @return Updated [EditorCaretState] reflecting caret position after deletion.
      */
-    fun deleteSelectedText(buffer: DocumentBuffer, selection: EditorSelection): EditorCaretState {
+    fun deleteSelectedText(
+        buffer: DocumentBuffer,
+        selection: EditorSelection,
+        foldRegions: List<FoldRegion> = emptyList(),
+        collapsedFoldStartLines: Set<Int> = emptySet()
+    ): EditorCaretState {
         if (selection.isEmpty) return EditorCaretState(selection.startLine, selection.startCol)
         val lines = buffer.getLines()
-        val (startLine, startCol) = selection.normalizedStart
-        val (endLine, endCol) = selection.normalizedEnd
+        val (normStartLine, normStartCol) = selection.normalizedStart
+        val (normEndLine, normEndCol) = selection.normalizedEnd
 
-        if (startLine !in lines.indices || endLine !in lines.indices) {
+        if (normStartLine !in lines.indices || normEndLine !in lines.indices) {
             return EditorCaretState(selection.startLine, selection.startCol)
         }
+
+        // Expand fold range if selection covers collapsed fold regions
+        val (startLine, startCol, endLine, endCol) = resolveEffectiveSelectionBounds(
+            normStartLine = normStartLine,
+            normStartCol = normStartCol,
+            normEndLine = normEndLine,
+            normEndCol = normEndCol,
+            lines = lines,
+            foldRegions = foldRegions,
+            collapsedFoldStartLines = collapsedFoldStartLines
+        )
 
         if (startLine == endLine) {
             val line = lines[startLine]
@@ -99,7 +137,48 @@ object SelectionEngine {
     }
 
     /**
-     * Computes the line-level character selection bounds [com.devuloopers.knet.ui.desktop.codeeditor.model.LineSelectionBounds]
+     * Resolves effective selection bounds by expanding collapsed fold blocks that overlap with the selection.
+     */
+    private fun resolveEffectiveSelectionBounds(
+        normStartLine: Int,
+        normStartCol: Int,
+        normEndLine: Int,
+        normEndCol: Int,
+        lines: List<String>,
+        foldRegions: List<FoldRegion>,
+        collapsedFoldStartLines: Set<Int>
+    ): FoldSelectionBounds {
+        if (foldRegions.isEmpty() || collapsedFoldStartLines.isEmpty()) {
+            return FoldSelectionBounds(normStartLine, normStartCol, normEndLine, normEndCol)
+        }
+
+        val foldByStart = foldRegions.associateBy { it.startLine }
+        var effectiveEndLine = normEndLine
+        var effectiveEndCol = normEndCol
+
+        // Check all lines covered by normalized selection
+        for (lineIdx in normStartLine..normEndLine) {
+            if (lineIdx in collapsedFoldStartLines) {
+                val region = foldByStart[lineIdx]
+                if (region != null && region.endLine > effectiveEndLine) {
+                    effectiveEndLine = region.endLine.coerceIn(0, lines.lastIndex)
+                    effectiveEndCol = lines[effectiveEndLine].length
+                }
+            }
+        }
+
+        return FoldSelectionBounds(normStartLine, normStartCol, effectiveEndLine, effectiveEndCol)
+    }
+
+    private data class FoldSelectionBounds(
+        val startLine: Int,
+        val startCol: Int,
+        val endLine: Int,
+        val endCol: Int
+    )
+
+    /**
+     * Computes the line-level character selection bounds [LineSelectionBounds]
      * for a given line index [lineIndex] within [selection].
      *
      * Returns `null` if [lineIndex] is not covered by [selection].
@@ -157,6 +236,3 @@ object SelectionEngine {
         )
     }
 }
-
-
-
