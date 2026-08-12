@@ -53,10 +53,10 @@ class MultiClickGestureHandler {
         currentTimeMs: Long = System.currentTimeMillis()
     ): EditorSelection? {
         val isSamePosition = (lastClickLineIndex == targetLineIndex && abs(lastClickColIndex - targetColIndex) <= 2)
-        if (currentTimeMs - lastClickTimeMs <= MULTI_CLICK_INTERVAL_MS && isSamePosition) {
-            clickCount = (clickCount % 3) + 1
+        clickCount = if (currentTimeMs - lastClickTimeMs <= MULTI_CLICK_INTERVAL_MS && isSamePosition) {
+            (clickCount % 3) + 1
         } else {
-            clickCount = 1
+            1
         }
         lastClickTimeMs = currentTimeMs
         lastClickLineIndex = targetLineIndex
@@ -69,9 +69,11 @@ class MultiClickGestureHandler {
                 wordAnchorEnd = wordEnd
                 EditorSelection(targetLineIndex, wordStart, targetLineIndex, wordEnd)
             }
+
             3 -> {
                 EditorSelection(targetLineIndex, 0, targetLineIndex, lineText.length)
             }
+
             else -> null
         }
     }
@@ -96,17 +98,20 @@ class MultiClickGestureHandler {
         return when (clickCount) {
             2 -> {
                 val (targetWordStart, targetWordEnd) = WordBoundaryEngine.findWordBounds(lineText, targetColIndex)
-                val isForward = (targetLineIndex > anchorLine || (targetLineIndex == anchorLine && targetColIndex >= anchorCol))
+                val isForward =
+                    (targetLineIndex > anchorLine || (targetLineIndex == anchorLine && targetColIndex >= anchorCol))
                 val startCol = if (isForward) wordAnchorStart else wordAnchorEnd
                 val endCol = if (isForward) targetWordEnd else targetWordStart
                 EditorSelection(anchorLine, startCol, targetLineIndex, endCol)
             }
+
             3 -> {
                 val isForward = targetLineIndex >= anchorLine
                 val startCol = if (isForward) 0 else lineText.length
                 val endCol = if (isForward) lineText.length else 0
                 EditorSelection(anchorLine, startCol, targetLineIndex, endCol)
             }
+
             else -> null
         }
     }

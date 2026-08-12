@@ -1,4 +1,4 @@
-package com.devuloopers.knet.ui.desktop.codeeditor.component
+package com.devuloopers.knet.ui.desktop.codeeditor.model
 
 /**
  * State representing the active line and caret position within the code editor.

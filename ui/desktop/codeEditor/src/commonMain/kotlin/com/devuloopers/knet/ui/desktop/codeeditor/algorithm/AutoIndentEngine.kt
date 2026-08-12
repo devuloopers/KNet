@@ -111,7 +111,6 @@ object AutoIndentEngine {
     ): String {
         val safeCol = colIndex.coerceIn(0, lineText.length)
         val textBefore = lineText.substring(0, safeCol)
-        val textAfter = lineText.substring(safeCol)
 
         // Phase 1: Inherit leading whitespace from the current line.
         val leadingWhitespace = lineText.takeWhile { it == ' ' || it == '\t' }

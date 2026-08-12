@@ -1,6 +1,6 @@
 package com.devuloopers.knet.ui.desktop.codeeditor.algorithm
 
-import com.devuloopers.knet.ui.desktop.codeeditor.component.EditorCaretState
+import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorCaretState
 import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorSelection
 
 /**

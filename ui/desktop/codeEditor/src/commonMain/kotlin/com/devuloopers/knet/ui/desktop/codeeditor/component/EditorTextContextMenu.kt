@@ -32,11 +32,10 @@ fun rememberEditorContextMenuItems(
     collapsedFoldStartLines,
     mode
 ) {
-    val currentSel = effectiveSelection
-    val selectedText = if (currentSel != null && !currentSel.isEmpty) {
+    val selectedText = if (effectiveSelection != null && !effectiveSelection.isEmpty) {
         SelectionEngine.extractSelectedText(
             buffer = DocumentBuffer(rawLines),
-            selection = currentSel,
+            selection = effectiveSelection,
             foldRegions = foldRegions,
             collapsedFoldStartLines = collapsedFoldStartLines
         )
@@ -52,7 +51,7 @@ fun rememberEditorContextMenuItems(
                 onClick = { copyAction(selectedText) }
             )
         )
-        if (mode == LazyCodeBodyMode.Editable && currentSel != null) {
+        if (mode == LazyCodeBodyMode.Editable && effectiveSelection != null) {
             menuItems.add(
                 ContextMenuItem(
                     label = "Cut",
@@ -62,7 +61,7 @@ fun rememberEditorContextMenuItems(
                         val docBuffer = DocumentBuffer(rawLines)
                         SelectionEngine.deleteSelectedText(
                             buffer = docBuffer,
-                            selection = currentSel,
+                            selection = effectiveSelection,
                             foldRegions = foldRegions,
                             collapsedFoldStartLines = collapsedFoldStartLines
                         )

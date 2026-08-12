@@ -12,18 +12,16 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Dp
-
 import androidx.compose.ui.unit.TextUnit
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.LazyLine
+import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.SelectionEngine
 import com.devuloopers.knet.ui.desktop.codeeditor.component.LazyCodeBodyMode
+import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorSelection
 import com.devuloopers.knet.ui.desktop.codeeditor.syntax.CodeLanguageHighlighter
 import com.devuloopers.knet.ui.desktop.codeeditor.syntax.TokenMaker
 import com.devuloopers.knet.ui.desktop.codeeditor.syntax.TokenState
-import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorSelection
 import com.devuloopers.knet.ui.desktop.codeeditor.theme.CodeEditorTokens
 import com.devuloopers.knet.ui.desktop.codeeditor.theme.EditorColors
-
-import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.SelectionEngine
 
 /**
  * Top-level row composable for a single document line inside

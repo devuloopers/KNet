@@ -2,7 +2,7 @@ package com.devuloopers.knet.ui.desktop.codeeditor
 
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.DocumentBuffer
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.SelectionEngine
-import com.devuloopers.knet.ui.desktop.codeeditor.component.EditorCaretState
+import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorCaretState
 import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorSelection
 import kotlin.test.Test
 import kotlin.test.assertEquals

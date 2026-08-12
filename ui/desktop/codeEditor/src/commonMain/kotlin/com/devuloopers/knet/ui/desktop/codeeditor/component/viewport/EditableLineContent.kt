@@ -4,28 +4,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.TextSelectionColors
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.isCtrlPressed
-import androidx.compose.ui.input.key.isMetaPressed
-import androidx.compose.ui.input.key.isShiftPressed
-import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
-
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextRange
@@ -35,9 +21,9 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.TextUnit
-import com.devuloopers.knet.ui.desktop.codeeditor.shortcut.LineKeyNavigationHandler
 import com.devuloopers.knet.ui.desktop.codeeditor.model.LineSelectionBounds
 import com.devuloopers.knet.ui.desktop.codeeditor.modifier.selectionHighlight
+import com.devuloopers.knet.ui.desktop.codeeditor.shortcut.LineKeyNavigationHandler
 import com.devuloopers.knet.ui.desktop.codeeditor.theme.CodeEditorTokens
 import com.devuloopers.knet.ui.desktop.codeeditor.theme.EditorColors
 
@@ -103,10 +89,10 @@ fun EditableLineContent(
             fieldValue = TextFieldValue(text = lineText, selection = TextRange(safeCol))
             try {
                 focusRequester.requestFocus()
-            } catch (_: Throwable) {}
+            } catch (_: Throwable) {
+            }
         }
     }
-
 
 
     var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }

@@ -121,11 +121,8 @@ object PointerHitTestEngine {
 
             val localX = (pos.x - gutterWidthPx).coerceAtLeast(0f)
             val layoutResult = lineTextLayoutMap[rawLineIndex]
-            if (layoutResult != null) {
-                colIndex = layoutResult.getOffsetForPosition(Offset(localX, 0f)).coerceIn(0, lineText.length)
-            } else {
-                colIndex = (localX / charWidthPx).roundToInt().coerceIn(0, lineText.length)
-            }
+            colIndex = layoutResult?.getOffsetForPosition(Offset(localX, 0f))?.coerceIn(0, lineText.length)
+                ?: (localX / charWidthPx).roundToInt().coerceIn(0, lineText.length)
         }
 
         return PointerHitResult(
@@ -133,23 +130,5 @@ object PointerHitTestEngine {
             colIndex = colIndex,
             displayLineText = lineText
         )
-    }
-
-    /** Backward compatible signature returning Pair(lineIndex, colIndex) */
-    fun calculatePointerLineAndCol(
-        pos: Offset,
-        lazyListState: LazyListState,
-        visibleLines: List<LazyLine>,
-        rawLines: List<String>,
-        lineHeightPx: Float,
-        charWidthPx: Float,
-        gutterWidthPx: Float,
-        containerWidthPx: Float,
-        lineTextLayoutMap: Map<Int, TextLayoutResult>
-    ): Pair<Int, Int> {
-        val res = calculatePointerHit(
-            pos, lazyListState, visibleLines, rawLines, lineHeightPx, charWidthPx, gutterWidthPx, containerWidthPx, lineTextLayoutMap
-        )
-        return res.rawLineIndex to res.colIndex
     }
 }

@@ -27,18 +27,17 @@ fun Modifier.selectionHighlight(
 ): Modifier = this.then(
     Modifier.drawBehind {
         bounds?.let { selectionBounds ->
-            val layout = textLayoutResult
-            if (layout != null) {
-                val textLen = layout.layoutInput.text.length
+            if (textLayoutResult != null) {
+                val textLen = textLayoutResult.layoutInput.text.length
                 val safeStart = selectionBounds.startCol.coerceIn(0, textLen)
                 val safeEnd = selectionBounds.endCol.coerceIn(safeStart, textLen)
                 val charWidthPx = fontSize.toPx() * 0.6f
 
                 if (safeStart < safeEnd) {
-                    val path = layout.getPathForRange(safeStart, safeEnd)
+                    val path = textLayoutResult.getPathForRange(safeStart, safeEnd)
                     drawPath(path = path, color = EditorColors.SelectionBackground)
                     if (selectionBounds.isStartLine && safeEnd == textLen) {
-                        val lineRight = layout.getLineRight(0)
+                        val lineRight = textLayoutResult.getLineRight(0)
                         drawRect(
                             color = EditorColors.SelectionBackground,
                             topLeft = Offset(lineRight, 0f),
@@ -46,7 +45,7 @@ fun Modifier.selectionHighlight(
                         )
                     }
                 } else if (selectionBounds.isStartLine && safeStart == textLen) {
-                    val lineRight = layout.getLineRight(0)
+                    val lineRight = textLayoutResult.getLineRight(0)
                     drawRect(
                         color = EditorColors.SelectionBackground,
                         topLeft = Offset(lineRight, 0f),

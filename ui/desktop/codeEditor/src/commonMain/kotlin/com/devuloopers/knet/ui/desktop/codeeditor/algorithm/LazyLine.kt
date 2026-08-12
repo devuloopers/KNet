@@ -3,21 +3,21 @@ package com.devuloopers.knet.ui.desktop.codeeditor.algorithm
 /**
  * State representation for code folding capabilities of a document line.
  */
-public sealed interface LineFoldState {
+sealed interface LineFoldState {
     /**
      * Line has no fold region start.
      */
-    public data object None : LineFoldState
+    data object None : LineFoldState
 
     /**
      * Line starts a fold region and is currently expanded.
      */
-    public data object FoldStartExpanded : LineFoldState
+    data object FoldStartExpanded : LineFoldState
 
     /**
      * Line starts a fold region and is currently collapsed.
      */
-    public data object FoldStartCollapsed : LineFoldState
+    data object FoldStartCollapsed : LineFoldState
 }
 
 /**
@@ -28,7 +28,7 @@ public sealed interface LineFoldState {
  * @property foldState Folding state of this line (none, expanded, collapsed).
  * @property foldRegion Associated [FoldRegion] if this line starts a fold region.
  */
-public data class LazyLine(
+data class LazyLine(
     val originalLineIndex: Int,
     val displayText: String,
     val foldState: LineFoldState,

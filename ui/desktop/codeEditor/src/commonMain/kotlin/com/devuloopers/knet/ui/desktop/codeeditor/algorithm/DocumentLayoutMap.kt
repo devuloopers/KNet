@@ -1,7 +1,5 @@
 package com.devuloopers.knet.ui.desktop.codeeditor.algorithm
 
-import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.CollapsedFoldState
-
 /**
  * Single Source of Truth for translating between original document line coordinates and displayed editor line coordinates.
  *

@@ -1,19 +1,11 @@
 package com.devuloopers.knet.ui.desktop.codeeditor.algorithm
 
-import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.unit.Dp
-import com.devuloopers.knet.ui.desktop.codeeditor.theme.CodeEditorTokens
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import kotlin.math.pow
 
 /**
@@ -24,7 +16,6 @@ import kotlin.math.pow
  */
 class AutoScrollController(
     private val scope: CoroutineScope,
-    val activationZoneDp: Dp = CodeEditorTokens.AutoScrollActivationZone,
     private val maxVelocityPxPerFrame: Float = 45f
 ) {
     private var scrollJob: Job? = null
@@ -55,39 +46,8 @@ class AutoScrollController(
                 val ratio = (overflow / thresholdPx).coerceIn(0f, 3f)
                 -(ratio.pow(1.5f) * 12f).coerceIn(2f, maxVelocityPxPerFrame)
             }
+
             else -> 0f
-        }
-    }
-
-    /**
-     * Triggers or updates the active auto-scroll loop.
-     * Guaranteed to maintain at most one active scroll job at a time.
-     */
-    fun handleDragPointer(
-        mouseY: Float,
-        containerHeightPx: Float,
-        thresholdPx: Float,
-        scrollState: ScrollState
-    ) {
-        val velocity = calculateVelocity(mouseY, containerHeightPx, thresholdPx)
-        currentVelocity = velocity
-
-        if (velocity == 0f) {
-            stop()
-            return
-        }
-
-        if (scrollJob?.isActive == true) return
-
-        scrollJob = scope.launch(Dispatchers.Main) {
-            try {
-                while (isActive && currentVelocity != 0f) {
-                    scrollState.scrollBy(currentVelocity)
-                    delay(16) // ~60 FPS smooth scrolling
-                }
-            } finally {
-                scrollJob = null
-            }
         }
     }
 

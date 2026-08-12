@@ -1,6 +1,6 @@
 package com.devuloopers.knet.ui.desktop.codeeditor.algorithm
 
-import com.devuloopers.knet.ui.desktop.codeeditor.component.EditorCaretState
+import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorCaretState
 
 /**
  * Single-responsibility engine handling single and multi-line paste operations on a [DocumentBuffer].

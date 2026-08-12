@@ -5,7 +5,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import com.devuloopers.knet.ui.desktop.codeeditor.component.EditorCaretState
+import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorCaretState
 import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorSelection
 
 /**
@@ -58,15 +58,15 @@ class SelectionGestureHandler(
                 return
             }
 
-            if (isShiftPressed && currentSelection != null && !currentSelection.isEmpty) {
+            dragAnchor = if (isShiftPressed && currentSelection != null && !currentSelection.isEmpty) {
                 // Shift + Click: Preserve origin start anchor of existing selection
-                dragAnchor = currentSelection.startLine to currentSelection.startCol
+                currentSelection.startLine to currentSelection.startCol
             } else if (isShiftPressed && caretState != null) {
                 // Shift + Click: Preserve current caret position as start anchor
-                dragAnchor = caretState.lineIndex to caretState.colIndex
+                caretState.lineIndex to caretState.colIndex
             } else {
                 // Standard press: Start new selection anchor at clicked coordinate
-                dragAnchor = targetLineIndex to targetColIndex
+                targetLineIndex to targetColIndex
             }
         }
 

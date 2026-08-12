@@ -5,10 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.input.pointer.PointerIcon
@@ -17,8 +14,8 @@ import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.LazyLine
-import com.devuloopers.knet.ui.desktop.codeeditor.component.EditorCaretState
 import com.devuloopers.knet.ui.desktop.codeeditor.component.LazyCodeBodyMode
+import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorCaretState
 import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorSelection
 import com.devuloopers.knet.ui.desktop.codeeditor.syntax.CodeLanguageHighlighter
 
@@ -43,7 +40,6 @@ fun LazyCodeBodyContent(
     caretState: EditorCaretState?,
     onCaretStateChange: ((EditorCaretState) -> Unit)?,
     selection: EditorSelection?,
-    onSelectionChange: ((EditorSelection?) -> Unit)?,
     onToggleFold: (originalLineIndex: Int) -> Unit,
     onLineChanged: ((lineIndex: Int, newText: String) -> Unit)?,
     onLineSplit: ((lineIndex: Int, colIndex: Int) -> Unit)?,
@@ -54,7 +50,6 @@ fun LazyCodeBodyContent(
     onTextLayout: ((lineIndex: Int, TextLayoutResult) -> Unit)? = null
 ) {
     val focusRequesters = remember { mutableMapOf<Int, FocusRequester>() }
-    var isKeyboardNavigated by remember { mutableStateOf(false) }
 
     LazyColumn(
         state = lazyListState,
@@ -88,34 +83,28 @@ fun LazyCodeBodyContent(
                 onMultiLinePaste = onMultiLinePaste,
                 onNavigateUp = { origIdx, col ->
                     if (origIdx > 0) {
-                        isKeyboardNavigated = true
                         onCaretStateChange?.invoke(EditorCaretState(origIdx - 1, col))
                     }
                 },
                 onNavigateDown = { origIdx, col ->
                     if (origIdx < rawLines.lastIndex) {
-                        isKeyboardNavigated = true
                         onCaretStateChange?.invoke(EditorCaretState(origIdx + 1, col))
                     }
                 },
                 onNavigateLeftAtStart = { origIdx ->
                     if (origIdx > 0) {
-                        isKeyboardNavigated = true
                         val prevLen = rawLines[origIdx - 1].length
                         onCaretStateChange?.invoke(EditorCaretState(origIdx - 1, prevLen))
                     }
                 },
                 onNavigateRightAtEnd = { origIdx ->
                     if (origIdx < rawLines.lastIndex) {
-                        isKeyboardNavigated = true
                         onCaretStateChange?.invoke(EditorCaretState(origIdx + 1, 0))
                     }
                 },
                 onFocused = { origIdx, clickedCol ->
-                    isKeyboardNavigated = false
                     onCaretStateChange?.invoke(EditorCaretState(origIdx, clickedCol))
                 },
-
                 onUndo = onUndo,
                 onRedo = onRedo,
                 onTextLayout = onTextLayout

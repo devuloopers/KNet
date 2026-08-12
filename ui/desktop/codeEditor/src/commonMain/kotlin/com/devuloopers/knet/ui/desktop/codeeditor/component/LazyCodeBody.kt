@@ -6,8 +6,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.LocalTextContextMenu
-import androidx.compose.foundation.text.TextContextMenu
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -23,6 +21,7 @@ import androidx.compose.ui.unit.sp
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.*
 import com.devuloopers.knet.ui.desktop.codeeditor.component.viewport.LazyCodeBodyContent
 import com.devuloopers.knet.ui.desktop.codeeditor.gesture.rememberSelectionGestureHandler
+import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorCaretState
 import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorSelection
 import com.devuloopers.knet.ui.desktop.codeeditor.modifier.editorPointerInput
 import com.devuloopers.knet.ui.desktop.codeeditor.shortcut.EditorShortcutHandler
@@ -39,7 +38,6 @@ import com.devuloopers.knet.ui.desktop.codeeditor.theme.EditorColors
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun LazyCodeBody(
-
     rawLines: List<String>,
     mode: LazyCodeBodyMode = LazyCodeBodyMode.ReadOnly,
     foldRegions: List<FoldRegion> = emptyList(),
@@ -221,7 +219,6 @@ fun LazyCodeBody(
                 caretState = caretState,
                 onCaretStateChange = onCaretStateChange,
                 selection = effectiveSelection,
-                onSelectionChange = updateSelection,
                 onToggleFold = onToggleFold,
                 onLineChanged = onLineChanged,
                 onLineSplit = onLineSplit,

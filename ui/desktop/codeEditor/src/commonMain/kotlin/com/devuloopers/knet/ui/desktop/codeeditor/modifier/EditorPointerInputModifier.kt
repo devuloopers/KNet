@@ -11,7 +11,7 @@ import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.AutoScrollController
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.FoldRegion
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.LazyLine
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.PointerHitTestEngine
-import com.devuloopers.knet.ui.desktop.codeeditor.component.EditorCaretState
+import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorCaretState
 import com.devuloopers.knet.ui.desktop.codeeditor.component.LazyCodeBodyMode
 import com.devuloopers.knet.ui.desktop.codeeditor.gesture.SelectionGestureHandler
 import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorSelection

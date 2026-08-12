@@ -5,7 +5,7 @@ package com.devuloopers.knet.ui.desktop.codeeditor.algorithm
  *
  * Filters uncollapsed lines and generates display text stubs for collapsed fold regions.
  */
-public object LazyLineVisibilityEngine {
+object LazyLineVisibilityEngine {
 
     /**
      * Builds the ordered list of [LazyLine] items to render in [com.devuloopers.knet.ui.desktop.codeeditor.component.LazyCodeBody].
@@ -15,7 +15,7 @@ public object LazyLineVisibilityEngine {
      * @param collapsedFoldStartLines Set of 0-indexed start line numbers currently collapsed.
      * @return List of visible [LazyLine] instances.
      */
-    public fun buildVisibleLines(
+    fun buildVisibleLines(
         rawLines: List<String>,
         foldRegions: List<FoldRegion>,
         collapsedFoldStartLines: Set<Int>

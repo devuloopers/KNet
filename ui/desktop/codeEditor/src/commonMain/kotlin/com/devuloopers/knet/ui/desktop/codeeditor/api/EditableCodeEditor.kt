@@ -25,7 +25,7 @@ import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.FoldRegion
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.PasteEngine
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.EditKind
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.UndoRedoStack
-import com.devuloopers.knet.ui.desktop.codeeditor.component.EditorCaretState
+import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorCaretState
 import com.devuloopers.knet.ui.desktop.codeeditor.component.EditorHeaderToolbar
 import com.devuloopers.knet.ui.desktop.codeeditor.component.LazyCodeBody
 import com.devuloopers.knet.ui.desktop.codeeditor.component.LazyCodeBodyMode
