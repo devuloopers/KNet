@@ -7,6 +7,8 @@ import com.devuloopers.knet.domain.clientNetwork.usecase.ExecuteClientApiRequest
 import com.devuloopers.knet.domain.clientNetwork.usecase.FormatResponseBodyUseCase
 import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
 import com.devuloopers.knet.domain.collection.model.HttpMethod
+import com.devuloopers.knet.domain.network.mapper.NetworkSpecMappers.sanitizeTransportHeaders
+import com.devuloopers.knet.domain.network.mapper.NetworkSpecMappers.toRequestBodyType
 import com.devuloopers.knet.engine.script.api.EnvironmentStore
 import com.devuloopers.knet.engine.script.api.ScriptExecutionResult
 import com.devuloopers.knet.engine.script.api.ScriptLanguage
@@ -63,7 +65,7 @@ public class ExecuteScriptedApiRequestUseCase(
         proxyPort: Int?
     ): ScriptedExecutionResult = withContext(ioDispatcher) {
         var effectiveUrl = editorState.url
-        var headerMap = editorState.headers.toMap()
+        var headerMap = editorState.headers.sanitizeTransportHeaders().toMap()
         var queryParamMap = editorState.queryParams.toMap()
         var effectiveBody = editorState.bodyPayload
 
@@ -128,14 +130,7 @@ public class ExecuteScriptedApiRequestUseCase(
             HttpMethod.GET
         }
 
-        val bodyTypeEnum = when (editorState.bodyType.uppercase()) {
-            "JSON" -> RequestBodyType.JSON
-            "XML" -> RequestBodyType.XML
-            "FORM", "FORM_DATA" -> RequestBodyType.FORM_DATA
-            "GRAPHQL" -> RequestBodyType.GRAPHQL
-            "RAW", "RAW_TEXT" -> RequestBodyType.RAW_TEXT
-            else -> RequestBodyType.NONE
-        }
+        val bodyTypeEnum = editorState.bodyType.toRequestBodyType()
 
         val cookieMap = editorState.cookies.toMap()
 

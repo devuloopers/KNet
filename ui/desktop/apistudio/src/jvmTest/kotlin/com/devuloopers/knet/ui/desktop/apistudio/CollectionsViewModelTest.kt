@@ -79,8 +79,8 @@ class CollectionsViewModelTest {
         )
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertTrue(assignedId?.startsWith("unsaved_") == true)
-        assertEquals("Unsaved Session 1", assignedTitle)
+        assertTrue(assignedId?.isNotBlank() == true)
+        assertEquals("Untitled Request", assignedTitle)
     }
 
     @Test

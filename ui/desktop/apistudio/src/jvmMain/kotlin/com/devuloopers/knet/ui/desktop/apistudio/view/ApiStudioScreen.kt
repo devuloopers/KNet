@@ -60,7 +60,7 @@ public fun ApiStudioScreen(
     
     LaunchedEffect(uiState.editorState.linkedUnsavedId) {
         val linkedId = uiState.editorState.linkedUnsavedId
-        if (linkedId != null && linkedId.startsWith("unsaved_")) {
+        if (!linkedId.isNullOrBlank() && uiState.editorState.sessionType == com.devuloopers.knet.ui.desktop.apistudio.model.SessionType.UNSAVED_DRAFT) {
             selectedRequestId = linkedId
             viewModel?.setUnsavedDraftSession(linkedId)
         }

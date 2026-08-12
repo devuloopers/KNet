@@ -368,8 +368,11 @@ public fun ResponseInspectorView(
         else -> com.devuloopers.knet.ui.desktop.codeeditor.inspector.InspectorResponseSubTab.BODY
     }
 
+    val isExecuting = state.executionState == ExecutionState.EXECUTING
+
     com.devuloopers.knet.ui.desktop.codeeditor.inspector.KNetResponseInspector(
         spec = spec,
+        isPreparing = isExecuting,
         activeSubTab = mappedSubTab,
         onSubTabSelected = { newSubTab ->
             val legacyTab = when (newSubTab) {

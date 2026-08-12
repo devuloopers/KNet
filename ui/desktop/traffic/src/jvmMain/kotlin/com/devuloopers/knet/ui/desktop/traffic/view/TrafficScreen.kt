@@ -8,7 +8,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import com.devuloopers.knet.domain.traffic.model.TrafficItemUiState
+import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
 import com.devuloopers.knet.ui.core.components.split.HorizontalSplitPane
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
@@ -29,7 +29,7 @@ import com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficViewModel
 @Composable
 public fun TrafficScreen(
     viewModel: TrafficViewModel,
-    onSendToApiStudio: (TrafficItemUiState) -> Unit = {},
+    onSendToApiStudio: (NetworkRequestSpec) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -88,6 +88,14 @@ public fun TrafficScreen(
         )
     }
 
+    val handleExportToStudio: (String) -> Unit = remember(viewModel, onSendToApiStudio) {
+        { transactionId ->
+            viewModel.exportToStudioSpec(transactionId) { spec ->
+                onSendToApiStudio(spec)
+            }
+        }
+    }
+
     KNetSurface(
         modifier = modifier.fillMaxSize(),
         color = themeColors.background
@@ -115,7 +123,7 @@ public fun TrafficScreen(
                         columnVisibility = state.columnVisibility,
                         onSelectTransaction = { viewModel.processIntent(TrafficIntent.SelectTransaction(it)) },
                         formattedTotalSize = state.formattedTotalSize,
-                        onSendToApiStudio = onSendToApiStudio,
+                        onSendToApiStudio = handleExportToStudio,
                         modifier = paneModifier
                     )
                 },
@@ -131,7 +139,7 @@ public fun TrafficScreen(
                         onRequestSubTabSelected = { viewModel.processIntent(TrafficIntent.SelectRequestSubTab(it)) },
                         onResponseSubTabSelected = { viewModel.processIntent(TrafficIntent.SelectResponseSubTab(it)) },
                         onPreviewModeSelected = { viewModel.processIntent(TrafficIntent.SetPreviewFormatMode(it)) },
-                        onSendToApiStudio = onSendToApiStudio,
+                        onSendToApiStudio = handleExportToStudio,
                         modifier = paneModifier
                     )
                 },

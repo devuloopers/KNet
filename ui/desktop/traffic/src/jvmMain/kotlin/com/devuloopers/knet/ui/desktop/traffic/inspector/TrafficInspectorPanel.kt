@@ -46,7 +46,7 @@ fun TrafficInspectorPanel(
     onRequestSubTabSelected: (RequestSubTab) -> Unit = {},
     onResponseSubTabSelected: (ResponseSubTab) -> Unit = {},
     onPreviewModeSelected: (PreviewFormatMode) -> Unit,
-    onSendToApiStudio: (TrafficItemUiState) -> Unit = {},
+    onSendToApiStudio: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val themeColors = KNetTheme.colors
@@ -137,7 +137,7 @@ fun TrafficInspectorPanel(
                                 }
                                 onRequestSubTabSelected(legacyTab)
                             }, 
-                            onOpenInApiStudio = { onSendToApiStudio(selectedTransaction) },
+                            onOpenInApiStudio = { onSendToApiStudio(selectedTransaction.transactionId) },
                             modifier = Modifier.fillMaxSize()
                         )
                     }

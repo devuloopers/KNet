@@ -13,6 +13,7 @@ import com.devuloopers.knet.domain.proxy.usecase.StartProxyEngineUseCase
 import com.devuloopers.knet.domain.proxy.usecase.StopProxyEngineUseCase
 import com.devuloopers.knet.domain.traffic.model.*
 import com.devuloopers.knet.domain.traffic.usecase.ClearLiveTrafficUseCase
+import com.devuloopers.knet.domain.traffic.usecase.ExportTrafficToSpecUseCase
 import com.devuloopers.knet.domain.traffic.usecase.GetLiveTrafficUseCase
 import com.devuloopers.knet.domain.traffic.usecase.LoadTransactionBodyUseCase
 import com.devuloopers.knet.domain.util.decodeBodyToText
@@ -28,14 +29,15 @@ import kotlin.time.Duration.Companion.milliseconds
  * ViewModel managing live traffic feed state, proxy engine lifecycle observation, filtering, and inspection selection.
  */
 class TrafficViewModel(
-    getLiveTrafficUseCase: GetLiveTrafficUseCase? = null,
+    private val getLiveTrafficUseCase: GetLiveTrafficUseCase? = null,
     private val clearLiveTrafficUseCase: ClearLiveTrafficUseCase? = null,
     private val startProxyEngineUseCase: StartProxyEngineUseCase? = null,
     private val stopProxyEngineUseCase: StopProxyEngineUseCase? = null,
     observeProxyEngineStateUseCase: ObserveProxyEngineStateUseCase? = null,
     private val loadTransactionBodyUseCase: LoadTransactionBodyUseCase? = null,
     observeLocalIpUseCase: ObserveLocalIpUseCase? = null,
-    private val widgetPreferencesRepository: WidgetPreferencesRepository? = null
+    private val widgetPreferencesRepository: WidgetPreferencesRepository? = null,
+    private val exportTrafficToSpecUseCase: ExportTrafficToSpecUseCase? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(createInitialState())
@@ -48,6 +50,46 @@ class TrafficViewModel(
     }
 
     private val _isCapturing = MutableStateFlow(false)
+
+    /**
+     * Asynchronously constructs a pristine, zero-data-loss [NetworkRequestSpec] for the given [transactionId]
+     * using [ExportTrafficToSpecUseCase] and invokes [onSpecReady] on the main thread.
+     *
+     * @param transactionId Unique UUID of the target transaction.
+     * @param onSpecReady Callback executed on main thread with the constructed [NetworkRequestSpec].
+     */
+    fun exportToStudioSpec(
+        transactionId: String,
+        onSpecReady: (com.devuloopers.knet.domain.network.model.NetworkRequestSpec) -> Unit
+    ) {
+        viewModelScope.launch(Dispatchers.Default) {
+            val prepared = _uiState.value.preparedState
+            val cachedReqBody = if (prepared.transactionId == transactionId && prepared.requestBody.rawText.isNotBlank()) {
+                prepared.requestBody.rawText
+            } else {
+                null
+            }
+
+            val displayedItem = _uiState.value.transactions.find { it.transactionId == transactionId }
+            val spec = exportTrafficToSpecUseCase?.execute(
+                transactionId = transactionId,
+                cachedReqBody = cachedReqBody,
+                fallbackItem = displayedItem
+            )
+            if (spec != null) {
+                KNetLogger.info("TrafficViewModel") {
+                    "[EXPORT TO STUDIO] Successfully built spec for transactionId=$transactionId method=${spec.method} url=${spec.url}"
+                }
+                withContext(Dispatchers.Main) {
+                    onSpecReady(spec)
+                }
+            } else {
+                KNetLogger.warn("TrafficViewModel") {
+                    "[EXPORT TO STUDIO FAILED] Spec could not be resolved for transactionId=$transactionId"
+                }
+            }
+        }
+    }
 
     init {
         // Auto-clear traffic feed on startup if configured in settings

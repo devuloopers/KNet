@@ -49,40 +49,26 @@ public fun KNetWorkspaceHost(
     modifier: Modifier = Modifier
 ) {
     val apiStudioViewModel: ApiStudioViewModel = koinViewModel()
+    val collectionsViewModel: CollectionsViewModel = koinViewModel()
 
     when (destination) {
         DesktopDestination.Traffic -> {
             val trafficViewModel: TrafficViewModel = koinViewModel()
             TrafficScreen(
                 viewModel = trafficViewModel,
-                onSendToApiStudio = { trafficItem ->
-                    val reqBody = trafficItem.requestBody
-                    val headerPairs = trafficItem.requestHeaders.map { it.key to it.value }
-                    val queryParamsList = trafficItem.queryParams.map { it.key to it.value.toString() }
-                    val parsedMethod = try {
-                        com.devuloopers.knet.domain.collection.model.HttpMethod.valueOf(trafficItem.method.uppercase())
-                    } catch (_: Exception) {
-                        com.devuloopers.knet.domain.collection.model.HttpMethod.CUSTOM
-                    }
-                    val targetUrl = if (trafficItem.host.isNotBlank()) "https://${trafficItem.host}${trafficItem.path}" else trafficItem.path
-
-                    val spec = com.devuloopers.knet.domain.network.model.NetworkRequestSpec(
-                        method = parsedMethod,
-                        customMethod = if (parsedMethod == com.devuloopers.knet.domain.collection.model.HttpMethod.CUSTOM) trafficItem.method else null,
-                        url = targetUrl,
-                        headers = headerPairs,
-                        queryParams = queryParamsList,
-                        bodyPayload = reqBody,
-                        timestamp = trafficItem.timestamp
+                onSendToApiStudio = { spec ->
+                    val newSessionId = apiStudioViewModel.importRequestSpec(spec)
+                    collectionsViewModel.createUnsavedDraftSession(
+                        id = newSessionId,
+                        editorState = apiStudioViewModel.uiState.value.editorState,
+                        title = apiStudioViewModel.uiState.value.tabs.find { it.id == newSessionId }?.title
                     )
-                    apiStudioViewModel.importRequestSpec(spec)
                     onNavigateToDestination(DesktopDestination.ApiStudio)
                 },
                 modifier = modifier
             )
         }
         DesktopDestination.ApiStudio -> {
-            val collectionsViewModel: CollectionsViewModel = koinViewModel()
             ApiStudioScreen(
                 viewModel = apiStudioViewModel,
                 collectionsViewModel = collectionsViewModel,

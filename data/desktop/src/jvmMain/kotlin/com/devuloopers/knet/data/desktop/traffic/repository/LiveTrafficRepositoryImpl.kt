@@ -36,6 +36,14 @@ public class LiveTrafficRepositoryImpl(
         entities.map { TransactionMapper.mapEntityToDomain(it) }
     }
 
+    override suspend fun getTransactionById(transactionId: String): HttpTransaction? {
+        return withContext(Dispatchers.IO) {
+            database.httpTransactionDao().getTransactionById(transactionId)?.let { entity ->
+                TransactionMapper.mapEntityToDomain(entity)
+            }
+        }
+    }
+
     /**
      * Loads raw request and response body payloads for the specified transaction on-demand.
      * Reads payload files from disk — must be called from a background dispatcher.

@@ -32,6 +32,7 @@ public val apiStudioUiModule = module {
     factory { FormatResponseBodyUseCase() }
     factory { ExecuteScriptedApiRequestUseCase(get(), get()) }
     factory { ImportRequestToStudioUseCase() }
+    factory { com.devuloopers.knet.domain.apistudio.usecase.ResolveUniqueSessionTitleUseCase() }
     factory { ObserveCollectionsUseCase(get()) }
     factory { ObserveUnsavedRequestsUseCase(get()) }
     factory { SaveUnsavedRequestUseCase(get()) }
@@ -64,7 +65,8 @@ public val apiStudioUiModule = module {
             renameCollectionUseCase = get(),
             saveRequestToCollectionUseCase = get(),
             updateRequestInCollectionUseCase = get(),
-            deleteSavedSessionUseCase = get()
+            deleteSavedSessionUseCase = get(),
+            resolveUniqueSessionTitleUseCase = get()
         )
     }
 }

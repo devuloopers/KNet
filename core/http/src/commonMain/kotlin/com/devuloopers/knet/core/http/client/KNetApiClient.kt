@@ -16,7 +16,10 @@ import com.devuloopers.knet.domain.clientNetwork.model.ProxyTrafficListener
 import com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction
 import com.devuloopers.knet.domain.clientNetwork.model.KNetHeaders
 import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
+import com.devuloopers.knet.domain.clientNetwork.decoder.BodyDecoder
+import com.devuloopers.knet.domain.clientNetwork.decoder.DecodedBodyResult
 import com.devuloopers.knet.domain.collection.model.SavedApiRequest
+import com.devuloopers.knet.domain.network.mapper.NetworkSpecMappers.sanitizeTransportHeaders
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.plugins.HttpRequestRetry
@@ -378,10 +381,11 @@ open class KNetApiClient(
                     }
                     RequestBodyType.GRAPHQL -> {
                         contentType(ContentType.Application.Json)
-                        val formattedGraphQl = if (!body.trim().startsWith("{")) {
-                            "{\"query\": \"${body.replace("\"", "\\\"").replace("\n", "\\n")}\"}"
-                        } else {
-                            body
+                        val trimmed = body.trim()
+                        val formattedGraphQl = when {
+                            trimmed.isBlank() -> "{}"
+                            trimmed.startsWith("{") -> trimmed
+                            else -> "{\"query\": \"${trimmed.replace("\"", "\\\"").replace("\n", "\\n")}\"}"
                         }
                         setBody(formattedGraphQl)
                     }
@@ -402,16 +406,17 @@ open class KNetApiClient(
         }
 
         val latency = System.currentTimeMillis() - startTime
-        val responseText = response.bodyAsText()
         val responseBytes = response.readRawBytes()
 
         val host = try { Url(url).host } catch (_: Exception) { "" }
         val responseHeadersMap = mutableMapOf<String, String>()
+        val responseHeadersList = mutableListOf<Pair<String, String>>()
         val responseCookiesMap = mutableMapOf<String, String>()
 
         response.headers.forEach { key, values ->
             val valueString = values.joinToString(", ")
             responseHeadersMap[key] = valueString
+            responseHeadersList.add(key to valueString)
             if (key.equals("set-cookie", ignoreCase = true)) {
                 values.forEach { setCookieRaw ->
                     try {
@@ -423,6 +428,13 @@ open class KNetApiClient(
                     } catch (_: Exception) { }
                 }
             }
+        }
+
+        val decodedResult = BodyDecoder.decode(responseBytes, responseHeadersList)
+        val responseText = when (decodedResult) {
+            is DecodedBodyResult.Success -> decodedResult.bytes.decodeToString()
+            is DecodedBodyResult.Identity -> decodedResult.bytes.decodeToString()
+            else -> try { responseBytes.decodeToString() } catch (_: Exception) { "" }
         }
 
         if (host.isNotBlank()) {
@@ -457,7 +469,8 @@ open class KNetApiClient(
         authType: AuthType,
         authToken: String
     ) {
-        headers.forEach { (k, v) ->
+        val sanitizedHeaders = headers.sanitizeTransportHeaders()
+        sanitizedHeaders.forEach { (k, v) ->
             if (k.isNotBlank() && v.isNotBlank()) {
                 builder.header(k, v)
             }

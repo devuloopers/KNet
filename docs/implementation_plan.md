@@ -46,3 +46,14 @@ This document serves as the live project tracking board for implementing seamles
 - [x] Set `LAZY_VIEWER_LINE_THRESHOLD = 200` in `ReadOnlyCodeViewer` — routes all documents above 200 lines to `LazyReadOnlyBody`, keeping `BasicTextField` only for tiny docs with fold support
 - [x] Wrap `LazyReadOnlyBody` in top-level `SelectionContainer` for multi-line mouse drag selection and Cmd+C / Ctrl+C support
 - [x] All modules compile and pass JVM tests: `BUILD SUCCESSFUL`
+
+---
+
+## Phase 7: Traffic to API Studio Data Transfer — Zero-Data-Loss In-Memory Transfer `[COMPLETED]`
+
+- [x] Implement `getTransactionById(transactionId: String)` in `GetLiveTrafficUseCase`
+- [x] Implement `exportToStudioSpec(transactionId: String, onSpecReady: (NetworkRequestSpec) -> Unit)` in `TrafficViewModel` with background body loading and domain mapper delegation
+- [x] Refactor `TrafficTable` and `TrafficInspectorPanel` `onSendToApiStudio` callbacks to pass `transactionId` string
+- [x] Update `TrafficScreen` to delegate `transactionId` to `viewModel.exportToStudioSpec`
+- [x] Update `WorkspaceHost` to forward `NetworkRequestSpec` directly to `apiStudioViewModel.importRequestSpec(spec)`
+- [x] Verify Gradle compilation and unit tests across `:ui:desktop:traffic`, `:ui:desktop:apistudio`, and `:ui:desktop:app`: `BUILD SUCCESSFUL`

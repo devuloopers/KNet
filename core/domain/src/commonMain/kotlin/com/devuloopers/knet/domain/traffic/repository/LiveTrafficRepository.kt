@@ -21,6 +21,14 @@ interface LiveTrafficRepository {
     val transactionsFlow: Flow<List<HttpTransaction>>
 
     /**
+     * Fetches a single domain [HttpTransaction] entity by its unique UUID directly from database storage.
+     *
+     * @param transactionId Unique UUID of the target transaction.
+     * @return [HttpTransaction] or null if missing.
+     */
+    suspend fun getTransactionById(transactionId: String): HttpTransaction?
+
+    /**
      * Loads raw request and response body payloads for the specified transaction on-demand.
      * Performs disk I/O and should be called from a background dispatcher.
      *

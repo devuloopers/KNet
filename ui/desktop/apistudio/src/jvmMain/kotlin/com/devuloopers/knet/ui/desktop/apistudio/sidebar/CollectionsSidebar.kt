@@ -54,7 +54,8 @@ public data class SidebarRequestItem(
     /** Non-null when this item belongs to a saved collection. Used for in-place edit routing. */
     val collectionId: String? = null,
     /** Non-null when this item belongs to a saved collection folder. Used for in-place edit routing. */
-    val folderId: String? = null
+    val folderId: String? = null,
+    val sessionType: com.devuloopers.knet.ui.desktop.apistudio.model.SessionType = com.devuloopers.knet.ui.desktop.apistudio.model.SessionType.UNSAVED_DRAFT
 )
 
 public data class SidebarFolderItem(

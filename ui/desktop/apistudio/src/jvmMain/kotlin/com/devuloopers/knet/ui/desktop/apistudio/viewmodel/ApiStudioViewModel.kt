@@ -4,7 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCase
 import com.devuloopers.knet.domain.clientNetwork.model.MimeType
+import com.devuloopers.knet.domain.network.mapper.NetworkSpecMappers.sanitizeTransportHeaders
+import com.devuloopers.knet.domain.network.mapper.NetworkSpecMappers.toEditorBodyMode
 import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
+import kotlin.uuid.Uuid
 import com.devuloopers.knet.domain.proxy.model.ProxyEngineState
 import com.devuloopers.knet.domain.proxy.usecase.ObserveProxyEngineStateUseCase
 import com.devuloopers.knet.domain.util.UrlQueryStringParser
@@ -323,34 +326,40 @@ class ApiStudioViewModel(
     fun importRequestSpec(
         spec: NetworkRequestSpec,
         title: String? = null
-    ) {
+    ): String {
         val importedResult = importRequestToStudioUseCase.execute(spec, title)
         val normalizedSpec = importedResult.spec
-        val newId = "tab_${System.currentTimeMillis()}"
-        val newTab = RequestTab(newId, importedResult.displayTitle, method = normalizedSpec.methodString)
+        val sessionUuid = Uuid.random().toString()
+        val newTab = RequestTab(sessionUuid, importedResult.displayTitle, method = normalizedSpec.methodString)
         val mappedAuthState = normalizedSpec.auth.toAuthState()
 
         _uiState.update { state ->
             val importedEditorState = RequestEditorState(
                 method = normalizedSpec.methodString,
                 url = normalizedSpec.url,
-                headers = normalizedSpec.headers,
+                headers = normalizedSpec.headers.sanitizeTransportHeaders(),
                 queryParams = normalizedSpec.queryParams,
                 bodyPayload = normalizedSpec.bodyPayload,
+                bodyType = normalizedSpec.bodyType.toEditorBodyMode(),
                 cookies = normalizedSpec.cookies,
                 authState = mappedAuthState,
                 authType = mappedAuthState.authType.label,
                 authToken = mappedAuthState.bearerToken,
                 activeSubTab = state.editorState.activeSubTab,
                 activeScriptPhase = state.editorState.activeScriptPhase,
-                activeResponseSubTab = state.editorState.activeResponseSubTab
+                activeResponseSubTab = state.editorState.activeResponseSubTab,
+                linkedUnsavedId = sessionUuid,
+                sessionType = SessionType.UNSAVED_DRAFT
             )
             state.copy(
                 tabs = state.tabs + newTab,
-                activeTabId = newId,
-                editorState = importedEditorState
+                activeTabId = sessionUuid,
+                editorState = importedEditorState,
+                sessionContext = SessionContext.UnsavedDraft(sessionUuid)
             )
         }
+        saveSessionContextToPreferences(SessionContext.UnsavedDraft(sessionUuid))
+        return sessionUuid
     }
 
     /**

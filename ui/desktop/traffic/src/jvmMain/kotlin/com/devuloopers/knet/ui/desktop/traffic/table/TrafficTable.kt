@@ -50,7 +50,7 @@ public fun TrafficTable(
     formattedTotalSize: String,
     modifier: Modifier = Modifier,
     columnVisibility: ColumnVisibilityState = ColumnVisibilityState(),
-    onSendToApiStudio: (TrafficItemUiState) -> Unit = {}
+    onSendToApiStudio: (String) -> Unit = {}
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -60,15 +60,12 @@ public fun TrafficTable(
             .fillMaxSize()
             .background(themeColors.background)
     ) {
-        // Sticky Table Header Row
-        TableHeaderRow(columnVisibility = columnVisibility)
-
         val listState = androidx.compose.foundation.lazy.rememberLazyListState()
         val todayDateState = remember { mutableStateOf(java.time.LocalDate.now()) }
 
         LaunchedEffect(Unit) {
             while (true) {
-                kotlinx.coroutines.delay(30_000L)
+                delay(30_000L)
                 val currentLocalDate = java.time.LocalDate.now()
                 if (todayDateState.value != currentLocalDate) {
                     todayDateState.value = currentLocalDate
@@ -82,7 +79,10 @@ public fun TrafficTable(
             }
         }
 
-        // Table Rows Body
+        // Sticky Table Header Row
+        TableHeaderRow(columnVisibility = columnVisibility)
+
+        // Table Content Area
         Box(
             modifier = Modifier
                 .fillMaxWidth()
@@ -94,8 +94,9 @@ public fun TrafficTable(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "No captured network requests",
-                        style = typography.bodyMedium.copy(color = themeColors.textMuted)
+                        text = "No captured traffic matching current filters",
+                        style = typography.caption,
+                        color = themeColors.textSecondary
                     )
                 }
             } else {
@@ -113,7 +114,7 @@ public fun TrafficTable(
                                     label = "Send to API Studio",
                                     icon = KNetIcons.Send
                                 ) {
-                                    onSendToApiStudio(item)
+                                    onSendToApiStudio(item.transactionId)
                                 }
                             )
                         }

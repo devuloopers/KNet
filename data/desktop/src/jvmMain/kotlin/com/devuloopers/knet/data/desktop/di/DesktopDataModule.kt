@@ -31,6 +31,7 @@ import com.devuloopers.knet.domain.rules.usecase.SaveRuleUseCase
 import com.devuloopers.knet.domain.rules.usecase.ToggleRuleUseCase
 import com.devuloopers.knet.domain.traffic.repository.LiveTrafficRepository
 import com.devuloopers.knet.domain.traffic.usecase.ClearLiveTrafficUseCase
+import com.devuloopers.knet.domain.traffic.usecase.ExportTrafficToSpecUseCase
 import com.devuloopers.knet.domain.traffic.usecase.GetLiveTrafficUseCase
 import com.devuloopers.knet.domain.traffic.usecase.LoadTransactionBodyUseCase
 import com.devuloopers.knet.domain.traffic.usecase.RecordClientTransactionUseCase
@@ -130,6 +131,7 @@ public object DesktopDataModule {
         factory { GetLiveTrafficUseCase(get()) }
         factory { ClearLiveTrafficUseCase(get()) }
         factory { LoadTransactionBodyUseCase(get()) }
+        factory { ExportTrafficToSpecUseCase(get()) }
         factory { StartProxyEngineUseCase(get()) }
         factory { StopProxyEngineUseCase(get()) }
         factory { ObserveProxyEngineStateUseCase(get()) }

@@ -70,10 +70,16 @@ public class ImportRequestToStudioUseCase {
     private fun deriveTitleFromUrl(url: String): String {
         return try {
             val pathOrHost = url.substringAfter("://")
-            val trimmed = pathOrHost.trim('/')
-            if (trimmed.isBlank()) "Imported Request" else trimmed
+            val pathWithQuery = pathOrHost.substringAfter("/", "")
+            val rawPath = pathWithQuery.substringBefore("?").trim('/')
+            if (rawPath.isNotBlank()) {
+                "/$rawPath"
+            } else {
+                val host = pathOrHost.substringBefore("/").substringBefore("?").trim()
+                if (host.isNotBlank()) host else "Untitled Request"
+            }
         } catch (_: Exception) {
-            "Imported Request"
+            "Untitled Request"
         }
     }
 }

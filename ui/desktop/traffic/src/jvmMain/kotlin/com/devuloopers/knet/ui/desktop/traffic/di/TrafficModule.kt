@@ -17,7 +17,8 @@ public val trafficModule = module {
             observeProxyEngineStateUseCase = get(),
             loadTransactionBodyUseCase = get(),
             observeLocalIpUseCase = get(),
-            widgetPreferencesRepository = get()
+            widgetPreferencesRepository = get(),
+            exportTrafficToSpecUseCase = get()
         )
     }
 }

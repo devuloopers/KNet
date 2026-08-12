@@ -8,6 +8,7 @@ import com.devuloopers.knet.domain.traffic.model.UriDetails
 import com.devuloopers.knet.domain.traffic.repository.LiveTrafficRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import java.net.URI

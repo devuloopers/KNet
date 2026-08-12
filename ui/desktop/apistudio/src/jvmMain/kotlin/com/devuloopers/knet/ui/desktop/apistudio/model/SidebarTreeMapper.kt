@@ -44,7 +44,8 @@ object SidebarTreeMapper {
                                 testScript = req.scripts.test,
                                 authState = AuthDomainMapper.mapDomainAuthToAuthState(req.auth),
                                 collectionId = collection.id,
-                                folderId = folder.id
+                                folderId = folder.id,
+                                sessionType = SessionType.SAVED_REQUEST
                             )
                         }
                     )
@@ -81,7 +82,8 @@ object SidebarTreeMapper {
                 bodyType = req.body.type,
                 preRequestScript = req.scripts.preRequest,
                 testScript = req.scripts.test,
-                authState = AuthDomainMapper.mapDomainAuthToAuthState(req.auth)
+                authState = AuthDomainMapper.mapDomainAuthToAuthState(req.auth),
+                sessionType = SessionType.UNSAVED_DRAFT
             )
         }
     }

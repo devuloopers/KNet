@@ -52,5 +52,6 @@ public data class RequestEditorState(
     val activeSubTab: RequestSubTab = RequestSubTab.BODY,
     val activeScriptPhase: ScriptPhase = ScriptPhase.PRE_REQUEST,
     val activeResponseSubTab: ResponseSubTab = ResponseSubTab.BODY,
-    val linkedUnsavedId: String? = null
+    val linkedUnsavedId: String? = null,
+    val sessionType: SessionType = SessionType.UNSAVED_DRAFT
 )

@@ -34,7 +34,7 @@ object NetworkSpecMappers {
             method = parsedMethod.first,
             customMethod = parsedMethod.second,
             url = this.url,
-            headers = this.headers,
+            headers = this.headers.sanitizeTransportHeaders(),
             queryParams = queryParamsList,
             cookies = cookiesList,
             bodyPayload = resolvedBody,
@@ -191,19 +191,80 @@ object NetworkSpecMappers {
         return result
     }
 
+    /**
+     * Set of low-level HTTP transport headers managed automatically by TCP sockets and HTTP client engines.
+     */
+    private val restrictedTransportHeaders: Set<String> = setOf(
+        "content-length",
+        "host",
+        "connection",
+        "transfer-encoding"
+    )
+
+    /**
+     * Sanitizes a list of header key-value pairs by removing transport-managed headers.
+     */
+    fun List<Pair<String, String>>.sanitizeTransportHeaders(): List<Pair<String, String>> {
+        return this.filterNot { (key, _) -> key.trim().lowercase() in restrictedTransportHeaders }
+    }
+
+    /**
+     * Sanitizes a header map by removing transport-managed headers.
+     */
+    fun Map<String, String>.sanitizeTransportHeaders(): Map<String, String> {
+        return this.filterKeys { key -> key.trim().lowercase() !in restrictedTransportHeaders }
+    }
+
+    /**
+     * Converts a [RequestBodyType] enum into a UI-compatible body mode string.
+     */
+    fun RequestBodyType.toEditorBodyMode(): String = when (this) {
+        RequestBodyType.JSON -> "JSON"
+        RequestBodyType.XML -> "XML"
+        RequestBodyType.FORM_DATA -> "FORM_DATA"
+        RequestBodyType.X_WWW_FORM_URLENCODED -> "X_WWW_FORM_URLENCODED"
+        RequestBodyType.MULTIPART -> "FORM_DATA"
+        RequestBodyType.GRAPHQL -> "GRAPHQL"
+        RequestBodyType.RAW_TEXT -> "RAW"
+        RequestBodyType.NONE -> "NONE"
+    }
+
+    /**
+     * Converts a string representation of body mode into a strongly-typed [RequestBodyType] enum.
+     */
+    fun String.toRequestBodyType(): RequestBodyType = when (this.uppercase().trim()) {
+        "JSON" -> RequestBodyType.JSON
+        "XML" -> RequestBodyType.XML
+        "FORM", "FORM_DATA", "FORM-DATA" -> RequestBodyType.FORM_DATA
+        "X-WWW-FORM-URLENCODED", "X_WWW_FORM_URLENCODED", "URLENCODED" -> RequestBodyType.X_WWW_FORM_URLENCODED
+        "MULTIPART" -> RequestBodyType.MULTIPART
+        "GRAPHQL" -> RequestBodyType.GRAPHQL
+        "RAW", "RAW_TEXT", "TEXT" -> RequestBodyType.RAW_TEXT
+        else -> RequestBodyType.NONE
+    }
+
     private fun inferRequestBodyType(body: String, headers: List<Pair<String, String>>): RequestBodyType {
         if (body.isBlank()) return RequestBodyType.NONE
         val contentType = headers.firstOrNull { it.first.equals("Content-Type", ignoreCase = true) }?.second ?: ""
+        val acceptType = headers.firstOrNull { it.first.equals("Accept", ignoreCase = true) }?.second ?: ""
+        val trimmedBody = body.trimStart()
 
         return when {
-            contentType.contains("json", ignoreCase = true) || body.trimStart().startsWith("{") || body.trimStart()
-                .startsWith("[") -> RequestBodyType.JSON
+            contentType.contains("graphql", ignoreCase = true) ||
+            acceptType.contains("graphql", ignoreCase = true) ||
+            trimmedBody.startsWith("query") ||
+            trimmedBody.startsWith("mutation") ||
+            (trimmedBody.startsWith("{") && (trimmedBody.contains("\"query\"") || trimmedBody.contains("\"mutation\""))) -> RequestBodyType.GRAPHQL
 
-            contentType.contains("xml", ignoreCase = true) || body.trimStart().startsWith("<") -> RequestBodyType.XML
-            contentType.contains("form-urlencoded", ignoreCase = true) || contentType.contains(
-                "form-data",
-                ignoreCase = true
-            ) -> RequestBodyType.FORM_DATA
+            contentType.contains("json", ignoreCase = true) ||
+            trimmedBody.startsWith("{") ||
+            trimmedBody.startsWith("[") -> RequestBodyType.JSON
+
+            contentType.contains("xml", ignoreCase = true) ||
+            trimmedBody.startsWith("<") -> RequestBodyType.XML
+
+            contentType.contains("form-urlencoded", ignoreCase = true) ||
+            contentType.contains("form-data", ignoreCase = true) -> RequestBodyType.FORM_DATA
 
             else -> RequestBodyType.RAW_TEXT
         }

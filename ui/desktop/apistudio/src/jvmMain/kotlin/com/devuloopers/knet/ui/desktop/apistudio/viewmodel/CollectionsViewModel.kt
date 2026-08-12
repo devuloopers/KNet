@@ -13,6 +13,7 @@ import com.devuloopers.knet.ui.desktop.apistudio.model.RequestDomainConverter.to
 import com.devuloopers.knet.ui.desktop.apistudio.model.RequestEditorState
 import com.devuloopers.knet.ui.desktop.apistudio.model.SidebarTreeMapper
 import com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarRequestItem
+import kotlin.uuid.Uuid
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -51,6 +52,7 @@ class CollectionsViewModel(
     private val saveRequestToCollectionUseCase: SaveRequestToCollectionUseCase? = null,
     private val updateRequestInCollectionUseCase: UpdateRequestInCollectionUseCase? = null,
     private val deleteSavedSessionUseCase: DeleteSavedSessionUseCase? = null,
+    private val resolveUniqueSessionTitleUseCase: com.devuloopers.knet.domain.apistudio.usecase.ResolveUniqueSessionTitleUseCase = com.devuloopers.knet.domain.apistudio.usecase.ResolveUniqueSessionTitleUseCase(),
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
@@ -83,9 +85,8 @@ class CollectionsViewModel(
             }
             ?.launchIn(viewModelScope)
 
-        // Debounced reactive auto-save pipeline
+        // Instant reactive auto-save pipeline
         autoSaveFlow
-            .debounce(500.milliseconds)
             .onEach { intent ->
                 when (intent) {
                     is AutoSaveIntent.Unsaved -> {
@@ -113,17 +114,34 @@ class CollectionsViewModel(
         onLinkedIdAssigned: (String, String) -> Unit
     ) {
         val currentUnsavedRequests = _uiState.value.unsavedRequests
-        val effectiveLinkedId = editorState.linkedUnsavedId ?: "unsaved_${System.currentTimeMillis()}"
+        val effectiveLinkedId = editorState.linkedUnsavedId ?: Uuid.random().toString()
+        val existingTitles = currentUnsavedRequests.map { it.name }
         val sessionName = if (editorState.linkedUnsavedId != null) {
             currentUnsavedRequests.find { it.id == effectiveLinkedId }?.name
-                ?: "Unsaved Session ${currentUnsavedRequests.size + 1}"
+                ?: resolveUniqueSessionTitleUseCase.execute("Untitled Request", existingTitles)
         } else {
-            val name = "Unsaved Session ${currentUnsavedRequests.size + 1}"
+            val name = resolveUniqueSessionTitleUseCase.execute("Untitled Request", existingTitles)
             onLinkedIdAssigned(effectiveLinkedId, name)
             name
         }
 
         val savedReq = editorState.toDomainSavedRequest(id = effectiveLinkedId, name = sessionName)
+        autoSaveFlow.tryEmit(AutoSaveIntent.Unsaved(savedReq))
+    }
+
+    /**
+     * Explicitly creates and persists a new unsaved session draft in storage.
+     */
+    fun createUnsavedDraftSession(
+        id: String,
+        editorState: RequestEditorState,
+        title: String? = null
+    ) {
+        val currentUnsavedRequests = _uiState.value.unsavedRequests
+        val existingTitles = currentUnsavedRequests.map { it.name }
+        val candidateTitle = title?.takeIf { it.isNotBlank() } ?: "Untitled Request"
+        val sessionName = resolveUniqueSessionTitleUseCase.execute(candidateTitle, existingTitles)
+        val savedReq = editorState.copy(linkedUnsavedId = id).toDomainSavedRequest(id = id, name = sessionName)
         autoSaveFlow.tryEmit(AutoSaveIntent.Unsaved(savedReq))
     }
 
