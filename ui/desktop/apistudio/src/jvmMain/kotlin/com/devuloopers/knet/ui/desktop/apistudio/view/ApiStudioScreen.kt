@@ -107,6 +107,15 @@ public fun ApiStudioScreen(
         }
     }
 
+    LaunchedEffect(collectionsState.unsavedRequests, collectionsState.collections) {
+        val hasUnsaved = collectionsState.unsavedRequests.isNotEmpty()
+        val hasCollections = collectionsState.collections.any { it.requests.isNotEmpty() }
+        if (!hasUnsaved && !hasCollections) {
+            selectedRequestId = null
+            viewModel?.clearSession()
+        }
+    }
+
     val currentMethod = uiState.editorState.method
     val currentUrl = uiState.editorState.url
     val bodyPayload = uiState.editorState.bodyPayload
@@ -161,9 +170,8 @@ public fun ApiStudioScreen(
                 },
                 onDeleteUnsavedRequest = { item ->
                     collectionsViewModel?.deleteUnsavedRequest(item.id)
+                    viewModel?.closeTab(item.id)
                     if (selectedRequestId == item.id) {
-                        viewModel?.updateLinkedUnsavedId(null, "")
-                        viewModel?.clearSession()
                         selectedRequestId = null
                     }
                 },
@@ -191,9 +199,8 @@ public fun ApiStudioScreen(
                 },
                 onDeleteSavedRequest = { item ->
                     collectionsViewModel?.deleteSavedRequest(item.id)
+                    viewModel?.closeTab(item.id)
                     if (selectedRequestId == item.id) {
-                        viewModel?.updateLinkedUnsavedId(null, "")
-                        viewModel?.clearSession()
                         selectedRequestId = null
                     }
                 },

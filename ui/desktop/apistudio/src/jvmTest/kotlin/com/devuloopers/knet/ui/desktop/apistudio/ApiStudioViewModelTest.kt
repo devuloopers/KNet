@@ -378,4 +378,84 @@ class ApiStudioViewModelTest {
         assertEquals("{\"item\": \"laptop\"}", state.editorState.bodyPayload)
         assertEquals(listOf("session" to "xyz123"), state.editorState.cookies)
     }
+
+    @Test
+    fun clearSessionContext_resetsEditorStateResponsePresentationAndSessionContextToNone() = runTest(testDispatcher) {
+        val testExecutor = TestHttpExecutor()
+        val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(testExecutor))
+
+        viewModel.updateUrl("https://stg-04astra.cnbc.com/graphql")
+        viewModel.updateMethod("POST")
+        viewModel.updateBodyPayload("{\"query\": \"...\"}")
+        viewModel.executeRequest()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertNotNull(viewModel.uiState.value.responsePresentation)
+        assertEquals("https://stg-04astra.cnbc.com/graphql", viewModel.uiState.value.editorState.url)
+
+        viewModel.clearSessionContext()
+
+        val state = viewModel.uiState.value
+        assertEquals("", state.editorState.url)
+        assertEquals("GET", state.editorState.method)
+        assertEquals("", state.editorState.bodyPayload)
+        assertNull(state.responsePresentation)
+        assertEquals(ExecutionState.IDLE, state.executionState)
+        assertEquals(com.devuloopers.knet.ui.desktop.apistudio.model.SessionType.NONE, state.editorState.sessionType)
+        assertEquals(com.devuloopers.knet.ui.desktop.apistudio.model.SessionContext.None, state.sessionContext)
+    }
+
+    @Test
+    fun closeTab_resetsStateWhenLastTabIsClosed() = runTest(testDispatcher) {
+        val testExecutor = TestHttpExecutor()
+        val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(testExecutor))
+
+        val spec = com.devuloopers.knet.domain.network.model.NetworkRequestSpec(
+            method = HttpMethod.POST,
+            url = "https://api.example.com/v1/users",
+            bodyPayload = "{\"user\":\"admin\"}"
+        )
+        val tabId = viewModel.importRequestSpec(spec)
+
+        assertEquals("https://api.example.com/v1/users", viewModel.uiState.value.editorState.url)
+
+        // Close all tabs
+        val allTabIds = viewModel.uiState.value.tabs.map { it.id }
+        allTabIds.forEach { viewModel.closeTab(it) }
+
+        val state = viewModel.uiState.value
+        assertTrue(state.tabs.isEmpty())
+        assertEquals("", state.editorState.url)
+        assertEquals("", state.editorState.bodyPayload)
+        assertEquals(com.devuloopers.knet.ui.desktop.apistudio.model.SessionType.NONE, state.editorState.sessionType)
+        assertEquals(com.devuloopers.knet.ui.desktop.apistudio.model.SessionContext.None, state.sessionContext)
+    }
+
+    @Test
+    fun closeTab_resetsActiveStateToBlankOnActiveSessionDeletionWithoutAutoSelectingAdjacentTabs() = runTest(testDispatcher) {
+        val testExecutor = TestHttpExecutor()
+        val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(testExecutor))
+
+        val spec1 = com.devuloopers.knet.domain.network.model.NetworkRequestSpec(
+            method = HttpMethod.GET,
+            url = "https://api.example.com/v1/users"
+        )
+        val spec2 = com.devuloopers.knet.domain.network.model.NetworkRequestSpec(
+            method = HttpMethod.POST,
+            url = "https://api.example.com/v1/orders"
+        )
+        val tabId1 = viewModel.importRequestSpec(spec1)
+        val tabId2 = viewModel.importRequestSpec(spec2)
+
+        assertEquals("https://api.example.com/v1/orders", viewModel.uiState.value.editorState.url)
+
+        // Close active tab2
+        viewModel.closeTab(tabId2)
+
+        val state = viewModel.uiState.value
+        assertEquals(2, state.tabs.size)
+        assertEquals("", state.editorState.url)
+        assertEquals(com.devuloopers.knet.ui.desktop.apistudio.model.SessionType.NONE, state.editorState.sessionType)
+        assertEquals(com.devuloopers.knet.ui.desktop.apistudio.model.SessionContext.None, state.sessionContext)
+    }
 }

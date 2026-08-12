@@ -289,15 +289,39 @@ class ApiStudioViewModel(
     fun closeTab(tabId: String) {
         _uiState.update { state ->
             val remainingTabs = state.tabs.filterNot { it.id == tabId }
-            val nextActiveId = if (state.activeTabId == tabId) {
-                remainingTabs.lastOrNull()?.id ?: "tab_1"
-            } else state.activeTabId
+            val isClosingActive = state.activeTabId == tabId || state.editorState.linkedUnsavedId == tabId
 
-            val finalTabs = remainingTabs.ifEmpty {
-                listOf(RequestTab("tab_1", "New Request"))
+            if (isClosingActive || remainingTabs.isEmpty()) {
+                state.copy(
+                    tabs = remainingTabs,
+                    activeTabId = "",
+                    editorState = RequestEditorState(
+                        url = "",
+                        method = "GET",
+                        queryParams = emptyList(),
+                        headers = RequestEditorDefaults.DEFAULT_HEADERS,
+                        cookies = emptyList(),
+                        bodyType = "None",
+                        bodyPayload = "",
+                        preRequestScript = "",
+                        testScript = "",
+                        activeSubTab = state.editorState.activeSubTab,
+                        activeScriptPhase = state.editorState.activeScriptPhase,
+                        activeResponseSubTab = state.editorState.activeResponseSubTab,
+                        linkedUnsavedId = null,
+                        sessionType = SessionType.NONE
+                    ),
+                    executionState = ExecutionState.IDLE,
+                    responsePresentation = null,
+                    errorMessage = null,
+                    sessionContext = SessionContext.None
+                )
+            } else {
+                state.copy(tabs = remainingTabs)
             }
-
-            state.copy(tabs = finalTabs, activeTabId = nextActiveId)
+        }
+        if (_uiState.value.activeTabId.isBlank()) {
+            saveSessionContextToPreferences(SessionContext.None)
         }
     }
 
@@ -391,7 +415,32 @@ class ApiStudioViewModel(
 
     fun clearSessionContext() {
         val context = SessionContext.None
-        _uiState.update { it.copy(sessionContext = context) }
+        _uiState.update { state ->
+            state.copy(
+                tabs = emptyList(),
+                activeTabId = "",
+                editorState = RequestEditorState(
+                    url = "",
+                    method = "GET",
+                    queryParams = emptyList(),
+                    headers = RequestEditorDefaults.DEFAULT_HEADERS,
+                    cookies = emptyList(),
+                    bodyType = "None",
+                    bodyPayload = "",
+                    preRequestScript = "",
+                    testScript = "",
+                    activeSubTab = state.editorState.activeSubTab,
+                    activeScriptPhase = state.editorState.activeScriptPhase,
+                    activeResponseSubTab = state.editorState.activeResponseSubTab,
+                    linkedUnsavedId = null,
+                    sessionType = SessionType.NONE
+                ),
+                executionState = ExecutionState.IDLE,
+                responsePresentation = null,
+                errorMessage = null,
+                sessionContext = context
+            )
+        }
         saveSessionContextToPreferences(context)
     }
 
