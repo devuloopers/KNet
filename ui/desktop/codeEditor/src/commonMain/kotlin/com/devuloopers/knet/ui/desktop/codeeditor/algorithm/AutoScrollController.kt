@@ -2,6 +2,7 @@ package com.devuloopers.knet.ui.desktop.codeeditor.algorithm
 
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -91,6 +92,38 @@ class AutoScrollController(
     }
 
     /**
+     * Triggers or updates the active auto-scroll loop for a [LazyListState].
+     * Guaranteed to maintain at most one active scroll job at a time.
+     */
+    fun handleDragPointerLazy(
+        mouseY: Float,
+        containerHeightPx: Float,
+        thresholdPx: Float,
+        lazyListState: LazyListState
+    ) {
+        val velocity = calculateVelocity(mouseY, containerHeightPx, thresholdPx)
+        currentVelocity = velocity
+
+        if (velocity == 0f) {
+            stop()
+            return
+        }
+
+        if (scrollJob?.isActive == true) return
+
+        scrollJob = scope.launch(Dispatchers.Main) {
+            try {
+                while (isActive && currentVelocity != 0f) {
+                    lazyListState.scrollBy(currentVelocity)
+                    delay(16) // ~60 FPS smooth scrolling
+                }
+            } finally {
+                scrollJob = null
+            }
+        }
+    }
+
+    /**
      * Immediately stops and cancels any active auto-scrolling coroutine job.
      */
     fun stop() {
@@ -99,6 +132,7 @@ class AutoScrollController(
         scrollJob = null
     }
 }
+
 
 /**
  * Creates and remembers a reusable [AutoScrollController] instance tied to the composable's scope.

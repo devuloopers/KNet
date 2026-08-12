@@ -8,7 +8,7 @@ package com.devuloopers.knet.ui.desktop.codeeditor.algorithm
 public object LazyLineVisibilityEngine {
 
     /**
-     * Builds the ordered list of [LazyLine] items to render in [com.devuloopers.knet.ui.desktop.codeeditor.component.LazyReadOnlyBody].
+     * Builds the ordered list of [LazyLine] items to render in [com.devuloopers.knet.ui.desktop.codeeditor.component.LazyCodeBody].
      *
      * @param rawLines Complete list of document lines split off the UI thread.
      * @param foldRegions Calculated fold region blocks.

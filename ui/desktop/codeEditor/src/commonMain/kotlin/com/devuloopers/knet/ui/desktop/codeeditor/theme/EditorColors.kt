@@ -12,4 +12,8 @@ object EditorColors {
     val ActiveBlue = Color(0xFF2F81F7)
     val TextSecondary = Color(0xFF8B949E)
     val TextMuted = Color(0xFF484F58)
+    val ActiveLineBackground = Color(0xFF161B22)
+    val SelectionBackground = Color(0x73264F78)
 }
+
+

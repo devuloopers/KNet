@@ -21,7 +21,7 @@ public sealed interface LineFoldState {
 }
 
 /**
- * Renderable line model for [com.devuloopers.knet.ui.desktop.codeeditor.component.LazyReadOnlyBody].
+ * Renderable line model for [com.devuloopers.knet.ui.desktop.codeeditor.component.LazyCodeBody].
  *
  * @property originalLineIndex 0-indexed position in the original raw lines list.
  * @property displayText Text string to display (either raw line or collapsed stub such as `{ ... }`).

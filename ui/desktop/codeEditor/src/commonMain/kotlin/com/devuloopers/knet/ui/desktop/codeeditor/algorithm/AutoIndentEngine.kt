@@ -82,4 +82,48 @@ object AutoIndentEngine {
             )
         }
     }
+
+    /**
+     * Computes the indentation prefix for a new line created by splitting [lineText] at [colIndex].
+     *
+     * Used by [com.devuloopers.knet.ui.desktop.codeeditor.algorithm.DocumentBuffer.splitLine]
+     * to determine the leading whitespace of the newly created trailing line when the user
+     * presses Enter inside [com.devuloopers.knet.ui.desktop.codeeditor.component.viewport.EditableLineContent].
+     *
+     * Applies the same three-phase indentation logic as [handleInsertBreak]:
+     * - **Phase 1**: Inherits leading whitespace from the current line.
+     * - **Phase 2**: Increases indentation by [tabSize] spaces if the character before [colIndex]
+     *   is an opening bracket (`{`, `[`, `(`) or colon (`:`).
+     * - **Phase 3**: Detects bracket pair expansion (`{ | }`, `[ | ]`, `( | )`) — when the character
+     *   immediately before [colIndex] is an opening bracket and the character at [colIndex] is
+     *   the matching closing bracket, returns the inner indented prefix only (the closing bracket
+     *   line is managed separately by the caller via a second [DocumentBuffer.splitLine] call).
+     *
+     * @param lineText Full text content of the line being split.
+     * @param colIndex 0-indexed column position at which Enter was pressed.
+     * @param tabSize Number of spaces per indentation level (defaults to 2).
+     * @return Indentation prefix string to prepend to the new trailing line.
+     */
+    fun computeIndentForSplit(
+        lineText: String,
+        colIndex: Int,
+        tabSize: Int = 2
+    ): String {
+        val safeCol = colIndex.coerceIn(0, lineText.length)
+        val textBefore = lineText.substring(0, safeCol)
+        val textAfter = lineText.substring(safeCol)
+
+        // Phase 1: Inherit leading whitespace from the current line.
+        val leadingWhitespace = lineText.takeWhile { it == ' ' || it == '\t' }
+        val trimmedBefore = textBefore.trimEnd()
+
+        // Phase 2: Increase indentation if line ends with an opening bracket or colon.
+        val shouldIncreaseIndent = trimmedBefore.endsWith("{") ||
+                trimmedBefore.endsWith("[") ||
+                trimmedBefore.endsWith("(") ||
+                trimmedBefore.endsWith(":")
+
+        val indentSpaces = " ".repeat(tabSize)
+        return leadingWhitespace + (if (shouldIncreaseIndent) indentSpaces else "")
+    }
 }

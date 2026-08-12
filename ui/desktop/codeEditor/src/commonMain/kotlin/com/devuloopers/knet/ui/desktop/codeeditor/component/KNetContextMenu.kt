@@ -210,3 +210,24 @@ fun rememberClipboardCopyAction(): (String) -> Unit {
         }
     }
 }
+
+/**
+ * Helper function returning a clipboard paste lambda.
+ * Reads plain text from system clipboard on Desktop JVM.
+ */
+@Composable
+fun rememberClipboardPasteAction(): () -> String? {
+    return remember {
+        {
+            try {
+                val clipboard = java.awt.Toolkit.getDefaultToolkit().systemClipboard
+                if (clipboard.isDataFlavorAvailable(java.awt.datatransfer.DataFlavor.stringFlavor)) {
+                    clipboard.getData(java.awt.datatransfer.DataFlavor.stringFlavor) as? String
+                } else null
+            } catch (_: Throwable) {
+                null
+            }
+        }
+    }
+}
+
