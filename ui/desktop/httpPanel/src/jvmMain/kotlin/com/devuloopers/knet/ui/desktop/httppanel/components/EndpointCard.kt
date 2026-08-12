@@ -1,4 +1,4 @@
-package com.devuloopers.knet.ui.desktop.http.components
+package com.devuloopers.knet.ui.desktop.httppanel.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border

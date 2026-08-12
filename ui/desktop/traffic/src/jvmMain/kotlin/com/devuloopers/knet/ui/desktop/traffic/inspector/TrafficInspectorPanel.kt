@@ -12,7 +12,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.devuloopers.knet.domain.collection.model.HttpMethod
 import com.devuloopers.knet.domain.network.model.NetworkResponseSpec
 import com.devuloopers.knet.domain.traffic.model.TrafficItemUiState
@@ -24,11 +23,14 @@ import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
 import com.devuloopers.knet.ui.desktop.codeeditor.api.KNetCodeEditor
-import com.devuloopers.knet.ui.desktop.codeeditor.inspector.InspectorRequestSubTab
-import com.devuloopers.knet.ui.desktop.codeeditor.inspector.InspectorResponseSubTab
-import com.devuloopers.knet.ui.desktop.codeeditor.inspector.KNetRequestEditorView
-import com.devuloopers.knet.ui.desktop.codeeditor.inspector.KNetResponseInspector
-import com.devuloopers.knet.ui.desktop.http.components.EndpointCard
+import com.devuloopers.knet.ui.desktop.httppanel.components.EndpointCard
+import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
+import com.devuloopers.knet.ui.desktop.httppanel.model.NetworkOverviewSpec
+import com.devuloopers.knet.ui.desktop.httppanel.model.NetworkTimingSpec
+import com.devuloopers.knet.ui.desktop.httppanel.view.KNetOverviewInspector
+import com.devuloopers.knet.ui.desktop.httppanel.view.KNetRequestInspector
+import com.devuloopers.knet.ui.desktop.httppanel.view.KNetResponseInspector
+import com.devuloopers.knet.ui.desktop.httppanel.view.KNetTimelineInspector
 import com.devuloopers.knet.ui.desktop.traffic.model.*
 
 /**
@@ -95,7 +97,31 @@ fun TrafficInspectorPanel(
                 }
             } else {
                 when (activeTab) {
-                    InspectorTab.OVERVIEW -> OverviewTabContent(selectedTransaction)
+                    InspectorTab.OVERVIEW -> {
+                        val overviewSpec = remember(selectedTransaction) {
+                            val targetUrl =
+                                if (selectedTransaction.host.isNotBlank()) "https://${selectedTransaction.host}${selectedTransaction.path}" else selectedTransaction.path
+                            val contentType =
+                                selectedTransaction.responseHeaders.map { it.key to it.value }
+                                    .find { it.first.equals("Content-Type", ignoreCase = true) }?.second ?: ""
+                            NetworkOverviewSpec(
+                                method = selectedTransaction.method,
+                                url = targetUrl,
+                                statusCode = selectedTransaction.status,
+                                statusText = selectedTransaction.statusText,
+                                protocol = selectedTransaction.protocol,
+                                remoteIp = if (selectedTransaction.host.isNotBlank()) "${selectedTransaction.host}:443" else "",
+                                timestamp = selectedTransaction.dateGroup.ifEmpty { selectedTransaction.timestamp.toString() },
+                                durationMs = selectedTransaction.formattedTime,
+                                sizeBytes = selectedTransaction.formattedSize,
+                                contentType = contentType
+                            )
+                        }
+                        KNetOverviewInspector(
+                            spec = overviewSpec,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                     InspectorTab.REQUEST -> {
                         val requestSpec = remember(selectedTransaction, preparedState) {
                             val reqBody =
@@ -122,21 +148,23 @@ fun TrafficInspectorPanel(
                             )
                         }
                         val mappedReqSubTab = when (activeRequestSubTab) {
-                            RequestSubTab.HEADERS -> InspectorRequestSubTab.HEADERS
-                            RequestSubTab.PARAMS -> InspectorRequestSubTab.PARAMS
-                            RequestSubTab.COOKIES -> InspectorRequestSubTab.COOKIES
-                            RequestSubTab.BODY -> InspectorRequestSubTab.BODY
+                            RequestSubTab.HEADERS -> InspectorSubTab.HEADERS
+                            RequestSubTab.PARAMS -> InspectorSubTab.PARAMS
+                            RequestSubTab.COOKIES -> InspectorSubTab.COOKIES
+                            RequestSubTab.BODY -> InspectorSubTab.BODY
                         }
-                        KNetRequestEditorView(
-                            spec = requestSpec, activeSubTab = mappedReqSubTab, onSubTabSelected = { newSubTab ->
+                        KNetRequestInspector(
+                            spec = requestSpec,
+                            activeSubTab = mappedReqSubTab,
+                            onSubTabSelected = { newSubTab ->
                                 val legacyTab = when (newSubTab) {
-                                    InspectorRequestSubTab.HEADERS -> RequestSubTab.HEADERS
-                                    InspectorRequestSubTab.COOKIES -> RequestSubTab.COOKIES
-                                    InspectorRequestSubTab.PARAMS -> RequestSubTab.PARAMS
-                                    InspectorRequestSubTab.BODY -> RequestSubTab.BODY
+                                    InspectorSubTab.HEADERS -> RequestSubTab.HEADERS
+                                    InspectorSubTab.COOKIES -> RequestSubTab.COOKIES
+                                    InspectorSubTab.PARAMS -> RequestSubTab.PARAMS
+                                    InspectorSubTab.BODY -> RequestSubTab.BODY
                                 }
                                 onRequestSubTabSelected(legacyTab)
-                            }, 
+                            },
                             onOpenInApiStudio = { onSendToApiStudio(selectedTransaction.transactionId) },
                             modifier = Modifier.fillMaxSize()
                         )
@@ -158,9 +186,9 @@ fun TrafficInspectorPanel(
                             )
                         }
                         val mappedResSubTab = when (activeResponseSubTab) {
-                            ResponseSubTab.HEADERS -> InspectorResponseSubTab.HEADERS
-                            ResponseSubTab.COOKIES -> InspectorResponseSubTab.COOKIES
-                            ResponseSubTab.BODY -> InspectorResponseSubTab.BODY
+                            ResponseSubTab.HEADERS -> InspectorSubTab.HEADERS
+                            ResponseSubTab.COOKIES -> InspectorSubTab.COOKIES
+                            ResponseSubTab.BODY -> InspectorSubTab.BODY
                         }
                         KNetResponseInspector(
                             spec = responseSpec,
@@ -169,9 +197,10 @@ fun TrafficInspectorPanel(
                             activeSubTab = mappedResSubTab,
                             onSubTabSelected = { newSubTab ->
                                 val legacyTab = when (newSubTab) {
-                                    InspectorResponseSubTab.HEADERS -> ResponseSubTab.HEADERS
-                                    InspectorResponseSubTab.COOKIES -> ResponseSubTab.COOKIES
-                                    else -> ResponseSubTab.BODY
+                                    InspectorSubTab.HEADERS -> ResponseSubTab.HEADERS
+                                    InspectorSubTab.COOKIES -> ResponseSubTab.COOKIES
+                                    InspectorSubTab.BODY -> ResponseSubTab.BODY
+                                    InspectorSubTab.PARAMS -> ResponseSubTab.BODY
                                 }
                                 onResponseSubTabSelected(legacyTab)
                             },
@@ -179,7 +208,24 @@ fun TrafficInspectorPanel(
                         )
                     }
 
-                    InspectorTab.TIMELINE -> TimelineTabContent(selectedTransaction)
+                    InspectorTab.TIMELINE -> {
+                        val timingSpec = remember(selectedTransaction.timings) {
+                            val t = selectedTransaction.timings
+                            NetworkTimingSpec(
+                                dnsMs = t.dnsMs,
+                                tcpMs = t.tcpMs,
+                                tlsMs = t.tlsMs,
+                                ttfbMs = t.ttfbMs,
+                                downloadMs = t.downloadMs,
+                                totalTimeMs = t.totalTimeMs,
+                                isReusedConnection = t.isReusedConnection
+                            )
+                        }
+                        KNetTimelineInspector(
+                            timing = timingSpec,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
             }
         }
@@ -196,58 +242,7 @@ private fun parseSizeBytes(formattedSize: String): Long {
     return numeric.toLongOrNull() ?: 0L
 }
 
-@Composable
-private fun OverviewTabContent(transaction: TrafficItemUiState) {
-    val themeColors = KNetTheme.colors
 
-    Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp)
-    ) {
-        EndpointCard(
-            method = transaction.method, endpoint = "https://${transaction.host}${transaction.path}"
-        )
-
-        val isCompleted = transaction.formattedTime != "-"
-        val isError = isCompleted && (transaction.status == 0 || transaction.status in 400..599)
-
-        val statusValue = when {
-            transaction.status > 0 -> "${transaction.status} ${transaction.statusText}"
-            isCompleted -> "ERR (${transaction.statusText.ifEmpty { "Connection Error" }})"
-            else -> "In Progress..."
-        }
-
-        val statusColor = when {
-            transaction.status in 200..299 -> themeColors.semantic.success
-            transaction.status in 300..399 -> themeColors.semantic.warning
-            isError -> themeColors.semantic.error
-            else -> themeColors.textPrimary
-        }
-
-        Column(
-            modifier = Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            GridRow(
-                label = "Status", value = statusValue, valueColor = statusColor
-            )
-            if (isError && transaction.statusText.isNotBlank()) {
-                GridRow(
-                    label = "Error Detail", value = transaction.statusText, valueColor = themeColors.semantic.error
-                )
-            }
-            GridRow(label = "Protocol", value = transaction.protocol)
-            GridRow(label = "Remote IP", value = "${transaction.host}:443", isMono = true)
-            GridRow(label = "Time", value = transaction.dateGroup.ifEmpty { "N/A" })
-            GridRow(label = "Duration", value = transaction.formattedTime)
-            GridRow(label = "Size", value = transaction.formattedSize)
-            GridRow(
-                label = "Type",
-                value = transaction.responseHeaders["Content-Type"] ?: "application/json; charset=utf-8",
-                isMono = true
-            )
-        }
-    }
-}
 
 @Composable
 private fun RequestTabContent(
@@ -456,8 +451,9 @@ private fun SubTabChip(
 
     Box(
         modifier = Modifier.clip(shapes.small)
-        .background(if (isSelected) themeColors.border else themeColors.surfaceVariant).clickable { onClick() }
-        .padding(horizontal = spacing.sm, vertical = spacing.xs).handCursor(), contentAlignment = Alignment.Center) {
+            .background(if (isSelected) themeColors.border else themeColors.surfaceVariant).clickable { onClick() }
+            .padding(horizontal = spacing.sm, vertical = spacing.xs).handCursor(),
+        contentAlignment = Alignment.Center) {
         Text(
             text = label, style = typography.labelMedium.copy(
                 color = if (isSelected) themeColors.textPrimary else themeColors.textSecondary,
@@ -638,69 +634,7 @@ private fun ResponseTabContent(
 }
 
 
-@Composable
-private fun TimelineTabContent(transaction: TrafficItemUiState) {
-    val themeColors = KNetTheme.colors
-    val typography = KNetTheme.typography
-    val shapes = KNetTheme.shapes
-    val timings = transaction.timings
-    val totalMs = timings.totalTimeMs.coerceAtLeast(1L)
 
-    Column(
-        modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            SectionHeader(title = "NETWORK TIMING BREAKDOWN")
-            if (timings.isReusedConnection || (timings.dnsMs == 0L && timings.tcpMs == 0L && timings.tlsMs == 0L)) {
-                Box(
-                    modifier = Modifier.clip(shapes.pill).background(Color(0xFF313244))
-                        .padding(horizontal = 8.dp, vertical = 2.dp)
-                ) {
-                    Text(
-                        text = "Reused Connection",
-                        style = typography.caption.copy(color = Color(0xFFA6ADC8), fontSize = 10.sp)
-                    )
-                }
-            }
-        }
-
-        TimelineWaterfallRow(
-            label = "DNS Resolution", durationMs = timings.dnsMs, totalMs = totalMs, color = Color(0xFF89B4FA)
-        )
-        TimelineWaterfallRow(
-            label = "TCP Connect", durationMs = timings.tcpMs, totalMs = totalMs, color = Color(0xFF89DCEB)
-        )
-        TimelineWaterfallRow(
-            label = "TLS Handshake", durationMs = timings.tlsMs, totalMs = totalMs, color = Color(0xFFA6E3A1)
-        )
-        TimelineWaterfallRow(
-            label = "TTFB (Wait)", durationMs = timings.ttfbMs, totalMs = totalMs, color = Color(0xFFF9E2AF)
-        )
-        TimelineWaterfallRow(
-            label = "Content Download", durationMs = timings.downloadMs, totalMs = totalMs, color = Color(0xFF74C7EC)
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Total Latency",
-                style = typography.bodySmall.copy(color = themeColors.textSecondary, fontWeight = FontWeight.Bold)
-            )
-            Text(
-                text = "$totalMs ms",
-                style = typography.bodySmall.copy(color = themeColors.accent, fontWeight = FontWeight.Bold)
-            )
-        }
-    }
-}
 
 @Composable
 private fun TimelineWaterfallRow(
@@ -760,8 +694,8 @@ private fun InspectorTabButton(
 
     Column(
         modifier = Modifier.padding(vertical = 4.dp).clip(shapes.small)
-        .background(if (isSelected) themeColors.surfaceVariant else Color.Transparent).clickable { onClick() }
-        .padding(horizontal = spacing.md, vertical = 4.dp).handCursor(),
+            .background(if (isSelected) themeColors.surfaceVariant else Color.Transparent).clickable { onClick() }
+            .padding(horizontal = spacing.md, vertical = 4.dp).handCursor(),
         verticalArrangement = Arrangement.Center,
         horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
@@ -802,9 +736,9 @@ private fun GridRow(
 
 internal fun parseCookieHeader(cookieHeader: String): Map<String, String> {
     return cookieHeader.split(";").mapNotNull {
-            val parts = it.trim().split("=", limit = 2)
-            if (parts.size == 2) parts[0].trim() to parts[1].trim() else null
-        }.toMap()
+        val parts = it.trim().split("=", limit = 2)
+        if (parts.size == 2) parts[0].trim() to parts[1].trim() else null
+    }.toMap()
 }
 
 internal data class ParsedResponseCookie(

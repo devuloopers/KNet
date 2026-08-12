@@ -11,6 +11,8 @@ kotlin {
         val jvmMain by getting {
             dependencies {
                 implementation(project(":ui:core"))
+                implementation(project(":core:domain"))
+                implementation(project(":ui:desktop:codeEditor"))
                 implementation(libs.compose.runtime)
                 implementation(libs.compose.foundation)
                 implementation(libs.compose.material3)

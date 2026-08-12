@@ -11,7 +11,7 @@ kotlin {
         val jvmMain by getting {
             dependencies {
                 implementation(project(":ui:core"))
-                implementation(project(":ui:desktop:http"))
+                implementation(project(":ui:desktop:httpPanel"))
                 implementation(project(":ui:desktop:codeEditor"))
                 implementation(project(":engine:formatter"))
                 implementation(project(":core:domain"))

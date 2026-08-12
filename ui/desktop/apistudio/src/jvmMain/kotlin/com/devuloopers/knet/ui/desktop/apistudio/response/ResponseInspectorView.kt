@@ -54,6 +54,8 @@ import com.devuloopers.knet.ui.desktop.apistudio.model.TestResult
 import com.devuloopers.knet.ui.desktop.apistudio.theme.ApiStudioColors
 import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
 import com.devuloopers.knet.ui.desktop.codeeditor.api.KNetCodeEditor
+import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
+import com.devuloopers.knet.ui.desktop.httppanel.view.KNetResponseInspector
 
 /**
  * Closed set of copy format capabilities supported by Response Inspector views.
@@ -362,23 +364,24 @@ public fun ResponseInspectorView(
     }
 
     val mappedSubTab = when (activeSubTab) {
-        ResponseSubTab.BODY -> com.devuloopers.knet.ui.desktop.codeeditor.inspector.InspectorResponseSubTab.BODY
-        ResponseSubTab.HEADERS -> com.devuloopers.knet.ui.desktop.codeeditor.inspector.InspectorResponseSubTab.HEADERS
-        ResponseSubTab.COOKIES -> com.devuloopers.knet.ui.desktop.codeeditor.inspector.InspectorResponseSubTab.COOKIES
-        else -> com.devuloopers.knet.ui.desktop.codeeditor.inspector.InspectorResponseSubTab.BODY
+        ResponseSubTab.BODY -> InspectorSubTab.BODY
+        ResponseSubTab.HEADERS -> InspectorSubTab.HEADERS
+        ResponseSubTab.COOKIES -> InspectorSubTab.COOKIES
+        else -> InspectorSubTab.BODY
     }
 
     val isExecuting = state.executionState == ExecutionState.EXECUTING
 
-    com.devuloopers.knet.ui.desktop.codeeditor.inspector.KNetResponseInspector(
+    KNetResponseInspector(
         spec = spec,
         isPreparing = isExecuting,
         activeSubTab = mappedSubTab,
         onSubTabSelected = { newSubTab ->
             val legacyTab = when (newSubTab) {
-                com.devuloopers.knet.ui.desktop.codeeditor.inspector.InspectorResponseSubTab.BODY -> ResponseSubTab.BODY
-                com.devuloopers.knet.ui.desktop.codeeditor.inspector.InspectorResponseSubTab.HEADERS -> ResponseSubTab.HEADERS
-                com.devuloopers.knet.ui.desktop.codeeditor.inspector.InspectorResponseSubTab.COOKIES -> ResponseSubTab.COOKIES
+                InspectorSubTab.BODY -> ResponseSubTab.BODY
+                InspectorSubTab.HEADERS -> ResponseSubTab.HEADERS
+                InspectorSubTab.COOKIES -> ResponseSubTab.COOKIES
+                else -> ResponseSubTab.BODY
             }
             onSubTabSelected(legacyTab)
         },
