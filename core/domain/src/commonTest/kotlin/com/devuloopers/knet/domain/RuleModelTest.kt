@@ -47,13 +47,11 @@ class RuleModelTest {
 
         val rule = TestFixtures.createRuleModel()
         val successState: RulesUiState = RulesUiState.Success(
-            rules = listOf(rule),
-            activeTab = "Rewrite"
+            rules = listOf(rule)
         )
 
         if (successState is RulesUiState.Success) {
             assertEquals(1, successState.rules.size)
-            assertEquals("Rewrite", successState.activeTab)
         }
     }
 

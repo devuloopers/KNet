@@ -3,6 +3,9 @@ package com.devuloopers.knet.engine.interceptor
 import com.devuloopers.knet.domain.clientNetwork.model.HttpRequest
 import com.devuloopers.knet.domain.clientNetwork.model.HttpResponse
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
@@ -12,6 +15,9 @@ import java.util.concurrent.ConcurrentHashMap
 object InterceptSessionManager {
 
     private val activeSuspensions = ConcurrentHashMap<String, InterceptedEvent>()
+
+    private val _activeEventsStream = MutableStateFlow<List<InterceptedEvent>>(emptyList())
+    public val activeEventsStream: StateFlow<List<InterceptedEvent>> = _activeEventsStream.asStateFlow()
 
     /**
      * Creates and registers a suspension event for an inbound request.
@@ -29,6 +35,7 @@ object InterceptSessionManager {
             deferred = deferred
         )
         activeSuspensions[id] = event
+        notifyEventsChanged()
         return event
     }
 
@@ -48,6 +55,7 @@ object InterceptSessionManager {
             deferred = deferred
         )
         activeSuspensions[id] = event
+        notifyEventsChanged()
         return event
     }
 
@@ -55,8 +63,9 @@ object InterceptSessionManager {
      * Resumes a suspended connection event by resolving its deferred completion handle.
      */
     fun resume(eventId: String, result: InterceptResult): Boolean {
-        val event = activeSuspensions.remove(eventId) ?: return false
-        return event.deferred.complete(result)
+        val event = activeSuspensions.remove(eventId)
+        notifyEventsChanged()
+        return event?.deferred?.complete(result) ?: false
     }
 
     /**
@@ -80,5 +89,10 @@ object InterceptSessionManager {
         activeSuspensions.keys.forEach { id ->
             resume(id, InterceptResult.Drop)
         }
+        notifyEventsChanged()
+    }
+
+    private fun notifyEventsChanged() {
+        _activeEventsStream.value = getActiveEvents()
     }
 }

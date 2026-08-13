@@ -21,13 +21,12 @@ class UseCaseTest {
         repository.setRules(listOf(rule1, rule2))
 
         val useCase = GetRulesUseCase(repository)
-        val state = useCase.execute(activeTab = "Rules").first()
+        val state = useCase.execute().first()
 
         assertTrue(state is RulesUiState.Success)
         assertEquals(2, state.rules.size)
         assertEquals("Rule One", state.rules[0].name)
         assertEquals("Rule Two", state.rules[1].name)
-        assertEquals("Rules", state.activeTab)
     }
 
     @Test

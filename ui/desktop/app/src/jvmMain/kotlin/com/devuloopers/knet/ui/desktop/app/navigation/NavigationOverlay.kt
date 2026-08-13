@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Navigation
+import androidx.compose.material.icons.filled.PauseCircle
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.WifiTethering
@@ -67,11 +68,12 @@ public fun NavigationOverlay(
 
     val topSection = listOf(
         NavigationDestinationInfo(DesktopDestination.Traffic, "Traffic", Icons.Default.WifiTethering, "Ctrl+1"),
-        NavigationDestinationInfo(DesktopDestination.ApiStudio, "API Studio", Icons.Default.Navigation, "Ctrl+2")
+        NavigationDestinationInfo(DesktopDestination.ApiStudio, "API Studio", Icons.Default.Navigation, "Ctrl+2"),
+        NavigationDestinationInfo(DesktopDestination.Breakpoints, "Intercepts", Icons.Default.PauseCircle, "Ctrl+3")
     )
 
     val middleSection = listOf(
-        NavigationDestinationInfo(DesktopDestination.Certificate, "Certificates", Icons.Default.Lock, "Ctrl+3")
+        NavigationDestinationInfo(DesktopDestination.Certificate, "Certificates", Icons.Default.Lock, "Ctrl+4")
     )
 
     val bottomSection = listOf(

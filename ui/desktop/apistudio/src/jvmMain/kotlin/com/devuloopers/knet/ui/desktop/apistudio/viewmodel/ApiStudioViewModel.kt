@@ -15,8 +15,8 @@ import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
 import com.devuloopers.knet.domain.workspace.usecase.SaveWorkspaceLayoutUseCase
 import com.devuloopers.knet.ui.desktop.apistudio.model.*
 import com.devuloopers.knet.ui.desktop.apistudio.response.ResponseSubTab
+import com.devuloopers.knet.ui.desktop.apistudio.usecase.AutoSaveApiSessionUseCase
 import com.devuloopers.knet.ui.desktop.apistudio.usecase.ExecuteScriptedApiRequestUseCase
-import com.devuloopers.knet.ui.desktop.httppanel.mapper.GraphQlPayloadMapper
 import com.devuloopers.knet.ui.desktop.httppanel.model.BodyMode
 import com.devuloopers.knet.ui.desktop.httppanel.model.BodyState
 import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlState
@@ -28,8 +28,6 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.uuid.Uuid
-
-import com.devuloopers.knet.ui.desktop.apistudio.usecase.AutoSaveApiSessionUseCase
 
 /**
  * Clean ViewModel managing UDF state for HTTP API request authoring, execution, and response inspection.
@@ -108,9 +106,6 @@ class ApiStudioViewModel(
             initialValue = null
         )
 
-    /**
-     * Updates target URL in UDF state and synchronizes query parameters via [UrlQueryStringParser].
-     */
     /**
      * Updates target URL in UDF state and synchronizes query parameters via [UrlQueryStringParser].
      */

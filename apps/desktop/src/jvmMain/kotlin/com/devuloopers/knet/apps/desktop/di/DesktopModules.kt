@@ -3,6 +3,7 @@ package com.devuloopers.knet.apps.desktop.di
 import com.devuloopers.knet.data.desktop.di.DesktopDataModule
 import com.devuloopers.knet.ui.desktop.app.di.desktopAppUiModule
 import com.devuloopers.knet.ui.desktop.httppanel.di.httpPanelModule
+import com.devuloopers.knet.ui.desktop.breakpointmanager.di.breakpointManagerUiModule
 import org.koin.core.module.Module
 
 /**
@@ -20,7 +21,7 @@ public object DesktopModules {
 
     public val engine: List<Module> = emptyList()
 
-    public val ui: List<Module> = listOf(desktopAppUiModule, httpPanelModule)
+    public val ui: List<Module> = listOf(desktopAppUiModule, httpPanelModule, breakpointManagerUiModule)
 
     /**
      * Complete aggregated Koin module list for Desktop application assembly.

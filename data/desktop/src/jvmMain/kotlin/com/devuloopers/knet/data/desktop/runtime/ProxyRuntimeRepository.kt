@@ -5,6 +5,7 @@ import com.devuloopers.knet.core.logger.LogTags
 import com.devuloopers.knet.domain.clientNetwork.model.ProxyTrafficListener
 import com.devuloopers.knet.engine.certificate.CertificateAuthority
 import com.devuloopers.knet.engine.certificate.CertificateCache
+import com.devuloopers.knet.engine.interceptor.KNetInterceptorHandler
 import com.devuloopers.knet.engine.portal.MobilePortalHandler
 import com.devuloopers.knet.engine.proxy.KNetProxyServer
 import com.devuloopers.knet.engine.proxy.tls.KeyManagerProvider
@@ -29,10 +30,11 @@ class ProxyRuntimeRepository(
         }
         KNetLogger.info(tag = LogTags.PROXY) { "Starting Netty proxy server on port $port..." }
         
-        // Ensure MobilePortalHandler is registered after httpAggregator in Netty pipeline
+        // Ensure MobilePortalHandler and KNetInterceptorHandler are registered after httpAggregator in Netty pipeline
         KNetProxyServer.pipelineInitializers.clear()
         KNetProxyServer.pipelineInitializers.add { pipeline ->
             pipeline.addLast("mobilePortalHandler", MobilePortalHandler(ca = certificateAuthority, proxyPort = port))
+            pipeline.addLast("knetInterceptorHandler", KNetInterceptorHandler())
         }
         val server = KNetProxyServer(
             port = port,

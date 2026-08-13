@@ -16,4 +16,8 @@ class ToggleRuleUseCase(
     suspend fun execute(ruleId: String, enabled: Boolean) {
         repository.toggleRule(ruleId, enabled)
     }
+
+    suspend operator fun invoke(ruleId: String, enabled: Boolean) {
+        execute(ruleId, enabled)
+    }
 }

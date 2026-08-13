@@ -69,3 +69,28 @@ This document serves as the live project tracking board for implementing seamles
 - [x] Add `AutoSaveApiSessionUseCaseTest.kt` unit test suite verifying persistent storage of GraphQL body modes, queries, operation names, and variables
 - [x] All modules compile and pass JVM tests: `BUILD SUCCESSFUL`
 
+---
+
+## Phase 9: Breakpoint Interception & In-Flight Traffic Editing Suite `[IN PROGRESS]`
+
+- [x] **Phase 1: `:ui:desktop:breakpointManager` UI & State** `[COMPLETED]`
+  - [x] Created `:ui:desktop:breakpointManager` module registered in `settings.gradle.kts`
+  - [x] Implemented `BreakpointRuleUiModel` and `BreakpointManagerState` with strongly-typed `HttpMethod?` and `BreakpointPhase`
+  - [x] Built `BreakpointRulesTable` with status switches, monospace URL regex formatting, and method/phase badges
+  - [x] Built `AddEditBreakpointRuleDialog` reusing `KNetDialog`, `KNetTextField`, `KNetButton`, and `KNetSwitch`
+  - [x] Built `BreakpointManagerScreen` and integrated `Intercepts` into left navigation rail (`Ctrl+3`)
+- [x] **Phase 2: Reactive Interceptor Engine & Domain Synchronization** `[COMPLETED]`
+  - [x] Upgraded `BreakpointRuleRegistry` in `:engine:interceptor` with `rulesStream` and `isGlobalInterceptionEnabled` `StateFlow` streams
+  - [x] Upgraded `InterceptSessionManager` with `activeEventsStream: StateFlow<List<InterceptedEvent>>`
+  - [x] Added `if (!isGlobalInterceptionEnabled.value) return null` global interception guard to `BreakpointMatcher`
+  - [x] Registered `KNetInterceptorHandler()` into Netty `pipelineInitializers` in `ProxyRuntimeRepository.kt` (`:data:desktop`)
+  - [x] Placed all domain rules UseCases (`GetRulesUseCase`, `SaveRuleUseCase`, `DeleteRuleUseCase`, `ToggleRuleUseCase`, `ObserveGlobalInterceptionUseCase`, `ToggleGlobalInterceptionUseCase`) in `:core:domain`
+  - [x] Wired `BreakpointManagerViewModel` with domain UseCases and registered in `BreakpointManagerModule.kt` Koin DI
+- [x] **Phase 3: `:storage` Room Database Persistence** `[COMPLETED]`
+  - [x] Created `BreakpointRuleEntity` and `BreakpointRuleDao` in `:storage` module
+  - [x] Updated `KNetDatabase` schema to version 7
+  - [x] Updated `RulesRepositoryImpl` in `:data:desktop` to stream Room DB records to `BreakpointRuleRegistry` engine
+  - [x] Verified full multi-module JVM test suite across `:storage`, `:data:desktop`, `:engine:interceptor`, `:ui:desktop:breakpointManager`, and `:ui:desktop:app` (`BUILD SUCCESSFUL in 13s`)
+- [ ] **Phase 4: 1-Click Right-Click Shortcut in `TrafficTable`** `[PENDING]`
+- [ ] **Phase 5: Global 75% Width Right Slide-Over Panel (`InFlightInterceptionSlideOver`)** `[PENDING]`
+

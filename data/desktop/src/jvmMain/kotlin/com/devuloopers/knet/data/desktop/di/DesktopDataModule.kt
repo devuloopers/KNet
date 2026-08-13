@@ -28,9 +28,7 @@ import com.devuloopers.knet.domain.proxy.usecase.ObserveProxyEngineStateUseCase
 import com.devuloopers.knet.domain.proxy.usecase.StartProxyEngineUseCase
 import com.devuloopers.knet.domain.proxy.usecase.StopProxyEngineUseCase
 import com.devuloopers.knet.domain.rules.repository.RulesRepository
-import com.devuloopers.knet.domain.rules.usecase.GetRulesUseCase
-import com.devuloopers.knet.domain.rules.usecase.SaveRuleUseCase
-import com.devuloopers.knet.domain.rules.usecase.ToggleRuleUseCase
+import com.devuloopers.knet.domain.rules.usecase.*
 import com.devuloopers.knet.domain.traffic.repository.LiveTrafficRepository
 import com.devuloopers.knet.domain.traffic.usecase.*
 import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
@@ -127,7 +125,10 @@ object DesktopDataModule {
         single<LiveTrafficRepository> { LiveTrafficRepositoryImpl(get()) }
         single<ProxyEngineRepository> { ProxyEngineRepositoryImpl(get(), get(), get(), get()) }
         single<InspectorRepository> { InspectorRepositoryImpl(get()) }
-        single<RulesRepository> { RulesRepositoryImpl() }
+        single<RulesRepository> {
+            val db: KNetDatabase = get()
+            RulesRepositoryImpl(db.breakpointRuleDao())
+        }
         single<WidgetPreferencesRepository> { WidgetPreferencesRepositoryImpl(get()) }
         single<NetworkRepository> { NetworkRepositoryImpl(get()) }
         single { ProxyHistoryHeaderLookup(get()) }
@@ -146,6 +147,9 @@ object DesktopDataModule {
         factory { GetRulesUseCase(get()) }
         factory { SaveRuleUseCase(get()) }
         factory { ToggleRuleUseCase(get()) }
+        factory { DeleteRuleUseCase(get()) }
+        factory { ObserveGlobalInterceptionUseCase(get()) }
+        factory { ToggleGlobalInterceptionUseCase(get()) }
         factory { SaveLiveTransactionToCollectionUseCase(get()) }
         factory { RecordClientTransactionUseCase(get()) }
         factory { ObserveLocalIpUseCase(get()) }

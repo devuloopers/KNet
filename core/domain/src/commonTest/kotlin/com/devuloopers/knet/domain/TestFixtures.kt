@@ -125,6 +125,13 @@ class FakeRulesRepository : RulesRepository {
     private val _rules = MutableStateFlow<List<RuleModel>>(emptyList())
     override val rulesFlow: Flow<List<RuleModel>> = _rules.asStateFlow()
 
+    private val _isGlobalInterceptionEnabled = MutableStateFlow(true)
+    override val isGlobalInterceptionEnabled: Flow<Boolean> = _isGlobalInterceptionEnabled.asStateFlow()
+
+    override suspend fun toggleGlobalInterception(enabled: Boolean) {
+        _isGlobalInterceptionEnabled.value = enabled
+    }
+
     fun setRules(rules: List<RuleModel>) {
         _rules.value = rules
     }

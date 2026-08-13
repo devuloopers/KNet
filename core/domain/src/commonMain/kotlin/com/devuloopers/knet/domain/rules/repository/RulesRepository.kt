@@ -7,10 +7,21 @@ import kotlinx.coroutines.flow.Flow
  * Feature repository contract for the Rules engine.
  */
 interface RulesRepository {
+
     /**
-     * Cold stream emitting persistent active interceptor rules.
+     * Reactive stream emitting persistent active interceptor rules.
      */
     val rulesFlow: Flow<List<RuleModel>>
+
+    /**
+     * Reactive stream emitting global proxy interception engine status.
+     */
+    val isGlobalInterceptionEnabled: Flow<Boolean>
+
+    /**
+     * Toggles global proxy interception engine state.
+     */
+    suspend fun toggleGlobalInterception(enabled: Boolean)
 
     /**
      * Toggles rule enabled/disabled state by ID.

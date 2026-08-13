@@ -1,7 +1,7 @@
 package com.devuloopers.knet.domain.rules.model
 
 /**
- * Sealed interface representing renderable UI state variations for the Rules console.
+ * Sealed interface representing renderable state variations for rules.
  */
 sealed interface RulesUiState {
     /** Rules list is loading off-thread. */
@@ -11,10 +11,8 @@ sealed interface RulesUiState {
      * Successfully loaded rules configuration list.
      *
      * @property rules Active rules list.
-     * @property activeTab Active bottom tray tab (e.g. "Rules", "Breakpoints").
      */
     data class Success(
-        val rules: List<RuleModel>,
-        val activeTab: String = "Rules"
+        val rules: List<RuleModel>
     ) : RulesUiState
 }

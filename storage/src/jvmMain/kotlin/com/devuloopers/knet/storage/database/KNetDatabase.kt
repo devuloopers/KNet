@@ -6,6 +6,8 @@ import com.devuloopers.knet.storage.apistudio.dao.CollectionDao
 import com.devuloopers.knet.storage.apistudio.entity.CollectionEntity
 import com.devuloopers.knet.storage.apistudio.entity.CollectionFolderEntity
 import com.devuloopers.knet.storage.apistudio.entity.SavedRequestEntity
+import com.devuloopers.knet.storage.rules.dao.BreakpointRuleDao
+import com.devuloopers.knet.storage.rules.entity.BreakpointRuleEntity
 import com.devuloopers.knet.storage.traffic.dao.HttpTransactionDao
 import com.devuloopers.knet.storage.traffic.entity.HttpTransactionEntity
 
@@ -17,13 +19,16 @@ import com.devuloopers.knet.storage.traffic.entity.HttpTransactionEntity
         HttpTransactionEntity::class,
         CollectionEntity::class,
         CollectionFolderEntity::class,
-        SavedRequestEntity::class
+        SavedRequestEntity::class,
+        BreakpointRuleEntity::class
     ],
-    version = 6
+    version = 7
 )
 abstract class KNetDatabase : RoomDatabase() {
 
     abstract fun httpTransactionDao(): HttpTransactionDao
 
     abstract fun collectionDao(): CollectionDao
+
+    abstract fun breakpointRuleDao(): BreakpointRuleDao
 }

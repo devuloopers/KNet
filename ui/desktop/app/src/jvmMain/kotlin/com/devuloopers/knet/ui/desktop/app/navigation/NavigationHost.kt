@@ -43,6 +43,8 @@ public fun NavigationHost(
                     DesktopDestination.Inspector -> "Transaction Inspector (Awaiting Feature Migration Phase)"
                     DesktopDestination.Certificate -> "CA Certificates Manager (Awaiting Feature Migration Phase)"
                     DesktopDestination.ApiStudio -> ""
+                    DesktopDestination.Breakpoints -> ""
+                    DesktopDestination.Settings -> ""
                 }
 
                 Text(

@@ -35,6 +35,7 @@ public fun Toolbar(
             DesktopDestination.Inspector -> "Inspector"
             DesktopDestination.ApiStudio -> "API Studio"
             DesktopDestination.Certificate -> "Certificates Manager"
+            DesktopDestination.Breakpoints -> "Intercepts"
             DesktopDestination.Settings -> "Settings"
         }
 

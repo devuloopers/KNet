@@ -17,4 +17,8 @@ class SaveRuleUseCase(
     suspend fun execute(rule: RuleModel) {
         repository.saveRule(rule)
     }
+
+    suspend operator fun invoke(rule: RuleModel) {
+        execute(rule)
+    }
 }

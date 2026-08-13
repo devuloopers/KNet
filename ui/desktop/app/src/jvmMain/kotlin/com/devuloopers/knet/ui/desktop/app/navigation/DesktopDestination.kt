@@ -26,6 +26,11 @@ public sealed interface DesktopDestination {
     public data object Certificate : DesktopDestination
 
     /**
+     * Breakpoint interception rules and in-flight traffic manager.
+     */
+    public data object Breakpoints : DesktopDestination
+
+    /**
      * General application proxy defaults configuration screen.
      */
     public data object Settings : DesktopDestination

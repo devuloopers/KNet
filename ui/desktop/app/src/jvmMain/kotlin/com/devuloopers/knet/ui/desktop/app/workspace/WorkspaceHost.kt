@@ -33,6 +33,8 @@ import com.devuloopers.knet.ui.desktop.app.navigation.DesktopDestination
 import com.devuloopers.knet.ui.desktop.apistudio.view.ApiStudioScreen
 import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.ApiStudioViewModel
 import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.CollectionsViewModel
+import com.devuloopers.knet.ui.desktop.breakpointmanager.view.BreakpointManagerScreen
+import com.devuloopers.knet.ui.desktop.breakpointmanager.viewmodel.BreakpointManagerViewModel
 import com.devuloopers.knet.ui.desktop.traffic.view.TrafficScreen
 import com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficViewModel
 import com.devuloopers.knet.ui.desktop.certificate.view.CertificateManagerScreen
@@ -79,6 +81,13 @@ public fun KNetWorkspaceHost(
             val certificateViewModel: CertificateViewModel = koinViewModel()
             CertificateManagerScreen(
                 viewModel = certificateViewModel,
+                modifier = modifier
+            )
+        }
+        DesktopDestination.Breakpoints -> {
+            val breakpointViewModel: BreakpointManagerViewModel = koinViewModel()
+            BreakpointManagerScreen(
+                viewModel = breakpointViewModel,
                 modifier = modifier
             )
         }
