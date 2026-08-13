@@ -1,4 +1,4 @@
-package com.devuloopers.knet.ui.desktop.apistudio.editor
+package com.devuloopers.knet.ui.desktop.httppanel.editor
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -27,9 +27,9 @@ import com.devuloopers.knet.ui.core.components.keyvalue.KeyValueEntry
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.ui.desktop.apistudio.model.BodyMode
-import com.devuloopers.knet.ui.desktop.apistudio.model.BodyState
-import com.devuloopers.knet.ui.desktop.apistudio.model.RawSubFormat
+import com.devuloopers.knet.ui.desktop.httppanel.model.BodyMode
+import com.devuloopers.knet.ui.desktop.httppanel.model.BodyState
+import com.devuloopers.knet.ui.desktop.httppanel.model.RawSubFormat
 import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
 import com.devuloopers.knet.ui.desktop.codeeditor.api.KNetCodeEditor
 

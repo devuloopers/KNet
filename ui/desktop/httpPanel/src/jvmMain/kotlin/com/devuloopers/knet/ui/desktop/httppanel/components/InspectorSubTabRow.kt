@@ -35,10 +35,12 @@ public fun InspectorSubTabRow(
         tabs.forEach { subTab ->
             val isSelected = subTab == activeTab
             val labelText = when (subTab) {
-                InspectorSubTab.BODY -> "Body"
-                InspectorSubTab.HEADERS -> "Headers ($headerCount)"
                 InspectorSubTab.PARAMS -> "Params ($paramCount)"
+                InspectorSubTab.AUTH -> "Auth"
+                InspectorSubTab.HEADERS -> "Headers ($headerCount)"
+                InspectorSubTab.BODY -> "Body"
                 InspectorSubTab.COOKIES -> if (cookieCount > 0) "Cookies ($cookieCount)" else "Cookies"
+                InspectorSubTab.SCRIPTS -> "Scripts"
             }
             KNetTab(
                 title = labelText,

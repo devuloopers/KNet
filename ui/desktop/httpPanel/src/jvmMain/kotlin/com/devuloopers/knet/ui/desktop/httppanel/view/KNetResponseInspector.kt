@@ -212,13 +212,14 @@ fun KNetResponseInspector(
                             entries = cookieEntries,
                             keyHeader = "COOKIE NAME",
                             valueHeader = "VALUE",
-                            emptyMessage = "This response included no Set-Cookie headers.",
+                            emptyMessage = "This response set no HTTP cookies (Set-Cookie headers).",
                             modifier = Modifier.fillMaxSize()
                         )
                     }
                     InspectorSubTab.PARAMS -> {
                         // Params not applicable to response
                     }
+                    else -> {}
                 }
             }
         }

@@ -8,17 +8,20 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -28,6 +31,7 @@ import com.devuloopers.knet.ui.core.components.button.KNetCopyButton
 import com.devuloopers.knet.ui.core.components.button.KNetIconButton
 import com.devuloopers.knet.ui.core.components.checkbox.KNetCheckbox
 import com.devuloopers.knet.ui.core.components.divider.HorizontalDivider
+import com.devuloopers.knet.ui.core.components.divider.VerticalDivider
 import com.devuloopers.knet.ui.core.components.input.KNetInputField
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
@@ -48,7 +52,18 @@ public data class KeyValueEntry(
 )
 
 /**
- * Domain-agnostic Key-Value editor composable table with headers and centered controls.
+ * Domain-agnostic Key-Value editor composable table with panelHeader styling,
+ * alternating row colors, and inline editing controls.
+ *
+ * @param entries Interactive list of [KeyValueEntry] items to render and edit.
+ * @param onEntryChange Callback triggered when an entry's key, value, or enabled status changes.
+ * @param onAddEntry Callback triggered when user clicks '+ Add Row'.
+ * @param onRemoveEntry Callback triggered when user clicks delete icon for a row.
+ * @param modifier Composable layout modifier.
+ * @param keyHeader Column header label for key column (default: "KEY").
+ * @param valueHeader Column header label for value column (default: "VALUE").
+ * @param emptyMessage Message displayed when entries list is empty.
+ * @param addLabel Label text displayed on add button (default: "Add Row").
  */
 @Composable
 public fun KNetKeyValueEditor(
@@ -56,87 +71,163 @@ public fun KNetKeyValueEditor(
     onEntryChange: (index: Int, updated: KeyValueEntry) -> Unit,
     onAddEntry: () -> Unit,
     onRemoveEntry: (index: Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    keyHeader: String = "KEY",
+    valueHeader: String = "VALUE",
+    emptyMessage: String = "No entries defined. Click 'Add Row' to start.",
+    addLabel: String = "Add Row"
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
 
     Column(modifier = modifier.fillMaxWidth()) {
-        // Table Header Row
-        if (entries.isNotEmpty()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 6.dp),
-                verticalAlignment = Alignment.CenterVertically
+        // Table Header Row matching panelHeader design with cell borders
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(themeColors.panelHeader)
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier.width(36.dp),
+                contentAlignment = Alignment.Center
             ) {
-                // Checkbox spacer offset (24dp + 6dp padding)
-                Spacer(modifier = Modifier.width(30.dp))
-                Text(
-                    text = "KEY",
-                    style = typography.caption.copy(
-                        color = themeColors.textMuted,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    modifier = Modifier.weight(1f).padding(start = 4.dp)
-                )
-                Text(
-                    text = "VALUE",
-                    style = typography.caption.copy(
-                        color = themeColors.textMuted,
-                        fontWeight = FontWeight.Bold
-                    ),
-                    modifier = Modifier.weight(1f).padding(start = 4.dp)
-                )
-                // Remove icon spacer offset (28dp)
-                Spacer(modifier = Modifier.width(28.dp))
+                // Header checkbox column spacer
+            }
+            VerticalDivider(color = themeColors.border, modifier = Modifier.height(16.dp))
+            Text(
+                text = keyHeader,
+                style = typography.caption.copy(
+                    color = themeColors.textMuted,
+                    fontWeight = FontWeight.Bold
+                ),
+                modifier = Modifier.weight(0.4f).padding(start = 8.dp)
+            )
+            VerticalDivider(color = themeColors.border, modifier = Modifier.height(16.dp))
+            Text(
+                text = valueHeader,
+                style = typography.caption.copy(
+                    color = themeColors.textMuted,
+                    fontWeight = FontWeight.Bold
+                ),
+                modifier = Modifier.weight(0.6f).padding(start = 8.dp)
+            )
+            VerticalDivider(color = themeColors.border, modifier = Modifier.height(16.dp))
+            Box(
+                modifier = Modifier.width(36.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                // Header action column spacer
             }
         }
 
-        // Key-Value Rows
+        HorizontalDivider(color = themeColors.border)
+
+        // Key-Value Rows with Grid Cell Borders & Seamless Inputs
         if (entries.isEmpty()) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 16.dp),
+                    .padding(vertical = 24.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "No parameters defined. Click 'Add Row' to start.",
+                    text = emptyMessage,
                     style = typography.bodySmall.copy(color = themeColors.textMuted)
                 )
             }
         } else {
-            entries.forEachIndexed { index, entry ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 3.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    KNetCheckbox(
-                        checked = entry.enabled,
-                        onCheckedChange = { onEntryChange(index, entry.copy(enabled = it)) },
-                        modifier = Modifier.padding(end = 6.dp)
-                    )
-                    KNetInputField(
-                        value = entry.key,
-                        onValueChange = { onEntryChange(index, entry.copy(key = it)) },
-                        placeholder = "Key",
-                        modifier = Modifier.weight(1f).padding(end = 6.dp)
-                    )
-                    KNetInputField(
-                        value = entry.value,
-                        onValueChange = { onEntryChange(index, entry.copy(value = it)) },
-                        placeholder = "Value",
-                        modifier = Modifier.weight(1f).padding(end = 6.dp)
-                    )
-                    KNetIconButton(
-                        onClick = { onRemoveEntry(index) },
-                        icon = KNetIcons.Delete,
-                        contentDescription = "Remove",
-                        tint = themeColors.semantic.error
-                    )
+            LazyColumn(
+                modifier = Modifier.fillMaxWidth().weight(1f, fill = false)
+            ) {
+                itemsIndexed(entries) { index, entry ->
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .background(if (index % 2 == 1) themeColors.surfaceVariant.copy(alpha = 0.3f) else Color.Transparent)
+                                .padding(vertical = 2.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier.width(36.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                KNetCheckbox(
+                                    checked = entry.enabled,
+                                    onCheckedChange = { onEntryChange(index, entry.copy(enabled = it)) }
+                                )
+                            }
+                            VerticalDivider(color = themeColors.border.copy(alpha = 0.3f), modifier = Modifier.height(28.dp))
+                            Box(
+                                modifier = Modifier
+                                    .weight(0.4f)
+                                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                if (entry.key.isEmpty()) {
+                                    Text(
+                                        text = "Key",
+                                        style = typography.codeSmall.copy(
+                                            color = themeColors.textMuted,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    )
+                                }
+                                BasicTextField(
+                                    value = entry.key,
+                                    onValueChange = { onEntryChange(index, entry.copy(key = it)) },
+                                    textStyle = typography.codeSmall.copy(
+                                        color = if (entry.enabled) themeColors.textPrimary else themeColors.textMuted,
+                                        fontWeight = FontWeight.SemiBold
+                                    ),
+                                    cursorBrush = SolidColor(themeColors.textPrimary),
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                            VerticalDivider(color = themeColors.border.copy(alpha = 0.3f), modifier = Modifier.height(28.dp))
+                            Box(
+                                modifier = Modifier
+                                    .weight(0.6f)
+                                    .padding(horizontal = 8.dp, vertical = 6.dp),
+                                contentAlignment = Alignment.CenterStart
+                            ) {
+                                if (entry.value.isEmpty()) {
+                                    Text(
+                                        text = "Value",
+                                        style = typography.codeSmall.copy(
+                                            color = themeColors.textMuted
+                                        )
+                                    )
+                                }
+                                BasicTextField(
+                                    value = entry.value,
+                                    onValueChange = { onEntryChange(index, entry.copy(value = it)) },
+                                    textStyle = typography.codeSmall.copy(
+                                        color = if (entry.enabled) themeColors.textSecondary else themeColors.textMuted
+                                    ),
+                                    cursorBrush = SolidColor(themeColors.textPrimary),
+                                    singleLine = true,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+                            VerticalDivider(color = themeColors.border.copy(alpha = 0.3f), modifier = Modifier.height(28.dp))
+                            Box(
+                                modifier = Modifier.width(36.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                KNetIconButton(
+                                    onClick = { onRemoveEntry(index) },
+                                    icon = KNetIcons.Delete,
+                                    contentDescription = "Remove",
+                                    tint = themeColors.semantic.error
+                                )
+                            }
+                        }
+                        HorizontalDivider(color = themeColors.border.copy(alpha = 0.4f))
+                    }
                 }
             }
         }
@@ -145,7 +236,7 @@ public fun KNetKeyValueEditor(
         KNetButton(
             onClick = onAddEntry,
             variant = ButtonVariant.Secondary,
-            modifier = Modifier.padding(top = 10.dp)
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -153,11 +244,11 @@ public fun KNetKeyValueEditor(
             ) {
                 Icon(
                     imageVector = KNetIcons.Add,
-                    contentDescription = "Add Row",
+                    contentDescription = addLabel,
                     modifier = Modifier.size(14.dp),
                     tint = themeColors.textPrimary
                 )
-                Text("Add Row")
+                Text(addLabel)
             }
         }
     }

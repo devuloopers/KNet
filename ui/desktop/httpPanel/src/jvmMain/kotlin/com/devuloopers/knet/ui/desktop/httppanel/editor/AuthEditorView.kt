@@ -1,4 +1,4 @@
-package com.devuloopers.knet.ui.desktop.apistudio.editor
+package com.devuloopers.knet.ui.desktop.httppanel.editor
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,9 +26,9 @@ import com.devuloopers.knet.ui.core.components.input.KNetInputField
 import com.devuloopers.knet.ui.core.components.input.KNetPasswordField
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.ui.desktop.apistudio.model.ApiKeyLocation
-import com.devuloopers.knet.ui.desktop.apistudio.model.AuthState
-import com.devuloopers.knet.ui.desktop.apistudio.model.AuthType
+import com.devuloopers.knet.ui.desktop.httppanel.model.ApiKeyLocation
+import com.devuloopers.knet.ui.desktop.httppanel.model.AuthState
+import com.devuloopers.knet.ui.desktop.httppanel.model.AuthType
 
 /**
  * Modern, high-density Authorization Editor View supporting No Auth, Bearer Token, Basic Auth, API Key, and Inherit Auth.

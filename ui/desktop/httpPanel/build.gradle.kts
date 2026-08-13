@@ -12,6 +12,7 @@ kotlin {
             dependencies {
                 implementation(project(":ui:core"))
                 implementation(project(":core:domain"))
+                implementation(project(":engine:script"))
                 implementation(project(":ui:desktop:codeEditor"))
                 implementation(libs.compose.runtime)
                 implementation(libs.compose.foundation)

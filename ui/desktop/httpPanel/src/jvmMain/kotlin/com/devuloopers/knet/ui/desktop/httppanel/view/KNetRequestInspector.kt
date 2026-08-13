@@ -139,10 +139,11 @@ public fun KNetRequestInspector(
                         entries = cookieEntries,
                         keyHeader = "COOKIE NAME",
                         valueHeader = "VALUE",
-                        emptyMessage = "This request included no Cookie header.",
+                        emptyMessage = "This request contained no HTTP cookies.",
                         modifier = Modifier.fillMaxSize()
                     )
                 }
+                else -> {}
             }
         }
     }

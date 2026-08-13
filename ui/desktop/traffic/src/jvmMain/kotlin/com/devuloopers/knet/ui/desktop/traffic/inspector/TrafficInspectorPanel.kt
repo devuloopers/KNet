@@ -162,6 +162,7 @@ fun TrafficInspectorPanel(
                                     InspectorSubTab.COOKIES -> RequestSubTab.COOKIES
                                     InspectorSubTab.PARAMS -> RequestSubTab.PARAMS
                                     InspectorSubTab.BODY -> RequestSubTab.BODY
+                                    else -> RequestSubTab.BODY
                                 }
                                 onRequestSubTabSelected(legacyTab)
                             },
@@ -200,7 +201,7 @@ fun TrafficInspectorPanel(
                                     InspectorSubTab.HEADERS -> ResponseSubTab.HEADERS
                                     InspectorSubTab.COOKIES -> ResponseSubTab.COOKIES
                                     InspectorSubTab.BODY -> ResponseSubTab.BODY
-                                    InspectorSubTab.PARAMS -> ResponseSubTab.BODY
+                                    else -> ResponseSubTab.BODY
                                 }
                                 onResponseSubTabSelected(legacyTab)
                             },

@@ -1,8 +1,42 @@
-package com.devuloopers.knet.ui.desktop.apistudio.model
+package com.devuloopers.knet.ui.desktop.httppanel.model
 
-public typealias ScriptPhase = com.devuloopers.knet.ui.desktop.httppanel.model.ScriptPhase
-public typealias ScriptSnippet = com.devuloopers.knet.ui.desktop.httppanel.model.ScriptSnippet
-public typealias ScriptState = com.devuloopers.knet.ui.desktop.httppanel.model.ScriptState
+import com.devuloopers.knet.engine.script.api.ScriptLanguage
+
+/**
+ * Execution phase for request scripts in API Studio.
+ */
+public enum class ScriptPhase(val label: String) {
+    PRE_REQUEST("Pre-request"),
+    TESTS("Post-response / Tests")
+}
+
+/**
+ * Represents a quick code snippet template for request/test scripts.
+ *
+ * @property title User-facing title string.
+ * @property codeJs JavaScript code template.
+ * @property codeKotlin Kotlin code template.
+ */
+public data class ScriptSnippet(
+    val title: String,
+    val codeJs: String,
+    val codeKotlin: String
+)
+
+/**
+ * State DTO holding configuration for script editing in API Studio.
+ *
+ * @property preRequestScript Pre-request script source code.
+ * @property testScript Post-response test script source code.
+ * @property scriptLanguage Target scripting language engine (JavaScript vs Kotlin).
+ * @property activePhase Active script editing tab phase (Pre-request vs Tests).
+ */
+public data class ScriptState(
+    val preRequestScript: String = "",
+    val testScript: String = "",
+    val scriptLanguage: ScriptLanguage = ScriptLanguage.JAVASCRIPT,
+    val activePhase: ScriptPhase = ScriptPhase.TESTS
+)
 
 /**
  * Registry providing standard built-in quick code snippets for API Studio scripts.

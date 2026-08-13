@@ -20,7 +20,9 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.apistudio.dialog.CreateCollectionDialog
 import com.devuloopers.knet.ui.desktop.apistudio.dialog.RenameCollectionDialog
 import com.devuloopers.knet.ui.desktop.apistudio.dialog.SaveRequestDialog
-import com.devuloopers.knet.ui.desktop.apistudio.editor.RequestPayloadEditor
+import com.devuloopers.knet.ui.desktop.httppanel.editor.KNetRequestEditor
+import com.devuloopers.knet.ui.desktop.httppanel.editor.KNetRequestEditorActions
+import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
 import com.devuloopers.knet.ui.desktop.apistudio.editor.RequestUrlBar
 import com.devuloopers.knet.ui.desktop.apistudio.model.ApiStudioState
 import com.devuloopers.knet.ui.desktop.apistudio.model.CollectionsState
@@ -258,103 +260,109 @@ public fun ApiStudioScreen(
 
                         HorizontalDivider(color = themeColors.border)
 
-                        RequestPayloadEditor(
+                        KNetRequestEditor(
+                            bodyState = uiState.editorState.bodyState,
                             bodyPayload = bodyPayload,
-                            onBodyPayloadChanged = { newBody ->
-                                viewModel?.updateBodyPayload(newBody)
-                                when (val context = uiState.sessionContext) {
-                                    is SessionContext.SavedRequest -> collectionsViewModel?.triggerSavedRequestAutoSave(
-                                        requestId = context.requestId, collectionId = context.collectionId, folderId = context.folderId,
-                                        editorState = uiState.editorState.copy(bodyPayload = newBody)
-                                    )
-                                    else -> collectionsViewModel?.triggerUnsavedAutoSave(
-                                        editorState = uiState.editorState.copy(bodyPayload = newBody),
-                                        onLinkedIdAssigned = { id, title -> viewModel?.updateLinkedUnsavedId(id, title) }
-                                    )
-                                }
-                            },
                             queryParams = uiState.editorState.queryParams,
-                            onQueryParamsChanged = { newParams ->
-                                viewModel?.updateQueryParams(newParams)
-                                when (val context = uiState.sessionContext) {
-                                    is SessionContext.SavedRequest -> collectionsViewModel?.triggerSavedRequestAutoSave(
-                                        requestId = context.requestId, collectionId = context.collectionId, folderId = context.folderId,
-                                        editorState = uiState.editorState.copy(queryParams = newParams)
-                                    )
-                                    else -> collectionsViewModel?.triggerUnsavedAutoSave(
-                                        editorState = uiState.editorState.copy(queryParams = newParams),
-                                        onLinkedIdAssigned = { id, title -> viewModel?.updateLinkedUnsavedId(id, title) }
-                                    )
-                                }
-                            },
                             headers = uiState.editorState.headers,
-                            onHeadersChanged = { newHeaders ->
-                                viewModel?.updateHeaders(newHeaders)
-                                when (val context = uiState.sessionContext) {
-                                    is SessionContext.SavedRequest -> collectionsViewModel?.triggerSavedRequestAutoSave(
-                                        requestId = context.requestId, collectionId = context.collectionId, folderId = context.folderId,
-                                        editorState = uiState.editorState.copy(headers = newHeaders)
-                                    )
-                                    else -> collectionsViewModel?.triggerUnsavedAutoSave(
-                                        editorState = uiState.editorState.copy(headers = newHeaders),
-                                        onLinkedIdAssigned = { id, title -> viewModel?.updateLinkedUnsavedId(id, title) }
-                                    )
-                                }
-                            },
                             cookies = uiState.editorState.cookies,
-                            onCookiesChanged = { viewModel?.updateCookies(it) },
                             authState = uiState.editorState.authState,
-                            onAuthStateChanged = { newAuth ->
-                                viewModel?.updateAuthState(newAuth)
-                                when (val context = uiState.sessionContext) {
-                                    is SessionContext.SavedRequest -> collectionsViewModel?.triggerSavedRequestAutoSave(
-                                        requestId = context.requestId, collectionId = context.collectionId, folderId = context.folderId,
-                                        editorState = uiState.editorState.copy(authState = newAuth)
-                                    )
-                                    else -> collectionsViewModel?.triggerUnsavedAutoSave(
-                                        editorState = uiState.editorState.copy(authState = newAuth),
-                                        onLinkedIdAssigned = { id, title -> viewModel?.updateLinkedUnsavedId(id, title) }
-                                    )
-                                }
-                            },
                             preRequestScript = uiState.editorState.preRequestScript,
-                            onPreRequestScriptChanged = { newScript ->
-                                viewModel?.updatePreRequestScript(newScript)
-                                when (val context = uiState.sessionContext) {
-                                    is SessionContext.SavedRequest -> collectionsViewModel?.triggerSavedRequestAutoSave(
-                                        requestId = context.requestId, collectionId = context.collectionId, folderId = context.folderId,
-                                        editorState = uiState.editorState.copy(preRequestScript = newScript)
-                                    )
-                                    else -> collectionsViewModel?.triggerUnsavedAutoSave(
-                                        editorState = uiState.editorState.copy(preRequestScript = newScript),
-                                        onLinkedIdAssigned = { id, title -> viewModel?.updateLinkedUnsavedId(id, title) }
-                                    )
-                                }
-                            },
                             testScript = uiState.editorState.testScript,
-                            onTestScriptChanged = { newScript ->
-                                viewModel?.updateTestScript(newScript)
-                                when (val context = uiState.sessionContext) {
-                                    is SessionContext.SavedRequest -> collectionsViewModel?.triggerSavedRequestAutoSave(
-                                        requestId = context.requestId, collectionId = context.collectionId, folderId = context.folderId,
-                                        editorState = uiState.editorState.copy(testScript = newScript)
-                                    )
-                                    else -> collectionsViewModel?.triggerUnsavedAutoSave(
-                                        editorState = uiState.editorState.copy(testScript = newScript),
-                                        onLinkedIdAssigned = { id, title -> viewModel?.updateLinkedUnsavedId(id, title) }
-                                    )
-                                }
-                            },
                             activeSubTab = activeSubTabEnum,
-                            onSubTabSelected = { viewModel?.updateActiveSubTab(it.name) },
                             activeScriptPhase = uiState.editorState.activeScriptPhase,
-                            onScriptPhaseSelected = { viewModel?.updateActiveScriptPhase(it.name) },
                             scriptLanguage = try {
                                 com.devuloopers.knet.engine.script.api.ScriptLanguage.valueOf(uiState.editorState.scriptLanguage.uppercase())
                             } catch (_: Exception) {
                                 com.devuloopers.knet.engine.script.api.ScriptLanguage.JAVASCRIPT
                             },
-                            onScriptLanguageChanged = { viewModel?.updateScriptLanguage(it.name) }
+                            actions = KNetRequestEditorActions(
+                                onBodyStateChanged = { newBodyState ->
+                                    viewModel?.updateBodyState(newBodyState)
+                                },
+                                onBodyPayloadChanged = { newBody ->
+                                    viewModel?.updateBodyPayload(newBody)
+                                    when (val context = uiState.sessionContext) {
+                                        is SessionContext.SavedRequest -> collectionsViewModel?.triggerSavedRequestAutoSave(
+                                            requestId = context.requestId, collectionId = context.collectionId, folderId = context.folderId,
+                                            editorState = uiState.editorState.copy(bodyPayload = newBody)
+                                        )
+                                        else -> collectionsViewModel?.triggerUnsavedAutoSave(
+                                            editorState = uiState.editorState.copy(bodyPayload = newBody),
+                                            onLinkedIdAssigned = { id, title -> viewModel?.updateLinkedUnsavedId(id, title) }
+                                        )
+                                    }
+                                },
+                                onQueryParamsChanged = { newParams ->
+                                    viewModel?.updateQueryParams(newParams)
+                                    when (val context = uiState.sessionContext) {
+                                        is SessionContext.SavedRequest -> collectionsViewModel?.triggerSavedRequestAutoSave(
+                                            requestId = context.requestId, collectionId = context.collectionId, folderId = context.folderId,
+                                            editorState = uiState.editorState.copy(queryParams = newParams)
+                                        )
+                                        else -> collectionsViewModel?.triggerUnsavedAutoSave(
+                                            editorState = uiState.editorState.copy(queryParams = newParams),
+                                            onLinkedIdAssigned = { id, title -> viewModel?.updateLinkedUnsavedId(id, title) }
+                                        )
+                                    }
+                                },
+                                onHeadersChanged = { newHeaders ->
+                                    viewModel?.updateHeaders(newHeaders)
+                                    when (val context = uiState.sessionContext) {
+                                        is SessionContext.SavedRequest -> collectionsViewModel?.triggerSavedRequestAutoSave(
+                                            requestId = context.requestId, collectionId = context.collectionId, folderId = context.folderId,
+                                            editorState = uiState.editorState.copy(headers = newHeaders)
+                                        )
+                                        else -> collectionsViewModel?.triggerUnsavedAutoSave(
+                                            editorState = uiState.editorState.copy(headers = newHeaders),
+                                            onLinkedIdAssigned = { id, title -> viewModel?.updateLinkedUnsavedId(id, title) }
+                                        )
+                                    }
+                                },
+                                onCookiesChanged = { viewModel?.updateCookies(it) },
+                                onAuthStateChanged = { newAuth ->
+                                    viewModel?.updateAuthState(newAuth)
+                                    when (val context = uiState.sessionContext) {
+                                        is SessionContext.SavedRequest -> collectionsViewModel?.triggerSavedRequestAutoSave(
+                                            requestId = context.requestId, collectionId = context.collectionId, folderId = context.folderId,
+                                            editorState = uiState.editorState.copy(authState = newAuth)
+                                        )
+                                        else -> collectionsViewModel?.triggerUnsavedAutoSave(
+                                            editorState = uiState.editorState.copy(authState = newAuth),
+                                            onLinkedIdAssigned = { id, title -> viewModel?.updateLinkedUnsavedId(id, title) }
+                                        )
+                                    }
+                                },
+                                onPreRequestScriptChanged = { newScript ->
+                                    viewModel?.updatePreRequestScript(newScript)
+                                    when (val context = uiState.sessionContext) {
+                                        is SessionContext.SavedRequest -> collectionsViewModel?.triggerSavedRequestAutoSave(
+                                            requestId = context.requestId, collectionId = context.collectionId, folderId = context.folderId,
+                                            editorState = uiState.editorState.copy(preRequestScript = newScript)
+                                        )
+                                        else -> collectionsViewModel?.triggerUnsavedAutoSave(
+                                            editorState = uiState.editorState.copy(preRequestScript = newScript),
+                                            onLinkedIdAssigned = { id, title -> viewModel?.updateLinkedUnsavedId(id, title) }
+                                        )
+                                    }
+                                },
+                                onTestScriptChanged = { newScript ->
+                                    viewModel?.updateTestScript(newScript)
+                                    when (val context = uiState.sessionContext) {
+                                        is SessionContext.SavedRequest -> collectionsViewModel?.triggerSavedRequestAutoSave(
+                                            requestId = context.requestId, collectionId = context.collectionId, folderId = context.folderId,
+                                            editorState = uiState.editorState.copy(testScript = newScript)
+                                        )
+                                        else -> collectionsViewModel?.triggerUnsavedAutoSave(
+                                            editorState = uiState.editorState.copy(testScript = newScript),
+                                            onLinkedIdAssigned = { id, title -> viewModel?.updateLinkedUnsavedId(id, title) }
+                                        )
+                                    }
+                                },
+                                onSubTabSelected = { viewModel?.updateActiveSubTab(it.name) },
+                                onScriptPhaseSelected = { viewModel?.updateActiveScriptPhase(it.name) },
+                                onScriptLanguageChanged = { viewModel?.updateScriptLanguage(it.name) }
+                            )
                         )
                     }
                 },

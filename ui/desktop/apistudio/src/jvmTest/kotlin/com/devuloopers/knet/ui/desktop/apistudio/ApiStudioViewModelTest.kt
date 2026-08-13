@@ -268,7 +268,7 @@ class ApiStudioViewModelTest {
         assertEquals("session_id" to "sess_999", state.cookies[0])
         assertEquals("// pre-request", state.preRequestScript)
         assertEquals("// test assertion", state.testScript)
-        assertEquals(com.devuloopers.knet.ui.desktop.apistudio.editor.RequestSubTab.HEADERS, state.activeSubTab)
+        assertEquals(com.devuloopers.knet.ui.desktop.apistudio.model.RequestSubTab.HEADERS, state.activeSubTab)
     }
 
     @Test

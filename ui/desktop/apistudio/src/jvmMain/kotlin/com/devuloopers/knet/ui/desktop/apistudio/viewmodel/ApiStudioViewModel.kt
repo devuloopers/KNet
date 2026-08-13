@@ -14,7 +14,6 @@ import com.devuloopers.knet.domain.util.UrlQueryStringParser
 import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
 import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
 import com.devuloopers.knet.domain.workspace.usecase.SaveWorkspaceLayoutUseCase
-import com.devuloopers.knet.ui.desktop.apistudio.editor.RequestSubTab
 import com.devuloopers.knet.ui.desktop.apistudio.model.*
 import com.devuloopers.knet.ui.desktop.apistudio.response.ResponseSubTab
 import com.devuloopers.knet.ui.desktop.apistudio.usecase.ExecuteScriptedApiRequestUseCase
@@ -154,7 +153,25 @@ class ApiStudioViewModel(
      * Updates request body payload string in UDF state.
      */
     fun updateBodyPayload(bodyPayload: String) {
-        _uiState.update { it.copy(editorState = it.editorState.copy(bodyPayload = bodyPayload)) }
+        _uiState.update {
+            val updatedBodyState = it.editorState.bodyState.copy(payloadText = bodyPayload)
+            it.copy(editorState = it.editorState.copy(bodyPayload = bodyPayload, bodyState = updatedBodyState))
+        }
+    }
+
+    /**
+     * Updates strongly-typed body state configuration in UDF state.
+     */
+    fun updateBodyState(bodyState: BodyState) {
+        _uiState.update {
+            it.copy(
+                editorState = it.editorState.copy(
+                    bodyState = bodyState,
+                    bodyPayload = bodyState.payloadText,
+                    bodyType = bodyState.mode.label
+                )
+            )
+        }
     }
 
     /**

@@ -1,7 +1,8 @@
 package com.devuloopers.knet.ui.desktop.apistudio.model
 
-import com.devuloopers.knet.ui.desktop.apistudio.editor.RequestSubTab
 import com.devuloopers.knet.ui.desktop.apistudio.response.ResponseSubTab
+
+public typealias RequestSubTab = com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
 
 /**
  * Data DTO representing current request editor fields.
@@ -42,6 +43,7 @@ public data class RequestEditorState(
     val cookies: List<Pair<String, String>> = emptyList(),
 
     val authState: AuthState = AuthState(),
+    val bodyState: BodyState = BodyState(),
     val authType: String = "No Auth",
     val authToken: String = "",
     val bodyType: String = "None",
