@@ -215,7 +215,13 @@ private fun TableRowItem(
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
 
-    val methodColor = when (item.method.uppercase()) {
+    val displayMethod = when (item.interceptionMetadata) {
+        is com.devuloopers.knet.domain.protocol.model.InterceptionMetadata.GraphQL -> "GQL"
+        else -> item.method
+    }
+
+    val methodColor = when (displayMethod.uppercase()) {
+        "GQL" -> androidx.compose.ui.graphics.Color(0xFFCBA6F7)
         "GET" -> themeColors.semantic.success
         "POST" -> themeColors.semantic.info
         "OPTIONS" -> themeColors.semantic.warning
@@ -240,26 +246,43 @@ private fun TableRowItem(
         ?: item.responseHeaders.entries.firstOrNull { it.key.equals("Content-Type", ignoreCase = true) }?.value
         ?: item.requestHeaders.entries.firstOrNull { it.key.equals("Content-Type", ignoreCase = true) }?.value
 
-    val inferredType = when (val category = MediaTypeInspector.inspectCategory(contentTypeHeader)) {
-        BinaryCategory.OHTTP -> "OHTTP"
-        BinaryCategory.PROTOBUF -> "Proto"
-        BinaryCategory.CBOR -> "CBOR"
-        BinaryCategory.MSGPACK -> "MsgPack"
-        BinaryCategory.WASM -> "WASM"
-        BinaryCategory.ARCHIVE -> "Zip"
-        BinaryCategory.IMAGE -> "IMG"
-        BinaryCategory.AUDIO -> "Audio"
-        BinaryCategory.VIDEO -> "Video"
-        BinaryCategory.FONT -> "Font"
-        else -> when {
-            contentTypeHeader?.contains("json", ignoreCase = true) == true -> "JSON"
-            contentTypeHeader?.contains("html", ignoreCase = true) == true -> "HTML"
-            contentTypeHeader?.contains("xml", ignoreCase = true) == true -> "XML"
-            contentTypeHeader?.contains("css", ignoreCase = true) == true -> "CSS"
-            contentTypeHeader?.contains("javascript", ignoreCase = true) == true || contentTypeHeader?.contains("js", ignoreCase = true) == true -> "JS"
-            item.method == "WS" || item.protocol == "WS" -> "WS"
-            else -> "Other"
+    val inferredType = when (val metadata = item.interceptionMetadata) {
+        is com.devuloopers.knet.domain.protocol.model.InterceptionMetadata.GraphQL -> "GraphQL"
+        is com.devuloopers.knet.domain.protocol.model.InterceptionMetadata.Grpc -> "gRPC"
+        is com.devuloopers.knet.domain.protocol.model.InterceptionMetadata.Protobuf -> "Proto"
+        else -> when (val category = MediaTypeInspector.inspectCategory(contentTypeHeader)) {
+            BinaryCategory.OHTTP -> "OHTTP"
+            BinaryCategory.PROTOBUF -> "Proto"
+            BinaryCategory.CBOR -> "CBOR"
+            BinaryCategory.MSGPACK -> "MsgPack"
+            BinaryCategory.WASM -> "WASM"
+            BinaryCategory.ARCHIVE -> "Zip"
+            BinaryCategory.IMAGE -> "IMG"
+            BinaryCategory.AUDIO -> "Audio"
+            BinaryCategory.VIDEO -> "Video"
+            BinaryCategory.FONT -> "Font"
+            else -> when {
+                contentTypeHeader?.contains("json", ignoreCase = true) == true -> "JSON"
+                contentTypeHeader?.contains("html", ignoreCase = true) == true -> "HTML"
+                contentTypeHeader?.contains("xml", ignoreCase = true) == true -> "XML"
+                contentTypeHeader?.contains("css", ignoreCase = true) == true -> "CSS"
+                contentTypeHeader?.contains("javascript", ignoreCase = true) == true || contentTypeHeader?.contains("js", ignoreCase = true) == true -> "JS"
+                item.method == "WS" || item.protocol == "WS" -> "WS"
+                else -> "Other"
+            }
         }
+    }
+
+    val displayPath = when (val metadata = item.interceptionMetadata) {
+        is com.devuloopers.knet.domain.protocol.model.InterceptionMetadata.GraphQL -> {
+            val opName = metadata.operationName
+            val opType = metadata.operationType
+            when {
+                !opName.isNullOrBlank() -> "${item.path} • $opName ($opType)"
+                else -> "${item.path} ($opType)"
+            }
+        }
+        else -> item.path
     }
 
     KNetRow(
@@ -293,7 +316,7 @@ private fun TableRowItem(
         // Method (Mandatory)
         Box(modifier = Modifier.width(76.dp), contentAlignment = Alignment.CenterStart) {
             Text(
-                text = item.method,
+                text = displayMethod,
                 style = typography.codeSmall.copy(color = methodColor, fontWeight = FontWeight.Bold)
             )
         }
@@ -311,7 +334,7 @@ private fun TableRowItem(
         // Path (Mandatory)
         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
             Text(
-                text = item.path,
+                text = displayPath,
                 style = typography.codeSmall.copy(color = themeColors.textSecondary),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis

@@ -282,13 +282,16 @@ public fun ApiStudioScreen(
                                 },
                                 onBodyPayloadChanged = { newBody ->
                                     viewModel?.updateBodyPayload(newBody)
+                                    val updatedEditorState = uiState.editorState.copy(
+                                        bodyState = uiState.editorState.bodyState.copy(payloadText = newBody)
+                                    )
                                     when (val context = uiState.sessionContext) {
                                         is SessionContext.SavedRequest -> collectionsViewModel?.triggerSavedRequestAutoSave(
                                             requestId = context.requestId, collectionId = context.collectionId, folderId = context.folderId,
-                                            editorState = uiState.editorState.copy(bodyPayload = newBody)
+                                            editorState = updatedEditorState
                                         )
                                         else -> collectionsViewModel?.triggerUnsavedAutoSave(
-                                            editorState = uiState.editorState.copy(bodyPayload = newBody),
+                                            editorState = updatedEditorState,
                                             onLinkedIdAssigned = { id, title -> viewModel?.updateLinkedUnsavedId(id, title) }
                                         )
                                     }

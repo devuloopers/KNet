@@ -4,8 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCase
 import com.devuloopers.knet.domain.clientNetwork.model.MimeType
+import com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType
 import com.devuloopers.knet.domain.network.mapper.NetworkSpecMappers.sanitizeTransportHeaders
 import com.devuloopers.knet.domain.network.mapper.NetworkSpecMappers.toEditorBodyMode
+import com.devuloopers.knet.ui.desktop.httppanel.model.BodyMode
+import com.devuloopers.knet.ui.desktop.httppanel.model.BodyState
 import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
 import kotlin.uuid.Uuid
 import com.devuloopers.knet.domain.proxy.model.ProxyEngineState
@@ -155,7 +158,7 @@ class ApiStudioViewModel(
     fun updateBodyPayload(bodyPayload: String) {
         _uiState.update {
             val updatedBodyState = it.editorState.bodyState.copy(payloadText = bodyPayload)
-            it.copy(editorState = it.editorState.copy(bodyPayload = bodyPayload, bodyState = updatedBodyState))
+            it.copy(editorState = it.editorState.copy(bodyState = updatedBodyState))
         }
     }
 
@@ -164,13 +167,7 @@ class ApiStudioViewModel(
      */
     fun updateBodyState(bodyState: BodyState) {
         _uiState.update {
-            it.copy(
-                editorState = it.editorState.copy(
-                    bodyState = bodyState,
-                    bodyPayload = bodyState.payloadText,
-                    bodyType = bodyState.mode.label
-                )
-            )
+            it.copy(editorState = it.editorState.copy(bodyState = bodyState))
         }
     }
 
@@ -178,7 +175,11 @@ class ApiStudioViewModel(
      * Updates request body mode representation string in UDF state.
      */
     fun updateBodyType(bodyType: String) {
-        _uiState.update { it.copy(editorState = it.editorState.copy(bodyType = bodyType)) }
+        val mode = bodyType.toBodyMode()
+        _uiState.update {
+            val updatedBodyState = it.editorState.bodyState.copy(mode = mode)
+            it.copy(editorState = it.editorState.copy(bodyState = updatedBodyState))
+        }
     }
 
     /**
@@ -318,8 +319,6 @@ class ApiStudioViewModel(
                         queryParams = emptyList(),
                         headers = RequestEditorDefaults.DEFAULT_HEADERS,
                         cookies = emptyList(),
-                        bodyType = "None",
-                        bodyPayload = "",
                         preRequestScript = "",
                         testScript = "",
                         activeSubTab = state.editorState.activeSubTab,
@@ -375,13 +374,16 @@ class ApiStudioViewModel(
         val mappedAuthState = normalizedSpec.auth.toAuthState()
 
         _uiState.update { state ->
+            val resolvedBodyMode = normalizedSpec.bodyType.toBodyMode()
             val importedEditorState = RequestEditorState(
                 method = normalizedSpec.methodString,
                 url = normalizedSpec.url,
                 headers = normalizedSpec.headers.sanitizeTransportHeaders(),
                 queryParams = normalizedSpec.queryParams,
-                bodyPayload = normalizedSpec.bodyPayload,
-                bodyType = normalizedSpec.bodyType.toEditorBodyMode(),
+                bodyState = BodyState(
+                    mode = resolvedBodyMode,
+                    payloadText = normalizedSpec.bodyPayload
+                ),
                 cookies = normalizedSpec.cookies,
                 authState = mappedAuthState,
                 authType = mappedAuthState.authType.label,
@@ -401,6 +403,30 @@ class ApiStudioViewModel(
         }
         saveSessionContextToPreferences(SessionContext.UnsavedDraft(sessionUuid))
         return sessionUuid
+    }
+
+    /**
+     * Maps a domain [RequestBodyType] to the UI [BodyMode] understood by the body editor panel.
+     *
+     * Used during request import so that [BodyState.payloadText] and [BodyState.mode] are both
+     * populated in sync with [RequestEditorState.bodyPayload].
+     */
+    private fun RequestBodyType.toBodyMode(): BodyMode = when (this) {
+        RequestBodyType.JSON -> BodyMode.JSON
+        RequestBodyType.GRAPHQL -> BodyMode.GRAPHQL
+        RequestBodyType.FORM_DATA, RequestBodyType.MULTIPART -> BodyMode.FORM_DATA
+        RequestBodyType.X_WWW_FORM_URLENCODED -> BodyMode.X_WWW_FORM_URLENCODED
+        RequestBodyType.XML, RequestBodyType.RAW_TEXT -> BodyMode.RAW
+        RequestBodyType.NONE -> BodyMode.NONE
+    }
+
+    private fun String.toBodyMode(): BodyMode = when (this.uppercase().trim()) {
+        "JSON" -> BodyMode.JSON
+        "GRAPHQL" -> BodyMode.GRAPHQL
+        "FORM_DATA", "FORM-DATA" -> BodyMode.FORM_DATA
+        "X_WWW_FORM_URLENCODED", "URLENCODED" -> BodyMode.X_WWW_FORM_URLENCODED
+        "RAW", "RAW_TEXT", "TEXT", "XML" -> BodyMode.RAW
+        else -> BodyMode.NONE
     }
 
     /**
@@ -442,8 +468,6 @@ class ApiStudioViewModel(
                     queryParams = emptyList(),
                     headers = RequestEditorDefaults.DEFAULT_HEADERS,
                     cookies = emptyList(),
-                    bodyType = "None",
-                    bodyPayload = "",
                     preRequestScript = "",
                     testScript = "",
                     activeSubTab = state.editorState.activeSubTab,

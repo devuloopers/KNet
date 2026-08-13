@@ -86,43 +86,7 @@ fun EditorHeaderToolbar(
                     )
                 }
 
-                if (isTruncated) {
-                    Row(
-                        modifier = Modifier
-                            .background(Color(0x1A3FB950), RoundedCornerShape(4.dp))
-                            .border(1.dp, Color(0x4D3FB950), RoundedCornerShape(4.dp))
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(
-                            text = "⚡ Showing $displayedLines of $totalLines lines",
-                            color = Color(0xFF3FB950),
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Bold,
-                            fontFamily = FontFamily.Monospace,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Clip
-                        )
-                        if (onCopyAll != null) {
-                            Text(
-                                text = "|  [ Copy Full Response ]",
-                                color = EditorColors.ActiveBlue,
-                                fontSize = 9.sp,
-                                fontWeight = FontWeight.Bold,
-                                fontFamily = FontFamily.Monospace,
-                                maxLines = 1,
-                                softWrap = false,
-                                overflow = TextOverflow.Clip,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .clickable(onClick = onCopyAll)
-                                    .handCursor()
-                            )
-                        }
-                    }
-                } else if (isHighPerformanceMode) {
+                if (isHighPerformanceMode) {
                     Row(
                         modifier = Modifier
                             .background(Color(0x1A3FB950), RoundedCornerShape(4.dp))

@@ -25,6 +25,7 @@ import com.devuloopers.knet.core.logger.LogTags
 import com.devuloopers.knet.engine.proxy.network.LocalIpResolver
 
 import kotlinx.coroutines.Job
+import com.devuloopers.knet.domain.protocol.inspector.registry.ProtocolInspectorRegistry
 
 /**
  * Desktop implementation of [ProxyEngineRepository] managing Netty lifecycle and 2-phase request/response correlation.
@@ -33,7 +34,8 @@ import kotlinx.coroutines.Job
 public class ProxyEngineRepositoryImpl(
     private val proxyRuntimeRepository: ProxyRuntimeRepository,
     private val database: KNetDatabase,
-    private val localIpResolver: LocalIpResolver? = null
+    private val localIpResolver: LocalIpResolver? = null,
+    private val protocolInspectorRegistry: ProtocolInspectorRegistry = ProtocolInspectorRegistry()
 ) : ProxyEngineRepository, ProxyTrafficListener {
 
     private val scope = CoroutineScope(Dispatchers.IO)
@@ -86,6 +88,13 @@ public class ProxyEngineRepositoryImpl(
         pendingRequests[request.id] = request
         val reqBodyPath = payloadStore.savePayload(request.id, "req", request.body)
 
+        val interceptionMetadata = protocolInspectorRegistry.inspect(
+            method = request.method,
+            url = request.url,
+            headers = request.headers.toMap(),
+            bodyBytes = request.body ?: ByteArray(0)
+        )
+
         val pendingTx = HttpTransaction(
             id = request.id,
             request = request,
@@ -95,7 +104,8 @@ public class ProxyEngineRepositoryImpl(
             requestBodySize = request.body?.size?.toLong() ?: 0L,
             responseBodySize = 0L,
             durationMs = 0L,
-            timestamp = request.timestamp
+            timestamp = request.timestamp,
+            interceptionMetadata = interceptionMetadata
         )
         scope.launch {
             try {
@@ -136,6 +146,13 @@ public class ProxyEngineRepositoryImpl(
         val reqBodyPath = payloadStore.savePayload(transactionId, "req", reqToUse.body)
         val resBodyPath = payloadStore.savePayload(transactionId, "res", response.body)
 
+        val interceptionMetadata = protocolInspectorRegistry.inspect(
+            method = reqToUse.method,
+            url = reqToUse.url,
+            headers = reqToUse.headers.toMap(),
+            bodyBytes = reqToUse.body ?: ByteArray(0)
+        )
+
         val completedTx = HttpTransaction(
             id = transactionId,
             request = reqToUse,
@@ -146,7 +163,8 @@ public class ProxyEngineRepositoryImpl(
             responseBodySize = response.body?.size?.toLong() ?: 0L,
             durationMs = durationMs,
             timestamp = reqToUse.timestamp,
-            timings = timings
+            timings = timings,
+            interceptionMetadata = interceptionMetadata
         )
 
         scope.launch {
@@ -169,11 +187,20 @@ public class ProxyEngineRepositoryImpl(
             try {
                 val reqBodyPath = payloadStore.savePayload(transaction.id, "req", transaction.request.body)
                 val resBodyPath = payloadStore.savePayload(transaction.id, "res", transaction.response?.body)
+
+                val interceptionMetadata = protocolInspectorRegistry.inspect(
+                    method = transaction.request.method,
+                    url = transaction.request.url,
+                    headers = transaction.request.headers.toMap(),
+                    bodyBytes = transaction.request.body ?: ByteArray(0)
+                )
+
                 val txToSave = transaction.copy(
                     requestBodyPath = reqBodyPath,
                     responseBodyPath = resBodyPath,
                     requestBodySize = transaction.request.body?.size?.toLong() ?: transaction.requestBodySize,
-                    responseBodySize = transaction.response?.body?.size?.toLong() ?: transaction.responseBodySize
+                    responseBodySize = transaction.response?.body?.size?.toLong() ?: transaction.responseBodySize,
+                    interceptionMetadata = interceptionMetadata
                 )
                 val entity = TransactionMapper.mapDomainToEntity(txToSave)
                 database.httpTransactionDao().insert(entity)

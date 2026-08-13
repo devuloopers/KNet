@@ -1,5 +1,7 @@
 package com.devuloopers.knet.domain.clientNetwork.model
 
+import com.devuloopers.knet.domain.protocol.model.InterceptionMetadata
+
 /**
  * Data transfer object encapsulating a complete HTTP request/response transaction.
  *
@@ -13,6 +15,7 @@ package com.devuloopers.knet.domain.clientNetwork.model
  * @property durationMs Execution latency of the transaction.
  * @property timestamp Epoch millisecond timestamp of request initiation.
  * @property timings Detailed socket connection phase metrics.
+ * @property interceptionMetadata Protocol classification metadata evaluated at capture time.
  */
 data class HttpTransaction(
     val id: String,
@@ -24,5 +27,6 @@ data class HttpTransaction(
     val responseBodySize: Long = 0L,
     val durationMs: Long,
     val timestamp: Long,
-    val timings: HttpTimings = HttpTimings()
+    val timings: HttpTimings = HttpTimings(),
+    val interceptionMetadata: InterceptionMetadata = InterceptionMetadata.GenericHttp
 )

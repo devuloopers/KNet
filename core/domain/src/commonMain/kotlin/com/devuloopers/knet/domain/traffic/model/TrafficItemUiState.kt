@@ -1,6 +1,7 @@
 package com.devuloopers.knet.domain.traffic.model
 
 import com.devuloopers.knet.domain.clientNetwork.model.HttpTimings
+import com.devuloopers.knet.domain.protocol.model.InterceptionMetadata
 
 /**
  * Immutable pre-calculated display state model for a single traffic feed row.
@@ -23,6 +24,7 @@ import com.devuloopers.knet.domain.clientNetwork.model.HttpTimings
  * @property queryParams Parsed query parameters map.
  * @property requestHeaders Request headers map.
  * @property responseHeaders Response headers map.
+ * @property interceptionMetadata Protocol metadata detected during network interception.
  * @property isSelected Whether this row is currently selected by the user.
  */
 data class TrafficItemUiState(
@@ -45,5 +47,6 @@ data class TrafficItemUiState(
     val requestHeaders: Map<String, String>,
     val responseHeaders: Map<String, String>,
     val timings: HttpTimings = HttpTimings(),
+    val interceptionMetadata: InterceptionMetadata = InterceptionMetadata.GenericHttp,
     val isSelected: Boolean = false
 )

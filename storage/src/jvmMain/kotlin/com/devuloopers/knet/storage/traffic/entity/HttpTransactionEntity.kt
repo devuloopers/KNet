@@ -10,7 +10,7 @@ import androidx.room.PrimaryKey
  * computed from metadata alone without reading body files from disk.
  */
 @Entity
-public data class HttpTransactionEntity(
+data class HttpTransactionEntity(
     @PrimaryKey val id: String,
     val url: String,
     val method: String,
@@ -28,5 +28,8 @@ public data class HttpTransactionEntity(
     val timingTcpMs: Long = 0L,
     val timingTlsMs: Long = 0L,
     val timingTtfbMs: Long = 0L,
-    val timingDownloadMs: Long = 0L
+    val timingDownloadMs: Long = 0L,
+    val protocolType: String? = "GENERIC_HTTP",
+    val graphqlOperationName: String? = null,
+    val graphqlOperationType: String? = null
 )

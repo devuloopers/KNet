@@ -26,7 +26,8 @@ public object DatabaseFactory {
         builder.addMigrations(
             DatabaseMigrations.MIGRATION_1_2,
             DatabaseMigrations.MIGRATION_3_4,
-            DatabaseMigrations.MIGRATION_4_5
+            DatabaseMigrations.MIGRATION_4_5,
+            DatabaseMigrations.MIGRATION_5_6
         )
         builder.fallbackToDestructiveMigration(dropAllTables = true)
         return builder.build()

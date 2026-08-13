@@ -19,11 +19,11 @@ import com.devuloopers.knet.storage.traffic.entity.HttpTransactionEntity
         CollectionFolderEntity::class,
         SavedRequestEntity::class
     ],
-    version = 5
+    version = 6
 )
-public abstract class KNetDatabase : RoomDatabase() {
+abstract class KNetDatabase : RoomDatabase() {
 
-    public abstract fun httpTransactionDao(): HttpTransactionDao
+    abstract fun httpTransactionDao(): HttpTransactionDao
 
-    public abstract fun collectionDao(): CollectionDao
+    abstract fun collectionDao(): CollectionDao
 }

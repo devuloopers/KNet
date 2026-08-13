@@ -17,6 +17,8 @@ import com.devuloopers.knet.data.desktop.runtime.SessionRuntimeRepository
 import com.devuloopers.knet.data.desktop.workspace.repository.WidgetPreferencesRepositoryImpl
 import com.devuloopers.knet.engine.certificate.CertificateManager
 import com.devuloopers.knet.engine.certificate.CertificateManagerImpl
+import com.devuloopers.knet.domain.protocol.inspector.registry.ProtocolInspectorRegistry
+import com.devuloopers.knet.engine.protocol.inspector.graphql.GraphQLProtocolInspector
 import com.devuloopers.knet.domain.clientNetwork.model.ProxyTrafficListener
 import com.devuloopers.knet.domain.collection.repository.CollectionsRepository
 import com.devuloopers.knet.domain.collection.usecase.SaveLiveTransactionToCollectionUseCase
@@ -104,11 +106,19 @@ public object DesktopDataModule {
             val proxyEngineRepository = get<ProxyEngineRepository>() as ProxyTrafficListener
             KNetApiClient(proxyTrafficListener = proxyEngineRepository)
         }
+
         // Core HTTP executor binding (used by core.http layer)
         single<HttpExecutor> { get<KNetApiClient>() }
         // Domain HTTP executor binding (used by domain UseCases such as ExecuteClientApiRequestUseCase)
         single<DomainHttpExecutor> { get<KNetApiClient>() }
         single { LocalIpResolver() }
+        single {
+            ProtocolInspectorRegistry(
+                inspectors = listOf(
+                    GraphQLProtocolInspector()
+                )
+            )
+        }
     }
 
     public val repositories: Module = module {
@@ -117,7 +127,7 @@ public object DesktopDataModule {
             CollectionsRepositoryImpl(db.collectionDao())
         }
         single<LiveTrafficRepository> { LiveTrafficRepositoryImpl(get()) }
-        single<ProxyEngineRepository> { ProxyEngineRepositoryImpl(get(), get(), get()) }
+        single<ProxyEngineRepository> { ProxyEngineRepositoryImpl(get(), get(), get(), get()) }
         single<InspectorRepository> { InspectorRepositoryImpl(get()) }
         single<RulesRepository> { RulesRepositoryImpl() }
         single<WidgetPreferencesRepository> { WidgetPreferencesRepositoryImpl(get()) }

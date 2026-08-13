@@ -7,6 +7,8 @@ import com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction
 import com.devuloopers.knet.storage.traffic.entity.HttpTransactionEntity
 import java.io.File
 
+import com.devuloopers.knet.domain.protocol.model.InterceptionMetadata
+
 /**
  * Maps between SQLite Room transaction entities and Domain network transaction models.
  */
@@ -16,8 +18,6 @@ object TransactionMapper {
         val reqHeadersList = parseHeadersString(entity.requestHeadersJson)
         val resHeadersList = parseHeadersString(entity.responseHeadersJson ?: "")
 
-        // Body bytes are intentionally NOT read here. Payload files are loaded on-demand
-        // via LiveTrafficRepository.loadTransactionBody() when the user opens the inspector.
         val request = HttpRequest(
             id = entity.id,
             method = entity.method,
@@ -49,6 +49,15 @@ object TransactionMapper {
             downloadMs = entity.timingDownloadMs
         )
 
+        val interceptionMetadata = when (entity.protocolType) {
+            "GRAPHQL" -> InterceptionMetadata.GraphQL(
+                operationName = entity.graphqlOperationName,
+                operationType = entity.graphqlOperationType ?: "Query",
+                querySummary = ""
+            )
+            else -> InterceptionMetadata.GenericHttp
+        }
+
         return HttpTransaction(
             id = entity.id,
             request = request,
@@ -59,13 +68,21 @@ object TransactionMapper {
             responseBodySize = entity.responseBodySize,
             durationMs = entity.durationMs,
             timestamp = entity.timestamp,
-            timings = timings
+            timings = timings,
+            interceptionMetadata = interceptionMetadata
         )
     }
 
     fun mapDomainToEntity(domain: HttpTransaction): HttpTransactionEntity {
         val reqHeadersStr = domain.request.headers.joinToString(";\n") { "${it.first}: ${it.second}" }
         val resHeadersStr = domain.response?.headers?.joinToString(";\n") { "${it.first}: ${it.second}" } ?: ""
+
+        val (protocolType, opName, opType) = when (val meta = domain.interceptionMetadata) {
+            is InterceptionMetadata.GraphQL -> Triple("GRAPHQL", meta.operationName, meta.operationType)
+            is InterceptionMetadata.Grpc -> Triple("GRPC", null, null)
+            is InterceptionMetadata.Protobuf -> Triple("PROTOBUF", null, null)
+            else -> Triple("GENERIC_HTTP", null, null)
+        }
 
         return HttpTransactionEntity(
             id = domain.id,
@@ -85,7 +102,10 @@ object TransactionMapper {
             timingTcpMs = domain.timings.tcpMs,
             timingTlsMs = domain.timings.tlsMs,
             timingTtfbMs = domain.timings.ttfbMs,
-            timingDownloadMs = domain.timings.downloadMs
+            timingDownloadMs = domain.timings.downloadMs,
+            protocolType = protocolType,
+            graphqlOperationName = opName,
+            graphqlOperationType = opType
         )
     }
 

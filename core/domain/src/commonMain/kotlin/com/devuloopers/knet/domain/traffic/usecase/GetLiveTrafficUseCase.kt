@@ -8,7 +8,6 @@ import com.devuloopers.knet.domain.traffic.model.UriDetails
 import com.devuloopers.knet.domain.traffic.repository.LiveTrafficRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import java.net.URI
@@ -44,7 +43,7 @@ class GetLiveTrafficUseCase(
             if (transactions.isEmpty()) {
                 LiveTrafficUiState.Empty(filter, searchQuery)
             } else {
-                val filtered = transactions.filterIndexed { _, tx ->
+                val filtered = transactions.filter { tx ->
                     matchesFilter(tx, filter) && matchesSearch(tx, searchQuery)
                 }
 
@@ -52,8 +51,6 @@ class GetLiveTrafficUseCase(
                     LiveTrafficUiState.Empty(filter, searchQuery)
                 } else {
                     val totalCount = filtered.size
-                    // List is chronologically descending (index 0 = newest transaction).
-                    // Newest transaction gets sequentialId = totalCount (#N at top), oldest gets #1.
                     val displayedItems = filtered.mapIndexed { index, tx ->
                         val sequentialId = totalCount - index
                         mapToUiState(sequentialId, tx, selectedId)
@@ -68,7 +65,7 @@ class GetLiveTrafficUseCase(
                     )
                 }
             }
-        }.flowOn(Dispatchers.Default)
+        }.flowOn(Dispatchers.IO)
     }
 
     private fun matchesFilter(tx: HttpTransaction, filter: ProtocolFilter): Boolean {
@@ -87,7 +84,6 @@ class GetLiveTrafficUseCase(
             ProtocolFilter.WEBSOCKET -> scheme.contains("ws") ||
                     reqHeaders["upgrade"]?.contains("websocket", ignoreCase = true) == true ||
                     resHeaders["upgrade"]?.contains("websocket", ignoreCase = true) == true
-
             ProtocolFilter.HTTP_2 -> tx.request.protocol.contains("2")
             ProtocolFilter.GRPC -> reqHeaders["content-type"]?.contains("grpc", ignoreCase = true) == true ||
                     resHeaders["content-type"]?.contains("grpc", ignoreCase = true) == true ||
@@ -112,7 +108,6 @@ class GetLiveTrafficUseCase(
         val sizeText = if (tx.response == null) {
             "-"
         } else {
-            // Sizes are stored at capture time in dedicated DB columns — never computed from body bytes.
             val totalBytes = tx.requestBodySize + tx.responseBodySize
             when {
                 totalBytes >= 1024 * 1024 -> "%.2f MB".format(totalBytes / (1024.0 * 1024.0))
@@ -124,8 +119,6 @@ class GetLiveTrafficUseCase(
 
         val formattedTimestamp = formatTimestamp(tx.request.timestamp)
 
-        // Body bytes are intentionally omitted here — disk I/O is deferred to LoadTransactionBodyUseCase.
-        // The inspector panel calls that use case when the user selects this row.
         return TrafficItemUiState(
             id = sequentialId,
             transactionId = tx.id,
@@ -145,6 +138,7 @@ class GetLiveTrafficUseCase(
             requestHeaders = tx.request.headers.toMap(),
             responseHeaders = tx.response?.headers?.toMap() ?: emptyMap(),
             timings = tx.timings,
+            interceptionMetadata = tx.interceptionMetadata,
             isSelected = tx.id == selectedId
         )
     }

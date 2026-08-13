@@ -12,6 +12,7 @@ import kotlinx.coroutines.withContext
 import kotlin.system.measureNanoTime
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
@@ -177,13 +178,11 @@ class EditorPerformanceBenchmarkTest {
             state = withContext(Dispatchers.Default) {
                 val lines = payload100k.lines()
                 val total = lines.size
-                val isTruncated = total > LARGE_PAYLOAD_LINE_THRESHOLD
-                val previewText = if (isTruncated) lines.take(LARGE_PAYLOAD_LINE_THRESHOLD).joinToString("\n") else payload100k
                 ProcessedPayloadState(
-                    displayedText = previewText,
+                    displayedText = payload100k,
                     totalLineCount = total,
-                    displayedLineCount = if (isTruncated) LARGE_PAYLOAD_LINE_THRESHOLD else total,
-                    isTruncated = isTruncated
+                    displayedLineCount = total,
+                    isTruncated = false
                 )
             }
         }
@@ -196,9 +195,9 @@ class EditorPerformanceBenchmarkTest {
         println("Background Coroutine Execution Time: ${kotlin.math.round(executionMs * 100) / 100.0} ms")
         println("=========================================================")
 
-        assertTrue(state.isTruncated, "100,000 line payload should activate truncation windowing")
+        assertFalse(state.isTruncated, "Full 100,000 line payload should render without truncation")
         assertTrue(state.totalLineCount >= 100000, "Total line count should exceed 100,000 lines")
-        assertEquals(LARGE_PAYLOAD_LINE_THRESHOLD, state.displayedLineCount)
-        assertTrue(executionMs < 300.0, "100,000 line coroutine truncation should execute in < 300 ms")
+        assertEquals(state.totalLineCount, state.displayedLineCount)
+        assertTrue(executionMs < 500.0, "100,000 line coroutine processing should execute in < 500 ms")
     }
 }

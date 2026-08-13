@@ -11,8 +11,8 @@ import com.devuloopers.knet.ui.desktop.codeeditor.model.PreparedDocument
  */
 object DocumentPreparationService {
 
-    /** Maximum displayed line preview threshold for zero-latency large payload rendering. */
-    const val EDITOR_PREVIEW_MAX_LINES: Int = 10000
+    /** Maximum displayed line preview threshold set to Int.MAX_VALUE for full payload virtualization. */
+    const val EDITOR_PREVIEW_MAX_LINES: Int = Int.MAX_VALUE
 
     /**
      * Prepares document metadata, statistics, and fold regions off the UI thread.
@@ -30,7 +30,7 @@ object DocumentPreparationService {
         val activeText = formattedText.ifBlank { rawText }
         val previewResult = DocumentPreviewGenerator.generatePreview(
             text = activeText,
-            maxPreviewLines = EDITOR_PREVIEW_MAX_LINES
+            maxPreviewLines = Int.MAX_VALUE
         )
 
         val foldRegions = FoldManager.calculateFolds(
@@ -40,9 +40,9 @@ object DocumentPreparationService {
 
         val statistics = DocumentStatistics(
             totalLines = previewResult.totalLines,
-            previewLineLimit = EDITOR_PREVIEW_MAX_LINES,
+            previewLineLimit = Int.MAX_VALUE,
             totalCharacters = activeText.length,
-            isTruncated = previewResult.isTruncated,
+            isTruncated = false,
             language = language
         )
 

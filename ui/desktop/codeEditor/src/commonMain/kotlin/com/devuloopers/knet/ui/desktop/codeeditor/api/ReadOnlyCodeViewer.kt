@@ -44,7 +44,7 @@ internal data class ProcessedPayloadState(
     val isTruncated: Boolean
 )
 
-internal const val LARGE_PAYLOAD_LINE_THRESHOLD = 5000
+internal const val LARGE_PAYLOAD_LINE_THRESHOLD = Int.MAX_VALUE
 
 
 /**
@@ -80,8 +80,8 @@ internal fun ReadOnlyCodeViewer(
             ProcessedPayloadState(
                 displayedText = document.previewText,
                 totalLineCount = document.statistics.totalLines,
-                displayedLineCount = minOf(document.statistics.totalLines, document.statistics.previewLineLimit),
-                isTruncated = document.statistics.isTruncated
+                displayedLineCount = document.statistics.totalLines,
+                isTruncated = false
             )
         } else {
             withContext(Dispatchers.Default) {
@@ -91,17 +91,11 @@ internal fun ReadOnlyCodeViewer(
                     code.lines().filter { it.contains(searchQuery, ignoreCase = true) }
                 }
                 val total = lines.size
-                val isTruncated = total > LARGE_PAYLOAD_LINE_THRESHOLD
-                val previewText = if (isTruncated) {
-                    lines.take(LARGE_PAYLOAD_LINE_THRESHOLD).joinToString("\n")
-                } else {
-                    lines.joinToString("\n")
-                }
                 ProcessedPayloadState(
-                    displayedText = previewText,
+                    displayedText = lines.joinToString("\n"),
                     totalLineCount = total,
-                    displayedLineCount = if (isTruncated) LARGE_PAYLOAD_LINE_THRESHOLD else total,
-                    isTruncated = isTruncated
+                    displayedLineCount = total,
+                    isTruncated = false
                 )
             }
         }
@@ -111,8 +105,8 @@ internal fun ReadOnlyCodeViewer(
         ProcessedPayloadState(
             displayedText = document.previewText,
             totalLineCount = document.statistics.totalLines,
-            displayedLineCount = minOf(document.statistics.totalLines, document.statistics.previewLineLimit),
-            isTruncated = document.statistics.isTruncated
+            displayedLineCount = document.statistics.totalLines,
+            isTruncated = false
         )
     } else {
         ProcessedPayloadState(
