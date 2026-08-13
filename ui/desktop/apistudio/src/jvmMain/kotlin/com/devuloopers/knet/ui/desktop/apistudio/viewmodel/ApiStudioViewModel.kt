@@ -6,11 +6,7 @@ import com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCas
 import com.devuloopers.knet.domain.clientNetwork.model.MimeType
 import com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType
 import com.devuloopers.knet.domain.network.mapper.NetworkSpecMappers.sanitizeTransportHeaders
-import com.devuloopers.knet.domain.network.mapper.NetworkSpecMappers.toEditorBodyMode
-import com.devuloopers.knet.ui.desktop.httppanel.model.BodyMode
-import com.devuloopers.knet.ui.desktop.httppanel.model.BodyState
 import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
-import kotlin.uuid.Uuid
 import com.devuloopers.knet.domain.proxy.model.ProxyEngineState
 import com.devuloopers.knet.domain.proxy.usecase.ObserveProxyEngineStateUseCase
 import com.devuloopers.knet.domain.util.UrlQueryStringParser
@@ -20,12 +16,17 @@ import com.devuloopers.knet.domain.workspace.usecase.SaveWorkspaceLayoutUseCase
 import com.devuloopers.knet.ui.desktop.apistudio.model.*
 import com.devuloopers.knet.ui.desktop.apistudio.response.ResponseSubTab
 import com.devuloopers.knet.ui.desktop.apistudio.usecase.ExecuteScriptedApiRequestUseCase
+import com.devuloopers.knet.ui.desktop.httppanel.mapper.GraphQlPayloadMapper
+import com.devuloopers.knet.ui.desktop.httppanel.model.BodyMode
+import com.devuloopers.knet.ui.desktop.httppanel.model.BodyState
+import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlState
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.uuid.Uuid
 
 /**
  * Clean ViewModel managing UDF state for HTTP API request authoring, execution, and response inspection.
@@ -204,8 +205,6 @@ class ApiStudioViewModel(
         }
     }
 
-    fun updateAuth(authState: AuthState) = updateAuthState(authState)
-
     fun updateAuth(authType: String, token: String) {
         val typeEnum = AuthType.entries.find { it.label.equals(authType, ignoreCase = true) } ?: AuthType.BEARER_TOKEN
         updateAuthState(AuthState(authType = typeEnum, bearerToken = token))
@@ -300,10 +299,6 @@ class ApiStudioViewModel(
         updateActiveResponseSubTab(parsed)
     }
 
-    fun selectTab(tabId: String) {
-        _uiState.update { it.copy(activeTabId = tabId) }
-    }
-
     fun closeTab(tabId: String) {
         _uiState.update { state ->
             val remainingTabs = state.tabs.filterNot { it.id == tabId }
@@ -341,22 +336,6 @@ class ApiStudioViewModel(
         }
     }
 
-    fun openNewTab() {
-        val newId = "tab_${System.currentTimeMillis()}"
-        val newTab = RequestTab(newId, "New Request")
-        _uiState.update { state ->
-            state.copy(
-                tabs = state.tabs + newTab,
-                activeTabId = newId,
-                editorState = RequestEditorState(
-                    activeSubTab = state.editorState.activeSubTab,
-                    activeScriptPhase = state.editorState.activeScriptPhase,
-                    activeResponseSubTab = state.editorState.activeResponseSubTab
-                )
-            )
-        }
-    }
-
     /**
      * Imports a captured strongly-typed [com.devuloopers.knet.domain.network.model.NetworkRequestSpec] into a new unsaved session draft tab in API Studio.
      *
@@ -375,6 +354,11 @@ class ApiStudioViewModel(
 
         _uiState.update { state ->
             val resolvedBodyMode = normalizedSpec.bodyType.toBodyMode()
+            val parsedGraphQlState = if (resolvedBodyMode == BodyMode.GRAPHQL) {
+                GraphQlPayloadMapper().parsePayload(normalizedSpec.bodyPayload)
+            } else {
+                GraphQlState()
+            }
             val importedEditorState = RequestEditorState(
                 method = normalizedSpec.methodString,
                 url = normalizedSpec.url,
@@ -382,7 +366,8 @@ class ApiStudioViewModel(
                 queryParams = normalizedSpec.queryParams,
                 bodyState = BodyState(
                     mode = resolvedBodyMode,
-                    payloadText = normalizedSpec.bodyPayload
+                    payloadText = normalizedSpec.bodyPayload,
+                    graphQlState = parsedGraphQlState
                 ),
                 cookies = normalizedSpec.cookies,
                 authState = mappedAuthState,

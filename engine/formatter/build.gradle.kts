@@ -13,6 +13,7 @@ dependencies {
     implementation(libs.jackson.dataformat.msgpack)
     implementation(libs.protobuf.java)
     implementation(libs.protobuf.java.util)
+    implementation(libs.graphql.java)
 
     testImplementation(kotlin("test"))
 }

@@ -32,6 +32,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.BodyState
 import com.devuloopers.knet.ui.desktop.httppanel.model.RawSubFormat
 import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
 import com.devuloopers.knet.ui.desktop.codeeditor.api.KNetCodeEditor
+import com.devuloopers.knet.ui.desktop.httppanel.mapper.GraphQlPayloadMapper
 
 /**
  * Multi-mode Body Payload Editor supporting none, JSON, form-data, x-www-form-urlencoded, raw, and GraphQL.
@@ -88,7 +89,14 @@ public fun BodyEditorView(
                             color = if (isSelected) themeColors.accent else themeColors.border,
                             shape = RoundedCornerShape(4.dp)
                         )
-                        .clickable { onStateChange(state.copy(mode = mode)) }
+                        .clickable {
+                            if (mode == BodyMode.GRAPHQL) {
+                                val parsedGraphQlState = GraphQlPayloadMapper().parsePayload(state.payloadText)
+                                onStateChange(state.copy(mode = mode, graphQlState = parsedGraphQlState))
+                            } else {
+                                onStateChange(state.copy(mode = mode))
+                            }
+                        }
                         .handCursor()
                         .padding(horizontal = 10.dp, vertical = 5.dp)
                 ) {
@@ -242,38 +250,21 @@ public fun BodyEditorView(
             }
 
             BodyMode.GRAPHQL -> {
-                // GraphQL query/mutation editor with info banner
-                Column(
-                    modifier = Modifier.fillMaxSize(),
-                    verticalArrangement = Arrangement.spacedBy(spacing.sm)
-                ) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Icon(
-                            imageVector = KNetIcons.Info,
-                            contentDescription = "Info",
-                            modifier = Modifier.size(14.dp),
-                            tint = themeColors.accent.copy(alpha = 0.7f)
+                // Structured GraphQL Editor (Query, Variables, Extensions, Operation Name)
+                val graphQlMapper = androidx.compose.runtime.remember { GraphQlPayloadMapper() }
+                GraphQlBodyEditor(
+                    state = state.graphQlState,
+                    onStateChange = { updatedGraphQlState ->
+                        val serializedPayload = graphQlMapper.serializePayload(updatedGraphQlState)
+                        onStateChange(
+                            state.copy(
+                                graphQlState = updatedGraphQlState,
+                                payloadText = serializedPayload
+                            )
                         )
-                        Text(
-                            text = "GraphQL query/mutation is sent as POST with 'Content-Type: application/json' body.",
-                            style = typography.caption.copy(color = themeColors.textMuted)
-                        )
-                    }
-                    KNetCodeEditor(
-                        code = state.payloadText,
-                        mode = EditorMode.Editable(
-                            onCodeChange = { onStateChange(state.copy(payloadText = it)) },
-                            placeholder = "# Enter GraphQL Query or Mutation...\nquery GetUser {\n  user(id: 1) {\n    name\n    email\n  }\n}"
-                        ),
-                        languageHint = "json",
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth()
-                    )
-                }
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
             }
 
             BodyMode.RAW -> {

@@ -3,26 +3,26 @@ package com.devuloopers.knet.data.desktop.di
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.devuloopers.knet.core.http.client.KNetApiClient
 import com.devuloopers.knet.core.http.execution.HttpExecutor
-import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor as DomainHttpExecutor
 import com.devuloopers.knet.data.desktop.apistudio.autocomplete.ProxyHistoryHeaderLookup
 import com.devuloopers.knet.data.desktop.apistudio.repository.CollectionsRepositoryImpl
 import com.devuloopers.knet.data.desktop.core.KNetCoreRepository
 import com.devuloopers.knet.data.desktop.inspector.repository.InspectorRepositoryImpl
-import com.devuloopers.knet.data.desktop.traffic.repository.LiveTrafficRepositoryImpl
+import com.devuloopers.knet.data.desktop.network.repository.NetworkRepositoryImpl
 import com.devuloopers.knet.data.desktop.proxy.repository.ProxyEngineRepositoryImpl
 import com.devuloopers.knet.data.desktop.rules.repository.RulesRepositoryImpl
 import com.devuloopers.knet.data.desktop.runtime.CertificateRuntimeRepository
 import com.devuloopers.knet.data.desktop.runtime.ProxyRuntimeRepository
 import com.devuloopers.knet.data.desktop.runtime.SessionRuntimeRepository
+import com.devuloopers.knet.data.desktop.traffic.repository.LiveTrafficRepositoryImpl
 import com.devuloopers.knet.data.desktop.workspace.repository.WidgetPreferencesRepositoryImpl
-import com.devuloopers.knet.engine.certificate.CertificateManager
-import com.devuloopers.knet.engine.certificate.CertificateManagerImpl
-import com.devuloopers.knet.domain.protocol.inspector.registry.ProtocolInspectorRegistry
-import com.devuloopers.knet.engine.protocol.inspector.graphql.GraphQLProtocolInspector
 import com.devuloopers.knet.domain.clientNetwork.model.ProxyTrafficListener
 import com.devuloopers.knet.domain.collection.repository.CollectionsRepository
 import com.devuloopers.knet.domain.collection.usecase.SaveLiveTransactionToCollectionUseCase
 import com.devuloopers.knet.domain.inspector.repository.InspectorRepository
+import com.devuloopers.knet.domain.network.repository.NetworkRepository
+import com.devuloopers.knet.domain.network.usecase.GetLocalIpUseCase
+import com.devuloopers.knet.domain.network.usecase.ObserveLocalIpUseCase
+import com.devuloopers.knet.domain.protocol.inspector.registry.ProtocolInspectorRegistry
 import com.devuloopers.knet.domain.proxy.repository.ProxyEngineRepository
 import com.devuloopers.knet.domain.proxy.usecase.ObserveProxyEngineStateUseCase
 import com.devuloopers.knet.domain.proxy.usecase.StartProxyEngineUseCase
@@ -32,33 +32,31 @@ import com.devuloopers.knet.domain.rules.usecase.GetRulesUseCase
 import com.devuloopers.knet.domain.rules.usecase.SaveRuleUseCase
 import com.devuloopers.knet.domain.rules.usecase.ToggleRuleUseCase
 import com.devuloopers.knet.domain.traffic.repository.LiveTrafficRepository
-import com.devuloopers.knet.domain.traffic.usecase.ClearLiveTrafficUseCase
-import com.devuloopers.knet.domain.traffic.usecase.ExportTrafficToSpecUseCase
-import com.devuloopers.knet.domain.traffic.usecase.GetLiveTrafficUseCase
-import com.devuloopers.knet.domain.traffic.usecase.LoadTransactionBodyUseCase
-import com.devuloopers.knet.domain.traffic.usecase.RecordClientTransactionUseCase
+import com.devuloopers.knet.domain.traffic.usecase.*
 import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
 import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
 import com.devuloopers.knet.domain.workspace.usecase.SaveWorkspaceLayoutUseCase
+import com.devuloopers.knet.engine.certificate.CertificateManager
+import com.devuloopers.knet.engine.certificate.CertificateManagerImpl
+import com.devuloopers.knet.engine.formatter.BodyFormatter
+import com.devuloopers.knet.engine.formatter.formatters.GraphQLBodyFormatter
+import com.devuloopers.knet.engine.protocol.inspector.graphql.GraphQLProtocolInspector
+import com.devuloopers.knet.engine.proxy.network.LocalIpResolver
 import com.devuloopers.knet.storage.database.DatabaseFactory
 import com.devuloopers.knet.storage.database.KNetDatabase
-import com.devuloopers.knet.data.desktop.network.repository.NetworkRepositoryImpl
-import com.devuloopers.knet.domain.network.repository.NetworkRepository
-import com.devuloopers.knet.domain.network.usecase.GetLocalIpUseCase
-import com.devuloopers.knet.domain.network.usecase.ObserveLocalIpUseCase
-import com.devuloopers.knet.engine.proxy.network.LocalIpResolver
+import okio.Path.Companion.toPath
 import org.koin.core.module.Module
 import org.koin.dsl.module
 import java.io.File
-import okio.Path.Companion.toPath
+import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor as DomainHttpExecutor
 
 /**
  * Desktop Data Layer Koin Dependency Injection Registry.
  * Organizes runtime, datasource, repository, and usecase modules.
  */
-public object DesktopDataModule {
+object DesktopDataModule {
 
-    public val datasource: Module = module {
+    val datasource: Module = module {
         single {
             val baseDir = File(System.getProperty("user.home"), ".knet")
             val dbFile = File(baseDir, "knet.db")
@@ -73,14 +71,14 @@ public object DesktopDataModule {
         }
     }
 
-    public val runtime: Module = module {
+    val runtime: Module = module {
         single {
             val baseDir = File(System.getProperty("user.home"), ".knet")
             CertificateRuntimeRepository(baseDir)
         }
         single<CertificateManager> {
             val certRepo: CertificateRuntimeRepository = get()
-            val certificatesDir = java.io.File(System.getProperty("user.home"), ".knet/certificates")
+            val certificatesDir = File(System.getProperty("user.home"), ".knet/certificates")
             CertificateManagerImpl(
                 ca = certRepo.certificateAuthority,
                 certificatesDir = certificatesDir
@@ -102,7 +100,7 @@ public object DesktopDataModule {
         single {
             KNetCoreRepository(get(), get(), get())
         }
-        single { 
+        single {
             val proxyEngineRepository = get<ProxyEngineRepository>() as ProxyTrafficListener
             KNetApiClient(proxyTrafficListener = proxyEngineRepository)
         }
@@ -112,6 +110,7 @@ public object DesktopDataModule {
         // Domain HTTP executor binding (used by domain UseCases such as ExecuteClientApiRequestUseCase)
         single<DomainHttpExecutor> { get<KNetApiClient>() }
         single { LocalIpResolver() }
+        single<BodyFormatter> { GraphQLBodyFormatter() }
         single {
             ProtocolInspectorRegistry(
                 inspectors = listOf(
@@ -121,7 +120,7 @@ public object DesktopDataModule {
         }
     }
 
-    public val repositories: Module = module {
+    val repositories: Module = module {
         single<CollectionsRepository> {
             val db: KNetDatabase = get()
             CollectionsRepositoryImpl(db.collectionDao())
@@ -135,7 +134,7 @@ public object DesktopDataModule {
         single { ProxyHistoryHeaderLookup(get()) }
     }
 
-    public val useCases: Module = module {
+    val useCases: Module = module {
         factory { GetWorkspaceLayoutUseCase(get()) }
         factory { SaveWorkspaceLayoutUseCase(get()) }
         factory { GetLiveTrafficUseCase(get()) }
@@ -157,7 +156,7 @@ public object DesktopDataModule {
     /**
      * Aggregated list of all desktop data layer DI modules.
      */
-    public val all: List<Module> = listOf(
+    val all: List<Module> = listOf(
         datasource,
         runtime,
         repositories,

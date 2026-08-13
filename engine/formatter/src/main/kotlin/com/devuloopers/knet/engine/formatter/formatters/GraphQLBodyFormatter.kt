@@ -3,17 +3,40 @@ package com.devuloopers.knet.engine.formatter.formatters
 import com.devuloopers.knet.engine.formatter.BodyFormatter
 import com.devuloopers.knet.engine.formatter.model.BodyFormat
 import com.fasterxml.jackson.databind.ObjectMapper
+import graphql.language.AstPrinter
+import graphql.parser.Parser
 
 /**
  * Formatter for GraphQL requests.
  * Detects GraphQL query POST payloads or application/graphql headers,
  * extracts operationType, operationName, query string, and variables JSON.
+ *
+ * Also provides AST document syntax pretty-printing via `graphql-java`.
  */
 class GraphQLBodyFormatter : BodyFormatter {
 
     override val priority: Int = 85
 
     private val objectMapper = ObjectMapper()
+
+    /**
+     * Formats a raw GraphQL query, mutation, or subscription document string into
+     * spec-compliant multi-line indented GraphQL AST syntax via `graphql-java`.
+     *
+     * @param queryText Raw GraphQL query document text.
+     * @return Pretty-printed GraphQL document syntax, or the trimmed raw string if syntax is malformed.
+     */
+    fun formatQuery(queryText: String): String {
+        val trimmed = queryText.trim()
+        if (trimmed.isEmpty()) return ""
+
+        return try {
+            val document = Parser().parseDocument(trimmed)
+            AstPrinter.printAst(document)
+        } catch (_: Exception) {
+            trimmed
+        }
+    }
 
     override fun matches(headers: Map<String, String>, bodyText: String): Boolean {
         val contentType = headers.entries.find { it.key.equals("content-type", ignoreCase = true) }?.value ?: ""
@@ -56,17 +79,19 @@ class GraphQLBodyFormatter : BodyFormatter {
                 else -> "Query"
             }
 
+            val formattedQuery = formatQuery(rawQuery)
+
             BodyFormat.GraphQL(
                 operationType = operationType,
                 operationName = operationName,
-                queryText = rawQuery,
+                queryText = formattedQuery,
                 variablesJson = variablesJson
             )
         } catch (_: Exception) {
             BodyFormat.GraphQL(
                 operationType = "Query",
                 operationName = null,
-                queryText = trimmed,
+                queryText = formatQuery(trimmed),
                 variablesJson = ""
             )
         }

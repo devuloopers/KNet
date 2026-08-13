@@ -36,6 +36,38 @@ public enum class RawSubFormat(val label: String, val languageHint: String, val 
 }
 
 /**
+ * Strongly-typed sub-tabs for structured GraphQL request authoring.
+ *
+ * @property label User-facing display label for the sub-tab chip.
+ */
+public enum class GraphQlSubTab(val label: String) {
+    QUERY("Query"),
+    VARIABLES("Variables (JSON)"),
+    EXTENSIONS("Extensions (JSON)")
+}
+
+/**
+ * Immutable state model holding structured GraphQL request components.
+ *
+ * @property queryText Raw GraphQL query or mutation document syntax (clean unescaped text).
+ * @property variablesText Pretty-printed JSON for GraphQL `$variables`.
+ * @property operationName Optional name of the active GraphQL operation to execute.
+ * @property extensionsText Pretty-printed JSON for GraphQL `$extensions`.
+ * @property activeSubTab Currently selected GraphQL editor sub-tab ([GraphQlSubTab]).
+ */
+public data class GraphQlState(
+    val queryText: String = "",
+    val variablesText: String = DEFAULT_JSON_OBJECT_PLACEHOLDER,
+    val operationName: String = "",
+    val extensionsText: String = DEFAULT_JSON_OBJECT_PLACEHOLDER,
+    val activeSubTab: GraphQlSubTab = GraphQlSubTab.QUERY
+) {
+    public companion object {
+        public const val DEFAULT_JSON_OBJECT_PLACEHOLDER: String = "{\n  \n}"
+    }
+}
+
+/**
  * Immutable DTO holding the complete Body payload editor configuration for a single request.
  *
  * @property mode Active body payload mode (None, JSON, form-data, url-encoded, raw, GraphQL).
@@ -43,11 +75,13 @@ public enum class RawSubFormat(val label: String, val languageHint: String, val 
  * @property payloadText Raw text/JSON/XML/HTML/JS/GraphQL payload content for text-based modes.
  * @property formDataEntries Key-value entries used for [BodyMode.FORM_DATA] multipart payloads.
  * @property urlEncodedEntries Key-value entries used for [BodyMode.X_WWW_FORM_URLENCODED] payloads.
+ * @property graphQlState Structured GraphQL state model used when [mode] is [BodyMode.GRAPHQL].
  */
 public data class BodyState(
     val mode: BodyMode = BodyMode.JSON,
     val rawSubFormat: RawSubFormat = RawSubFormat.TEXT,
     val payloadText: String = "",
     val formDataEntries: List<KeyValueEntry> = emptyList(),
-    val urlEncodedEntries: List<KeyValueEntry> = emptyList()
+    val urlEncodedEntries: List<KeyValueEntry> = emptyList(),
+    val graphQlState: GraphQlState = GraphQlState()
 )

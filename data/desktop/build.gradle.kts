@@ -24,6 +24,7 @@ kotlin {
                 implementation(project(":engine:interceptor"))
                 implementation(project(":engine:portal"))
                 implementation(project(":engine:protocol"))
+                implementation(project(":engine:formatter"))
                 implementation(libs.netty.all)
 
                 implementation(libs.datastore.preferences)
