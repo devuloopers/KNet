@@ -53,10 +53,11 @@ fun EditorHeaderToolbar(
     isTruncated: Boolean = false,
     displayedLines: Int = totalLines,
     onCopyAll: (() -> Unit)? = null,
+    onPrettify: (() -> Unit)? = null,
     onExpandAll: () -> Unit,
     onCollapseAll: () -> Unit
 ) {
-    if (!showLineCountHeader && (!showFoldActionsHeader || !hasFoldRegions) && !isHighPerformanceMode && !isTruncated) return
+    if (!showLineCountHeader && (!showFoldActionsHeader || !hasFoldRegions) && !isHighPerformanceMode && !isTruncated && onPrettify == null) return
 
     val scrollState = rememberScrollState()
 
@@ -95,7 +96,7 @@ fun EditorHeaderToolbar(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = "⚡ High-Performance Fast Rendering",
+                            text = "High-Performance Fast Rendering",
                             color = Color(0xFF3FB950),
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Bold,
@@ -111,48 +112,76 @@ fun EditorHeaderToolbar(
             Spacer(modifier = Modifier.width(1.dp))
         }
 
-        if (showFoldActionsHeader && hasFoldRegions && !isHighPerformanceMode && !isTruncated) {
-            Row(
-                modifier = Modifier
-                    .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(4.dp))
-                    .border(1.dp, EditorColors.BorderDark, RoundedCornerShape(4.dp))
-                    .padding(horizontal = 6.dp, vertical = 2.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Expand All",
-                    color = EditorColors.ActiveBlue,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Clip,
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            if (onPrettify != null) {
+                Row(
                     modifier = Modifier
+                        .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(4.dp))
+                        .border(1.dp, EditorColors.BorderDark, RoundedCornerShape(4.dp))
                         .clip(RoundedCornerShape(4.dp))
-                        .clickable(onClick = onExpandAll)
+                        .clickable(onClick = onPrettify)
                         .handCursor()
-                )
-                Text(
-                    text = "|",
-                    color = EditorColors.TextSecondary.copy(alpha = 0.4f),
-                    fontSize = 10.sp,
-                    maxLines = 1,
-                    softWrap = false
-                )
-                Text(
-                    text = "Collapse All",
-                    color = EditorColors.ActiveBlue,
-                    fontSize = 10.sp,
-                    fontWeight = FontWeight.Bold,
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Clip,
+                        .padding(horizontal = 8.dp, vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Prettify",
+                        color = EditorColors.ActiveBlue,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip
+                    )
+                }
+            }
+
+            if (showFoldActionsHeader && hasFoldRegions && !isHighPerformanceMode && !isTruncated) {
+                Row(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(4.dp))
-                        .clickable(onClick = onCollapseAll)
-                        .handCursor()
-                )
+                        .background(Color.White.copy(alpha = 0.05f), RoundedCornerShape(4.dp))
+                        .border(1.dp, EditorColors.BorderDark, RoundedCornerShape(4.dp))
+                        .padding(horizontal = 6.dp, vertical = 2.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Expand All",
+                        color = EditorColors.ActiveBlue,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable(onClick = onExpandAll)
+                            .handCursor()
+                    )
+                    Text(
+                        text = "|",
+                        color = EditorColors.TextSecondary.copy(alpha = 0.4f),
+                        fontSize = 10.sp,
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                    Text(
+                        text = "Collapse All",
+                        color = EditorColors.ActiveBlue,
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Clip,
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable(onClick = onCollapseAll)
+                            .handCursor()
+                    )
+                }
             }
         }
     }

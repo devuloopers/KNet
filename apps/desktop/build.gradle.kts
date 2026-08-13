@@ -22,6 +22,7 @@ dependencies {
     implementation(project(":ui:desktop:traffic"))
     implementation(project(":ui:desktop:apistudio"))
     implementation(project(":ui:desktop:certificate"))
+    implementation(project(":ui:desktop:httpPanel"))
     implementation(project(":core:domain"))
     implementation(project(":core:logger"))
     implementation(project(":core:serialization"))

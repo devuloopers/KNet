@@ -22,6 +22,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.*
 data class KNetRequestEditorActions(
     val onBodyStateChanged: (BodyState) -> Unit = {},
     val onBodyPayloadChanged: (String) -> Unit = {},
+    val onGraphQlStateChanged: ((GraphQlState) -> Unit)? = null,
     val onQueryParamsChanged: (List<Pair<String, String>>) -> Unit = {},
     val onHeadersChanged: (List<Pair<String, String>>) -> Unit = {},
     val onCookiesChanged: (List<Pair<String, String>>) -> Unit = {},
@@ -166,6 +167,7 @@ fun KNetRequestEditor(
                             actions.onBodyStateChanged(updatedBodyState)
                             actions.onBodyPayloadChanged(updatedBodyState.payloadText)
                         },
+                        onGraphQlStateChange = actions.onGraphQlStateChanged,
                         modifier = Modifier.fillMaxSize()
                     )
                 }

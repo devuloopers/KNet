@@ -12,6 +12,7 @@ sealed interface EditorMode {
      */
     data class Editable(
         val onCodeChange: (String) -> Unit,
+        val onPrettify: (() -> Unit)? = null,
         val placeholder: String = "",
         val textColor: Color = Color(0xFFA855F7)
     ) : EditorMode

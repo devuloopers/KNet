@@ -29,6 +29,7 @@ import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.httppanel.model.BodyMode
 import com.devuloopers.knet.ui.desktop.httppanel.model.BodyState
+import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlState
 import com.devuloopers.knet.ui.desktop.httppanel.model.RawSubFormat
 import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
 import com.devuloopers.knet.ui.desktop.codeeditor.api.KNetCodeEditor
@@ -49,6 +50,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.mapper.GraphQlPayloadMapper
 public fun BodyEditorView(
     state: BodyState,
     onStateChange: (BodyState) -> Unit,
+    onGraphQlStateChange: ((GraphQlState) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val themeColors = KNetTheme.colors
@@ -90,12 +92,7 @@ public fun BodyEditorView(
                             shape = RoundedCornerShape(4.dp)
                         )
                         .clickable {
-                            if (mode == BodyMode.GRAPHQL) {
-                                val parsedGraphQlState = GraphQlPayloadMapper().parsePayload(state.payloadText)
-                                onStateChange(state.copy(mode = mode, graphQlState = parsedGraphQlState))
-                            } else {
-                                onStateChange(state.copy(mode = mode))
-                            }
+                            onStateChange(state.copy(mode = mode))
                         }
                         .handCursor()
                         .padding(horizontal = 10.dp, vertical = 5.dp)
@@ -123,7 +120,7 @@ public fun BodyEditorView(
                 Text(
                     text = "Format:",
                     style = typography.caption.copy(
-                        color = themeColors.textMuted,
+                        color = themeColors.textSecondary,
                         fontWeight = FontWeight.Medium
                     )
                 )
@@ -240,6 +237,9 @@ public fun BodyEditorView(
                     code = state.payloadText,
                     mode = EditorMode.Editable(
                         onCodeChange = { onStateChange(state.copy(payloadText = it)) },
+                        onPrettify = {
+                            onStateChange(state.copy(payloadText = formatJsonPayload(state.payloadText)))
+                        },
                         placeholder = "// Enter JSON payload...\n{\n  \"key\": \"value\"\n}"
                     ),
                     languageHint = "json",
@@ -255,13 +255,17 @@ public fun BodyEditorView(
                 GraphQlBodyEditor(
                     state = state.graphQlState,
                     onStateChange = { updatedGraphQlState ->
-                        val serializedPayload = graphQlMapper.serializePayload(updatedGraphQlState)
-                        onStateChange(
-                            state.copy(
-                                graphQlState = updatedGraphQlState,
-                                payloadText = serializedPayload
+                        if (onGraphQlStateChange != null) {
+                            onGraphQlStateChange(updatedGraphQlState)
+                        } else {
+                            val serializedPayload = graphQlMapper.serializePayload(updatedGraphQlState)
+                            onStateChange(
+                                state.copy(
+                                    graphQlState = updatedGraphQlState,
+                                    payloadText = serializedPayload
+                                )
                             )
-                        )
+                        }
                     },
                     modifier = Modifier.fillMaxSize()
                 )
@@ -273,6 +277,9 @@ public fun BodyEditorView(
                     code = state.payloadText,
                     mode = EditorMode.Editable(
                         onCodeChange = { onStateChange(state.copy(payloadText = it)) },
+                        onPrettify = if (state.rawSubFormat == RawSubFormat.JSON) {
+                            { onStateChange(state.copy(payloadText = formatJsonPayload(state.payloadText))) }
+                        } else null,
                         placeholder = "// Enter raw ${state.rawSubFormat.label} payload content..."
                     ),
                     languageHint = state.rawSubFormat.languageHint,
@@ -282,5 +289,17 @@ public fun BodyEditorView(
                 )
             }
         }
+    }
+}
+
+private fun formatJsonPayload(raw: String): String {
+    val trimmed = raw.trim()
+    if (trimmed.isEmpty()) return raw
+    return try {
+        val json = kotlinx.serialization.json.Json { prettyPrint = true; isLenient = true; ignoreUnknownKeys = true }
+        val element = json.parseToJsonElement(trimmed)
+        json.encodeToString(kotlinx.serialization.json.JsonElement.serializer(), element)
+    } catch (_: Exception) {
+        raw
     }
 }

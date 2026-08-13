@@ -88,7 +88,7 @@ fun GraphQlBodyEditor(
                 }
             }
 
-            // Operation Name & Prettify Action
+            // Operation Name Input
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(spacing.xs)
@@ -107,34 +107,6 @@ fun GraphQlBodyEditor(
                         borderColor = themeColors.border
                     )
                 )
-
-                // Prettify Action Button
-                Box(
-                    modifier = Modifier
-                        .background(themeColors.surfaceVariant, RoundedCornerShape(4.dp))
-                        .border(1.dp, themeColors.border, RoundedCornerShape(4.dp))
-                        .handCursor()
-                        .clickable {
-                            val formatter = GraphQLBodyFormatter()
-                            val formattedQuery = formatter.formatQuery(state.queryText)
-                            val prettyVars = formatJsonOrOriginal(state.variablesText)
-                            val prettyExt = formatJsonOrOriginal(state.extensionsText)
-                            onStateChange(
-                                state.copy(
-                                    queryText = formattedQuery,
-                                    variablesText = prettyVars,
-                                    extensionsText = prettyExt
-                                )
-                            )
-                        }
-                        .padding(horizontal = spacing.sm, vertical = 6.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(
-                        text = "Prettify",
-                        style = typography.caption.copy(color = themeColors.accent, fontWeight = FontWeight.SemiBold)
-                    )
-                }
             }
         }
 
@@ -150,6 +122,10 @@ fun GraphQlBodyEditor(
                         code = state.queryText,
                         mode = EditorMode.Editable(
                             onCodeChange = { onStateChange(state.copy(queryText = it)) },
+                            onPrettify = {
+                                val formatter = GraphQLBodyFormatter()
+                                onStateChange(state.copy(queryText = formatter.formatQuery(state.queryText)))
+                            },
                             placeholder = "# Enter GraphQL Query or Mutation...\nquery GetUser {\n  user(id: 1) {\n    name\n    email\n  }\n}"
                         ),
                         languageHint = "graphql",
@@ -162,6 +138,9 @@ fun GraphQlBodyEditor(
                         code = state.variablesText,
                         mode = EditorMode.Editable(
                             onCodeChange = { onStateChange(state.copy(variablesText = it)) },
+                            onPrettify = {
+                                onStateChange(state.copy(variablesText = formatJsonOrOriginal(state.variablesText)))
+                            },
                             placeholder = "// Enter GraphQL variables as JSON...\n{\n  \"id\": \"123\"\n}"
                         ),
                         languageHint = "json",
@@ -174,6 +153,9 @@ fun GraphQlBodyEditor(
                         code = state.extensionsText,
                         mode = EditorMode.Editable(
                             onCodeChange = { onStateChange(state.copy(extensionsText = it)) },
+                            onPrettify = {
+                                onStateChange(state.copy(extensionsText = formatJsonOrOriginal(state.extensionsText)))
+                            },
                             placeholder = "// Enter GraphQL extensions metadata as JSON...\n{\n  \"clientLibrary\": {\n    \"name\": \"apollo-kotlin\",\n    \"version\": \"5.0.0\"\n  }\n}"
                         ),
                         languageHint = "json",

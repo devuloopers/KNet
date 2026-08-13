@@ -57,3 +57,15 @@ This document serves as the live project tracking board for implementing seamles
 - [x] Update `TrafficScreen` to delegate `transactionId` to `viewModel.exportToStudioSpec`
 - [x] Update `WorkspaceHost` to forward `NetworkRequestSpec` directly to `apiStudioViewModel.importRequestSpec(spec)`
 - [x] Verify Gradle compilation and unit tests across `:ui:desktop:traffic`, `:ui:desktop:apistudio`, and `:ui:desktop:app`: `BUILD SUCCESSFUL`
+
+---
+
+## Phase 8: API Studio — Decoupled Reactive Auto-Save Pipeline `[COMPLETED]`
+
+- [x] Implement `AutoSaveApiSessionUseCase.kt` in `:ui:desktop:apistudio` encapsulating auto-save routing logic for unsaved drafts and saved collection requests
+- [x] Register `AutoSaveApiSessionUseCase` in Koin DI (`ApiStudioModule.kt`) and inject into `ApiStudioViewModel`
+- [x] Add reactive `triggerAutoSave()` calls across all editor mutation methods in `ApiStudioViewModel` (`updateUrl`, `updateMethod`, `updateHeaders`, `updateBodyState`, `updateBodyPayload`, `updateGraphQlState`, `updateScripts`)
+- [x] Clean up `ApiStudioScreen.kt` by delegating action callbacks directly to `viewModel` methods
+- [x] Add `AutoSaveApiSessionUseCaseTest.kt` unit test suite verifying persistent storage of GraphQL body modes, queries, operation names, and variables
+- [x] All modules compile and pass JVM tests: `BUILD SUCCESSFUL`
+

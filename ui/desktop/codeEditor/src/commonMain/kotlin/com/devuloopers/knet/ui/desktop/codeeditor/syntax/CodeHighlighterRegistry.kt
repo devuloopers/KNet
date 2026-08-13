@@ -12,6 +12,7 @@ object CodeHighlighterRegistry {
     private val xmlHighlighter = XmlLanguageHighlighter()
     private val jsHighlighter = JsLanguageHighlighter()
     private val cssHighlighter = CssLanguageHighlighter()
+    private val graphQlHighlighter = GraphQlLanguageHighlighter()
     private val plainTextHighlighter = PlainTextLanguageHighlighter()
 
     /**
@@ -24,12 +25,13 @@ object CodeHighlighterRegistry {
             is BodyFormat.Xml -> xmlHighlighter
             is BodyFormat.Js -> jsHighlighter
             is BodyFormat.Css -> cssHighlighter
+            is BodyFormat.GraphQL -> graphQlHighlighter
             else -> plainTextHighlighter
         }
     }
 
     /**
-     * Resolves strategy by language ID string hint (e.g. "json", "html", "xml", "plain").
+     * Resolves strategy by language ID string hint (e.g. "json", "html", "xml", "graphql", "plain").
      */
     fun resolveByLanguage(languageId: String): CodeLanguageHighlighter {
         return when (languageId.trim().lowercase()) {
@@ -38,6 +40,7 @@ object CodeHighlighterRegistry {
             "xml" -> xmlHighlighter
             "javascript", "js" -> jsHighlighter
             "css" -> cssHighlighter
+            "graphql", "gql" -> graphQlHighlighter
             else -> plainTextHighlighter
         }
     }

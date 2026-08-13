@@ -18,7 +18,7 @@ import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.ApiStudioViewModel
 import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.CollectionsViewModel
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
-
+import com.devuloopers.knet.ui.desktop.apistudio.usecase.AutoSaveApiSessionUseCase
 import com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCase
 
 /**
@@ -43,6 +43,7 @@ public val apiStudioUiModule = module {
     factory { RenameCollectionUseCase(get()) }
     factory { SaveRequestToCollectionUseCase(get()) }
     factory { UpdateRequestInCollectionUseCase(get()) }
+    factory { AutoSaveApiSessionUseCase(get(), get(), get()) }
 
     viewModel {
         ApiStudioViewModel(
@@ -50,7 +51,9 @@ public val apiStudioUiModule = module {
             observeProxyEngineStateUseCase = get(),
             getWorkspaceLayoutUseCase = get(),
             saveWorkspaceLayoutUseCase = get(),
-            importRequestToStudioUseCase = get()
+            importRequestToStudioUseCase = get(),
+            syncBodyStateUseCase = get(),
+            autoSaveApiSessionUseCase = get()
         )
     }
 

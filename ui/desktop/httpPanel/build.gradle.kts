@@ -22,6 +22,7 @@ kotlin {
                 implementation(libs.compose.ui)
                 implementation(compose.materialIconsExtended)
                 implementation(libs.kotlinx.serialization.json)
+                implementation(libs.koin.core)
             }
         }
         val jvmTest by getting {

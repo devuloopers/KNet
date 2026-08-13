@@ -110,7 +110,6 @@ object DesktopDataModule {
         // Domain HTTP executor binding (used by domain UseCases such as ExecuteClientApiRequestUseCase)
         single<DomainHttpExecutor> { get<KNetApiClient>() }
         single { LocalIpResolver() }
-        single<BodyFormatter> { GraphQLBodyFormatter() }
         single {
             ProtocolInspectorRegistry(
                 inspectors = listOf(

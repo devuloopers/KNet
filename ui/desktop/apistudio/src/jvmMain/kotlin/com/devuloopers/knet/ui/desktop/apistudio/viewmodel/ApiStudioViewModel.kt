@@ -20,6 +20,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.mapper.GraphQlPayloadMapper
 import com.devuloopers.knet.ui.desktop.httppanel.model.BodyMode
 import com.devuloopers.knet.ui.desktop.httppanel.model.BodyState
 import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlState
+import com.devuloopers.knet.ui.desktop.httppanel.usecase.SyncBodyStateUseCase
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -27,6 +28,8 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.uuid.Uuid
+
+import com.devuloopers.knet.ui.desktop.apistudio.usecase.AutoSaveApiSessionUseCase
 
 /**
  * Clean ViewModel managing UDF state for HTTP API request authoring, execution, and response inspection.
@@ -41,6 +44,8 @@ import kotlin.uuid.Uuid
  * @param getWorkspaceLayoutUseCase Domain UseCase providing workspace layout settings stream.
  * @param saveWorkspaceLayoutUseCase Domain UseCase persisting updated workspace layout settings.
  * @param importRequestToStudioUseCase Domain UseCase validating and normalizing imported request specs.
+ * @param syncBodyStateUseCase Presentation UseCase synchronizing payload mode switching and GraphQL state models.
+ * @param autoSaveApiSessionUseCase Presentation UseCase auto-saving request state updates to Room DB.
  * @param ioDispatcher Coroutine dispatcher for background thread dispatching.
  */
 class ApiStudioViewModel(
@@ -49,6 +54,8 @@ class ApiStudioViewModel(
     private val getWorkspaceLayoutUseCase: GetWorkspaceLayoutUseCase,
     private val saveWorkspaceLayoutUseCase: SaveWorkspaceLayoutUseCase,
     private val importRequestToStudioUseCase: ImportRequestToStudioUseCase,
+    private val syncBodyStateUseCase: SyncBodyStateUseCase? = null,
+    private val autoSaveApiSessionUseCase: AutoSaveApiSessionUseCase? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
 ) : ViewModel() {
 
@@ -104,6 +111,9 @@ class ApiStudioViewModel(
     /**
      * Updates target URL in UDF state and synchronizes query parameters via [UrlQueryStringParser].
      */
+    /**
+     * Updates target URL in UDF state and synchronizes query parameters via [UrlQueryStringParser].
+     */
     fun updateUrl(url: String) {
         val parsedParams = UrlQueryStringParser.parseQueryParams(url)
         _uiState.update { state ->
@@ -114,6 +124,7 @@ class ApiStudioViewModel(
                 )
             )
         }
+        triggerAutoSave()
     }
 
     /**
@@ -129,6 +140,7 @@ class ApiStudioViewModel(
                 )
             )
         }
+        triggerAutoSave()
     }
 
     /**
@@ -144,6 +156,7 @@ class ApiStudioViewModel(
                 tabs = updatedTabs
             )
         }
+        triggerAutoSave()
     }
 
     /**
@@ -151,6 +164,7 @@ class ApiStudioViewModel(
      */
     fun updateHeaders(headers: List<Pair<String, String>>) {
         _uiState.update { it.copy(editorState = it.editorState.copy(headers = headers)) }
+        triggerAutoSave()
     }
 
     /**
@@ -161,6 +175,7 @@ class ApiStudioViewModel(
             val updatedBodyState = it.editorState.bodyState.copy(payloadText = bodyPayload)
             it.copy(editorState = it.editorState.copy(bodyState = updatedBodyState))
         }
+        triggerAutoSave()
     }
 
     /**
@@ -168,8 +183,10 @@ class ApiStudioViewModel(
      */
     fun updateBodyState(bodyState: BodyState) {
         _uiState.update {
-            it.copy(editorState = it.editorState.copy(bodyState = bodyState))
+            val hydratedState = syncBodyStateUseCase?.ensureHydrated(bodyState) ?: bodyState
+            it.copy(editorState = it.editorState.copy(bodyState = hydratedState))
         }
+        triggerAutoSave()
     }
 
     /**
@@ -178,9 +195,25 @@ class ApiStudioViewModel(
     fun updateBodyType(bodyType: String) {
         val mode = bodyType.toBodyMode()
         _uiState.update {
-            val updatedBodyState = it.editorState.bodyState.copy(mode = mode)
+            val currentBodyState = it.editorState.bodyState
+            val updatedBodyState = syncBodyStateUseCase?.switchMode(currentBodyState, mode)
+                ?: currentBodyState.copy(mode = mode)
             it.copy(editorState = it.editorState.copy(bodyState = updatedBodyState))
         }
+        triggerAutoSave()
+    }
+
+    /**
+     * Updates structured [GraphQlState] in UDF state and serializes it back to transport payload text.
+     */
+    fun updateGraphQlState(graphQlState: GraphQlState) {
+        _uiState.update {
+            val currentBodyState = it.editorState.bodyState
+            val updatedBodyState = syncBodyStateUseCase?.updateGraphQlState(currentBodyState, graphQlState)
+                ?: currentBodyState.copy(graphQlState = graphQlState)
+            it.copy(editorState = it.editorState.copy(bodyState = updatedBodyState))
+        }
+        triggerAutoSave()
     }
 
     /**
@@ -188,6 +221,7 @@ class ApiStudioViewModel(
      */
     fun updateCookies(cookies: List<Pair<String, String>>) {
         _uiState.update { it.copy(editorState = it.editorState.copy(cookies = cookies)) }
+        triggerAutoSave()
     }
 
     /**
@@ -203,6 +237,7 @@ class ApiStudioViewModel(
                 )
             )
         }
+        triggerAutoSave()
     }
 
     fun updateAuth(authType: String, token: String) {
@@ -222,17 +257,36 @@ class ApiStudioViewModel(
                 )
             )
         }
+        triggerAutoSave()
     }
 
     fun updatePreRequestScript(preRequestScript: String) {
         _uiState.update {
             it.copy(editorState = it.editorState.copy(preRequestScript = preRequestScript))
         }
+        triggerAutoSave()
     }
 
     fun updateTestScript(testScript: String) {
         _uiState.update {
             it.copy(editorState = it.editorState.copy(testScript = testScript))
+        }
+        triggerAutoSave()
+    }
+
+    private fun triggerAutoSave() {
+        val currentState = _uiState.value
+        val context = currentState.sessionContext
+        val editorState = currentState.editorState
+        if (context is SessionContext.None) return
+        viewModelScope.launch(ioDispatcher) {
+            autoSaveApiSessionUseCase?.execute(
+                sessionContext = context,
+                editorState = editorState,
+                onLinkedIdAssigned = { id, title ->
+                    updateLinkedUnsavedId(id, title)
+                }
+            )
         }
     }
 
@@ -354,21 +408,17 @@ class ApiStudioViewModel(
 
         _uiState.update { state ->
             val resolvedBodyMode = normalizedSpec.bodyType.toBodyMode()
-            val parsedGraphQlState = if (resolvedBodyMode == BodyMode.GRAPHQL) {
-                GraphQlPayloadMapper().parsePayload(normalizedSpec.bodyPayload)
-            } else {
-                GraphQlState()
-            }
+            val initialBodyState = BodyState(
+                mode = resolvedBodyMode,
+                payloadText = normalizedSpec.bodyPayload
+            )
+            val hydratedBodyState = syncBodyStateUseCase?.ensureHydrated(initialBodyState) ?: initialBodyState
             val importedEditorState = RequestEditorState(
                 method = normalizedSpec.methodString,
                 url = normalizedSpec.url,
                 headers = normalizedSpec.headers.sanitizeTransportHeaders(),
                 queryParams = normalizedSpec.queryParams,
-                bodyState = BodyState(
-                    mode = resolvedBodyMode,
-                    payloadText = normalizedSpec.bodyPayload,
-                    graphQlState = parsedGraphQlState
-                ),
+                bodyState = hydratedBodyState,
                 cookies = normalizedSpec.cookies,
                 authState = mappedAuthState,
                 authType = mappedAuthState.authType.label,

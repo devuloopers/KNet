@@ -108,6 +108,7 @@ internal fun EditableCodeEditor(
                     copyAction(documentBuffer.toFullText())
                 }
             },
+            onPrettify = mode.onPrettify,
             onExpandAll = {
                 collapsedFoldStartLines = emptySet()
                 mode.onCodeChange(documentBuffer.toFullText())
