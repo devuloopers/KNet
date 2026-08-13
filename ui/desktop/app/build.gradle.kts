@@ -13,6 +13,7 @@ kotlin {
                 implementation(project(":ui:core"))
                 implementation(project(":core:domain"))
                 implementation(project(":core:logger"))
+                implementation(project(":engine:interceptor"))
                 api(project(":ui:desktop:traffic"))
                 api(project(":ui:desktop:apistudio"))
                 api(project(":ui:desktop:certificate"))

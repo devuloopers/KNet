@@ -2,15 +2,10 @@ package com.devuloopers.knet.ui.desktop.breakpointmanager.viewmodel
 
 import com.devuloopers.knet.domain.collection.model.HttpMethod
 import com.devuloopers.knet.domain.rules.model.RuleModel
+import com.devuloopers.knet.domain.rules.model.RuleType
 import com.devuloopers.knet.domain.rules.repository.RulesRepository
-import com.devuloopers.knet.domain.rules.usecase.DeleteRuleUseCase
-import com.devuloopers.knet.domain.rules.usecase.GetRulesUseCase
-import com.devuloopers.knet.domain.rules.usecase.ObserveGlobalInterceptionUseCase
-import com.devuloopers.knet.domain.rules.usecase.SaveRuleUseCase
-import com.devuloopers.knet.domain.rules.usecase.ToggleGlobalInterceptionUseCase
-import com.devuloopers.knet.domain.rules.usecase.ToggleRuleUseCase
+import com.devuloopers.knet.domain.rules.usecase.*
 import com.devuloopers.knet.engine.interceptor.BreakpointPhase
-import com.devuloopers.knet.engine.interceptor.BreakpointRule
 import com.devuloopers.knet.engine.interceptor.BreakpointRuleRegistry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -21,12 +16,7 @@ import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertTrue
+import kotlin.test.*
 
 private class FakeTestRulesRepository : RulesRepository {
     private val _rules = MutableStateFlow<List<RuleModel>>(emptyList())
@@ -125,10 +115,24 @@ class BreakpointManagerViewModelTest {
     fun `search query filters rules by url pattern`() = runTest {
         val repositoryWithRules = FakeTestRulesRepository()
         repositoryWithRules.saveRule(
-            RuleModel(id = "r1", name = ".*stripe.*", type = "REQUEST", condition = ".*stripe.*", action = "POST", enabled = true)
+            RuleModel(
+                id = "r1",
+                name = ".*stripe.*",
+                type = RuleType.REQUEST,
+                condition = ".*stripe.*",
+                action = "POST",
+                enabled = true
+            )
         )
         repositoryWithRules.saveRule(
-            RuleModel(id = "r2", name = ".*auth/login.*", type = "BOTH", condition = ".*auth/login.*", action = "ALL", enabled = true)
+            RuleModel(
+                id = "r2",
+                name = ".*auth/login.*",
+                type = RuleType.BOTH,
+                condition = ".*auth/login.*",
+                action = "ALL",
+                enabled = true
+            )
         )
 
         val viewModel = BreakpointManagerViewModel(
@@ -151,7 +155,14 @@ class BreakpointManagerViewModelTest {
     fun `deleteRule removes target rule from registry`() = runTest {
         val repositoryWithRule = FakeTestRulesRepository()
         repositoryWithRule.saveRule(
-            RuleModel(id = "r1", name = ".*stripe.*", type = "REQUEST", condition = ".*stripe.*", action = "POST", enabled = true)
+            RuleModel(
+                id = "r1",
+                name = ".*stripe.*",
+                type = RuleType.REQUEST,
+                condition = ".*stripe.*",
+                action = "POST",
+                enabled = true
+            )
         )
 
         val viewModel = BreakpointManagerViewModel(

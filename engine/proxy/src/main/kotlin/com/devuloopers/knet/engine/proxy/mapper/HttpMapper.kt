@@ -7,7 +7,7 @@ import io.netty.buffer.ByteBuf
 import io.netty.handler.codec.http.FullHttpRequest
 import io.netty.handler.codec.http.FullHttpResponse
 import io.netty.handler.codec.http.HttpHeaders
-import java.util.UUID
+import io.netty.handler.codec.http.HttpResponse as nHttpResponse
 
 /**
  * Utility functions to map Netty HTTP objects to KNet domain models.
@@ -31,7 +31,7 @@ object HttpMapper {
         port: Int,
         relativeUri: String
     ): HttpRequest {
-        val transactionId = nettyReq.headers().get(KNetHeaders.HEADER_TRANSACTION_ID) ?: UUID.randomUUID().toString()
+        val transactionId = nettyReq.headers().get(KNetHeaders.HEADER_TRANSACTION_ID) ?: @OptIn(kotlin.uuid.ExperimentalUuidApi::class) kotlin.uuid.Uuid.random().toString()
         if (nettyReq.headers().contains(KNetHeaders.HEADER_TRANSACTION_ID)) {
             nettyReq.headers().remove(KNetHeaders.HEADER_TRANSACTION_ID)
         }
@@ -70,7 +70,7 @@ object HttpMapper {
     /**
      * Maps Netty's streaming [io.netty.handler.codec.http.HttpResponse] headers to KNet's domain [HttpResponse] model.
      */
-    fun mapResponseHeaders(nettyRes: io.netty.handler.codec.http.HttpResponse): HttpResponse {
+    fun mapResponseHeaders(nettyRes: nHttpResponse): HttpResponse {
         val headers = mapHeaders(nettyRes.headers())
         return HttpResponse(
             statusCode = nettyRes.status().code(),

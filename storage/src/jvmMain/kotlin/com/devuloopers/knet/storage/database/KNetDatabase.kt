@@ -22,7 +22,7 @@ import com.devuloopers.knet.storage.traffic.entity.HttpTransactionEntity
         SavedRequestEntity::class,
         BreakpointRuleEntity::class
     ],
-    version = 7
+    version = 9
 )
 abstract class KNetDatabase : RoomDatabase() {
 

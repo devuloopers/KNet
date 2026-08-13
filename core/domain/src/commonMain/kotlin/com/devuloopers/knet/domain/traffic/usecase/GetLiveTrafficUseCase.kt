@@ -123,6 +123,7 @@ class GetLiveTrafficUseCase(
             id = sequentialId,
             transactionId = tx.id,
             method = tx.request.method,
+            scheme = uriDetails.scheme,
             host = uriDetails.host,
             path = uriDetails.path,
             status = tx.response?.statusCode ?: 0,
@@ -139,6 +140,8 @@ class GetLiveTrafficUseCase(
             responseHeaders = tx.response?.headers?.toMap() ?: emptyMap(),
             timings = tx.timings,
             interceptionMetadata = tx.interceptionMetadata,
+            isIntercepted = tx.request.isIntercepted,
+            matchedRuleId = tx.request.matchedRuleId,
             isSelected = tx.id == selectedId
         )
     }

@@ -10,10 +10,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
+import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -25,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.domain.clientNetwork.decoder.BinaryCategory
+import com.devuloopers.knet.domain.rules.model.matchesTransaction
 import com.devuloopers.knet.domain.clientNetwork.decoder.MediaTypeInspector
 import com.devuloopers.knet.domain.traffic.model.TrafficItemUiState
 import com.devuloopers.knet.ui.core.components.table.KNetCell
@@ -36,7 +40,6 @@ import com.devuloopers.knet.ui.desktop.traffic.model.TrafficColumn
 
 import com.devuloopers.knet.ui.core.components.menu.ContextMenuItem
 import com.devuloopers.knet.ui.core.components.menu.KNetContextMenuArea
-import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 
 /**
  * High-density virtualized traffic feed table using standardized :ui:core table primitives and tokens.
@@ -50,7 +53,9 @@ public fun TrafficTable(
     formattedTotalSize: String,
     modifier: Modifier = Modifier,
     columnVisibility: ColumnVisibilityState = ColumnVisibilityState(),
-    onSendToApiStudio: (String) -> Unit = {}
+    onSendToApiStudio: (String) -> Unit = {},
+    onAddBreakpointRule: (String) -> Unit = {},
+    activeRules: List<com.devuloopers.knet.domain.rules.model.RuleModel> = emptyList()
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -115,6 +120,12 @@ public fun TrafficTable(
                                     icon = KNetIcons.Send
                                 ) {
                                     onSendToApiStudio(item.transactionId)
+                                },
+                                ContextMenuItem(
+                                    label = "Add Breakpoint Rule",
+                                    icon = KNetIcons.Pause
+                                ) {
+                                    onAddBreakpointRule(item.transactionId)
                                 }
                             )
                         }
@@ -125,6 +136,7 @@ public fun TrafficTable(
                                 isSelected = item.transactionId == selectedId,
                                 columnVisibility = columnVisibility,
                                 todayDate = todayDateState.value,
+                                activeRules = activeRules,
                                 onClick = { onSelectTransaction(item.transactionId) }
                             )
                         }
@@ -210,10 +222,13 @@ private fun TableRowItem(
     isSelected: Boolean,
     columnVisibility: ColumnVisibilityState,
     todayDate: java.time.LocalDate,
+    activeRules: List<com.devuloopers.knet.domain.rules.model.RuleModel>,
     onClick: () -> Unit
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
+
+    val isMatchedByBreakpoint = item.isIntercepted
 
     val displayMethod = when (item.interceptionMetadata) {
         is com.devuloopers.knet.domain.protocol.model.InterceptionMetadata.GraphQL -> "GQL"
@@ -285,11 +300,18 @@ private fun TableRowItem(
         else -> item.path
     }
 
+    val rowBackgroundModifier = if (isMatchedByBreakpoint) {
+        Modifier.background(themeColors.semantic.warning.copy(alpha = 0.18f))
+    } else {
+        Modifier
+    }
+
     KNetRow(
         onClick = onClick,
         selected = isSelected,
         modifier = Modifier
             .height(34.dp)
+            .then(rowBackgroundModifier)
             .then(
                 if (isSelected) Modifier.border(width = 2.dp, color = themeColors.accent) else Modifier
             )
@@ -315,10 +337,20 @@ private fun TableRowItem(
 
         // Method (Mandatory)
         Box(modifier = Modifier.width(76.dp), contentAlignment = Alignment.CenterStart) {
-            Text(
-                text = displayMethod,
-                style = typography.codeSmall.copy(color = methodColor, fontWeight = FontWeight.Bold)
-            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (isMatchedByBreakpoint) {
+                    Icon(
+                        imageVector = KNetIcons.Pause,
+                        contentDescription = "Breakpoint Active",
+                        tint = themeColors.semantic.warning,
+                        modifier = Modifier.size(12.dp).padding(end = 2.dp)
+                    )
+                }
+                Text(
+                    text = displayMethod,
+                    style = typography.codeSmall.copy(color = methodColor, fontWeight = FontWeight.Bold)
+                )
+            }
         }
 
         // Host (Mandatory)

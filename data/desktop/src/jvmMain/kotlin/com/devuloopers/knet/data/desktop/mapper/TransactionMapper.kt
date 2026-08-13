@@ -5,8 +5,6 @@ import com.devuloopers.knet.domain.clientNetwork.model.HttpResponse
 import com.devuloopers.knet.domain.clientNetwork.model.HttpTimings
 import com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction
 import com.devuloopers.knet.storage.traffic.entity.HttpTransactionEntity
-import java.io.File
-
 import com.devuloopers.knet.domain.protocol.model.InterceptionMetadata
 
 /**
@@ -25,7 +23,9 @@ object TransactionMapper {
             protocol = "HTTP/1.1",
             headers = reqHeadersList,
             body = null,
-            timestamp = entity.timestamp
+            timestamp = entity.timestamp,
+            isIntercepted = entity.isIntercepted,
+            matchedRuleId = entity.matchedRuleId
         )
 
         val statusCode = entity.responseStatusCode
@@ -105,7 +105,9 @@ object TransactionMapper {
             timingDownloadMs = domain.timings.downloadMs,
             protocolType = protocolType,
             graphqlOperationName = opName,
-            graphqlOperationType = opType
+            graphqlOperationType = opType,
+            isIntercepted = domain.request.isIntercepted,
+            matchedRuleId = domain.request.matchedRuleId
         )
     }
 
@@ -121,19 +123,5 @@ object TransactionMapper {
                 val parts = line.split(":", limit = 2)
                 parts[0].trim() to (parts.getOrNull(1)?.trim() ?: "")
             }
-    }
-
-    private fun readBodyFromPath(path: String?): ByteArray? {
-        if (path.isNullOrBlank()) return null
-        val file = File(path)
-        return if (file.exists() && file.length() > 0) {
-            try {
-                file.readBytes()
-            } catch (_: Exception) {
-                null
-            }
-        } else {
-            null
-        }
     }
 }

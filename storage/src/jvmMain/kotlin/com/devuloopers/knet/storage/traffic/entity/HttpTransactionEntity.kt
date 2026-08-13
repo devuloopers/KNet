@@ -31,5 +31,7 @@ data class HttpTransactionEntity(
     val timingDownloadMs: Long = 0L,
     val protocolType: String? = "GENERIC_HTTP",
     val graphqlOperationName: String? = null,
-    val graphqlOperationType: String? = null
+    val graphqlOperationType: String? = null,
+    val isIntercepted: Boolean = false,
+    val matchedRuleId: String? = null
 )

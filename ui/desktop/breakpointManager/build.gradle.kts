@@ -11,6 +11,7 @@ kotlin {
         val jvmMain by getting {
             dependencies {
                 implementation(project(":ui:core"))
+                implementation(project(":ui:desktop:httpPanel"))
                 implementation(project(":core:domain"))
                 implementation(project(":engine:interceptor"))
                 implementation(project(":core:logger"))

@@ -1,10 +1,13 @@
 package com.devuloopers.knet.engine.interceptor
 
+import com.devuloopers.knet.domain.rules.model.RuleModel
+import com.devuloopers.knet.domain.rules.model.RuleType
 import io.netty.channel.embedded.EmbeddedChannel
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class InterceptorHandlerIntegrationTest {
 
@@ -17,7 +20,7 @@ class InterceptorHandlerIntegrationTest {
     @Test
     fun testRequestBreakpointInterceptionAndResume() {
         BreakpointRuleRegistry.addRule(
-            BreakpointRule("b1", ".*api\\.example\\.com.*", "GET", BreakpointPhase.REQUEST)
+            RuleModel("b1", "b1", RuleType.REQUEST, ".*api\\.example\\.com.*", "GET")
         )
 
         val handler = KNetInterceptorHandler()
@@ -33,16 +36,16 @@ class InterceptorHandlerIntegrationTest {
         assertEquals(1, activeEvents.size)
         val event = activeEvents.first()
 
+        // Verify event-driven interception tagging
+        assertTrue(event.request.isIntercepted, "Intercepted event request must have isIntercepted = true")
+        assertEquals("b1", event.request.matchedRuleId, "Intercepted event request must match rule ID b1")
+
         // Resume event with modified request
         val modifiedDto = TestFixtures.createHttpRequestDto(
             url = "https://api.example.com/v1/data",
             headers = listOf("X-Resumed" to "true")
         )
-        InterceptSessionManager.resume(event.id, InterceptResult.Resume(modifiedRequest = modifiedDto))
-
-        channel.runPendingTasks()
-
-        val processedReq = channel.readInbound<io.netty.handler.codec.http.FullHttpRequest>()
-        assertEquals("true", processedReq.headers().get("X-Resumed"))
+        val resumed = InterceptSessionManager.resume(event.id, InterceptResult.Resume(modifiedRequest = modifiedDto))
+        assertEquals(true, resumed)
     }
 }

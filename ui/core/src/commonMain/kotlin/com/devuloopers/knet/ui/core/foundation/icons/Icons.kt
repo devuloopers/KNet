@@ -4,22 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Send
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Clear
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.FolderOpen
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.*
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.vector.ImageVector
 
@@ -27,28 +12,29 @@ import androidx.compose.ui.graphics.vector.ImageVector
  * Single entry point for core vector iconography across KNet Design System.
  */
 @Immutable
-public object KNetIcons {
-    public val Search: ImageVector = Icons.Default.Search
-    public val Clear: ImageVector = Icons.Default.Clear
-    public val Close: ImageVector = Icons.Default.Close
-    public val Add: ImageVector = Icons.Default.Add
-    public val Delete: ImageVector = Icons.Default.Delete
-    public val Edit: ImageVector = Icons.Default.Edit
-    public val Check: ImageVector = Icons.Default.Check
-    public val Refresh: ImageVector = Icons.Default.Refresh
-    public val Play: ImageVector = Icons.Default.PlayArrow
-    public val Settings: ImageVector = Icons.Default.Settings
-    public val ChevronDown: ImageVector = Icons.Default.KeyboardArrowDown
-    public val ChevronRight: ImageVector = Icons.Default.KeyboardArrowRight
-    public val Info: ImageVector = Icons.Default.Info
-    public val Warning: ImageVector = Icons.Default.Warning
-    public val Back: ImageVector = Icons.AutoMirrored.Filled.ArrowBack
-    public val List: ImageVector = Icons.AutoMirrored.Filled.List
-    public val Folder: ImageVector = Icons.Default.Folder
-    public val FolderOpen: ImageVector = Icons.Default.FolderOpen
-    public val Download: ImageVector = Icons.AutoMirrored.Filled.List
-    public val History: ImageVector = Icons.AutoMirrored.Filled.List
-    public val Save: ImageVector = Icons.Default.Check
-    public val Code: ImageVector = Icons.Default.Edit
-    public val Send: ImageVector = Icons.AutoMirrored.Filled.Send
+object KNetIcons {
+    val Search: ImageVector = Icons.Default.Search
+    val Clear: ImageVector = Icons.Default.Clear
+    val Close: ImageVector = Icons.Default.Close
+    val Add: ImageVector = Icons.Default.Add
+    val Delete: ImageVector = Icons.Default.Delete
+    val Edit: ImageVector = Icons.Default.Edit
+    val Check: ImageVector = Icons.Default.Check
+    val Refresh: ImageVector = Icons.Default.Refresh
+    val Play: ImageVector = Icons.Default.PlayArrow
+    val Settings: ImageVector = Icons.Default.Settings
+    val ChevronDown: ImageVector = Icons.Default.KeyboardArrowDown
+    val ChevronRight: ImageVector = Icons.Default.KeyboardArrowRight
+    val Info: ImageVector = Icons.Default.Info
+    val Warning: ImageVector = Icons.Default.Warning
+    val Back: ImageVector = Icons.AutoMirrored.Filled.ArrowBack
+    val List: ImageVector = Icons.AutoMirrored.Filled.List
+    val Folder: ImageVector = Icons.Default.Folder
+    val FolderOpen: ImageVector = Icons.Default.FolderOpen
+    val Download: ImageVector = Icons.AutoMirrored.Filled.List
+    val History: ImageVector = Icons.AutoMirrored.Filled.List
+    val Save: ImageVector = Icons.Default.Check
+    val Code: ImageVector = Icons.Default.Edit
+    val Send: ImageVector = Icons.AutoMirrored.Filled.Send
+    val Pause: ImageVector = Icons.Default.Warning
 }

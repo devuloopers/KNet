@@ -1,23 +1,24 @@
 package com.devuloopers.knet.engine.interceptor
 
+import com.devuloopers.knet.domain.rules.model.RuleModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Thread-safe registry for breakpoint rules.
- * Encapsulates rule management, priority ordering, and reactive state streams.
+ * Thread-safe in-memory registry holding active [RuleModel] instances for Netty proxy engine.
+ * Directly synchronized from Room DB via `:data:desktop`.
  */
 object BreakpointRuleRegistry {
 
-    private val rulesMap = ConcurrentHashMap<String, BreakpointRule>()
+    private val rulesMap = ConcurrentHashMap<String, RuleModel>()
 
     private val _isGlobalInterceptionEnabled = MutableStateFlow(true)
     public val isGlobalInterceptionEnabled: StateFlow<Boolean> = _isGlobalInterceptionEnabled.asStateFlow()
 
-    private val _rulesStream = MutableStateFlow<List<BreakpointRule>>(emptyList())
-    public val rulesStream: StateFlow<List<BreakpointRule>> = _rulesStream.asStateFlow()
+    private val _rulesStream = MutableStateFlow<List<RuleModel>>(emptyList())
+    public val rulesStream: StateFlow<List<RuleModel>> = _rulesStream.asStateFlow()
 
     /**
      * Toggles global interception engine state.
@@ -27,9 +28,9 @@ object BreakpointRuleRegistry {
     }
 
     /**
-     * Adds or updates a breakpoint rule in the registry.
+     * Adds or updates a domain [RuleModel] in the registry.
      */
-    fun addRule(rule: BreakpointRule) {
+    fun addRule(rule: RuleModel) {
         require(rule.id.isNotBlank()) { "Breakpoint rule ID must not be blank" }
         rulesMap[rule.id] = rule
         notifyRulesChanged()
@@ -52,10 +53,10 @@ object BreakpointRuleRegistry {
     }
 
     /**
-     * Obtains a snapshot list of registered rules, sorted by priority ASC.
+     * Returns a snapshot list of all currently registered rules.
      */
-    fun getRules(): List<BreakpointRule> {
-        return rulesMap.values.sortedBy { it.priority }
+    fun getRules(): List<RuleModel> {
+        return rulesMap.values.toList()
     }
 
     private fun notifyRulesChanged() {

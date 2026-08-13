@@ -7,7 +7,7 @@ import org.koin.dsl.module
 /**
  * Koin Dependency Injection module for `:ui:desktop:traffic`.
  */
-public val trafficModule = module {
+val trafficModule = module {
     viewModel {
         TrafficViewModel(
             getLiveTrafficUseCase = get(),
@@ -17,8 +17,10 @@ public val trafficModule = module {
             observeProxyEngineStateUseCase = get(),
             loadTransactionBodyUseCase = get(),
             observeLocalIpUseCase = get(),
-            widgetPreferencesRepository = get(),
-            exportTrafficToSpecUseCase = get()
+            getWorkspaceLayoutUseCase = get(),
+            exportTrafficToSpecUseCase = get(),
+            observeRulesUseCase = get(),
+            saveRuleUseCase = get()
         )
     }
 }

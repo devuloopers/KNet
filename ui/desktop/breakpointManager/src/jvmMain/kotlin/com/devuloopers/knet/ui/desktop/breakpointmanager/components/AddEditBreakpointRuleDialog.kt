@@ -20,11 +20,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.devuloopers.knet.domain.collection.model.HttpMethod
+import com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria
 import com.devuloopers.knet.engine.interceptor.BreakpointPhase
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
@@ -43,7 +43,7 @@ import com.devuloopers.knet.ui.desktop.breakpointmanager.model.BreakpointRuleUiM
 public fun AddEditBreakpointRuleDialog(
     rule: BreakpointRuleUiModel?,
     onDismiss: () -> Unit,
-    onSave: (urlPattern: String, method: HttpMethod?, phase: BreakpointPhase, enabled: Boolean) -> Unit
+    onSave: (urlPattern: String, method: HttpMethod?, phase: BreakpointPhase, enabled: Boolean, protocolCriteria: ProtocolMatchCriteria) -> Unit
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -53,12 +53,16 @@ public fun AddEditBreakpointRuleDialog(
     var selectedPhase by remember(rule) { mutableStateOf(rule?.phase ?: BreakpointPhase.BOTH) }
     var enabled by remember(rule) { mutableStateOf(rule?.enabled ?: true) }
 
+    val initialGraphqlOp = (rule?.protocolCriteria as? ProtocolMatchCriteria.GraphQL)?.operationName ?: ""
+    var isGraphqlProtocol by remember(rule) { mutableStateOf(rule?.protocolCriteria is ProtocolMatchCriteria.GraphQL) }
+    var graphqlOperationName by remember(rule) { mutableStateOf(initialGraphqlOp) }
+
     val dialogTitle = if (rule != null) "Edit Breakpoint Rule" else "Add Breakpoint Rule"
 
     KNetDialog(
         onDismissRequest = onDismiss,
         title = dialogTitle,
-        modifier = Modifier.width(460.dp)
+        modifier = Modifier.width(480.dp)
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -75,11 +79,77 @@ public fun AddEditBreakpointRuleDialog(
                     onValueChange = { urlPattern = it },
                     modifier = Modifier.fillMaxWidth(),
                     config = InputFieldConfig(
-                        placeholder = "e.g. .*api\\.stripe\\.com/v1/charges.*",
+                        placeholder = "e.g. http://stg-04astra.cnbc.com/graphql",
                         backgroundColor = themeColors.surfaceVariant,
                         borderColor = themeColors.border
                     )
                 )
+            }
+
+            // Protocol Selector (HTTP vs GraphQL)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    text = "Protocol Matching Criteria",
+                    style = typography.caption.copy(color = themeColors.textMuted, fontWeight = FontWeight.SemiBold)
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    val protocolOptions = listOf(false to "HTTP / REST", true to "GraphQL")
+                    protocolOptions.forEach { (isGql, label) ->
+                        val isSelected = isGraphqlProtocol == isGql
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .background(
+                                    if (isSelected) themeColors.accent.copy(alpha = 0.2f) else themeColors.surfaceVariant,
+                                    RoundedCornerShape(4.dp)
+                                )
+                                .border(
+                                    1.dp,
+                                    if (isSelected) themeColors.accent else themeColors.border,
+                                    RoundedCornerShape(4.dp)
+                                )
+                                .clip(RoundedCornerShape(4.dp))
+                                .clickable { isGraphqlProtocol = isGql }
+                                .handCursor()
+                                .padding(vertical = 8.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = label,
+                                color = if (isSelected) themeColors.accent else themeColors.textSecondary,
+                                fontSize = 11.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Optional GraphQL Operation Name Input
+            if (isGraphqlProtocol) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        text = "GraphQL Operation Name (Optional)",
+                        style = typography.caption.copy(color = themeColors.textMuted, fontWeight = FontWeight.SemiBold)
+                    )
+                    KNetTextField(
+                        value = graphqlOperationName,
+                        onValueChange = { graphqlOperationName = it },
+                        modifier = Modifier.fillMaxWidth(),
+                        config = InputFieldConfig(
+                            placeholder = "e.g. GetUserProfile or UpdateCart",
+                            backgroundColor = themeColors.surfaceVariant,
+                            borderColor = themeColors.border
+                        )
+                    )
+                    Text(
+                        text = "Only requests matching this operationName in JSON payload will pause.",
+                        style = typography.caption.copy(color = themeColors.textMuted, fontSize = 10.sp)
+                    )
+                }
             }
 
             // HTTP Method Selector (ALL + Enum Values)
@@ -204,7 +274,12 @@ public fun AddEditBreakpointRuleDialog(
                 KNetButton(
                     onClick = {
                         if (urlPattern.isNotBlank()) {
-                            onSave(urlPattern.trim(), selectedMethod, selectedPhase, enabled)
+                            val criteria: ProtocolMatchCriteria = if (isGraphqlProtocol) {
+                                ProtocolMatchCriteria.GraphQL(operationName = graphqlOperationName.trim().ifEmpty { null })
+                            } else {
+                                ProtocolMatchCriteria.HttpDefault
+                            }
+                            onSave(urlPattern.trim(), selectedMethod, selectedPhase, enabled, criteria)
                         }
                     },
                     variant = ButtonVariant.Primary,

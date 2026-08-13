@@ -17,27 +17,34 @@ import com.devuloopers.knet.domain.traffic.usecase.ExportTrafficToSpecUseCase
 import com.devuloopers.knet.domain.traffic.usecase.GetLiveTrafficUseCase
 import com.devuloopers.knet.domain.traffic.usecase.LoadTransactionBodyUseCase
 import com.devuloopers.knet.domain.util.decodeBodyToText
-import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
+import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
 import com.devuloopers.knet.engine.formatter.formatters.JsonBodyFormatter
 import com.devuloopers.knet.ui.desktop.codeeditor.service.DocumentPreparationService
 import com.devuloopers.knet.ui.desktop.traffic.model.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlin.time.Duration.Companion.milliseconds
+import com.devuloopers.knet.domain.rules.model.RuleModel
+import com.devuloopers.knet.domain.rules.usecase.ObserveRulesUseCase
+import com.devuloopers.knet.domain.rules.usecase.SaveRuleUseCase
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 /**
  * ViewModel managing live traffic feed state, proxy engine lifecycle observation, filtering, and inspection selection.
  */
 class TrafficViewModel(
-    private val getLiveTrafficUseCase: GetLiveTrafficUseCase? = null,
-    private val clearLiveTrafficUseCase: ClearLiveTrafficUseCase? = null,
-    private val startProxyEngineUseCase: StartProxyEngineUseCase? = null,
-    private val stopProxyEngineUseCase: StopProxyEngineUseCase? = null,
-    observeProxyEngineStateUseCase: ObserveProxyEngineStateUseCase? = null,
-    private val loadTransactionBodyUseCase: LoadTransactionBodyUseCase? = null,
-    observeLocalIpUseCase: ObserveLocalIpUseCase? = null,
-    private val widgetPreferencesRepository: WidgetPreferencesRepository? = null,
-    private val exportTrafficToSpecUseCase: ExportTrafficToSpecUseCase? = null
+    getLiveTrafficUseCase: GetLiveTrafficUseCase,
+    private val clearLiveTrafficUseCase: ClearLiveTrafficUseCase,
+    private val startProxyEngineUseCase: StartProxyEngineUseCase,
+    private val stopProxyEngineUseCase: StopProxyEngineUseCase,
+    observeProxyEngineStateUseCase: ObserveProxyEngineStateUseCase,
+    private val loadTransactionBodyUseCase: LoadTransactionBodyUseCase,
+    observeLocalIpUseCase: ObserveLocalIpUseCase,
+    private val getWorkspaceLayoutUseCase: GetWorkspaceLayoutUseCase,
+    private val exportTrafficToSpecUseCase: ExportTrafficToSpecUseCase,
+    observeRulesUseCase: ObserveRulesUseCase,
+    private val saveRuleUseCase: SaveRuleUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(createInitialState())
@@ -71,7 +78,7 @@ class TrafficViewModel(
             }
 
             val displayedItem = _uiState.value.transactions.find { it.transactionId == transactionId }
-            val spec = exportTrafficToSpecUseCase?.execute(
+            val spec = exportTrafficToSpecUseCase.execute(
                 transactionId = transactionId,
                 cachedReqBody = cachedReqBody,
                 fallbackItem = displayedItem
@@ -93,12 +100,10 @@ class TrafficViewModel(
 
     init {
         // Auto-clear traffic feed on startup if configured in settings
-        widgetPreferencesRepository?.let { repo ->
-            viewModelScope.launch {
-                val settings = repo.settingsFlow.firstOrNull()
-                if (settings?.autoClearTrafficOnStartup == true) {
-                    clearLiveTrafficUseCase?.execute()
-                }
+        viewModelScope.launch {
+            val settings = getWorkspaceLayoutUseCase.execute().firstOrNull()
+            if (settings?.autoClearTrafficOnStartup == true) {
+                clearLiveTrafficUseCase.execute()
             }
         }
 
@@ -106,32 +111,28 @@ class TrafficViewModel(
         viewModelScope.launch {
             _isCapturing.flatMapLatest { isCapturing ->
                 if (isCapturing) {
-                    val portFlow = widgetPreferencesRepository?.settingsFlow
-                        ?.map { it.proxyPort }
-                        ?.distinctUntilChanged()
+                    val portFlow = getWorkspaceLayoutUseCase.execute()
+                        .map { it.proxyPort }
+                        .distinctUntilChanged()
 
-                    if (portFlow != null) {
-                        flow {
-                            var isFirst = true
-                            portFlow.collect { port ->
-                                if (!isFirst) {
-                                    delay(500.milliseconds)
-                                }
-                                isFirst = false
-                                emit(port)
+                    flow {
+                        var isFirst = true
+                        portFlow.collect { port ->
+                            if (!isFirst) {
+                                delay(500.milliseconds)
                             }
+                            isFirst = false
+                            emit(port)
                         }
-                    } else {
-                        flowOf(StartProxyEngineUseCase.DEFAULT_PORT)
                     }
                 } else {
                     emptyFlow()
                 }
             }.collect { port ->
                 if (_uiState.value.engineState !is ProxyEngineState.Stopped) {
-                    stopProxyEngineUseCase?.execute()
+                    stopProxyEngineUseCase.execute()
                 }
-                startProxyEngineUseCase?.execute(port)
+                startProxyEngineUseCase.execute(port)
             }
         }
 
@@ -162,7 +163,7 @@ class TrafficViewModel(
                         )
 
                         val prepared = kotlinx.coroutines.withContext(Dispatchers.Default) {
-                            val body = loadTransactionBodyUseCase?.execute(tx.transactionId)
+                            val body = loadTransactionBodyUseCase.execute(tx.transactionId)
 
                             val reqBodyText = body?.let { decodeBodyToText(it.requestBody, it.requestHeaders) } ?: ""
                             val respBodyText = body?.let { decodeBodyToText(it.responseBody, it.responseHeaders) } ?: ""
@@ -208,39 +209,43 @@ class TrafficViewModel(
         }
 
         // 1. Observe Proxy Engine State
-        observeProxyEngineStateUseCase?.let { useCase ->
-            viewModelScope.launch {
-                useCase.execute().collect { state ->
-                    _uiState.update { current ->
-                        val capState = if (state is ProxyEngineState.Running) {
-                            CaptureState.CAPTURING
-                        } else {
-                            CaptureState.STOPPED
-                        }
-                        current.copy(
-                            engineState = state,
-                            captureState = capState
-                        )
+        viewModelScope.launch {
+            observeProxyEngineStateUseCase.execute().collect { state ->
+                _uiState.update { current ->
+                    val capState = if (state is ProxyEngineState.Running) {
+                        CaptureState.CAPTURING
+                    } else {
+                        CaptureState.STOPPED
                     }
+                    current.copy(
+                        engineState = state,
+                        captureState = capState
+                    )
                 }
             }
         }
 
         // 2. Observe Reactive Host Local IP Address
-        observeLocalIpUseCase?.let { useCase ->
-            viewModelScope.launch {
-                useCase.execute().collect { ip ->
-                    _uiState.update { current ->
-                        current.copy(localIpAddress = ip)
-                    }
+        viewModelScope.launch {
+            observeLocalIpUseCase.execute().collect { ip ->
+                _uiState.update { current ->
+                    current.copy(localIpAddress = ip)
                 }
             }
         }
 
-        // 2. Observe Live Traffic Database Stream — GetLiveTrafficUseCase handles domain filtering.
-        getLiveTrafficUseCase?.let { useCase ->
-            viewModelScope.launch {
-                useCase.execute(ProtocolFilter.ALL, "").conflate().collect { liveState ->
+        // 3. Observe Room DB Active Breakpoint Rules for Traffic Row Highlighting
+        viewModelScope.launch {
+            observeRulesUseCase.execute().collect { rules ->
+                _uiState.update { current ->
+                    current.copy(activeBreakpointRules = rules)
+                }
+            }
+        }
+
+        // 4. Observe Live Traffic Database Stream — GetLiveTrafficUseCase handles domain filtering.
+        viewModelScope.launch {
+            getLiveTrafficUseCase.execute(ProtocolFilter.ALL, "").conflate().collect { liveState ->
                     when (liveState) {
                         is LiveTrafficUiState.Success -> {
                             _uiState.update { current ->
@@ -268,7 +273,6 @@ class TrafficViewModel(
                         }
                     }
                 }
-            }
         }
     }
 
@@ -281,12 +285,12 @@ class TrafficViewModel(
             is TrafficIntent.StopCapture -> {
                 _isCapturing.value = false
                 viewModelScope.launch {
-                    stopProxyEngineUseCase?.execute()
+                    stopProxyEngineUseCase.execute()
                 }
             }
 
             is TrafficIntent.ClearFeed -> {
-                clearLiveTrafficUseCase?.execute()
+                clearLiveTrafficUseCase.execute()
                 _uiState.update {
                     it.copy(
                         transactions = emptyList(),
@@ -465,6 +469,76 @@ class TrafficViewModel(
             }
 
             matchesQuery && matchesProtocol && matchesMethod && matchesStatus
+        }
+    }
+
+    /**
+     * Constructs a pre-populated [RuleModel] from a captured transaction and opens the Add/Edit dialog.
+     *
+     * @param transactionId Target transaction UUID.
+     */
+    fun createBreakpointFromTransaction(transactionId: String) {
+        val item = uiState.value.transactions.find { it.transactionId == transactionId } ?: return
+        val targetUrl = item.fullUrl
+
+        // Auto-detect GraphQL Metadata
+        val (protocolCriteria, ruleUrl) = when (val meta = item.interceptionMetadata) {
+            is com.devuloopers.knet.domain.protocol.model.InterceptionMetadata.GraphQL -> {
+                com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria.GraphQL(operationName = meta.operationName) to targetUrl
+            }
+            else -> {
+                com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria.HttpDefault to targetUrl
+            }
+        }
+
+        val prefilledModel = RuleModel(
+            id = Uuid.random().toString(),
+            name = ruleUrl,
+            type = com.devuloopers.knet.domain.rules.model.RuleType.BOTH,
+            condition = ruleUrl,
+            action = item.method,
+            enabled = true,
+            protocolCriteria = protocolCriteria
+        )
+
+        _uiState.update { state ->
+            state.copy(
+                isBreakpointDialogVisible = true,
+                prefilledBreakpointRule = prefilledModel
+            )
+        }
+    }
+
+    /**
+     * Closes the traffic workspace breakpoint rule dialog.
+     */
+    fun closeBreakpointDialog() {
+        _uiState.update { it.copy(isBreakpointDialogVisible = false, prefilledBreakpointRule = null) }
+    }
+
+    /**
+     * Saves a breakpoint rule configured via the Traffic Inspector pre-populated dialog.
+     */
+    fun saveBreakpointRule(
+        urlPattern: String,
+        method: com.devuloopers.knet.domain.collection.model.HttpMethod?,
+        phaseType: com.devuloopers.knet.domain.rules.model.RuleType,
+        enabled: Boolean,
+        protocolCriteria: com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria
+    ) {
+        val editingId = _uiState.value.prefilledBreakpointRule?.id ?: Uuid.random().toString()
+        val rule = RuleModel(
+            id = editingId,
+            name = urlPattern,
+            type = phaseType,
+            condition = urlPattern,
+            action = method?.name ?: "ALL",
+            enabled = enabled,
+            protocolCriteria = protocolCriteria
+        )
+        viewModelScope.launch {
+            saveRuleUseCase.execute(rule)
+            closeBreakpointDialog()
         }
     }
 

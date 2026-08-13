@@ -39,8 +39,6 @@ public object DatabaseMigrations {
 
     /**
      * Migration v4 → v5: adds body size metadata columns to [HttpTransactionEntity].
-     * Sizes default to 0 for all existing rows; they will be populated correctly for
-     * any transactions captured after this migration.
      */
     public val MIGRATION_4_5: Migration = object : Migration(4, 5) {
         override fun migrate(connection: SQLiteConnection) {
@@ -51,14 +49,32 @@ public object DatabaseMigrations {
 
     /**
      * Migration v5 → v6: adds protocol metadata columns to [HttpTransactionEntity].
-     * Allows protocol classification (GraphQL operation names/types) to be computed ONCE at capture time
-     * and persisted directly in Room DB for zero disk I/O during stream mapping.
      */
     public val MIGRATION_5_6: Migration = object : Migration(5, 6) {
         override fun migrate(connection: SQLiteConnection) {
             connection.execSQL("ALTER TABLE HttpTransactionEntity ADD COLUMN protocolType TEXT")
             connection.execSQL("ALTER TABLE HttpTransactionEntity ADD COLUMN graphqlOperationName TEXT")
             connection.execSQL("ALTER TABLE HttpTransactionEntity ADD COLUMN graphqlOperationType TEXT")
+        }
+    }
+
+    /**
+     * Migration v7 → v8: adds scalable protocol criteria columns to [BreakpointRuleEntity].
+     */
+    public val MIGRATION_7_8: Migration = object : Migration(7, 8) {
+        override fun migrate(connection: SQLiteConnection) {
+            connection.execSQL("ALTER TABLE breakpoint_rules ADD COLUMN protocolCriteriaType TEXT NOT NULL DEFAULT 'HTTP'")
+            connection.execSQL("ALTER TABLE breakpoint_rules ADD COLUMN protocolCriteriaData TEXT DEFAULT NULL")
+        }
+    }
+
+    /**
+     * Migration v8 → v9: adds event-driven interception metadata columns to [HttpTransactionEntity].
+     */
+    public val MIGRATION_8_9: Migration = object : Migration(8, 9) {
+        override fun migrate(connection: SQLiteConnection) {
+            connection.execSQL("ALTER TABLE HttpTransactionEntity ADD COLUMN isIntercepted INTEGER NOT NULL DEFAULT 0")
+            connection.execSQL("ALTER TABLE HttpTransactionEntity ADD COLUMN matchedRuleId TEXT DEFAULT NULL")
         }
     }
 }

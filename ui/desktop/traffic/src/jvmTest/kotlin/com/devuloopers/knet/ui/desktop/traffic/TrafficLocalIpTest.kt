@@ -2,7 +2,6 @@ package com.devuloopers.knet.ui.desktop.traffic
 
 import com.devuloopers.knet.domain.network.repository.NetworkRepository
 import com.devuloopers.knet.domain.network.usecase.ObserveLocalIpUseCase
-import com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -39,8 +38,8 @@ class TrafficLocalIpTest {
         }
         val observeLocalIpUseCase = ObserveLocalIpUseCase(fakeNetworkRepo)
 
-        val viewModel = TrafficViewModel(
-            observeLocalIpUseCase = observeLocalIpUseCase
+        val viewModel = FakeTrafficViewModelFactory.create(
+            customObserveLocalIpUseCase = observeLocalIpUseCase
         )
 
         testDispatcher.scheduler.advanceUntilIdle()

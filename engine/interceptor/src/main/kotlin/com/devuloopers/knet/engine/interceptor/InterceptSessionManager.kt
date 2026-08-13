@@ -6,8 +6,8 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.uuid.Uuid
 
 /**
  * Thread-safe manager responsible for tracking active asynchronous HTTP request/response suspensions.
@@ -17,13 +17,13 @@ object InterceptSessionManager {
     private val activeSuspensions = ConcurrentHashMap<String, InterceptedEvent>()
 
     private val _activeEventsStream = MutableStateFlow<List<InterceptedEvent>>(emptyList())
-    public val activeEventsStream: StateFlow<List<InterceptedEvent>> = _activeEventsStream.asStateFlow()
+    val activeEventsStream: StateFlow<List<InterceptedEvent>> = _activeEventsStream.asStateFlow()
 
     /**
      * Creates and registers a suspension event for an inbound request.
      */
     fun suspendRequest(request: HttpRequest): InterceptedEvent {
-        val id = UUID.randomUUID().toString()
+        val id = Uuid.random().toString()
         val deferred = CompletableDeferred<InterceptResult>()
         val event = InterceptedEvent(
             id = id,
@@ -43,7 +43,7 @@ object InterceptSessionManager {
      * Creates and registers a suspension event for an outbound response.
      */
     fun suspendResponse(request: HttpRequest, response: HttpResponse): InterceptedEvent {
-        val id = UUID.randomUUID().toString()
+        val id = Uuid.random().toString()
         val deferred = CompletableDeferred<InterceptResult>()
         val event = InterceptedEvent(
             id = id,

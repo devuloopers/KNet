@@ -1,7 +1,6 @@
 package com.devuloopers.knet.ui.desktop.traffic.view
 
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -27,7 +26,7 @@ import com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficViewModel
  * Top-level Live Traffic Workspace Screen composable bound strictly to :ui:core design tokens and parameter objects.
  */
 @Composable
-public fun TrafficScreen(
+fun TrafficScreen(
     viewModel: TrafficViewModel,
     onSendToApiStudio: (NetworkRequestSpec) -> Unit = {},
     modifier: Modifier = Modifier
@@ -35,15 +34,16 @@ public fun TrafficScreen(
     val state by viewModel.uiState.collectAsState()
     val themeColors = KNetTheme.colors
 
-    val toolbarState = remember(state.captureState, state.engineState, state.autoScroll, state.searchQuery, state.localIpAddress) {
-        TrafficToolbarState(
-            captureState = state.captureState,
-            engineState = state.engineState,
-            autoScroll = state.autoScroll,
-            searchQuery = state.searchQuery,
-            localIpAddress = state.localIpAddress
-        )
-    }
+    val toolbarState =
+        remember(state.captureState, state.engineState, state.autoScroll, state.searchQuery, state.localIpAddress) {
+            TrafficToolbarState(
+                captureState = state.captureState,
+                engineState = state.engineState,
+                autoScroll = state.autoScroll,
+                searchQuery = state.searchQuery,
+                localIpAddress = state.localIpAddress
+            )
+        }
 
     val toolbarActions = remember(viewModel) {
         TrafficToolbarActions(
@@ -124,6 +124,8 @@ public fun TrafficScreen(
                         onSelectTransaction = { viewModel.processIntent(TrafficIntent.SelectTransaction(it)) },
                         formattedTotalSize = state.formattedTotalSize,
                         onSendToApiStudio = handleExportToStudio,
+                        onAddBreakpointRule = viewModel::createBreakpointFromTransaction,
+                        activeRules = state.activeBreakpointRules,
                         modifier = paneModifier
                     )
                 },

@@ -1,5 +1,6 @@
 package com.devuloopers.knet.engine.interceptor
 
+import com.devuloopers.knet.domain.rules.model.RuleModel
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -13,22 +14,23 @@ class BreakpointRuleRegistryTest {
     }
 
     @Test
-    fun testRuleRegistrationAndPrioritySorting() {
-        val r1 = BreakpointRule("b1", priority = 10)
-        val r2 = BreakpointRule("b2", priority = 1)
+    fun testRuleRegistrationAndRetrieval() {
+        val r1 = RuleModel(id = "b1", name = "b1", condition = "*", action = "GET")
+        val r2 = RuleModel(id = "b2", name = "b2", condition = "*", action = "POST")
 
         BreakpointRuleRegistry.addRule(r1)
         BreakpointRuleRegistry.addRule(r2)
 
         val rules = BreakpointRuleRegistry.getRules()
         assertEquals(2, rules.size)
-        assertEquals("b2", rules.first().id, "Rule with lower priority integer must come first")
+        assertTrue(rules.any { it.id == "b1" })
+        assertTrue(rules.any { it.id == "b2" })
     }
 
     @Test
     fun testRuleRemovalAndClear() {
-        BreakpointRuleRegistry.addRule(BreakpointRule("b1"))
-        BreakpointRuleRegistry.addRule(BreakpointRule("b2"))
+        BreakpointRuleRegistry.addRule(RuleModel(id = "b1", name = "b1", condition = "*", action = "GET"))
+        BreakpointRuleRegistry.addRule(RuleModel(id = "b2", name = "b2", condition = "*", action = "POST"))
 
         BreakpointRuleRegistry.removeRule("b1")
         assertEquals(1, BreakpointRuleRegistry.getRules().size)

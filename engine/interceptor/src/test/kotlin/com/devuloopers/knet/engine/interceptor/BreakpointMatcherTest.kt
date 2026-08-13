@@ -1,5 +1,7 @@
 package com.devuloopers.knet.engine.interceptor
 
+import com.devuloopers.knet.domain.rules.model.RuleModel
+import com.devuloopers.knet.domain.rules.model.RuleType
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -15,8 +17,8 @@ class BreakpointMatcherTest {
 
     @Test
     fun testFindMatchingRulesForPhases() {
-        val reqRule = BreakpointRule("req1", ".*api.*", "GET", BreakpointPhase.REQUEST)
-        val resRule = BreakpointRule("res1", ".*api.*", "GET", BreakpointPhase.RESPONSE)
+        val reqRule = RuleModel(id = "req1", name = "req1", condition = ".*api.*", action = "GET", type = RuleType.REQUEST)
+        val resRule = RuleModel(id = "res1", name = "res1", condition = ".*api.*", action = "GET", type = RuleType.RESPONSE)
         BreakpointRuleRegistry.addRule(reqRule)
         BreakpointRuleRegistry.addRule(resRule)
 
@@ -30,5 +32,15 @@ class BreakpointMatcherTest {
 
         val nonMatchedReq = BreakpointMatcher.findMatchingRequestRule("https://other.com/data", "GET")
         assertNull(nonMatchedReq)
+    }
+
+    @Test
+    fun testWildcardStarMatching() {
+        val starRule = RuleModel(id = "star1", name = "star1", condition = "*formattedQuotes*", action = "ALL", type = RuleType.BOTH)
+        BreakpointRuleRegistry.addRule(starRule)
+
+        val matched = BreakpointMatcher.findMatchingRequestRule("https://api.site.com/v1/formattedQuotes/query", "POST")
+        assertNotNull(matched)
+        assertEquals("star1", matched.id)
     }
 }

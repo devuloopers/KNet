@@ -12,6 +12,8 @@ import androidx.room.PrimaryKey
  * @property phase Interception phase filter (REQUEST, RESPONSE, BOTH).
  * @property enabled Whether this rule is active.
  * @property priority Rule evaluation priority order.
+ * @property protocolCriteriaType Protocol type token ("HTTP", "GRAPHQL", "GRPC", "WEBSOCKET").
+ * @property protocolCriteriaData Optional JSON payload for protocol-specific criteria.
  */
 @Entity(tableName = "breakpoint_rules")
 data class BreakpointRuleEntity(
@@ -20,5 +22,7 @@ data class BreakpointRuleEntity(
     val method: String?,
     val phase: String,
     val enabled: Boolean,
-    val priority: Int = 0
+    val priority: Int = 0,
+    val protocolCriteriaType: String = "HTTP",
+    val protocolCriteriaData: String? = null
 )

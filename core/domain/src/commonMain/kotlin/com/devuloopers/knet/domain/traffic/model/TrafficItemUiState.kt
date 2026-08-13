@@ -9,6 +9,7 @@ import com.devuloopers.knet.domain.protocol.model.InterceptionMetadata
  * @property id Sequential numerical identifier for UI display.
  * @property transactionId Unique UUID string of the underlying transaction.
  * @property method HTTP method (e.g. GET, POST, CONNECT, WS).
+ * @property scheme Target URL scheme (e.g. "http", "https").
  * @property host Target host domain.
  * @property path URI path string.
  * @property status HTTP status code (e.g. 200, 404, 0 for active).
@@ -25,12 +26,15 @@ import com.devuloopers.knet.domain.protocol.model.InterceptionMetadata
  * @property requestHeaders Request headers map.
  * @property responseHeaders Response headers map.
  * @property interceptionMetadata Protocol metadata detected during network interception.
+ * @property isIntercepted Whether Netty proxy engine actively intercepted this transaction.
+ * @property matchedRuleId ID of the matched breakpoint rule if intercepted.
  * @property isSelected Whether this row is currently selected by the user.
  */
 data class TrafficItemUiState(
     val id: Int,
     val transactionId: String,
     val method: String,
+    val scheme: String = "http",
     val host: String,
     val path: String,
     val status: Int,
@@ -48,5 +52,17 @@ data class TrafficItemUiState(
     val responseHeaders: Map<String, String>,
     val timings: HttpTimings = HttpTimings(),
     val interceptionMetadata: InterceptionMetadata = InterceptionMetadata.GenericHttp,
+    val isIntercepted: Boolean = false,
+    val matchedRuleId: String? = null,
     val isSelected: Boolean = false
-)
+) {
+    /**
+     * Reconstructed absolute target URL preserving original scheme (https vs http).
+     */
+    val fullUrl: String
+        get() {
+            if (path.startsWith("http://") || path.startsWith("https://")) return path
+            val activeScheme = if (scheme.isNotBlank()) scheme else if (protocol.contains("HTTPS", ignoreCase = true)) "https" else "http"
+            return if (host.isNotBlank()) "$activeScheme://$host$path" else path
+        }
+}

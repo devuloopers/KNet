@@ -61,7 +61,9 @@ object HttpTransactionMapper {
             protocol = "HTTP/1.1",
             headers = reqHeaders,
             body = reqBody,
-            timestamp = entity.timestamp
+            timestamp = entity.timestamp,
+            isIntercepted = entity.isIntercepted,
+            matchedRuleId = entity.matchedRuleId
         )
 
         val statusCode = entity.responseStatusCode

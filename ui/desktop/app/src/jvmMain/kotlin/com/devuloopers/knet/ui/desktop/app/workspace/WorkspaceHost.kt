@@ -2,108 +2,160 @@ package com.devuloopers.knet.ui.desktop.app.workspace
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.devuloopers.knet.domain.rules.model.RuleType
+import com.devuloopers.knet.domain.rules.model.matchesTransaction
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.ui.desktop.app.navigation.DesktopDestination
 import com.devuloopers.knet.ui.desktop.apistudio.view.ApiStudioScreen
 import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.ApiStudioViewModel
 import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.CollectionsViewModel
+import com.devuloopers.knet.ui.desktop.app.navigation.DesktopDestination
+import com.devuloopers.knet.ui.desktop.breakpointmanager.components.AddEditBreakpointRuleDialog
+import com.devuloopers.knet.ui.desktop.breakpointmanager.components.LiveInterceptDrawer
+import com.devuloopers.knet.ui.desktop.breakpointmanager.mapper.toDomainRule
+import com.devuloopers.knet.ui.desktop.breakpointmanager.mapper.toUiModel
 import com.devuloopers.knet.ui.desktop.breakpointmanager.view.BreakpointManagerScreen
 import com.devuloopers.knet.ui.desktop.breakpointmanager.viewmodel.BreakpointManagerViewModel
-import com.devuloopers.knet.ui.desktop.traffic.view.TrafficScreen
-import com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficViewModel
 import com.devuloopers.knet.ui.desktop.certificate.view.CertificateManagerScreen
 import com.devuloopers.knet.ui.desktop.certificate.viewmodel.CertificateViewModel
+import com.devuloopers.knet.ui.desktop.traffic.view.TrafficScreen
+import com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficViewModel
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
  * IDE Workspace Host composable routing active destinations to feature workspaces.
  */
 @Composable
-public fun KNetWorkspaceHost(
+fun KNetWorkspaceHost(
     destination: DesktopDestination,
     onNavigateToDestination: (DesktopDestination) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val apiStudioViewModel: ApiStudioViewModel = koinViewModel()
     val collectionsViewModel: CollectionsViewModel = koinViewModel()
+    val breakpointViewModel: BreakpointManagerViewModel = koinViewModel()
+    val breakpointState by breakpointViewModel.uiState.collectAsState()
 
-    when (destination) {
-        DesktopDestination.Traffic -> {
-            val trafficViewModel: TrafficViewModel = koinViewModel()
-            TrafficScreen(
-                viewModel = trafficViewModel,
-                onSendToApiStudio = { spec ->
-                    val newSessionId = apiStudioViewModel.importRequestSpec(spec)
-                    collectionsViewModel.createUnsavedDraftSession(
-                        id = newSessionId,
-                        editorState = apiStudioViewModel.uiState.value.editorState,
-                        title = apiStudioViewModel.uiState.value.tabs.find { it.id == newSessionId }?.title
+    Box(modifier = modifier.fillMaxSize()) {
+        when (destination) {
+            DesktopDestination.Traffic -> {
+                val trafficViewModel: TrafficViewModel = koinViewModel()
+                val trafficState by trafficViewModel.uiState.collectAsState()
+
+                TrafficScreen(
+                    viewModel = trafficViewModel,
+                    onSendToApiStudio = { spec ->
+                        val newSessionId = apiStudioViewModel.importRequestSpec(spec)
+                        collectionsViewModel.createUnsavedDraftSession(
+                            id = newSessionId,
+                            editorState = apiStudioViewModel.uiState.value.editorState,
+                            title = apiStudioViewModel.uiState.value.tabs.find { it.id == newSessionId }?.title
+                        )
+                        onNavigateToDestination(DesktopDestination.ApiStudio)
+                    },
+                    modifier = Modifier.fillMaxSize()
+                )
+
+                if (trafficState.isBreakpointDialogVisible) {
+                    val prefilledUiModel = remember(trafficState.prefilledBreakpointRule) {
+                        trafficState.prefilledBreakpointRule?.toUiModel()
+                    }
+                    AddEditBreakpointRuleDialog(
+                        rule = prefilledUiModel,
+                        onDismiss = { trafficViewModel.closeBreakpointDialog() },
+                        onSave = { urlPattern, method, phase, enabled, protocolCriteria ->
+                            val ruleType = RuleType.fromString(phase.name)
+                            trafficViewModel.saveBreakpointRule(urlPattern, method, ruleType, enabled, protocolCriteria)
+                        }
                     )
-                    onNavigateToDestination(DesktopDestination.ApiStudio)
-                },
-                modifier = modifier
-            )
+                }
+            }
+
+            DesktopDestination.ApiStudio -> {
+                ApiStudioScreen(
+                    viewModel = apiStudioViewModel,
+                    collectionsViewModel = collectionsViewModel,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            DesktopDestination.Certificate -> {
+                val certificateViewModel: CertificateViewModel = koinViewModel()
+                CertificateManagerScreen(
+                    viewModel = certificateViewModel,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            DesktopDestination.Breakpoints -> {
+                BreakpointManagerScreen(
+                    viewModel = breakpointViewModel,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            DesktopDestination.Settings -> {
+                val settingsViewModel: com.devuloopers.knet.ui.desktop.settings.viewmodel.SettingsViewModel =
+                    koinViewModel()
+                com.devuloopers.knet.ui.desktop.settings.view.SettingsScreen(
+                    viewModel = settingsViewModel,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            else -> {
+                PlaceholderWorkspaceScreen(
+                    destination = destination,
+                    modifier = Modifier.fillMaxSize()
+                )
+            }
         }
-        DesktopDestination.ApiStudio -> {
-            ApiStudioScreen(
-                viewModel = apiStudioViewModel,
-                collectionsViewModel = collectionsViewModel,
-                modifier = modifier
-            )
-        }
-        DesktopDestination.Certificate -> {
-            val certificateViewModel: CertificateViewModel = koinViewModel()
-            CertificateManagerScreen(
-                viewModel = certificateViewModel,
-                modifier = modifier
-            )
-        }
-        DesktopDestination.Breakpoints -> {
-            val breakpointViewModel: BreakpointManagerViewModel = koinViewModel()
-            BreakpointManagerScreen(
-                viewModel = breakpointViewModel,
-                modifier = modifier
-            )
-        }
-        DesktopDestination.Settings -> {
-            val settingsViewModel: com.devuloopers.knet.ui.desktop.settings.viewmodel.SettingsViewModel = koinViewModel()
-            com.devuloopers.knet.ui.desktop.settings.view.SettingsScreen(
-                viewModel = settingsViewModel,
-                modifier = modifier
-            )
-        }
-        else -> {
-            PlaceholderWorkspaceScreen(
-                destination = destination,
-                modifier = modifier
-            )
-        }
+
+        // Live Intercept Side Drawer Overlay
+        LiveInterceptDrawer(
+            event = breakpointState.activeEvent,
+            isVisible = breakpointState.activeEvent != null,
+            onForwardRequest = { modifiedReq ->
+                val event = breakpointState.activeEvent ?: return@LiveInterceptDrawer
+                breakpointViewModel.forwardRequest(event.id, modifiedReq)
+            },
+            onForwardResponse = { modifiedResp ->
+                val event = breakpointState.activeEvent ?: return@LiveInterceptDrawer
+                breakpointViewModel.forwardResponse(event.id, modifiedResp)
+            },
+            onDrop = {
+                val event = breakpointState.activeEvent ?: return@LiveInterceptDrawer
+                breakpointViewModel.dropEvent(event.id)
+            },
+            onDisableRule = {
+                val event = breakpointState.activeEvent ?: return@LiveInterceptDrawer
+                val matchedRule = breakpointState.rules.find { rule ->
+                    rule.toDomainRule().matchesTransaction(event.url, event.method)
+                }
+                breakpointViewModel.disableMatchingRule(matchedRule?.id ?: "")
+            },
+            onDismiss = {
+                breakpointViewModel.dismissCurrentEvent()
+            },
+            modifier = Modifier.align(Alignment.CenterEnd)
+        )
     }
 }
 
@@ -127,9 +179,24 @@ private fun PlaceholderWorkspaceScreen(
             modifier = Modifier.width(600.dp)
         ) {
             val (title, description, icon) = when (destination) {
-                DesktopDestination.ApiStudio -> Triple("API Testing Studio", "API request authoring, collections, and environment variables.", Icons.Default.Build)
-                DesktopDestination.Inspector -> Triple("Transaction Inspector", "Header, query parameters, timeline, and payload metadata view.", Icons.Default.Info)
-                DesktopDestination.Certificate -> Triple("PKI Certificates Manager", "Root certificate generation, trust stores, and CA management.", Icons.Default.Lock)
+                DesktopDestination.ApiStudio -> Triple(
+                    "API Testing Studio",
+                    "API request authoring, collections, and environment variables.",
+                    Icons.Default.Build
+                )
+
+                DesktopDestination.Inspector -> Triple(
+                    "Transaction Inspector",
+                    "Header, query parameters, timeline, and payload metadata view.",
+                    Icons.Default.Info
+                )
+
+                DesktopDestination.Certificate -> Triple(
+                    "PKI Certificates Manager",
+                    "Root certificate generation, trust stores, and CA management.",
+                    Icons.Default.Lock
+                )
+
                 else -> Triple("KNet Workspace", "Developer suite workspace.", Icons.Default.Info)
             }
 
@@ -203,7 +270,11 @@ private fun QuickActionCard(
         Column(modifier = Modifier.padding(14.dp)) {
             Text(text = icon, style = typography.titleLarge, modifier = Modifier.padding(bottom = 4.dp))
             Text(text = title, style = typography.titleSmall.copy(color = themeColors.textPrimary))
-            Text(text = subtitle, style = typography.caption.copy(color = themeColors.textMuted), modifier = Modifier.padding(top = 2.dp))
+            Text(
+                text = subtitle,
+                style = typography.caption.copy(color = themeColors.textMuted),
+                modifier = Modifier.padding(top = 2.dp)
+            )
         }
     }
 }

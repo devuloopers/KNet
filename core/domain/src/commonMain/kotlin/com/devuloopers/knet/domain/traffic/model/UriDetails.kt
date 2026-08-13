@@ -3,9 +3,10 @@ package com.devuloopers.knet.domain.traffic.model
 import java.net.URI
 
 /**
- * Parsed URL components containing host, path with query string, and extracted query parameter map.
+ * Parsed URL components containing scheme, host, path with query string, and extracted query parameter map.
  */
 data class UriDetails(
+    val scheme: String = "http",
     val host: String,
     val path: String,
     val queryParams: Map<String, String>
@@ -17,9 +18,13 @@ data class UriDetails(
         fun parse(url: String): UriDetails {
             var path = "/"
             val params = mutableMapOf<String, String>()
+            var scheme = if (url.startsWith("https", ignoreCase = true)) "https" else "http"
 
             val host = try {
                 val uri = URI(url)
+                if (!uri.scheme.isNullOrBlank()) {
+                    scheme = uri.scheme.lowercase()
+                }
                 val parsedPath = (uri.path ?: "/").ifEmpty { "/" }
                 val query = uri.query
                 path = if (!query.isNullOrEmpty()) "$parsedPath?$query" else parsedPath
@@ -38,7 +43,7 @@ data class UriDetails(
                 url
             }
 
-            return UriDetails(host, path, params)
+            return UriDetails(scheme, host, path, params)
         }
     }
 }

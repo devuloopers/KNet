@@ -102,12 +102,11 @@ object TestFixtures {
     fun createRuleModel(
         id: String = "rule-1",
         name: String = "Mock Auth Token",
-        type: String = "Rewrite",
+        type: com.devuloopers.knet.domain.rules.model.RuleType = com.devuloopers.knet.domain.rules.model.RuleType.BOTH,
         condition: String = "url CONTAINS 'auth'",
         action: String = "Set Header",
         enabled: Boolean = true,
-        hitCount: Int = 5,
-        lastHit: String = "10:30:00"
+        protocolCriteria: com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria = com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria.HttpDefault
     ): RuleModel = RuleModel(
         id = id,
         name = name,
@@ -115,8 +114,7 @@ object TestFixtures {
         condition = condition,
         action = action,
         enabled = enabled,
-        hitCount = hitCount,
-        lastHit = lastHit
+        protocolCriteria = protocolCriteria
     )
 }
 

@@ -70,7 +70,10 @@ data class TrafficState(
     val previewFormatMode: PreviewFormatMode = PreviewFormatMode.PRETTY,
     val columnVisibility: ColumnVisibilityState = ColumnVisibilityState(),
     val preparedState: InspectorPreparedState = InspectorPreparedState(),
-    val localIpAddress: String = "127.0.0.1"
+    val localIpAddress: String = "127.0.0.1",
+    val activeBreakpointRules: List<com.devuloopers.knet.domain.rules.model.RuleModel> = emptyList(),
+    val isBreakpointDialogVisible: Boolean = false,
+    val prefilledBreakpointRule: com.devuloopers.knet.domain.rules.model.RuleModel? = null
 ) {
     /**
      * Selected transaction UI model matching [selectedTransactionId].

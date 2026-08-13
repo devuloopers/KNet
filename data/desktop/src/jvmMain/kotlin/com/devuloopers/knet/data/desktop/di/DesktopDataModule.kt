@@ -36,8 +36,6 @@ import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
 import com.devuloopers.knet.domain.workspace.usecase.SaveWorkspaceLayoutUseCase
 import com.devuloopers.knet.engine.certificate.CertificateManager
 import com.devuloopers.knet.engine.certificate.CertificateManagerImpl
-import com.devuloopers.knet.engine.formatter.BodyFormatter
-import com.devuloopers.knet.engine.formatter.formatters.GraphQLBodyFormatter
 import com.devuloopers.knet.engine.protocol.inspector.graphql.GraphQLProtocolInspector
 import com.devuloopers.knet.engine.proxy.network.LocalIpResolver
 import com.devuloopers.knet.storage.database.DatabaseFactory
@@ -145,6 +143,7 @@ object DesktopDataModule {
         factory { StopProxyEngineUseCase(get()) }
         factory { ObserveProxyEngineStateUseCase(get()) }
         factory { GetRulesUseCase(get()) }
+        factory { ObserveRulesUseCase(get()) }
         factory { SaveRuleUseCase(get()) }
         factory { ToggleRuleUseCase(get()) }
         factory { DeleteRuleUseCase(get()) }

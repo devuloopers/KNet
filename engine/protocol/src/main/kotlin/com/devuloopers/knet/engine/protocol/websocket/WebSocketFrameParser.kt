@@ -10,7 +10,7 @@ import io.netty.handler.codec.http.websocketx.PingWebSocketFrame
 import io.netty.handler.codec.http.websocketx.PongWebSocketFrame
 import io.netty.handler.codec.http.websocketx.TextWebSocketFrame
 import io.netty.handler.codec.http.websocketx.WebSocketFrame
-import java.util.UUID
+import kotlin.uuid.Uuid
 
 private const val TAG = "WebSocketFrameParser"
 
@@ -33,7 +33,7 @@ class WebSocketFrameParser(
      */
     fun parseFrame(frame: WebSocketFrame, direction: FrameDirection): WebSocketFrameRecord? {
         val timestamp = System.currentTimeMillis()
-        val id = UUID.randomUUID().toString()
+        val id = Uuid.random().toString()
         val length = frame.content().readableBytes()
 
         return when (frame) {

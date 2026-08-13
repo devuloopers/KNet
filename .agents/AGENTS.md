@@ -146,4 +146,17 @@ Strict adherence to KNet Clean Architecture and Koin Dependency Injection patter
 2. **No Default Instantiation in Primary Constructor**:
    * ViewModel primary constructors must NEVER specify default fallback instantiations for injected dependencies (e.g., `useCase: MyUseCase = MyUseCase()`). All dependencies must be explicitly defined and provided by Koin DI modules (`module { factory { ... } }`).
 
+---
+
+## Kotlin UUID Rule
+
+Always use Kotlin Multiplatform's native `kotlin.uuid.Uuid` instead of `java.util.UUID`.
+
+### Guidelines:
+1. **No Java UUID**:
+   * `java.util.UUID` is strictly prohibited in KNet Multiplatform code.
+2. **Standard Kotlin Uuid**:
+   * Always use `kotlin.uuid.Uuid.random().toString()` (with `@OptIn(ExperimentalUuidApi::class)` if required) for random UUID string generation.
+
+
 

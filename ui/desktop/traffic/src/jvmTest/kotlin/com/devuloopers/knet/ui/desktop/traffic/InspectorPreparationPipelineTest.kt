@@ -1,7 +1,6 @@
 package com.devuloopers.knet.ui.desktop.traffic
 
 import com.devuloopers.knet.domain.traffic.model.TrafficItemUiState
-import com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -31,7 +30,7 @@ class InspectorPreparationPipelineTest {
 
     @Test
     fun testPreparationPipelineFormatsJsonInBackground() = runTest {
-        val viewModel = TrafficViewModel()
+        val viewModel = FakeTrafficViewModelFactory.create()
         val rawJson = """{"id":1,"name":"Test Item","items":[1,2,3]}"""
         val item = TrafficItemUiState(
             id = 1,

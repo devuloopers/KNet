@@ -40,9 +40,22 @@ class KNetInterceptorHandler : ChannelDuplexHandler() {
             }
 
             if (request != null) {
-                val rule = BreakpointMatcher.findMatchingRequestRule(request.url, request.method)
+                val requestBodyText = com.devuloopers.knet.domain.util.decodeBodyToText(request.body)
+                val rule = BreakpointMatcher.findMatchingRequestRule(request.url, request.method, requestBodyText)
                 if (rule != null) {
-                    InterceptCoordinator.coordinateRequest(context, msg, request)
+                    val taggedRequest = com.devuloopers.knet.domain.clientNetwork.model.HttpRequest(
+                        id = request.id,
+                        method = request.method,
+                        url = request.url,
+                        protocol = request.protocol,
+                        headers = request.headers,
+                        body = request.body,
+                        timestamp = request.timestamp,
+                        isIntercepted = true,
+                        matchedRuleId = rule.id
+                    )
+                    context.channel().attr(ChannelAttributes.REQUEST_ATTR).set(taggedRequest)
+                    InterceptCoordinator.coordinateRequest(context, msg, taggedRequest)
                     return
                 }
             }
@@ -54,10 +67,23 @@ class KNetInterceptorHandler : ChannelDuplexHandler() {
         if (msg is FullHttpResponse) {
             val request = context.channel().attr(ChannelAttributes.REQUEST_ATTR).get()
             if (request != null) {
-                val rule = BreakpointMatcher.findMatchingResponseRule(request.url, request.method)
+                val requestBodyText = com.devuloopers.knet.domain.util.decodeBodyToText(request.body)
+                val rule = BreakpointMatcher.findMatchingResponseRule(request.url, request.method, requestBodyText)
                 if (rule != null) {
+                    val taggedRequest = com.devuloopers.knet.domain.clientNetwork.model.HttpRequest(
+                        id = request.id,
+                        method = request.method,
+                        url = request.url,
+                        protocol = request.protocol,
+                        headers = request.headers,
+                        body = request.body,
+                        timestamp = request.timestamp,
+                        isIntercepted = true,
+                        matchedRuleId = rule.id
+                    )
+                    context.channel().attr(ChannelAttributes.REQUEST_ATTR).set(taggedRequest)
                     val mappedResponse = HttpMapper.mapResponse(msg)
-                    InterceptCoordinator.coordinateResponse(context, msg, request, mappedResponse)
+                    InterceptCoordinator.coordinateResponse(context, msg, taggedRequest, mappedResponse)
                     return
                 }
             }
@@ -66,6 +92,12 @@ class KNetInterceptorHandler : ChannelDuplexHandler() {
     }
 
     override fun channelInactive(context: ChannelHandlerContext) {
+        val request = context.channel().attr(ChannelAttributes.REQUEST_ATTR).get()
+        if (request != null) {
+            InterceptSessionManager.getActiveEvents()
+                .filter { it.request.id == request.id }
+                .forEach { InterceptSessionManager.resume(it.id, InterceptResult.Drop) }
+        }
         super.channelInactive(context)
     }
 
