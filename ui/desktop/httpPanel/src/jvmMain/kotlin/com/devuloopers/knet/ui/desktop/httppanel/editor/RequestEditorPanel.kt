@@ -20,7 +20,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.*
  * Cohesive actions parameter object for [RequestEditorPanel].
  */
 data class RequestEditorPanelActions(
-    val onBodyStateChanged: (BodyState) -> Unit = {},
+    val onBodyStateChanged: (RequestBodyState) -> Unit = {},
     val onBodyPayloadChanged: (String) -> Unit = {},
     val onGraphQlStateChanged: ((GraphQlState) -> Unit)? = null,
     val onQueryParamsChanged: (List<Pair<String, String>>) -> Unit = {},
@@ -43,7 +43,7 @@ data class RequestEditorPanelActions(
  */
 @Composable
 fun RequestEditorPanel(
-    bodyState: BodyState = BodyState(),
+    bodyState: RequestBodyState = RequestBodyState(),
     queryParams: List<Pair<String, String>> = emptyList(),
     headers: List<Pair<String, String>> = emptyList(),
     cookies: List<Pair<String, String>> = emptyList(),
@@ -98,7 +98,7 @@ fun RequestEditorPanel(
         ) {
             when (localActiveTab) {
                 InspectorSubTab.BODY -> {
-                    BodyEditor(
+                    RequestBodyEditor(
                         state = bodyState,
                         onStateChange = { updatedBodyState ->
                             actions.onBodyStateChanged(updatedBodyState)

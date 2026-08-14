@@ -21,18 +21,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.devuloopers.knet.domain.clientNetwork.model.HttpRequest
 import com.devuloopers.knet.domain.clientNetwork.model.HttpResponse
-import com.devuloopers.knet.domain.network.model.NetworkResponseSpec
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.InterceptedTransaction
+import com.devuloopers.knet.domain.util.decodeBodyToText
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.httppanel.editor.RequestEditorPanel
 import com.devuloopers.knet.ui.desktop.httppanel.editor.RequestEditorPanelActions
-import com.devuloopers.knet.ui.desktop.httppanel.model.BodyMode
-import com.devuloopers.knet.ui.desktop.httppanel.model.BodyState
+import com.devuloopers.knet.ui.desktop.httppanel.editor.ResponseEditorPanel
+import com.devuloopers.knet.ui.desktop.httppanel.editor.ResponseEditorPanelActions
 import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
-import com.devuloopers.knet.ui.desktop.httppanel.viewpanels.ResponseViewPanel
+import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyState
+import com.devuloopers.knet.ui.desktop.httppanel.model.ResponseBodyState
 
 /**
  * Slide-out desktop drawer displaying active in-flight suspended HTTP transactions.
@@ -60,14 +61,31 @@ fun LiveInterceptDrawer(
     ) {
         if (event == null) return@AnimatedVisibility
 
-        var editedHeaders by remember(event.id) {
+        var editedReqHeaders by remember(event.id) {
             mutableStateOf(event.request.headers)
         }
-        var bodyState by remember(event.id) {
-            val rawBodyText = event.request.body?.decodeToString() ?: ""
-            mutableStateOf(BodyState.fromPayload(event.request.headers, rawBodyText))
+        var reqBodyState by remember(event.id) {
+            val rawBodyText = decodeBodyToText(event.request.body, event.request.headers)
+            mutableStateOf(RequestBodyState.fromPayload(event.request.headers, rawBodyText))
         }
-        var activeSubTab by remember(event.id) {
+        var activeReqSubTab by remember(event.id) {
+            mutableStateOf(InspectorSubTab.BODY)
+        }
+
+        var editedStatusCode by remember(event.id) {
+            mutableStateOf(event.response?.statusCode ?: 200)
+        }
+        var editedStatusText by remember(event.id) {
+            mutableStateOf(event.response?.statusText ?: "OK")
+        }
+        var editedRespHeaders by remember(event.id) {
+            mutableStateOf(event.response?.headers ?: emptyList())
+        }
+        var respBodyState by remember(event.id) {
+            val rawBodyText = decodeBodyToText(event.response?.body, event.response?.headers ?: emptyList())
+            mutableStateOf(ResponseBodyState.fromPayload(event.response?.headers ?: emptyList(), rawBodyText))
+        }
+        var activeRespSubTab by remember(event.id) {
             mutableStateOf(InspectorSubTab.BODY)
         }
 
@@ -105,6 +123,27 @@ fun LiveInterceptDrawer(
                                 text = "PAUSED IN-FLIGHT",
                                 style = typography.codeSmall.copy(
                                     color = themeColors.semantic.warning,
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 10.sp
+                                )
+                            )
+                        }
+
+                        // Intercept Phase Badge
+                        val isRequestPhase = event.phase == BreakpointPhase.REQUEST
+                        val phaseColor = if (isRequestPhase) themeColors.semantic.info else themeColors.semantic.success
+                        val phaseLabel = if (isRequestPhase) "REQUEST INTERCEPT" else "RESPONSE INTERCEPT"
+
+                        Box(
+                            modifier = Modifier
+                                .background(phaseColor.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                                .border(1.dp, phaseColor, RoundedCornerShape(4.dp))
+                                .padding(horizontal = 8.dp, vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = phaseLabel,
+                                style = typography.codeSmall.copy(
+                                    color = phaseColor,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 10.sp
                                 )
@@ -149,36 +188,45 @@ fun LiveInterceptDrawer(
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Forward Button
+                    // Dynamic Forward Button
+                    val isRequestPhase = event.phase == BreakpointPhase.REQUEST
+                    val forwardLabel = if (isRequestPhase) "FORWARD REQUEST" else "FORWARD RESPONSE"
+
                     KNetButton(
                         onClick = {
-                            if (event.phase == BreakpointPhase.REQUEST || event.phase == BreakpointPhase.BOTH) {
+                            if (isRequestPhase) {
+                                val headersToForward = editedReqHeaders.filterNot {
+                                    it.first.equals("Content-Encoding", ignoreCase = true)
+                                }
                                 val modifiedReq = HttpRequest(
                                     id = event.request.id,
                                     method = event.request.method,
                                     url = event.request.url,
                                     protocol = event.request.protocol,
-                                    headers = editedHeaders,
-                                    body = bodyState.payloadText.encodeToByteArray(),
+                                    headers = headersToForward,
+                                    body = reqBodyState.payloadText.encodeToByteArray(),
                                     timestamp = event.request.timestamp,
                                     isIntercepted = true,
                                     matchedRuleId = event.request.matchedRuleId
                                 )
                                 onForwardRequest(modifiedReq)
                             } else {
-                                val currentResp = event.response ?: HttpResponse(
-                                    statusCode = 200,
-                                    statusText = "OK",
-                                    headers = emptyList(),
-                                    body = null,
-                                    timestamp = System.currentTimeMillis()
+                                val headersToForward = editedRespHeaders.filterNot {
+                                    it.first.equals("Content-Encoding", ignoreCase = true)
+                                }
+                                val modifiedResp = HttpResponse(
+                                    statusCode = editedStatusCode,
+                                    statusText = editedStatusText,
+                                    headers = headersToForward,
+                                    body = respBodyState.payloadText.encodeToByteArray(),
+                                    timestamp = event.response?.timestamp ?: System.currentTimeMillis()
                                 )
-                                onForwardResponse(currentResp)
+                                onForwardResponse(modifiedResp)
                             }
                         },
                         variant = ButtonVariant.Primary
                     ) {
-                        Text(text = "FORWARD", style = typography.caption.copy(fontWeight = FontWeight.Bold))
+                        Text(text = forwardLabel, style = typography.caption.copy(fontWeight = FontWeight.Bold))
                     }
 
                     // Drop Button
@@ -206,44 +254,36 @@ fun LiveInterceptDrawer(
                 ) {
                     if (event.phase == BreakpointPhase.REQUEST || event.phase == BreakpointPhase.BOTH) {
                         RequestEditorPanel(
-                            bodyState = bodyState,
-                            headers = editedHeaders,
-                            activeSubTab = activeSubTab,
+                            bodyState = reqBodyState,
+                            headers = editedReqHeaders,
+                            activeSubTab = activeReqSubTab,
                             actions = RequestEditorPanelActions(
-                                onBodyStateChanged = { bodyState = it },
+                                onBodyStateChanged = { reqBodyState = it },
                                 onHeadersChanged = { pairs ->
-                                    editedHeaders = pairs
+                                    editedReqHeaders = pairs
                                 },
-                                onSubTabSelected = { activeSubTab = it }
+                                onSubTabSelected = { activeReqSubTab = it }
                             ),
                             modifier = Modifier.fillMaxSize()
                         )
                     } else {
-                        val response = event.response
-                        if (response != null) {
-                            val respSpec = NetworkResponseSpec(
-                                statusCode = response.statusCode,
-                                statusText = response.statusText,
-                                durationMs = 0L,
-                                sizeBytes = (response.body?.size ?: 0).toLong(),
-                                responseBody = response.body?.decodeToString() ?: "",
-                                headers = response.headers.map { it.first to it.second }
-                            )
-                            ResponseViewPanel(
-                                spec = respSpec,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        } else {
-                            Box(
-                                modifier = Modifier.fillMaxSize(),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = "No Response Payload Intercepted",
-                                    style = typography.bodyMedium.copy(color = themeColors.textMuted)
-                                )
-                            }
-                        }
+                        ResponseEditorPanel(
+                            statusCode = editedStatusCode,
+                            statusText = editedStatusText,
+                            bodyState = respBodyState,
+                            headers = editedRespHeaders,
+                            activeSubTab = activeRespSubTab,
+                            actions = ResponseEditorPanelActions(
+                                onStatusCodeChanged = { editedStatusCode = it },
+                                onStatusTextChanged = { editedStatusText = it },
+                                onBodyStateChanged = { respBodyState = it },
+                                onHeadersChanged = { pairs ->
+                                    editedRespHeaders = pairs
+                                },
+                                onSubTabSelected = { activeRespSubTab = it }
+                            ),
+                            modifier = Modifier.fillMaxSize()
+                        )
                     }
                 }
             }

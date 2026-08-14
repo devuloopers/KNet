@@ -17,9 +17,9 @@ import com.devuloopers.knet.ui.desktop.apistudio.model.*
 import com.devuloopers.knet.ui.desktop.apistudio.response.ResponseSubTab
 import com.devuloopers.knet.ui.desktop.apistudio.usecase.AutoSaveApiSessionUseCase
 import com.devuloopers.knet.ui.desktop.apistudio.usecase.ExecuteScriptedApiRequestUseCase
-import com.devuloopers.knet.ui.desktop.httppanel.model.BodyMode
-import com.devuloopers.knet.ui.desktop.httppanel.model.BodyState
 import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlState
+import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyMode
+import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyState
 import com.devuloopers.knet.ui.desktop.httppanel.usecase.SyncBodyStateUseCase
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -178,7 +178,7 @@ class ApiStudioViewModel(
     /**
      * Updates strongly-typed body state configuration in UDF state.
      */
-    fun updateBodyState(bodyState: BodyState) {
+    fun updateBodyState(bodyState: RequestBodyState) {
         _uiState.update {
             val hydratedState = syncBodyStateUseCase?.ensureHydrated(bodyState) ?: bodyState
             it.copy(editorState = it.editorState.copy(bodyState = hydratedState))
@@ -189,7 +189,7 @@ class ApiStudioViewModel(
     /**
      * Updates strongly-typed body mode in UDF state, synchronizing GraphQL state if needed.
      */
-    fun updateBodyMode(mode: BodyMode) {
+    fun updateBodyMode(mode: RequestBodyMode) {
         _uiState.update {
             val currentBodyState = it.editorState.bodyState
             val updatedBodyState = syncBodyStateUseCase?.switchMode(currentBodyState, mode)
@@ -380,7 +380,7 @@ class ApiStudioViewModel(
         val mappedAuthState = normalizedSpec.auth.toAuthState()
 
         _uiState.update { state ->
-            val hydratedBodyState = BodyState.fromPayload(
+            val hydratedBodyState = RequestBodyState.fromPayload(
                 headers = normalizedSpec.headers,
                 rawBody = normalizedSpec.bodyPayload
             )

@@ -235,6 +235,7 @@ class KNetProxyHandler(
                                 pipeline.addLast("ssl", sslHandler)
                             }
                             pipeline.addLast("httpCodec", HttpClientCodec())
+                            pipeline.addLast("httpAggregator", HttpObjectAggregator(10 * 1024 * 1024))
                             pipeline.addLast(
                                 "outboundHandler",
                                 KNetOutboundHandler(
@@ -322,7 +323,7 @@ class KNetProxyHandler(
 }
 
 /**
- * Netty outbound client connection handler supporting real-time chunked response streaming.
+ * Netty outbound client connection handler supporting real-time chunked and aggregated response streaming.
  * Streams HttpResponse and HttpContent to client channel while accumulating body bytes
  * for proxy inspection. Chunked responses arrive as separate HttpContent messages;
  * this handler buffers them in a [java.io.ByteArrayOutputStream] and merges the
@@ -352,14 +353,48 @@ class KNetOutboundHandler(
 
     override fun channelRead0(context: ChannelHandlerContext, msg: HttpObject) {
         when (msg) {
+            is FullHttpResponse -> {
+                timingCollector.markFirstByteReceived()
+                timingCollector.markLastByteReceived()
+
+                val timings = timingCollector.getTimings()
+                val totalDuration = timingCollector.getTotalDuration()
+
+                val mapped = HttpMapper.mapResponse(msg)
+                mappedResponse = mapped
+                isKeepAlive = HttpUtil.isKeepAlive(msg)
+                KNetLogger.info(TAG) { "KNet Proxy Full Response: ${msg.status()}" }
+
+                if (!isKeepAlive) {
+                    msg.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE)
+                }
+
+                val clientRequest = clientChannel.attr(AttributeKey.valueOf<com.devuloopers.knet.domain.clientNetwork.model.HttpRequest>("knet.request")).get()
+                val isIntercepted = clientRequest?.isIntercepted == true
+
+                if (!isIntercepted) {
+                    listener?.onResponseCaptured(
+                        transactionId = transactionId,
+                        response = mapped,
+                        durationMs = totalDuration,
+                        timings = timings
+                    )
+                }
+
+                clientChannel.writeAndFlush(ReferenceCountUtil.retain(msg))
+
+                // Close the one-shot outbound remote server channel
+                context.close()
+
+                if (!isKeepAlive) {
+                    clientChannel.close()
+                }
+            }
+
             is HttpResponse -> {
                 timingCollector.markFirstByteReceived()
 
-                if (msg is FullHttpResponse) {
-                    mappedResponse = HttpMapper.mapResponse(msg)
-                } else {
-                    mappedResponse = HttpMapper.mapResponseHeaders(msg)
-                }
+                mappedResponse = HttpMapper.mapResponseHeaders(msg)
                 isKeepAlive = HttpUtil.isKeepAlive(msg)
                 KNetLogger.info(TAG) { "KNet Proxy Response Headers: ${msg.status()}" }
 

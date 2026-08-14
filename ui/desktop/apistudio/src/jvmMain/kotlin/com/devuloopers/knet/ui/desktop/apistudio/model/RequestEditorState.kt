@@ -2,7 +2,8 @@ package com.devuloopers.knet.ui.desktop.apistudio.model
 
 import com.devuloopers.knet.engine.script.api.ScriptLanguage
 import com.devuloopers.knet.ui.desktop.apistudio.response.ResponseSubTab
-import com.devuloopers.knet.ui.desktop.httppanel.model.BodyMode
+import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyMode
+import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyState
 
 public typealias RequestSubTab = com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
 
@@ -45,7 +46,7 @@ public data class RequestEditorState(
     val cookies: List<Pair<String, String>> = emptyList(),
 
     val authState: AuthState = AuthState(),
-    val bodyState: BodyState = BodyState(mode = BodyMode.NONE),
+    val bodyState: RequestBodyState = RequestBodyState(mode = RequestBodyMode.NONE),
     val authType: String = "No Auth",
     val authToken: String = "",
     val preRequestScript: String = "",
@@ -61,5 +62,5 @@ public data class RequestEditorState(
     val bodyPayload: String get() = bodyState.payloadText
 
     /** User-facing display label string derived directly from [bodyState] SSOT mode. */
-    val bodyType: String get() = if (bodyState.mode == BodyMode.NONE) "None" else bodyState.mode.name
+    val bodyType: String get() = if (bodyState.mode == RequestBodyMode.NONE) "None" else bodyState.mode.name
 }

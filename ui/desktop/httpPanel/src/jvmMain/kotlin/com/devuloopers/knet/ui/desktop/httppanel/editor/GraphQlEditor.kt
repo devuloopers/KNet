@@ -17,6 +17,8 @@ import com.devuloopers.knet.engine.formatter.formatters.GraphQLBodyFormatter
 import com.devuloopers.knet.engine.formatter.graphql.GraphQLQuerySynchronizer
 import com.devuloopers.knet.ui.core.components.input.InputFieldConfig
 import com.devuloopers.knet.ui.core.components.input.KNetTextField
+import com.devuloopers.knet.ui.core.components.tabs.KNetTab
+import com.devuloopers.knet.ui.core.components.tabs.KNetTabRow
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
@@ -58,36 +60,14 @@ fun GraphQlEditor(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Sub-Tab Chips
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(spacing.xs),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
+            // Sub-Tab Chips using reusable KNetTabRow & KNetTab
+            KNetTabRow {
                 GraphQlSubTab.entries.forEach { subTab ->
-                    val isSelected = state.activeSubTab == subTab
-                    Box(
-                        modifier = Modifier
-                            .background(
-                                color = if (isSelected) themeColors.accent.copy(alpha = 0.15f) else Color.Transparent,
-                                shape = RoundedCornerShape(4.dp)
-                            )
-                            .border(
-                                width = 1.dp,
-                                color = if (isSelected) themeColors.accent else themeColors.border,
-                                shape = RoundedCornerShape(4.dp)
-                            )
-                            .clickable { onStateChange(state.copy(activeSubTab = subTab)) }
-                            .handCursor()
-                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                    ) {
-                        Text(
-                            text = subTab.label,
-                            style = typography.caption.copy(
-                                color = if (isSelected) themeColors.accent else themeColors.textMuted,
-                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-                            )
-                        )
-                    }
+                    KNetTab(
+                        title = subTab.label,
+                        selected = state.activeSubTab == subTab,
+                        onClick = { onStateChange(state.copy(activeSubTab = subTab)) }
+                    )
                 }
             }
 

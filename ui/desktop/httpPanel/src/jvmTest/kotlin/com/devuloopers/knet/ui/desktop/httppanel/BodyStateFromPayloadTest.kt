@@ -1,27 +1,33 @@
 package com.devuloopers.knet.ui.desktop.httppanel
 
-import com.devuloopers.knet.ui.desktop.httppanel.model.BodyMode
-import com.devuloopers.knet.ui.desktop.httppanel.model.BodyState
 import com.devuloopers.knet.ui.desktop.httppanel.model.RawSubFormat
+import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyMode
+import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyState
+import com.devuloopers.knet.ui.desktop.httppanel.model.ResponseBodyMode
+import com.devuloopers.knet.ui.desktop.httppanel.model.ResponseBodyState
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Unit tests verifying [BodyState.fromPayload] automatic format detection
- * and payload model hydration across all supported HTTP payload formats.
+ * Unit tests verifying [RequestBodyState.fromPayload] and [ResponseBodyState.fromPayload]
+ * automatic format detection and payload model hydration across all supported HTTP payload formats.
  */
 class BodyStateFromPayloadTest {
 
     @Test
     fun testEmptyOrBlankPayloadReturnsNoneMode() {
-        val emptyState = BodyState.fromPayload(emptyList(), "")
-        assertEquals(BodyMode.NONE, emptyState.mode)
-        assertEquals("", emptyState.payloadText)
+        val emptyReqState = RequestBodyState.fromPayload(emptyList(), "")
+        assertEquals(RequestBodyMode.NONE, emptyReqState.mode)
+        assertEquals("", emptyReqState.payloadText)
 
-        val blankState = BodyState.fromPayload(emptyList(), "   \n  \t  ")
-        assertEquals(BodyMode.NONE, blankState.mode)
-        assertEquals("", blankState.payloadText)
+        val blankReqState = RequestBodyState.fromPayload(emptyList(), "   \n  \t  ")
+        assertEquals(RequestBodyMode.NONE, blankReqState.mode)
+        assertEquals("", blankReqState.payloadText)
+
+        val emptyRespState = ResponseBodyState.fromPayload(emptyList(), "")
+        assertEquals(ResponseBodyMode.NONE, emptyRespState.mode)
+        assertEquals("", emptyRespState.payloadText)
     }
 
     @Test
@@ -40,9 +46,9 @@ class BodyStateFromPayloadTest {
             }
         """.trimIndent()
 
-        val state = BodyState.fromPayload(headers, graphQlJson)
+        val state = RequestBodyState.fromPayload(headers, graphQlJson)
 
-        assertEquals(BodyMode.GRAPHQL, state.mode)
+        assertEquals(RequestBodyMode.GRAPHQL, state.mode)
         assertEquals("FormattedQuotes", state.graphQlState.operationName)
         assertTrue(state.graphQlState.queryText.contains("formattedQuotes"))
         assertTrue(state.graphQlState.variablesText.contains(".N225"))
@@ -54,9 +60,9 @@ class BodyStateFromPayloadTest {
         val headers = listOf("content-type" to "application/x-www-form-urlencoded")
         val formPayload = "grant_type=client_credentials&client_id=knet_client_123"
 
-        val state = BodyState.fromPayload(headers, formPayload)
+        val state = RequestBodyState.fromPayload(headers, formPayload)
 
-        assertEquals(BodyMode.FORM_DATA, state.mode)
+        assertEquals(RequestBodyMode.FORM_DATA, state.mode)
         assertEquals(2, state.formDataEntries.size)
         assertEquals("grant_type", state.formDataEntries[0].key)
         assertEquals("client_credentials", state.formDataEntries[0].value)
@@ -69,10 +75,14 @@ class BodyStateFromPayloadTest {
         val headers = listOf("content-type" to "application/json")
         val jsonPayload = """{"status":"active","count":42}"""
 
-        val state = BodyState.fromPayload(headers, jsonPayload)
+        val reqState = RequestBodyState.fromPayload(headers, jsonPayload)
+        assertEquals(RequestBodyMode.JSON, reqState.mode)
+        assertTrue(reqState.payloadText.contains("\n"), "JSON payload should be auto pretty-printed with newlines")
+        assertTrue(reqState.payloadText.contains("\"status\": \"active\""))
 
-        assertEquals(BodyMode.JSON, state.mode)
-        assertEquals(jsonPayload, state.payloadText)
+        val respState = ResponseBodyState.fromPayload(headers, jsonPayload)
+        assertEquals(ResponseBodyMode.JSON, respState.mode)
+        assertTrue(respState.payloadText.contains("\n"), "Response JSON should be auto pretty-printed with newlines")
     }
 
     @Test
@@ -80,11 +90,15 @@ class BodyStateFromPayloadTest {
         val headers = listOf("content-type" to "application/xml")
         val xmlPayload = "<response><status>success</status></response>"
 
-        val state = BodyState.fromPayload(headers, xmlPayload)
+        val reqState = RequestBodyState.fromPayload(headers, xmlPayload)
+        assertEquals(RequestBodyMode.RAW, reqState.mode)
+        assertEquals(RawSubFormat.XML, reqState.rawSubFormat)
+        assertTrue(reqState.payloadText.contains("\n"), "XML payload should be auto formatted with newlines")
+        assertTrue(reqState.payloadText.contains("<status>success</status>"))
 
-        assertEquals(BodyMode.RAW, state.mode)
-        assertEquals(RawSubFormat.XML, state.rawSubFormat)
-        assertEquals(xmlPayload, state.payloadText)
+        val respState = ResponseBodyState.fromPayload(headers, xmlPayload)
+        assertEquals(ResponseBodyMode.XML, respState.mode)
+        assertTrue(respState.payloadText.contains("<status>success</status>"))
     }
 
     @Test
@@ -92,11 +106,15 @@ class BodyStateFromPayloadTest {
         val headers = listOf("content-type" to "text/html")
         val htmlPayload = "<!DOCTYPE html><html><body><h1>Hello</h1></body></html>"
 
-        val state = BodyState.fromPayload(headers, htmlPayload)
+        val reqState = RequestBodyState.fromPayload(headers, htmlPayload)
+        assertEquals(RequestBodyMode.RAW, reqState.mode)
+        assertEquals(RawSubFormat.HTML, reqState.rawSubFormat)
+        assertTrue(reqState.payloadText.contains("<h1>"), "HTML payload should contain h1 tag")
+        assertTrue(reqState.payloadText.contains("Hello"), "HTML payload should contain Hello")
 
-        assertEquals(BodyMode.RAW, state.mode)
-        assertEquals(RawSubFormat.HTML, state.rawSubFormat)
-        assertEquals(htmlPayload, state.payloadText)
+        val respState = ResponseBodyState.fromPayload(headers, htmlPayload)
+        assertEquals(ResponseBodyMode.HTML, respState.mode)
+        assertTrue(respState.payloadText.contains("<h1>"))
     }
 
     @Test
@@ -104,10 +122,13 @@ class BodyStateFromPayloadTest {
         val headers = listOf("content-type" to "text/plain")
         val plainText = "Hello KNet Desktop"
 
-        val state = BodyState.fromPayload(headers, plainText)
+        val reqState = RequestBodyState.fromPayload(headers, plainText)
+        assertEquals(RequestBodyMode.RAW, reqState.mode)
+        assertEquals(RawSubFormat.TEXT, reqState.rawSubFormat)
+        assertEquals(plainText, reqState.payloadText)
 
-        assertEquals(BodyMode.RAW, state.mode)
-        assertEquals(RawSubFormat.TEXT, state.rawSubFormat)
-        assertEquals(plainText, state.payloadText)
+        val respState = ResponseBodyState.fromPayload(headers, plainText)
+        assertEquals(ResponseBodyMode.TEXT, respState.mode)
+        assertEquals(plainText, respState.payloadText)
     }
 }

@@ -83,6 +83,22 @@ class KNetInterceptorHandler(
 
                 InterceptCoordinator.coordinateRequest(context, msg, taggedRequest, listener)
                 return
+            } else {
+                val responseRule = BreakpointMatcher.findMatchingResponseRule(request.url, request.method, requestBodyText)
+                if (responseRule != null) {
+                    val taggedRequest = HttpRequest(
+                        id = request.id,
+                        method = request.method,
+                        url = request.url,
+                        protocol = request.protocol,
+                        headers = request.headers,
+                        body = request.body,
+                        timestamp = request.timestamp,
+                        isIntercepted = true,
+                        matchedRuleId = responseRule.id
+                    )
+                    context.channel().attr(ChannelAttributes.REQUEST_ATTR).set(taggedRequest)
+                }
             }
         }
         super.channelRead(context, msg)

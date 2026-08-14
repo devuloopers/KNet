@@ -3,15 +3,15 @@ package com.devuloopers.knet.ui.desktop.httppanel.usecase
 import com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType
 import com.devuloopers.knet.domain.payload.PayloadMapper
 import com.devuloopers.knet.domain.payload.PayloadMapperRegistry
-import com.devuloopers.knet.ui.desktop.httppanel.model.BodyMode
-import com.devuloopers.knet.ui.desktop.httppanel.model.BodyState
 import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlState
+import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyMode
+import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyState
 
 /**
- * Presentation UseCase responsible for synchronizing [BodyState] mode transitions,
+ * Presentation UseCase responsible for synchronizing [RequestBodyState] mode transitions,
  * GraphQL state parsing, and payload serialization dynamically via [PayloadMapperRegistry].
  *
- * Provides a single, 100% reusable, and testable source of truth for body state transitions
+ * Provides a single, 100% reusable, and testable source of truth for request body state transitions
  * across any ViewModel (API Studio, Traffic Inspector, Mock Server, Scripting Engine).
  *
  * @param mapperRegistry Injected [PayloadMapperRegistry] resolving payload mappers dynamically by [RequestBodyType].
@@ -21,13 +21,13 @@ public class SyncBodyStateUseCase(
 ) {
 
     /**
-     * Updates [BodyState.mode] and automatically hydrates payload state models (such as [GraphQlState])
-     * if switching to a structured payload mode (e.g. [BodyMode.GRAPHQL]).
+     * Updates [RequestBodyState.mode] and automatically hydrates payload state models (such as [GraphQlState])
+     * if switching to a structured payload mode (e.g. [RequestBodyMode.GRAPHQL]).
      */
-    public fun switchMode(currentState: BodyState, targetMode: BodyMode): BodyState {
+    public fun switchMode(currentState: RequestBodyState, targetMode: RequestBodyMode): RequestBodyState {
         if (currentState.mode == targetMode) return currentState
 
-        val updatedGraphQlState = if (targetMode == BodyMode.GRAPHQL && currentState.graphQlState.queryText.isEmpty() && currentState.payloadText.isNotEmpty()) {
+        val updatedGraphQlState = if (targetMode == RequestBodyMode.GRAPHQL && currentState.graphQlState.queryText.isEmpty() && currentState.payloadText.isNotEmpty()) {
             parseGraphQlState(currentState.payloadText)
         } else {
             currentState.graphQlState
@@ -37,9 +37,9 @@ public class SyncBodyStateUseCase(
     }
 
     /**
-     * Updates structured [GraphQlState], automatically serializing it back into transport [BodyState.payloadText].
+     * Updates structured [GraphQlState], automatically serializing it back into transport [RequestBodyState.payloadText].
      */
-    public fun updateGraphQlState(currentState: BodyState, newGraphQlState: GraphQlState): BodyState {
+    public fun updateGraphQlState(currentState: RequestBodyState, newGraphQlState: GraphQlState): RequestBodyState {
         val mapper = mapperRegistry.getMapper<GraphQlState>(RequestBodyType.GRAPHQL)
         val serializedPayload = mapper?.serializePayload(newGraphQlState) ?: currentState.payloadText
 
@@ -50,18 +50,18 @@ public class SyncBodyStateUseCase(
     }
 
     /**
-     * Ensures [graphQlState] is hydrated from [payloadText] if currently in [BodyMode.GRAPHQL].
+     * Ensures [graphQlState] is hydrated from [payloadText] if currently in [RequestBodyMode.GRAPHQL].
      */
-    public fun ensureHydrated(currentState: BodyState): BodyState {
-        if (currentState.mode == BodyMode.GRAPHQL && currentState.graphQlState.queryText.isEmpty() && currentState.payloadText.isNotEmpty()) {
+    public fun ensureHydrated(currentState: RequestBodyState): RequestBodyState {
+        if (currentState.mode == RequestBodyMode.GRAPHQL && currentState.graphQlState.queryText.isEmpty() && currentState.payloadText.isNotEmpty()) {
             val parsedState = parseGraphQlState(currentState.payloadText)
             return currentState.copy(graphQlState = parsedState)
         }
         return currentState
     }
 
-    private fun parseGraphQlState(payloadText: String): GraphQlState {
+    private fun parseGraphQlState(payload: String): GraphQlState {
         val mapper = mapperRegistry.getMapper<GraphQlState>(RequestBodyType.GRAPHQL)
-        return mapper?.parsePayload(payloadText) ?: GraphQlState()
+        return mapper?.parsePayload(payload) ?: GraphQlState(queryText = payload)
     }
 }

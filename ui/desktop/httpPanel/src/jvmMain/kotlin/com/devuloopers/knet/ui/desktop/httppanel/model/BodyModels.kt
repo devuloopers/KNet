@@ -6,12 +6,12 @@ import com.devuloopers.knet.ui.core.components.keyvalue.KeyValueEntry
 import com.devuloopers.knet.ui.desktop.httppanel.mapper.GraphQlPayloadMapper
 
 /**
- * Strongly-typed body payload mode for HTTP request authoring in API Studio.
+ * Strongly-typed body payload mode for HTTP request authoring in API Studio and Request Interceptors.
  *
  * @property label User-facing display label for the mode pill selector.
  * @property tabLabel Short dynamic label used in the Body sub-tab header (e.g. "Body (JSON)").
  */
-public enum class BodyMode(val label: String, val tabLabel: String) {
+enum class RequestBodyMode(val label: String, val tabLabel: String) {
     NONE("none", "Body"),
     JSON("json", "Body (JSON)"),
     FORM_DATA("form-data", "Body (form-data)"),
@@ -21,7 +21,24 @@ public enum class BodyMode(val label: String, val tabLabel: String) {
 }
 
 /**
- * Strongly-typed raw body sub-format selector for the [BodyMode.RAW] payload mode.
+ * Strongly-typed body payload mode for HTTP response inspection and live editing.
+ *
+ * Excludes client-only upload encodings (form-data, x-www-form-urlencoded, graphql query syntax)
+ * and focuses on universal server response data formats.
+ *
+ * @property label User-facing display label for the response mode pill selector.
+ */
+enum class ResponseBodyMode(val label: String) {
+    NONE("none"),
+    JSON("json"),
+    XML("xml"),
+    HTML("html"),
+    TEXT("text"),
+    RAW("raw")
+}
+
+/**
+ * Strongly-typed raw body sub-format selector for the [RequestBodyMode.RAW] payload mode.
  *
  * Each variant controls the syntax highlighting language hint passed to [KNetCodeEditor]
  * and the MIME Content-Type that should be set on the request.
@@ -30,7 +47,11 @@ public enum class BodyMode(val label: String, val tabLabel: String) {
  * @property languageHint Language token forwarded to [KNetCodeEditor] for syntax highlighting.
  * @property contentType HTTP Content-Type MIME type produced by this raw sub-format.
  */
-public enum class RawSubFormat(val label: String, val languageHint: String, val contentType: String) {
+enum class RawSubFormat(
+    val label: String,
+    val languageHint: String,
+    val contentType: String
+) {
     TEXT("Text", "plain", "text/plain"),
     JSON("JSON", "json", "application/json"),
     XML("XML", "xml", "application/xml"),
@@ -43,7 +64,7 @@ public enum class RawSubFormat(val label: String, val languageHint: String, val 
  *
  * @property label User-facing display label for the sub-tab chip.
  */
-public enum class GraphQlSubTab(val label: String) {
+enum class GraphQlSubTab(val label: String) {
     QUERY("Query"),
     VARIABLES("Variables (JSON)"),
     EXTENSIONS("Extensions (JSON)")
@@ -58,61 +79,61 @@ public enum class GraphQlSubTab(val label: String) {
  * @property extensionsText Pretty-printed JSON for GraphQL `$extensions`.
  * @property activeSubTab Currently selected GraphQL editor sub-tab ([GraphQlSubTab]).
  */
-public data class GraphQlState(
+data class GraphQlState(
     val queryText: String = "",
     val variablesText: String = DEFAULT_JSON_OBJECT_PLACEHOLDER,
     val operationName: String = "",
     val extensionsText: String = DEFAULT_JSON_OBJECT_PLACEHOLDER,
     val activeSubTab: GraphQlSubTab = GraphQlSubTab.QUERY
 ) {
-    public companion object {
-        public const val DEFAULT_JSON_OBJECT_PLACEHOLDER: String = "{\n  \n}"
+    companion object {
+        const val DEFAULT_JSON_OBJECT_PLACEHOLDER: String = "{\n  \n}"
     }
 }
 
 /**
- * Immutable DTO holding the complete Body payload editor configuration for a single request.
+ * Immutable DTO holding the complete Body payload editor configuration for a single HTTP Request.
  *
- * @property mode Active body payload mode (None, JSON, form-data, url-encoded, raw, GraphQL).
- * @property rawSubFormat Active raw sub-format selector when [mode] is [BodyMode.RAW].
+ * @property mode Active body payload mode for requests (None, JSON, form-data, url-encoded, raw, GraphQL).
+ * @property rawSubFormat Active raw sub-format selector when [mode] is [RequestBodyMode.RAW].
  * @property payloadText Raw text/JSON/XML/HTML/JS/GraphQL payload content for text-based modes.
- * @property formDataEntries Key-value entries used for [BodyMode.FORM_DATA] multipart payloads.
- * @property urlEncodedEntries Key-value entries used for [BodyMode.X_WWW_FORM_URLENCODED] payloads.
- * @property graphQlState Structured GraphQL state model used when [mode] is [BodyMode.GRAPHQL].
+ * @property formDataEntries Key-value entries used for [RequestBodyMode.FORM_DATA] multipart payloads.
+ * @property urlEncodedEntries Key-value entries used for [RequestBodyMode.X_WWW_FORM_URLENCODED] payloads.
+ * @property graphQlState Structured GraphQL state model used when [mode] is [RequestBodyMode.GRAPHQL].
  */
-public data class BodyState(
-    val mode: BodyMode = BodyMode.JSON,
+data class RequestBodyState(
+    val mode: RequestBodyMode = RequestBodyMode.JSON,
     val rawSubFormat: RawSubFormat = RawSubFormat.TEXT,
     val payloadText: String = "",
     val formDataEntries: List<KeyValueEntry> = emptyList(),
     val urlEncodedEntries: List<KeyValueEntry> = emptyList(),
     val graphQlState: GraphQlState = GraphQlState()
 ) {
-    public companion object {
+    companion object {
         /**
-         * Automatically detects and hydrates a strongly-typed [BodyState] from raw HTTP wire headers and payload string.
+         * Automatically detects and hydrates a strongly-typed [RequestBodyState] for HTTP Request authoring.
          *
-         * - Auto-detects GraphQL JSON payloads or GraphQL endpoints, setting [BodyMode.GRAPHQL] and populating [GraphQlState].
+         * - Auto-detects GraphQL JSON payloads or GraphQL endpoints, setting [RequestBodyMode.GRAPHQL] and populating [GraphQlState].
          * - Auto-detects `multipart/form-data` or `application/x-www-form-urlencoded` payloads into [formDataEntries].
-         * - Auto-detects standard JSON payloads into [BodyMode.JSON].
-         * - Auto-detects XML, HTML, JavaScript, and Plain text into [BodyMode.RAW] with the appropriate [RawSubFormat].
+         * - Auto-detects standard JSON payloads into [RequestBodyMode.JSON].
+         * - Auto-detects XML, HTML, JavaScript, and Plain text into [RequestBodyMode.RAW] with the appropriate [RawSubFormat].
          *
          * @param headers HTTP headers list as key-value pairs.
          * @param rawBody Raw request body payload string.
-         * @return Hydrated [BodyState] with resolved [BodyMode] and sub-models.
+         * @return Hydrated [RequestBodyState] configured for request authoring.
          */
-        public fun fromPayload(headers: List<Pair<String, String>>, rawBody: String): BodyState {
+        fun fromPayload(headers: List<Pair<String, String>>, rawBody: String): RequestBodyState {
             val trimmed = rawBody.trim()
             if (trimmed.isEmpty()) {
-                return BodyState(mode = BodyMode.NONE, payloadText = "")
+                return RequestBodyState(mode = RequestBodyMode.NONE, payloadText = "")
             }
 
             val headersMap = headers.toMap()
             return when (val resolvedFormat = BodyFormatterRegistry.resolveFormat(headersMap, trimmed)) {
                 is BodyFormat.GraphQL -> {
                     val parsedGraphQlState = GraphQlPayloadMapper().parsePayload(trimmed)
-                    BodyState(
-                        mode = BodyMode.GRAPHQL,
+                    RequestBodyState(
+                        mode = RequestBodyMode.GRAPHQL,
                         payloadText = trimmed,
                         graphQlState = parsedGraphQlState
                     )
@@ -122,48 +143,163 @@ public data class BodyState(
                     val entries = resolvedFormat.pairs.mapIndexed { idx, (k, v) ->
                         KeyValueEntry(id = "form_$idx", key = k, value = v)
                     }
-                    BodyState(
-                        mode = BodyMode.FORM_DATA,
+                    RequestBodyState(
+                        mode = RequestBodyMode.FORM_DATA,
                         payloadText = trimmed,
                         formDataEntries = entries
                     )
                 }
 
                 is BodyFormat.Json -> {
-                    BodyState(
-                        mode = BodyMode.JSON,
+                    RequestBodyState(
+                        mode = RequestBodyMode.JSON,
+                        payloadText = resolvedFormat.formattedText
+                    )
+                }
+
+                is BodyFormat.Cbor -> {
+                    RequestBodyState(
+                        mode = RequestBodyMode.JSON,
+                        payloadText = resolvedFormat.formattedText
+                    )
+                }
+
+                is BodyFormat.Xml -> {
+                    RequestBodyState(
+                        mode = RequestBodyMode.RAW,
+                        rawSubFormat = RawSubFormat.XML,
+                        payloadText = resolvedFormat.formattedText
+                    )
+                }
+
+                is BodyFormat.Html -> {
+                    RequestBodyState(
+                        mode = RequestBodyMode.RAW,
+                        rawSubFormat = RawSubFormat.HTML,
+                        payloadText = resolvedFormat.formattedText
+                    )
+                }
+
+                is BodyFormat.Js -> {
+                    RequestBodyState(
+                        mode = RequestBodyMode.RAW,
+                        rawSubFormat = RawSubFormat.JAVASCRIPT,
+                        payloadText = resolvedFormat.formattedText
+                    )
+                }
+
+                is BodyFormat.Css -> {
+                    RequestBodyState(
+                        mode = RequestBodyMode.RAW,
+                        rawSubFormat = RawSubFormat.TEXT,
+                        payloadText = resolvedFormat.formattedText
+                    )
+                }
+
+                else -> {
+                    RequestBodyState(
+                        mode = RequestBodyMode.RAW,
+                        rawSubFormat = RawSubFormat.TEXT,
+                        payloadText = trimmed
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Immutable DTO holding the complete Body payload editor configuration for a single HTTP Response.
+ *
+ * Dedicated strictly to server responses: zero client form-data or GraphQL editor state pollution.
+ *
+ * @property mode Active body payload mode for responses (None, JSON, XML, HTML, Text, Raw).
+ * @property payloadText Raw text/JSON/XML/HTML/JS payload content for response inspection & editing.
+ */
+data class ResponseBodyState(
+    val mode: ResponseBodyMode = ResponseBodyMode.JSON,
+    val payloadText: String = ""
+) {
+    companion object {
+        /**
+         * Automatically detects and hydrates a strongly-typed [ResponseBodyState] for HTTP Response inspection & editing.
+         *
+         * - Auto-detects standard JSON payloads into [ResponseBodyMode.JSON].
+         * - Auto-detects XML into [ResponseBodyMode.XML].
+         * - Auto-detects HTML into [ResponseBodyMode.HTML].
+         * - Auto-detects Plain text into [ResponseBodyMode.TEXT].
+         * - Auto-detects fallback formats into [ResponseBodyMode.RAW].
+         *
+         * @param headers HTTP headers list as key-value pairs.
+         * @param rawBody Raw response body payload string.
+         * @return Hydrated [ResponseBodyState] configured for response editing.
+         */
+        fun fromPayload(headers: List<Pair<String, String>>, rawBody: String): ResponseBodyState {
+            val trimmed = rawBody.trim()
+            if (trimmed.isEmpty()) {
+                return ResponseBodyState(mode = ResponseBodyMode.NONE, payloadText = "")
+            }
+
+            val headersMap = headers.toMap()
+            return when (val resolvedFormat = BodyFormatterRegistry.resolveFormat(headersMap, trimmed)) {
+                is BodyFormat.Json -> {
+                    ResponseBodyState(
+                        mode = ResponseBodyMode.JSON,
+                        payloadText = resolvedFormat.formattedText
+                    )
+                }
+
+                is BodyFormat.Cbor -> {
+                    ResponseBodyState(
+                        mode = ResponseBodyMode.JSON,
+                        payloadText = resolvedFormat.formattedText
+                    )
+                }
+
+                is BodyFormat.GraphQL -> {
+                    ResponseBodyState(
+                        mode = ResponseBodyMode.JSON,
                         payloadText = trimmed
                     )
                 }
 
                 is BodyFormat.Xml -> {
-                    BodyState(
-                        mode = BodyMode.RAW,
-                        rawSubFormat = RawSubFormat.XML,
-                        payloadText = trimmed
+                    ResponseBodyState(
+                        mode = ResponseBodyMode.XML,
+                        payloadText = resolvedFormat.formattedText
                     )
                 }
 
                 is BodyFormat.Html -> {
-                    BodyState(
-                        mode = BodyMode.RAW,
-                        rawSubFormat = RawSubFormat.HTML,
-                        payloadText = trimmed
+                    ResponseBodyState(
+                        mode = ResponseBodyMode.HTML,
+                        payloadText = resolvedFormat.formattedText
                     )
                 }
 
                 is BodyFormat.Js -> {
-                    BodyState(
-                        mode = BodyMode.RAW,
-                        rawSubFormat = RawSubFormat.JAVASCRIPT,
-                        payloadText = trimmed
+                    ResponseBodyState(
+                        mode = ResponseBodyMode.RAW,
+                        payloadText = resolvedFormat.formattedText
+                    )
+                }
+
+                is BodyFormat.Css -> {
+                    ResponseBodyState(
+                        mode = ResponseBodyMode.RAW,
+                        payloadText = resolvedFormat.formattedText
                     )
                 }
 
                 else -> {
-                    BodyState(
-                        mode = BodyMode.RAW,
-                        rawSubFormat = RawSubFormat.TEXT,
+                    val isTextPlain = headersMap.entries.find {
+                        it.key.equals(
+                            "content-type",
+                            ignoreCase = true
+                        )
+                    }?.value?.contains("text/plain", ignoreCase = true) == true
+                    ResponseBodyState(
+                        mode = if (isTextPlain) ResponseBodyMode.TEXT else ResponseBodyMode.RAW,
                         payloadText = trimmed
                     )
                 }

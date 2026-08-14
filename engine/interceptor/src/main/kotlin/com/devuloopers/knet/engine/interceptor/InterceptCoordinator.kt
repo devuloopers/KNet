@@ -133,6 +133,16 @@ object InterceptCoordinator {
                 when (result) {
                     is InterceptResult.Resume -> {
                         val modified = result.modifiedResponse
+                        val responseToPersist = modified ?: mappedResponse
+                        val totalDuration = (System.currentTimeMillis() - request.timestamp).coerceAtLeast(0L)
+
+                        listener?.onResponseCaptured(
+                            transactionId = request.id,
+                            response = responseToPersist,
+                            durationMs = totalDuration,
+                            timings = com.devuloopers.knet.domain.clientNetwork.model.HttpTimings()
+                        )
+
                         if (modified != null) {
                             val rebuilt = ResponseRebuilder.rebuild(msg, modified)
                             context.write(rebuilt)

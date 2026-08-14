@@ -8,9 +8,9 @@ import com.devuloopers.knet.domain.collection.usecase.SaveUnsavedRequestUseCase
 import com.devuloopers.knet.domain.collection.usecase.UpdateRequestInCollectionUseCase
 import com.devuloopers.knet.ui.desktop.apistudio.model.RequestEditorState
 import com.devuloopers.knet.ui.desktop.apistudio.model.SessionContext
-import com.devuloopers.knet.ui.desktop.httppanel.model.BodyMode
-import com.devuloopers.knet.ui.desktop.httppanel.model.BodyState
 import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlState
+import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyMode
+import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.test.runTest
@@ -63,8 +63,8 @@ class AutoSaveApiSessionUseCaseTest {
             operationName = "GetUser",
             variablesText = "{\n  \"id\": \"123\"\n}"
         )
-        val bodyState = BodyState(
-            mode = BodyMode.GRAPHQL,
+        val bodyState = RequestBodyState(
+            mode = RequestBodyMode.GRAPHQL,
             graphQlState = graphQlState,
             payloadText = "{\"query\":\"query GetUser { user { id name } }\",\"operationName\":\"GetUser\",\"variables\":{\"id\":\"123\"}}"
         )

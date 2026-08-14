@@ -22,9 +22,9 @@ import com.devuloopers.knet.ui.desktop.apistudio.dialog.RenameCollectionDialog
 import com.devuloopers.knet.ui.desktop.apistudio.dialog.SaveRequestDialog
 import com.devuloopers.knet.ui.desktop.httppanel.editor.RequestEditorPanel
 import com.devuloopers.knet.ui.desktop.httppanel.editor.RequestEditorPanelActions
-import com.devuloopers.knet.ui.desktop.httppanel.model.BodyMode
-import com.devuloopers.knet.ui.desktop.httppanel.model.BodyState
 import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
+import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyMode
+import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyState
 import com.devuloopers.knet.ui.desktop.apistudio.editor.RequestUrlBar
 import com.devuloopers.knet.ui.desktop.apistudio.model.ApiStudioState
 import com.devuloopers.knet.ui.desktop.apistudio.model.CollectionsState
@@ -85,7 +85,7 @@ public fun ApiStudioScreen(
                 viewModel?.updateMethod(unsavedMatch.method)
                 viewModel?.updateUrl(unsavedMatch.url)
                 viewModel?.updateHeaders(unsavedMatch.headers)
-                viewModel?.updateBodyState(BodyState.fromPayload(unsavedMatch.headers, unsavedMatch.bodyPayload))
+                viewModel?.updateBodyState(RequestBodyState.fromPayload(unsavedMatch.headers, unsavedMatch.bodyPayload))
                 viewModel?.updateScripts(unsavedMatch.preRequestScript, unsavedMatch.testScript)
             } else {
                 fun findInFolder(folders: List<com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarFolderItem>): com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarRequestItem? {
@@ -102,7 +102,7 @@ public fun ApiStudioScreen(
                     viewModel?.updateMethod(savedMatch.method)
                     viewModel?.updateUrl(savedMatch.url)
                     viewModel?.updateHeaders(savedMatch.headers)
-                    viewModel?.updateBodyState(BodyState.fromPayload(savedMatch.headers, savedMatch.bodyPayload))
+                    viewModel?.updateBodyState(RequestBodyState.fromPayload(savedMatch.headers, savedMatch.bodyPayload))
                     viewModel?.updateScripts(savedMatch.preRequestScript, savedMatch.testScript)
                 }
             }
@@ -151,7 +151,7 @@ public fun ApiStudioScreen(
                     viewModel?.updateMethod(item.method)
                     viewModel?.updateUrl(item.url)
                     viewModel?.updateHeaders(item.headers)
-                    viewModel?.updateBodyState(BodyState.fromPayload(item.headers, item.bodyPayload))
+                    viewModel?.updateBodyState(RequestBodyState.fromPayload(item.headers, item.bodyPayload))
                     viewModel?.updateScripts(item.preRequestScript, item.testScript)
                     viewModel?.updateAuthState(item.authState)
                 },
@@ -162,7 +162,7 @@ public fun ApiStudioScreen(
                     viewModel?.updateMethod(item.method)
                     viewModel?.updateUrl(item.url)
                     viewModel?.updateHeaders(item.headers)
-                    viewModel?.updateBodyState(BodyState.fromPayload(item.headers, item.bodyPayload))
+                    viewModel?.updateBodyState(RequestBodyState.fromPayload(item.headers, item.bodyPayload))
                     viewModel?.updateScripts(item.preRequestScript, item.testScript)
                     viewModel?.updateAuthState(item.authState)
                     collectionsViewModel?.openSaveDialog()
@@ -182,7 +182,7 @@ public fun ApiStudioScreen(
                         viewModel?.updateMethod("GET")
                         viewModel?.updateUrl("")
                         viewModel?.updateHeaders(emptyList())
-                        viewModel?.updateBodyState(BodyState(mode = BodyMode.NONE))
+                        viewModel?.updateBodyState(RequestBodyState(mode = RequestBodyMode.NONE))
                         viewModel?.updateScripts("", "")
                     }
                 },

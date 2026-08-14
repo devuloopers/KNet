@@ -26,6 +26,8 @@ import com.devuloopers.knet.engine.formatter.formatters.JsonBodyFormatter
 import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdown
 import com.devuloopers.knet.ui.core.components.keyvalue.KNetKeyValueEditor
 import com.devuloopers.knet.ui.core.components.keyvalue.KeyValueEntry
+import com.devuloopers.knet.ui.core.components.tabs.KNetTab
+import com.devuloopers.knet.ui.core.components.tabs.ScrollableTabRow
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
@@ -33,26 +35,27 @@ import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
 import com.devuloopers.knet.ui.desktop.codeeditor.api.KNetCodeEditor
 import com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage
 import com.devuloopers.knet.ui.desktop.httppanel.mapper.GraphQlPayloadMapper
-import com.devuloopers.knet.ui.desktop.httppanel.model.BodyMode
-import com.devuloopers.knet.ui.desktop.httppanel.model.BodyState
 import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlState
 import com.devuloopers.knet.ui.desktop.httppanel.model.RawSubFormat
+import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyMode
+import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyState
 
 /**
- * Multi-mode Body Payload Editor supporting none, JSON, form-data, x-www-form-urlencoded, raw, and GraphQL.
+ * Multi-mode Request Body Payload Editor supporting none, JSON, form-data, x-www-form-urlencoded, raw, and GraphQL.
  *
  * Switches dynamically between [KNetCodeEditor] for text-based modes and [KNetKeyValueEditor]
  * for form-based modes. The raw mode exposes a [KNetDropdown] sub-format selector that controls
  * the syntax highlighting language passed to [KNetCodeEditor].
  *
- * @param state Immutable [BodyState] representing the current body payload configuration.
- * @param onStateChange Callback invoked with an updated [BodyState] whenever any configuration changes.
+ * @param state Immutable [RequestBodyState] representing the current request body payload configuration.
+ * @param onStateChange Callback invoked with an updated [RequestBodyState] whenever any configuration changes.
+ * @param onGraphQlStateChange Optional callback for structured GraphQL updates.
  * @param modifier Composable modifier applied to the root [Column] layout.
  */
 @Composable
-public fun BodyEditor(
-    state: BodyState,
-    onStateChange: (BodyState) -> Unit,
+public fun RequestBodyEditor(
+    state: RequestBodyState,
+    onStateChange: (RequestBodyState) -> Unit,
     onGraphQlStateChange: ((GraphQlState) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -67,47 +70,21 @@ public fun BodyEditor(
             .padding(spacing.md),
         verticalArrangement = Arrangement.spacedBy(spacing.sm)
     ) {
-        // Mode Selector Pills Bar
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(spacing.xs),
-            verticalAlignment = Alignment.CenterVertically
+        // Mode Selector Tab Row using reusable design system components
+        ScrollableTabRow(
+            modifier = Modifier.fillMaxWidth()
         ) {
-            BodyMode.entries.forEach { mode ->
-                val isSelected = state.mode == mode
-                Box(
-                    modifier = Modifier
-                        .background(
-                            color = if (isSelected) themeColors.accent.copy(alpha = 0.15f) else themeColors.surfaceVariant,
-                            shape = RoundedCornerShape(4.dp)
-                        )
-                        .border(
-                            width = 1.dp,
-                            color = if (isSelected) themeColors.accent else themeColors.border,
-                            shape = RoundedCornerShape(4.dp)
-                        )
-                        .clickable { onStateChange(state.copy(mode = mode)) }
-                        .handCursor()
-                        .padding(horizontal = 10.dp, vertical = 5.dp)
-                ) {
-                    Text(
-                        text = mode.label,
-                        style = typography.caption.copy(
-                            color = if (isSelected) themeColors.accent else themeColors.textSecondary,
-                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
-                        ),
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
-                    )
-                }
+            RequestBodyMode.entries.forEach { mode ->
+                KNetTab(
+                    title = mode.label,
+                    selected = state.mode == mode,
+                    onClick = { onStateChange(state.copy(mode = mode)) }
+                )
             }
         }
 
         // Raw Sub-Format Selector (visible only in RAW mode)
-        if (state.mode == BodyMode.RAW) {
+        if (state.mode == RequestBodyMode.RAW) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -132,7 +109,7 @@ public fun BodyEditor(
 
         // Dynamic Body Panel Content
         when (state.mode) {
-            BodyMode.NONE -> {
+            RequestBodyMode.NONE -> {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -159,7 +136,7 @@ public fun BodyEditor(
                 }
             }
 
-            BodyMode.FORM_DATA -> {
+            RequestBodyMode.FORM_DATA -> {
                 KNetKeyValueEditor(
                     entries = state.formDataEntries,
                     onEntryChange = { index, updatedEntry ->
@@ -181,7 +158,7 @@ public fun BodyEditor(
                 )
             }
 
-            BodyMode.X_WWW_FORM_URLENCODED -> {
+            RequestBodyMode.X_WWW_FORM_URLENCODED -> {
                 Column(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(spacing.sm)
@@ -223,7 +200,7 @@ public fun BodyEditor(
                 }
             }
 
-            BodyMode.JSON -> {
+            RequestBodyMode.JSON -> {
                 KNetCodeEditor(
                     code = state.payloadText,
                     mode = EditorMode.Editable(
@@ -241,7 +218,7 @@ public fun BodyEditor(
                 )
             }
 
-            BodyMode.RAW -> {
+            RequestBodyMode.RAW -> {
                 val codeLang = when (state.rawSubFormat) {
                     RawSubFormat.TEXT -> CodeLanguage.PLAIN
                     RawSubFormat.JSON -> CodeLanguage.JSON
@@ -268,7 +245,7 @@ public fun BodyEditor(
                 )
             }
 
-            BodyMode.GRAPHQL -> {
+            RequestBodyMode.GRAPHQL -> {
                 val graphQlMapper = remember { GraphQlPayloadMapper() }
                 GraphQlEditor(
                     state = state.graphQlState,
