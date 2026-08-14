@@ -473,15 +473,22 @@ This document serves as the live project tracking board for implementing seamles
   - [x] Update tests in `httpPanel` and `apistudio`
   - [x] Verify 100% pass across all modules via `./gradlew jvmTest`
 
+---
 
+## Phase 35: SSOT-Driven Stable Code Editor & Viewer Architecture `[COMPLETED]`
 
-
-
-
-
-
-
-
-
-
-
+- [x] **Phase 1: Model SSOT Enums & Prettifiers (`:ui:desktop:httpPanel:model`)** `[COMPLETED]`
+  - [x] Added `isPrettifiable: Boolean` and `fun prettify(payload: String): String` to `ResponseBodyMode`
+  - [x] Added `isPrettifiable: Boolean` and `fun prettify(payload: String): String` to `RawSubFormat`
+  - [x] Enforced complete SSOT for language tokens, placeholders, and formatting logic
+- [x] **Phase 2: Zero-Lag Synchronous Initial Lines (`:ui:desktop:codeEditor`)** `[COMPLETED]`
+  - [x] Initialized `rawLinesState` synchronously during composition in `ReadOnlyCodeViewer.kt`
+  - [x] Kept fold regions calculation off-thread in `LaunchedEffect` without resetting `rawLinesState = null`
+  - [x] Eliminated `KNetBodyLoadingPlaceholder` flash during document/format updates
+- [x] **Phase 3: Stable Call Sites & DRY Composables (`:ui:desktop:httpPanel`)** `[COMPLETED]`
+  - [x] Refactored `ResponseBodyEditor.kt` to use a single continuous `KNetCodeEditor` call site for all text modes (`JSON`, `XML`, `HTML`, `TEXT`, `RAW`)
+  - [x] Refactored `RequestBodyEditor.kt` to share a single stable `KNetCodeEditor` call site across `JSON` and `RAW` modes
+  - [x] Refactored `SmartBodyViewer.kt` to collapse split text format branches into a unified `KNetCodeEditor` call site
+- [x] **Phase 4: Unit Testing & Multi-Module Verification** `[COMPLETED]`
+  - [x] Added unit tests for `ResponseBodyMode.prettify` and `RawSubFormat.prettify` in `ResponseEditorPanelTest.kt`
+  - [x] Verified 100% passing test suites across all affected modules (`BUILD SUCCESSFUL`)

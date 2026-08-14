@@ -2,29 +2,26 @@ package com.devuloopers.knet.ui.desktop.httppanel.editor
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.devuloopers.knet.engine.formatter.formatters.HtmlBodyFormatter
-import com.devuloopers.knet.engine.formatter.formatters.JsonBodyFormatter
-import com.devuloopers.knet.engine.formatter.formatters.XmlBodyFormatter
 import com.devuloopers.knet.ui.core.components.tabs.KNetTab
 import com.devuloopers.knet.ui.core.components.tabs.ScrollableTabRow
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
 import com.devuloopers.knet.ui.desktop.codeeditor.api.KNetCodeEditor
-import com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage
 import com.devuloopers.knet.ui.desktop.httppanel.model.ResponseBodyMode
 import com.devuloopers.knet.ui.desktop.httppanel.model.ResponseBodyState
 
@@ -35,7 +32,8 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.ResponseBodyState
  * - Excludes client-only upload encodings (form-data, x-www-form-urlencoded, GraphQL query syntax).
  * - Provides tailored response mode tabs: [ResponseBodyMode.NONE], [ResponseBodyMode.JSON],
  *   [ResponseBodyMode.XML], [ResponseBodyMode.HTML], [ResponseBodyMode.TEXT], and [ResponseBodyMode.RAW].
- * - Automatically configures syntax highlighting and dedicated code prettifiers.
+ * - Automatically configures syntax highlighting and dedicated code prettifiers via [ResponseBodyMode] SSOT.
+ * - Maintains a single continuous [KNetCodeEditor] call site across text modes to prevent layout flashing and preserve editor caret/scroll state.
  *
  * @param state Immutable [ResponseBodyState] holding the response payload and active response mode.
  * @param onStateChange Callback invoked when the response body state or mode changes.
@@ -71,115 +69,53 @@ public fun ResponseBodyEditor(
         }
 
         // Dynamic Response Body Panel Content
-        when (state.mode) {
-            ResponseBodyMode.NONE -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .background(themeColors.surfaceVariant, RoundedCornerShape(6.dp))
-                        .border(1.dp, themeColors.border, RoundedCornerShape(6.dp)),
-                    contentAlignment = Alignment.Center
+        if (state.mode == ResponseBodyMode.NONE) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+                    .background(themeColors.surfaceVariant, RoundedCornerShape(6.dp))
+                    .border(1.dp, themeColors.border, RoundedCornerShape(6.dp)),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(spacing.sm)
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(spacing.sm)
-                    ) {
-                        Icon(
-                            imageVector = KNetIcons.Info,
-                            contentDescription = "No Body",
-                            modifier = Modifier.size(20.dp),
-                            tint = themeColors.textMuted
-                        )
-                        Text(
-                            text = "This response does not have a body payload.",
-                            style = typography.bodyMedium.copy(color = themeColors.textMuted)
-                        )
-                    }
+                    Icon(
+                        imageVector = KNetIcons.Info,
+                        contentDescription = "No Body",
+                        modifier = Modifier.size(20.dp),
+                        tint = themeColors.textMuted
+                    )
+                    Text(
+                        text = "This response does not have a body payload.",
+                        style = typography.bodyMedium.copy(color = themeColors.textMuted)
+                    )
                 }
             }
-
-            ResponseBodyMode.JSON -> {
-                KNetCodeEditor(
-                    code = state.payloadText,
-                    mode = EditorMode.Editable(
-                        onCodeChange = { onStateChange(state.copy(payloadText = it)) },
-                        onPrettify = {
-                            val formatted = JsonBodyFormatter().prettyPrintJson(state.payloadText)
-                            onStateChange(state.copy(payloadText = formatted))
-                        },
-                        placeholder = "// Enter JSON response body...\n{\n  \"status\": \"success\"\n}"
-                    ),
-                    language = CodeLanguage.JSON,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                )
+        } else {
+            val prettifyAction: (() -> Unit)? = if (state.mode.isPrettifiable) {
+                {
+                    val formatted = state.mode.prettify(state.payloadText)
+                    onStateChange(state.copy(payloadText = formatted))
+                }
+            } else {
+                null
             }
 
-            ResponseBodyMode.XML -> {
-                KNetCodeEditor(
-                    code = state.payloadText,
-                    mode = EditorMode.Editable(
-                        onCodeChange = { onStateChange(state.copy(payloadText = it)) },
-                        onPrettify = {
-                            val formatted = XmlBodyFormatter().prettyPrint(state.payloadText)
-                            onStateChange(state.copy(payloadText = formatted))
-                        },
-                        placeholder = "<!-- Enter XML response body -->\n<response>\n  <status>success</status>\n</response>"
-                    ),
-                    language = CodeLanguage.XML,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                )
-            }
-
-            ResponseBodyMode.HTML -> {
-                KNetCodeEditor(
-                    code = state.payloadText,
-                    mode = EditorMode.Editable(
-                        onCodeChange = { onStateChange(state.copy(payloadText = it)) },
-                        onPrettify = {
-                            val formatted = HtmlBodyFormatter.prettyPrintHtml(state.payloadText)
-                            onStateChange(state.copy(payloadText = formatted))
-                        },
-                        placeholder = "<!-- Enter HTML response body -->\n<!DOCTYPE html>\n<html>\n<body>\n  <h1>200 OK</h1>\n</body>\n</html>"
-                    ),
-                    language = CodeLanguage.HTML,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                )
-            }
-
-            ResponseBodyMode.TEXT -> {
-                KNetCodeEditor(
-                    code = state.payloadText,
-                    mode = EditorMode.Editable(
-                        onCodeChange = { onStateChange(state.copy(payloadText = it)) },
-                        placeholder = "// Enter plain text response body..."
-                    ),
-                    language = CodeLanguage.PLAIN,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                )
-            }
-
-            ResponseBodyMode.RAW -> {
-                KNetCodeEditor(
-                    code = state.payloadText,
-                    mode = EditorMode.Editable(
-                        onCodeChange = { onStateChange(state.copy(payloadText = it)) },
-                        placeholder = "// Enter raw response payload..."
-                    ),
-                    language = CodeLanguage.PLAIN,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                )
-            }
+            KNetCodeEditor(
+                code = state.payloadText,
+                mode = EditorMode.Editable(
+                    onCodeChange = { onStateChange(state.copy(payloadText = it)) },
+                    onPrettify = prettifyAction,
+                    placeholder = state.mode.placeholder
+                ),
+                language = state.mode.codeLanguage,
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+            )
         }
     }
 }

@@ -17,7 +17,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.engine.formatter.model.BodyFormat
-import com.devuloopers.knet.ui.core.components.placeholder.KNetBodyLoadingPlaceholder
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.FoldManager
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.FoldRegion
 import com.devuloopers.knet.ui.desktop.codeeditor.component.EditorHeaderToolbar
@@ -117,19 +116,16 @@ internal fun ReadOnlyCodeViewer(
         )
     }
 
-    var rawLinesState by remember { mutableStateOf<List<String>?>(null) }
+    val rawLines = remember(activePayload.displayedText) {
+        activePayload.displayedText.split("\n")
+    }
     var foldRegionsState by remember { mutableStateOf<List<FoldRegion>>(emptyList()) }
     var collapsedFoldStartLines by remember { mutableStateOf<Set<Int>>(emptySet()) }
 
     LaunchedEffect(activePayload.displayedText) {
-        rawLinesState = null
         collapsedFoldStartLines = emptySet()
-        val lines = withContext(Dispatchers.Default) {
-            activePayload.displayedText.split("\n")
-        }
-        rawLinesState = lines
         val folds = document?.folding ?: withContext(Dispatchers.Default) {
-            FoldManager.calculateFolds(lines, respectLineThreshold = false)
+            FoldManager.calculateFolds(rawLines, respectLineThreshold = false)
         }
         foldRegionsState = folds
     }
@@ -161,31 +157,24 @@ internal fun ReadOnlyCodeViewer(
             }
         )
 
-        val currentRawLines = rawLinesState
-        if (currentRawLines != null) {
-            LazyCodeBody(
-                mode = LazyCodeBodyMode.ReadOnly,
-                rawLines = currentRawLines,
-                foldRegions = foldRegionsState,
-                collapsedFoldStartLines = collapsedFoldStartLines,
-                onToggleFold = { lineIndex ->
-                    collapsedFoldStartLines = if (lineIndex in collapsedFoldStartLines) {
-                        collapsedFoldStartLines - lineIndex
-                    } else {
-                        collapsedFoldStartLines + lineIndex
-                    }
-                },
-                isFoldingEnabled = isFoldingEnabled && !isSearching,
-                isWordWrapEnabled = isWordWrapEnabled,
-                languageHint = document?.statistics?.language ?: languageHint,
-                fontSize = style.fontSize,
-                lineHeight = style.lineHeight,
-                modifier = Modifier.weight(1f).fillMaxWidth()
-            )
-        } else {
-            KNetBodyLoadingPlaceholder(
-                modifier = Modifier.weight(1f).fillMaxWidth()
-            )
-        }
+        LazyCodeBody(
+            mode = LazyCodeBodyMode.ReadOnly,
+            rawLines = rawLines,
+            foldRegions = foldRegionsState,
+            collapsedFoldStartLines = collapsedFoldStartLines,
+            onToggleFold = { lineIndex ->
+                collapsedFoldStartLines = if (lineIndex in collapsedFoldStartLines) {
+                    collapsedFoldStartLines - lineIndex
+                } else {
+                    collapsedFoldStartLines + lineIndex
+                }
+            },
+            isFoldingEnabled = isFoldingEnabled && !isSearching,
+            isWordWrapEnabled = isWordWrapEnabled,
+            languageHint = document?.statistics?.language ?: languageHint,
+            fontSize = style.fontSize,
+            lineHeight = style.lineHeight,
+            modifier = Modifier.weight(1f).fillMaxWidth()
+        )
     }
 }

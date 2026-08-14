@@ -6,6 +6,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.ResponseBodyMode
 import com.devuloopers.knet.ui.desktop.httppanel.model.ResponseBodyState
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class ResponseEditorPanelTest {
 
@@ -62,5 +63,44 @@ class ResponseEditorPanelTest {
 
         val emptyState = ResponseBodyState.fromPayload(emptyList(), "")
         assertEquals(ResponseBodyMode.NONE, emptyState.mode)
+    }
+
+    @Test
+    fun testResponseBodyModePrettify() {
+        val rawJson = "{\"status\":\"ok\",\"code\":200}"
+        val prettyJson = ResponseBodyMode.JSON.prettify(rawJson)
+        assertEquals(true, ResponseBodyMode.JSON.isPrettifiable)
+        assertEquals("{\n  \"status\": \"ok\",\n  \"code\": 200\n}", prettyJson)
+
+        val rawXml = "<response><status>ok</status></response>"
+        val prettyXml = ResponseBodyMode.XML.prettify(rawXml)
+        assertEquals(true, ResponseBodyMode.XML.isPrettifiable)
+        assertTrue(prettyXml.contains("<status>ok</status>"))
+
+        val rawHtml = "<html><body><h1>200</h1></body></html>"
+        val prettyHtml = ResponseBodyMode.HTML.prettify(rawHtml)
+        assertEquals(true, ResponseBodyMode.HTML.isPrettifiable)
+        assertTrue(prettyHtml.contains("<h1>"))
+        assertTrue(prettyHtml.contains("200"))
+
+        assertEquals(false, ResponseBodyMode.TEXT.isPrettifiable)
+        assertEquals("plain text", ResponseBodyMode.TEXT.prettify("plain text"))
+
+        assertEquals(false, ResponseBodyMode.RAW.isPrettifiable)
+        assertEquals("raw data", ResponseBodyMode.RAW.prettify("raw data"))
+    }
+
+    @Test
+    fun testRawSubFormatPrettify() {
+        val rawJson = "{\"key\":\"value\"}"
+        assertEquals(true, com.devuloopers.knet.ui.desktop.httppanel.model.RawSubFormat.JSON.isPrettifiable)
+        assertEquals("{\n  \"key\": \"value\"\n}", com.devuloopers.knet.ui.desktop.httppanel.model.RawSubFormat.JSON.prettify(rawJson))
+
+        val rawXml = "<root><item>1</item></root>"
+        assertEquals(true, com.devuloopers.knet.ui.desktop.httppanel.model.RawSubFormat.XML.isPrettifiable)
+        assertTrue(com.devuloopers.knet.ui.desktop.httppanel.model.RawSubFormat.XML.prettify(rawXml).contains("<item>1</item>"))
+
+        assertEquals(false, com.devuloopers.knet.ui.desktop.httppanel.model.RawSubFormat.TEXT.isPrettifiable)
+        assertEquals("some text", com.devuloopers.knet.ui.desktop.httppanel.model.RawSubFormat.TEXT.prettify("some text"))
     }
 }

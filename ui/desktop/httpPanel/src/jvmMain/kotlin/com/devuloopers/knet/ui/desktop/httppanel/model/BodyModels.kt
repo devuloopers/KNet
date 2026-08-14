@@ -1,8 +1,12 @@
 package com.devuloopers.knet.ui.desktop.httppanel.model
 
+import com.devuloopers.knet.engine.formatter.formatters.HtmlBodyFormatter
+import com.devuloopers.knet.engine.formatter.formatters.JsonBodyFormatter
+import com.devuloopers.knet.engine.formatter.formatters.XmlBodyFormatter
 import com.devuloopers.knet.engine.formatter.model.BodyFormat
 import com.devuloopers.knet.engine.formatter.registry.BodyFormatterRegistry
 import com.devuloopers.knet.ui.core.components.keyvalue.KeyValueEntry
+import com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage
 import com.devuloopers.knet.ui.desktop.httppanel.mapper.GraphQlPayloadMapper
 
 /**
@@ -27,14 +31,50 @@ enum class RequestBodyMode(val label: String, val tabLabel: String) {
  * and focuses on universal server response data formats.
  *
  * @property label User-facing display label for the response mode pill selector.
+ * @property codeLanguage Strongly-typed [CodeLanguage] passed to [KNetCodeEditor] for syntax highlighting.
+ * @property placeholder Default template or placeholder string shown when payload is empty.
+ * @property isPrettifiable True if this response format supports automatic syntax prettification.
  */
-enum class ResponseBodyMode(val label: String) {
-    NONE("none"),
-    JSON("json"),
-    XML("xml"),
-    HTML("html"),
-    TEXT("text"),
-    RAW("raw")
+enum class ResponseBodyMode(
+    val label: String,
+    val codeLanguage: CodeLanguage = CodeLanguage.PLAIN,
+    val placeholder: String = "",
+    val isPrettifiable: Boolean = false
+) {
+    NONE("none", CodeLanguage.PLAIN, "", isPrettifiable = false),
+    JSON(
+        "json",
+        CodeLanguage.JSON,
+        "// Enter JSON response body...\n{\n  \"status\": \"success\"\n}",
+        isPrettifiable = true
+    ),
+    XML(
+        "xml",
+        CodeLanguage.XML,
+        "<!-- Enter XML response body -->\n<response>\n  <status>success</status>\n</response>",
+        isPrettifiable = true
+    ),
+    HTML(
+        "html",
+        CodeLanguage.HTML,
+        "<!-- Enter HTML response body -->\n<!DOCTYPE html>\n<html>\n<body>\n  <h1>200 OK</h1>\n</body>\n</html>",
+        isPrettifiable = true
+    ),
+    TEXT("text", CodeLanguage.PLAIN, "// Enter plain text response body...", isPrettifiable = false),
+    RAW("raw", CodeLanguage.PLAIN, "// Enter raw response payload...", isPrettifiable = false);
+
+    /**
+     * Formats the payload text according to this response mode's syntax rules.
+     *
+     * @param payload Raw payload string to format.
+     * @return Pretty-printed string if formatting succeeds, or original payload text on failure.
+     */
+    fun prettify(payload: String): String = when (this) {
+        JSON -> JsonBodyFormatter().prettyPrintJson(payload)
+        XML -> XmlBodyFormatter().prettyPrint(payload)
+        HTML -> HtmlBodyFormatter.prettyPrintHtml(payload)
+        else -> payload
+    }
 }
 
 /**
@@ -44,19 +84,34 @@ enum class ResponseBodyMode(val label: String) {
  * and the MIME Content-Type that should be set on the request.
  *
  * @property label User-facing display label for the format dropdown.
- * @property languageHint Language token forwarded to [KNetCodeEditor] for syntax highlighting.
+ * @property codeLanguage Strongly-typed [CodeLanguage] passed to [KNetCodeEditor] for syntax highlighting.
  * @property contentType HTTP Content-Type MIME type produced by this raw sub-format.
+ * @property isPrettifiable True if this raw sub-format supports automatic syntax prettification.
  */
 enum class RawSubFormat(
     val label: String,
-    val languageHint: String,
-    val contentType: String
+    val codeLanguage: CodeLanguage,
+    val contentType: String,
+    val isPrettifiable: Boolean = false
 ) {
-    TEXT("Text", "plain", "text/plain"),
-    JSON("JSON", "json", "application/json"),
-    XML("XML", "xml", "application/xml"),
-    HTML("HTML", "html", "text/html"),
-    JAVASCRIPT("JavaScript", "javascript", "text/javascript")
+    TEXT("Text", CodeLanguage.PLAIN, "text/plain", isPrettifiable = false),
+    JSON("JSON", CodeLanguage.JSON, "application/json", isPrettifiable = true),
+    XML("XML", CodeLanguage.XML, "application/xml", isPrettifiable = true),
+    HTML("HTML", CodeLanguage.HTML, "text/html", isPrettifiable = true),
+    JAVASCRIPT("JavaScript", CodeLanguage.JAVASCRIPT, "text/javascript", isPrettifiable = false);
+
+    /**
+     * Formats the payload text according to this raw sub-format syntax rules.
+     *
+     * @param payload Raw payload string to format.
+     * @return Pretty-printed string if formatting succeeds, or original payload text on failure.
+     */
+    fun prettify(payload: String): String = when (this) {
+        JSON -> JsonBodyFormatter().prettyPrintJson(payload)
+        XML -> XmlBodyFormatter().prettyPrint(payload)
+        HTML -> HtmlBodyFormatter.prettyPrintHtml(payload)
+        else -> payload
+    }
 }
 
 /**

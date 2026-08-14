@@ -200,43 +200,35 @@ public fun RequestBodyEditor(
                 }
             }
 
-            RequestBodyMode.JSON -> {
-                KNetCodeEditor(
-                    code = state.payloadText,
-                    mode = EditorMode.Editable(
-                        onCodeChange = { onStateChange(state.copy(payloadText = it)) },
-                        onPrettify = {
-                            val formatted = JsonBodyFormatter().prettyPrintJson(state.payloadText)
-                            onStateChange(state.copy(payloadText = formatted))
-                        },
-                        placeholder = "// Enter JSON payload...\n{\n  \"key\": \"value\"\n}"
-                    ),
-                    language = CodeLanguage.JSON,
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth()
-                )
-            }
-
+            RequestBodyMode.JSON,
             RequestBodyMode.RAW -> {
-                val codeLang = when (state.rawSubFormat) {
-                    RawSubFormat.TEXT -> CodeLanguage.PLAIN
-                    RawSubFormat.JSON -> CodeLanguage.JSON
-                    RawSubFormat.HTML -> CodeLanguage.HTML
-                    RawSubFormat.XML -> CodeLanguage.XML
-                    RawSubFormat.JAVASCRIPT -> CodeLanguage.JAVASCRIPT
+                val isJson = state.mode == RequestBodyMode.JSON
+                val codeLang = if (isJson) CodeLanguage.JSON else state.rawSubFormat.codeLanguage
+                val placeholder = if (isJson) {
+                    "// Enter JSON payload...\n{\n  \"key\": \"value\"\n}"
+                } else {
+                    "// Enter raw payload..."
                 }
+                val isPrettifiable = if (isJson) true else state.rawSubFormat.isPrettifiable
+                val prettifyAction: (() -> Unit)? = if (isPrettifiable) {
+                    {
+                        val formatted = if (isJson) {
+                            JsonBodyFormatter().prettyPrintJson(state.payloadText)
+                        } else {
+                            state.rawSubFormat.prettify(state.payloadText)
+                        }
+                        onStateChange(state.copy(payloadText = formatted))
+                    }
+                } else {
+                    null
+                }
+
                 KNetCodeEditor(
                     code = state.payloadText,
                     mode = EditorMode.Editable(
                         onCodeChange = { onStateChange(state.copy(payloadText = it)) },
-                        onPrettify = {
-                            if (state.rawSubFormat == RawSubFormat.JSON) {
-                                val formatted = JsonBodyFormatter().prettyPrintJson(state.payloadText)
-                                onStateChange(state.copy(payloadText = formatted))
-                            }
-                        },
-                        placeholder = "// Enter raw payload..."
+                        onPrettify = prettifyAction,
+                        placeholder = placeholder
                     ),
                     language = codeLang,
                     modifier = Modifier

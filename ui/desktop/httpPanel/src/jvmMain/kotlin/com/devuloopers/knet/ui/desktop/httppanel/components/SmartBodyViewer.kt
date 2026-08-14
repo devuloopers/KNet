@@ -74,72 +74,27 @@ public fun SmartBodyViewer(
             )
         }
 
-        is BodyFormat.Json -> {
-            KNetCodeEditor(
-                code = format.formattedText,
-                language = CodeLanguage.JSON,
-                mode = EditorMode.ReadOnly,
-                modifier = modifier.fillMaxSize()
-            )
-        }
-
-        is BodyFormat.Xml -> {
-            KNetCodeEditor(
-                code = format.formattedText,
-                language = CodeLanguage.XML,
-                mode = EditorMode.ReadOnly,
-                modifier = modifier.fillMaxSize()
-            )
-        }
-
-        is BodyFormat.Html -> {
-            KNetCodeEditor(
-                code = format.formattedText,
-                language = CodeLanguage.HTML,
-                mode = EditorMode.ReadOnly,
-                modifier = modifier.fillMaxSize()
-            )
-        }
-
-        is BodyFormat.Js -> {
-            KNetCodeEditor(
-                code = format.formattedText,
-                language = CodeLanguage.JAVASCRIPT,
-                mode = EditorMode.ReadOnly,
-                modifier = modifier.fillMaxSize()
-            )
-        }
-
-        is BodyFormat.Css -> {
-            KNetCodeEditor(
-                code = format.formattedText,
-                language = CodeLanguage.CSS,
-                mode = EditorMode.ReadOnly,
-                modifier = modifier.fillMaxSize()
-            )
-        }
-
-        is BodyFormat.Cbor,
-        is BodyFormat.Protobuf,
-        is BodyFormat.GrpcWeb -> {
-            val prettyText = remember(spec.headers, spec.rawBody) {
-                BodyFormatterRegistry.prettyPrintBody(headersMap, spec.rawBody)
+        else -> {
+            val (codeLanguage, displayText) = when (format) {
+                is BodyFormat.Json -> CodeLanguage.JSON to format.formattedText
+                is BodyFormat.Xml -> CodeLanguage.XML to format.formattedText
+                is BodyFormat.Html -> CodeLanguage.HTML to format.formattedText
+                is BodyFormat.Js -> CodeLanguage.JAVASCRIPT to format.formattedText
+                is BodyFormat.Css -> CodeLanguage.CSS to format.formattedText
+                is BodyFormat.Cbor,
+                is BodyFormat.Protobuf,
+                is BodyFormat.GrpcWeb -> {
+                    val prettyText = remember(spec.headers, spec.rawBody) {
+                        BodyFormatterRegistry.prettyPrintBody(headersMap, spec.rawBody)
+                    }
+                    CodeLanguage.JSON to prettyText
+                }
+                else -> CodeLanguage.PLAIN to spec.rawBody
             }
-            KNetCodeEditor(
-                code = prettyText,
-                language = CodeLanguage.JSON,
-                mode = EditorMode.ReadOnly,
-                modifier = modifier.fillMaxSize()
-            )
-        }
 
-        is BodyFormat.RawText,
-        is BodyFormat.Image,
-        is BodyFormat.JsonStream,
-        is BodyFormat.SseStream -> {
             KNetCodeEditor(
-                code = spec.rawBody,
-                language = CodeLanguage.PLAIN,
+                code = displayText,
+                language = codeLanguage,
                 mode = EditorMode.ReadOnly,
                 modifier = modifier.fillMaxSize()
             )
