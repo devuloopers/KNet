@@ -87,4 +87,54 @@ class GraphQLRequestBodyViewerTest {
         assertTrue(result.extensionsJson.contains("persistedQuery"))
         assertTrue(result.extensionsJson.contains("abc123hash"))
     }
+
+    @Test
+    fun `GraphQlSubTab SSOT accessors, updates, and prettifiers operate correctly`() {
+        val initialState = com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlState(
+            queryText = "query MyQuery { user { id } }",
+            variablesText = "{\"id\":\"123\"}",
+            operationName = "MyQuery",
+            extensionsText = "{\"client\":\"apollo\"}"
+        )
+
+        // 1. Payloads
+        assertEquals("query MyQuery { user { id } }", com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlSubTab.QUERY.getPayload(initialState))
+        assertEquals("{\"id\":\"123\"}", com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlSubTab.VARIABLES.getPayload(initialState))
+        assertEquals("{\"client\":\"apollo\"}", com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlSubTab.EXTENSIONS.getPayload(initialState))
+
+        // 2. Updates
+        val updatedQueryState = com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlSubTab.QUERY.updatePayload(initialState, "query NewOp { item }")
+        assertEquals("query NewOp { item }", updatedQueryState.queryText)
+        assertEquals("NewOp", updatedQueryState.operationName)
+
+        val updatedVarsState = com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlSubTab.VARIABLES.updatePayload(initialState, "{\"key\":\"val\"}")
+        assertEquals("{\"key\":\"val\"}", updatedVarsState.variablesText)
+
+        // 3. Prettify
+        val prettifiedVarsState = com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlSubTab.VARIABLES.prettify(updatedVarsState)
+        assertEquals("{\n  \"key\": \"val\"\n}", prettifiedVarsState.variablesText)
+    }
+
+    @Test
+    fun `GraphQLBodySubTab SSOT accessors and empty states resolve accurately`() {
+        val format = BodyFormat.GraphQL(
+            operationType = "Query",
+            operationName = "TestOp",
+            queryText = "query TestOp { test }",
+            variablesJson = "{}",
+            extensionsJson = ""
+        )
+        val rawJson = "{\"query\":\"query TestOp { test }\"}"
+
+        assertEquals("query TestOp { test }", com.devuloopers.knet.ui.desktop.httppanel.components.GraphQLBodySubTab.QUERY.getPayload(format, rawJson))
+        assertEquals(null, com.devuloopers.knet.ui.desktop.httppanel.components.GraphQLBodySubTab.QUERY.getEmptyState(format, rawJson))
+
+        assertEquals("{}", com.devuloopers.knet.ui.desktop.httppanel.components.GraphQLBodySubTab.VARIABLES.getPayload(format, rawJson))
+        assertNotNull(com.devuloopers.knet.ui.desktop.httppanel.components.GraphQLBodySubTab.VARIABLES.getEmptyState(format, rawJson))
+
+        assertNotNull(com.devuloopers.knet.ui.desktop.httppanel.components.GraphQLBodySubTab.EXTENSIONS.getEmptyState(format, rawJson))
+
+        assertEquals(rawJson, com.devuloopers.knet.ui.desktop.httppanel.components.GraphQLBodySubTab.RAW_JSON.getPayload(format, rawJson))
+        assertEquals(null, com.devuloopers.knet.ui.desktop.httppanel.components.GraphQLBodySubTab.RAW_JSON.getEmptyState(format, rawJson))
+    }
 }

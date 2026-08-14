@@ -19,8 +19,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.engine.formatter.model.BodyFormat
@@ -36,13 +34,17 @@ import com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage
 /**
  * Sub-tabs available directly within the GraphQL request body inspector.
  *
+ * Serves as the Single Source of Truth (SSOT) for sub-tab metadata, syntax highlighting,
+ * payload extraction, and empty state definitions.
+ *
  * @property label Standard human-readable tab display name.
+ * @property codeLanguage Strongly-typed [CodeLanguage] passed to [KNetCodeEditor] for syntax highlighting.
  */
-enum class GraphQLBodySubTab(val label: String) {
-    QUERY("Query"),
-    VARIABLES("Variables"),
-    EXTENSIONS("Extensions"),
-    RAW_JSON("Raw JSON");
+enum class GraphQLBodySubTab(val label: String, val codeLanguage: CodeLanguage) {
+    QUERY("Query", CodeLanguage.GRAPHQL),
+    VARIABLES("Variables", CodeLanguage.JSON),
+    EXTENSIONS("Extensions", CodeLanguage.JSON),
+    RAW_JSON("Raw JSON", CodeLanguage.JSON);
 
     /**
      * Resolves the user-facing title, appending `(0)` when optional sections are empty.
@@ -54,6 +56,36 @@ enum class GraphQLBodySubTab(val label: String) {
             else -> label
         }
     }
+
+    /**
+     * Extracts the string payload for this sub-tab from the given [BodyFormat.GraphQL] and raw transport string.
+     */
+    fun getPayload(format: BodyFormat.GraphQL, rawJsonText: String): String = when (this) {
+        QUERY -> format.queryText
+        VARIABLES -> format.variablesJson
+        EXTENSIONS -> format.extensionsJson
+        RAW_JSON -> rawJsonText
+    }
+
+    /**
+     * Returns the empty state placeholder metadata if the section contains no payload.
+     */
+    fun getEmptyState(format: BodyFormat.GraphQL, rawJsonText: String): Pair<String, String>? = when (this) {
+        QUERY -> if (format.queryText.isBlank()) {
+            "No GraphQL Query" to "This GraphQL payload does not define a query document."
+        } else null
+        VARIABLES -> {
+            val hasVars = format.variablesJson.isNotBlank() && format.variablesJson.trim() != "{}"
+            if (!hasVars) "No Variables" to "This GraphQL operation has no query variables." else null
+        }
+        EXTENSIONS -> {
+            val hasExt = format.extensionsJson.isNotBlank() && format.extensionsJson.trim() != "{}"
+            if (!hasExt) "No Extensions" to "This GraphQL operation does not include protocol extensions." else null
+        }
+        RAW_JSON -> if (rawJsonText.isBlank()) {
+            "No Raw Body" to "No raw JSON payload available for this GraphQL request."
+        } else null
+    }
 }
 
 /**
@@ -61,6 +93,7 @@ enum class GraphQLBodySubTab(val label: String) {
  *
  * Provides sub-tabs for GraphQL Query Document (with syntax highlighting),
  * Variables (JSON), Extensions (JSON), and formatted Raw JSON transport payload.
+ * Uses a single stable [KNetCodeEditor] call site to prevent layout flashing across sub-tabs.
  *
  * @param format Strongly-typed [BodyFormat.GraphQL] domain model containing parsed query AST, variables, and extensions.
  * @param rawJsonText Raw JSON representation of the GraphQL POST request body.
@@ -144,80 +177,26 @@ public fun GraphQLBodyViewer(
             modifier = Modifier.height(1.dp)
         )
 
-        // Sub-Tab Content View
+        // Sub-Tab Content View (Single Stable Call Site)
         Box(
             modifier = Modifier
                 .weight(1f)
                 .fillMaxWidth()
         ) {
-            when (activeSubTab) {
-                GraphQLBodySubTab.QUERY -> {
-                    if (format.queryText.isBlank()) {
-                        KNetEmptyStatePlaceholder(
-                            title = "No GraphQL Query",
-                            subtitle = "This GraphQL payload does not define a query document.",
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        KNetCodeEditor(
-                            code = format.queryText,
-                            language = CodeLanguage.GRAPHQL,
-                            mode = EditorMode.ReadOnly,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                }
-
-                GraphQLBodySubTab.VARIABLES -> {
-                    if (!hasVariables) {
-                        KNetEmptyStatePlaceholder(
-                            title = "No Variables",
-                            subtitle = "This GraphQL operation has no query variables.",
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        KNetCodeEditor(
-                            code = format.variablesJson,
-                            language = CodeLanguage.JSON,
-                            mode = EditorMode.ReadOnly,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                }
-
-                GraphQLBodySubTab.EXTENSIONS -> {
-                    if (!hasExtensions) {
-                        KNetEmptyStatePlaceholder(
-                            title = "No Extensions",
-                            subtitle = "This GraphQL operation does not include protocol extensions.",
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        KNetCodeEditor(
-                            code = format.extensionsJson,
-                            language = CodeLanguage.JSON,
-                            mode = EditorMode.ReadOnly,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                }
-
-                GraphQLBodySubTab.RAW_JSON -> {
-                    if (rawJsonText.isBlank()) {
-                        KNetEmptyStatePlaceholder(
-                            title = "No Raw Body",
-                            subtitle = "No raw JSON payload available for this GraphQL request.",
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        KNetCodeEditor(
-                            code = rawJsonText,
-                            language = CodeLanguage.JSON,
-                            mode = EditorMode.ReadOnly,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    }
-                }
+            val emptyState = activeSubTab.getEmptyState(format, rawJsonText)
+            if (emptyState != null) {
+                KNetEmptyStatePlaceholder(
+                    title = emptyState.first,
+                    subtitle = emptyState.second,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                KNetCodeEditor(
+                    code = activeSubTab.getPayload(format, rawJsonText),
+                    language = activeSubTab.codeLanguage,
+                    mode = EditorMode.ReadOnly,
+                    modifier = Modifier.fillMaxSize()
+                )
             }
         }
     }

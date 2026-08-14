@@ -492,3 +492,17 @@ This document serves as the live project tracking board for implementing seamles
 - [x] **Phase 4: Unit Testing & Multi-Module Verification** `[COMPLETED]`
   - [x] Added unit tests for `ResponseBodyMode.prettify` and `RawSubFormat.prettify` in `ResponseEditorPanelTest.kt`
   - [x] Verified 100% passing test suites across all affected modules (`BUILD SUCCESSFUL`)
+
+---
+
+## Phase 36: GraphQL Editor & Viewer SSOT Harmonization `[COMPLETED]`
+
+- [x] **Phase 1: GraphQL Editor SSOT Enums & Prettifiers (`:ui:desktop:httpPanel:model`)** `[COMPLETED]`
+  - [x] Enhanced `GraphQlSubTab` with `codeLanguage`, `placeholder`, `getPayload()`, `updatePayload()`, and `prettify()`
+- [x] **Phase 2: Stable Single Call Site for GraphQL Editor (`:ui:desktop:httpPanel:editor`)** `[COMPLETED]`
+  - [x] Refactored `GraphQlEditor.kt` to use a single continuous `KNetCodeEditor` call site across `Query`, `Variables`, and `Extensions`
+- [x] **Phase 3: Stable Single Call Site for GraphQL Viewer (`:ui:desktop:httpPanel:components`)** `[COMPLETED]`
+  - [x] Refactored `GraphQLBodyViewer.kt` to use `GraphQLBodySubTab` SSOT and a single stable `KNetCodeEditor` call site
+- [x] **Phase 4: Unit Testing & Verification** `[COMPLETED]`
+  - [x] Added unit tests for `GraphQlSubTab` operations in `httpPanel:jvmTest`
+  - [x] Ran full workspace test suites to verify 100% pass rate (`BUILD SUCCESSFUL`)
