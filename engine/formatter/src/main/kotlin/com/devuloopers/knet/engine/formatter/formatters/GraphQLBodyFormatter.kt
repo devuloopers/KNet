@@ -43,6 +43,18 @@ class GraphQLBodyFormatter : BodyFormatter {
         if (contentType.contains("application/graphql", ignoreCase = true)) return true
 
         val trimmed = bodyText.trim()
+        if (trimmed.isEmpty()) return false
+
+        // Check if raw GraphQL document string or pre-formatted block
+        if (trimmed.startsWith("query") ||
+            trimmed.startsWith("mutation") ||
+            trimmed.startsWith("subscription") ||
+            trimmed.startsWith("fragment") ||
+            trimmed.startsWith("# GraphQL")
+        ) {
+            return true
+        }
+
         if (!trimmed.startsWith("{") || !trimmed.endsWith("}")) return false
 
         return try {
@@ -72,28 +84,52 @@ class GraphQLBodyFormatter : BodyFormatter {
                 objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(root.get("variables"))
             } else ""
 
+            val extensionsJson = if (root.has("extensions") && root.get("extensions").isObject) {
+                objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(root.get("extensions"))
+            } else ""
+
+            val (astOpType, astOpName) = parseAstDetails(rawQuery)
+            val resolvedOperationName = operationName ?: astOpName
+
             val queryTrimmed = rawQuery.trim()
-            val operationType = when {
+            val resolvedOperationType = when {
                 queryTrimmed.startsWith("mutation") -> "Mutation"
                 queryTrimmed.startsWith("subscription") -> "Subscription"
-                else -> "Query"
+                else -> astOpType
             }
 
             val formattedQuery = formatQuery(rawQuery)
 
             BodyFormat.GraphQL(
-                operationType = operationType,
-                operationName = operationName,
+                operationType = resolvedOperationType,
+                operationName = resolvedOperationName,
                 queryText = formattedQuery,
-                variablesJson = variablesJson
+                variablesJson = variablesJson,
+                extensionsJson = extensionsJson
             )
         } catch (_: Exception) {
+            val (astOpType, astOpName) = parseAstDetails(trimmed)
             BodyFormat.GraphQL(
-                operationType = "Query",
-                operationName = null,
+                operationType = astOpType,
+                operationName = astOpName,
                 queryText = formatQuery(trimmed),
-                variablesJson = ""
+                variablesJson = "",
+                extensionsJson = ""
             )
+        }
+    }
+
+    private fun parseAstDetails(queryText: String): Pair<String, String?> {
+        val trimmed = queryText.trim()
+        if (trimmed.isEmpty()) return "Query" to null
+        return try {
+            val document = Parser().parseDocument(trimmed)
+            val opDef = document.definitions.filterIsInstance<graphql.language.OperationDefinition>().firstOrNull()
+            val opType = opDef?.operation?.name?.lowercase()?.replaceFirstChar { it.uppercase() } ?: "Query"
+            val opName = opDef?.name
+            opType to opName
+        } catch (_: Exception) {
+            "Query" to null
         }
     }
 }

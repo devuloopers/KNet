@@ -20,8 +20,10 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.apistudio.dialog.CreateCollectionDialog
 import com.devuloopers.knet.ui.desktop.apistudio.dialog.RenameCollectionDialog
 import com.devuloopers.knet.ui.desktop.apistudio.dialog.SaveRequestDialog
-import com.devuloopers.knet.ui.desktop.httppanel.editor.KNetRequestEditor
-import com.devuloopers.knet.ui.desktop.httppanel.editor.KNetRequestEditorActions
+import com.devuloopers.knet.ui.desktop.httppanel.editor.RequestEditorPanel
+import com.devuloopers.knet.ui.desktop.httppanel.editor.RequestEditorPanelActions
+import com.devuloopers.knet.ui.desktop.httppanel.model.BodyMode
+import com.devuloopers.knet.ui.desktop.httppanel.model.BodyState
 import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
 import com.devuloopers.knet.ui.desktop.apistudio.editor.RequestUrlBar
 import com.devuloopers.knet.ui.desktop.apistudio.model.ApiStudioState
@@ -83,8 +85,7 @@ public fun ApiStudioScreen(
                 viewModel?.updateMethod(unsavedMatch.method)
                 viewModel?.updateUrl(unsavedMatch.url)
                 viewModel?.updateHeaders(unsavedMatch.headers)
-                viewModel?.updateBodyPayload(unsavedMatch.bodyPayload)
-                viewModel?.updateBodyType(unsavedMatch.bodyType)
+                viewModel?.updateBodyState(BodyState.fromPayload(unsavedMatch.headers, unsavedMatch.bodyPayload))
                 viewModel?.updateScripts(unsavedMatch.preRequestScript, unsavedMatch.testScript)
             } else {
                 fun findInFolder(folders: List<com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarFolderItem>): com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarRequestItem? {
@@ -101,8 +102,7 @@ public fun ApiStudioScreen(
                     viewModel?.updateMethod(savedMatch.method)
                     viewModel?.updateUrl(savedMatch.url)
                     viewModel?.updateHeaders(savedMatch.headers)
-                    viewModel?.updateBodyPayload(savedMatch.bodyPayload)
-                    viewModel?.updateBodyType(savedMatch.bodyType)
+                    viewModel?.updateBodyState(BodyState.fromPayload(savedMatch.headers, savedMatch.bodyPayload))
                     viewModel?.updateScripts(savedMatch.preRequestScript, savedMatch.testScript)
                 }
             }
@@ -120,7 +120,6 @@ public fun ApiStudioScreen(
 
     val currentMethod = uiState.editorState.method
     val currentUrl = uiState.editorState.url
-    val bodyPayload = uiState.editorState.bodyPayload
     val activeSubTabEnum = uiState.editorState.activeSubTab
 
     Box(modifier = modifier.fillMaxSize()) {
@@ -152,8 +151,7 @@ public fun ApiStudioScreen(
                     viewModel?.updateMethod(item.method)
                     viewModel?.updateUrl(item.url)
                     viewModel?.updateHeaders(item.headers)
-                    viewModel?.updateBodyPayload(item.bodyPayload)
-                    viewModel?.updateBodyType(item.bodyType)
+                    viewModel?.updateBodyState(BodyState.fromPayload(item.headers, item.bodyPayload))
                     viewModel?.updateScripts(item.preRequestScript, item.testScript)
                     viewModel?.updateAuthState(item.authState)
                 },
@@ -164,8 +162,7 @@ public fun ApiStudioScreen(
                     viewModel?.updateMethod(item.method)
                     viewModel?.updateUrl(item.url)
                     viewModel?.updateHeaders(item.headers)
-                    viewModel?.updateBodyPayload(item.bodyPayload)
-                    viewModel?.updateBodyType(item.bodyType)
+                    viewModel?.updateBodyState(BodyState.fromPayload(item.headers, item.bodyPayload))
                     viewModel?.updateScripts(item.preRequestScript, item.testScript)
                     viewModel?.updateAuthState(item.authState)
                     collectionsViewModel?.openSaveDialog()
@@ -185,8 +182,7 @@ public fun ApiStudioScreen(
                         viewModel?.updateMethod("GET")
                         viewModel?.updateUrl("")
                         viewModel?.updateHeaders(emptyList())
-                        viewModel?.updateBodyPayload("")
-                        viewModel?.updateBodyType("NONE")
+                        viewModel?.updateBodyState(BodyState(mode = BodyMode.NONE))
                         viewModel?.updateScripts("", "")
                     }
                 },
@@ -260,9 +256,8 @@ public fun ApiStudioScreen(
 
                         HorizontalDivider(color = themeColors.border)
 
-                        KNetRequestEditor(
+                        RequestEditorPanel(
                             bodyState = uiState.editorState.bodyState,
-                            bodyPayload = bodyPayload,
                             queryParams = uiState.editorState.queryParams,
                             headers = uiState.editorState.headers,
                             cookies = uiState.editorState.cookies,
@@ -271,12 +266,8 @@ public fun ApiStudioScreen(
                             testScript = uiState.editorState.testScript,
                             activeSubTab = activeSubTabEnum,
                             activeScriptPhase = uiState.editorState.activeScriptPhase,
-                            scriptLanguage = try {
-                                com.devuloopers.knet.engine.script.api.ScriptLanguage.valueOf(uiState.editorState.scriptLanguage.uppercase())
-                            } catch (_: Exception) {
-                                com.devuloopers.knet.engine.script.api.ScriptLanguage.JAVASCRIPT
-                            },
-                            actions = KNetRequestEditorActions(
+                            scriptLanguage = uiState.editorState.scriptLanguage,
+                            actions = RequestEditorPanelActions(
                                 onBodyStateChanged = { viewModel?.updateBodyState(it) },
                                 onGraphQlStateChanged = { viewModel?.updateGraphQlState(it) },
                                 onBodyPayloadChanged = { viewModel?.updateBodyPayload(it) },
@@ -286,9 +277,9 @@ public fun ApiStudioScreen(
                                 onAuthStateChanged = { viewModel?.updateAuthState(it) },
                                 onPreRequestScriptChanged = { viewModel?.updatePreRequestScript(it) },
                                 onTestScriptChanged = { viewModel?.updateTestScript(it) },
-                                onSubTabSelected = { viewModel?.updateActiveSubTab(it.name) },
-                                onScriptPhaseSelected = { viewModel?.updateActiveScriptPhase(it.name) },
-                                onScriptLanguageChanged = { viewModel?.updateScriptLanguage(it.name) }
+                                onSubTabSelected = { viewModel?.updateActiveSubTab(it) },
+                                onScriptPhaseSelected = { viewModel?.updateActiveScriptPhase(it) },
+                                onScriptLanguageChanged = { viewModel?.updateScriptLanguage(it) }
                             )
                         )
                     }
@@ -317,7 +308,7 @@ public fun ApiStudioScreen(
                             onClearResponse = { viewModel?.clearResponse() }
                         ),
                         activeSubTab = activeResponseSubTabEnum,
-                        onSubTabSelected = { viewModel?.updateActiveResponseSubTab(it.name) },
+                        onSubTabSelected = { viewModel?.updateActiveResponseSubTab(it) },
                         modifier = paneModifier
                     )
                 },

@@ -17,9 +17,9 @@ import com.devuloopers.knet.ui.desktop.httppanel.components.InspectorSubTabRow
 import com.devuloopers.knet.ui.desktop.httppanel.model.*
 
 /**
- * Cohesive actions parameter object for [KNetRequestEditor].
+ * Cohesive actions parameter object for [RequestEditorPanel].
  */
-data class KNetRequestEditorActions(
+data class RequestEditorPanelActions(
     val onBodyStateChanged: (BodyState) -> Unit = {},
     val onBodyPayloadChanged: (String) -> Unit = {},
     val onGraphQlStateChanged: ((GraphQlState) -> Unit)? = null,
@@ -35,16 +35,15 @@ data class KNetRequestEditorActions(
 )
 
 /**
- * Unified interactive HTTP request editor composable shared across API Studio payload authoring
- * and Phase 4 Breakpoint in-flight request modification.
+ * Unified interactive HTTP request editor facade composable shared across API Studio payload authoring
+ * and Breakpoint in-flight request modification.
  *
- * Renders standardized edge-to-edge sub-tabs, panelHeader key-value editors, body authoring,
+ * Renders standardized edge-to-edge sub-tabs, header key-value editors, body authoring,
  * auth state configuration, and pre/post-request scripting views.
  */
 @Composable
-fun KNetRequestEditor(
+fun RequestEditorPanel(
     bodyState: BodyState = BodyState(),
-    bodyPayload: String = bodyState.payloadText,
     queryParams: List<Pair<String, String>> = emptyList(),
     headers: List<Pair<String, String>> = emptyList(),
     cookies: List<Pair<String, String>> = emptyList(),
@@ -54,85 +53,58 @@ fun KNetRequestEditor(
     activeSubTab: InspectorSubTab = InspectorSubTab.BODY,
     activeScriptPhase: ScriptPhase = ScriptPhase.PRE_REQUEST,
     scriptLanguage: ScriptLanguage = ScriptLanguage.JAVASCRIPT,
-    actions: KNetRequestEditorActions = KNetRequestEditorActions(),
+    actions: RequestEditorPanelActions = RequestEditorPanelActions(),
     modifier: Modifier = Modifier
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
     val spacing = KNetTheme.spacing
 
-    val paramEntries = remember(queryParams) {
-        queryParams.mapIndexed { index, (paramKey, paramValue) ->
-            KeyValueEntry("param_$index", paramKey, paramValue)
-        }
-    }
+    var localActiveTab by remember(activeSubTab) { mutableStateOf(activeSubTab) }
+
     val headerEntries = remember(headers) {
-        headers.mapIndexed { index, (headerKey, headerValue) ->
-            KeyValueEntry("header_$index", headerKey, headerValue)
-        }
+        headers.mapIndexed { idx, (k, v) -> KeyValueEntry(id = "header_$idx", key = k, value = v) }
     }
+
+    val paramEntries = remember(queryParams) {
+        queryParams.mapIndexed { idx, (k, v) -> KeyValueEntry(id = "param_$idx", key = k, value = v) }
+    }
+
     val cookieEntries = remember(cookies) {
-        cookies.mapIndexed { index, (cookieKey, cookieValue) ->
-            KeyValueEntry("cookie_$index", cookieKey, cookieValue)
-        }
+        cookies.mapIndexed { idx, (k, v) -> KeyValueEntry(id = "cookie_$idx", key = k, value = v) }
     }
-
-    val scriptState = remember(preRequestScript, testScript, activeScriptPhase, scriptLanguage) {
-        ScriptState(
-            preRequestScript = preRequestScript,
-            testScript = testScript,
-            scriptLanguage = scriptLanguage,
-            activePhase = activeScriptPhase
-        )
-    }
-
-    val activeParamsCount = queryParams.count { it.first.isNotBlank() }
-    val activeHeadersCount = headerEntries.count { it.key.isNotBlank() }
 
     Column(modifier = modifier.fillMaxSize()) {
-        // Standardized Sub-Tab Navigation Bar matching Response Inspector
+        // 1. Sub-Tabs Header Navigation Bar
         InspectorSubTabRow(
             tabs = InspectorSubTab.RequestTabs,
-            activeTab = activeSubTab,
-            onTabSelected = actions.onSubTabSelected,
-            headerCount = activeHeadersCount,
-            paramCount = activeParamsCount,
-            cookieCount = cookies.size,
-            modifier = Modifier.fillMaxWidth()
+            activeTab = localActiveTab,
+            onTabSelected = { newTab ->
+                localActiveTab = newTab
+                actions.onSubTabSelected(newTab)
+            },
+            headerCount = headers.size,
+            paramCount = queryParams.size,
+            cookieCount = cookies.size
         )
 
         HorizontalDivider(color = themeColors.border)
 
-        // Sub-Tab Panel Content
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            when (activeSubTab) {
-                InspectorSubTab.PARAMS -> {
-                    KNetKeyValueEditor(
-                        entries = paramEntries,
-                        keyHeader = "PARAMETER NAME",
-                        valueHeader = "VALUE",
-                        emptyMessage = "No query parameters defined. Click '+ Add Param' to start.",
-                        addLabel = "Add Param",
-                        onEntryChange = { entryIndex, updatedEntry ->
-                            val updatedEntries = paramEntries.toMutableList().apply { set(entryIndex, updatedEntry) }
-                            actions.onQueryParamsChanged(updatedEntries.map { it.key to it.value })
+        // 2. Active Tab Content
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+        ) {
+            when (localActiveTab) {
+                InspectorSubTab.BODY -> {
+                    BodyEditor(
+                        state = bodyState,
+                        onStateChange = { updatedBodyState ->
+                            actions.onBodyStateChanged(updatedBodyState)
+                            actions.onBodyPayloadChanged(updatedBodyState.payloadText)
                         },
-                        onAddEntry = {
-                            val updatedList = queryParams + ("" to "")
-                            actions.onQueryParamsChanged(updatedList)
-                        },
-                        onRemoveEntry = { targetIndex ->
-                            val updatedList = queryParams.toMutableList().apply { removeAt(targetIndex) }
-                            actions.onQueryParamsChanged(updatedList)
-                        },
-                        modifier = Modifier.fillMaxSize()
-                    )
-                }
-
-                InspectorSubTab.AUTH -> {
-                    AuthEditorView(
-                        state = authState,
-                        onStateChange = actions.onAuthStateChanged,
+                        onGraphQlStateChange = actions.onGraphQlStateChanged,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -160,14 +132,25 @@ fun KNetRequestEditor(
                     )
                 }
 
-                InspectorSubTab.BODY -> {
-                    BodyEditorView(
-                        state = bodyState,
-                        onStateChange = { updatedBodyState ->
-                            actions.onBodyStateChanged(updatedBodyState)
-                            actions.onBodyPayloadChanged(updatedBodyState.payloadText)
+                InspectorSubTab.PARAMS -> {
+                    KNetKeyValueEditor(
+                        entries = paramEntries,
+                        keyHeader = "PARAMETER NAME",
+                        valueHeader = "VALUE",
+                        emptyMessage = "No query parameters defined. Click '+ Add Param' to start.",
+                        addLabel = "Add Param",
+                        onEntryChange = { entryIndex, updatedEntry ->
+                            val updatedEntries = paramEntries.toMutableList().apply { set(entryIndex, updatedEntry) }
+                            actions.onQueryParamsChanged(updatedEntries.map { it.key to it.value })
                         },
-                        onGraphQlStateChange = actions.onGraphQlStateChanged,
+                        onAddEntry = {
+                            val updatedList = queryParams + ("" to "")
+                            actions.onQueryParamsChanged(updatedList)
+                        },
+                        onRemoveEntry = { targetIndex ->
+                            val updatedList = queryParams.toMutableList().apply { removeAt(targetIndex) }
+                            actions.onQueryParamsChanged(updatedList)
+                        },
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -198,8 +181,7 @@ fun KNetRequestEditor(
                             emptyMessage = "No cookies configured. Click '+ Add Cookie' to start.",
                             addLabel = "Add Cookie",
                             onEntryChange = { entryIndex, updatedEntry ->
-                                val updatedEntries =
-                                    cookieEntries.toMutableList().apply { set(entryIndex, updatedEntry) }
+                                val updatedEntries = cookieEntries.toMutableList().apply { set(entryIndex, updatedEntry) }
                                 actions.onCookiesChanged(updatedEntries.map { it.key to it.value })
                             },
                             onAddEntry = {
@@ -215,14 +197,27 @@ fun KNetRequestEditor(
                     }
                 }
 
+                InspectorSubTab.AUTH -> {
+                    AuthEditor(
+                        state = authState,
+                        onStateChange = actions.onAuthStateChanged,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+
                 InspectorSubTab.SCRIPTS -> {
-                    ScriptEditorView(
-                        state = scriptState,
+                    ScriptEditor(
+                        state = ScriptState(
+                            preRequestScript = preRequestScript,
+                            testScript = testScript,
+                            scriptLanguage = scriptLanguage,
+                            activePhase = activeScriptPhase
+                        ),
                         onStateChange = { updated ->
                             actions.onPreRequestScriptChanged(updated.preRequestScript)
                             actions.onTestScriptChanged(updated.testScript)
-                            actions.onScriptPhaseSelected(updated.activePhase)
                             actions.onScriptLanguageChanged(updated.scriptLanguage)
+                            actions.onScriptPhaseSelected(updated.activePhase)
                         },
                         modifier = Modifier.fillMaxSize()
                     )

@@ -27,12 +27,12 @@ import com.devuloopers.knet.domain.rules.model.InterceptedTransaction
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.ui.desktop.httppanel.editor.KNetRequestEditor
-import com.devuloopers.knet.ui.desktop.httppanel.editor.KNetRequestEditorActions
+import com.devuloopers.knet.ui.desktop.httppanel.editor.RequestEditorPanel
+import com.devuloopers.knet.ui.desktop.httppanel.editor.RequestEditorPanelActions
 import com.devuloopers.knet.ui.desktop.httppanel.model.BodyMode
 import com.devuloopers.knet.ui.desktop.httppanel.model.BodyState
 import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
-import com.devuloopers.knet.ui.desktop.httppanel.view.KNetResponseInspector
+import com.devuloopers.knet.ui.desktop.httppanel.viewpanels.ResponseViewPanel
 
 /**
  * Slide-out desktop drawer displaying active in-flight suspended HTTP transactions.
@@ -63,8 +63,9 @@ fun LiveInterceptDrawer(
         var editedHeaders by remember(event.id) {
             mutableStateOf(event.request.headers)
         }
-        var editedBodyText by remember(event.id) {
-            mutableStateOf(event.request.body?.decodeToString() ?: "")
+        var bodyState by remember(event.id) {
+            val rawBodyText = event.request.body?.decodeToString() ?: ""
+            mutableStateOf(BodyState.fromPayload(event.request.headers, rawBodyText))
         }
         var activeSubTab by remember(event.id) {
             mutableStateOf(InspectorSubTab.BODY)
@@ -158,7 +159,7 @@ fun LiveInterceptDrawer(
                                     url = event.request.url,
                                     protocol = event.request.protocol,
                                     headers = editedHeaders,
-                                    body = editedBodyText.encodeToByteArray(),
+                                    body = bodyState.payloadText.encodeToByteArray(),
                                     timestamp = event.request.timestamp,
                                     isIntercepted = true,
                                     matchedRuleId = event.request.matchedRuleId
@@ -204,16 +205,12 @@ fun LiveInterceptDrawer(
                         .fillMaxWidth()
                 ) {
                     if (event.phase == BreakpointPhase.REQUEST || event.phase == BreakpointPhase.BOTH) {
-                        KNetRequestEditor(
-                            bodyState = BodyState(
-                                mode = BodyMode.JSON,
-                                payloadText = editedBodyText
-                            ),
-                            bodyPayload = editedBodyText,
+                        RequestEditorPanel(
+                            bodyState = bodyState,
                             headers = editedHeaders,
                             activeSubTab = activeSubTab,
-                            actions = KNetRequestEditorActions(
-                                onBodyPayloadChanged = { editedBodyText = it },
+                            actions = RequestEditorPanelActions(
+                                onBodyStateChanged = { bodyState = it },
                                 onHeadersChanged = { pairs ->
                                     editedHeaders = pairs
                                 },
@@ -232,7 +229,7 @@ fun LiveInterceptDrawer(
                                 responseBody = response.body?.decodeToString() ?: "",
                                 headers = response.headers.map { it.first to it.second }
                             )
-                            KNetResponseInspector(
+                            ResponseViewPanel(
                                 spec = respSpec,
                                 modifier = Modifier.fillMaxSize()
                             )

@@ -9,7 +9,7 @@ import com.devuloopers.knet.ui.desktop.codeeditor.model.PreparedDocument
  * Service encapsulating editor-specific document preparation policies,
  * such as preview line limits, metric generation, and background fold calculations.
  */
-object DocumentPreparationService {
+internal object DocumentPreparationService {
 
     /** Maximum displayed line preview threshold set to Int.MAX_VALUE for full payload virtualization. */
     const val EDITOR_PREVIEW_MAX_LINES: Int = Int.MAX_VALUE

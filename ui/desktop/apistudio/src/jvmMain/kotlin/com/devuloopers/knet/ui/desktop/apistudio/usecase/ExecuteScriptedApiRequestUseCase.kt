@@ -72,11 +72,7 @@ public class ExecuteScriptedApiRequestUseCase(
         val environmentStore = EnvironmentStore()
         val uiConsoleLogs = mutableListOf<String>()
 
-        val targetLanguage = if (editorState.scriptLanguage.equals("KOTLIN", ignoreCase = true)) {
-            ScriptLanguage.KOTLIN
-        } else {
-            ScriptLanguage.JAVASCRIPT
-        }
+        val targetLanguage = editorState.scriptLanguage
 
         // 1. Pre-request Script Execution
         if (editorState.preRequestScript.isNotBlank()) {

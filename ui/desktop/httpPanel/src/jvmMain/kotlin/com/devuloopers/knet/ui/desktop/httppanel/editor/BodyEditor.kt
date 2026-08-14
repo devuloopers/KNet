@@ -17,37 +17,40 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.devuloopers.knet.engine.formatter.formatters.JsonBodyFormatter
 import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdown
 import com.devuloopers.knet.ui.core.components.keyvalue.KNetKeyValueEditor
 import com.devuloopers.knet.ui.core.components.keyvalue.KeyValueEntry
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
+import com.devuloopers.knet.ui.desktop.codeeditor.api.KNetCodeEditor
+import com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage
+import com.devuloopers.knet.ui.desktop.httppanel.mapper.GraphQlPayloadMapper
 import com.devuloopers.knet.ui.desktop.httppanel.model.BodyMode
 import com.devuloopers.knet.ui.desktop.httppanel.model.BodyState
 import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlState
 import com.devuloopers.knet.ui.desktop.httppanel.model.RawSubFormat
-import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
-import com.devuloopers.knet.ui.desktop.codeeditor.api.KNetCodeEditor
-import com.devuloopers.knet.ui.desktop.httppanel.mapper.GraphQlPayloadMapper
 
 /**
  * Multi-mode Body Payload Editor supporting none, JSON, form-data, x-www-form-urlencoded, raw, and GraphQL.
  *
  * Switches dynamically between [KNetCodeEditor] for text-based modes and [KNetKeyValueEditor]
  * for form-based modes. The raw mode exposes a [KNetDropdown] sub-format selector that controls
- * the syntax highlighting language hint passed to [KNetCodeEditor].
+ * the syntax highlighting language passed to [KNetCodeEditor].
  *
  * @param state Immutable [BodyState] representing the current body payload configuration.
  * @param onStateChange Callback invoked with an updated [BodyState] whenever any configuration changes.
  * @param modifier Composable modifier applied to the root [Column] layout.
  */
 @Composable
-public fun BodyEditorView(
+public fun BodyEditor(
     state: BodyState,
     onStateChange: (BodyState) -> Unit,
     onGraphQlStateChange: ((GraphQlState) -> Unit)? = null,
@@ -60,26 +63,20 @@ public fun BodyEditorView(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .background(themeColors.surface)
             .padding(spacing.md),
         verticalArrangement = Arrangement.spacedBy(spacing.sm)
     ) {
-        // ─── Mode Selector Bar ────────────────────────────────────────────────────────
+        // Mode Selector Pills Bar
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(spacing.xs),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = "Payload:",
-                style = typography.caption.copy(
-                    color = themeColors.textMuted,
-                    fontWeight = FontWeight.Medium
-                )
-            )
             BodyMode.entries.forEach { mode ->
-                val isSelected = mode == state.mode
+                val isSelected = state.mode == mode
                 Box(
                     modifier = Modifier
                         .background(
@@ -91,9 +88,7 @@ public fun BodyEditorView(
                             color = if (isSelected) themeColors.accent else themeColors.border,
                             shape = RoundedCornerShape(4.dp)
                         )
-                        .clickable {
-                            onStateChange(state.copy(mode = mode))
-                        }
+                        .clickable { onStateChange(state.copy(mode = mode)) }
                         .handCursor()
                         .padding(horizontal = 10.dp, vertical = 5.dp)
                 ) {
@@ -111,7 +106,7 @@ public fun BodyEditorView(
             }
         }
 
-        // ─── Raw Sub-Format Selector (visible only in RAW mode) ───────────────────────
+        // Raw Sub-Format Selector (visible only in RAW mode)
         if (state.mode == BodyMode.RAW) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -135,10 +130,9 @@ public fun BodyEditorView(
             }
         }
 
-        // ─── Dynamic Body Panel Content ───────────────────────────────────────────────
+        // Dynamic Body Panel Content
         when (state.mode) {
             BodyMode.NONE -> {
-                // Empty state — no body payload
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -166,7 +160,6 @@ public fun BodyEditorView(
             }
 
             BodyMode.FORM_DATA -> {
-                // Multipart form-data key-value grid
                 KNetKeyValueEditor(
                     entries = state.formDataEntries,
                     onEntryChange = { index, updatedEntry ->
@@ -189,7 +182,6 @@ public fun BodyEditorView(
             }
 
             BodyMode.X_WWW_FORM_URLENCODED -> {
-                // URL-encoded key-value grid with info banner
                 Column(
                     modifier = Modifier.fillMaxSize(),
                     verticalArrangement = Arrangement.spacedBy(spacing.sm)
@@ -232,17 +224,44 @@ public fun BodyEditorView(
             }
 
             BodyMode.JSON -> {
-                // JSON code editor with syntax highlighting
                 KNetCodeEditor(
                     code = state.payloadText,
                     mode = EditorMode.Editable(
                         onCodeChange = { onStateChange(state.copy(payloadText = it)) },
                         onPrettify = {
-                            onStateChange(state.copy(payloadText = formatJsonPayload(state.payloadText)))
+                            val formatted = JsonBodyFormatter().prettyPrintJson(state.payloadText)
+                            onStateChange(state.copy(payloadText = formatted))
                         },
                         placeholder = "// Enter JSON payload...\n{\n  \"key\": \"value\"\n}"
                     ),
-                    languageHint = "json",
+                    language = CodeLanguage.JSON,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth()
+                )
+            }
+
+            BodyMode.RAW -> {
+                val codeLang = when (state.rawSubFormat) {
+                    RawSubFormat.TEXT -> CodeLanguage.PLAIN
+                    RawSubFormat.JSON -> CodeLanguage.JSON
+                    RawSubFormat.HTML -> CodeLanguage.HTML
+                    RawSubFormat.XML -> CodeLanguage.XML
+                    RawSubFormat.JAVASCRIPT -> CodeLanguage.JAVASCRIPT
+                }
+                KNetCodeEditor(
+                    code = state.payloadText,
+                    mode = EditorMode.Editable(
+                        onCodeChange = { onStateChange(state.copy(payloadText = it)) },
+                        onPrettify = {
+                            if (state.rawSubFormat == RawSubFormat.JSON) {
+                                val formatted = JsonBodyFormatter().prettyPrintJson(state.payloadText)
+                                onStateChange(state.copy(payloadText = formatted))
+                            }
+                        },
+                        placeholder = "// Enter raw payload..."
+                    ),
+                    language = codeLang,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
@@ -250,56 +269,27 @@ public fun BodyEditorView(
             }
 
             BodyMode.GRAPHQL -> {
-                // Structured GraphQL Editor (Query, Variables, Extensions, Operation Name)
-                val graphQlMapper = androidx.compose.runtime.remember { GraphQlPayloadMapper() }
-                GraphQlBodyEditor(
+                val graphQlMapper = remember { GraphQlPayloadMapper() }
+                GraphQlEditor(
                     state = state.graphQlState,
                     onStateChange = { updatedGraphQlState ->
                         if (onGraphQlStateChange != null) {
                             onGraphQlStateChange(updatedGraphQlState)
                         } else {
-                            val serializedPayload = graphQlMapper.serializePayload(updatedGraphQlState)
+                            val newPayload = graphQlMapper.serializePayload(updatedGraphQlState)
                             onStateChange(
                                 state.copy(
                                     graphQlState = updatedGraphQlState,
-                                    payloadText = serializedPayload
+                                    payloadText = newPayload
                                 )
                             )
                         }
                     },
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-
-            BodyMode.RAW -> {
-                // Raw text editor — language hint driven by rawSubFormat
-                KNetCodeEditor(
-                    code = state.payloadText,
-                    mode = EditorMode.Editable(
-                        onCodeChange = { onStateChange(state.copy(payloadText = it)) },
-                        onPrettify = if (state.rawSubFormat == RawSubFormat.JSON) {
-                            { onStateChange(state.copy(payloadText = formatJsonPayload(state.payloadText))) }
-                        } else null,
-                        placeholder = "// Enter raw ${state.rawSubFormat.label} payload content..."
-                    ),
-                    languageHint = state.rawSubFormat.languageHint,
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
                 )
             }
         }
-    }
-}
-
-private fun formatJsonPayload(raw: String): String {
-    val trimmed = raw.trim()
-    if (trimmed.isEmpty()) return raw
-    return try {
-        val json = kotlinx.serialization.json.Json { prettyPrint = true; isLenient = true; ignoreUnknownKeys = true }
-        val element = json.parseToJsonElement(trimmed)
-        json.encodeToString(kotlinx.serialization.json.JsonElement.serializer(), element)
-    } catch (_: Exception) {
-        raw
     }
 }

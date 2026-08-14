@@ -247,11 +247,14 @@ class ApiStudioViewModelTest {
         viewModel.updateUrl("http://localhost:9090/api/post?debug=true")
         viewModel.updateHeaders(listOf("Authorization" to "Bearer token_123", "X-Custom" to "HeaderValue"))
         viewModel.updateBodyPayload("{\"name\": \"KNet\"}")
-        viewModel.updateBodyType("JSON")
-        viewModel.updateAuth("Bearer Token", "secret_token_abc")
+        viewModel.updateBodyMode(com.devuloopers.knet.ui.desktop.httppanel.model.BodyMode.JSON)
+        viewModel.updateAuthState(com.devuloopers.knet.ui.desktop.apistudio.model.AuthState(
+            authType = com.devuloopers.knet.ui.desktop.apistudio.model.AuthType.BEARER_TOKEN,
+            bearerToken = "secret_token_abc"
+        ))
         viewModel.updateCookies(listOf("session_id" to "sess_999"))
         viewModel.updateScripts("// pre-request", "// test assertion")
-        viewModel.updateActiveSubTab("HEADERS")
+        viewModel.updateActiveSubTab(com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab.HEADERS)
 
         val state = viewModel.uiState.value.editorState
         assertEquals("POST", state.method)
@@ -457,5 +460,49 @@ class ApiStudioViewModelTest {
         assertEquals("", state.editorState.url)
         assertEquals(com.devuloopers.knet.ui.desktop.apistudio.model.SessionType.NONE, state.editorState.sessionType)
         assertEquals(com.devuloopers.knet.ui.desktop.apistudio.model.SessionContext.None, state.sessionContext)
+    }
+
+    @Test
+    fun `updateBodyMode directly sets strongly typed BodyMode`() = runTest {
+        val testExecutor = TestHttpExecutor()
+        val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(testExecutor))
+
+        viewModel.updateBodyMode(com.devuloopers.knet.ui.desktop.httppanel.model.BodyMode.GRAPHQL)
+
+        val state = viewModel.uiState.value.editorState
+        assertEquals(com.devuloopers.knet.ui.desktop.httppanel.model.BodyMode.GRAPHQL, state.bodyState.mode)
+        assertEquals("GRAPHQL", state.bodyType)
+    }
+
+    @Test
+    fun `importRequestSpec auto detects and hydrates GraphQL payload via BodyState fromPayload`() = runTest {
+        val testExecutor = TestHttpExecutor()
+        val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(testExecutor))
+
+        val gqlJson = """{"query": "query GetSymbols { symbols { id } }", "operationName": "GetSymbols"}"""
+        val spec = com.devuloopers.knet.domain.network.model.NetworkRequestSpec(
+            method = HttpMethod.POST,
+            url = "https://api.example.com/graphql",
+            headers = listOf("content-type" to "application/json"),
+            bodyPayload = gqlJson
+        )
+
+        viewModel.importRequestSpec(spec)
+
+        val state = viewModel.uiState.value.editorState
+        assertEquals(com.devuloopers.knet.ui.desktop.httppanel.model.BodyMode.GRAPHQL, state.bodyState.mode)
+        assertTrue(state.bodyState.graphQlState.queryText.contains("GetSymbols"))
+        assertEquals("GetSymbols", state.bodyState.graphQlState.operationName)
+    }
+
+    @Test
+    fun `updateScriptLanguage sets strongly typed ScriptLanguage enum`() = runTest {
+        val testExecutor = TestHttpExecutor()
+        val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(testExecutor))
+
+        viewModel.updateScriptLanguage(com.devuloopers.knet.engine.script.api.ScriptLanguage.KOTLIN)
+
+        val state = viewModel.uiState.value.editorState
+        assertEquals(com.devuloopers.knet.engine.script.api.ScriptLanguage.KOTLIN, state.scriptLanguage)
     }
 }

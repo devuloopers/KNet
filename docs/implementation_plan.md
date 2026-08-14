@@ -151,6 +151,229 @@ This document serves as the live project tracking board for implementing seamles
 - [x] **Phase 5: Multi-Module Verification** `[COMPLETED]`
   - [x] Automated unit and integration tests passing across all layers (`BUILD SUCCESSFUL`)
 
+---
+
+## Phase 13: Dedicated GraphQL Request Formatter & Single-Level Sub-Tabs `[COMPLETED]`
+
+- [x] **Phase 1: Dedicated GraphQL Request Viewer (`:ui:desktop:httpPanel`)** `[COMPLETED]`
+  - [x] Created `GraphQLRequestBodyViewer.kt` featuring:
+    - Flat single-level sub-tabs (`Query`, `Variables`, `Raw JSON`, `Raw`) using `KNetTab`
+    - Operation details badge (`[GQL: QUERY/MUTATION] <operationName>`)
+    - AST-formatted GraphQL query display with `KNetCodeEditor(languageHint = "graphql")`
+    - JSON-formatted variables display with `KNetCodeEditor(languageHint = "json")`
+- [x] **Phase 2: Request Inspector Integration & Loading State (`:ui:desktop:httpPanel`)** `[COMPLETED]`
+  - [x] Updated `KNetRequestInspector.kt` to auto-detect GraphQL payloads and render `GraphQLRequestBodyViewer` in `InspectorSubTab.BODY`
+  - [x] Added `isPreparing` loading placeholder support while reading payloads from disk
+- [x] **Phase 3: Traffic Inspector Panel Payload Alignment (`:ui:desktop:traffic`)** `[COMPLETED]`
+  - [x] Updated `TrafficInspectorPanel.kt` to pass pristine raw wire payload and `isPreparing` state to `KNetRequestInspector`
+  - [x] Updated `TrafficViewModel.kt` to use `BodyFormatterRegistry` for syntax detection and off-thread document preparation
+- [x] **Phase 4: Multi-Module Verification & Automated Tests** `[COMPLETED]`
+  - [x] Added `GraphQLRequestBodyViewerTest.kt` in `:ui:desktop:httpPanel`
+  - [x] Verified 100% test pass rate across `:core:domain`, `:engine:formatter`, `:engine:protocol`, `:ui:desktop:codeEditor`, `:ui:desktop:httpPanel`, `:ui:desktop:traffic`, and `:ui:desktop:app`
+
+---
+
+## Phase 14: Strongly-Typed Multi-Format Body Inspection Architecture `[COMPLETED]`
+
+- [x] **Phase 1: Strongly-Typed Language Contracts (`:ui:desktop:codeEditor`)** `[COMPLETED]`
+  - [x] Created `CodeLanguage` enum (`JSON`, `GRAPHQL`, `XML`, `HTML`, `JAVASCRIPT`, `CSS`, `PLAIN`)
+  - [x] Updated `CodeHighlighterRegistry` and `KNetCodeEditor` to accept strongly-typed `CodeLanguage`
+- [x] **Phase 2: Strongly-Typed Body Inspection & Polymorphic Viewers (`:ui:desktop:httpPanel`)** `[COMPLETED]`
+  - [x] Created `BodyInspectionSpec` DTO (`headers`, `rawBody`, `resolvedFormat`, `isPreparing`)
+  - [x] Created `FormDataViewer` for structured URL-encoded and multipart parameter display
+  - [x] Created `SmartBodyViewer` polymorphic dispatcher covering all 15 formats in `BodyFormat`
+- [x] **Phase 3: Standardizing Request & Response Panels (`:ui:desktop:httpPanel`)** `[COMPLETED]`
+  - [x] Updated `KNetRequestInspector` and `KNetResponseInspector` to delegate directly to `SmartBodyViewer`
+  - [x] Standardized `RequestViewPanel` and `ResponseViewPanel` composables
+- [x] **Phase 4: Multi-Module Verification & Automated Tests** `[COMPLETED]`
+  - [x] Added `SmartBodyViewerTest.kt` in `:ui:desktop:httpPanel`
+  - [x] 100% passing tests across `:core:domain`, `:engine:formatter`, `:engine:protocol`, `:ui:desktop:codeEditor`, `:ui:desktop:httpPanel`, `:ui:desktop:traffic`, and `:ui:desktop:app`
+
+---
+
+## Phase 15: Canonical Restructuring of `:ui:desktop:httpPanel` (`viewpanels`, `editor`, `components`) `[COMPLETED]`
+
+- [x] **Phase 1: Standardized `viewpanels/` Read-Only Facades** `[COMPLETED]`
+  - [x] Created `RequestViewPanel.kt`, `ResponseViewPanel.kt`, `OverviewViewPanel.kt`, `TimelineViewPanel.kt`
+- [x] **Phase 2: Standardized `editor/` Interactive Editors** `[COMPLETED]`
+  - [x] Created `RequestEditorPanel.kt`, `BodyEditor.kt`, `AuthEditor.kt`, `ScriptEditor.kt`, `GraphQlEditor.kt`
+- [x] **Phase 3: Consolidated `components/` Format Viewers & Micro-Widgets** `[COMPLETED]`
+  - [x] Placed `SmartBodyViewer.kt`, `GraphQLBodyViewer.kt`, and `FormDataViewer.kt` directly in `components/`
+  - [x] Standardized `NetworkErrorCard.kt`, `RequestSummaryHeader.kt`, `ResponseSummaryHeader.kt`, `InspectorSubTabRow.kt`, `EndpointCard.kt`
+- [x] **Phase 4: Eliminated Legacy `view/` and `viewers/` Redundant Packages** `[COMPLETED]`
+  - [x] Migrated `ApiStudio` and `BreakpointManager` to import directly from `viewpanels/` and `editor/`
+  - [x] Completely removed `view/` and `viewers/` directories
+- [x] **Phase 5: Multi-Module Verification & Zero Regression** `[COMPLETED]`
+  - [x] 100% passing test suite across `:core:domain`, `:engine:formatter`, `:engine:protocol`, `:ui:desktop:codeEditor`, `:ui:desktop:httpPanel`, `:ui:desktop:traffic`, `:ui:desktop:breakpointManager`, `:ui:desktop:apistudio`, and `:ui:desktop:app`
+
+---
+
+## Phase 16: Dead Code & Unused Function Elimination `[COMPLETED]`
+
+- [x] **Phase 1: Direct Consumer Migration** `[COMPLETED]`
+  - [x] Migrated `ApiStudioScreen.kt` to use `RequestEditorPanel` and `RequestEditorPanelActions` directly
+- [x] **Phase 2: Purged 11 Unused Backward-Compatibility Functions & Overloads** `[COMPLETED]`
+  - [x] Removed `KNetRequestInspector` from `RequestViewPanel.kt`
+  - [x] Removed `KNetResponseInspector` from `ResponseViewPanel.kt`
+  - [x] Removed `KNetOverviewInspector` from `OverviewViewPanel.kt`
+  - [x] Removed `KNetTimelineInspector` from `TimelineViewPanel.kt`
+  - [x] Removed `KNetRequestEditor` and `KNetRequestEditorActions` from `RequestEditorPanel.kt`
+  - [x] Removed `BodyEditorView` and loose-lambda `BodyEditor(...)` overload from `BodyEditor.kt`
+  - [x] Removed `AuthEditorView` from `AuthEditor.kt`
+  - [x] Removed `ScriptEditorView` from `ScriptEditor.kt`
+  - [x] Removed `GraphQlBodyEditor` from `GraphQlEditor.kt`
+  - [x] Removed `GraphQLRequestBodyViewer` from `GraphQLBodyViewer.kt`
+  - [x] Removed `NetworkExecutionErrorCard` from `NetworkErrorCard.kt`
+- [x] **Phase 3: Deleted Orphaned / Dead Files** `[COMPLETED]`
+  - [x] Deleted empty `model/ErrorDetails.kt` file
+- [x] **Phase 4: Multi-Module Test Suite & Warning Free Verification** `[COMPLETED]`
+  - [x] Removed unused `bodyPayload` parameter from `RequestEditorPanel` and updated consumers (`ApiStudioScreen.kt`, `LiveInterceptDrawer.kt`)
+  - [x] Made `when (localActiveTab)` exhaustive in `RequestEditorPanel.kt` without redundant `else` branch
+  - [x] 100% passing test suite across all 8 modules (115 actionable tasks verified with 0 warnings)
+
+---
+
+## Phase 17: Restored Original Timeline & Overview UI Styling `[COMPLETED]`
+
+- [x] **Phase 1: Horizontal Waterfall Timeline Restoration** `[COMPLETED]`
+  - [x] Restored horizontal waterfall layout (`[Label 130dp] [18dp Bar] [Duration 64dp]`) in `TimelineViewPanel.kt`
+  - [x] Restored `"Reused Connection"` pill badge in top-right header
+  - [x] Restored `"Total Latency"` summary footer with accent styling
+  - [x] Restored Catppuccin color palette (`Color(0xFF89B4FA)`, `Color(0xFF89DCEB)`, `Color(0xFFA6E3A1)`, `Color(0xFFF9E2AF)`, `Color(0xFF74C7EC)`)
+- [x] **Phase 2: Semantic Theme Overview Restoration** `[COMPLETED]`
+  - [x] Restored Title-Case clean labels (`"Status"`, `"Protocol"`, `"Remote IP"`, `"Time"`, `"Duration"`, `"Size"`, `"Type"`, `"Error Detail"`) in `OverviewViewPanel.kt`
+  - [x] Bound status colors directly to semantic theme tokens (`themeColors.semantic.success`, `warning`, `error`) without hardcoded hexes
+- [x] **Phase 3: Multi-Module Verification** `[COMPLETED]`
+  - [x] 100% passing test suite across all modules (115 actionable tasks verified)
+
+---
+
+## Phase 18: Design System Tab Row Harmonization `[COMPLETED]`
+
+- [x] **Phase 1: TrafficInspectorPanel Navigation Harmonization** `[COMPLETED]`
+  - [x] Replaced custom local `InspectorTabButton` in `TrafficInspectorPanel.kt` with Design System `ScrollableTabRow` and `KNetTab` (`Overview`, `Request`, `Response`, `Timeline`)
+  - [x] Cleaned up dead local `InspectorTabButton` function
+- [x] **Phase 2: Multi-Module Verification** `[COMPLETED]`
+  - [x] 100% passing test suite across all 8 modules (115 actionable tasks verified)
+
+---
+
+## Phase 19: Automatic BodyState Detection & Breakpoint Hydration `[COMPLETED]`
+
+- [x] **Phase 1: Canonical BodyState.fromPayload in `:ui:desktop:httpPanel`** `[COMPLETED]`
+  - [x] Added `BodyState.Companion.fromPayload(headers, rawBody)` leveraging `BodyFormatterRegistry` and `GraphQlPayloadMapper`
+  - [x] Auto-detects and hydrates `BodyMode.GRAPHQL` with structured `GraphQlState` (`Query`, `Variables`, `Extensions`)
+  - [x] Auto-detects and populates `BodyMode.FORM_DATA`, `BodyMode.JSON`, and `BodyMode.RAW` (`XML`, `HTML`, `JS`, `TEXT`)
+  - [x] Added unit test suite `BodyStateFromPayloadTest.kt` with 100% test coverage
+- [x] **Phase 2: LiveInterceptDrawer Dynamic Hydration** `[COMPLETED]`
+  - [x] Migrated `LiveInterceptDrawer.kt` from hardcoded `BodyMode.JSON` to `BodyState.fromPayload`
+  - [x] Bound reactive `bodyState` mutations (`onBodyStateChanged`) to `LiveInterceptDrawer` and forwarded encoded payload
+- [x] **Phase 3: Multi-Module Verification** `[COMPLETED]`
+  - [x] 100% passing test suite across all 8 modules (115 actionable tasks verified)
+
+---
+
+## Phase 20: Unified Format Detection via BodyModels SSOT `[COMPLETED]`
+
+- [x] **Phase 1: BodyInspectionSpec SSOT in `:ui:desktop:httpPanel:model`** `[COMPLETED]`
+  - [x] Added `codeLanguage: CodeLanguage` and `formattedText: String` computed properties to `BodyInspectionSpec`
+  - [x] Added `BodyInspectionSpec.Companion.fromPayload(headers, rawBody, isPreparing)` factory
+  - [x] Added unit test suite `BodyInspectionSpecTest.kt` with 100% test coverage
+- [x] **Phase 2: TrafficViewModel SSOT Migration** `[COMPLETED]`
+  - [x] Removed direct calls to `BodyFormatterRegistry` and eliminated dead private `detectLanguage` and `formatPayload` string methods
+  - [x] Migrated off-thread document preparation to `BodyInspectionSpec.fromPayload()`
+- [x] **Phase 3: ApiStudioViewModel SSOT Migration** `[COMPLETED]`
+  - [x] Migrated `importRequestSpec()` to `BodyState.fromPayload()`
+  - [x] Deleted dead private `toBodyMode()` converter method
+- [x] **Phase 4: Multi-Module Verification** `[COMPLETED]`
+  - [x] 100% passing test suite across all 8 modules (115 actionable tasks verified)
+
+---
+
+## Phase 21: Complete API Studio BodyModels SSOT Alignment `[COMPLETED]`
+
+- [x] **Phase 1: Sidebar Session Loading via BodyState.fromPayload** `[COMPLETED]`
+  - [x] Migrated `ApiStudioScreen.kt` from loose string updates (`updateBodyPayload`, `updateBodyType`) to `viewModel.updateBodyState(BodyState.fromPayload(headers, bodyPayload))`
+  - [x] Automatically hydrates GraphQL, JSON, Form-Data, and Raw states upon selecting any saved collection request or unsaved draft
+- [x] **Phase 2: Strongly-Typed Enum APIs in ApiStudioViewModel & ApiStudioScreen** `[COMPLETED]`
+  - [x] Added `fun updateBodyMode(mode: BodyMode)` directly on `ApiStudioViewModel`
+  - [x] Eliminated private `String.toBodyMode()` extension mapper and deleted primitive string `updateBodyType`
+  - [x] Strongly typed `scriptLanguage: ScriptLanguage` in `RequestEditorState`, `ApiStudioViewModel`, and `ApiStudioScreen`
+  - [x] Eliminated primitive string overloads for `updateActiveSubTab`, `updateActiveScriptPhase`, and `updateActiveResponseSubTab`
+- [x] **Phase 3: Multi-Module Verification** `[COMPLETED]`
+  - [x] Added unit tests in `ApiStudioViewModelTest.kt` verifying `updateBodyMode`, `updateScriptLanguage`, and GraphQL payload hydration
+  - [x] 100% passing test suite across all 8 modules (115 actionable tasks verified)
+
+---
+
+## Phase 22: Complete Encapsulation of `:ui:desktop:codeEditor` Inside `:ui:desktop:httpPanel` `[COMPLETED]`
+
+- [x] **Phase 1: `:ui:desktop:httpPanel` Facade & SSOT Bridge** `[COMPLETED]`
+  - [x] Updated `httpPanel/build.gradle.kts` to expose `api(project(":ui:desktop:codeEditor"))`
+  - [x] Added `prepareDocument()` member on `BodyInspectionSpec` and exported `typealias PreparedDocument` in `:ui:desktop:httpPanel:model`
+- [x] **Phase 2: Eliminate `:ui:desktop:codeEditor` Coupling in `:ui:desktop:traffic`** `[COMPLETED]`
+  - [x] Removed `project(":ui:desktop:codeEditor")` from `traffic/build.gradle.kts`
+  - [x] Updated `InspectorPreparedState.kt` and `TrafficViewModel.kt` to use `httpPanel` models and `prepareDocument()`
+- [x] **Phase 3: Eliminate `:ui:desktop:codeEditor` Coupling in `:ui:desktop:apiStudio`** `[COMPLETED]`
+  - [x] Removed `project(":ui:desktop:codeEditor")` from `apistudio/build.gradle.kts`
+  - [x] Removed unused `EditorMode` import in `ResponseInspectorView.kt`
+- [x] **Phase 4: Migrate `:ui:desktop:scripting` to `:ui:desktop:httpPanel`** `[COMPLETED]`
+  - [x] Replaced `project(":ui:desktop:codeEditor")` with `project(":ui:desktop:httpPanel")` in `scripting/build.gradle.kts`
+  - [x] Updated `ScriptEditor.kt` to use `httpPanel` ScriptEditor facade
+- [x] **Phase 5: Multi-Module Verification & Zero Leak Audit** `[COMPLETED]`
+  - [x] Verified 100% pass across all modules via `./gradlew jvmTest`
+  - [x] Grep verified zero external imports of `com.devuloopers.knet.ui.desktop.codeeditor` outside `:ui:desktop:httpPanel`
+
+---
+
+## Phase 23: Complete Internalization of Document Preparation Inside `:ui:desktop:codeEditor` `[COMPLETED]`
+
+- [x] **Phase 1: `:ui:desktop:httpPanel` Cleanups** `[COMPLETED]`
+  - [x] Removed `prepareDocument()` and `typealias PreparedDocument` from `BodyInspectionSpec.kt`
+  - [x] Removed `testPrepareDocumentCreatesValidPreparedDocument` from `BodyInspectionSpecTest.kt`
+  - [x] Removed `preparedBody: PreparedDocument?` parameter from `ResponseViewPanel.kt` and used `SmartBodyViewer` uniformly
+- [x] **Phase 2: `:ui:desktop:traffic` Cleanups** `[COMPLETED]`
+  - [x] Simplified `InspectorPreparedState.kt` to store raw strings (`requestBodyText`, `responseBodyText`, `isPreparing`)
+  - [x] Updated `TrafficViewModel.kt` to remove document preparation calls
+  - [x] Updated `TrafficInspectorPanel.kt` to omit `preparedBody` parameter
+- [x] **Phase 3: `:ui:desktop:codeEditor` Internalization** `[COMPLETED]`
+  - [x] Marked `DocumentPreparationService` as `internal`
+- [x] **Phase 4: Multi-Module Verification** `[COMPLETED]`
+  - [x] Verified 100% pass across all modules via `./gradlew jvmTest`
+
+---
+
+## Phase 24: GraphQL Real-Time Operation Name & Query Synchronization `[COMPLETED]`
+
+- [x] **Phase 1: Engine Synchronizer Component (`:engine:formatter`)** `[COMPLETED]`
+  - [x] Implemented `GraphQLQuerySynchronizer.kt` with AST and regex fallback handling
+  - [x] Added comprehensive unit tests in `GraphQLQuerySynchronizerTest.kt`
+- [x] **Phase 2: UI Real-Time Two-Way Sync (`:ui:desktop:httpPanel`)** `[COMPLETED]`
+  - [x] Connected `Op Name` field to `GraphQLQuerySynchronizer.updateOperationName` in `GraphQlEditor.kt`
+  - [x] Connected Query Code Editor to `GraphQLQuerySynchronizer.extractOperationName` in `GraphQlEditor.kt`
+- [x] **Phase 3: Multi-Module Verification** `[COMPLETED]`
+  - [x] Verified 100% pass across all modules via `./gradlew jvmTest`
+
+---
+
+## Phase 25: Eliminate LazyColumn Line Flash via Synchronous State Alignment `[COMPLETED]`
+
+- [x] **Phase 1: Synchronous State Alignment in `EditableLineContent`** `[COMPLETED]`
+  - [x] Replaced `LaunchedEffect(lineText)` with immediate synchronous state alignment during composition
+- [x] **Phase 2: Surgical Single-Line Buffer Mutations in `EditableCodeEditor`** `[COMPLETED]`
+  - [x] Added single-line diff detection and `documentBuffer.setLine` in `LaunchedEffect(code)`
+- [x] **Phase 3: Multi-Module Verification** `[COMPLETED]`
+  - [x] Verified 100% pass across all modules via `./gradlew jvmTest`
+
+
+
+
+
+
+
+
+
+
 
 
 

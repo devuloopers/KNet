@@ -18,8 +18,7 @@ import com.devuloopers.knet.domain.traffic.usecase.GetLiveTrafficUseCase
 import com.devuloopers.knet.domain.traffic.usecase.LoadTransactionBodyUseCase
 import com.devuloopers.knet.domain.util.decodeBodyToText
 import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
-import com.devuloopers.knet.engine.formatter.formatters.JsonBodyFormatter
-import com.devuloopers.knet.ui.desktop.codeeditor.service.DocumentPreparationService
+import com.devuloopers.knet.ui.desktop.httppanel.model.BodyInspectionSpec
 import com.devuloopers.knet.ui.desktop.traffic.model.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -71,8 +70,8 @@ class TrafficViewModel(
     ) {
         viewModelScope.launch(Dispatchers.Default) {
             val prepared = _uiState.value.preparedState
-            val cachedReqBody = if (prepared.transactionId == transactionId && prepared.requestBody.rawText.isNotBlank()) {
-                prepared.requestBody.rawText
+            val cachedReqBody = if (prepared.transactionId == transactionId && prepared.requestBodyText.isNotBlank()) {
+                prepared.requestBodyText
             } else {
                 null
             }
@@ -157,7 +156,7 @@ class TrafficViewModel(
 
                         val isPending = tx.status <= 0
                         val cached = synchronized(preparedStateCache) { preparedStateCache[tx.transactionId] }
-                        if (cached != null && (isPending || cached.responseBody.rawText.isNotBlank())) {
+                        if (cached != null && (isPending || cached.responseBodyText.isNotBlank())) {
                             emit(cached)
                             return@flow
                         }
@@ -172,29 +171,13 @@ class TrafficViewModel(
                         val prepared = kotlinx.coroutines.withContext(Dispatchers.Default) {
                             val body = loadTransactionBodyUseCase.execute(tx.transactionId)
 
-                            val reqBodyText = body?.let { decodeBodyToText(it.requestBody, it.requestHeaders) } ?: ""
-                            val respBodyText = body?.let { decodeBodyToText(it.responseBody, it.responseHeaders) } ?: ""
-
-                            val reqLang = detectLanguage(tx.requestHeaders["Content-Type"])
-                            val reqFormatted = formatPayload(tx.requestHeaders["Content-Type"], reqBodyText)
-                            val reqDoc = DocumentPreparationService.prepare(
-                                rawText = reqBodyText,
-                                formattedText = reqFormatted,
-                                language = reqLang
-                            )
-
-                            val respLang = detectLanguage(tx.responseHeaders["Content-Type"])
-                            val respFormatted = formatPayload(tx.responseHeaders["Content-Type"], respBodyText)
-                            val respDoc = DocumentPreparationService.prepare(
-                                rawText = respBodyText,
-                                formattedText = respFormatted,
-                                language = respLang
-                            )
+                            val reqBodyText = decodeBodyToText(body.requestBody, body.requestHeaders)
+                            val respBodyText = decodeBodyToText(body.responseBody, body.responseHeaders)
 
                             val state = InspectorPreparedState(
                                 transactionId = tx.transactionId,
-                                requestBody = reqDoc,
-                                responseBody = respDoc,
+                                requestBodyText = reqBodyText,
+                                responseBodyText = respBodyText,
                                 isPreparing = false
                             )
 
@@ -400,33 +383,6 @@ class TrafficViewModel(
                     current.copy(columnVisibility = current.columnVisibility.toggle(intent.column))
                 }
             }
-        }
-    }
-
-    private fun formatPayload(contentType: String?, bodyText: String): String {
-        if (bodyText.isBlank()) return ""
-        val trimmed = bodyText.trimEnd()
-        val isJson = contentType.isNullOrBlank() || contentType.contains(
-            other = "json",
-            ignoreCase = true
-        ) || trimmed.startsWith("{") || trimmed.startsWith("[")
-        return if (isJson) {
-            JsonBodyFormatter().prettyPrintJson(trimmed).trimEnd()
-        } else {
-            trimmed
-        }
-    }
-
-    private fun detectLanguage(contentType: String?): String {
-        if (contentType.isNullOrBlank()) return "json"
-        val lower = contentType.lowercase()
-        return when {
-            lower.contains("json") -> "json"
-            lower.contains("html") -> "html"
-            lower.contains("xml") -> "xml"
-            lower.contains("javascript") || lower.contains("js") -> "js"
-            lower.contains("css") -> "css"
-            else -> "json"
         }
     }
 

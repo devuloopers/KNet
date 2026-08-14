@@ -1,6 +1,9 @@
 package com.devuloopers.knet.ui.desktop.httppanel.model
 
+import com.devuloopers.knet.engine.formatter.model.BodyFormat
+import com.devuloopers.knet.engine.formatter.registry.BodyFormatterRegistry
 import com.devuloopers.knet.ui.core.components.keyvalue.KeyValueEntry
+import com.devuloopers.knet.ui.desktop.httppanel.mapper.GraphQlPayloadMapper
 
 /**
  * Strongly-typed body payload mode for HTTP request authoring in API Studio.
@@ -84,4 +87,87 @@ public data class BodyState(
     val formDataEntries: List<KeyValueEntry> = emptyList(),
     val urlEncodedEntries: List<KeyValueEntry> = emptyList(),
     val graphQlState: GraphQlState = GraphQlState()
-)
+) {
+    public companion object {
+        /**
+         * Automatically detects and hydrates a strongly-typed [BodyState] from raw HTTP wire headers and payload string.
+         *
+         * - Auto-detects GraphQL JSON payloads or GraphQL endpoints, setting [BodyMode.GRAPHQL] and populating [GraphQlState].
+         * - Auto-detects `multipart/form-data` or `application/x-www-form-urlencoded` payloads into [formDataEntries].
+         * - Auto-detects standard JSON payloads into [BodyMode.JSON].
+         * - Auto-detects XML, HTML, JavaScript, and Plain text into [BodyMode.RAW] with the appropriate [RawSubFormat].
+         *
+         * @param headers HTTP headers list as key-value pairs.
+         * @param rawBody Raw request body payload string.
+         * @return Hydrated [BodyState] with resolved [BodyMode] and sub-models.
+         */
+        public fun fromPayload(headers: List<Pair<String, String>>, rawBody: String): BodyState {
+            val trimmed = rawBody.trim()
+            if (trimmed.isEmpty()) {
+                return BodyState(mode = BodyMode.NONE, payloadText = "")
+            }
+
+            val headersMap = headers.toMap()
+            return when (val resolvedFormat = BodyFormatterRegistry.resolveFormat(headersMap, trimmed)) {
+                is BodyFormat.GraphQL -> {
+                    val parsedGraphQlState = GraphQlPayloadMapper().parsePayload(trimmed)
+                    BodyState(
+                        mode = BodyMode.GRAPHQL,
+                        payloadText = trimmed,
+                        graphQlState = parsedGraphQlState
+                    )
+                }
+
+                is BodyFormat.FormData -> {
+                    val entries = resolvedFormat.pairs.mapIndexed { idx, (k, v) ->
+                        KeyValueEntry(id = "form_$idx", key = k, value = v)
+                    }
+                    BodyState(
+                        mode = BodyMode.FORM_DATA,
+                        payloadText = trimmed,
+                        formDataEntries = entries
+                    )
+                }
+
+                is BodyFormat.Json -> {
+                    BodyState(
+                        mode = BodyMode.JSON,
+                        payloadText = trimmed
+                    )
+                }
+
+                is BodyFormat.Xml -> {
+                    BodyState(
+                        mode = BodyMode.RAW,
+                        rawSubFormat = RawSubFormat.XML,
+                        payloadText = trimmed
+                    )
+                }
+
+                is BodyFormat.Html -> {
+                    BodyState(
+                        mode = BodyMode.RAW,
+                        rawSubFormat = RawSubFormat.HTML,
+                        payloadText = trimmed
+                    )
+                }
+
+                is BodyFormat.Js -> {
+                    BodyState(
+                        mode = BodyMode.RAW,
+                        rawSubFormat = RawSubFormat.JAVASCRIPT,
+                        payloadText = trimmed
+                    )
+                }
+
+                else -> {
+                    BodyState(
+                        mode = BodyMode.RAW,
+                        rawSubFormat = RawSubFormat.TEXT,
+                        payloadText = trimmed
+                    )
+                }
+            }
+        }
+    }
+}

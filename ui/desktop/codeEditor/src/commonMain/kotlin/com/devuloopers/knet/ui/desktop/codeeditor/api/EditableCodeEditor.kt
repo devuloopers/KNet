@@ -69,7 +69,25 @@ internal fun EditableCodeEditor(
     LaunchedEffect(code) {
         val currentText = documentBuffer.toFullText()
         if (currentText != code) {
-            documentBuffer.replaceAll(code.lines())
+            val newLines = code.lines()
+            val oldLines = documentBuffer.getLines()
+            if (newLines.size == oldLines.size) {
+                var diffIndex = -1
+                var diffCount = 0
+                for (i in newLines.indices) {
+                    if (newLines[i] != oldLines[i]) {
+                        diffIndex = i
+                        diffCount++
+                    }
+                }
+                if (diffCount == 1) {
+                    // Surgical single-line update (e.g. Op Name header change)
+                    documentBuffer.setLine(diffIndex, newLines[diffIndex])
+                    rawLines = documentBuffer.getLines()
+                    return@LaunchedEffect
+                }
+            }
+            documentBuffer.replaceAll(newLines)
             undoStack.init(code)
             rawLines = documentBuffer.getLines()
             collapsedFoldStartLines = emptySet()

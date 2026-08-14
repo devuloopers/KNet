@@ -1,4 +1,4 @@
-package com.devuloopers.knet.ui.desktop.httppanel.view
+package com.devuloopers.knet.ui.desktop.httppanel.viewpanels
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -21,14 +21,14 @@ import com.devuloopers.knet.ui.desktop.httppanel.components.EndpointCard
 import com.devuloopers.knet.ui.desktop.httppanel.model.NetworkOverviewSpec
 
 /**
- * Reusable HTTP transaction overview inspection composable rendering endpoint summary card
+ * Reusable HTTP transaction overview inspection facade composable rendering endpoint summary card
  * and structured key-value grid metadata (Status, Protocol, Remote IP, Time, Duration, Size, Content-Type).
  *
  * @param spec Strongly-typed domain overview specification.
  * @param modifier Composable layout modifier.
  */
 @Composable
-public fun KNetOverviewInspector(
+public fun OverviewViewPanel(
     spec: NetworkOverviewSpec,
     modifier: Modifier = Modifier
 ) {

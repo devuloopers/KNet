@@ -61,23 +61,19 @@ fun EditableLineContent(
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    // Stable initialization: do NOT reset selection to end-of-line on every lineText change.
-    // Selection is managed explicitly by LaunchedEffect below.
     var fieldValue by remember { mutableStateOf(TextFieldValue(text = lineText, selection = TextRange(0))) }
+
+    // Synchronously align fieldValue during composition when lineText changes externally (Op Name sync, paste, undo).
+    // Eliminates 1-frame asynchronous LaunchedEffect lag and visual flash in virtualized LazyColumn.
+    if (fieldValue.text != lineText) {
+        val clampedCol = fieldValue.selection.start.coerceIn(0, lineText.length)
+        fieldValue = TextFieldValue(text = lineText, selection = TextRange(clampedCol))
+    }
 
     // Collapse native BasicTextField selection when viewport selection is active (prevents dual selection)
     LaunchedEffect(isViewportSelecting, lineSelectionBounds) {
         if ((isViewportSelecting || lineSelectionBounds != null) && !fieldValue.selection.collapsed) {
             fieldValue = fieldValue.copy(selection = TextRange(fieldValue.selection.start))
-        }
-    }
-
-    // When lineText changes externally (undo, redo, backspace selection delete, paste):
-    // clamp the existing cursor position to the new text length rather than resetting to end-of-line.
-    LaunchedEffect(lineText) {
-        if (fieldValue.text != lineText) {
-            val clampedCol = fieldValue.selection.start.coerceIn(0, lineText.length)
-            fieldValue = TextFieldValue(text = lineText, selection = TextRange(clampedCol))
         }
     }
 

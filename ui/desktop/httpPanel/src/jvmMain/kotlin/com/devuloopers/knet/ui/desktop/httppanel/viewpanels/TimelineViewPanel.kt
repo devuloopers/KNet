@@ -1,4 +1,4 @@
-package com.devuloopers.knet.ui.desktop.httppanel.view
+package com.devuloopers.knet.ui.desktop.httppanel.viewpanels
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -29,12 +29,12 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.NetworkTimingSpec
  * Reusable HTTP timeline & waterfall inspection composable rendering network timing breakdown rows
  * (DNS, TCP, TLS, TTFB, Content Download), connection reuse badge, and total roundtrip latency summary.
  *
- * @param timing Strongly-typed domain network timing specification.
+ * @param spec Strongly-typed domain network timing specification.
  * @param modifier Composable layout modifier.
  */
 @Composable
-public fun KNetTimelineInspector(
-    timing: NetworkTimingSpec,
+public fun TimelineViewPanel(
+    spec: NetworkTimingSpec,
     modifier: Modifier = Modifier
 ) {
     val themeColors = KNetTheme.colors
@@ -42,7 +42,7 @@ public fun KNetTimelineInspector(
     val shapes = KNetTheme.shapes
     val scrollState = rememberScrollState()
 
-    val totalMs = timing.totalTimeMs.coerceAtLeast(1L)
+    val totalMs = spec.totalTimeMs.coerceAtLeast(1L)
 
     Column(
         modifier = modifier
@@ -66,7 +66,7 @@ public fun KNetTimelineInspector(
                 )
             )
 
-            if (timing.isReusedConnection || (timing.dnsMs == 0L && timing.tcpMs == 0L && timing.tlsMs == 0L)) {
+            if (spec.isReusedConnection || (spec.dnsMs == 0L && spec.tcpMs == 0L && spec.tlsMs == 0L)) {
                 Box(
                     modifier = Modifier
                         .clip(shapes.pill)
@@ -84,31 +84,31 @@ public fun KNetTimelineInspector(
         // 2. Waterfall Rows
         TimelineWaterfallRow(
             label = "DNS Resolution",
-            durationMs = timing.dnsMs,
+            durationMs = spec.dnsMs,
             totalMs = totalMs,
             color = Color(0xFF89B4FA)
         )
         TimelineWaterfallRow(
             label = "TCP Connect",
-            durationMs = timing.tcpMs,
+            durationMs = spec.tcpMs,
             totalMs = totalMs,
             color = Color(0xFF89DCEB)
         )
         TimelineWaterfallRow(
             label = "TLS Handshake",
-            durationMs = timing.tlsMs,
+            durationMs = spec.tlsMs,
             totalMs = totalMs,
             color = Color(0xFFA6E3A1)
         )
         TimelineWaterfallRow(
             label = "TTFB (Wait)",
-            durationMs = timing.ttfbMs,
+            durationMs = spec.ttfbMs,
             totalMs = totalMs,
             color = Color(0xFFF9E2AF)
         )
         TimelineWaterfallRow(
             label = "Content Download",
-            durationMs = timing.downloadMs,
+            durationMs = spec.downloadMs,
             totalMs = totalMs,
             color = Color(0xFF74C7EC)
         )
@@ -139,6 +139,9 @@ public fun KNetTimelineInspector(
     }
 }
 
+/**
+ * Single horizontal waterfall progress bar row with timing fraction and duration value.
+ */
 @Composable
 private fun TimelineWaterfallRow(
     label: String,

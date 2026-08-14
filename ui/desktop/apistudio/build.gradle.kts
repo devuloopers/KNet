@@ -12,7 +12,6 @@ kotlin {
             dependencies {
                 implementation(project(":ui:core"))
                 implementation(project(":ui:desktop:httpPanel"))
-                implementation(project(":ui:desktop:codeEditor"))
                 implementation(project(":engine:script"))
                 implementation(project(":core:domain"))
                 implementation(project(":core:http"))

@@ -1,46 +1,41 @@
-package com.devuloopers.knet.ui.desktop.httppanel.view
+package com.devuloopers.knet.ui.desktop.httppanel.viewpanels
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
 import com.devuloopers.knet.ui.core.components.divider.HorizontalDivider
 import com.devuloopers.knet.ui.core.components.keyvalue.KNetReadOnlyKeyValueViewer
 import com.devuloopers.knet.ui.core.components.keyvalue.KeyValueEntry
-import com.devuloopers.knet.ui.core.components.placeholder.KNetEmptyStatePlaceholder
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
-import com.devuloopers.knet.ui.desktop.codeeditor.api.KNetCodeEditor
 import com.devuloopers.knet.ui.desktop.httppanel.components.InspectorSubTabRow
 import com.devuloopers.knet.ui.desktop.httppanel.components.RequestSummaryHeader
+import com.devuloopers.knet.ui.desktop.httppanel.components.SmartBodyViewer
+import com.devuloopers.knet.ui.desktop.httppanel.model.BodyInspectionSpec
 import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
 
 /**
- * Unified high-density request inspector composable shared across Live Traffic Inspector,
+ * Unified high-density request view panel composable shared across Live Traffic Inspector,
  * API Studio request panels, and live interception in-flight editing drawers.
  *
- * Streamlined view host in `com.devuloopers.knet.ui.desktop.http.view` delegating to
- * modular sub-components in `components/` and models in `model/`.
+ * Streamlined view host in `com.devuloopers.knet.ui.desktop.httppanel.viewpanels` delegating to
+ * modular viewers in `viewers/` and models in `model/`.
  *
  * @param spec Strongly-typed domain request specification.
+ * @param isPreparing True if payload is asynchronously loading from disk/network.
  * @param activeSubTab Currently selected request sub-tab.
  * @param onSubTabSelected Event callback when user switches sub-tabs.
  * @param onOpenInApiStudio Optional action button callback for 1-click API Studio export.
  * @param modifier Composable layout modifier.
  */
 @Composable
-public fun KNetRequestInspector(
+public fun RequestViewPanel(
     spec: NetworkRequestSpec,
+    isPreparing: Boolean = false,
     activeSubTab: InspectorSubTab = InspectorSubTab.BODY,
     onSubTabSelected: (InspectorSubTab) -> Unit = {},
     onOpenInApiStudio: (() -> Unit)? = null,
@@ -96,26 +91,21 @@ public fun KNetRequestInspector(
         ) {
             when (localActiveTab) {
                 InspectorSubTab.BODY -> {
-                    if (spec.bodyPayload.isBlank()) {
-                        KNetEmptyStatePlaceholder(
-                            title = "No Request Body",
-                            subtitle = "This request was sent without a body payload (e.g. GET or HEAD request)"
-                        )
-                    } else {
-                        val langHint = when {
-                            spec.bodyPayload.trimStart().startsWith("{") || spec.bodyPayload.trimStart().startsWith("[") -> "json"
-                            spec.bodyPayload.trimStart().startsWith("<") -> "html"
-                            else -> "plain"
-                        }
-
-                        KNetCodeEditor(
-                            code = spec.bodyPayload,
-                            mode = EditorMode.ReadOnly,
-                            languageHint = langHint,
-                            modifier = Modifier.fillMaxSize()
+                    val bodySpec = remember(spec.headers, spec.bodyPayload, isPreparing) {
+                        BodyInspectionSpec(
+                            headers = spec.headers,
+                            rawBody = spec.bodyPayload,
+                            isPreparing = isPreparing
                         )
                     }
+                    SmartBodyViewer(
+                        spec = bodySpec,
+                        emptyTitle = "No Request Body",
+                        emptySubtitle = "This request was sent without a body payload (e.g. GET or HEAD request)",
+                        modifier = Modifier.fillMaxSize()
+                    )
                 }
+
                 InspectorSubTab.HEADERS -> {
                     KNetReadOnlyKeyValueViewer(
                         entries = headerEntries,
@@ -125,6 +115,7 @@ public fun KNetRequestInspector(
                         modifier = Modifier.fillMaxSize()
                     )
                 }
+
                 InspectorSubTab.PARAMS -> {
                     KNetReadOnlyKeyValueViewer(
                         entries = paramEntries,
@@ -134,6 +125,7 @@ public fun KNetRequestInspector(
                         modifier = Modifier.fillMaxSize()
                     )
                 }
+
                 InspectorSubTab.COOKIES -> {
                     KNetReadOnlyKeyValueViewer(
                         entries = cookieEntries,
@@ -143,6 +135,7 @@ public fun KNetRequestInspector(
                         modifier = Modifier.fillMaxSize()
                     )
                 }
+
                 else -> {}
             }
         }

@@ -88,7 +88,9 @@ class ApiStudioViewModel(
                         activeSubTab = parsedSubTab,
                         activeScriptPhase = parsedScriptPhase,
                         activeResponseSubTab = parsedResponseSubTab,
-                        scriptLanguage = settings.scriptLanguage
+                        scriptLanguage = com.devuloopers.knet.engine.script.api.ScriptLanguage.entries.find {
+                            it.name.equals(settings.scriptLanguage, ignoreCase = true)
+                        } ?: com.devuloopers.knet.engine.script.api.ScriptLanguage.JAVASCRIPT
                     )
                 )
             }
@@ -185,10 +187,9 @@ class ApiStudioViewModel(
     }
 
     /**
-     * Updates request body mode representation string in UDF state.
+     * Updates strongly-typed body mode in UDF state, synchronizing GraphQL state if needed.
      */
-    fun updateBodyType(bodyType: String) {
-        val mode = bodyType.toBodyMode()
+    fun updateBodyMode(mode: BodyMode) {
         _uiState.update {
             val currentBodyState = it.editorState.bodyState
             val updatedBodyState = syncBodyStateUseCase?.switchMode(currentBodyState, mode)
@@ -233,11 +234,6 @@ class ApiStudioViewModel(
             )
         }
         triggerAutoSave()
-    }
-
-    fun updateAuth(authType: String, token: String) {
-        val typeEnum = AuthType.entries.find { it.label.equals(authType, ignoreCase = true) } ?: AuthType.BEARER_TOKEN
-        updateAuthState(AuthState(authType = typeEnum, bearerToken = token))
     }
 
     /**
@@ -288,6 +284,9 @@ class ApiStudioViewModel(
     /**
      * Updates active sub-tab selection in UDF state.
      */
+    /**
+     * Updates active sub-tab selection in UDF state.
+     */
     fun updateActiveSubTab(subTab: RequestSubTab) {
         _uiState.update { it.copy(editorState = it.editorState.copy(activeSubTab = subTab)) }
         viewModelScope.launch(ioDispatcher) {
@@ -295,13 +294,6 @@ class ApiStudioViewModel(
                 ?: WorkspaceLayoutSettings()
             saveWorkspaceLayoutUseCase.execute(currentSettings.copy(activeRequestSubTab = subTab.name))
         }
-    }
-
-    fun updateActiveSubTab(subTabName: String) {
-        val parsed = RequestSubTab.entries.find {
-            it.name.equals(subTabName, ignoreCase = true)
-        } ?: RequestSubTab.BODY
-        updateActiveSubTab(parsed)
     }
 
     /**
@@ -316,19 +308,12 @@ class ApiStudioViewModel(
         }
     }
 
-    fun updateActiveScriptPhase(phaseName: String) {
-        val parsed = ScriptPhase.entries.find {
-            it.name.equals(phaseName, ignoreCase = true)
-        } ?: ScriptPhase.PRE_REQUEST
-        updateActiveScriptPhase(parsed)
-    }
-
-    fun updateScriptLanguage(language: String) {
+    fun updateScriptLanguage(language: com.devuloopers.knet.engine.script.api.ScriptLanguage) {
         _uiState.update { it.copy(editorState = it.editorState.copy(scriptLanguage = language)) }
         viewModelScope.launch(ioDispatcher) {
             val currentSettings = getWorkspaceLayoutUseCase.execute().firstOrNull()
                 ?: WorkspaceLayoutSettings()
-            saveWorkspaceLayoutUseCase.execute(currentSettings.copy(scriptLanguage = language))
+            saveWorkspaceLayoutUseCase.execute(currentSettings.copy(scriptLanguage = language.name))
         }
     }
 
@@ -339,13 +324,6 @@ class ApiStudioViewModel(
                 ?: WorkspaceLayoutSettings()
             saveWorkspaceLayoutUseCase.execute(currentSettings.copy(activeResponseSubTab = tab.name))
         }
-    }
-
-    fun updateActiveResponseSubTab(tabName: String) {
-        val parsed = ResponseSubTab.entries.find {
-            it.name.equals(tabName, ignoreCase = true)
-        } ?: ResponseSubTab.BODY
-        updateActiveResponseSubTab(parsed)
     }
 
     fun closeTab(tabId: String) {
@@ -402,12 +380,10 @@ class ApiStudioViewModel(
         val mappedAuthState = normalizedSpec.auth.toAuthState()
 
         _uiState.update { state ->
-            val resolvedBodyMode = normalizedSpec.bodyType.toBodyMode()
-            val initialBodyState = BodyState(
-                mode = resolvedBodyMode,
-                payloadText = normalizedSpec.bodyPayload
+            val hydratedBodyState = BodyState.fromPayload(
+                headers = normalizedSpec.headers,
+                rawBody = normalizedSpec.bodyPayload
             )
-            val hydratedBodyState = syncBodyStateUseCase?.ensureHydrated(initialBodyState) ?: initialBodyState
             val importedEditorState = RequestEditorState(
                 method = normalizedSpec.methodString,
                 url = normalizedSpec.url,
@@ -433,30 +409,6 @@ class ApiStudioViewModel(
         }
         saveSessionContextToPreferences(SessionContext.UnsavedDraft(sessionUuid))
         return sessionUuid
-    }
-
-    /**
-     * Maps a domain [RequestBodyType] to the UI [BodyMode] understood by the body editor panel.
-     *
-     * Used during request import so that [BodyState.payloadText] and [BodyState.mode] are both
-     * populated in sync with [RequestEditorState.bodyPayload].
-     */
-    private fun RequestBodyType.toBodyMode(): BodyMode = when (this) {
-        RequestBodyType.JSON -> BodyMode.JSON
-        RequestBodyType.GRAPHQL -> BodyMode.GRAPHQL
-        RequestBodyType.FORM_DATA, RequestBodyType.MULTIPART -> BodyMode.FORM_DATA
-        RequestBodyType.X_WWW_FORM_URLENCODED -> BodyMode.X_WWW_FORM_URLENCODED
-        RequestBodyType.XML, RequestBodyType.RAW_TEXT -> BodyMode.RAW
-        RequestBodyType.NONE -> BodyMode.NONE
-    }
-
-    private fun String.toBodyMode(): BodyMode = when (this.uppercase().trim()) {
-        "JSON" -> BodyMode.JSON
-        "GRAPHQL" -> BodyMode.GRAPHQL
-        "FORM_DATA", "FORM-DATA" -> BodyMode.FORM_DATA
-        "X_WWW_FORM_URLENCODED", "URLENCODED" -> BodyMode.X_WWW_FORM_URLENCODED
-        "RAW", "RAW_TEXT", "TEXT", "XML" -> BodyMode.RAW
-        else -> BodyMode.NONE
     }
 
     /**

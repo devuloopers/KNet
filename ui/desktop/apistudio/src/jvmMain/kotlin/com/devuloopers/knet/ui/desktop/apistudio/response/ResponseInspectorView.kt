@@ -52,10 +52,8 @@ import com.devuloopers.knet.domain.network.model.NetworkResponseSpec
 import com.devuloopers.knet.ui.desktop.apistudio.model.ExecutionState
 import com.devuloopers.knet.ui.desktop.apistudio.model.TestResult
 import com.devuloopers.knet.ui.desktop.apistudio.theme.ApiStudioColors
-import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
-import com.devuloopers.knet.ui.desktop.codeeditor.api.KNetCodeEditor
 import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
-import com.devuloopers.knet.ui.desktop.httppanel.view.KNetResponseInspector
+import com.devuloopers.knet.ui.desktop.httppanel.viewpanels.ResponseViewPanel
 
 /**
  * Closed set of copy format capabilities supported by Response Inspector views.
@@ -372,7 +370,7 @@ public fun ResponseInspectorView(
 
     val isExecuting = state.executionState == ExecutionState.EXECUTING
 
-    KNetResponseInspector(
+    ResponseViewPanel(
         spec = spec,
         isPreparing = isExecuting,
         activeSubTab = mappedSubTab,

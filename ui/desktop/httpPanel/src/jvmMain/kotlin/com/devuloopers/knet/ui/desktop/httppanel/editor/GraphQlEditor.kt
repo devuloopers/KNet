@@ -5,7 +5,6 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -15,12 +14,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.devuloopers.knet.engine.formatter.formatters.GraphQLBodyFormatter
+import com.devuloopers.knet.engine.formatter.graphql.GraphQLQuerySynchronizer
 import com.devuloopers.knet.ui.core.components.input.InputFieldConfig
 import com.devuloopers.knet.ui.core.components.input.KNetTextField
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
 import com.devuloopers.knet.ui.desktop.codeeditor.api.KNetCodeEditor
+import com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage
 import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlState
 import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlSubTab
 
@@ -36,7 +37,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlSubTab
  * @param modifier Optional modifier applied to the root container layout.
  */
 @Composable
-fun GraphQlBodyEditor(
+fun GraphQlEditor(
     state: GraphQlState,
     onStateChange: (GraphQlState) -> Unit,
     modifier: Modifier = Modifier
@@ -59,39 +60,41 @@ fun GraphQlBodyEditor(
         ) {
             // Sub-Tab Chips
             Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(spacing.xs)
+                horizontalArrangement = Arrangement.spacedBy(spacing.xs),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 GraphQlSubTab.entries.forEach { subTab ->
                     val isSelected = state.activeSubTab == subTab
-                    val chipBackground = if (isSelected) themeColors.accent.copy(alpha = 0.15f) else Color.Transparent
-                    val chipBorder = if (isSelected) themeColors.accent.copy(alpha = 0.5f) else themeColors.border
-                    val textColor = if (isSelected) themeColors.accent else themeColors.textMuted
-
                     Box(
                         modifier = Modifier
-                            .background(chipBackground, RoundedCornerShape(4.dp))
-                            .border(1.dp, chipBorder, RoundedCornerShape(4.dp))
-                            .handCursor()
+                            .background(
+                                color = if (isSelected) themeColors.accent.copy(alpha = 0.15f) else Color.Transparent,
+                                shape = RoundedCornerShape(4.dp)
+                            )
+                            .border(
+                                width = 1.dp,
+                                color = if (isSelected) themeColors.accent else themeColors.border,
+                                shape = RoundedCornerShape(4.dp)
+                            )
                             .clickable { onStateChange(state.copy(activeSubTab = subTab)) }
-                            .padding(horizontal = spacing.sm, vertical = spacing.xxs),
-                        contentAlignment = Alignment.Center
+                            .handCursor()
+                            .padding(horizontal = 8.dp, vertical = 4.dp)
                     ) {
                         Text(
                             text = subTab.label,
                             style = typography.caption.copy(
-                                color = textColor,
-                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                color = if (isSelected) themeColors.accent else themeColors.textMuted,
+                                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                             )
                         )
                     }
                 }
             }
 
-            // Operation Name Input
+            // Compact Operation Name Input Field
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(spacing.xs)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Text(
                     text = "Op Name:",
@@ -99,7 +102,15 @@ fun GraphQlBodyEditor(
                 )
                 KNetTextField(
                     value = state.operationName,
-                    onValueChange = { onStateChange(state.copy(operationName = it)) },
+                    onValueChange = { newOpName ->
+                        val updatedQuery = GraphQLQuerySynchronizer.updateOperationName(state.queryText, newOpName)
+                        onStateChange(
+                            state.copy(
+                                operationName = newOpName,
+                                queryText = updatedQuery
+                            )
+                        )
+                    },
                     modifier = Modifier.width(200.dp),
                     config = InputFieldConfig(
                         placeholder = "OperationName",
@@ -121,14 +132,29 @@ fun GraphQlBodyEditor(
                     KNetCodeEditor(
                         code = state.queryText,
                         mode = EditorMode.Editable(
-                            onCodeChange = { onStateChange(state.copy(queryText = it)) },
+                            onCodeChange = { newQuery ->
+                                val extractedOpName = GraphQLQuerySynchronizer.extractOperationName(newQuery) ?: ""
+                                onStateChange(
+                                    state.copy(
+                                        queryText = newQuery,
+                                        operationName = extractedOpName
+                                    )
+                                )
+                            },
                             onPrettify = {
                                 val formatter = GraphQLBodyFormatter()
-                                onStateChange(state.copy(queryText = formatter.formatQuery(state.queryText)))
+                                val formatted = formatter.formatQuery(state.queryText)
+                                val extractedOpName = GraphQLQuerySynchronizer.extractOperationName(formatted) ?: ""
+                                onStateChange(
+                                    state.copy(
+                                        queryText = formatted,
+                                        operationName = extractedOpName
+                                    )
+                                )
                             },
                             placeholder = "# Enter GraphQL Query or Mutation...\nquery GetUser {\n  user(id: 1) {\n    name\n    email\n  }\n}"
                         ),
-                        languageHint = "graphql",
+                        language = CodeLanguage.GRAPHQL,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -143,7 +169,7 @@ fun GraphQlBodyEditor(
                             },
                             placeholder = "// Enter GraphQL variables as JSON...\n{\n  \"id\": \"123\"\n}"
                         ),
-                        languageHint = "json",
+                        language = CodeLanguage.JSON,
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -158,7 +184,7 @@ fun GraphQlBodyEditor(
                             },
                             placeholder = "// Enter GraphQL extensions metadata as JSON...\n{\n  \"clientLibrary\": {\n    \"name\": \"apollo-kotlin\",\n    \"version\": \"5.0.0\"\n  }\n}"
                         ),
-                        languageHint = "json",
+                        language = CodeLanguage.JSON,
                         modifier = Modifier.fillMaxSize()
                     )
                 }

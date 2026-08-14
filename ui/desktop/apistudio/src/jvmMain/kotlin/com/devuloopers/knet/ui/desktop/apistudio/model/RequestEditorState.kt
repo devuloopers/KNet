@@ -1,5 +1,6 @@
 package com.devuloopers.knet.ui.desktop.apistudio.model
 
+import com.devuloopers.knet.engine.script.api.ScriptLanguage
 import com.devuloopers.knet.ui.desktop.apistudio.response.ResponseSubTab
 import com.devuloopers.knet.ui.desktop.httppanel.model.BodyMode
 
@@ -20,7 +21,7 @@ public typealias RequestSubTab = com.devuloopers.knet.ui.desktop.httppanel.model
  * @property bodyPayload Raw text payload of the request body.
  * @property preRequestScript Script code executed before request execution.
  * @property testScript Script code executed after response receipt.
- * @property scriptLanguage Target scripting language engine string.
+ * @property scriptLanguage Target scripting language engine enum.
  * @property activeSubTab Strongly-typed active request sub-tab selection.
  * @property activeScriptPhase Strongly-typed active script editing phase.
  * @property activeResponseSubTab Strongly-typed active response inspector sub-tab.
@@ -49,7 +50,7 @@ public data class RequestEditorState(
     val authToken: String = "",
     val preRequestScript: String = "",
     val testScript: String = "",
-    val scriptLanguage: String = "JAVASCRIPT",
+    val scriptLanguage: ScriptLanguage = ScriptLanguage.JAVASCRIPT,
     val activeSubTab: RequestSubTab = RequestSubTab.BODY,
     val activeScriptPhase: ScriptPhase = ScriptPhase.PRE_REQUEST,
     val activeResponseSubTab: ResponseSubTab = ResponseSubTab.BODY,

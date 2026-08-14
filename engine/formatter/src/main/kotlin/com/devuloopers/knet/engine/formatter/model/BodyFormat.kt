@@ -29,12 +29,13 @@ sealed class BodyFormat {
     data class Css(val formattedText: String) : BodyFormat()
     /** Parsed gRPC-Web binary frames. */
     data class GrpcWeb(val frames: List<GrpcWebFrame>) : BodyFormat()
-    /** GraphQL operation type, name, query text, and variables JSON. */
+    /** GraphQL operation type, name, query text, variables JSON, and extensions JSON. */
     data class GraphQL(
         val operationType: String,
         val operationName: String?,
         val queryText: String,
-        val variablesJson: String
+        val variablesJson: String,
+        val extensionsJson: String = ""
     ) : BodyFormat()
     /** Raw plain text fallback. */
     data class RawText(val text: String) : BodyFormat()

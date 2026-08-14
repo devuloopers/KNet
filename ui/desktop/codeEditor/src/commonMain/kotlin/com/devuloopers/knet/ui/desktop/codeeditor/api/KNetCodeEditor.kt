@@ -29,10 +29,9 @@ import com.devuloopers.knet.ui.desktop.codeeditor.theme.CodeEditorStyle
 fun KNetCodeEditor(
     code: String = "",
     mode: EditorMode = EditorMode.ReadOnly,
-
     document: PreparedDocument? = null,
     style: CodeEditorStyle = CodeEditorStyle(),
-
+    language: com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage? = null,
     languageHint: String? = null,
     bodyFormat: BodyFormat? = null,
     searchQuery: String = "",
@@ -42,13 +41,17 @@ fun KNetCodeEditor(
     isWordWrapEnabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
+    val resolvedLang = language
+        ?: (if (bodyFormat != null) com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage.fromBodyFormat(bodyFormat) else null)
+        ?: com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage.fromId(languageHint)
+
     when (mode) {
         is EditorMode.Editable -> {
             EditableCodeEditor(
                 code = code,
                 mode = mode,
                 style = style,
-                languageHint = languageHint,
+                languageHint = resolvedLang.id,
                 isFoldingEnabled = isFoldingEnabled,
                 showLineCountHeader = showLineCountHeader,
                 showFoldActionsHeader = showFoldActionsHeader,
@@ -61,7 +64,7 @@ fun KNetCodeEditor(
                 code = code,
                 document = document,
                 style = style,
-                languageHint = languageHint,
+                languageHint = resolvedLang.id,
                 bodyFormat = bodyFormat,
                 searchQuery = searchQuery,
                 isFoldingEnabled = isFoldingEnabled,

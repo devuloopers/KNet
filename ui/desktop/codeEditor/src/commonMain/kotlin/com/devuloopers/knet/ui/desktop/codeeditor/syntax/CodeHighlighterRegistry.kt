@@ -31,17 +31,24 @@ object CodeHighlighterRegistry {
     }
 
     /**
+     * Resolves the matching [CodeLanguageHighlighter] strategy based on [CodeLanguage].
+     */
+    fun resolve(language: com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage): CodeLanguageHighlighter {
+        return when (language) {
+            com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage.JSON -> jsonHighlighter
+            com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage.GRAPHQL -> graphQlHighlighter
+            com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage.XML -> xmlHighlighter
+            com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage.HTML -> htmlHighlighter
+            com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage.JAVASCRIPT -> jsHighlighter
+            com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage.CSS -> cssHighlighter
+            com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage.PLAIN -> plainTextHighlighter
+        }
+    }
+
+    /**
      * Resolves strategy by language ID string hint (e.g. "json", "html", "xml", "graphql", "plain").
      */
     fun resolveByLanguage(languageId: String): CodeLanguageHighlighter {
-        return when (languageId.trim().lowercase()) {
-            "json" -> jsonHighlighter
-            "html" -> htmlHighlighter
-            "xml" -> xmlHighlighter
-            "javascript", "js" -> jsHighlighter
-            "css" -> cssHighlighter
-            "graphql", "gql" -> graphQlHighlighter
-            else -> plainTextHighlighter
-        }
+        return resolve(com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage.fromId(languageId))
     }
 }

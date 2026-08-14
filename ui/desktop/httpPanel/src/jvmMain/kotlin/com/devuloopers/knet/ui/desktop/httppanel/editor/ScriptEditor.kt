@@ -1,42 +1,30 @@
 package com.devuloopers.knet.ui.desktop.httppanel.editor
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.*
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.engine.script.api.ScriptLanguage
-import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
+import com.devuloopers.knet.ui.desktop.codeeditor.api.KNetCodeEditor
+import com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage
 import com.devuloopers.knet.ui.desktop.httppanel.model.ScriptPhase
 import com.devuloopers.knet.ui.desktop.httppanel.model.ScriptSnippetRegistry
 import com.devuloopers.knet.ui.desktop.httppanel.model.ScriptState
-import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
-import com.devuloopers.knet.ui.desktop.codeeditor.api.KNetCodeEditor
 
 /**
- * Modern, interactive Script Editor View supporting Pre-request and Test scripts with JS/Kotlin dual language engines.
+ * Modern, interactive Script Editor supporting Pre-request and Test scripts with JS/Kotlin dual language engines.
  */
 @Composable
-public fun ScriptEditorView(
+fun ScriptEditor(
     state: ScriptState,
     onStateChange: (ScriptState) -> Unit,
     modifier: Modifier = Modifier
@@ -53,27 +41,27 @@ public fun ScriptEditorView(
             onStateChange(state.copy(testScript = newScript))
         }
     }
-    val phaseAccent = if (state.activePhase == ScriptPhase.PRE_REQUEST) Color(0xFFA855F7) else Color(0xFFF59E0B)
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .padding(spacing.md),
-        verticalArrangement = Arrangement.spacedBy(spacing.sm)
+            .padding(spacing.md)
     ) {
-        // Toolbar Row: Phase Selector + Language Selector
+        // Phase & Engine Selection Bar
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // Phase Toggle Pills
+            // Phase Tabs
             Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 ScriptPhase.entries.forEach { phase ->
-                    val isSelected = phase == state.activePhase
+                    val isSelected = state.activePhase == phase
                     Box(
                         modifier = Modifier
                             .background(
@@ -97,7 +85,7 @@ public fun ScriptEditorView(
                             ),
                             maxLines = 1,
                             softWrap = false,
-                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
@@ -157,66 +145,57 @@ public fun ScriptEditorView(
                 style = typography.caption.copy(color = themeColors.textMuted)
             )
             ScriptSnippetRegistry.DEFAULT_SNIPPETS.forEach { snippet ->
-                val snippetCode = if (state.scriptLanguage == ScriptLanguage.JAVASCRIPT) snippet.codeJs else snippet.codeKotlin
+                val snippetCode =
+                    if (state.scriptLanguage == ScriptLanguage.JAVASCRIPT) snippet.codeJs else snippet.codeKotlin
                 Box(
                     modifier = Modifier
-                        .background(themeColors.surfaceVariant, RoundedCornerShape(4.dp))
-                        .border(1.dp, themeColors.border, RoundedCornerShape(4.dp))
+                        .background(
+                            color = themeColors.surfaceVariant,
+                            shape = RoundedCornerShape(4.dp)
+                        )
+                        .border(
+                            width = 1.dp,
+                            color = themeColors.border,
+                            shape = RoundedCornerShape(4.dp)
+                        )
                         .clickable {
-                            val newScript = if (currentScript.isBlank()) snippetCode else "$currentScript\n\n$snippetCode"
+                            val newScript =
+                                if (currentScript.isBlank()) snippetCode else "$currentScript\n\n$snippetCode"
                             onCurrentScriptChange(newScript)
                         }
                         .handCursor()
                         .padding(horizontal = 8.dp, vertical = 4.dp)
                 ) {
                     Text(
-                        text = "+ ${snippet.title}",
+                        text = snippet.title,
                         style = typography.caption.copy(
-                            color = themeColors.accent,
-                            fontWeight = FontWeight.SemiBold
+                            color = themeColors.textSecondary,
+                            fontWeight = FontWeight.Medium
                         )
                     )
                 }
             }
         }
 
-        // Informational Caption Row
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            modifier = Modifier.padding(vertical = 2.dp)
+        // Script Editor Area
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .weight(1f)
+                .padding(top = spacing.sm)
+                .border(width = 1.dp, color = themeColors.border, shape = RoundedCornerShape(4.dp))
         ) {
-            Icon(
-                imageVector = KNetIcons.Info,
-                contentDescription = "Info",
-                modifier = Modifier.size(14.dp),
-                tint = phaseAccent
-            )
-            Text(
-                text = if (state.activePhase == ScriptPhase.PRE_REQUEST) {
-                    "Pre-request scripts run before sending the HTTP request. Use pm.environment or request mutation APIs."
-                } else {
-                    "Test scripts run after receiving the response. Assert status codes, response headers, or JSON body data."
-                },
-                style = typography.caption.copy(color = themeColors.textMuted)
+            val codeLang =
+                if (state.scriptLanguage == ScriptLanguage.JAVASCRIPT) CodeLanguage.JAVASCRIPT else CodeLanguage.PLAIN
+            KNetCodeEditor(
+                code = currentScript,
+                mode = EditorMode.Editable(
+                    onCodeChange = onCurrentScriptChange,
+                    placeholder = "// Write request script..."
+                ),
+                language = codeLang,
+                modifier = Modifier.fillMaxSize()
             )
         }
-
-        // Embedded KNetCodeEditor
-        KNetCodeEditor(
-            code = currentScript,
-            mode = EditorMode.Editable(
-                onCodeChange = onCurrentScriptChange,
-                placeholder = if (state.activePhase == ScriptPhase.PRE_REQUEST) {
-                    "// Enter pre-request script (e.g. pm.environment.set(\"timestamp\", Date.now()))..."
-                } else {
-                    "// Enter post-response test assertions (e.g. pm.test(\"Status code is 200\", ...))..."
-                }
-            ),
-            languageHint = if (state.scriptLanguage == ScriptLanguage.JAVASCRIPT) "javascript" else "plain",
-            modifier = Modifier
-                .weight(1f)
-                .fillMaxWidth()
-        )
     }
 }
