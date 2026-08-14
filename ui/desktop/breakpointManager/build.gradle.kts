@@ -13,7 +13,6 @@ kotlin {
                 implementation(project(":ui:core"))
                 implementation(project(":ui:desktop:httpPanel"))
                 implementation(project(":core:domain"))
-                implementation(project(":engine:interceptor"))
                 implementation(project(":core:logger"))
                 implementation(libs.compose.runtime)
                 implementation(libs.compose.foundation)

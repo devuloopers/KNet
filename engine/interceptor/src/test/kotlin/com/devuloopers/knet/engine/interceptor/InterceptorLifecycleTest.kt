@@ -1,7 +1,7 @@
 package com.devuloopers.knet.engine.interceptor
 
+import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.RuleModel
-import com.devuloopers.knet.domain.rules.model.RuleType
 import io.netty.channel.embedded.EmbeddedChannel
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -19,7 +19,7 @@ class InterceptorLifecycleTest {
     @Test
     fun testDropEventClosesChannelAndCleansUp() {
         BreakpointRuleRegistry.addRule(
-            RuleModel("b1", "b1", RuleType.REQUEST, ".*api\\.example\\.com.*", "GET")
+            RuleModel("b1", "b1", BreakpointPhase.REQUEST, ".*api\\.example\\.com.*", "GET")
         )
 
         val handler = KNetInterceptorHandler()
@@ -40,7 +40,7 @@ class InterceptorLifecycleTest {
     @Test
     fun testChannelInactiveCleansUpSuspensions() {
         BreakpointRuleRegistry.addRule(
-            RuleModel("b1", "b1", RuleType.REQUEST, ".*api\\.example\\.com.*", "GET")
+            RuleModel("b1", "b1", BreakpointPhase.REQUEST, ".*api\\.example\\.com.*", "GET")
         )
 
         val handler = KNetInterceptorHandler()

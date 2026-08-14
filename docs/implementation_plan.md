@@ -71,7 +71,7 @@ This document serves as the live project tracking board for implementing seamles
 
 ---
 
-## Phase 9: Breakpoint Interception & In-Flight Traffic Editing Suite `[IN PROGRESS]`
+## Phase 9: Breakpoint Interception & In-Flight Traffic Editing Suite `[COMPLETED]`
 
 - [x] **Phase 1: `:ui:desktop:breakpointManager` UI & State** `[COMPLETED]`
   - [x] Created `:ui:desktop:breakpointManager` module registered in `settings.gradle.kts`
@@ -91,6 +91,66 @@ This document serves as the live project tracking board for implementing seamles
   - [x] Updated `KNetDatabase` schema to version 7
   - [x] Updated `RulesRepositoryImpl` in `:data:desktop` to stream Room DB records to `BreakpointRuleRegistry` engine
   - [x] Verified full multi-module JVM test suite across `:storage`, `:data:desktop`, `:engine:interceptor`, `:ui:desktop:breakpointManager`, and `:ui:desktop:app` (`BUILD SUCCESSFUL in 13s`)
-- [ ] **Phase 4: 1-Click Right-Click Shortcut in `TrafficTable`** `[PENDING]`
-- [ ] **Phase 5: Global 75% Width Right Slide-Over Panel (`InFlightInterceptionSlideOver`)** `[PENDING]`
+- [x] **Phase 4: 1-Click Right-Click Shortcut in `TrafficTable`** `[COMPLETED]`
+  - [x] Added "Add Breakpoint Rule" context menu option pre-populating URL regex and method in rule dialog
+- [x] **Phase 5: Global Right Slide-Over Drawer (`LiveInterceptDrawer`)** `[COMPLETED]`
+  - [x] Built smooth slide-in drawer displaying active in-flight request/response metadata, headers editor, and payload editor with forward and drop controls
+
+---
+
+## Phase 10: Breakpoint Clean Architecture Refactoring & In-Flight Interception Fixes `[COMPLETED]`
+
+- [x] **Phase 1: Domain & Data Layer Clean Architecture (`:core:domain` & `:data:desktop`)** `[COMPLETED]`
+  - [x] Create `InterceptedTransaction` pure domain model in `:core:domain`
+  - [x] Define `InterceptionSessionRepository` interface in `:core:domain`
+  - [x] Create domain UseCases: `ObserveActiveInterceptionsUseCase`, `ForwardInterceptedRequestUseCase`, `ForwardInterceptedResponseUseCase`, `DropInterceptedTransactionUseCase`, `ClearInterceptionSessionsUseCase`
+  - [x] Implement `InterceptionSessionRepositoryImpl` in `:data:desktop` bridging domain UseCases to `InterceptSessionManager`
+  - [x] Register repository and use cases in `DesktopDataModule.kt` Koin DI
+- [x] **Phase 2: Engine & Proxy Pipeline Fixes (`:engine:proxy` & `:engine:interceptor`)** `[COMPLETED]`
+  - [x] Fix Netty pipeline handler ordering in `KNetProxyHandler.handleConnect` so `knetInterceptorHandler` is placed after `httpAggregator` on HTTPS
+  - [x] Preserve `isIntercepted = true`, `matchedRuleId`, and `id` from `ChannelAttributes.REQUEST_ATTR` in `KNetProxyHandler.handleRequest`
+- [x] **Phase 3: Presentation Layer Decoupling & UI Highlighting (`:ui:desktop:breakpointManager`, `:ui:desktop:traffic`, `:ui:desktop:app`)** `[COMPLETED]`
+  - [x] Remove `:engine:interceptor` dependency from `ui/desktop/breakpointManager/build.gradle.kts`
+  - [x] Refactor `BreakpointManagerViewModel` to inject domain UseCases exclusively
+  - [x] Refactor `LiveInterceptDrawer` and `BreakpointManagerState` to use domain `InterceptedTransaction`
+  - [x] Inject `GetRulesUseCase` in `TrafficViewModel` to stream active rules
+  - [x] Update `TrafficTable` row highlighting for intercepted transactions and active rule presence
+- [x] **Phase 4: Verification & Automated Tests** `[COMPLETED]`
+  - [x] Update and execute test suites across `:core:domain`, `:data:desktop`, `:engine:proxy`, `:engine:interceptor`, `:ui:desktop:breakpointManager`, `:ui:desktop:traffic`, and `:ui:desktop:app` (`BUILD SUCCESSFUL in 32s`)
+
+---
+
+## Phase 11: HTTPS Interception Fix, Netty-Driven Highlighting & Diagnostic Logging `[COMPLETED]`
+
+- [x] **Phase 1: HTTPS Request Mapping & Interceptor Bypass** `[COMPLETED]`
+  - [x] Bypass `CONNECT` handshakes in `KNetInterceptorHandler` without setting stale channel attributes
+  - [x] Map every inbound HTTP/HTTPS request freshly from `FullHttpRequest` with body decoding
+  - [x] Re-evaluate `BreakpointMatcher` against decoded body (JSON/GraphQL) and URL criteria
+- [x] **Phase 2: Strict Netty-Driven Highlighting in `TrafficTable`** `[COMPLETED]`
+  - [x] Remove client-side `activeBreakpointRules.any { ... }` fallback from `TrafficTable.kt`
+  - [x] Enforce `isMatchedByBreakpoint = item.isIntercepted` directly from Room DB / Netty SSOT
+- [x] **Phase 3: Diagnostic Logging Instrumentation** `[COMPLETED]`
+  - [x] Add structured `KNetLogger` logging across `KNetInterceptorHandler`, `BreakpointMatcher`, and `InterceptCoordinator`
+- [x] **Phase 4: Multi-Module Verification** `[COMPLETED]`
+  - [x] All unit and integration test suites pass across all layers (`BUILD SUCCESSFUL in 17s`)
+
+---
+
+## Phase 12: In-Progress Interception Capture & Action-Driven Lifecycle `[COMPLETED]`
+
+- [x] **Phase 1: Domain & Listener Contracts (`:core:domain`)** `[COMPLETED]`
+  - [x] Added `onTransactionDropped(transactionId: String, reason: String)` to `ProxyTrafficListener`
+- [x] **Phase 2: Data Layer Persistence (`:data:desktop`)** `[COMPLETED]`
+  - [x] Implemented `onTransactionDropped` in `ProxyEngineRepositoryImpl` to update Room DB record with `responseStatusText` and `responseStatusCode = 0`
+  - [x] Wired `ProxyRuntimeRepository` to pass `trafficListener` into `KNetInterceptorHandler`
+- [x] **Phase 3: Engine Immediate Capture & Drop Dispatch (`:engine:interceptor`)** `[COMPLETED]`
+  - [x] Instantly notify `listener?.onRequestCaptured(taggedRequest)` on breakpoint match to display row in Traffic Table while paused
+  - [x] Dispatch `listener?.onTransactionDropped` on drop and timeout in `InterceptCoordinator`
+- [x] **Phase 4: UI Status Rendering (`:ui:desktop:traffic`)** `[COMPLETED]`
+  - [x] Render `In Progress` in orange, `Dropped` in red, `Timed Out` in muted text, and status code (e.g. `200`) in green
+- [x] **Phase 5: Multi-Module Verification** `[COMPLETED]`
+  - [x] Automated unit and integration tests passing across all layers (`BUILD SUCCESSFUL`)
+
+
+
 

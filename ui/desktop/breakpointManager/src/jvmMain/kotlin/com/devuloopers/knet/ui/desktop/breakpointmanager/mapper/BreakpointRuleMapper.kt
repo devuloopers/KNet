@@ -1,9 +1,8 @@
 package com.devuloopers.knet.ui.desktop.breakpointmanager.mapper
 
 import com.devuloopers.knet.domain.collection.model.HttpMethod
+import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.RuleModel
-import com.devuloopers.knet.domain.rules.model.RuleType
-import com.devuloopers.knet.engine.interceptor.BreakpointPhase
 import com.devuloopers.knet.ui.desktop.breakpointmanager.model.BreakpointRuleUiModel
 
 /**
@@ -21,13 +20,11 @@ fun RuleModel.toUiModel(): BreakpointRuleUiModel {
         }
     }
 
-    val phaseEnum = runCatching { BreakpointPhase.valueOf(type.name) }.getOrDefault(BreakpointPhase.BOTH)
-
     return BreakpointRuleUiModel(
         id = id,
         urlPattern = condition.ifBlank { ".*" },
         method = methodEnum,
-        phase = phaseEnum,
+        phase = type,
         enabled = enabled,
         protocolCriteria = protocolCriteria
     )
@@ -40,7 +37,7 @@ fun BreakpointRuleUiModel.toDomainRule(): RuleModel {
     return RuleModel(
         id = id,
         name = urlPattern,
-        type = RuleType.fromString(phase.name),
+        type = phase,
         condition = urlPattern,
         action = method?.name ?: "ALL",
         enabled = enabled,

@@ -5,10 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.domain.clientNetwork.model.HttpRequest
 import com.devuloopers.knet.domain.clientNetwork.model.HttpResponse
 import com.devuloopers.knet.domain.collection.model.HttpMethod
+import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.usecase.*
-import com.devuloopers.knet.engine.interceptor.BreakpointPhase
-import com.devuloopers.knet.engine.interceptor.InterceptResult
-import com.devuloopers.knet.engine.interceptor.InterceptSessionManager
 import com.devuloopers.knet.ui.desktop.breakpointmanager.mapper.toDomainRule
 import com.devuloopers.knet.ui.desktop.breakpointmanager.mapper.toUiModel
 import com.devuloopers.knet.ui.desktop.breakpointmanager.model.BreakpointManagerState
@@ -19,16 +17,19 @@ import kotlinx.coroutines.launch
 /**
  * ViewModel managing presentation state and domain UseCase interactions for Breakpoint Manager Screen and Live Intercept Drawer.
  *
- * All rule mutations are delegated strictly to domain UseCases from `:core:domain`.
- * Active connection suspensions are bound to [InterceptSessionManager].
+ * All rule mutations and in-flight interception operations are delegated strictly to domain UseCases from `:core:domain`.
  */
 class BreakpointManagerViewModel(
     getRulesUseCase: GetRulesUseCase,
     observeGlobalInterceptionUseCase: ObserveGlobalInterceptionUseCase,
+    observeActiveInterceptionsUseCase: ObserveActiveInterceptionsUseCase,
     private val saveRuleUseCase: SaveRuleUseCase,
     private val toggleRuleUseCase: ToggleRuleUseCase,
     private val deleteRuleUseCase: DeleteRuleUseCase,
-    private val toggleGlobalInterceptionUseCase: ToggleGlobalInterceptionUseCase
+    private val toggleGlobalInterceptionUseCase: ToggleGlobalInterceptionUseCase,
+    private val forwardInterceptedRequestUseCase: ForwardInterceptedRequestUseCase,
+    private val forwardInterceptedResponseUseCase: ForwardInterceptedResponseUseCase,
+    private val dropInterceptedTransactionUseCase: DropInterceptedTransactionUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BreakpointManagerState())
@@ -48,8 +49,8 @@ class BreakpointManagerViewModel(
             }
             .launchIn(viewModelScope)
 
-        // Reactive stream of active suspended in-flight HTTP connections
-        InterceptSessionManager.activeEventsStream
+        // Reactive stream of active suspended in-flight HTTP connections via domain UseCase
+        observeActiveInterceptionsUseCase()
             .onEach { events ->
                 _uiState.update { current ->
                     val activeEv = events.firstOrNull()
@@ -62,16 +63,22 @@ class BreakpointManagerViewModel(
             .launchIn(viewModelScope)
     }
 
-    fun forwardRequest(eventId: String, modifiedRequest: HttpRequest) {
-        InterceptSessionManager.resume(eventId, InterceptResult.Resume(modifiedRequest = modifiedRequest))
+    fun forwardRequest(transactionId: String, modifiedRequest: HttpRequest) {
+        viewModelScope.launch {
+            forwardInterceptedRequestUseCase(transactionId, modifiedRequest)
+        }
     }
 
-    fun forwardResponse(eventId: String, modifiedResponse: HttpResponse) {
-        InterceptSessionManager.resume(eventId, InterceptResult.Resume(modifiedResponse = modifiedResponse))
+    fun forwardResponse(transactionId: String, modifiedResponse: HttpResponse) {
+        viewModelScope.launch {
+            forwardInterceptedResponseUseCase(transactionId, modifiedResponse)
+        }
     }
 
-    fun dropEvent(eventId: String) {
-        InterceptSessionManager.resume(eventId, InterceptResult.Drop)
+    fun dropEvent(transactionId: String) {
+        viewModelScope.launch {
+            dropInterceptedTransactionUseCase(transactionId)
+        }
     }
 
     fun disableMatchingRule(ruleId: String) {

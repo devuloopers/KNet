@@ -1,7 +1,7 @@
 package com.devuloopers.knet.engine.interceptor
 
+import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.RuleModel
-import com.devuloopers.knet.domain.rules.model.RuleType
 import com.devuloopers.knet.domain.rules.model.matchesTransaction
 
 /**
@@ -19,7 +19,7 @@ object BreakpointMatcher {
             rule.matchesTransaction(
                 url = url,
                 method = method,
-                currentPhase = RuleType.REQUEST,
+                currentPhase = BreakpointPhase.REQUEST,
                 requestBodyText = requestBodyText
             )
         }
@@ -34,7 +34,7 @@ object BreakpointMatcher {
             rule.matchesTransaction(
                 url = url,
                 method = method,
-                currentPhase = RuleType.RESPONSE,
+                currentPhase = BreakpointPhase.RESPONSE,
                 requestBodyText = requestBodyText
             )
         }

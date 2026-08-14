@@ -228,6 +228,7 @@ private fun TableRowItem(
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
 
+    // Highlight is strictly driven by Netty interception SSOT
     val isMatchedByBreakpoint = item.isIntercepted
 
     val displayMethod = when (item.interceptionMetadata) {
@@ -251,6 +252,8 @@ private fun TableRowItem(
         item.status in 300..399 -> themeColors.semantic.warning
         item.status in 400..599 -> themeColors.semantic.error
         item.status == 101 -> themeColors.semantic.info
+        item.statusText.equals("Dropped", ignoreCase = true) -> themeColors.semantic.error
+        item.statusText.equals("Timed Out", ignoreCase = true) -> themeColors.textMuted
         isCompleted && item.status == 0 -> themeColors.semantic.error
         !isCompleted && item.status == 0 -> androidx.compose.ui.graphics.Color(0xFFFAB387)
         else -> themeColors.textSecondary
@@ -379,6 +382,8 @@ private fun TableRowItem(
                 Text(
                     text = when {
                         item.status > 0 -> "${item.status}"
+                        item.statusText.equals("Dropped", ignoreCase = true) -> "Dropped"
+                        item.statusText.equals("Timed Out", ignoreCase = true) -> "Timed Out"
                         isCompleted -> "ERR"
                         else -> "In Progress"
                     },

@@ -3,6 +3,7 @@ package com.devuloopers.knet.engine.interceptor
 import com.devuloopers.knet.core.logger.KNetLogger
 import com.devuloopers.knet.domain.clientNetwork.model.HttpRequest
 import com.devuloopers.knet.domain.clientNetwork.model.HttpResponse
+import com.devuloopers.knet.domain.clientNetwork.model.ProxyTrafficListener
 import io.netty.channel.ChannelHandlerContext
 import io.netty.handler.codec.http.FullHttpRequest
 import io.netty.handler.codec.http.FullHttpResponse
@@ -26,10 +27,9 @@ object InterceptCoordinator {
     fun coordinateRequest(
         context: ChannelHandlerContext,
         msg: FullHttpRequest,
-        request: HttpRequest
+        request: HttpRequest,
+        listener: ProxyTrafficListener? = null
     ) {
-        KNetLogger.info(TAG) { "Breakpoint hit for request: ${request.method} ${request.url}" }
-
         context.channel().config().isAutoRead = false
         ReferenceCountUtil.retain(msg)
 
@@ -43,6 +43,7 @@ object InterceptCoordinator {
                     event.deferred.await()
                 } ?: InterceptResult.Timeout
             } catch (e: Exception) {
+                KNetLogger.error(TAG) { "Exception during request suspension await: ${e.message}" }
                 InterceptResult.Drop
             } finally {
                 InterceptSessionManager.resume(event.id, InterceptResult.Drop)
@@ -52,9 +53,25 @@ object InterceptCoordinator {
                 when (result) {
                     is InterceptResult.Resume -> {
                         val modified = result.modifiedRequest
+                        val reqToResume = if (modified != null) {
+                            HttpRequest(
+                                id = modified.id,
+                                method = modified.method,
+                                url = modified.url,
+                                protocol = modified.protocol,
+                                headers = modified.headers,
+                                body = modified.body,
+                                timestamp = modified.timestamp,
+                                isIntercepted = true,
+                                matchedRuleId = modified.matchedRuleId ?: request.matchedRuleId
+                            )
+                        } else {
+                            request
+                        }
+                        context.channel().attr(ChannelAttributes.REQUEST_ATTR).set(reqToResume)
+
                         if (modified != null) {
-                            val rebuilt = RequestRebuilder.rebuild(msg, modified)
-                            context.channel().attr(ChannelAttributes.REQUEST_ATTR).set(modified)
+                            val rebuilt = RequestRebuilder.rebuild(msg, reqToResume)
                             context.fireChannelRead(rebuilt)
                             ReferenceCountUtil.release(msg)
                         } else {
@@ -62,13 +79,23 @@ object InterceptCoordinator {
                         }
                         context.channel().config().isAutoRead = true
                     }
-                    is InterceptResult.Drop, is InterceptResult.Timeout -> {
+                    is InterceptResult.Drop -> {
+                        KNetLogger.info(TAG) { "Dropping request ${request.id} by user request" }
+                        listener?.onTransactionDropped(request.id, "Dropped")
+                        ReferenceCountUtil.release(msg)
+                        context.channel().config().isAutoRead = true
+                        context.close()
+                    }
+                    is InterceptResult.Timeout -> {
+                        KNetLogger.warn(TAG) { "Request ${request.id} timed out after ${timeoutMs}ms" }
+                        listener?.onTransactionDropped(request.id, "Timed Out")
                         ReferenceCountUtil.release(msg)
                         context.channel().config().isAutoRead = true
                         context.close()
                     }
                 }
             } catch (e: Exception) {
+                KNetLogger.error(TAG) { "Error firing resumed request: ${e.message}" }
                 ReferenceCountUtil.release(msg)
                 context.channel().config().isAutoRead = true
                 context.close()
@@ -80,10 +107,9 @@ object InterceptCoordinator {
         context: ChannelHandlerContext,
         msg: FullHttpResponse,
         request: HttpRequest,
-        mappedResponse: HttpResponse
+        mappedResponse: HttpResponse,
+        listener: ProxyTrafficListener? = null
     ) {
-        KNetLogger.info(TAG) { "Breakpoint hit for response: ${request.method} ${request.url} -> ${mappedResponse.statusCode}" }
-
         context.channel().config().isAutoRead = false
         ReferenceCountUtil.retain(msg)
 
@@ -97,6 +123,7 @@ object InterceptCoordinator {
                     event.deferred.await()
                 } ?: InterceptResult.Timeout
             } catch (e: Exception) {
+                KNetLogger.error(TAG) { "Exception during response suspension await: ${e.message}" }
                 InterceptResult.Drop
             } finally {
                 InterceptSessionManager.resume(event.id, InterceptResult.Drop)
@@ -116,13 +143,23 @@ object InterceptCoordinator {
                         context.channel().config().isAutoRead = true
                         context.flush()
                     }
-                    is InterceptResult.Drop, is InterceptResult.Timeout -> {
+                    is InterceptResult.Drop -> {
+                        KNetLogger.info(TAG) { "Dropping response ${request.id} by user request" }
+                        listener?.onTransactionDropped(request.id, "Dropped")
+                        ReferenceCountUtil.release(msg)
+                        context.channel().config().isAutoRead = true
+                        context.close()
+                    }
+                    is InterceptResult.Timeout -> {
+                        KNetLogger.warn(TAG) { "Response ${request.id} timed out after ${timeoutMs}ms" }
+                        listener?.onTransactionDropped(request.id, "Timed Out")
                         ReferenceCountUtil.release(msg)
                         context.channel().config().isAutoRead = true
                         context.close()
                     }
                 }
             } catch (e: Exception) {
+                KNetLogger.error(TAG) { "Error firing resumed response: ${e.message}" }
                 ReferenceCountUtil.release(msg)
                 context.channel().config().isAutoRead = true
                 context.close()

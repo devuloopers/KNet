@@ -18,7 +18,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.devuloopers.knet.domain.rules.model.RuleType
 import com.devuloopers.knet.domain.rules.model.matchesTransaction
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
@@ -81,8 +80,7 @@ fun KNetWorkspaceHost(
                         rule = prefilledUiModel,
                         onDismiss = { trafficViewModel.closeBreakpointDialog() },
                         onSave = { urlPattern, method, phase, enabled, protocolCriteria ->
-                            val ruleType = RuleType.fromString(phase.name)
-                            trafficViewModel.saveBreakpointRule(urlPattern, method, ruleType, enabled, protocolCriteria)
+                            trafficViewModel.saveBreakpointRule(urlPattern, method, phase, enabled, protocolCriteria)
                         }
                     )
                 }

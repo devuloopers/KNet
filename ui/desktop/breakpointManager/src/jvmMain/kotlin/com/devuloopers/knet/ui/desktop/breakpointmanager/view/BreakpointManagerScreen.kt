@@ -26,6 +26,7 @@ import com.devuloopers.knet.ui.core.components.input.InputFieldConfig
 import com.devuloopers.knet.ui.core.components.input.KNetTextField
 import com.devuloopers.knet.ui.core.components.switch.KNetSwitch
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.ui.desktop.breakpointmanager.components.AddEditBreakpointRuleDialog
 import com.devuloopers.knet.ui.desktop.breakpointmanager.components.BreakpointRulesTable
 import com.devuloopers.knet.ui.desktop.breakpointmanager.viewmodel.BreakpointManagerViewModel

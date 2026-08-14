@@ -22,8 +22,8 @@ import androidx.compose.ui.unit.sp
 import com.devuloopers.knet.domain.clientNetwork.model.HttpRequest
 import com.devuloopers.knet.domain.clientNetwork.model.HttpResponse
 import com.devuloopers.knet.domain.network.model.NetworkResponseSpec
-import com.devuloopers.knet.engine.interceptor.BreakpointPhase
-import com.devuloopers.knet.engine.interceptor.InterceptedEvent
+import com.devuloopers.knet.domain.rules.model.BreakpointPhase
+import com.devuloopers.knet.domain.rules.model.InterceptedTransaction
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
@@ -40,7 +40,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.view.KNetResponseInspector
  */
 @Composable
 fun LiveInterceptDrawer(
-    event: InterceptedEvent?,
+    event: InterceptedTransaction?,
     isVisible: Boolean,
     onForwardRequest: (modifiedRequest: HttpRequest) -> Unit,
     onForwardResponse: (modifiedResponse: HttpResponse) -> Unit,
@@ -151,7 +151,7 @@ fun LiveInterceptDrawer(
                     // Forward Button
                     KNetButton(
                         onClick = {
-                            if (event.phase == BreakpointPhase.REQUEST) {
+                            if (event.phase == BreakpointPhase.REQUEST || event.phase == BreakpointPhase.BOTH) {
                                 val modifiedReq = HttpRequest(
                                     id = event.request.id,
                                     method = event.request.method,
@@ -159,7 +159,9 @@ fun LiveInterceptDrawer(
                                     protocol = event.request.protocol,
                                     headers = editedHeaders,
                                     body = editedBodyText.encodeToByteArray(),
-                                    timestamp = event.request.timestamp
+                                    timestamp = event.request.timestamp,
+                                    isIntercepted = true,
+                                    matchedRuleId = event.request.matchedRuleId
                                 )
                                 onForwardRequest(modifiedReq)
                             } else {
@@ -201,7 +203,7 @@ fun LiveInterceptDrawer(
                         .weight(1f)
                         .fillMaxWidth()
                 ) {
-                    if (event.phase == BreakpointPhase.REQUEST) {
+                    if (event.phase == BreakpointPhase.REQUEST || event.phase == BreakpointPhase.BOTH) {
                         KNetRequestEditor(
                             bodyState = BodyState(
                                 mode = BodyMode.JSON,

@@ -20,6 +20,11 @@ interface ProxyTrafficListener {
     ) {}
 
     /**
+     * Triggered when an in-flight transaction is dropped or cancelled.
+     */
+    fun onTransactionDropped(transactionId: String, reason: String = "Dropped") {}
+
+    /**
      * Triggered when a complete request/response transaction finishes.
      */
     fun onTransactionCaptured(transaction: HttpTransaction) {}

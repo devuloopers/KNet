@@ -24,8 +24,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.devuloopers.knet.domain.collection.model.HttpMethod
+import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria
-import com.devuloopers.knet.engine.interceptor.BreakpointPhase
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
 import com.devuloopers.knet.ui.core.components.dialog.KNetDialog

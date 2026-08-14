@@ -1,7 +1,6 @@
 package com.devuloopers.knet.ui.desktop.breakpointmanager.model
 
-import com.devuloopers.knet.engine.interceptor.BreakpointPhase
-import com.devuloopers.knet.engine.interceptor.InterceptedEvent
+import com.devuloopers.knet.domain.rules.model.InterceptedTransaction
 
 /**
  * Presentation UI State for Breakpoint Manager Screen and Live Intercept Drawer.
@@ -20,8 +19,8 @@ data class BreakpointManagerState(
     val rules: List<BreakpointRuleUiModel> = emptyList(),
     val isAddEditDialogVisible: Boolean = false,
     val editingRule: BreakpointRuleUiModel? = null,
-    val activeEvents: List<InterceptedEvent> = emptyList(),
-    val activeEvent: InterceptedEvent? = null
+    val activeEvents: List<InterceptedTransaction> = emptyList(),
+    val activeEvent: InterceptedTransaction? = null
 ) {
     /**
      * Filtered list of rules matching the active search query.

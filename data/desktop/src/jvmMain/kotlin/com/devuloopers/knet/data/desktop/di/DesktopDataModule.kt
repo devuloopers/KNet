@@ -9,6 +9,7 @@ import com.devuloopers.knet.data.desktop.core.KNetCoreRepository
 import com.devuloopers.knet.data.desktop.inspector.repository.InspectorRepositoryImpl
 import com.devuloopers.knet.data.desktop.network.repository.NetworkRepositoryImpl
 import com.devuloopers.knet.data.desktop.proxy.repository.ProxyEngineRepositoryImpl
+import com.devuloopers.knet.data.desktop.rules.repository.InterceptionSessionRepositoryImpl
 import com.devuloopers.knet.data.desktop.rules.repository.RulesRepositoryImpl
 import com.devuloopers.knet.data.desktop.runtime.CertificateRuntimeRepository
 import com.devuloopers.knet.data.desktop.runtime.ProxyRuntimeRepository
@@ -27,6 +28,7 @@ import com.devuloopers.knet.domain.proxy.repository.ProxyEngineRepository
 import com.devuloopers.knet.domain.proxy.usecase.ObserveProxyEngineStateUseCase
 import com.devuloopers.knet.domain.proxy.usecase.StartProxyEngineUseCase
 import com.devuloopers.knet.domain.proxy.usecase.StopProxyEngineUseCase
+import com.devuloopers.knet.domain.rules.repository.InterceptionSessionRepository
 import com.devuloopers.knet.domain.rules.repository.RulesRepository
 import com.devuloopers.knet.domain.rules.usecase.*
 import com.devuloopers.knet.domain.traffic.repository.LiveTrafficRepository
@@ -127,6 +129,7 @@ object DesktopDataModule {
             val db: KNetDatabase = get()
             RulesRepositoryImpl(db.breakpointRuleDao())
         }
+        single<InterceptionSessionRepository> { InterceptionSessionRepositoryImpl() }
         single<WidgetPreferencesRepository> { WidgetPreferencesRepositoryImpl(get()) }
         single<NetworkRepository> { NetworkRepositoryImpl(get()) }
         single { ProxyHistoryHeaderLookup(get()) }
@@ -149,6 +152,11 @@ object DesktopDataModule {
         factory { DeleteRuleUseCase(get()) }
         factory { ObserveGlobalInterceptionUseCase(get()) }
         factory { ToggleGlobalInterceptionUseCase(get()) }
+        factory { ObserveActiveInterceptionsUseCase(get()) }
+        factory { ForwardInterceptedRequestUseCase(get()) }
+        factory { ForwardInterceptedResponseUseCase(get()) }
+        factory { DropInterceptedTransactionUseCase(get()) }
+        factory { ClearInterceptionSessionsUseCase(get()) }
         factory { SaveLiveTransactionToCollectionUseCase(get()) }
         factory { RecordClientTransactionUseCase(get()) }
         factory { ObserveLocalIpUseCase(get()) }

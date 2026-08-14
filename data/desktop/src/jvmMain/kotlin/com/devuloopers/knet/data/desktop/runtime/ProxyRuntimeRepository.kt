@@ -34,7 +34,7 @@ class ProxyRuntimeRepository(
         KNetProxyServer.pipelineInitializers.clear()
         KNetProxyServer.pipelineInitializers.add { pipeline ->
             pipeline.addLast("mobilePortalHandler", MobilePortalHandler(ca = certificateAuthority, proxyPort = port))
-            pipeline.addLast("knetInterceptorHandler", KNetInterceptorHandler())
+            pipeline.addLast("knetInterceptorHandler", KNetInterceptorHandler(trafficListener))
         }
         val server = KNetProxyServer(
             port = port,

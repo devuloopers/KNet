@@ -7,7 +7,7 @@ import com.devuloopers.knet.domain.protocol.model.InterceptionMetadata
  *
  * @property id Unique rule identifier.
  * @property name The display name of the rule.
- * @property type The target context type ([RuleType]).
+ * @property type The target context phase ([BreakpointPhase]).
  * @property condition Description of the triggering matching criteria (URL pattern/wildcard).
  * @property action The action execution type or target HTTP method filter (e.g. "ALL", "GET", "POST").
  * @property enabled Whether this rule is currently active.
@@ -16,7 +16,7 @@ import com.devuloopers.knet.domain.protocol.model.InterceptionMetadata
 data class RuleModel(
     val id: String = "",
     val name: String = "",
-    val type: RuleType = RuleType.BOTH,
+    val type: BreakpointPhase = BreakpointPhase.BOTH,
     val condition: String = "*",
     val action: String = "ALL",
     val enabled: Boolean = true,
@@ -29,7 +29,7 @@ data class RuleModel(
  *
  * @param url Full target URL string or path.
  * @param method HTTP method (e.g. GET, POST).
- * @param currentPhase Target traffic phase filter ([RuleType.REQUEST], [RuleType.RESPONSE], [RuleType.BOTH]).
+ * @param currentPhase Target traffic phase filter ([BreakpointPhase.REQUEST], [BreakpointPhase.RESPONSE], [BreakpointPhase.BOTH]).
  * @param requestBodyText Optional decoded request body text for payload scanning.
  * @param metadata Extracted protocol metadata (e.g. [InterceptionMetadata.GraphQL]).
  * @return True if the rule matches the target transaction criteria, false otherwise.
@@ -37,14 +37,14 @@ data class RuleModel(
 fun RuleModel.matchesTransaction(
     url: String,
     method: String,
-    currentPhase: RuleType = RuleType.BOTH,
+    currentPhase: BreakpointPhase = BreakpointPhase.BOTH,
     requestBodyText: String? = null,
     metadata: InterceptionMetadata? = null
 ): Boolean {
     if (!enabled) return false
 
     // 1. Phase check
-    if (type != RuleType.BOTH && currentPhase != RuleType.BOTH && type != currentPhase) {
+    if (type != BreakpointPhase.BOTH && currentPhase != BreakpointPhase.BOTH && type != currentPhase) {
         return false
     }
 

@@ -1,7 +1,7 @@
 package com.devuloopers.knet.data.desktop.rules.repository
 
+import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.RuleModel
-import com.devuloopers.knet.domain.rules.model.RuleType
 import com.devuloopers.knet.domain.rules.repository.RulesRepository
 import com.devuloopers.knet.engine.interceptor.BreakpointRuleRegistry
 import com.devuloopers.knet.storage.rules.dao.BreakpointRuleDao
@@ -66,10 +66,11 @@ class RulesRepositoryImpl(
             "WEBSOCKET" -> com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria.WebSocket()
             else -> com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria.HttpDefault
         }
+
         return RuleModel(
             id = id,
             name = urlPattern,
-            type = RuleType.fromString(phase),
+            type = BreakpointPhase.fromString(phase),
             condition = urlPattern,
             action = method ?: "ALL",
             enabled = enabled,

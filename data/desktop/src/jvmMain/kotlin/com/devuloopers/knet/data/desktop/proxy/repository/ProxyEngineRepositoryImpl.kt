@@ -212,6 +212,62 @@ public class ProxyEngineRepositoryImpl(
         }
     }
 
+    override fun onTransactionDropped(transactionId: String, reason: String) {
+        KNetLogger.info(tag = LogTags.PROXY) {
+            "DROPPED [id=$transactionId]: Reason $reason"
+        }
+
+        val request = pendingRequests.remove(transactionId)
+        val reqToUse = request ?: HttpRequest(
+            id = transactionId,
+            method = "GET",
+            url = "http://unknown",
+            protocol = "HTTP/1.1",
+            headers = emptyList(),
+            body = null,
+            timestamp = System.currentTimeMillis()
+        )
+
+        val reqBodyPath = payloadStore.savePayload(transactionId, "req", reqToUse.body)
+        val interceptionMetadata = protocolInspectorRegistry.inspect(
+            method = reqToUse.method,
+            url = reqToUse.url,
+            headers = reqToUse.headers.toMap(),
+            bodyBytes = reqToUse.body ?: ByteArray(0)
+        )
+
+        val droppedTx = HttpTransaction(
+            id = transactionId,
+            request = reqToUse,
+            response = HttpResponse(
+                statusCode = 0,
+                statusText = reason,
+                headers = emptyList(),
+                body = null,
+                timestamp = System.currentTimeMillis()
+            ),
+            requestBodyPath = reqBodyPath,
+            responseBodyPath = null,
+            requestBodySize = reqToUse.body?.size?.toLong() ?: 0L,
+            responseBodySize = 0L,
+            durationMs = 0L,
+            timestamp = reqToUse.timestamp,
+            timings = HttpTimings(),
+            interceptionMetadata = interceptionMetadata
+        )
+
+        scope.launch {
+            try {
+                val entity = TransactionMapper.mapDomainToEntity(droppedTx)
+                database.httpTransactionDao().insert(entity)
+            } catch (e: Exception) {
+                KNetLogger.error(tag = LogTags.PROXY, throwable = e) {
+                    "Failed to persist dropped transaction: ${e.message}"
+                }
+            }
+        }
+    }
+
 
     override suspend fun stop() {
         if (_engineState.value is ProxyEngineState.Stopped || _engineState.value is ProxyEngineState.Stopping) {

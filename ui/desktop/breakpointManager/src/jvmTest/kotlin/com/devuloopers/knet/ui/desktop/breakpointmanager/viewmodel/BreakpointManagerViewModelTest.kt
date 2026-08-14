@@ -1,12 +1,14 @@
 package com.devuloopers.knet.ui.desktop.breakpointmanager.viewmodel
 
+import com.devuloopers.knet.domain.clientNetwork.model.HttpRequest
+import com.devuloopers.knet.domain.clientNetwork.model.HttpResponse
 import com.devuloopers.knet.domain.collection.model.HttpMethod
+import com.devuloopers.knet.domain.rules.model.BreakpointPhase
+import com.devuloopers.knet.domain.rules.model.InterceptedTransaction
 import com.devuloopers.knet.domain.rules.model.RuleModel
-import com.devuloopers.knet.domain.rules.model.RuleType
+import com.devuloopers.knet.domain.rules.repository.InterceptionSessionRepository
 import com.devuloopers.knet.domain.rules.repository.RulesRepository
 import com.devuloopers.knet.domain.rules.usecase.*
-import com.devuloopers.knet.engine.interceptor.BreakpointPhase
-import com.devuloopers.knet.engine.interceptor.BreakpointRuleRegistry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -52,32 +54,69 @@ private class FakeTestRulesRepository : RulesRepository {
     }
 }
 
+private class FakeTestInterceptionSessionRepository : InterceptionSessionRepository {
+    private val _activeInterceptions = MutableStateFlow<List<InterceptedTransaction>>(emptyList())
+    override val activeInterceptions: Flow<List<InterceptedTransaction>> = _activeInterceptions.asStateFlow()
+
+    var lastForwardedRequestId: String? = null
+    var lastForwardedResponseId: String? = null
+    var lastDroppedId: String? = null
+
+    fun emitInterceptions(items: List<InterceptedTransaction>) {
+        _activeInterceptions.value = items
+    }
+
+    override suspend fun forwardRequest(transactionId: String, modifiedRequest: HttpRequest) {
+        lastForwardedRequestId = transactionId
+        _activeInterceptions.value = _activeInterceptions.value.filterNot { it.id == transactionId }
+    }
+
+    override suspend fun forwardResponse(transactionId: String, modifiedResponse: HttpResponse) {
+        lastForwardedResponseId = transactionId
+        _activeInterceptions.value = _activeInterceptions.value.filterNot { it.id == transactionId }
+    }
+
+    override suspend fun dropTransaction(transactionId: String) {
+        lastDroppedId = transactionId
+        _activeInterceptions.value = _activeInterceptions.value.filterNot { it.id == transactionId }
+    }
+
+    override suspend fun clearAll() {
+        _activeInterceptions.value = emptyList()
+    }
+}
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class BreakpointManagerViewModelTest {
 
-    private val repository = FakeTestRulesRepository()
+    private val rulesRepository = FakeTestRulesRepository()
+    private val sessionRepository = FakeTestInterceptionSessionRepository()
 
     @BeforeTest
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
-        BreakpointRuleRegistry.clearRules()
-        BreakpointRuleRegistry.toggleGlobalInterception(true)
     }
 
     @AfterTest
     fun tearDown() {
-        BreakpointRuleRegistry.clearRules()
         Dispatchers.resetMain()
     }
 
-    private fun createViewModel(): BreakpointManagerViewModel {
+    private fun createViewModel(
+        rulesRepo: RulesRepository = rulesRepository,
+        sessionRepo: InterceptionSessionRepository = sessionRepository
+    ): BreakpointManagerViewModel {
         return BreakpointManagerViewModel(
-            getRulesUseCase = GetRulesUseCase(repository),
-            observeGlobalInterceptionUseCase = ObserveGlobalInterceptionUseCase(repository),
-            saveRuleUseCase = SaveRuleUseCase(repository),
-            toggleRuleUseCase = ToggleRuleUseCase(repository),
-            deleteRuleUseCase = DeleteRuleUseCase(repository),
-            toggleGlobalInterceptionUseCase = ToggleGlobalInterceptionUseCase(repository)
+            getRulesUseCase = GetRulesUseCase(rulesRepo),
+            observeGlobalInterceptionUseCase = ObserveGlobalInterceptionUseCase(rulesRepo),
+            observeActiveInterceptionsUseCase = ObserveActiveInterceptionsUseCase(sessionRepo),
+            saveRuleUseCase = SaveRuleUseCase(rulesRepo),
+            toggleRuleUseCase = ToggleRuleUseCase(rulesRepo),
+            deleteRuleUseCase = DeleteRuleUseCase(rulesRepo),
+            toggleGlobalInterceptionUseCase = ToggleGlobalInterceptionUseCase(rulesRepo),
+            forwardInterceptedRequestUseCase = ForwardInterceptedRequestUseCase(sessionRepo),
+            forwardInterceptedResponseUseCase = ForwardInterceptedResponseUseCase(sessionRepo),
+            dropInterceptedTransactionUseCase = DropInterceptedTransactionUseCase(sessionRepo)
         )
     }
 
@@ -118,7 +157,7 @@ class BreakpointManagerViewModelTest {
             RuleModel(
                 id = "r1",
                 name = ".*stripe.*",
-                type = RuleType.REQUEST,
+                type = BreakpointPhase.REQUEST,
                 condition = ".*stripe.*",
                 action = "POST",
                 enabled = true
@@ -128,21 +167,14 @@ class BreakpointManagerViewModelTest {
             RuleModel(
                 id = "r2",
                 name = ".*auth/login.*",
-                type = RuleType.BOTH,
+                type = BreakpointPhase.BOTH,
                 condition = ".*auth/login.*",
                 action = "ALL",
                 enabled = true
             )
         )
 
-        val viewModel = BreakpointManagerViewModel(
-            getRulesUseCase = GetRulesUseCase(repositoryWithRules),
-            observeGlobalInterceptionUseCase = ObserveGlobalInterceptionUseCase(repositoryWithRules),
-            saveRuleUseCase = SaveRuleUseCase(repositoryWithRules),
-            toggleRuleUseCase = ToggleRuleUseCase(repositoryWithRules),
-            deleteRuleUseCase = DeleteRuleUseCase(repositoryWithRules),
-            toggleGlobalInterceptionUseCase = ToggleGlobalInterceptionUseCase(repositoryWithRules)
-        )
+        val viewModel = createViewModel(rulesRepo = repositoryWithRules)
 
         assertEquals(2, viewModel.uiState.value.rules.size)
 
@@ -158,25 +190,102 @@ class BreakpointManagerViewModelTest {
             RuleModel(
                 id = "r1",
                 name = ".*stripe.*",
-                type = RuleType.REQUEST,
+                type = BreakpointPhase.REQUEST,
                 condition = ".*stripe.*",
                 action = "POST",
                 enabled = true
             )
         )
 
-        val viewModel = BreakpointManagerViewModel(
-            getRulesUseCase = GetRulesUseCase(repositoryWithRule),
-            observeGlobalInterceptionUseCase = ObserveGlobalInterceptionUseCase(repositoryWithRule),
-            saveRuleUseCase = SaveRuleUseCase(repositoryWithRule),
-            toggleRuleUseCase = ToggleRuleUseCase(repositoryWithRule),
-            deleteRuleUseCase = DeleteRuleUseCase(repositoryWithRule),
-            toggleGlobalInterceptionUseCase = ToggleGlobalInterceptionUseCase(repositoryWithRule)
-        )
+        val viewModel = createViewModel(rulesRepo = repositoryWithRule)
 
         assertEquals(1, viewModel.uiState.value.rules.size)
 
         viewModel.deleteRule("r1")
         assertEquals(0, viewModel.uiState.value.rules.size)
+    }
+
+    @Test
+    fun `in-flight intercepted session observation and forward actions execute properly`() = runTest {
+        val viewModel = createViewModel()
+        assertEquals(0, viewModel.uiState.value.activeEvents.size)
+
+        val fakeRequest = HttpRequest(
+            id = "tx-101",
+            method = "GET",
+            url = "https://api.stripe.com/v1/charges",
+            protocol = "HTTP/1.1",
+            headers = listOf("Authorization" to "Bearer test_123"),
+            body = null,
+            timestamp = 1000L
+        )
+        val fakeEvent = InterceptedTransaction(
+            id = "event-1",
+            phase = BreakpointPhase.REQUEST,
+            method = "GET",
+            url = fakeRequest.url,
+            request = fakeRequest,
+            response = null,
+            timestamp = 1000L
+        )
+
+        sessionRepository.emitInterceptions(listOf(fakeEvent))
+
+        assertEquals(1, viewModel.uiState.value.activeEvents.size)
+        assertEquals("event-1", viewModel.uiState.value.activeEvent?.id)
+
+        viewModel.forwardRequest("event-1", fakeRequest)
+        assertEquals("event-1", sessionRepository.lastForwardedRequestId)
+        assertEquals(0, viewModel.uiState.value.activeEvents.size)
+    }
+
+    @Test
+    fun `multiple in-flight intercepted sessions are queued and cached in viewModel activeEvents`() = runTest {
+        val viewModel = createViewModel()
+
+        val req1 = HttpRequest(id = "tx-1", method = "GET", url = "https://api.one.com/v1", protocol = "HTTP/1.1", headers = emptyList(), body = null, timestamp = 1000L)
+        val req2 = HttpRequest(id = "tx-2", method = "POST", url = "https://api.two.com/v2", protocol = "HTTP/1.1", headers = emptyList(), body = null, timestamp = 2000L)
+        val event1 = InterceptedTransaction(id = "ev-1", phase = BreakpointPhase.REQUEST, method = "GET", url = req1.url, request = req1, response = null, timestamp = 1000L)
+        val event2 = InterceptedTransaction(id = "ev-2", phase = BreakpointPhase.REQUEST, method = "POST", url = req2.url, request = req2, response = null, timestamp = 2000L)
+
+        // Netty informs about 2 simultaneous in-flight interceptions
+        sessionRepository.emitInterceptions(listOf(event1, event2))
+
+        // ViewModel caches the queue and selects the head event for the drawer
+        assertEquals(2, viewModel.uiState.value.activeEvents.size)
+        assertEquals("ev-1", viewModel.uiState.value.activeEvent?.id)
+        assertEquals("https://api.one.com/v1", viewModel.uiState.value.activeEvent?.url)
+
+        // User forwards the first event -> next event is promoted to active
+        viewModel.forwardRequest("ev-1", req1)
+        assertEquals("ev-1", sessionRepository.lastForwardedRequestId)
+        assertEquals(1, viewModel.uiState.value.activeEvents.size)
+        assertEquals("ev-2", viewModel.uiState.value.activeEvent?.id)
+        assertEquals("https://api.two.com/v2", viewModel.uiState.value.activeEvent?.url)
+
+        // User drops the second event -> queue becomes empty
+        viewModel.dropEvent("ev-2")
+        assertEquals("ev-2", sessionRepository.lastDroppedId)
+        assertEquals(0, viewModel.uiState.value.activeEvents.size)
+        assertNull(viewModel.uiState.value.activeEvent)
+    }
+
+    @Test
+    fun `forwardResponse executes domain useCase and clears active interception`() = runTest {
+        val viewModel = createViewModel()
+
+        val req = HttpRequest(id = "tx-3", method = "GET", url = "https://api.test.com/data", protocol = "HTTP/1.1", headers = emptyList(), body = null, timestamp = 1000L)
+        val resp = HttpResponse(statusCode = 200, statusText = "OK", headers = emptyList(), body = null, timestamp = 1000L)
+        val event = InterceptedTransaction(id = "ev-3", phase = BreakpointPhase.RESPONSE, method = "GET", url = req.url, request = req, response = resp, timestamp = 1000L)
+
+        sessionRepository.emitInterceptions(listOf(event))
+        assertEquals("ev-3", viewModel.uiState.value.activeEvent?.id)
+
+        val modifiedResp = HttpResponse(statusCode = 201, statusText = "Created", headers = emptyList(), body = null, timestamp = 1000L)
+        viewModel.forwardResponse("ev-3", modifiedResp)
+
+        assertEquals("ev-3", sessionRepository.lastForwardedResponseId)
+        assertEquals(0, viewModel.uiState.value.activeEvents.size)
+        assertNull(viewModel.uiState.value.activeEvent)
     }
 }

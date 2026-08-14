@@ -28,7 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.devuloopers.knet.engine.interceptor.BreakpointPhase
+import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.ui.core.components.switch.KNetSwitch
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme

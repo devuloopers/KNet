@@ -1,7 +1,7 @@
 package com.devuloopers.knet.engine.interceptor
 
+import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.RuleModel
-import com.devuloopers.knet.domain.rules.model.RuleType
 import kotlin.system.measureTimeMillis
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -19,7 +19,7 @@ class PerformanceRegressionTest {
     fun testBreakpointMatcherPerformanceWithMultipleRules() {
         repeat(100) { i ->
             BreakpointRuleRegistry.addRule(
-                RuleModel("b-$i", "b-$i", RuleType.REQUEST, ".*api-$i\\.example\\.com.*", "GET")
+                RuleModel("b-$i", "b-$i", BreakpointPhase.REQUEST, ".*api-$i\\.example\\.com.*", "GET")
             )
         }
 

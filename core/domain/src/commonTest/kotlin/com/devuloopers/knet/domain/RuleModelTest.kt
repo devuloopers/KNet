@@ -1,7 +1,7 @@
 package com.devuloopers.knet.domain
 
+import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.RuleModel
-import com.devuloopers.knet.domain.rules.model.RuleType
 import com.devuloopers.knet.domain.rules.model.RulesIntent
 import com.devuloopers.knet.domain.rules.model.RulesUiState
 import kotlin.test.Test
@@ -15,14 +15,14 @@ class RuleModelTest {
     fun testRuleModelDefaults() {
         val rule = RuleModel(
             name = "Rewrite Auth Header",
-            type = RuleType.REQUEST,
+            type = BreakpointPhase.REQUEST,
             condition = "url CONTAINS '/api/'",
             action = "Add Header"
         )
 
         assertEquals("", rule.id)
         assertEquals("Rewrite Auth Header", rule.name)
-        assertEquals(RuleType.REQUEST, rule.type)
+        assertEquals(BreakpointPhase.REQUEST, rule.type)
         assertEquals("url CONTAINS '/api/'", rule.condition)
         assertEquals("Add Header", rule.action)
         assertTrue(rule.enabled)

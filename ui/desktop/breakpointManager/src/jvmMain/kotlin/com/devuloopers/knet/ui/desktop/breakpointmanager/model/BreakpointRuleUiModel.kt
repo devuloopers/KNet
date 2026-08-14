@@ -1,8 +1,8 @@
 package com.devuloopers.knet.ui.desktop.breakpointmanager.model
 
 import com.devuloopers.knet.domain.collection.model.HttpMethod
+import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria
-import com.devuloopers.knet.engine.interceptor.BreakpointPhase
 
 /**
  * Presentation UI model for a breakpoint interception rule.

@@ -107,6 +107,13 @@ class TrafficViewModel(
             }
         }
 
+        // Reactively observe active breakpoint rules from domain UseCase
+        observeRulesUseCase()
+            .onEach { rules ->
+                _uiState.update { it.copy(activeBreakpointRules = rules) }
+            }
+            .launchIn(viewModelScope)
+
         // Reactive Dynamic Proxy Port Re-binding via flatMapLatest
         viewModelScope.launch {
             _isCapturing.flatMapLatest { isCapturing ->
@@ -494,7 +501,7 @@ class TrafficViewModel(
         val prefilledModel = RuleModel(
             id = Uuid.random().toString(),
             name = ruleUrl,
-            type = com.devuloopers.knet.domain.rules.model.RuleType.BOTH,
+            type = com.devuloopers.knet.domain.rules.model.BreakpointPhase.BOTH,
             condition = ruleUrl,
             action = item.method,
             enabled = true,
@@ -522,7 +529,7 @@ class TrafficViewModel(
     fun saveBreakpointRule(
         urlPattern: String,
         method: com.devuloopers.knet.domain.collection.model.HttpMethod?,
-        phaseType: com.devuloopers.knet.domain.rules.model.RuleType,
+        phaseType: com.devuloopers.knet.domain.rules.model.BreakpointPhase,
         enabled: Boolean,
         protocolCriteria: com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria
     ) {

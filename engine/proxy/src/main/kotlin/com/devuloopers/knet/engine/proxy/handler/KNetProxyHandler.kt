@@ -46,6 +46,7 @@ class KNetProxyHandler(
         private val PORT_ATTR = AttributeKey.valueOf<Int>("knet.port")
         private val SSL_ATTR = AttributeKey.valueOf<Boolean>("knet.ssl")
         private val TX_ID_ATTR = AttributeKey.valueOf<String>("knet.txId")
+        private val REQUEST_ATTR = AttributeKey.valueOf<com.devuloopers.knet.domain.clientNetwork.model.HttpRequest>("knet.request")
     }
 
     override fun channelActive(context: ChannelHandlerContext) {
@@ -85,8 +86,8 @@ class KNetProxyHandler(
                 val sslContext = SslContextBuilder.forServer(leaf.keyPair.private, leaf.certificate).build()
 
                 pipeline.addFirst("ssl", sslContext.newHandler(context.alloc()))
-                pipeline.addBefore("proxyHandler", "httpCodec", HttpServerCodec())
-                pipeline.addBefore("proxyHandler", "httpAggregator", HttpObjectAggregator(10 * 1024 * 1024))
+                pipeline.addAfter("ssl", "httpCodec", HttpServerCodec())
+                pipeline.addAfter("httpCodec", "httpAggregator", HttpObjectAggregator(10 * 1024 * 1024))
             } else {
                 context.close()
             }
@@ -145,8 +146,13 @@ class KNetProxyHandler(
             request.uri()
         }
 
-        val mappedRequest = HttpMapper.mapRequest(request, isSsl, targetHost, targetPort, relativeUri)
-        KNetLogger.info(TAG) { "KNet Proxy Intercepted: ${mappedRequest.method} ${mappedRequest.url}" }
+        val taggedReq = context.channel().attr(REQUEST_ATTR).get()
+        val mappedRequest = if (taggedReq != null && taggedReq.isIntercepted) {
+            taggedReq
+        } else {
+            HttpMapper.mapRequest(request, isSsl, targetHost, targetPort, relativeUri)
+        }
+        KNetLogger.info(TAG) { "Captured request: ${mappedRequest.method} ${mappedRequest.url}" }
         listener?.onRequestCaptured(mappedRequest)
 
         val outboundRequest = DefaultFullHttpRequest(

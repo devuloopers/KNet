@@ -1,7 +1,7 @@
 package com.devuloopers.knet.engine.interceptor
 
+import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.RuleModel
-import com.devuloopers.knet.domain.rules.model.RuleType
 import com.devuloopers.knet.domain.rules.model.matchesTransaction
 import kotlin.test.Test
 import kotlin.test.assertFalse
@@ -16,12 +16,12 @@ class BreakpointRuleTest {
             name = "b1",
             condition = ".*api\\.example\\.com.*",
             action = "POST",
-            type = RuleType.REQUEST
+            type = BreakpointPhase.REQUEST
         )
 
-        assertTrue(rule.matchesTransaction("https://api.example.com/v1/users", "POST", RuleType.REQUEST))
-        assertFalse(rule.matchesTransaction("https://api.example.com/v1/users", "GET", RuleType.REQUEST), "Method mismatch must fail")
-        assertFalse(rule.matchesTransaction("https://api.example.com/v1/users", "POST", RuleType.RESPONSE), "Phase mismatch must fail")
+        assertTrue(rule.matchesTransaction("https://api.example.com/v1/users", "POST", BreakpointPhase.REQUEST))
+        assertFalse(rule.matchesTransaction("https://api.example.com/v1/users", "GET", BreakpointPhase.REQUEST), "Method mismatch must fail")
+        assertFalse(rule.matchesTransaction("https://api.example.com/v1/users", "POST", BreakpointPhase.RESPONSE), "Phase mismatch must fail")
     }
 
     @Test
@@ -31,11 +31,11 @@ class BreakpointRuleTest {
             name = "b2",
             condition = "*",
             action = "ALL",
-            type = RuleType.BOTH
+            type = BreakpointPhase.BOTH
         )
 
-        assertTrue(rule.matchesTransaction("https://any.com/test", "GET", RuleType.REQUEST))
-        assertTrue(rule.matchesTransaction("https://any.com/test", "POST", RuleType.RESPONSE))
+        assertTrue(rule.matchesTransaction("https://any.com/test", "GET", BreakpointPhase.REQUEST))
+        assertTrue(rule.matchesTransaction("https://any.com/test", "POST", BreakpointPhase.RESPONSE))
     }
 
     @Test
@@ -47,6 +47,6 @@ class BreakpointRuleTest {
             enabled = false
         )
 
-        assertFalse(rule.matchesTransaction("https://test.com", "GET", RuleType.REQUEST))
+        assertFalse(rule.matchesTransaction("https://test.com", "GET", BreakpointPhase.REQUEST))
     }
 }

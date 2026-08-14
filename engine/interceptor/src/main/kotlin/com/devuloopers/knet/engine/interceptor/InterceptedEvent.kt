@@ -2,6 +2,7 @@ package com.devuloopers.knet.engine.interceptor
 
 import com.devuloopers.knet.domain.clientNetwork.model.HttpRequest
 import com.devuloopers.knet.domain.clientNetwork.model.HttpResponse
+import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import kotlinx.coroutines.CompletableDeferred
 
 /**
