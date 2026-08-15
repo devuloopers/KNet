@@ -3,9 +3,7 @@ package com.devuloopers.knet.data.desktop.di
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.devuloopers.knet.core.http.client.KNetApiClient
 import com.devuloopers.knet.core.http.execution.HttpExecutor
-import com.devuloopers.knet.data.desktop.apistudio.autocomplete.ProxyHistoryHeaderLookup
 import com.devuloopers.knet.data.desktop.apistudio.repository.CollectionsRepositoryImpl
-import com.devuloopers.knet.data.desktop.core.KNetCoreRepository
 import com.devuloopers.knet.data.desktop.inspector.repository.InspectorRepositoryImpl
 import com.devuloopers.knet.data.desktop.network.repository.NetworkRepositoryImpl
 import com.devuloopers.knet.data.desktop.proxy.repository.ProxyEngineRepositoryImpl
@@ -13,7 +11,6 @@ import com.devuloopers.knet.data.desktop.rules.repository.InterceptionSessionRep
 import com.devuloopers.knet.data.desktop.rules.repository.RulesRepositoryImpl
 import com.devuloopers.knet.data.desktop.runtime.CertificateRuntimeRepository
 import com.devuloopers.knet.data.desktop.runtime.ProxyRuntimeRepository
-import com.devuloopers.knet.data.desktop.runtime.SessionRuntimeRepository
 import com.devuloopers.knet.data.desktop.traffic.repository.LiveTrafficRepositoryImpl
 import com.devuloopers.knet.data.desktop.workspace.repository.WidgetPreferencesRepositoryImpl
 import com.devuloopers.knet.domain.clientNetwork.model.ProxyTrafficListener
@@ -92,13 +89,6 @@ object DesktopDataModule {
             )
         }
         single {
-            val baseDir = File(System.getProperty("user.home"), ".knet")
-            SessionRuntimeRepository(get(), baseDir)
-        }
-        single {
-            KNetCoreRepository(get(), get(), get())
-        }
-        single {
             val proxyEngineRepository = get<ProxyEngineRepository>() as ProxyTrafficListener
             KNetApiClient(proxyTrafficListener = proxyEngineRepository)
         }
@@ -132,7 +122,6 @@ object DesktopDataModule {
         single<InterceptionSessionRepository> { InterceptionSessionRepositoryImpl(protocolInspectorRegistry = get()) }
         single<WidgetPreferencesRepository> { WidgetPreferencesRepositoryImpl(get(), get()) }
         single<NetworkRepository> { NetworkRepositoryImpl(get()) }
-        single { ProxyHistoryHeaderLookup(get()) }
     }
 
     val useCases: Module = module {

@@ -76,7 +76,7 @@ public class ImportRequestToStudioUseCase {
                 "/$rawPath"
             } else {
                 val host = pathOrHost.substringBefore("/").substringBefore("?").trim()
-                if (host.isNotBlank()) host else "Untitled Request"
+                host.ifBlank { "Untitled Request" }
             }
         } catch (_: Exception) {
             "Untitled Request"

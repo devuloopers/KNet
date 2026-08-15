@@ -735,6 +735,22 @@ This document serves as the live project tracking board for implementing seamles
   - [x] Add unit test in `KNetApiClientTest`
   - [x] Run full project multi-module test suite (132 tasks, 0 failures)
 
+---
+
+## Phase 51: Data Module Dead Code Cleanup `[COMPLETED]`
+
+- [x] **Phase 1: Remove Obsolete Classes (`:data:desktop`)** `[COMPLETED]`
+  - [x] Remove `KNetCoreRepository.kt`
+  - [x] Remove `SessionRuntimeRepository.kt`
+  - [x] Remove `ProxyHistoryHeaderLookup.kt`
+  - [x] Remove `MigrationRegressionTest.kt`
+- [x] **Phase 2: DI Configuration & Import Cleanup (`:data:desktop`)** `[COMPLETED]`
+  - [x] Remove dead bindings and imports in `DesktopDataModule.kt`
+- [x] **Phase 3: Automated Verification** `[COMPLETED]`
+  - [x] Run `./gradlew :data:desktop:jvmTest` (all passed)
+  - [x] Run full project multi-module test suite (132 tasks, 0 failures)
+
+
 
 
 
