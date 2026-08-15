@@ -1,6 +1,8 @@
 package com.devuloopers.knet.ui.desktop.breakpointmanager.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
@@ -17,7 +19,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.devuloopers.knet.domain.clientNetwork.model.HttpRequest
@@ -43,10 +44,10 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.ResponseBodyState
  * Supports Master-Detail layout with an animated left Queue Sidebar when multiple transactions are waiting,
  * and reuses `:ui:desktop:httpPanel` editors with [FORWARD], [DROP], and [DISABLE RULE] controls.
  *
- * @param events The full list of active in-flight suspended transactions.
- * @param activeEvent The currently focused transaction being displayed and edited in the drawer.
- * @param isVisible True if the drawer should slide in.
- * @param onSelectEvent Callback when an item in the queue sidebar is clicked to focus it.
+ * @param events List of currently waiting intercepted transactions in the queue.
+ * @param activeEvent The currently selected active transaction being inspected and edited.
+ * @param isVisible Whether the drawer should be shown.
+ * @param onSelectEvent Callback when selecting an item from the queue sidebar.
  * @param onDropItem Callback when an individual item's drop button is clicked in the queue sidebar.
  * @param onDropAll Callback when the bulk "Drop All" button is clicked.
  * @param onForwardRequest Callback when forwarding a request with modifications.
@@ -76,39 +77,60 @@ fun LiveInterceptDrawer(
 
     val drawerWidth = 880.dp
 
+    // Retain the last active event and non-empty queue snapshot so that during the slide-out
+    // exit animation, Compose continues to render the full drawer UI smoothly without an abrupt 0x0 collapse.
+    var lastActiveEvent by remember { mutableStateOf(activeEvent) }
+    if (activeEvent != null) {
+        lastActiveEvent = activeEvent
+    }
+
+    var lastEvents by remember { mutableStateOf(events) }
+    if (events.isNotEmpty()) {
+        lastEvents = events
+    }
+
+    val currentActiveEvent = activeEvent ?: lastActiveEvent
+    val currentEvents = events.ifEmpty { lastEvents }
+
     AnimatedVisibility(
         visible = isVisible && activeEvent != null,
-        enter = slideInHorizontally(initialOffsetX = { fullWidth -> fullWidth }),
-        exit = slideOutHorizontally(targetOffsetX = { fullWidth -> fullWidth }),
+        enter = slideInHorizontally(
+            initialOffsetX = { fullWidth -> fullWidth },
+            animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing)
+        ),
+        exit = slideOutHorizontally(
+            targetOffsetX = { fullWidth -> fullWidth },
+            animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing)
+        ),
         modifier = modifier
     ) {
-        if (activeEvent == null) return@AnimatedVisibility
+        val eventToRender = currentActiveEvent ?: return@AnimatedVisibility
 
-        var editedReqHeaders by remember(activeEvent.id) {
-            mutableStateOf(activeEvent.request.headers)
+        var editedReqHeaders by remember(eventToRender.id) {
+            mutableStateOf(eventToRender.request.headers)
         }
-        var reqBodyState by remember(activeEvent.id) {
-            val rawBodyText = decodeBodyToText(activeEvent.request.body, activeEvent.request.headers)
-            mutableStateOf(RequestBodyState.fromPayload(activeEvent.request.headers, rawBodyText))
+        var reqBodyState by remember(eventToRender.id) {
+            val rawBodyText = decodeBodyToText(eventToRender.request.body, eventToRender.request.headers)
+            mutableStateOf(RequestBodyState.fromPayload(eventToRender.request.headers, rawBodyText))
         }
-        var activeReqSubTab by remember(activeEvent.id) {
+        var activeReqSubTab by remember(eventToRender.id) {
             mutableStateOf(InspectorSubTab.BODY)
         }
 
-        var editedStatusCode by remember(activeEvent.id) {
-            mutableStateOf(activeEvent.response?.statusCode ?: 200)
+        var editedStatusCode by remember(eventToRender.id) {
+            mutableStateOf(eventToRender.response?.statusCode ?: 200)
         }
-        var editedStatusText by remember(activeEvent.id) {
-            mutableStateOf(activeEvent.response?.statusText ?: "OK")
+        var editedStatusText by remember(eventToRender.id) {
+            mutableStateOf(eventToRender.response?.statusText ?: "OK")
         }
-        var editedRespHeaders by remember(activeEvent.id) {
-            mutableStateOf(activeEvent.response?.headers ?: emptyList())
+        var editedRespHeaders by remember(eventToRender.id) {
+            mutableStateOf(eventToRender.response?.headers ?: emptyList())
         }
-        var respBodyState by remember(activeEvent.id) {
-            val rawBodyText = decodeBodyToText(activeEvent.response?.body, activeEvent.response?.headers ?: emptyList())
-            mutableStateOf(ResponseBodyState.fromPayload(activeEvent.response?.headers ?: emptyList(), rawBodyText))
+        var respBodyState by remember(eventToRender.id) {
+            val rawBodyText = decodeBodyToText(eventToRender.response?.body, eventToRender.response?.headers ?: emptyList())
+            mutableStateOf(ResponseBodyState.fromPayload(eventToRender.response?.headers ?: emptyList(), rawBodyText))
         }
-        var activeRespSubTab by remember(activeEvent.id) {
+        var activeRespSubTab by remember(eventToRender.id) {
             mutableStateOf(InspectorSubTab.BODY)
         }
 
@@ -122,8 +144,8 @@ fun LiveInterceptDrawer(
             Row(modifier = Modifier.fillMaxSize()) {
                 // Left Queue Sidebar (always visible in Master-Detail layout)
                 InterceptQueueSidebar(
-                    events = events,
-                    selectedEventId = activeEvent.id,
+                    events = currentEvents,
+                    selectedEventId = eventToRender.id,
                     onSelectEvent = onSelectEvent,
                     onDropItem = onDropItem,
                     onDropAll = onDropAll
@@ -173,7 +195,7 @@ fun LiveInterceptDrawer(
                                 }
 
                                 // Intercept Phase Badge
-                                val isRequestPhase = activeEvent.phase == BreakpointPhase.REQUEST
+                                val isRequestPhase = eventToRender.phase == BreakpointPhase.REQUEST
                                 val phaseColor = if (isRequestPhase) themeColors.semantic.info else themeColors.semantic.success
                                 val phaseLabel = if (isRequestPhase) "REQUEST INTERCEPT" else "RESPONSE INTERCEPT"
 
@@ -194,10 +216,10 @@ fun LiveInterceptDrawer(
                                 }
 
                                 // Protocol / Payload Badge
-                                val contentTypeHeader = activeEvent.response?.headers?.firstOrNull { it.first.equals("Content-Type", ignoreCase = true) }?.second
-                                    ?: activeEvent.request.headers.firstOrNull { it.first.equals("Content-Type", ignoreCase = true) }?.second
+                                val contentTypeHeader = eventToRender.response?.headers?.firstOrNull { it.first.equals("Content-Type", ignoreCase = true) }?.second
+                                    ?: eventToRender.request.headers.firstOrNull { it.first.equals("Content-Type", ignoreCase = true) }?.second
 
-                                val (protocolHeaderLabel, protocolHeaderColor) = when (val meta = activeEvent.metadata) {
+                                val (protocolHeaderLabel, protocolHeaderColor) = when (val meta = eventToRender.metadata) {
                                     is InterceptionMetadata.GraphQL -> {
                                         val op = if (!meta.operationName.isNullOrBlank()) "${meta.operationName} (${meta.operationType})" else meta.operationType
                                         "GRAPHQL: $op" to Color(0xFFCBA6F7)
@@ -245,7 +267,7 @@ fun LiveInterceptDrawer(
                         }
 
                         // Tier 2: Standardized EndpointCard with Full URL, HTTP Method, and Copy Action
-                        val methodColor = when (activeEvent.method.uppercase()) {
+                        val methodColor = when (eventToRender.method.uppercase()) {
                             "GET" -> themeColors.semantic.success
                             "POST" -> themeColors.semantic.info
                             "PUT" -> themeColors.semantic.warning
@@ -254,8 +276,8 @@ fun LiveInterceptDrawer(
                         }
 
                         EndpointCard(
-                            method = activeEvent.method,
-                            endpoint = activeEvent.url,
+                            method = eventToRender.method,
+                            endpoint = eventToRender.url,
                             methodColor = methodColor,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -272,7 +294,7 @@ fun LiveInterceptDrawer(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         // Dynamic Forward Button
-                        val isRequestPhase = activeEvent.phase == BreakpointPhase.REQUEST
+                        val isRequestPhase = eventToRender.phase == BreakpointPhase.REQUEST
                         val forwardLabel = if (isRequestPhase) "FORWARD REQUEST" else "FORWARD RESPONSE"
 
                         KNetButton(
@@ -282,15 +304,15 @@ fun LiveInterceptDrawer(
                                         it.first.equals("Content-Encoding", ignoreCase = true)
                                     }
                                     val modifiedReq = HttpRequest(
-                                        id = activeEvent.request.id,
-                                        method = activeEvent.request.method,
-                                        url = activeEvent.request.url,
-                                        protocol = activeEvent.request.protocol,
+                                        id = eventToRender.request.id,
+                                        method = eventToRender.request.method,
+                                        url = eventToRender.request.url,
+                                        protocol = eventToRender.request.protocol,
                                         headers = headersToForward,
                                         body = reqBodyState.payloadText.encodeToByteArray(),
-                                        timestamp = activeEvent.request.timestamp,
+                                        timestamp = eventToRender.request.timestamp,
                                         isIntercepted = true,
-                                        matchedRuleId = activeEvent.request.matchedRuleId
+                                        matchedRuleId = eventToRender.request.matchedRuleId
                                     )
                                     onForwardRequest(modifiedReq)
                                 } else {
@@ -302,7 +324,7 @@ fun LiveInterceptDrawer(
                                         statusText = editedStatusText,
                                         headers = headersToForward,
                                         body = respBodyState.payloadText.encodeToByteArray(),
-                                        timestamp = activeEvent.response?.timestamp ?: System.currentTimeMillis()
+                                        timestamp = eventToRender.response?.timestamp ?: System.currentTimeMillis()
                                     )
                                     onForwardResponse(modifiedResp)
                                 }
@@ -335,7 +357,7 @@ fun LiveInterceptDrawer(
                             .weight(1f)
                             .fillMaxWidth()
                     ) {
-                        if (activeEvent.phase == BreakpointPhase.REQUEST || activeEvent.phase == BreakpointPhase.BOTH) {
+                        if (eventToRender.phase == BreakpointPhase.REQUEST || eventToRender.phase == BreakpointPhase.BOTH) {
                             RequestEditorPanel(
                                 bodyState = reqBodyState,
                                 headers = editedReqHeaders,

@@ -97,6 +97,14 @@ class ApiStudioExecutionPipelineE2ETest {
         }
 
         val (getLayoutUseCase, saveLayoutUseCase) = createTestLayoutUseCases()
+        val fakeInterceptionRepo = object : com.devuloopers.knet.domain.rules.repository.InterceptionSessionRepository {
+            override val activeInterceptions = kotlinx.coroutines.flow.emptyFlow<List<com.devuloopers.knet.domain.rules.model.InterceptedTransaction>>()
+            override suspend fun forwardRequest(transactionId: String, modifiedRequest: com.devuloopers.knet.domain.clientNetwork.model.HttpRequest) {}
+            override suspend fun forwardResponse(transactionId: String, modifiedResponse: com.devuloopers.knet.domain.clientNetwork.model.HttpResponse) {}
+            override suspend fun dropTransaction(transactionId: String) {}
+            override suspend fun dropMatching(url: String, method: String) {}
+            override suspend fun clearAll() {}
+        }
 
         return ApiStudioViewModel(
             executeScriptedUseCase = com.devuloopers.knet.ui.desktop.apistudio.usecase.ExecuteScriptedApiRequestUseCase(
@@ -108,6 +116,7 @@ class ApiStudioExecutionPipelineE2ETest {
             getWorkspaceLayoutUseCase = getLayoutUseCase,
             saveWorkspaceLayoutUseCase = saveLayoutUseCase,
             importRequestToStudioUseCase = com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCase(),
+            dropInterceptedTransactionUseCase = com.devuloopers.knet.domain.rules.usecase.DropInterceptedTransactionUseCase(fakeInterceptionRepo),
             ioDispatcher = testDispatcher
         )
     }

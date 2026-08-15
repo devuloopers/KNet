@@ -674,6 +674,35 @@ This document serves as the live project tracking board for implementing seamles
 - [x] **Phase 4: Full Multi-Module Verification & Zero Regression** `[COMPLETED]`
   - [x] Run test suites across `:engine:proxy`, `:engine:interceptor`, and workspace integration tests (118 tasks, 0 failures)
 
+---
+
+## Phase 47: Live Intercept Drawer Smooth Slide-Out Exit Animation `[COMPLETED]`
+
+- [x] **Phase 1: Cached Transition State in LiveInterceptDrawer (`:ui:desktop:breakpointManager`)** `[COMPLETED]`
+  - [x] Retain last active event and last events queue to prevent 0x0 empty composition during AnimatedVisibility exit
+  - [x] Configure 250ms `FastOutSlowInEasing` animation specs on `slideInHorizontally` and `slideOutHorizontally`
+- [x] **Phase 2: Full UI Test Verification & Regression Testing** `[COMPLETED]`
+  - [x] Execute tests in `:ui:desktop:breakpointManager`, `:ui:desktop:app`, and `:apps:desktop` (117 tasks, 0 failures)
+
+---
+
+## Phase 48: API Studio Cancellation & Interceptor Auto-Closure Synchronization `[COMPLETED]`
+
+- [x] **Phase 1: Engine & Domain Interception Session Lookup & Drop (`:engine:interceptor`, `:core:domain`, `:data:desktop`)** `[COMPLETED]`
+  - [x] Enhance `InterceptSessionManager.resume` to match by both `id` and `request.id`
+  - [x] Add `InterceptSessionManager.dropMatching(url, method)`
+  - [x] Add `dropMatching(url, method)` to `InterceptionSessionRepository`, `InterceptionSessionRepositoryImpl`, and `DropInterceptedTransactionUseCase`
+- [x] **Phase 2: API Studio ViewModel Cancellation & Timeout Coordination (`:ui:desktop:apistudio`)** `[COMPLETED]`
+  - [x] Inject `DropInterceptedTransactionUseCase` into `ApiStudioViewModel` and register in `ApiStudioModule`
+  - [x] Track `executionJob` and add `cancelExecution()` in `ApiStudioViewModel`
+  - [x] Trigger `dropInterceptedTransactionUseCase` on timeout, cancellation, or error in `executeRequest()`
+  - [x] Add `onCancelClicked` handling in `RequestUrlBar` and `ApiStudioScreen`
+- [x] **Phase 3: Automated Multi-Module Test Suite Verification** `[COMPLETED]`
+  - [x] Update `ApiStudioViewModelTest` and `ApiStudioExecutionPipelineE2ETest`
+  - [x] Run full test suites across `:ui:desktop:apistudio`, `:data:desktop`, `:engine:interceptor`, and `:apps:desktop` (132 tasks, 0 failures)
+
+
+
 
 
 

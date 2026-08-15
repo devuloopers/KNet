@@ -75,23 +75,46 @@ object InterceptSessionManager {
 
     /**
      * Resumes a suspended connection event by atomically removing it from the queue and resolving its deferred handle.
+     * Matches by either the suspension event's internal [eventId] or the underlying request's transaction ID.
      *
-     * @param eventId Unique identifier of the suspension event.
+     * @param eventId Unique identifier of the suspension event or request transaction ID.
      * @param result Interception resolution outcome ([InterceptResult.Resume], [InterceptResult.Drop], or [InterceptResult.Timeout]).
      * @return True if the event was found and its deferred handle completed; false if already completed or expired.
      */
     fun resume(eventId: String, result: InterceptResult): Boolean {
         var targetEvent: InterceptedEvent? = null
         _activeEventsStream.update { currentList ->
-            val found = currentList.find { it.id == eventId }
+            val found = currentList.find { it.id == eventId || it.request.id == eventId }
             if (found != null) {
                 targetEvent = found
-                currentList.filterNot { it.id == eventId }
+                currentList.filterNot { it.id == found.id }
             } else {
                 currentList
             }
         }
         return targetEvent?.deferred?.complete(result) ?: false
+    }
+
+    /**
+     * Atomically drops and removes any active suspension events matching the specified [url] and [method].
+     *
+     * @param url Target HTTP request URL to match against.
+     * @param method HTTP method (e.g. GET, POST).
+     * @return True if at least one matching suspension event was found and dropped; false otherwise.
+     */
+    fun dropMatching(url: String, method: String): Boolean {
+        var droppedEvents: List<InterceptedEvent> = emptyList()
+        _activeEventsStream.update { currentList ->
+            val matches = currentList.filter { event ->
+                event.url.equals(url, ignoreCase = true) && event.method.equals(method, ignoreCase = true)
+            }
+            droppedEvents = matches
+            currentList.filterNot { it in matches }
+        }
+        droppedEvents.forEach { event ->
+            event.deferred.complete(InterceptResult.Drop)
+        }
+        return droppedEvents.isNotEmpty()
     }
 
     /**

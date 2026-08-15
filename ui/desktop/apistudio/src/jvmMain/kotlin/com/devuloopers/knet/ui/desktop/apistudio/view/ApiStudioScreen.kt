@@ -248,6 +248,9 @@ public fun ApiStudioScreen(
                             onSendClicked = {
                                 viewModel?.executeRequest()
                             },
+                            onCancelClicked = {
+                                viewModel?.cancelExecution()
+                            },
                             onSaveClicked = {
                                 collectionsViewModel?.openSaveDialog()
                             },

@@ -3,8 +3,6 @@ package com.devuloopers.knet.data.desktop.rules.repository
 import com.devuloopers.knet.domain.clientNetwork.model.HttpRequest
 import com.devuloopers.knet.domain.clientNetwork.model.HttpResponse
 import com.devuloopers.knet.domain.protocol.inspector.registry.ProtocolInspectorRegistry
-import com.devuloopers.knet.domain.protocol.model.InterceptionMetadata
-import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.InterceptedTransaction
 import com.devuloopers.knet.domain.rules.repository.InterceptionSessionRepository
 import com.devuloopers.knet.engine.interceptor.InterceptResult
@@ -21,9 +19,13 @@ import kotlinx.coroutines.flow.map
  * @param sessionManager Netty in-memory interception manager holding active suspensions.
  * @param protocolInspectorRegistry Registry of protocol inspectors for rich metadata extraction.
  */
-public class InterceptionSessionRepositoryImpl(
+class InterceptionSessionRepositoryImpl(
     private val sessionManager: InterceptSessionManager = InterceptSessionManager,
-    private val protocolInspectorRegistry: ProtocolInspectorRegistry = ProtocolInspectorRegistry(listOf(GraphQLProtocolInspector()))
+    private val protocolInspectorRegistry: ProtocolInspectorRegistry = ProtocolInspectorRegistry(
+        listOf(
+            GraphQLProtocolInspector()
+        )
+    )
 ) : InterceptionSessionRepository {
 
     override val activeInterceptions: Flow<List<InterceptedTransaction>> =
@@ -41,6 +43,10 @@ public class InterceptionSessionRepositoryImpl(
 
     override suspend fun dropTransaction(transactionId: String) {
         sessionManager.resume(transactionId, InterceptResult.Drop)
+    }
+
+    override suspend fun dropMatching(url: String, method: String) {
+        sessionManager.dropMatching(url, method)
     }
 
     override suspend fun clearAll() {

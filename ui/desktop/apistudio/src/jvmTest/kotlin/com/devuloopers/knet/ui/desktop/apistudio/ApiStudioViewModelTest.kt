@@ -104,13 +104,33 @@ fun createTestLayoutUseCases(
 }
 
 
+private class FakeTestInterceptionSessionRepository : com.devuloopers.knet.domain.rules.repository.InterceptionSessionRepository {
+    var droppedTransactionId: String? = null
+    var droppedUrl: String? = null
+    var droppedMethod: String? = null
+
+    override val activeInterceptions = kotlinx.coroutines.flow.emptyFlow<List<com.devuloopers.knet.domain.rules.model.InterceptedTransaction>>()
+    override suspend fun forwardRequest(transactionId: String, modifiedRequest: com.devuloopers.knet.domain.clientNetwork.model.HttpRequest) {}
+    override suspend fun forwardResponse(transactionId: String, modifiedResponse: com.devuloopers.knet.domain.clientNetwork.model.HttpResponse) {}
+    override suspend fun dropTransaction(transactionId: String) {
+        droppedTransactionId = transactionId
+    }
+    override suspend fun dropMatching(url: String, method: String) {
+        droppedUrl = url
+        droppedMethod = method
+    }
+    override suspend fun clearAll() {}
+}
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class ApiStudioViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
+    private val fakeInterceptionRepo = FakeTestInterceptionSessionRepository()
 
     private fun createTestViewModel(
-        executeUseCase: ExecuteClientApiRequestUseCase
+        executeUseCase: ExecuteClientApiRequestUseCase,
+        interceptionRepo: com.devuloopers.knet.domain.rules.repository.InterceptionSessionRepository = fakeInterceptionRepo
     ): ApiStudioViewModel {
         val (getLayoutUseCase, saveLayoutUseCase) = createTestLayoutUseCases()
         return ApiStudioViewModel(
@@ -123,6 +143,7 @@ class ApiStudioViewModelTest {
             getWorkspaceLayoutUseCase = getLayoutUseCase,
             saveWorkspaceLayoutUseCase = saveLayoutUseCase,
             importRequestToStudioUseCase = com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCase(),
+            dropInterceptedTransactionUseCase = com.devuloopers.knet.domain.rules.usecase.DropInterceptedTransactionUseCase(interceptionRepo),
             ioDispatcher = testDispatcher
         )
     }
@@ -504,5 +525,72 @@ class ApiStudioViewModelTest {
 
         val state = viewModel.uiState.value.editorState
         assertEquals(com.devuloopers.knet.engine.script.api.ScriptLanguage.KOTLIN, state.scriptLanguage)
+    }
+
+    @Test
+    fun `cancelExecution resets executionState to IDLE and invokes dropInterceptedTransactionUseCase`() = runTest {
+        val testExecutor = TestHttpExecutor()
+        val customInterceptionRepo = FakeTestInterceptionSessionRepository()
+        val viewModel = createTestViewModel(
+            executeUseCase = ExecuteClientApiRequestUseCase(testExecutor),
+            interceptionRepo = customInterceptionRepo
+        )
+
+        viewModel.updateUrl("https://api.example.com/cancel-test")
+        viewModel.updateMethod("POST")
+
+        // Trigger cancel
+        viewModel.cancelExecution()
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(ExecutionState.IDLE, viewModel.uiState.value.executionState)
+        assertEquals("https://api.example.com/cancel-test", customInterceptionRepo.droppedUrl)
+        assertEquals("POST", customInterceptionRepo.droppedMethod)
+    }
+
+    @Test
+    fun `executeRequest failure triggers dropInterceptedTransactionUseCase for interception cleanup`() = runTest {
+        val failingExecutor = object : HttpExecutor {
+            override suspend fun execute(
+                url: String,
+                method: HttpMethod,
+                customMethod: String?,
+                headers: Map<String, String>,
+                body: String,
+                bodyType: RequestBodyType,
+                formParameters: Map<String, String>,
+                auth: ApiRequestAuth,
+                proxyPort: Int?
+            ): ExecutionResult {
+                return ExecutionResult(
+                    statusCode = 0,
+                    statusText = "Timeout",
+                    headers = emptyMap(),
+                    responseBody = "",
+                    latencyMs = 10000L,
+                    responseSizeBytes = 0L,
+                    isSuccess = false,
+                    errorMessage = "Request timeout has expired"
+                )
+            }
+
+            override fun close() {}
+        }
+
+        val customInterceptionRepo = FakeTestInterceptionSessionRepository()
+        val viewModel = createTestViewModel(
+            executeUseCase = ExecuteClientApiRequestUseCase(failingExecutor),
+            interceptionRepo = customInterceptionRepo
+        )
+
+        viewModel.updateUrl("https://api.example.com/timeout-test")
+        viewModel.updateMethod("GET")
+
+        viewModel.executeRequest()
+        testScheduler.advanceUntilIdle()
+
+        assertEquals(ExecutionState.ERROR, viewModel.uiState.value.executionState)
+        assertEquals("https://api.example.com/timeout-test", customInterceptionRepo.droppedUrl)
+        assertEquals("GET", customInterceptionRepo.droppedMethod)
     }
 }

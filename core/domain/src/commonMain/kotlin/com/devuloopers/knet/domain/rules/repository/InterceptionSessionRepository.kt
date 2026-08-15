@@ -40,6 +40,14 @@ public interface InterceptionSessionRepository {
     suspend fun dropTransaction(transactionId: String)
 
     /**
+     * Drops and closes any active in-flight suspensions matching the specified [url] and [method].
+     *
+     * @param url Target HTTP request URL to match against.
+     * @param method HTTP method (e.g. GET, POST).
+     */
+    suspend fun dropMatching(url: String, method: String)
+
+    /**
      * Drops and clears all active in-flight suspensions immediately.
      */
     suspend fun clearAll()

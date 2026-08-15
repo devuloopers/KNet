@@ -4,11 +4,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCase
 import com.devuloopers.knet.domain.clientNetwork.model.MimeType
-import com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType
 import com.devuloopers.knet.domain.network.mapper.NetworkSpecMappers.sanitizeTransportHeaders
 import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
 import com.devuloopers.knet.domain.proxy.model.ProxyEngineState
 import com.devuloopers.knet.domain.proxy.usecase.ObserveProxyEngineStateUseCase
+import com.devuloopers.knet.domain.rules.usecase.DropInterceptedTransactionUseCase
 import com.devuloopers.knet.domain.util.UrlQueryStringParser
 import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
 import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
@@ -23,6 +23,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyState
 import com.devuloopers.knet.ui.desktop.httppanel.usecase.SyncBodyStateUseCase
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -30,18 +31,17 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.uuid.Uuid
 
 /**
- * Clean ViewModel managing UDF state for HTTP API request authoring, execution, and response inspection.
+ * Single Source of Truth (SSOT) ViewModel driving the entire API Studio UI screen.
  *
- * SRP: Strictly presentation UDF state management. Script execution, network transport,
- * URL query string parsing, and Session serialization are delegated to domain Use Cases and utilities.
- *
- * Collection management & unsaved session tracking is owned by [CollectionsViewModel].
+ * Implements strict Unidirectional Data Flow (UDF) by exposing a single immutable [ApiStudioState]
+ * via [uiState] and providing public intent methods to mutate state.
  *
  * @param executeScriptedUseCase Presentation UseCase for executing scripted HTTP API requests.
  * @param observeProxyEngineStateUseCase Use case for observing live KNet proxy engine state.
  * @param getWorkspaceLayoutUseCase Domain UseCase providing workspace layout settings stream.
  * @param saveWorkspaceLayoutUseCase Domain UseCase persisting updated workspace layout settings.
  * @param importRequestToStudioUseCase Domain UseCase validating and normalizing imported request specs.
+ * @param dropInterceptedTransactionUseCase Domain UseCase for dropping active suspended interception sessions on cancellation or timeout.
  * @param syncBodyStateUseCase Presentation UseCase synchronizing payload mode switching and GraphQL state models.
  * @param autoSaveApiSessionUseCase Presentation UseCase auto-saving request state updates to Room DB.
  * @param ioDispatcher Coroutine dispatcher for background thread dispatching.
@@ -52,6 +52,7 @@ class ApiStudioViewModel(
     private val getWorkspaceLayoutUseCase: GetWorkspaceLayoutUseCase,
     private val saveWorkspaceLayoutUseCase: SaveWorkspaceLayoutUseCase,
     private val importRequestToStudioUseCase: ImportRequestToStudioUseCase,
+    private val dropInterceptedTransactionUseCase: DropInterceptedTransactionUseCase,
     private val syncBodyStateUseCase: SyncBodyStateUseCase? = null,
     private val autoSaveApiSessionUseCase: AutoSaveApiSessionUseCase? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
@@ -63,6 +64,8 @@ class ApiStudioViewModel(
          */
         const val MIN_LOADING_DURATION_MS: Long = 200L
     }
+
+    private var executionJob: Job? = null
 
     private val _uiState = MutableStateFlow(ApiStudioState())
     val uiState: StateFlow<ApiStudioState> = _uiState.asStateFlow()
@@ -502,7 +505,8 @@ class ApiStudioViewModel(
 
         val executionStartTime = System.currentTimeMillis()
 
-        viewModelScope.launch {
+        executionJob?.cancel()
+        executionJob = viewModelScope.launch {
             try {
                 val execTuple = executeScriptedUseCase.execute(
                     editorState = currentEditor,
@@ -523,6 +527,15 @@ class ApiStudioViewModel(
                     failureReason = execTuple.result.failureReason
                 )
 
+                if (!execTuple.result.isSuccess) {
+                    // If the request failed or timed out, notify engine to drop any matching suspended session
+                    try {
+                        dropInterceptedTransactionUseCase.execute(currentEditor.url, currentEditor.method)
+                    } catch (_: Exception) {
+                        // Safe cleanup
+                    }
+                }
+
                 val elapsedMs = System.currentTimeMillis() - executionStartTime
                 if (elapsedMs < MIN_LOADING_DURATION_MS) {
                     delay((MIN_LOADING_DURATION_MS - elapsedMs).milliseconds)
@@ -536,6 +549,13 @@ class ApiStudioViewModel(
                     )
                 }
             } catch (e: Exception) {
+                // Notify engine to drop any active suspended interception session
+                try {
+                    dropInterceptedTransactionUseCase.execute(currentEditor.url, currentEditor.method)
+                } catch (_: Exception) {
+                    // Safe cleanup
+                }
+
                 val elapsedMs = System.currentTimeMillis() - executionStartTime
                 if (elapsedMs < MIN_LOADING_DURATION_MS) {
                     delay((MIN_LOADING_DURATION_MS - elapsedMs).milliseconds)
@@ -547,7 +567,32 @@ class ApiStudioViewModel(
                         errorMessage = e.message ?: "Failed to execute request"
                     )
                 }
+            } finally {
+                executionJob = null
             }
+        }
+    }
+
+    /**
+     * Cancels the active in-flight request execution and notifies the interception engine
+     * to drop any matching suspended breakpoint session, automatically closing the Live Intercept Drawer.
+     */
+    fun cancelExecution() {
+        val currentEditor = _uiState.value.editorState
+        executionJob?.cancel()
+        executionJob = null
+
+        _uiState.update {
+            it.copy(
+                executionState = ExecutionState.IDLE,
+                errorMessage = null
+            )
+        }
+
+        viewModelScope.launch(ioDispatcher) {
+            try {
+                dropInterceptedTransactionUseCase.execute(currentEditor.url, currentEditor.method)
+            } catch (_: Exception) { }
         }
     }
 }

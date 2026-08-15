@@ -186,5 +186,20 @@ class InterceptionSessionRepositoryImplTest {
         assertEquals("GetUserProfile", meta.operationName)
         assertEquals("Query", meta.operationType)
     }
+
+    @Test
+    fun testDropMatchingDropsTargetSuspension() = runTest {
+        val req1 = HttpRequest(id = "tx-match", method = "GET", url = "https://match.com/test", protocol = "HTTP/1.1", headers = emptyList(), body = null, timestamp = 1700000000L)
+        val req2 = HttpRequest(id = "tx-other", method = "POST", url = "https://other.com/test", protocol = "HTTP/1.1", headers = emptyList(), body = null, timestamp = 1700000000L)
+
+        val event1 = InterceptSessionManager.suspendRequest(req1)
+        val event2 = InterceptSessionManager.suspendRequest(req2)
+
+        repository.dropMatching("https://match.com/test", "GET")
+
+        assertTrue(event1.deferred.isCompleted)
+        assertTrue(event1.deferred.getCompleted() is InterceptResult.Drop)
+        assertTrue(!event2.deferred.isCompleted)
+    }
 }
 

@@ -20,6 +20,7 @@ import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 import com.devuloopers.knet.ui.desktop.apistudio.usecase.AutoSaveApiSessionUseCase
 import com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCase
+import com.devuloopers.knet.domain.rules.usecase.DropInterceptedTransactionUseCase
 
 /**
  * Koin Dependency Injection module for `:ui:desktop:apistudio`.
@@ -52,6 +53,7 @@ public val apiStudioUiModule = module {
             getWorkspaceLayoutUseCase = get(),
             saveWorkspaceLayoutUseCase = get(),
             importRequestToStudioUseCase = get(),
+            dropInterceptedTransactionUseCase = get(),
             syncBodyStateUseCase = get(),
             autoSaveApiSessionUseCase = get()
         )

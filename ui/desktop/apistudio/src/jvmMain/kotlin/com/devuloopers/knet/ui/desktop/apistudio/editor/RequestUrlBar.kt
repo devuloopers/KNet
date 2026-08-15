@@ -48,6 +48,8 @@ private val httpMethods = listOf("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"
  * @param onMethodChanged Callback when HTTP method selection changes.
  * @param onUrlChanged Callback when URL text input changes.
  * @param onSendClicked Callback when Send button is clicked.
+ * @param onCancelClicked Callback when Cancel button is clicked during in-flight execution.
+ * @param onSaveClicked Callback when Save button is clicked.
  * @param isExecuting Reactive execution loading toggle (renders inline spinner on Send button).
  * @param modifier Layout modifier.
  */
@@ -58,6 +60,7 @@ public fun RequestUrlBar(
     onMethodChanged: (String) -> Unit,
     onUrlChanged: (String) -> Unit,
     onSendClicked: () -> Unit,
+    onCancelClicked: (() -> Unit)? = null,
     onSaveClicked: () -> Unit = {},
     isExecuting: Boolean = false,
     modifier: Modifier = Modifier
@@ -109,7 +112,11 @@ public fun RequestUrlBar(
                     .fillMaxHeight()
                     .onKeyEvent { keyEvent ->
                         if (keyEvent.type == KeyEventType.KeyDown && (keyEvent.key == Key.Enter || keyEvent.key == Key.NumPadEnter)) {
-                            onSendClicked()
+                            if (isExecuting) {
+                                onCancelClicked?.invoke()
+                            } else {
+                                onSendClicked()
+                            }
                             true
                         } else {
                             false
@@ -144,10 +151,16 @@ public fun RequestUrlBar(
             }
         }
 
-        // Modern Action Send Button using KNetButton with native loading state support
+        // Modern Action Send / Cancel Button using KNetButton with native loading state support
         KNetButton(
-            onClick = onSendClicked,
-            variant = ButtonVariant.Primary,
+            onClick = {
+                if (isExecuting) {
+                    onCancelClicked?.invoke()
+                } else {
+                    onSendClicked()
+                }
+            },
+            variant = if (isExecuting) ButtonVariant.Secondary else ButtonVariant.Primary,
             loading = isExecuting,
             modifier = Modifier.height(40.dp)
         ) {
@@ -157,7 +170,7 @@ public fun RequestUrlBar(
                 modifier = Modifier.padding(horizontal = 8.dp)
             ) {
                 Text(
-                    text = if (isExecuting) "Sending..." else "Send",
+                    text = if (isExecuting) "Cancel" else "Send",
                     style = typography.titleMedium.copy(
                         fontWeight = FontWeight.SemiBold
                     )

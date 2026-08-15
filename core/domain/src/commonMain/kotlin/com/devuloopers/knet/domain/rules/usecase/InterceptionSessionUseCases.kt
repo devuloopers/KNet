@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.Flow
  *
  * @property repository Interception session repository contract.
  */
-public class ObserveActiveInterceptionsUseCase(
+class ObserveActiveInterceptionsUseCase(
     private val repository: InterceptionSessionRepository
 ) {
     /**
@@ -19,14 +19,14 @@ public class ObserveActiveInterceptionsUseCase(
      *
      * @return Flow emitting snapshots of active [InterceptedTransaction] items.
      */
-    public operator fun invoke(): Flow<List<InterceptedTransaction>> {
+    operator fun invoke(): Flow<List<InterceptedTransaction>> {
         return repository.activeInterceptions
     }
 
     /**
      * Explicit execution handle for Java/KMP interop.
      */
-    public fun execute(): Flow<List<InterceptedTransaction>> {
+    fun execute(): Flow<List<InterceptedTransaction>> {
         return repository.activeInterceptions
     }
 }
@@ -36,7 +36,7 @@ public class ObserveActiveInterceptionsUseCase(
  *
  * @property repository Interception session repository contract.
  */
-public class ForwardInterceptedRequestUseCase(
+class ForwardInterceptedRequestUseCase(
     private val repository: InterceptionSessionRepository
 ) {
     /**
@@ -45,14 +45,14 @@ public class ForwardInterceptedRequestUseCase(
      * @param transactionId Unique ID of the suspended interception event.
      * @param modifiedRequest The modified or original [HttpRequest] to send upstream.
      */
-    public suspend operator fun invoke(transactionId: String, modifiedRequest: HttpRequest) {
+    suspend operator fun invoke(transactionId: String, modifiedRequest: HttpRequest) {
         repository.forwardRequest(transactionId, modifiedRequest)
     }
 
     /**
      * Explicit execution handle.
      */
-    public suspend fun execute(transactionId: String, modifiedRequest: HttpRequest) {
+    suspend fun execute(transactionId: String, modifiedRequest: HttpRequest) {
         repository.forwardRequest(transactionId, modifiedRequest)
     }
 }
@@ -62,7 +62,7 @@ public class ForwardInterceptedRequestUseCase(
  *
  * @property repository Interception session repository contract.
  */
-public class ForwardInterceptedResponseUseCase(
+class ForwardInterceptedResponseUseCase(
     private val repository: InterceptionSessionRepository
 ) {
     /**
@@ -71,14 +71,14 @@ public class ForwardInterceptedResponseUseCase(
      * @param transactionId Unique ID of the suspended interception event.
      * @param modifiedResponse The modified or original [HttpResponse] to return to the client.
      */
-    public suspend operator fun invoke(transactionId: String, modifiedResponse: HttpResponse) {
+    suspend operator fun invoke(transactionId: String, modifiedResponse: HttpResponse) {
         repository.forwardResponse(transactionId, modifiedResponse)
     }
 
     /**
      * Explicit execution handle.
      */
-    public suspend fun execute(transactionId: String, modifiedResponse: HttpResponse) {
+    suspend fun execute(transactionId: String, modifiedResponse: HttpResponse) {
         repository.forwardResponse(transactionId, modifiedResponse)
     }
 }
@@ -88,7 +88,7 @@ public class ForwardInterceptedResponseUseCase(
  *
  * @property repository Interception session repository contract.
  */
-public class DropInterceptedTransactionUseCase(
+class DropInterceptedTransactionUseCase(
     private val repository: InterceptionSessionRepository
 ) {
     /**
@@ -96,15 +96,32 @@ public class DropInterceptedTransactionUseCase(
      *
      * @param transactionId Unique ID of the suspended interception event.
      */
-    public suspend operator fun invoke(transactionId: String) {
+    suspend operator fun invoke(transactionId: String) {
         repository.dropTransaction(transactionId)
+    }
+
+    /**
+     * Drops the in-flight connection matching [url] and [method].
+     *
+     * @param url Target HTTP request URL.
+     * @param method HTTP method.
+     */
+    suspend operator fun invoke(url: String, method: String) {
+        repository.dropMatching(url, method)
     }
 
     /**
      * Explicit execution handle.
      */
-    public suspend fun execute(transactionId: String) {
+    suspend fun execute(transactionId: String) {
         repository.dropTransaction(transactionId)
+    }
+
+    /**
+     * Explicit execution handle matching by [url] and [method].
+     */
+    suspend fun execute(url: String, method: String) {
+        repository.dropMatching(url, method)
     }
 }
 
@@ -113,20 +130,20 @@ public class DropInterceptedTransactionUseCase(
  *
  * @property repository Interception session repository contract.
  */
-public class ClearInterceptionSessionsUseCase(
+class ClearInterceptionSessionsUseCase(
     private val repository: InterceptionSessionRepository
 ) {
     /**
      * Drops and clears all active suspensions.
      */
-    public suspend operator fun invoke() {
+    suspend operator fun invoke() {
         repository.clearAll()
     }
 
     /**
      * Explicit execution handle.
      */
-    public suspend fun execute() {
+    suspend fun execute() {
         repository.clearAll()
     }
 }
