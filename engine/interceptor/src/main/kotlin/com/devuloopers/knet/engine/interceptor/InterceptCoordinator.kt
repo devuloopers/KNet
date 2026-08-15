@@ -45,8 +45,6 @@ object InterceptCoordinator {
             } catch (e: Exception) {
                 KNetLogger.error(TAG) { "Exception during request suspension await: ${e.message}" }
                 InterceptResult.Drop
-            } finally {
-                InterceptSessionManager.resume(event.id, InterceptResult.Drop)
             }
 
             try {
@@ -88,6 +86,7 @@ object InterceptCoordinator {
                     }
                     is InterceptResult.Timeout -> {
                         KNetLogger.warn(TAG) { "Request ${request.id} timed out after ${timeoutMs}ms" }
+                        InterceptSessionManager.resume(event.id, InterceptResult.Timeout)
                         listener?.onTransactionDropped(request.id, "Timed Out")
                         ReferenceCountUtil.release(msg)
                         context.channel().config().isAutoRead = true
@@ -125,8 +124,6 @@ object InterceptCoordinator {
             } catch (e: Exception) {
                 KNetLogger.error(TAG) { "Exception during response suspension await: ${e.message}" }
                 InterceptResult.Drop
-            } finally {
-                InterceptSessionManager.resume(event.id, InterceptResult.Drop)
             }
 
             try {
@@ -162,6 +159,7 @@ object InterceptCoordinator {
                     }
                     is InterceptResult.Timeout -> {
                         KNetLogger.warn(TAG) { "Response ${request.id} timed out after ${timeoutMs}ms" }
+                        InterceptSessionManager.resume(event.id, InterceptResult.Timeout)
                         listener?.onTransactionDropped(request.id, "Timed Out")
                         ReferenceCountUtil.release(msg)
                         context.channel().config().isAutoRead = true

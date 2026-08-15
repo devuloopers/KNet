@@ -4,6 +4,7 @@ import com.devuloopers.knet.domain.clientNetwork.model.ProxyTrafficListener
 import com.devuloopers.knet.engine.certificate.CertificateAuthority
 import com.devuloopers.knet.engine.certificate.CertificateCache
 import com.devuloopers.knet.engine.proxy.handler.KNetProxyHandler
+import com.devuloopers.knet.engine.proxy.pipeline.PipelineHandlerNames
 import io.netty.bootstrap.ServerBootstrap
 import io.netty.channel.Channel
 import io.netty.channel.ChannelInitializer
@@ -89,12 +90,18 @@ class KNetProxyServer(
                     activeChannels.add(ch)
                     val pipeline = ch.pipeline()
 
-                    pipeline.addLast("httpCodec", HttpServerCodec())
-                    pipeline.addLast("httpAggregator", HttpObjectAggregator(10 * 1024 * 1024))
+                    pipeline.addLast(PipelineHandlerNames.HTTP_CODEC, HttpServerCodec())
+                    pipeline.addLast(
+                        PipelineHandlerNames.HTTP_AGGREGATOR,
+                        HttpObjectAggregator(PipelineHandlerNames.MAX_CONTENT_LENGTH_BYTES)
+                    )
 
                     pipelineInitializers.forEach { it(pipeline) }
 
-                    pipeline.addLast("proxyHandler", KNetProxyHandler(ca, certCache, listener, keyManagerProvider, proxyScope = scope))
+                    pipeline.addLast(
+                        PipelineHandlerNames.PROXY_HANDLER,
+                        KNetProxyHandler(ca, certCache, listener, keyManagerProvider, proxyScope = scope)
+                    )
                 }
             })
 

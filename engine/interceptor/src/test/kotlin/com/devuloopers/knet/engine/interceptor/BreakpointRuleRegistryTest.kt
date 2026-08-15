@@ -39,4 +39,15 @@ class BreakpointRuleRegistryTest {
         BreakpointRuleRegistry.clearRules()
         assertTrue(BreakpointRuleRegistry.getRules().isEmpty())
     }
+
+    @Test
+    fun testRulesStreamEmission() {
+        val r1 = RuleModel(id = "b1", name = "b1", condition = "*", action = "GET")
+        BreakpointRuleRegistry.addRule(r1)
+        assertEquals(1, BreakpointRuleRegistry.rulesStream.value.size)
+        assertEquals("b1", BreakpointRuleRegistry.rulesStream.value.first().id)
+
+        BreakpointRuleRegistry.removeRule("b1")
+        assertTrue(BreakpointRuleRegistry.rulesStream.value.isEmpty())
+    }
 }

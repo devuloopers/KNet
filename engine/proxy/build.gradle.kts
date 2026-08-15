@@ -6,8 +6,8 @@ dependencies {
     api(project(":core:domain"))
     api(project(":engine:certificate"))
     api(project(":core:logger"))
-    api(project(":core:http"))
     api(libs.netty.all)
+
     implementation(libs.kotlinx.coroutines.core)
 
     testImplementation(kotlin("test-junit"))

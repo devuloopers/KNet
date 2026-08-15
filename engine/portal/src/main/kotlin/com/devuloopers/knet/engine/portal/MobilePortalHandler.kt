@@ -5,7 +5,13 @@ import com.devuloopers.knet.engine.certificate.CertificateAuthority
 import io.netty.buffer.Unpooled
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.SimpleChannelInboundHandler
-import io.netty.handler.codec.http.*
+import io.netty.handler.codec.http.DefaultFullHttpResponse
+import io.netty.handler.codec.http.FullHttpRequest
+import io.netty.handler.codec.http.HttpHeaderNames
+import io.netty.handler.codec.http.HttpHeaderValues
+import io.netty.handler.codec.http.HttpResponseStatus
+import io.netty.handler.codec.http.HttpVersion
+
 import java.net.InetAddress
 import java.net.NetworkInterface
 
@@ -76,11 +82,12 @@ class MobilePortalHandler(
             uri == "/knet-ca.crt" || uri == "/ca" -> {
                 serveCaCertificate(context)
             }
-            uri == "/setup" || uri == "/" || isPortalRequest(uri, request.headers().get(HttpHeaderNames.HOST) ?: "") -> {
+            uri == "/setup" || uri == "/" -> {
                 serveSetupPage(context, request)
             }
             else -> {
-                serveNotFound(context)
+                // All other portal-matching URLs serve the setup onboarding page
+                serveSetupPage(context, request)
             }
         }
     }

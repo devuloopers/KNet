@@ -4,6 +4,7 @@ import java.io.File
 import java.security.MessageDigest
 import java.security.cert.X509Certificate
 import java.util.Locale
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
@@ -44,23 +45,26 @@ object TrustStoreInstaller {
     fun install(caCertificate: X509Certificate): InstallationResult {
         val os = System.getProperty("os.name").lowercase(Locale.ENGLISH)
         val tempCertFile = File.createTempFile("knet_root_ca", ".crt")
-        tempCertFile.deleteOnExit()
 
-        // Write certificate to temporary file in PEM format
-        tempCertFile.writer().use { writer ->
-            writer.write("-----BEGIN CERTIFICATE-----\n")
-            writer.write(Base64.Mime.encode(caCertificate.encoded))
-            writer.write("\n-----END CERTIFICATE-----\n")
-        }
+        return try {
+            // Write certificate to temporary file in PEM format
+            tempCertFile.writer().use { writer ->
+                writer.write("-----BEGIN CERTIFICATE-----\n")
+                writer.write(Base64.Mime.encode(caCertificate.encoded))
+                writer.write("\n-----END CERTIFICATE-----\n")
+            }
 
-        return when {
-            os.contains("win") -> installWindows(tempCertFile)
-            os.contains("mac") -> installMac(tempCertFile)
-            os.contains("nix") || os.contains("nux") || os.contains("aix") -> installLinux(tempCertFile)
-            else -> InstallationResult.Failure(
-                "Unsupported Operating System: $os",
-                "Please manually install the certificate file located at: ${tempCertFile.absolutePath}"
-            )
+            when {
+                os.contains("win") -> installWindows(tempCertFile)
+                os.contains("mac") -> installMac(tempCertFile)
+                os.contains("nix") || os.contains("nux") || os.contains("aix") -> installLinux(tempCertFile)
+                else -> InstallationResult.Failure(
+                    "Unsupported Operating System: $os",
+                    "Please manually install the certificate file located at: ${tempCertFile.absolutePath}"
+                )
+            }
+        } finally {
+            tempCertFile.delete()
         }
     }
 
@@ -89,15 +93,17 @@ object TrustStoreInstaller {
 
     /**
      * Executes a platform trust installation command using [ProcessBuilder], waiting with a timeout,
-     * capturing stdout/stderr streams, and validating the exit code.
+     * capturing merged output asynchronously to prevent pipe deadlocks, and validating the exit code.
      */
     private fun executeCommand(command: Array<String>, suggestedCommand: String): InstallationResult {
         return try {
-            val processBuilder = ProcessBuilder(*command)
+            val processBuilder = ProcessBuilder(*command).redirectErrorStream(true)
             val process = processBuilder.start()
 
-            val stdoutFuture = process.inputStream.bufferedReader().readText()
-            val stderrFuture = process.errorStream.bufferedReader().readText()
+            // Asynchronously read merged stdout and stderr to prevent OS pipe buffer deadlocks on large output
+            val outputFuture = CompletableFuture.supplyAsync {
+                process.inputStream.bufferedReader().readText()
+            }
 
             val completed = process.waitFor(COMMAND_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             if (!completed) {
@@ -108,11 +114,17 @@ object TrustStoreInstaller {
                 )
             }
 
+            val output = try {
+                outputFuture.get(1, TimeUnit.SECONDS)
+            } catch (_: Exception) {
+                ""
+            }
+
             val exitCode = process.exitValue()
             if (exitCode == 0) {
                 InstallationResult.Success
             } else {
-                val errorDetails = stderrFuture.ifBlank { stdoutFuture }
+                val errorDetails = output.ifBlank { "Command failed with exit code $exitCode" }
                 InstallationResult.Failure(
                     "Command failed with exit code $exitCode: $errorDetails",
                     suggestedCommand

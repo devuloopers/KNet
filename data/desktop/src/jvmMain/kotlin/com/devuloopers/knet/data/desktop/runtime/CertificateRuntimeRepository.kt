@@ -5,6 +5,7 @@ import com.devuloopers.knet.engine.certificate.CertificateAuthority
 import com.devuloopers.knet.engine.certificate.CertificateCache
 import com.devuloopers.knet.engine.certificate.InstallationResult
 import com.devuloopers.knet.engine.certificate.TrustStoreInstaller
+import com.devuloopers.knet.engine.certificate.ssl.KNetTrustManagerProvider
 import java.io.File
 
 /**
@@ -22,6 +23,7 @@ class CertificateRuntimeRepository(
     } else {
         val generated = CertificateAuthority.generate()
         generated.saveToPem(caCertFile, caKeyFile)
+        KNetTrustManagerProvider.invalidateCache()
         generated
     }
 
@@ -33,6 +35,9 @@ class CertificateRuntimeRepository(
     fun installRootCa(): Boolean {
         return try {
             val result = TrustStoreInstaller.install(certificateAuthority.certificate)
+            if (result is InstallationResult.Success) {
+                KNetTrustManagerProvider.invalidateCache()
+            }
             result is InstallationResult.Success
         } catch (e: Exception) {
             KNetLogger.error(tag = "CertificateRuntimeRepository", throwable = e) {

@@ -11,26 +11,58 @@ import kotlinx.coroutines.flow.Flow
  * Data Access Object (DAO) defining SQLite database operations for [HttpTransactionEntity].
  */
 @Dao
-public interface HttpTransactionDao {
+interface HttpTransactionDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    public suspend fun insert(transaction: HttpTransactionEntity)
+    suspend fun insert(transaction: HttpTransactionEntity)
 
     @Query("SELECT * FROM HttpTransactionEntity ORDER BY timestamp DESC")
-    public fun getAllTransactionsFlow(): Flow<List<HttpTransactionEntity>>
+    fun getAllTransactionsFlow(): Flow<List<HttpTransactionEntity>>
 
     @Query("SELECT * FROM HttpTransactionEntity WHERE id = :id")
-    public suspend fun getTransactionById(id: String): HttpTransactionEntity?
+    suspend fun getTransactionById(id: String): HttpTransactionEntity?
 
     @Query("DELETE FROM HttpTransactionEntity")
-    public suspend fun clearAll()
+    suspend fun clearAll()
 
     @Query("SELECT COUNT(*) FROM HttpTransactionEntity")
-    public suspend fun getTransactionCount(): Int
+    suspend fun getTransactionCount(): Int
 
     @Query("SELECT * FROM HttpTransactionEntity ORDER BY timestamp ASC LIMIT :count")
-    public suspend fun getOldestTransactions(count: Int): List<HttpTransactionEntity>
+    suspend fun getOldestTransactions(count: Int): List<HttpTransactionEntity>
 
     @Query("DELETE FROM HttpTransactionEntity WHERE id IN (:ids)")
-    public suspend fun deleteTransactionsByIds(ids: List<String>)
+    suspend fun deleteTransactionsByIds(ids: List<String>)
+
+    @Query(
+        """
+        UPDATE HttpTransactionEntity SET
+            responseStatusCode = :statusCode,
+            responseStatusText = :statusText,
+            responseHeadersJson = :responseHeadersJson,
+            responseBodyPath = :responseBodyPath,
+            responseBodySize = :responseBodySize,
+            durationMs = :durationMs,
+            timingDnsMs = :timingDnsMs,
+            timingTcpMs = :timingTcpMs,
+            timingTlsMs = :timingTlsMs,
+            timingTtfbMs = :timingTtfbMs,
+            timingDownloadMs = :timingDownloadMs
+        WHERE id = :id
+    """
+    )
+    suspend fun updateResponse(
+        id: String,
+        statusCode: Int,
+        statusText: String,
+        responseHeadersJson: String?,
+        responseBodyPath: String?,
+        responseBodySize: Long,
+        durationMs: Long,
+        timingDnsMs: Long,
+        timingTcpMs: Long,
+        timingTlsMs: Long,
+        timingTtfbMs: Long,
+        timingDownloadMs: Long
+    )
 }

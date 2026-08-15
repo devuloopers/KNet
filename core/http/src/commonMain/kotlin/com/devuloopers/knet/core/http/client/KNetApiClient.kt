@@ -94,7 +94,6 @@ open class KNetApiClient(
      * @return Configured [HttpClient] instance.
      */
     private fun createHttpClient(targetProxyPort: Int?): HttpClient {
-        val engineFactory = customEngine
         val block: io.ktor.client.HttpClientConfig<*>.() -> Unit = {
             install(HttpTimeout) {
                 requestTimeoutMillis = configuration.timeoutMillis
@@ -109,19 +108,14 @@ open class KNetApiClient(
             followRedirects = configuration.followRedirects
         }
 
-        return if (engineFactory != null) {
-            HttpClient(engineFactory, block)
-        } else {
-            HttpClient(getKNetHttpEngine()) {
-                if (targetProxyPort != null && targetProxyPort > 0) {
-                    engine {
-                        proxy = io.ktor.client.engine.ProxyBuilder.http(Url("http://127.0.0.1:$targetProxyPort"))
-                    }
-                }
-                block()
-            }
-        }
+        return createPlatformHttpClient(
+            targetProxyPort = targetProxyPort,
+            configuration = configuration,
+            customEngine = customEngine,
+            block = block
+        )
     }
+
 
     override suspend fun execute(request: SavedApiRequest): ApiExecutionResult {
         val headersMap = request.headers.filter { it.isEnabled }.associate { it.key to it.value }

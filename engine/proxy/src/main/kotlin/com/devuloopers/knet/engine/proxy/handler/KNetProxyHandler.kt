@@ -8,6 +8,7 @@ import com.devuloopers.knet.engine.proxy.dns.NettyDnsResolver
 import com.devuloopers.knet.engine.proxy.mapper.HttpMapper
 import com.devuloopers.knet.engine.proxy.ssl.ProxyTrustManager
 import com.devuloopers.knet.engine.proxy.timing.NetworkTimingCollector
+import com.devuloopers.knet.engine.proxy.pipeline.PipelineHandlerNames
 import io.netty.bootstrap.Bootstrap
 import io.netty.buffer.Unpooled
 import io.netty.channel.Channel
@@ -16,7 +17,25 @@ import io.netty.channel.ChannelInitializer
 import io.netty.channel.SimpleChannelInboundHandler
 import io.netty.channel.socket.SocketChannel
 import io.netty.channel.socket.nio.NioSocketChannel
-import io.netty.handler.codec.http.*
+import io.netty.handler.codec.http.DefaultFullHttpRequest
+
+import io.netty.handler.codec.http.DefaultFullHttpResponse
+import io.netty.handler.codec.http.FullHttpRequest
+import io.netty.handler.codec.http.FullHttpResponse
+import io.netty.handler.codec.http.HttpClientCodec
+import io.netty.handler.codec.http.HttpContent
+import io.netty.handler.codec.http.HttpHeaderNames
+import io.netty.handler.codec.http.HttpHeaderValues
+import io.netty.handler.codec.http.HttpMethod
+import io.netty.handler.codec.http.HttpObject
+import io.netty.handler.codec.http.HttpObjectAggregator
+import io.netty.handler.codec.http.HttpResponse
+import io.netty.handler.codec.http.HttpResponseStatus
+import io.netty.handler.codec.http.HttpServerCodec
+import io.netty.handler.codec.http.HttpUtil
+import io.netty.handler.codec.http.HttpVersion
+import io.netty.handler.codec.http.LastHttpContent
+
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.util.AttributeKey
 import io.netty.util.ReferenceCountUtil
@@ -80,16 +99,25 @@ class KNetProxyHandler(
         response.headers().set("Proxy-Agent", "KNet")
         context.writeAndFlush(response).addListener { future ->
             if (future.isSuccess) {
-                val pipeline = context.pipeline()
-                pipeline.remove("httpCodec")
-                pipeline.remove("httpAggregator")
+                try {
+                    val pipeline = context.pipeline()
+                    pipeline.remove(PipelineHandlerNames.HTTP_CODEC)
+                    pipeline.remove(PipelineHandlerNames.HTTP_AGGREGATOR)
 
-                val leaf = certCache.get(host, ca)
-                val sslContext = SslContextBuilder.forServer(leaf.keyPair.private, leaf.certificate).build()
+                    val leaf = certCache.get(host, ca)
+                    val sslContext = SslContextBuilder.forServer(leaf.keyPair.private, leaf.certificate).build()
 
-                pipeline.addFirst("ssl", sslContext.newHandler(context.alloc()))
-                pipeline.addAfter("ssl", "httpCodec", HttpServerCodec())
-                pipeline.addAfter("httpCodec", "httpAggregator", HttpObjectAggregator(10 * 1024 * 1024))
+                    pipeline.addFirst(PipelineHandlerNames.SSL, sslContext.newHandler(context.alloc()))
+                    pipeline.addAfter(PipelineHandlerNames.SSL, PipelineHandlerNames.HTTP_CODEC, HttpServerCodec())
+                    pipeline.addAfter(
+                        PipelineHandlerNames.HTTP_CODEC,
+                        PipelineHandlerNames.HTTP_AGGREGATOR,
+                        HttpObjectAggregator(PipelineHandlerNames.MAX_CONTENT_LENGTH_BYTES)
+                    )
+                } catch (e: Exception) {
+                    KNetLogger.error(TAG, e) { "Failed to configure SSL pipeline for $host: ${e.message}" }
+                    context.close()
+                }
             } else {
                 context.close()
             }
@@ -234,12 +262,12 @@ class KNetProxyHandler(
                                         context.writeAndFlush(errResponse).addListener { context.close() }
                                     }
                                 }
-                                pipeline.addLast("ssl", sslHandler)
+                                pipeline.addLast(PipelineHandlerNames.SSL, sslHandler)
                             }
-                            pipeline.addLast("httpCodec", HttpClientCodec())
-                            pipeline.addLast("httpAggregator", HttpObjectAggregator(10 * 1024 * 1024))
+                            pipeline.addLast(PipelineHandlerNames.HTTP_CODEC, HttpClientCodec())
+                            pipeline.addLast(PipelineHandlerNames.HTTP_AGGREGATOR, HttpObjectAggregator(PipelineHandlerNames.MAX_CONTENT_LENGTH_BYTES))
                             pipeline.addLast(
-                                "outboundHandler",
+                                PipelineHandlerNames.OUTBOUND_HANDLER,
                                 KNetOutboundHandler(
                                     clientChannel = context.channel(),
                                     request = outboundRequest,
@@ -352,7 +380,6 @@ class KNetOutboundHandler(
     private val responseBodyBuffer = java.io.ByteArrayOutputStream()
 
     override fun channelActive(context: ChannelHandlerContext) {
-        timingCollector.markRequestSent()
         context.writeAndFlush(request).addListener {
             timingCollector.markRequestSent()
         }

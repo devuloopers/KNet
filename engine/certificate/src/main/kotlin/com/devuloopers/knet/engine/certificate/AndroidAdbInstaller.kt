@@ -75,7 +75,7 @@ object AndroidAdbInstaller {
         if (deviceId != null) {
             command.addAll(listOf("-s", deviceId))
         }
-        command.addAll(listOf("shell", "settings", "put", "global", "http_proxy", ":5555"))
+        command.addAll(listOf("shell", "settings", "delete", "global", "http_proxy"))
 
         return executeCommand(command.toTypedArray(), "[ADB] Successfully cleared HTTP proxy setting on Android device.")
     }

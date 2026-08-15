@@ -619,6 +619,67 @@ This document serves as the live project tracking board for implementing seamles
 - [x] **Phase 4: Full Multi-Module Verification & Regression Testing** `[COMPLETED]`
   - [x] Execute full unit and regression test suites across all modules
 
+---
+
+## Phase 44: Unified SSL & Trust Management Architecture for Netty & Ktor `[COMPLETED]`
+
+- [x] **Phase 1: Unified SSL Trust Provider (`:engine:certificate`)** `[COMPLETED]`
+  - [x] Implement `KNetTrustManagerProvider.kt` in `:engine:certificate` providing `X509TrustManager` and `TrustManagerFactory` backed by composite KeyStore
+- [x] **Phase 2: Ktor Platform Engine HTTPS Configuration (`:core:http`)** `[COMPLETED]`
+  - [x] Add `:engine:certificate` dependency in `core/http/build.gradle.kts` for `jvmMain`
+  - [x] Update `HttpClientEngineProvider.kt` and `HttpClientEngineProvider.jvm.kt` with `createPlatformHttpClient`
+  - [x] Refactor `KNetApiClient.kt` to use `createPlatformHttpClient`
+- [x] **Phase 3: Netty Proxy Engine Unification (`:engine:proxy`)** `[COMPLETED]`
+  - [x] Refactor `ProxyTrustManager.kt` to delegate to `KNetTrustManagerProvider`
+  - [x] Remove unused `api(project(":core:http"))` from `engine/proxy/build.gradle.kts`
+- [x] **Phase 4: Full Verification & Regression Testing (`:core:http`, `:engine:proxy`, `:ui:desktop:apistudio`)** `[COMPLETED]`
+  - [x] Add `KNetTrustManagerProviderTest.kt` verifying public CAs, KNet CA, and self-signed bypass
+  - [x] Execute `./gradlew test` across all modules
+
+---
+
+## Phase 45: Core Engine Production Readiness & Resilience Hardening `[COMPLETED]`
+
+- [x] **Phase 1: Networking & Timing Accuracy (`:engine:proxy`)** `[COMPLETED]`
+  - [x] Fix double `markRequestSent()` invocation in `KNetOutboundHandler.channelActive` to guarantee accurate TTFB calculations
+- [x] **Phase 2: Platform Trust Installer Resilience & Leak Prevention (`:engine:certificate`)** `[COMPLETED]`
+  - [x] Prevent process pipe deadlock in `TrustStoreInstaller.executeCommand` using merged stream reader
+  - [x] Eliminate temp certificate disk leaks in `TrustStoreInstaller.install` via structured try-finally cleanup
+  - [x] Use `settings delete global http_proxy` in `AndroidAdbInstaller.clearProxy`
+- [x] **Phase 3: Interceptor State Safety & Lifecycle Cleanup (`:engine:interceptor`)** `[COMPLETED]`
+  - [x] Eliminate redundant `resume(Drop)` calls in `InterceptCoordinator` request/response finally blocks
+  - [x] Replace side-effecting `StateFlow` updates in `BreakpointRuleRegistry` with `updateAndGet` + post-update assignment
+- [x] **Phase 4: High-Throughput Regex LRU Caching (`:engine:traffic`)** `[COMPLETED]`
+  - [x] Replace naive `cache.clear()` in `RegexCache` with access-order LRU `LinkedHashMap` and thread-safe locking
+- [x] **Phase 5: Targeted Database Updates & Payload Persistence (`:storage`, `:engine:session`)** `[COMPLETED]`
+  - [x] Add `@Query` `updateResponse` in `HttpTransactionDao` to avoid full row replacement in `TransactionRecorder.recordResponse`
+- [x] **Phase 6: Protocol & Simulation Cleanups (`:engine:portal`, `:engine:simulator`)** `[COMPLETED]`
+  - [x] Streamline mobile portal fallback routing in `MobilePortalHandler`
+  - [x] Remove `addBytesThrottled` rate-unit metric mismatch in `KNetNetworkSimulatorHandler`
+- [x] **Phase 7: Full Multi-Module Verification & Zero Regression** `[COMPLETED]`
+  - [x] Execute automated unit and regression test suites across all engine and storage modules (132 tasks, 0 failures)
+
+---
+
+## Phase 46: Centralized Pipeline Constants & SSL Exception Safety `[COMPLETED]`
+
+- [x] **Phase 1: Pipeline Handler Names & Constants Architecture (`:engine:proxy`)** `[COMPLETED]`
+  - [x] Create `PipelineHandlerNames.kt` in `:engine:proxy:pipeline` with strongly-typed constants and KDoc
+- [x] **Phase 2: SSL Handshake Exception Safety & Pipeline Reconfiguration (`:engine:proxy`)** `[COMPLETED]`
+  - [x] Wrap `handleConnect` dynamic cert extraction and pipeline mutation in `try/catch` with logging and clean socket closure
+  - [x] Replace raw magic strings in `KNetProxyHandler.kt` with `PipelineHandlerNames` constants
+  - [x] Replace raw magic strings and buffer sizes in `KNetProxyServer.kt` with `PipelineHandlerNames` constants
+- [x] **Phase 3: Interceptor Pipeline Unification (`:engine:interceptor`)** `[COMPLETED]`
+  - [x] Replace raw `"ssl"` check in `KNetInterceptorHandler.kt` with `PipelineHandlerNames.SSL`
+- [x] **Phase 4: Full Multi-Module Verification & Zero Regression** `[COMPLETED]`
+  - [x] Run test suites across `:engine:proxy`, `:engine:interceptor`, and workspace integration tests (118 tasks, 0 failures)
+
+
+
+
+
+
+
 
 
 

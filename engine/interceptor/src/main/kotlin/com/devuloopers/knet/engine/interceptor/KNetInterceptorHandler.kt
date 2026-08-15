@@ -5,6 +5,7 @@ import com.devuloopers.knet.domain.clientNetwork.model.HttpRequest
 import com.devuloopers.knet.domain.clientNetwork.model.ProxyTrafficListener
 import com.devuloopers.knet.domain.util.decodeBodyToText
 import com.devuloopers.knet.engine.proxy.mapper.HttpMapper
+import com.devuloopers.knet.engine.proxy.pipeline.PipelineHandlerNames
 import io.netty.channel.ChannelDuplexHandler
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelPromise
@@ -33,7 +34,7 @@ class KNetInterceptorHandler(
             }
 
             // Always map incoming request freshly to prevent stale attribute leakage across pipelined/reused connections
-            val isSsl = context.channel().attr(ChannelAttributes.SSL_ATTR).get() == true || context.pipeline().get("ssl") != null
+            val isSsl = context.channel().attr(ChannelAttributes.SSL_ATTR).get() == true || context.pipeline().get(PipelineHandlerNames.SSL) != null
             var targetHost = context.channel().attr(ChannelAttributes.HOST_ATTR).get()
 
             if (targetHost == null) {

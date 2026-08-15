@@ -54,29 +54,22 @@ class TransactionRecorder(
     ): Boolean {
         val entity = transactionDao.getTransactionById(transactionId) ?: return false
         val responseBodyPath = payloadStore.savePayload(transactionId, "res", response.body)
-
         val responseBodySize = response.body?.size?.toLong() ?: 0L
-        val updated = HttpTransactionEntity(
+
+        transactionDao.updateResponse(
             id = entity.id,
-            url = entity.url,
-            method = entity.method,
-            requestHeadersJson = entity.requestHeadersJson,
-            requestBodyPath = entity.requestBodyPath,
-            requestBodySize = entity.requestBodySize,
-            responseStatusCode = response.statusCode,
-            responseStatusText = response.statusText,
+            statusCode = response.statusCode,
+            statusText = response.statusText,
             responseHeadersJson = HttpTransactionMapper.serializeHeaders(response.headers),
             responseBodyPath = responseBodyPath,
             responseBodySize = responseBodySize,
             durationMs = durationMs,
-            timestamp = entity.timestamp,
             timingDnsMs = timings.dnsMs,
             timingTcpMs = timings.tcpMs,
             timingTlsMs = timings.tlsMs,
             timingTtfbMs = timings.ttfbMs,
             timingDownloadMs = timings.downloadMs
         )
-        transactionDao.insert(updated)
 
         stats.incrementResponses()
         response.body?.let {

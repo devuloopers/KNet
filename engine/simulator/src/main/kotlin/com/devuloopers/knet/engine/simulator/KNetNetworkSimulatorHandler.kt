@@ -99,7 +99,6 @@ class KNetNetworkSimulatorHandler(
             if (existingShaper == null) {
                 val shaper = ChannelTrafficShapingHandler(targetBps, targetBps)
                 pipeline.addBefore(context.name(), TRAFFIC_SHAPER_NAME, shaper)
-                stats.addBytesThrottled(targetBps)
             }
         } else {
             if (existingShaper != null) {

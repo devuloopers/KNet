@@ -20,8 +20,10 @@ kotlin {
         val jvmMain by getting {
             dependencies {
                 implementation(libs.ktor.client.cio)
+                implementation(project(":engine:certificate"))
             }
         }
+
         val commonTest by getting {
             dependencies {
                 implementation(kotlin("test"))

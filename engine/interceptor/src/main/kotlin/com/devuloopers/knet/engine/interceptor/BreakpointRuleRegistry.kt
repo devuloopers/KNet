@@ -4,7 +4,7 @@ import com.devuloopers.knet.domain.rules.model.RuleModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.updateAndGet
 
 /**
  * Thread-safe in-memory registry holding active [RuleModel] instances for Netty proxy engine.
@@ -36,11 +36,10 @@ object BreakpointRuleRegistry {
      */
     fun addRule(rule: RuleModel) {
         require(rule.id.isNotBlank()) { "Breakpoint rule ID must not be blank" }
-        _rulesMap.update { current ->
-            val updated = current + (rule.id to rule)
-            _rulesStream.value = updated.values.toList()
-            updated
+        val updated = _rulesMap.updateAndGet { current ->
+            current + (rule.id to rule)
         }
+        _rulesStream.value = updated.values.toList()
     }
 
     /**
@@ -49,21 +48,18 @@ object BreakpointRuleRegistry {
      * @param ruleId Unique identifier of the rule to remove.
      */
     fun removeRule(ruleId: String) {
-        _rulesMap.update { current ->
-            val updated = current - ruleId
-            _rulesStream.value = updated.values.toList()
-            updated
+        val updated = _rulesMap.updateAndGet { current ->
+            current - ruleId
         }
+        _rulesStream.value = updated.values.toList()
     }
 
     /**
      * Clears all registered breakpoint rules.
      */
     fun clearRules() {
-        _rulesMap.update {
-            _rulesStream.value = emptyList()
-            emptyMap()
-        }
+        _rulesMap.value = emptyMap()
+        _rulesStream.value = emptyList()
     }
 
     /**

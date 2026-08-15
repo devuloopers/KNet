@@ -16,6 +16,7 @@ import com.devuloopers.knet.core.logger.KNetLogger
 
 
 import com.devuloopers.knet.core.logger.LogTags
+import com.devuloopers.knet.engine.certificate.ssl.KNetTrustManagerProvider
 import javax.net.ssl.KeyManagerFactory
 import org.bouncycastle.asn1.pkcs.PrivateKeyInfo
 import org.bouncycastle.cert.X509CertificateHolder
@@ -102,8 +103,13 @@ class CertificateManagerImpl(
     override fun getCaSha256Fingerprint(): String = getFingerprint(ca.certificate, "SHA-256")
 
     override fun installRootCertificate(): Boolean {
-        return TrustStoreInstaller.install(ca.certificate) is InstallationResult.Success
+        val result = TrustStoreInstaller.install(ca.certificate)
+        if (result is InstallationResult.Success) {
+            KNetTrustManagerProvider.invalidateCache()
+        }
+        return result is InstallationResult.Success
     }
+
 
     override fun isCaTrustedByOs(): Boolean {
         return TrustStoreInstaller.isTrusted(ca.certificate)
