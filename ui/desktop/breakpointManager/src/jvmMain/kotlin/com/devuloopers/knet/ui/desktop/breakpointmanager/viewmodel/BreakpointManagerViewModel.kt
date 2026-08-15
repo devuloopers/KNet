@@ -29,7 +29,8 @@ class BreakpointManagerViewModel(
     private val toggleGlobalInterceptionUseCase: ToggleGlobalInterceptionUseCase,
     private val forwardInterceptedRequestUseCase: ForwardInterceptedRequestUseCase,
     private val forwardInterceptedResponseUseCase: ForwardInterceptedResponseUseCase,
-    private val dropInterceptedTransactionUseCase: DropInterceptedTransactionUseCase
+    private val dropInterceptedTransactionUseCase: DropInterceptedTransactionUseCase,
+    private val clearInterceptionSessionsUseCase: ClearInterceptionSessionsUseCase
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BreakpointManagerState())
@@ -53,7 +54,8 @@ class BreakpointManagerViewModel(
         observeActiveInterceptionsUseCase()
             .onEach { events ->
                 _uiState.update { current ->
-                    val activeEv = events.firstOrNull()
+                    val stillSelected = events.find { it.id == current.activeEvent?.id }
+                    val activeEv = stillSelected ?: events.firstOrNull()
                     current.copy(
                         activeEvents = events,
                         activeEvent = activeEv
@@ -61,6 +63,31 @@ class BreakpointManagerViewModel(
                 }
             }
             .launchIn(viewModelScope)
+    }
+
+    /**
+     * Selects a specific active suspended transaction from the queue to display in the editor.
+     *
+     * @param eventId Unique identifier of the transaction to focus.
+     */
+    fun selectActiveEvent(eventId: String) {
+        _uiState.update { current ->
+            val selected = current.activeEvents.find { it.id == eventId }
+            if (selected != null) {
+                current.copy(activeEvent = selected)
+            } else {
+                current
+            }
+        }
+    }
+
+    /**
+     * Drops and terminates all active in-flight suspended connections in the queue immediately.
+     */
+    fun dropAllEvents() {
+        viewModelScope.launch {
+            clearInterceptionSessionsUseCase()
+        }
     }
 
     fun forwardRequest(transactionId: String, modifiedRequest: HttpRequest) {

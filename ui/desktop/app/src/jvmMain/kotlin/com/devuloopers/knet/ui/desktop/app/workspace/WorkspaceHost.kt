@@ -128,8 +128,18 @@ fun KNetWorkspaceHost(
 
         // Live Intercept Side Drawer Overlay
         LiveInterceptDrawer(
-            event = breakpointState.activeEvent,
+            events = breakpointState.activeEvents,
+            activeEvent = breakpointState.activeEvent,
             isVisible = breakpointState.activeEvent != null,
+            onSelectEvent = { eventId ->
+                breakpointViewModel.selectActiveEvent(eventId)
+            },
+            onDropItem = { eventId ->
+                breakpointViewModel.dropEvent(eventId)
+            },
+            onDropAll = {
+                breakpointViewModel.dropAllEvents()
+            },
             onForwardRequest = { modifiedReq ->
                 val event = breakpointState.activeEvent ?: return@LiveInterceptDrawer
                 breakpointViewModel.forwardRequest(event.id, modifiedReq)

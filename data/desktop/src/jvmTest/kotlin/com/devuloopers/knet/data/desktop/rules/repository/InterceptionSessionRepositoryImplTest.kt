@@ -161,4 +161,30 @@ class InterceptionSessionRepositoryImplTest {
         assertTrue(event1.deferred.getCompleted() is InterceptResult.Drop)
         assertTrue(event2.deferred.getCompleted() is InterceptResult.Drop)
     }
+
+    @Test
+    fun testActiveInterceptionsDetectsGraphQLOperationMetadata() = runTest {
+        val gqlPayload = """{"query": "query GetUserProfile { user { id name } }"}""".encodeToByteArray()
+        val fakeRequest = HttpRequest(
+            id = "tx-gql",
+            method = "POST",
+            url = "https://api.example.com/graphql",
+            protocol = "HTTP/1.1",
+            headers = listOf("Content-Type" to "application/json"),
+            body = gqlPayload,
+            timestamp = 1700000000L
+        )
+
+        InterceptSessionManager.suspendRequest(fakeRequest)
+
+        val activeList = repository.activeInterceptions.first()
+        assertEquals(1, activeList.size)
+        val transaction = activeList.first()
+
+        val meta = transaction.metadata
+        assertTrue(meta is com.devuloopers.knet.domain.protocol.model.InterceptionMetadata.GraphQL)
+        assertEquals("GetUserProfile", meta.operationName)
+        assertEquals("Query", meta.operationType)
+    }
 }
+

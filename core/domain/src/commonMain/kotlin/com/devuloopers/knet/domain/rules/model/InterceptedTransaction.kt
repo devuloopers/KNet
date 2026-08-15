@@ -2,6 +2,7 @@ package com.devuloopers.knet.domain.rules.model
 
 import com.devuloopers.knet.domain.clientNetwork.model.HttpRequest
 import com.devuloopers.knet.domain.clientNetwork.model.HttpResponse
+import com.devuloopers.knet.domain.protocol.model.InterceptionMetadata
 
 /**
  * Domain model representing an in-flight network transaction suspended by a breakpoint rule.
@@ -14,6 +15,7 @@ import com.devuloopers.knet.domain.clientNetwork.model.HttpResponse
  * @property request The captured or modified [HttpRequest] payload.
  * @property response The captured or modified [HttpResponse] payload (present if intercepted during response phase).
  * @property timestamp Epoch millisecond timestamp when the transaction was paused.
+ * @property metadata Strongly-typed protocol metadata (e.g. GraphQL operation name/type, gRPC, Protobuf).
  */
 public data class InterceptedTransaction(
     val id: String,
@@ -22,5 +24,6 @@ public data class InterceptedTransaction(
     val url: String,
     val request: HttpRequest,
     val response: HttpResponse? = null,
-    val timestamp: Long = 0L
+    val timestamp: Long = 0L,
+    val metadata: InterceptionMetadata = InterceptionMetadata.GenericHttp
 )

@@ -129,7 +129,7 @@ object DesktopDataModule {
             val db: KNetDatabase = get()
             RulesRepositoryImpl(db.breakpointRuleDao())
         }
-        single<InterceptionSessionRepository> { InterceptionSessionRepositoryImpl() }
+        single<InterceptionSessionRepository> { InterceptionSessionRepositoryImpl(protocolInspectorRegistry = get()) }
         single<WidgetPreferencesRepository> { WidgetPreferencesRepositoryImpl(get()) }
         single<NetworkRepository> { NetworkRepositoryImpl(get()) }
         single { ProxyHistoryHeaderLookup(get()) }

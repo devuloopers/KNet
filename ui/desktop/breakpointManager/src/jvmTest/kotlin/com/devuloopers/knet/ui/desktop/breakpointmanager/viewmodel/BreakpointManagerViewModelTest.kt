@@ -116,7 +116,8 @@ class BreakpointManagerViewModelTest {
             toggleGlobalInterceptionUseCase = ToggleGlobalInterceptionUseCase(rulesRepo),
             forwardInterceptedRequestUseCase = ForwardInterceptedRequestUseCase(sessionRepo),
             forwardInterceptedResponseUseCase = ForwardInterceptedResponseUseCase(sessionRepo),
-            dropInterceptedTransactionUseCase = DropInterceptedTransactionUseCase(sessionRepo)
+            dropInterceptedTransactionUseCase = DropInterceptedTransactionUseCase(sessionRepo),
+            clearInterceptionSessionsUseCase = ClearInterceptionSessionsUseCase(sessionRepo)
         )
     }
 
@@ -288,4 +289,102 @@ class BreakpointManagerViewModelTest {
         assertEquals(0, viewModel.uiState.value.activeEvents.size)
         assertNull(viewModel.uiState.value.activeEvent)
     }
+
+    @Test
+    fun `selectActiveEvent switches focused event in drawer`() = runTest {
+        val viewModel = createViewModel()
+
+        val req1 = HttpRequest(id = "tx-1", method = "GET", url = "https://api.one.com/v1", protocol = "HTTP/1.1", headers = emptyList(), body = null, timestamp = 1000L)
+        val req2 = HttpRequest(id = "tx-2", method = "POST", url = "https://api.two.com/v2", protocol = "HTTP/1.1", headers = emptyList(), body = null, timestamp = 2000L)
+        val event1 = InterceptedTransaction(id = "ev-1", phase = BreakpointPhase.REQUEST, method = "GET", url = req1.url, request = req1, response = null, timestamp = 1000L)
+        val event2 = InterceptedTransaction(id = "ev-2", phase = BreakpointPhase.REQUEST, method = "POST", url = req2.url, request = req2, response = null, timestamp = 2000L)
+
+        sessionRepository.emitInterceptions(listOf(event1, event2))
+        assertEquals("ev-1", viewModel.uiState.value.activeEvent?.id)
+
+        viewModel.selectActiveEvent("ev-2")
+        assertEquals("ev-2", viewModel.uiState.value.activeEvent?.id)
+    }
+
+    @Test
+    fun `dropAllEvents terminates all queued suspensions`() = runTest {
+        val viewModel = createViewModel()
+
+        val req1 = HttpRequest(id = "tx-1", method = "GET", url = "https://api.one.com/v1", protocol = "HTTP/1.1", headers = emptyList(), body = null, timestamp = 1000L)
+        val req2 = HttpRequest(id = "tx-2", method = "POST", url = "https://api.two.com/v2", protocol = "HTTP/1.1", headers = emptyList(), body = null, timestamp = 2000L)
+        val event1 = InterceptedTransaction(id = "ev-1", phase = BreakpointPhase.REQUEST, method = "GET", url = req1.url, request = req1, response = null, timestamp = 1000L)
+        val event2 = InterceptedTransaction(id = "ev-2", phase = BreakpointPhase.REQUEST, method = "POST", url = req2.url, request = req2, response = null, timestamp = 2000L)
+
+        sessionRepository.emitInterceptions(listOf(event1, event2))
+        assertEquals(2, viewModel.uiState.value.activeEvents.size)
+
+        viewModel.dropAllEvents()
+        assertEquals(0, viewModel.uiState.value.activeEvents.size)
+        assertNull(viewModel.uiState.value.activeEvent)
+    }
+
+    @Test
+    fun `active selection is retained when non-focused event is resolved`() = runTest {
+        val viewModel = createViewModel()
+
+        val req1 = HttpRequest(id = "tx-1", method = "GET", url = "https://api.one.com/v1", protocol = "HTTP/1.1", headers = emptyList(), body = null, timestamp = 1000L)
+        val req2 = HttpRequest(id = "tx-2", method = "POST", url = "https://api.two.com/v2", protocol = "HTTP/1.1", headers = emptyList(), body = null, timestamp = 2000L)
+        val event1 = InterceptedTransaction(id = "ev-1", phase = BreakpointPhase.REQUEST, method = "GET", url = req1.url, request = req1, response = null, timestamp = 1000L)
+        val event2 = InterceptedTransaction(id = "ev-2", phase = BreakpointPhase.REQUEST, method = "POST", url = req2.url, request = req2, response = null, timestamp = 2000L)
+
+        sessionRepository.emitInterceptions(listOf(event1, event2))
+        // User selects ev-2
+        viewModel.selectActiveEvent("ev-2")
+        assertEquals("ev-2", viewModel.uiState.value.activeEvent?.id)
+
+        // ev-1 is resolved/dropped in the background
+        sessionRepository.emitInterceptions(listOf(event2))
+
+        // Selection must remain on ev-2
+        assertEquals(1, viewModel.uiState.value.activeEvents.size)
+        assertEquals("ev-2", viewModel.uiState.value.activeEvent?.id)
+    }
+
+    @Test
+    fun `viewModel surfaces GraphQL protocol metadata in activeEvent`() = runTest {
+        val viewModel = createViewModel()
+
+        val req = HttpRequest(
+            id = "tx-gql",
+            method = "POST",
+            url = "https://api.example.com/graphql",
+            protocol = "HTTP/1.1",
+            headers = listOf("Content-Type" to "application/json"),
+            body = "{\"query\":\"mutation CreateOrder { id }\"}".encodeToByteArray(),
+            timestamp = 1000L
+        )
+        val gqlMeta = com.devuloopers.knet.domain.protocol.model.InterceptionMetadata.GraphQL(
+            operationName = "CreateOrder",
+            operationType = "Mutation",
+            querySummary = "mutation CreateOrder { id }"
+        )
+        val event = InterceptedTransaction(
+            id = "ev-gql",
+            phase = BreakpointPhase.REQUEST,
+            method = "POST",
+            url = req.url,
+            request = req,
+            response = null,
+            timestamp = 1000L,
+            metadata = gqlMeta
+        )
+
+        sessionRepository.emitInterceptions(listOf(event))
+
+        assertEquals(1, viewModel.uiState.value.activeEvents.size)
+        val active = viewModel.uiState.value.activeEvent
+        assertNotNull(active)
+        assertEquals("ev-gql", active.id)
+        val meta = active.metadata
+        assertTrue(meta is com.devuloopers.knet.domain.protocol.model.InterceptionMetadata.GraphQL)
+        assertEquals("CreateOrder", meta.operationName)
+        assertEquals("Mutation", meta.operationType)
+    }
 }
+
+

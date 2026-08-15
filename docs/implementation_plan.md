@@ -506,3 +506,83 @@ This document serves as the live project tracking board for implementing seamles
 - [x] **Phase 4: Unit Testing & Verification** `[COMPLETED]`
   - [x] Added unit tests for `GraphQlSubTab` operations in `httpPanel:jvmTest`
   - [x] Ran full workspace test suites to verify 100% pass rate (`BUILD SUCCESSFUL`)
+
+---
+
+## Phase 37: Atomic FIFO Interception Session Management `[COMPLETED]`
+
+- [x] **Phase 1: Pure Multiplatform SSOT State Model (`:engine:interceptor`)** `[COMPLETED]`
+  - [x] Replaced `ConcurrentHashMap` and dual-state architecture in `InterceptSessionManager.kt` with `MutableStateFlow<List<InterceptedEvent>>`
+  - [x] Removed `java.util.concurrent.*` imports
+  - [x] Implemented atomic lock-free list mutations using `update { ... }` for `suspendRequest`, `suspendResponse`, `resume`, and `clearSuspensions`
+- [x] **Phase 2: Strict FIFO & Concurrent Unit Testing (`:engine:interceptor`)** `[COMPLETED]`
+  - [x] Added `testFifoPreservation()` and `testResumeIdempotency()` to `InterceptSessionManagerTest.kt`
+  - [x] Verified `InterceptorConcurrencyTest.kt` for race-condition-free atomic resolution
+- [x] **Phase 3: Multi-Module Verification** `[COMPLETED]`
+  - [x] Ran 100% passing test suite across all 20 active modules (`BUILD SUCCESSFUL in 1m 12s`)
+
+---
+
+## Phase 38: Live Intercept Queue Sidebar & Fluid Animations `[COMPLETED]`
+
+- [x] **Phase 1: ViewModel Multi-Item Selection & Bulk Operations (`:ui:desktop:breakpointManager`)** `[COMPLETED]`
+  - [x] Injected `ClearInterceptionSessionsUseCase` into `BreakpointManagerViewModel`
+  - [x] Added `selectActiveEvent(eventId: String)` and `dropAllEvents()` to `BreakpointManagerViewModel`
+  - [x] Maintained active event selection across dynamic queue updates in `observeActiveInterceptionsUseCase()`
+- [x] **Phase 2: Master-Detail Layout & `InterceptQueueSidebar` Component with Animations (`:ui:desktop:breakpointManager`)** `[COMPLETED]`
+  - [x] Created `InterceptQueueSidebar.kt` displaying vertically scrollable queue cards with Phase badge, Method, Path, timestamp, and single-item drop action
+  - [x] Added `Modifier.animateItem()` to queue cards for fluid entry, reordering, and removal transitions
+  - [x] Added `animateDpAsState` for smooth drawer width resizing between `620.dp` and `880.dp`
+  - [x] Wrapped queue sidebar in `AnimatedVisibility(visible = events.size > 1, enter = expandHorizontally() + fadeIn(), exit = shrinkHorizontally() + fadeOut())`
+  - [x] Added queue position/count indicators to the drawer header bar
+  - [x] Wired multi-transaction callbacks in `WorkspaceHost.kt`
+- [x] **Phase 3: Unit Testing & Verification** `[COMPLETED]`
+  - [x] Added unit tests for selection retention and bulk actions in `BreakpointManagerViewModelTest.kt`
+  - [x] Ran changed module test suites (`BUILD SUCCESSFUL in 9s`)
+
+---
+
+## Phase 39: Consistent Queue Sidebar Master-Detail Layout `[COMPLETED]`
+
+- [x] **Phase 1: Stable Master-Detail Layout in LiveInterceptDrawer (`:ui:desktop:breakpointManager`)** `[COMPLETED]`
+  - [x] Set fixed width `880.dp` for consistent desktop UI layout
+  - [x] Render `InterceptQueueSidebar` whenever `activeEvents.isNotEmpty()` (including single-item queues)
+  - [x] Streamline drawer header and remove layout morphing
+- [x] **Phase 2: Changed Module Verification (`:ui:desktop:breakpointManager`, `:ui:desktop:app`)** `[COMPLETED]`
+  - [x] Ran test suites on changed modules (`BUILD SUCCESSFUL in 3s`)
+
+---
+
+## Phase 40: Specialized Protocol Badges & Clean URI Path `[COMPLETED]`
+
+- [x] **Phase 1: Domain & Data Protocol Inspection (`:core:domain`, `:data:desktop`)** `[COMPLETED]`
+  - [x] Added `metadata: InterceptionMetadata` property to `InterceptedTransaction`
+  - [x] Evaluated `ProtocolInspectorRegistry` (GraphQL inspector) in `InterceptionSessionRepositoryImpl`
+- [x] **Phase 2: UI Specialized Protocol Pills & Clean Path Extraction (`:ui:desktop:breakpointManager`)** `[COMPLETED]`
+  - [x] Stripped query parameters from standard HTTP requests in `InterceptQueueSidebar.kt`
+  - [x] Formatted GraphQL operation name & type in `InterceptQueueSidebar.kt` (`/graphql • GetUserProfile (Query)`)
+  - [x] Rendered `[GQL]`, `[gRPC]`, `[JSON]`, `[FORM]`, `[XML]` pill badges in `InterceptQueueSidebar.kt` and `LiveInterceptDrawer.kt`
+- [x] **Phase 3: Testing & Verification** `[COMPLETED]`
+  - [x] Added unit tests for GraphQL and HTTP path extraction in `BreakpointManagerViewModelTest.kt` and `InterceptionSessionRepositoryImplTest.kt`
+  - [x] Ran changed module test suites (`BUILD SUCCESSFUL in 17s`)
+
+---
+
+## Phase 41: 2-Tier Drawer Header & Reusable EndpointCard with Copy `[COMPLETED]`
+
+- [x] **Phase 1: 2-Tier Header in LiveInterceptDrawer (`:ui:desktop:breakpointManager`)** `[COMPLETED]`
+  - [x] Structured header into Tier 1 (Status & Protocol Badges + Close Button) and Tier 2 (`EndpointCard` with full URL and Copy Button)
+  - [x] Reused `EndpointCard` from `:ui:desktop:httpPanel` for standardized presentation
+  - [x] Updated `InterceptQueueSidebar.kt` to show full URL for standard HTTP
+- [x] **Phase 2: Changed Module Verification (`:ui:desktop:breakpointManager`, `:ui:desktop:app`)** `[COMPLETED]`
+  - [x] Ran test suites on changed modules (`BUILD SUCCESSFUL in 4s`)
+
+
+
+
+
+
+
+
+
+

@@ -15,18 +15,21 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.devuloopers.knet.domain.clientNetwork.model.HttpRequest
 import com.devuloopers.knet.domain.clientNetwork.model.HttpResponse
+import com.devuloopers.knet.domain.protocol.model.InterceptionMetadata
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.InterceptedTransaction
 import com.devuloopers.knet.domain.util.decodeBodyToText
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import com.devuloopers.knet.ui.desktop.httppanel.components.EndpointCard
 import com.devuloopers.knet.ui.desktop.httppanel.editor.RequestEditorPanel
 import com.devuloopers.knet.ui.desktop.httppanel.editor.RequestEditorPanelActions
 import com.devuloopers.knet.ui.desktop.httppanel.editor.ResponseEditorPanel
@@ -37,12 +40,30 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.ResponseBodyState
 
 /**
  * Slide-out desktop drawer displaying active in-flight suspended HTTP transactions.
- * Reuses `:ui:desktop:httpPanel` request/response editors and provides [FORWARD], [DROP], and [DISABLE RULE] controls.
+ * Supports Master-Detail layout with an animated left Queue Sidebar when multiple transactions are waiting,
+ * and reuses `:ui:desktop:httpPanel` editors with [FORWARD], [DROP], and [DISABLE RULE] controls.
+ *
+ * @param events The full list of active in-flight suspended transactions.
+ * @param activeEvent The currently focused transaction being displayed and edited in the drawer.
+ * @param isVisible True if the drawer should slide in.
+ * @param onSelectEvent Callback when an item in the queue sidebar is clicked to focus it.
+ * @param onDropItem Callback when an individual item's drop button is clicked in the queue sidebar.
+ * @param onDropAll Callback when the bulk "Drop All" button is clicked.
+ * @param onForwardRequest Callback when forwarding a request with modifications.
+ * @param onForwardResponse Callback when forwarding a response with modifications.
+ * @param onDrop Callback when dropping the current active transaction.
+ * @param onDisableRule Callback when disabling the matching rule and dropping the current transaction.
+ * @param onDismiss Callback when dismissing/closing the drawer.
+ * @param modifier Optional layout modifier.
  */
 @Composable
 fun LiveInterceptDrawer(
-    event: InterceptedTransaction?,
+    events: List<InterceptedTransaction>,
+    activeEvent: InterceptedTransaction?,
     isVisible: Boolean,
+    onSelectEvent: (eventId: String) -> Unit,
+    onDropItem: (eventId: String) -> Unit,
+    onDropAll: () -> Unit,
     onForwardRequest: (modifiedRequest: HttpRequest) -> Unit,
     onForwardResponse: (modifiedResponse: HttpResponse) -> Unit,
     onDrop: () -> Unit,
@@ -53,240 +74,304 @@ fun LiveInterceptDrawer(
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
 
+    val drawerWidth = 880.dp
+
     AnimatedVisibility(
-        visible = isVisible && event != null,
+        visible = isVisible && activeEvent != null,
         enter = slideInHorizontally(initialOffsetX = { fullWidth -> fullWidth }),
         exit = slideOutHorizontally(targetOffsetX = { fullWidth -> fullWidth }),
         modifier = modifier
     ) {
-        if (event == null) return@AnimatedVisibility
+        if (activeEvent == null) return@AnimatedVisibility
 
-        var editedReqHeaders by remember(event.id) {
-            mutableStateOf(event.request.headers)
+        var editedReqHeaders by remember(activeEvent.id) {
+            mutableStateOf(activeEvent.request.headers)
         }
-        var reqBodyState by remember(event.id) {
-            val rawBodyText = decodeBodyToText(event.request.body, event.request.headers)
-            mutableStateOf(RequestBodyState.fromPayload(event.request.headers, rawBodyText))
+        var reqBodyState by remember(activeEvent.id) {
+            val rawBodyText = decodeBodyToText(activeEvent.request.body, activeEvent.request.headers)
+            mutableStateOf(RequestBodyState.fromPayload(activeEvent.request.headers, rawBodyText))
         }
-        var activeReqSubTab by remember(event.id) {
+        var activeReqSubTab by remember(activeEvent.id) {
             mutableStateOf(InspectorSubTab.BODY)
         }
 
-        var editedStatusCode by remember(event.id) {
-            mutableStateOf(event.response?.statusCode ?: 200)
+        var editedStatusCode by remember(activeEvent.id) {
+            mutableStateOf(activeEvent.response?.statusCode ?: 200)
         }
-        var editedStatusText by remember(event.id) {
-            mutableStateOf(event.response?.statusText ?: "OK")
+        var editedStatusText by remember(activeEvent.id) {
+            mutableStateOf(activeEvent.response?.statusText ?: "OK")
         }
-        var editedRespHeaders by remember(event.id) {
-            mutableStateOf(event.response?.headers ?: emptyList())
+        var editedRespHeaders by remember(activeEvent.id) {
+            mutableStateOf(activeEvent.response?.headers ?: emptyList())
         }
-        var respBodyState by remember(event.id) {
-            val rawBodyText = decodeBodyToText(event.response?.body, event.response?.headers ?: emptyList())
-            mutableStateOf(ResponseBodyState.fromPayload(event.response?.headers ?: emptyList(), rawBodyText))
+        var respBodyState by remember(activeEvent.id) {
+            val rawBodyText = decodeBodyToText(activeEvent.response?.body, activeEvent.response?.headers ?: emptyList())
+            mutableStateOf(ResponseBodyState.fromPayload(activeEvent.response?.headers ?: emptyList(), rawBodyText))
         }
-        var activeRespSubTab by remember(event.id) {
+        var activeRespSubTab by remember(activeEvent.id) {
             mutableStateOf(InspectorSubTab.BODY)
         }
 
         Box(
             modifier = Modifier
                 .fillMaxHeight()
-                .width(620.dp)
+                .width(drawerWidth)
                 .background(themeColors.surface)
                 .border(width = 1.dp, color = themeColors.border)
         ) {
-            Column(modifier = Modifier.fillMaxSize()) {
-                // Header Bar
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(themeColors.surfaceVariant)
-                        .border(width = 1.dp, color = themeColors.border)
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        // Status Badge
-                        Box(
-                            modifier = Modifier
-                                .background(themeColors.semantic.warning.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
-                                .border(1.dp, themeColors.semantic.warning, RoundedCornerShape(4.dp))
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = "PAUSED IN-FLIGHT",
-                                style = typography.codeSmall.copy(
-                                    color = themeColors.semantic.warning,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 10.sp
-                                )
-                            )
-                        }
+            Row(modifier = Modifier.fillMaxSize()) {
+                // Left Queue Sidebar (always visible in Master-Detail layout)
+                InterceptQueueSidebar(
+                    events = events,
+                    selectedEventId = activeEvent.id,
+                    onSelectEvent = onSelectEvent,
+                    onDropItem = onDropItem,
+                    onDropAll = onDropAll
+                )
 
-                        // Intercept Phase Badge
-                        val isRequestPhase = event.phase == BreakpointPhase.REQUEST
-                        val phaseColor = if (isRequestPhase) themeColors.semantic.info else themeColors.semantic.success
-                        val phaseLabel = if (isRequestPhase) "REQUEST INTERCEPT" else "RESPONSE INTERCEPT"
-
-                        Box(
-                            modifier = Modifier
-                                .background(phaseColor.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
-                                .border(1.dp, phaseColor, RoundedCornerShape(4.dp))
-                                .padding(horizontal = 8.dp, vertical = 4.dp)
-                        ) {
-                            Text(
-                                text = phaseLabel,
-                                style = typography.codeSmall.copy(
-                                    color = phaseColor,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 10.sp
-                                )
-                            )
-                        }
-
-                        // Method Badge
-                        Text(
-                            text = event.method,
-                            style = typography.codeSmall.copy(
-                                color = themeColors.semantic.info,
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 12.sp
-                            )
-                        )
-
-                        // URL String
-                        Text(
-                            text = event.url,
-                            style = typography.bodySmall.copy(color = themeColors.textPrimary),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-
-                    IconButton(onClick = onDismiss) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Close Drawer",
-                            tint = themeColors.textSecondary
-                        )
-                    }
-                }
-
-                // Action Control Toolbar ([FORWARD], [DROP], [DISABLE RULE])
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(themeColors.background)
-                        .border(width = 1.dp, color = themeColors.border)
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Dynamic Forward Button
-                    val isRequestPhase = event.phase == BreakpointPhase.REQUEST
-                    val forwardLabel = if (isRequestPhase) "FORWARD REQUEST" else "FORWARD RESPONSE"
-
-                    KNetButton(
-                        onClick = {
-                            if (isRequestPhase) {
-                                val headersToForward = editedReqHeaders.filterNot {
-                                    it.first.equals("Content-Encoding", ignoreCase = true)
-                                }
-                                val modifiedReq = HttpRequest(
-                                    id = event.request.id,
-                                    method = event.request.method,
-                                    url = event.request.url,
-                                    protocol = event.request.protocol,
-                                    headers = headersToForward,
-                                    body = reqBodyState.payloadText.encodeToByteArray(),
-                                    timestamp = event.request.timestamp,
-                                    isIntercepted = true,
-                                    matchedRuleId = event.request.matchedRuleId
-                                )
-                                onForwardRequest(modifiedReq)
-                            } else {
-                                val headersToForward = editedRespHeaders.filterNot {
-                                    it.first.equals("Content-Encoding", ignoreCase = true)
-                                }
-                                val modifiedResp = HttpResponse(
-                                    statusCode = editedStatusCode,
-                                    statusText = editedStatusText,
-                                    headers = headersToForward,
-                                    body = respBodyState.payloadText.encodeToByteArray(),
-                                    timestamp = event.response?.timestamp ?: System.currentTimeMillis()
-                                )
-                                onForwardResponse(modifiedResp)
-                            }
-                        },
-                        variant = ButtonVariant.Primary
-                    ) {
-                        Text(text = forwardLabel, style = typography.caption.copy(fontWeight = FontWeight.Bold))
-                    }
-
-                    // Drop Button
-                    KNetButton(
-                        onClick = onDrop,
-                        variant = ButtonVariant.Secondary
-                    ) {
-                        Text(text = "DROP", style = typography.caption.copy(fontWeight = FontWeight.Bold))
-                    }
-
-                    // Disable Rule Button
-                    KNetButton(
-                        onClick = onDisableRule,
-                        variant = ButtonVariant.Secondary
-                    ) {
-                        Text(text = "DISABLE RULE", style = typography.caption.copy(fontWeight = FontWeight.Bold))
-                    }
-                }
-
-                // Editor Body
-                Box(
+                // Right Editor Pane
+                Column(
                     modifier = Modifier
                         .weight(1f)
-                        .fillMaxWidth()
+                        .fillMaxHeight()
                 ) {
-                    if (event.phase == BreakpointPhase.REQUEST || event.phase == BreakpointPhase.BOTH) {
-                        RequestEditorPanel(
-                            bodyState = reqBodyState,
-                            headers = editedReqHeaders,
-                            activeSubTab = activeReqSubTab,
-                            actions = RequestEditorPanelActions(
-                                onBodyStateChanged = { reqBodyState = it },
-                                onHeadersChanged = { pairs ->
-                                    editedReqHeaders = pairs
-                                },
-                                onSubTabSelected = { activeReqSubTab = it }
-                            ),
-                            modifier = Modifier.fillMaxSize()
+                    // Header Bar (2-Tier: Status Badges Row + Endpoint Card Row)
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(themeColors.surfaceVariant)
+                            .border(width = 1.dp, color = themeColors.border)
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
+                        verticalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        // Tier 1: Status Badges & Close Button
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                // Status Badge
+                                Box(
+                                    modifier = Modifier
+                                        .background(themeColors.semantic.warning.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                                        .border(1.dp, themeColors.semantic.warning, RoundedCornerShape(4.dp))
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        text = "PAUSED IN-FLIGHT",
+                                        style = typography.codeSmall.copy(
+                                            color = themeColors.semantic.warning,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 10.sp
+                                        )
+                                    )
+                                }
+
+                                // Intercept Phase Badge
+                                val isRequestPhase = activeEvent.phase == BreakpointPhase.REQUEST
+                                val phaseColor = if (isRequestPhase) themeColors.semantic.info else themeColors.semantic.success
+                                val phaseLabel = if (isRequestPhase) "REQUEST INTERCEPT" else "RESPONSE INTERCEPT"
+
+                                Box(
+                                    modifier = Modifier
+                                        .background(phaseColor.copy(alpha = 0.2f), RoundedCornerShape(4.dp))
+                                        .border(1.dp, phaseColor, RoundedCornerShape(4.dp))
+                                        .padding(horizontal = 8.dp, vertical = 4.dp)
+                                ) {
+                                    Text(
+                                        text = phaseLabel,
+                                        style = typography.codeSmall.copy(
+                                            color = phaseColor,
+                                            fontWeight = FontWeight.Bold,
+                                            fontSize = 10.sp
+                                        )
+                                    )
+                                }
+
+                                // Protocol / Payload Badge
+                                val contentTypeHeader = activeEvent.response?.headers?.firstOrNull { it.first.equals("Content-Type", ignoreCase = true) }?.second
+                                    ?: activeEvent.request.headers.firstOrNull { it.first.equals("Content-Type", ignoreCase = true) }?.second
+
+                                val (protocolHeaderLabel, protocolHeaderColor) = when (val meta = activeEvent.metadata) {
+                                    is InterceptionMetadata.GraphQL -> {
+                                        val op = if (!meta.operationName.isNullOrBlank()) "${meta.operationName} (${meta.operationType})" else meta.operationType
+                                        "GRAPHQL: $op" to Color(0xFFCBA6F7)
+                                    }
+                                    is InterceptionMetadata.Grpc -> "gRPC: ${meta.serviceName}/${meta.methodName}" to Color(0xFF89DCEB)
+                                    is InterceptionMetadata.Protobuf -> "PROTOBUF" to Color(0xFF89DCEB)
+                                    else -> when {
+                                        contentTypeHeader?.contains("json", ignoreCase = true) == true -> "JSON" to themeColors.semantic.info
+                                        contentTypeHeader?.contains("xml", ignoreCase = true) == true -> "XML" to themeColors.semantic.warning
+                                        contentTypeHeader?.contains("form", ignoreCase = true) == true -> "FORM-DATA" to Color(0xFFFAB387)
+                                        else -> null to themeColors.textSecondary
+                                    }
+                                }
+
+                                if (protocolHeaderLabel != null) {
+                                    Box(
+                                        modifier = Modifier
+                                            .background(protocolHeaderColor.copy(alpha = 0.18f), RoundedCornerShape(4.dp))
+                                            .border(1.dp, protocolHeaderColor.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
+                                            .padding(horizontal = 8.dp, vertical = 4.dp)
+                                    ) {
+                                        Text(
+                                            text = protocolHeaderLabel,
+                                            style = typography.codeSmall.copy(
+                                                color = protocolHeaderColor,
+                                                fontWeight = FontWeight.Bold,
+                                                fontSize = 10.sp
+                                            )
+                                        )
+                                    }
+                                }
+                            }
+
+                            IconButton(
+                                onClick = onDismiss,
+                                modifier = Modifier.size(24.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Close Drawer",
+                                    tint = themeColors.textSecondary,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+
+                        // Tier 2: Standardized EndpointCard with Full URL, HTTP Method, and Copy Action
+                        val methodColor = when (activeEvent.method.uppercase()) {
+                            "GET" -> themeColors.semantic.success
+                            "POST" -> themeColors.semantic.info
+                            "PUT" -> themeColors.semantic.warning
+                            "DELETE" -> themeColors.semantic.error
+                            else -> themeColors.semantic.info
+                        }
+
+                        EndpointCard(
+                            method = activeEvent.method,
+                            endpoint = activeEvent.url,
+                            methodColor = methodColor,
+                            modifier = Modifier.fillMaxWidth()
                         )
-                    } else {
-                        ResponseEditorPanel(
-                            statusCode = editedStatusCode,
-                            statusText = editedStatusText,
-                            bodyState = respBodyState,
-                            headers = editedRespHeaders,
-                            activeSubTab = activeRespSubTab,
-                            actions = ResponseEditorPanelActions(
-                                onStatusCodeChanged = { editedStatusCode = it },
-                                onStatusTextChanged = { editedStatusText = it },
-                                onBodyStateChanged = { respBodyState = it },
-                                onHeadersChanged = { pairs ->
-                                    editedRespHeaders = pairs
-                                },
-                                onSubTabSelected = { activeRespSubTab = it }
-                            ),
-                            modifier = Modifier.fillMaxSize()
-                        )
+                    }
+
+                    // Action Control Toolbar ([FORWARD], [DROP], [DISABLE RULE])
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(themeColors.background)
+                            .border(width = 1.dp, color = themeColors.border)
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Dynamic Forward Button
+                        val isRequestPhase = activeEvent.phase == BreakpointPhase.REQUEST
+                        val forwardLabel = if (isRequestPhase) "FORWARD REQUEST" else "FORWARD RESPONSE"
+
+                        KNetButton(
+                            onClick = {
+                                if (isRequestPhase) {
+                                    val headersToForward = editedReqHeaders.filterNot {
+                                        it.first.equals("Content-Encoding", ignoreCase = true)
+                                    }
+                                    val modifiedReq = HttpRequest(
+                                        id = activeEvent.request.id,
+                                        method = activeEvent.request.method,
+                                        url = activeEvent.request.url,
+                                        protocol = activeEvent.request.protocol,
+                                        headers = headersToForward,
+                                        body = reqBodyState.payloadText.encodeToByteArray(),
+                                        timestamp = activeEvent.request.timestamp,
+                                        isIntercepted = true,
+                                        matchedRuleId = activeEvent.request.matchedRuleId
+                                    )
+                                    onForwardRequest(modifiedReq)
+                                } else {
+                                    val headersToForward = editedRespHeaders.filterNot {
+                                        it.first.equals("Content-Encoding", ignoreCase = true)
+                                    }
+                                    val modifiedResp = HttpResponse(
+                                        statusCode = editedStatusCode,
+                                        statusText = editedStatusText,
+                                        headers = headersToForward,
+                                        body = respBodyState.payloadText.encodeToByteArray(),
+                                        timestamp = activeEvent.response?.timestamp ?: System.currentTimeMillis()
+                                    )
+                                    onForwardResponse(modifiedResp)
+                                }
+                            },
+                            variant = ButtonVariant.Primary
+                        ) {
+                            Text(text = forwardLabel, style = typography.caption.copy(fontWeight = FontWeight.Bold))
+                        }
+
+                        // Drop Button
+                        KNetButton(
+                            onClick = onDrop,
+                            variant = ButtonVariant.Secondary
+                        ) {
+                            Text(text = "DROP", style = typography.caption.copy(fontWeight = FontWeight.Bold))
+                        }
+
+                        // Disable Rule Button
+                        KNetButton(
+                            onClick = onDisableRule,
+                            variant = ButtonVariant.Secondary
+                        ) {
+                            Text(text = "DISABLE RULE", style = typography.caption.copy(fontWeight = FontWeight.Bold))
+                        }
+                    }
+
+                    // Editor Body
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                    ) {
+                        if (activeEvent.phase == BreakpointPhase.REQUEST || activeEvent.phase == BreakpointPhase.BOTH) {
+                            RequestEditorPanel(
+                                bodyState = reqBodyState,
+                                headers = editedReqHeaders,
+                                activeSubTab = activeReqSubTab,
+                                actions = RequestEditorPanelActions(
+                                    onBodyStateChanged = { reqBodyState = it },
+                                    onHeadersChanged = { pairs ->
+                                        editedReqHeaders = pairs
+                                    },
+                                    onSubTabSelected = { activeReqSubTab = it }
+                                ),
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        } else {
+                            ResponseEditorPanel(
+                                statusCode = editedStatusCode,
+                                statusText = editedStatusText,
+                                bodyState = respBodyState,
+                                headers = editedRespHeaders,
+                                activeSubTab = activeRespSubTab,
+                                actions = ResponseEditorPanelActions(
+                                    onStatusCodeChanged = { editedStatusCode = it },
+                                    onStatusTextChanged = { editedStatusText = it },
+                                    onBodyStateChanged = { respBodyState = it },
+                                    onHeadersChanged = { pairs ->
+                                        editedRespHeaders = pairs
+                                    },
+                                    onSubTabSelected = { activeRespSubTab = it }
+                                ),
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
                     }
                 }
             }
         }
     }
 }
+

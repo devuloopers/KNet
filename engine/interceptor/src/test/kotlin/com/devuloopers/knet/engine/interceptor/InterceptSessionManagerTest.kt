@@ -39,4 +39,47 @@ class InterceptSessionManagerTest {
         InterceptSessionManager.clearSuspensions()
         assertTrue(InterceptSessionManager.getActiveEvents().isEmpty())
     }
+
+    @Test
+    fun testFifoPreservation() {
+        val req1 = TestFixtures.createHttpRequestDto(url = "https://api.example.com/1")
+        val req2 = TestFixtures.createHttpRequestDto(url = "https://api.example.com/2")
+        val req3 = TestFixtures.createHttpRequestDto(url = "https://api.example.com/3")
+
+        val event1 = InterceptSessionManager.suspendRequest(req1)
+        val event2 = InterceptSessionManager.suspendRequest(req2)
+        val event3 = InterceptSessionManager.suspendRequest(req3)
+
+        val active = InterceptSessionManager.getActiveEvents()
+        assertEquals(3, active.size)
+        assertEquals(event1.id, active[0].id)
+        assertEquals(event2.id, active[1].id)
+        assertEquals(event3.id, active[2].id)
+
+        // Resuming the middle item preserves FIFO for remaining items
+        val resumed2 = InterceptSessionManager.resume(event2.id, InterceptResult.Drop)
+        assertTrue(resumed2)
+
+        val remaining = InterceptSessionManager.getActiveEvents()
+        assertEquals(2, remaining.size)
+        assertEquals(event1.id, remaining[0].id)
+        assertEquals(event3.id, remaining[1].id)
+
+        // Clean up
+        InterceptSessionManager.clearSuspensions()
+        assertTrue(InterceptSessionManager.getActiveEvents().isEmpty())
+    }
+
+    @Test
+    fun testResumeIdempotency() {
+        val req = TestFixtures.createHttpRequestDto()
+        val event = InterceptSessionManager.suspendRequest(req)
+
+        val firstResume = InterceptSessionManager.resume(event.id, InterceptResult.Resume())
+        val secondResume = InterceptSessionManager.resume(event.id, InterceptResult.Resume())
+
+        assertTrue(firstResume, "First resume attempt must return true")
+        assertTrue(!secondResume, "Subsequent resume attempts must return false")
+    }
 }
+
