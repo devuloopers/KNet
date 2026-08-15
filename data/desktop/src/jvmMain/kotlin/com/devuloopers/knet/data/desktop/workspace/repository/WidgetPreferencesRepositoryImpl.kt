@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.devuloopers.knet.core.http.client.KNetApiClient
 import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
 import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
 import kotlinx.coroutines.flow.Flow
@@ -14,9 +15,16 @@ import kotlinx.coroutines.flow.map
 
 /**
  * Desktop implementation of [WidgetPreferencesRepository].
+ *
+ * Persists workspace preferences to DataStore and synchronizes timeout configurations
+ * to low-level Netty interceptors and Ktor HTTP clients at runtime.
+ *
+ * @param dataStore DataStore preferences persistence engine.
+ * @param apiClient Optional [KNetApiClient] HTTP client instance for timeout synchronization.
  */
 class WidgetPreferencesRepositoryImpl(
-    private val dataStore: DataStore<Preferences>
+    private val dataStore: DataStore<Preferences>,
+    private val apiClient: KNetApiClient? = null
 ) : WidgetPreferencesRepository {
 
     private companion object {
@@ -43,7 +51,11 @@ class WidgetPreferencesRepositoryImpl(
 
     override val settingsFlow: Flow<WorkspaceLayoutSettings> = dataStore.data.map { preferences ->
         val liveTimeout = preferences[keyLiveInterceptionTimeout] ?: 60
+        val apiStudioTimeout = preferences[keyApiStudioTimeout] ?: 60
+
+        // Synchronize Netty and Ktor
         com.devuloopers.knet.engine.interceptor.InterceptCoordinator.setTimeoutSeconds(liveTimeout)
+        apiClient?.updateTimeoutSeconds(apiStudioTimeout)
 
         WorkspaceLayoutSettings(
             isTrafficFeedVisible = preferences[keyTrafficFeed] ?: true,
@@ -63,13 +75,16 @@ class WidgetPreferencesRepositoryImpl(
             autoClearTrafficOnStartup = preferences[keyAutoClearTraffic] ?: false,
             theme = preferences[keyTheme] ?: "DARK",
             maxPayloadMb = preferences[keyMaxPayloadMb] ?: 10,
-            apiStudioTimeoutSeconds = preferences[keyApiStudioTimeout] ?: 60,
+            apiStudioTimeoutSeconds = apiStudioTimeout,
             liveInterceptionTimeoutSeconds = liveTimeout
         )
     }
 
     override suspend fun saveSettings(settings: WorkspaceLayoutSettings) {
+        // Synchronize Netty and Ktor
         com.devuloopers.knet.engine.interceptor.InterceptCoordinator.setTimeoutSeconds(settings.liveInterceptionTimeoutSeconds)
+        apiClient?.updateTimeoutSeconds(settings.apiStudioTimeoutSeconds)
+
         dataStore.edit { preferences ->
             preferences[keyTrafficFeed] = settings.isTrafficFeedVisible
             preferences[keyInspector] = settings.isInspectorVisible

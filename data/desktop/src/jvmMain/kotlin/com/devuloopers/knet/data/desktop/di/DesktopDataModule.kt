@@ -130,7 +130,7 @@ object DesktopDataModule {
             RulesRepositoryImpl(db.breakpointRuleDao())
         }
         single<InterceptionSessionRepository> { InterceptionSessionRepositoryImpl(protocolInspectorRegistry = get()) }
-        single<WidgetPreferencesRepository> { WidgetPreferencesRepositoryImpl(get()) }
+        single<WidgetPreferencesRepository> { WidgetPreferencesRepositoryImpl(get(), get()) }
         single<NetworkRepository> { NetworkRepositoryImpl(get()) }
         single { ProxyHistoryHeaderLookup(get()) }
     }

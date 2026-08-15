@@ -24,6 +24,7 @@ import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.plugins.HttpRequestRetry
 import io.ktor.client.plugins.HttpTimeout
+import io.ktor.client.plugins.timeout
 import io.ktor.client.request.forms.formData
 import io.ktor.client.request.forms.submitFormWithBinaryData
 import io.ktor.client.request.header
@@ -63,6 +64,7 @@ open class KNetApiClient(
     private val proxyTrafficListener: ProxyTrafficListener? = null
 ) : CoreHttpExecutor, DomainHttpExecutor {
 
+    private var currentConfiguration: HttpClientConfiguration = configuration
     private val proxyHttpClients = java.util.concurrent.ConcurrentHashMap<Int, HttpClient>()
 
     private val directHttpClient: HttpClient by lazy {
@@ -72,6 +74,36 @@ open class KNetApiClient(
     private val proxyHttpClient: HttpClient? by lazy {
         proxyPort?.let { getProxyHttpClient(it) }
     }
+
+    /**
+     * Updates the active client timeout in seconds dynamically at runtime.
+     *
+     * @param seconds Timeout duration in seconds.
+     */
+    open fun updateTimeoutSeconds(seconds: Int) {
+        val millis = (seconds.coerceAtLeast(1)).toLong() * 1000L
+        updateTimeoutMillis(millis)
+    }
+
+    /**
+     * Updates the active client timeout in milliseconds dynamically at runtime.
+     *
+     * @param millis Timeout duration in milliseconds.
+     */
+    open fun updateTimeoutMillis(millis: Long) {
+        val coerced = millis.coerceAtLeast(100L)
+        currentConfiguration = currentConfiguration.copy(
+            timeoutMillis = coerced,
+            connectTimeoutMillis = coerced
+        )
+    }
+
+    /**
+     * Returns the active HTTP client configuration.
+     *
+     * @return Current [HttpClientConfiguration] instance.
+     */
+    open fun getConfiguration(): HttpClientConfiguration = currentConfiguration
 
     /**
      * Retrieves or creates a thread-safe cached Ktor [HttpClient] instance configured
@@ -96,21 +128,22 @@ open class KNetApiClient(
     private fun createHttpClient(targetProxyPort: Int?): HttpClient {
         val block: io.ktor.client.HttpClientConfig<*>.() -> Unit = {
             install(HttpTimeout) {
-                requestTimeoutMillis = configuration.timeoutMillis
-                connectTimeoutMillis = configuration.connectTimeoutMillis
+                requestTimeoutMillis = currentConfiguration.timeoutMillis
+                connectTimeoutMillis = currentConfiguration.connectTimeoutMillis
+                socketTimeoutMillis = currentConfiguration.timeoutMillis
             }
-            if (configuration.retryCount > 0) {
+            if (currentConfiguration.retryCount > 0) {
                 install(HttpRequestRetry) {
-                    retryOnExceptionOrServerErrors(maxRetries = configuration.retryCount)
+                    retryOnExceptionOrServerErrors(maxRetries = currentConfiguration.retryCount)
                     exponentialDelay()
                 }
             }
-            followRedirects = configuration.followRedirects
+            followRedirects = currentConfiguration.followRedirects
         }
 
         return createPlatformHttpClient(
             targetProxyPort = targetProxyPort,
-            configuration = configuration,
+            configuration = currentConfiguration,
             customEngine = customEngine,
             block = block
         )
@@ -288,7 +321,7 @@ open class KNetApiClient(
                     val reason = com.devuloopers.knet.core.http.util.NetworkExceptionClassifier.classify(
                         exception = fallbackException,
                         targetUrl = currentUrl,
-                        timeoutMs = configuration.timeoutMillis
+                        timeoutMs = currentConfiguration.timeoutMillis
                     )
                     ApiExecutionResult(
                         statusCode = 0,
@@ -310,7 +343,7 @@ open class KNetApiClient(
                 val reason = com.devuloopers.knet.core.http.util.NetworkExceptionClassifier.classify(
                     exception = exception,
                     targetUrl = currentUrl,
-                    timeoutMs = configuration.timeoutMillis
+                    timeoutMs = currentConfiguration.timeoutMillis
                 )
                 ApiExecutionResult(
                     statusCode = 0,
@@ -357,11 +390,21 @@ open class KNetApiClient(
                 }
             ) {
                 this.method = targetMethod
+                timeout {
+                    requestTimeoutMillis = currentConfiguration.timeoutMillis
+                    connectTimeoutMillis = currentConfiguration.connectTimeoutMillis
+                    socketTimeoutMillis = currentConfiguration.timeoutMillis
+                }
                 applyHeadersAndAuth(this, headers, authType, authToken)
             }
         } else {
             client.request(url) {
                 this.method = targetMethod
+                timeout {
+                    requestTimeoutMillis = currentConfiguration.timeoutMillis
+                    connectTimeoutMillis = currentConfiguration.connectTimeoutMillis
+                    socketTimeoutMillis = currentConfiguration.timeoutMillis
+                }
                 applyHeadersAndAuth(this, headers, authType, authToken)
 
                 when (bodyType) {

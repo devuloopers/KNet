@@ -720,6 +720,22 @@ This document serves as the live project tracking board for implementing seamles
   - [x] Write unit tests in `SettingsViewModelTest`
   - [x] Run full project test suite (132 tasks, 0 failures)
 
+---
+
+## Phase 50: Dynamic Runtime Timeout Synchronization for Netty & Ktor `[COMPLETED]`
+
+- [x] **Phase 1: Ktor HTTP Client Dynamic Timeout Support (`:core:http`)** `[COMPLETED]`
+  - [x] Add `updateTimeoutSeconds` and per-request `timeout { ... }` block in `KNetApiClient.kt`
+  - [x] Invalidate/refresh cached client instances on configuration updates
+- [x] **Phase 2: Data Layer Orchestration Bridge (`:data:desktop`)** `[COMPLETED]`
+  - [x] Inject `KNetApiClient` into `WidgetPreferencesRepositoryImpl`
+  - [x] Wire `KNetApiClient` injection in `DesktopDataModule.kt`
+  - [x] Synchronize `apiClient?.updateTimeoutSeconds(...)` alongside `InterceptCoordinator.setTimeoutSeconds(...)`
+- [x] **Phase 3: Automated Verification & Multi-Module Testing** `[COMPLETED]`
+  - [x] Add unit test in `KNetApiClientTest`
+  - [x] Run full project multi-module test suite (132 tasks, 0 failures)
+
+
 
 
 

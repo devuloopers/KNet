@@ -104,4 +104,28 @@ class KNetApiClientTest {
         
         clientWithListener.close()
     }
+
+    @Test
+    fun testUpdateTimeoutSecondsUpdatesConfiguration() {
+        val testClient = KNetApiClient()
+        testClient.updateTimeoutSeconds(45)
+        assertEquals(45_000L, testClient.getConfiguration().timeoutMillis)
+        assertEquals(45_000L, testClient.getConfiguration().connectTimeoutMillis)
+
+        testClient.updateTimeoutSeconds(120)
+        assertEquals(120_000L, testClient.getConfiguration().timeoutMillis)
+        assertEquals(120_000L, testClient.getConfiguration().connectTimeoutMillis)
+    }
+
+    @Test
+    fun testUpdateTimeoutMillisUpdatesConfiguration() {
+        val testClient = KNetApiClient()
+        testClient.updateTimeoutMillis(2500L)
+        assertEquals(2500L, testClient.getConfiguration().timeoutMillis)
+        assertEquals(2500L, testClient.getConfiguration().connectTimeoutMillis)
+
+        // Lower bound clamp check
+        testClient.updateTimeoutMillis(10L)
+        assertEquals(100L, testClient.getConfiguration().timeoutMillis)
+    }
 }
