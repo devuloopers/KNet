@@ -22,7 +22,19 @@ private const val TAG = "InterceptCoordinator"
  */
 object InterceptCoordinator {
 
+    /**
+     * Suspension timeout in milliseconds before an intercepted request/response is automatically dropped.
+     */
     var timeoutMs: Long = 60_000L
+
+    /**
+     * Sets the suspension timeout in seconds.
+     *
+     * @param seconds Timeout duration in seconds.
+     */
+    fun setTimeoutSeconds(seconds: Int) {
+        timeoutMs = (seconds.coerceAtLeast(1)).toLong() * 1000L
+    }
 
     fun coordinateRequest(
         context: ChannelHandlerContext,

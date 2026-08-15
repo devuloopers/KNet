@@ -37,9 +37,14 @@ class WidgetPreferencesRepositoryImpl(
         private val keyAutoClearTraffic = booleanPreferencesKey("auto_clear_traffic_startup")
         private val keyTheme = stringPreferencesKey("theme")
         private val keyMaxPayloadMb = intPreferencesKey("max_payload_mb")
+        private val keyApiStudioTimeout = intPreferencesKey("api_studio_timeout_seconds")
+        private val keyLiveInterceptionTimeout = intPreferencesKey("live_interception_timeout_seconds")
     }
 
     override val settingsFlow: Flow<WorkspaceLayoutSettings> = dataStore.data.map { preferences ->
+        val liveTimeout = preferences[keyLiveInterceptionTimeout] ?: 60
+        com.devuloopers.knet.engine.interceptor.InterceptCoordinator.setTimeoutSeconds(liveTimeout)
+
         WorkspaceLayoutSettings(
             isTrafficFeedVisible = preferences[keyTrafficFeed] ?: true,
             isInspectorVisible = preferences[keyInspector] ?: true,
@@ -57,11 +62,14 @@ class WidgetPreferencesRepositoryImpl(
             proxyPort = preferences[keyProxyPort] ?: 8080,
             autoClearTrafficOnStartup = preferences[keyAutoClearTraffic] ?: false,
             theme = preferences[keyTheme] ?: "DARK",
-            maxPayloadMb = preferences[keyMaxPayloadMb] ?: 10
+            maxPayloadMb = preferences[keyMaxPayloadMb] ?: 10,
+            apiStudioTimeoutSeconds = preferences[keyApiStudioTimeout] ?: 60,
+            liveInterceptionTimeoutSeconds = liveTimeout
         )
     }
 
     override suspend fun saveSettings(settings: WorkspaceLayoutSettings) {
+        com.devuloopers.knet.engine.interceptor.InterceptCoordinator.setTimeoutSeconds(settings.liveInterceptionTimeoutSeconds)
         dataStore.edit { preferences ->
             preferences[keyTrafficFeed] = settings.isTrafficFeedVisible
             preferences[keyInspector] = settings.isInspectorVisible
@@ -80,6 +88,8 @@ class WidgetPreferencesRepositoryImpl(
             preferences[keyAutoClearTraffic] = settings.autoClearTrafficOnStartup
             preferences[keyTheme] = settings.theme
             preferences[keyMaxPayloadMb] = settings.maxPayloadMb
+            preferences[keyApiStudioTimeout] = settings.apiStudioTimeoutSeconds
+            preferences[keyLiveInterceptionTimeout] = settings.liveInterceptionTimeoutSeconds
         }
     }
 }

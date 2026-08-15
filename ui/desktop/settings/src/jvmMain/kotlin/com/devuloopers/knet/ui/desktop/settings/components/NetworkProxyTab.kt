@@ -15,15 +15,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
+import com.devuloopers.knet.domain.workspace.model.TimeoutUnit
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
+import com.devuloopers.knet.ui.core.components.button.KNetSegmentedButton
 import com.devuloopers.knet.ui.core.components.input.KNetTextField
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.settings.model.SettingsIntent
 import com.devuloopers.knet.ui.desktop.settings.model.SettingsState
 
 /**
- * Tab content view rendering Proxy Listening Port, OS Trust Store, and Data Directory settings.
+ * Tab content view rendering Proxy Listening Port, Timeouts, OS Trust Store, and Data Directory settings.
+ *
+ * @param state Immutable settings screen state.
+ * @param onIntent Action callback dispatching settings user intents.
+ * @param onCopyPath Action callback copying the data directory path to clipboard.
+ * @param modifier Composable layout modifier.
  */
 @Composable
 fun NetworkProxyTab(
@@ -46,7 +53,7 @@ fun NetworkProxyTab(
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = "Configure interception settings, ports, and certificate trust stores.",
+                text = "Configure interception settings, ports, timeouts, and certificate trust stores.",
                 style = typography.bodyMedium.copy(color = themeColors.textSecondary)
             )
         }
@@ -80,7 +87,97 @@ fun NetworkProxyTab(
             }
         }
 
-        // Card 2: Operating System Trust Store
+        // Card 2: Live Interception Timeout
+        SettingsCard {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Live Interception Timeout",
+                        style = typography.titleSmall.copy(color = themeColors.textPrimary)
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Maximum duration suspended traffic remains paused before auto-dropping.",
+                        style = typography.bodySmall.copy(color = themeColors.textSecondary)
+                    )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(modifier = Modifier.width(70.dp)) {
+                        KNetTextField(
+                            value = state.liveInterceptionTimeoutValue,
+                            onValueChange = {
+                                onIntent(SettingsIntent.UpdateLiveInterceptionTimeout(it, state.liveInterceptionTimeoutUnit))
+                            },
+                            placeholder = "60",
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    KNetSegmentedButton(
+                        options = listOf(TimeoutUnit.SECONDS.label, TimeoutUnit.MINUTES.label),
+                        selectedIndex = if (state.liveInterceptionTimeoutUnit == TimeoutUnit.MINUTES) 1 else 0,
+                        onOptionSelected = { index ->
+                            val chosenUnit = if (index == 1) TimeoutUnit.MINUTES else TimeoutUnit.SECONDS
+                            onIntent(SettingsIntent.UpdateLiveInterceptionTimeout(state.liveInterceptionTimeoutValue, chosenUnit))
+                        }
+                    )
+                }
+            }
+        }
+
+        // Card 3: API Studio Request Timeout
+        SettingsCard {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "API Studio Request Timeout",
+                        style = typography.titleSmall.copy(color = themeColors.textPrimary)
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Maximum execution duration allowed for API Studio client HTTP requests.",
+                        style = typography.bodySmall.copy(color = themeColors.textSecondary)
+                    )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Box(modifier = Modifier.width(70.dp)) {
+                        KNetTextField(
+                            value = state.apiStudioTimeoutValue,
+                            onValueChange = {
+                                onIntent(SettingsIntent.UpdateApiStudioTimeout(it, state.apiStudioTimeoutUnit))
+                            },
+                            placeholder = "60",
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    KNetSegmentedButton(
+                        options = listOf(TimeoutUnit.SECONDS.label, TimeoutUnit.MINUTES.label),
+                        selectedIndex = if (state.apiStudioTimeoutUnit == TimeoutUnit.MINUTES) 1 else 0,
+                        onOptionSelected = { index ->
+                            val chosenUnit = if (index == 1) TimeoutUnit.MINUTES else TimeoutUnit.SECONDS
+                            onIntent(SettingsIntent.UpdateApiStudioTimeout(state.apiStudioTimeoutValue, chosenUnit))
+                        }
+                    )
+                }
+            }
+        }
+
+        // Card 4: Operating System Trust Store
         SettingsCard {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -112,7 +209,7 @@ fun NetworkProxyTab(
             }
         }
 
-        // Card 3: Data Directory
+        // Card 5: Data Directory
         SettingsCard {
             Column(modifier = Modifier.fillMaxWidth()) {
                 Row(

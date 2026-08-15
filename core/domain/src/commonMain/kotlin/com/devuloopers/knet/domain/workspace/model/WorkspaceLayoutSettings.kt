@@ -29,5 +29,7 @@ data class WorkspaceLayoutSettings(
     val proxyPort: Int = 8080,
     val autoClearTrafficOnStartup: Boolean = false,
     val theme: String = "DARK",
-    val maxPayloadMb: Int = 10
+    val maxPayloadMb: Int = 10,
+    val apiStudioTimeoutSeconds: Int = 60,
+    val liveInterceptionTimeoutSeconds: Int = 60
 )

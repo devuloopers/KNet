@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.core.logger.KNetLogger
 import com.devuloopers.knet.core.logger.LogTags
+import com.devuloopers.knet.domain.workspace.model.TimeoutUnit
 import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
 import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
 import com.devuloopers.knet.engine.certificate.CertificateManager
@@ -21,6 +22,10 @@ import java.io.File
  *
  * Interacts with [WidgetPreferencesRepository] for DataStore settings persistence
  * and [CertificateManager] for OS Root CA status and trust store installation.
+ *
+ * @param widgetPreferencesRepository Repository persisting user preferences to DataStore.
+ * @param certificateManager Certificate management service for OS Root CA trust store registration.
+ * @param ioDispatcher Background coroutine dispatcher for asynchronous I/O operations.
  */
 class SettingsViewModel(
     private val widgetPreferencesRepository: WidgetPreferencesRepository,
@@ -50,6 +55,9 @@ class SettingsViewModel(
                 }
             }
 
+            val (apiStudioVal, apiStudioUnit) = TimeoutUnit.fromSeconds(savedSettings.apiStudioTimeoutSeconds)
+            val (liveVal, liveUnit) = TimeoutUnit.fromSeconds(savedSettings.liveInterceptionTimeoutSeconds)
+
             _uiState.update {
                 it.copy(
                     proxyPort = savedSettings.proxyPort.toString(),
@@ -57,6 +65,10 @@ class SettingsViewModel(
                     theme = savedSettings.theme,
                     scriptLanguage = savedSettings.scriptLanguage,
                     maxPayloadMb = savedSettings.maxPayloadMb,
+                    apiStudioTimeoutValue = apiStudioVal.toString(),
+                    apiStudioTimeoutUnit = apiStudioUnit,
+                    liveInterceptionTimeoutValue = liveVal.toString(),
+                    liveInterceptionTimeoutUnit = liveUnit,
                     isCaTrusted = isCaTrusted,
                     dataDirectory = defaultDataDir
                 )
@@ -66,6 +78,8 @@ class SettingsViewModel(
 
     /**
      * Processes user intents from the Settings UI with direct background auto-saving.
+     *
+     * @param intent User action intent to process.
      */
     fun processIntent(intent: SettingsIntent) {
         viewModelScope.launch {
@@ -106,6 +120,30 @@ class SettingsViewModel(
 
                 is SettingsIntent.SetScriptLanguage -> {
                     _uiState.update { it.copy(scriptLanguage = intent.language, message = "Saved to preferences") }
+                    autoSaveSettings(_uiState.value)
+                }
+
+                is SettingsIntent.UpdateApiStudioTimeout -> {
+                    val filtered = intent.value.filter { it.isDigit() }.take(4)
+                    _uiState.update {
+                        it.copy(
+                            apiStudioTimeoutValue = filtered,
+                            apiStudioTimeoutUnit = intent.unit,
+                            message = "Saved to preferences"
+                        )
+                    }
+                    autoSaveSettings(_uiState.value)
+                }
+
+                is SettingsIntent.UpdateLiveInterceptionTimeout -> {
+                    val filtered = intent.value.filter { it.isDigit() }.take(4)
+                    _uiState.update {
+                        it.copy(
+                            liveInterceptionTimeoutValue = filtered,
+                            liveInterceptionTimeoutUnit = intent.unit,
+                            message = "Saved to preferences"
+                        )
+                    }
                     autoSaveSettings(_uiState.value)
                 }
 
@@ -150,12 +188,18 @@ class SettingsViewModel(
 
                 SettingsIntent.ResetDefaults -> {
                     val defaultSettings = WorkspaceLayoutSettings()
+                    val (apiStudioVal, apiStudioUnit) = TimeoutUnit.fromSeconds(defaultSettings.apiStudioTimeoutSeconds)
+                    val (liveVal, liveUnit) = TimeoutUnit.fromSeconds(defaultSettings.liveInterceptionTimeoutSeconds)
                     val newState = _uiState.value.copy(
                         proxyPort = defaultSettings.proxyPort.toString(),
                         autoClearTrafficOnStartup = defaultSettings.autoClearTrafficOnStartup,
                         theme = defaultSettings.theme,
                         scriptLanguage = defaultSettings.scriptLanguage,
                         maxPayloadMb = 10,
+                        apiStudioTimeoutValue = apiStudioVal.toString(),
+                        apiStudioTimeoutUnit = apiStudioUnit,
+                        liveInterceptionTimeoutValue = liveVal.toString(),
+                        liveInterceptionTimeoutUnit = liveUnit,
                         message = "Reset to default settings."
                     )
                     _uiState.value = newState
@@ -167,6 +211,12 @@ class SettingsViewModel(
 
     private suspend fun autoSaveSettings(state: SettingsState) {
         val portNumber = state.proxyPort.toIntOrNull() ?: 8080
+        val apiStudioRaw = state.apiStudioTimeoutValue.toIntOrNull() ?: 60
+        val apiStudioSeconds = state.apiStudioTimeoutUnit.toSeconds(apiStudioRaw)
+
+        val liveRaw = state.liveInterceptionTimeoutValue.toIntOrNull() ?: 60
+        val liveSeconds = state.liveInterceptionTimeoutUnit.toSeconds(liveRaw)
+
         withContext(ioDispatcher) {
             val currentSettings = widgetPreferencesRepository.settingsFlow.firstOrNull() ?: WorkspaceLayoutSettings()
             widgetPreferencesRepository.saveSettings(
@@ -175,7 +225,9 @@ class SettingsViewModel(
                     autoClearTrafficOnStartup = state.autoClearTrafficOnStartup,
                     theme = state.theme,
                     scriptLanguage = state.scriptLanguage,
-                    maxPayloadMb = state.maxPayloadMb
+                    maxPayloadMb = state.maxPayloadMb,
+                    apiStudioTimeoutSeconds = apiStudioSeconds,
+                    liveInterceptionTimeoutSeconds = liveSeconds
                 )
             )
         }

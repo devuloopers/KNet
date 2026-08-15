@@ -701,6 +701,26 @@ This document serves as the live project tracking board for implementing seamles
   - [x] Update `ApiStudioViewModelTest` and `ApiStudioExecutionPipelineE2ETest`
   - [x] Run full test suites across `:ui:desktop:apistudio`, `:data:desktop`, `:engine:interceptor`, and `:apps:desktop` (132 tasks, 0 failures)
 
+---
+
+## Phase 49: Configurable Timeouts with Sec/Min Segmented Toggle `[COMPLETED]`
+
+- [x] **Phase 1: Domain Models & DataStore Mapping (`:core:domain`, `:data:desktop`)** `[COMPLETED]`
+  - [x] Add `apiStudioTimeoutSeconds` and `liveInterceptionTimeoutSeconds` to `WorkspaceLayoutSettings`
+  - [x] Create `TimeoutUnit` strongly-typed enum (`SECONDS`, `MINUTES`)
+  - [x] Add DataStore preferences keys and persistence in `WidgetPreferencesRepositoryImpl`
+- [x] **Phase 2: Engine & Client Timeout Synchronization (`:engine:interceptor`, `:data:desktop`)** `[COMPLETED]`
+  - [x] Expose `setTimeoutSeconds` on `InterceptCoordinator`
+  - [x] Synchronize `InterceptCoordinator.timeoutMs` on settings observation
+- [x] **Phase 3: Settings Presentation & UI Implementation (`:ui:desktop:settings`)** `[COMPLETED]`
+  - [x] Add timeout values, units, and intents to `SettingsState` and `SettingsIntent`
+  - [x] Update `SettingsViewModel` to handle unit conversion and persistence
+  - [x] Add Live Interception and API Studio Timeout cards with numeric textfield and `KNetSegmentedButton` in `NetworkProxyTab`
+- [x] **Phase 4: Automated Verification & Multi-Module Testing** `[COMPLETED]`
+  - [x] Write unit tests in `SettingsViewModelTest`
+  - [x] Run full project test suite (132 tasks, 0 failures)
+
+
 
 
 
