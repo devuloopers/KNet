@@ -3,8 +3,10 @@ package com.devuloopers.knet.engine.certificate
 import java.io.File
 import java.security.MessageDigest
 import java.security.cert.X509Certificate
-import java.util.*
+import java.util.Locale
 import java.util.concurrent.TimeUnit
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 
 /**
  * Sealed interface representing the outcome of a Root CA trust store registration attempt.
@@ -25,22 +27,20 @@ sealed interface InstallationResult {
 }
 
 /**
- * Utility service to automatically register KNet's Root CA certificate into the host OS trust store.
- *
- * **Threading Contract**: Trust installation remains a synchronous operation. Callers are responsible for
- * invoking it from an appropriate background thread (e.g. `Dispatchers.IO`) if they wish to avoid blocking the UI.
+ * Utility responsible for automating the installation and verification of KNet's Root CA certificate
+ * into host operating system trust stores (macOS Keychain, Windows Root CA store, Linux `ca-certificates`).
  */
 object TrustStoreInstaller {
 
-    private const val COMMAND_TIMEOUT_SECONDS = 5L
+    private const val COMMAND_TIMEOUT_SECONDS = 10L
 
     /**
-     * Installs the given Root CA certificate into the host operating system's trust store.
-     * Detects the OS type and runs platform-specific utilities.
+     * Attempts to automatically install and trust the given Root CA certificate on the host machine.
      *
      * @param caCertificate The CA certificate to trust.
      * @return An [InstallationResult] indicating success or failure with manual instructions.
      */
+    @OptIn(ExperimentalEncodingApi::class)
     fun install(caCertificate: X509Certificate): InstallationResult {
         val os = System.getProperty("os.name").lowercase(Locale.ENGLISH)
         val tempCertFile = File.createTempFile("knet_root_ca", ".crt")
@@ -49,7 +49,7 @@ object TrustStoreInstaller {
         // Write certificate to temporary file in PEM format
         tempCertFile.writer().use { writer ->
             writer.write("-----BEGIN CERTIFICATE-----\n")
-            writer.write(Base64.getMimeEncoder().encodeToString(caCertificate.encoded))
+            writer.write(Base64.Mime.encode(caCertificate.encoded))
             writer.write("\n-----END CERTIFICATE-----\n")
         }
 
@@ -79,6 +79,7 @@ object TrustStoreInstaller {
             when {
                 os.contains("win") -> isTrustedWindows(caCertificate)
                 os.contains("mac") -> isTrustedMac(caCertificate)
+                os.contains("nix") || os.contains("nux") || os.contains("aix") -> isTrustedLinux(caCertificate)
                 else -> false
             }
         } catch (_: Exception) {
@@ -123,10 +124,10 @@ object TrustStoreInstaller {
     }
 
     /**
-     * Windows implementation utilizing command-line certutil.
+     * Windows implementation utilizing command-line certutil for the current user.
      */
     private fun installWindows(certFile: File): InstallationResult {
-        val command = arrayOf("certutil", "-addstore", "-user", "ROOT", certFile.absolutePath)
+        val command = arrayOf("certutil", "-user", "-addstore", "Root", certFile.absolutePath)
         val commandString = command.joinToString(" ")
         return executeCommand(command, commandString)
     }
@@ -174,19 +175,24 @@ object TrustStoreInstaller {
     }
 
     /**
+     * Derives the hex SHA-256 fingerprint of the given certificate without delimiters.
+     */
+    private fun sha256FingerprintHex(cert: X509Certificate): String {
+        val digest = MessageDigest.getInstance("SHA-256").digest(cert.encoded)
+        return digest.joinToString("") { String.format("%02x", it) }
+    }
+
+    /**
      * Windows trust detection — runs `certutil` on both the user and system Root stores and
      * matches the certificate's SHA-1 hash or serial number against the output.
-     *
-     * Note: Windows `certutil -store` outputs `Cert Hash(sha1)` and `Serial Number`, but does
-     * not output SHA-256 fingerprints.
      */
     private fun isTrustedWindows(caCertificate: X509Certificate): Boolean {
         val sha1Hex = sha1FingerprintHex(caCertificate).lowercase()
         val serialHex = caCertificate.serialNumber.toString(16).lowercase()
 
         // Check user Root store first, fallback to machine Root store if needed.
-        val userStoreOutput = runCertutilStore("-user", "Root")
-        val machineStoreOutput = runCertutilStore("Root")
+        val userStoreOutput = runCertutilStore("-user", "-store", "Root")
+        val machineStoreOutput = runCertutilStore("-store", "Root")
         val combinedOutput = (userStoreOutput + "\n" + machineStoreOutput)
             .lowercase()
             .replace(" ", "")
@@ -197,7 +203,7 @@ object TrustStoreInstaller {
 
     private fun runCertutilStore(vararg args: String): String {
         return try {
-            val command = arrayOf("certutil", "-store") + args
+            val command = arrayOf("certutil") + args
             val process = ProcessBuilder(*command)
                 .redirectErrorStream(true)
                 .start()
@@ -210,28 +216,49 @@ object TrustStoreInstaller {
     }
 
     /**
-     * Derives the colon-separated uppercase SHA-256 fingerprint of the given certificate.
-     */
-    private fun sha256Fingerprint(cert: X509Certificate): String {
-        val digest = MessageDigest.getInstance("SHA-256").digest(cert.encoded)
-        return digest.joinToString(":") { String.format("%02X", it) }
-    }
-
-    /**
-     * macOS trust detection — runs `security find-certificate` on the System root keychain
+     * macOS trust detection — runs `security find-certificate -a -Z` across active keychain search list
      * and checks whether the certificate's SHA-256 fingerprint appears in the output.
      */
     private fun isTrustedMac(caCertificate: X509Certificate): Boolean {
-        val fingerprint = sha256Fingerprint(caCertificate)
-        val process = ProcessBuilder(
-            "security", "find-certificate",
-            "-a", "-Z", "-p",
-            "/Library/Keychains/SystemRootCertificates.keychain",
-            "${System.getProperty("user.home")}/Library/Keychains/login.keychain-db"
-        ).redirectErrorStream(true).start()
-        val output = process.inputStream.bufferedReader().readText()
-        process.waitFor(COMMAND_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-        return output.uppercase().contains(fingerprint.replace(":", " "))
-                || output.uppercase().contains(fingerprint)
+        return try {
+            val fingerprint = sha256FingerprintHex(caCertificate).uppercase()
+            val process = ProcessBuilder("security", "find-certificate", "-a", "-Z")
+                .redirectErrorStream(true)
+                .start()
+            val output = process.inputStream.bufferedReader().readText()
+            process.waitFor(COMMAND_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            val cleanOutput = output.uppercase().replace(" ", "").replace(":", "")
+            cleanOutput.contains(fingerprint)
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Linux trust detection — scans standard system certificate bundle paths for the CA certificate.
+     */
+    @OptIn(ExperimentalEncodingApi::class)
+    private fun isTrustedLinux(caCertificate: X509Certificate): Boolean {
+        val certBundlePaths = listOf(
+            "/etc/ssl/certs/ca-certificates.crt",
+            "/etc/pki/tls/certs/ca-bundle.crt",
+            "/etc/ssl/ca-bundle.pem",
+            "/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem",
+            "/usr/local/share/ca-certificates/knet_root_ca.crt"
+        )
+        return try {
+            val encodedMime = Base64.Mime.encode(caCertificate.encoded)
+            for (path in certBundlePaths) {
+                val file = File(path)
+                if (file.exists() && file.canRead()) {
+                    if (file.name.contains("knet") || file.readText().contains(encodedMime)) {
+                        return true
+                    }
+                }
+            }
+            false
+        } catch (_: Exception) {
+            false
+        }
     }
 }

@@ -7,7 +7,8 @@ import com.google.protobuf.DynamicMessage
 import com.google.protobuf.util.JsonFormat
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
-import java.util.Base64
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 
 /**
  * Strategy formatter for gRPC-Web binary streams.
@@ -24,6 +25,7 @@ class GrpcWebBodyFormatter(
         return mime.contains("grpc-web") || mime.contains("grpc-web-text")
     }
 
+    @OptIn(ExperimentalEncodingApi::class)
     override fun format(headers: Map<String, String>, bodyText: String): BodyFormat {
         val contentType = headers.entries.find { it.key.equals("content-type", ignoreCase = true) }?.value ?: ""
         val isBase64Text = contentType.lowercase().contains("grpc-web-text")
@@ -31,7 +33,7 @@ class GrpcWebBodyFormatter(
         val rawBytes = try {
             val rawStringBytes = bodyText.toByteArray(StandardCharsets.ISO_8859_1)
             if (isBase64Text) {
-                Base64.getDecoder().decode(bodyText.trim().toByteArray(StandardCharsets.US_ASCII))
+                Base64.decode(bodyText.trim())
             } else {
                 rawStringBytes
             }
@@ -96,18 +98,19 @@ class GrpcWebBodyFormatter(
 
     private fun formatHexFallback(bytes: ByteArray): String {
         if (bytes.isEmpty()) return ""
-        val sb = StringBuilder()
-        sb.append("=== Raw Hex (Schema-less Fallback) ===\n")
-        var i = 0
-        while (i < bytes.size) {
-            val hex = bytes.copyOfRange(i, minOf(i + 16, bytes.size)).joinToString(" ") { "%02X".format(it) }
-            val ascii = bytes.copyOfRange(i, minOf(i + 16, bytes.size)).map {
-                val c = it.toInt().toChar()
-                if (c in ' '..'~') c else '.'
-            }.joinToString("")
-            sb.append("%04X  %-48s  |%s|\n".format(i, hex, ascii))
-            i += 16
-        }
-        return sb.toString().trim()
+        return buildString {
+            append("=== Raw Hex (Schema-less Fallback) ===\n")
+            var i = 0
+            while (i < bytes.size) {
+                val hex = bytes.copyOfRange(i, minOf(i + 16, bytes.size)).joinToString(" ") { "%02X".format(it) }
+                val ascii = bytes.copyOfRange(i, minOf(i + 16, bytes.size)).map {
+                    val c = it.toInt().toChar()
+                    if (c in ' '..'~') c else '.'
+                }.joinToString("")
+                append("%04X  %-48s  |%s|\n".format(i, hex, ascii))
+                i += 16
+            }
+        }.trim()
     }
 }
+

@@ -38,8 +38,10 @@ class KNetProxyHandler(
     private val certCache: CertificateCache,
     private val listener: ProxyTrafficListener? = null,
     private val keyManagerProvider: com.devuloopers.knet.engine.proxy.tls.KeyManagerProvider? = null,
-    private val strictSsl: Boolean = false
+    private val strictSsl: Boolean = false,
+    private val proxyScope: CoroutineScope = CoroutineScope(Dispatchers.IO)
 ) : SimpleChannelInboundHandler<FullHttpRequest>() {
+
 
     companion object {
         private val HOST_ATTR = AttributeKey.valueOf<String>("knet.host")
@@ -171,7 +173,7 @@ class KNetProxyHandler(
         val timingCollector = NetworkTimingCollector()
         timingCollector.markDnsStart()
 
-        CoroutineScope(Dispatchers.IO).launch {
+        proxyScope.launch {
             val resolvedHost = try {
                 val addr = InetAddress.getByName(targetHost)
                 timingCollector.markDnsEnd()
@@ -338,10 +340,15 @@ class KNetOutboundHandler(
     private val timingCollector: NetworkTimingCollector = NetworkTimingCollector()
 ) : SimpleChannelInboundHandler<HttpObject>() {
 
+    companion object {
+        /** Maximum response body bytes accumulated for in-memory inspection (10 MB). */
+        private const val MAX_STREAM_INSPECTION_BYTES = 10 * 1024 * 1024
+    }
+
     private var mappedResponse: com.devuloopers.knet.domain.clientNetwork.model.HttpResponse? = null
     private var isKeepAlive: Boolean = true
 
-    /** Accumulates body bytes from chunked HttpContent messages for inspection capture. */
+    /** Accumulates body bytes from chunked HttpContent messages for inspection capture up to [MAX_STREAM_INSPECTION_BYTES]. */
     private val responseBodyBuffer = java.io.ByteArrayOutputStream()
 
     override fun channelActive(context: ChannelHandlerContext) {
@@ -405,15 +412,19 @@ class KNetOutboundHandler(
             }
 
             is HttpContent -> {
-                // Accumulate body chunk bytes for inspection capture before forwarding
+                // Accumulate body chunk bytes for inspection capture before forwarding (bounded to MAX_STREAM_INSPECTION_BYTES)
                 val chunk = msg.content()
-                if (chunk.readableBytes() > 0) {
-                    val bytes = ByteArray(chunk.readableBytes())
-                    chunk.getBytes(chunk.readerIndex(), bytes)
+                val readable = chunk.readableBytes()
+                if (readable > 0 && responseBodyBuffer.size() < MAX_STREAM_INSPECTION_BYTES) {
+                    val remainingBudget = MAX_STREAM_INSPECTION_BYTES - responseBodyBuffer.size()
+                    val bytesToCopy = minOf(readable, remainingBudget)
+                    val bytes = ByteArray(bytesToCopy)
+                    chunk.getBytes(chunk.readerIndex(), bytes, 0, bytesToCopy)
                     responseBodyBuffer.write(bytes)
                 }
 
                 clientChannel.writeAndFlush(ReferenceCountUtil.retain(msg))
+
 
                 if (msg is LastHttpContent) {
                     timingCollector.markLastByteReceived()

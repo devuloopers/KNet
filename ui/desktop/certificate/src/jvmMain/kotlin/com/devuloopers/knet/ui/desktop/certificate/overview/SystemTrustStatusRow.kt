@@ -7,15 +7,20 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Computer
+import androidx.compose.material.icons.filled.LaptopMac
+import androidx.compose.material.icons.filled.Terminal
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.devuloopers.knet.domain.util.HostPlatform
 import com.devuloopers.knet.ui.core.components.badge.KNetBadge
+import com.devuloopers.knet.ui.core.components.button.ButtonDefaults
 import com.devuloopers.knet.ui.core.components.button.ButtonSize
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
@@ -23,8 +28,19 @@ import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.certificate.model.TrustInstallationState
 
+/**
+ * Platform-adaptive status card displaying the host operating system's Root CA trust state.
+ *
+ * Automatically adapts title, subtitle, and icons for macOS Keychain, Windows Certificate Store,
+ * and Linux system trust bundles.
+ *
+ * @param platform The detected host operating system platform.
+ * @param trustState Current trust installation status (IDLE, CHECKING, INSTALLING, INSTALLED, FAILED).
+ * @param onInstallClicked Callback invoked when the user requests trust installation or re-verification.
+ */
 @Composable
-fun WindowsTrustStatusRow(
+fun SystemTrustStatusRow(
+    platform: HostPlatform = HostPlatform.current(),
     trustState: TrustInstallationState,
     onInstallClicked: () -> Unit,
     modifier: Modifier = Modifier
@@ -34,6 +50,41 @@ fun WindowsTrustStatusRow(
     val shapes = KNetTheme.shapes
 
     val isInstalled = trustState == TrustInstallationState.INSTALLED
+
+    val platformIcon: ImageVector = when (platform) {
+        HostPlatform.MACOS -> Icons.Default.LaptopMac
+        HostPlatform.WINDOWS -> Icons.Default.Computer
+        HostPlatform.LINUX -> Icons.Default.Terminal
+        HostPlatform.UNKNOWN -> Icons.Default.Computer
+    }
+
+    val platformTitle: String = when (platform) {
+        HostPlatform.MACOS -> "macOS Keychain"
+        HostPlatform.WINDOWS -> "Windows OS"
+        HostPlatform.LINUX -> "Linux OS"
+        HostPlatform.UNKNOWN -> "System Store"
+    }
+
+    val platformSubtitle: String = when (platform) {
+        HostPlatform.MACOS -> "User Trust Store (login.keychain-db)"
+        HostPlatform.WINDOWS -> "User Certificate Store (Root)"
+        HostPlatform.LINUX -> "System CA Store (/etc/ssl/certs)"
+        HostPlatform.UNKNOWN -> "System Certificate Store"
+    }
+
+    val iconBgColor: Color = when (platform) {
+        HostPlatform.MACOS -> Color(0xFF6366F1).copy(alpha = 0.15f)
+        HostPlatform.WINDOWS -> Color(0xFF2563EB).copy(alpha = 0.15f)
+        HostPlatform.LINUX -> Color(0xFFD97706).copy(alpha = 0.15f)
+        HostPlatform.UNKNOWN -> Color(0xFF6B7280).copy(alpha = 0.15f)
+    }
+
+    val iconTintColor: Color = when (platform) {
+        HostPlatform.MACOS -> Color(0xFF818CF8)
+        HostPlatform.WINDOWS -> Color(0xFF60A5FA)
+        HostPlatform.LINUX -> Color(0xFFFBBF24)
+        HostPlatform.UNKNOWN -> Color(0xFF9CA3AF)
+    }
 
     KNetSurface(
         modifier = modifier
@@ -55,13 +106,13 @@ fun WindowsTrustStatusRow(
                 Box(
                     modifier = Modifier
                         .size(36.dp)
-                        .background(Color(0xFF2563EB).copy(alpha = 0.15f), CircleShape),
+                        .background(iconBgColor, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Computer,
-                        contentDescription = "Windows OS",
-                        tint = Color(0xFF60A5FA),
+                        imageVector = platformIcon,
+                        contentDescription = platformTitle,
+                        tint = iconTintColor,
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -70,12 +121,12 @@ fun WindowsTrustStatusRow(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Windows OS",
+                        text = platformTitle,
                         style = typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                         color = themeColors.textPrimary
                     )
                     Text(
-                        text = "System Certificate Store",
+                        text = platformSubtitle,
                         style = typography.labelSmall,
                         color = themeColors.textSecondary
                     )
@@ -105,7 +156,7 @@ fun WindowsTrustStatusRow(
                 KNetButton(
                     onClick = onInstallClicked,
                     variant = ButtonVariant.Ghost,
-                    colors = com.devuloopers.knet.ui.core.components.button.ButtonDefaults.colors(ButtonVariant.Ghost).copy(borderColor = themeColors.border),
+                    colors = ButtonDefaults.colors(ButtonVariant.Ghost).copy(borderColor = themeColors.border),
                     size = ButtonSize.Compact,
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -128,7 +179,13 @@ fun WindowsTrustStatusRow(
                     size = ButtonSize.Compact,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text(if (trustState == TrustInstallationState.INSTALLING) "Installing..." else "Install Trust")
+                    Text(
+                        when {
+                            trustState == TrustInstallationState.INSTALLING -> "Installing..."
+                            platform == HostPlatform.LINUX -> "View Install Instructions"
+                            else -> "Install Trust"
+                        }
+                    )
                 }
             }
         }

@@ -2,9 +2,7 @@ package com.devuloopers.knet.engine.session.export
 
 import com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction
 import kotlinx.serialization.json.Json
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.TimeZone
+import java.time.Instant
 
 /**
  * Exporter utility serializing transaction records into W3C standard HAR (HTTP Archive) 1.2 JSON structures.
@@ -16,13 +14,15 @@ object HTTPArchiveExporter {
         ignoreUnknownKeys = true
     }
 
+    /**
+     * Serializes a list of [HttpTransaction] instances into a standard HAR 1.2 JSON string.
+     *
+     * @param transactions List of captured HTTP transactions to export.
+     * @return Formatted JSON string conforming to the HAR 1.2 specification.
+     */
     fun export(transactions: List<HttpTransaction>): String {
-        val dateFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'").apply {
-            timeZone = TimeZone.getTimeZone("UTC")
-        }
-
         val entries = transactions.map { httpTransaction ->
-            val startedDateTime = dateFormat.format(Date(httpTransaction.timestamp))
+            val startedDateTime = Instant.ofEpochMilli(httpTransaction.timestamp).toString()
             val req = httpTransaction.request
             val res = httpTransaction.response
 
@@ -30,7 +30,7 @@ object HTTPArchiveExporter {
             val reqQueryParams = parseQueryString(req.url).map { HarQueryParam(it.first, it.second) }
 
             val reqBody = req.body
-            val reqBodyText = reqBody?.let { String(it) } ?: ""
+            val reqBodyText = reqBody?.let { String(it, Charsets.UTF_8) } ?: ""
             val reqMimeType = req.headers
                 .firstOrNull {
                     it.first.equals("content-type", ignoreCase = true)
@@ -54,7 +54,7 @@ object HTTPArchiveExporter {
 
             val response = if (res != null) {
                 val resCookies = parseResponseCookies(res.headers).map { HarCookie(it.first, it.second) }
-                val resBodyText = res.body?.let { String(it) } ?: ""
+                val resBodyText = res.body?.let { String(it, Charsets.UTF_8) } ?: ""
                 val resMimeType = res.headers
                     .firstOrNull {
                         it.first.equals("content-type", ignoreCase = true)

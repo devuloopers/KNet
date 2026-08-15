@@ -3,11 +3,13 @@ package com.devuloopers.knet.engine.traffic
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Reusable thread-safe cache for compiled regex patterns.
- * Avoids repeated Regex compilation overhead inside high-frequency Netty event loops.
+ * Reusable thread-safe bounded cache for compiled regex patterns.
+ * Avoids repeated Regex compilation overhead inside high-frequency Netty event loops
+ * while protecting against unbounded memory growth.
  */
 object RegexCache {
 
+    private const val MAX_CACHE_SIZE = 1000
     private val cache = ConcurrentHashMap<String, Regex>()
 
     /**
@@ -24,9 +26,12 @@ object RegexCache {
 
         return try {
             val regex = Regex(pattern)
+            if (cache.size >= MAX_CACHE_SIZE) {
+                cache.clear()
+            }
             cache[pattern] = regex
             regex
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             null
         }
     }

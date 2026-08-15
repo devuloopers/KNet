@@ -1,36 +1,44 @@
 package com.devuloopers.knet.engine.traffic
 
 import com.devuloopers.knet.core.logger.KNetLogger
-import java.util.concurrent.CopyOnWriteArrayList
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 private const val TAG = "TrafficModifierManager"
 
 /**
- * Thread-safe registry that maintains active [ModifierRule], [MapLocalRule], and [MapRemoteRule] sets.
+ * Thread-safe reactive registry maintaining active [ModifierRule], [MapLocalRule], and [MapRemoteRule] sets.
  *
- * All underlying rule collections use [CopyOnWriteArrayList] to ensure concurrent read safety
- * without requiring explicit locking during Netty event loop rule lookups.
+ * Stores pre-sorted immutable lists updated atomically via [MutableStateFlow] to guarantee
+ * zero-allocation, O(1) concurrent lookups during high-frequency Netty event loop matching.
  */
 class TrafficModifierManager {
 
-    private val modifierRules: MutableList<ModifierRule> = CopyOnWriteArrayList()
-    private val mapLocalRules: MutableList<MapLocalRule> = CopyOnWriteArrayList()
-    private val mapRemoteRules: MutableList<MapRemoteRule> = CopyOnWriteArrayList()
+    private val _modifierRules = MutableStateFlow<List<ModifierRule>>(emptyList())
+    val modifierRulesStream: StateFlow<List<ModifierRule>> = _modifierRules.asStateFlow()
+
+    private val _mapLocalRules = MutableStateFlow<List<MapLocalRule>>(emptyList())
+    val mapLocalRulesStream: StateFlow<List<MapLocalRule>> = _mapLocalRules.asStateFlow()
+
+    private val _mapRemoteRules = MutableStateFlow<List<MapRemoteRule>>(emptyList())
+    val mapRemoteRulesStream: StateFlow<List<MapRemoteRule>> = _mapRemoteRules.asStateFlow()
 
     /**
-     * Returns an immutable read-only snapshot of active modifier rules sorted by priority.
+     * Returns an immutable read-only snapshot of active modifier rules pre-sorted by priority.
      */
-    fun getModifierRules(): List<ModifierRule> = modifierRules.sortedBy { it.priority }
+    fun getModifierRules(): List<ModifierRule> = _modifierRules.value
 
     /**
-     * Returns an immutable read-only snapshot of active Map Local rules sorted by priority.
+     * Returns an immutable read-only snapshot of active Map Local rules pre-sorted by priority.
      */
-    fun getMapLocalRules(): List<MapLocalRule> = mapLocalRules.sortedBy { it.priority }
+    fun getMapLocalRules(): List<MapLocalRule> = _mapLocalRules.value
 
     /**
-     * Returns an immutable read-only snapshot of active Map Remote rules sorted by priority.
+     * Returns an immutable read-only snapshot of active Map Remote rules pre-sorted by priority.
      */
-    fun getMapRemoteRules(): List<MapRemoteRule> = mapRemoteRules.sortedBy { it.priority }
+    fun getMapRemoteRules(): List<MapRemoteRule> = _mapRemoteRules.value
 
     /**
      * Adds a new [ModifierRule] to the active rule set after validating.
@@ -40,7 +48,9 @@ class TrafficModifierManager {
      */
     fun addModifierRule(rule: ModifierRule) {
         validateRule(rule.id, rule.urlPattern)
-        modifierRules.add(rule)
+        _modifierRules.update { current ->
+            (current.filterNot { it.id == rule.id } + rule).sortedBy { it.priority }
+        }
         KNetLogger.debug(TAG) { "Added modifier rule [${rule.id}]: ${rule.name}" }
     }
 
@@ -53,7 +63,9 @@ class TrafficModifierManager {
     fun addMapLocalRule(rule: MapLocalRule) {
         validateRule(rule.id, rule.urlPattern)
         if (rule.localFilePath.isBlank()) throw IllegalArgumentException("Local file path cannot be blank")
-        mapLocalRules.add(rule)
+        _mapLocalRules.update { current ->
+            (current.filterNot { it.id == rule.id } + rule).sortedBy { it.priority }
+        }
         KNetLogger.debug(TAG) { "Added map local rule [${rule.id}]: ${rule.name} -> ${rule.localFilePath}" }
     }
 
@@ -67,7 +79,9 @@ class TrafficModifierManager {
         validateRule(rule.id, rule.urlPattern)
         if (rule.targetHost.isBlank()) throw IllegalArgumentException("Target host cannot be blank")
         if (rule.targetPort !in 1..65535) throw IllegalArgumentException("Invalid target port: ${rule.targetPort}")
-        mapRemoteRules.add(rule)
+        _mapRemoteRules.update { current ->
+            (current.filterNot { it.id == rule.id } + rule).sortedBy { it.priority }
+        }
         KNetLogger.debug(TAG) { "Added map remote rule [${rule.id}]: ${rule.name} -> ${rule.targetHost}:${rule.targetPort}" }
     }
 
@@ -77,7 +91,7 @@ class TrafficModifierManager {
      * @param id The rule ID to remove.
      */
     fun removeModifierRule(id: String) {
-        modifierRules.removeAll { it.id == id }
+        _modifierRules.update { current -> current.filterNot { it.id == id } }
     }
 
     /**
@@ -86,7 +100,7 @@ class TrafficModifierManager {
      * @param id The rule ID to remove.
      */
     fun removeMapLocalRule(id: String) {
-        mapLocalRules.removeAll { it.id == id }
+        _mapLocalRules.update { current -> current.filterNot { it.id == id } }
     }
 
     /**
@@ -95,16 +109,16 @@ class TrafficModifierManager {
      * @param id The rule ID to remove.
      */
     fun removeMapRemoteRule(id: String) {
-        mapRemoteRules.removeAll { it.id == id }
+        _mapRemoteRules.update { current -> current.filterNot { it.id == id } }
     }
 
     /**
      * Clears all active rules across all rule types.
      */
     fun clearAllRules() {
-        modifierRules.clear()
-        mapLocalRules.clear()
-        mapRemoteRules.clear()
+        _modifierRules.value = emptyList()
+        _mapLocalRules.value = emptyList()
+        _mapRemoteRules.value = emptyList()
         KNetLogger.debug(TAG) { "All traffic modifier rules cleared" }
     }
 

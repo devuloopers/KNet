@@ -577,11 +577,47 @@ This document serves as the live project tracking board for implementing seamles
 - [x] **Phase 2: Changed Module Verification (`:ui:desktop:breakpointManager`, `:ui:desktop:app`)** `[COMPLETED]`
   - [x] Ran test suites on changed modules (`BUILD SUCCESSFUL in 4s`)
 
+---
 
+## Phase 42: Core Engine Open-Source & Industry-Standard Modernization `[COMPLETED]`
 
+- [x] **Phase 1: Sockets, Lifecycle & Networking Core (`:engine:proxy`, `:engine:portal`)** `[COMPLETED]`
+  - [x] Replace per-request unmanaged `CoroutineScope` in `KNetProxyHandler.kt` with a shared lifecycle-managed scope
+  - [x] Add streaming response body inspection buffer safeguard (`10MB` cap) in `KNetOutboundHandler`
+  - [x] Add graceful Netty `EventLoopGroup` shutdown hooks with quiet periods and timeouts in `KNetProxyServer.kt`
+  - [x] Replace `java.util.Base64` with `kotlin.io.encoding.Base64.Mime` in `AppleProfileGenerator.kt`
+  - [x] Refactor Java enumeration loops to idiomatic Kotlin collection functions in `MobilePortalHandler.kt`
+- [x] **Phase 2: Reactive State & Interception Engine (`:engine:interceptor`, `:engine:traffic`)** `[COMPLETED]`
+  - [x] Replace `ConcurrentHashMap` and dual-state in `BreakpointRuleRegistry.kt` with a single atomic `MutableStateFlow`
+  - [x] Replace `CopyOnWriteArrayList` in `TrafficModifierManager.kt` with reactive `StateFlow` storing pre-sorted immutable lists
+  - [x] Add capacity bounding (`1000` entries) with LRU/thread-safe eviction to `RegexCache.kt`
+- [x] **Phase 3: Simulation & Payload Processing (`:engine:simulator`, `:engine:formatter`)** `[COMPLETED]`
+  - [x] Modernize `KNetNetworkSimulatorHandler.kt` with `kotlin.time.Duration`
+  - [x] Replace `java.util.Base64` in `GrpcWebBodyFormatter.kt` with `kotlin.io.encoding.Base64` and use `buildString`
+- [x] **Phase 4: Certificates, Session, Protocol & Scripting (`:engine:certificate`, `:engine:session`, `:engine:protocol`, `:engine:script`)** `[COMPLETED]`
+  - [x] Purge wildcard `import java.util.*` and `import java.io.*` across `CertificateAuthority.kt`, `CertificateManagerImpl.kt`, and `TrustStoreInstaller.kt`
+  - [x] Modernize `AndroidAdbInstaller.kt` and `IosSimctlInstaller.kt` with `kotlin.time.Duration` and `kotlin.io.encoding.Base64`
+  - [x] Replace `SimpleDateFormat`/`Date`/`TimeZone` in `HTTPArchiveExporter.kt` with ISO-8601 UTC Instant formatting and explicit UTF-8 charsets
+  - [x] Complete KDoc documentation across protocol decoders and script executors
+- [x] **Phase 5: Multi-Module Verification & Zero Regression** `[COMPLETED]`
+  - [x] Execute full unit and concurrency stress test suites across all 10 engine modules
 
+---
 
+## Phase 43: Platform-Adaptive System Trust Architecture `[COMPLETED]`
 
+- [x] **Phase 1: Strongly-Typed Host Platform Model (`:core:domain`)** `[COMPLETED]`
+  - [x] Add `HostPlatform` enum with detection for macOS, Windows, Linux, Unknown
+- [x] **Phase 2: Multiplatform Trust Store Installer & Verifier (`:engine:certificate`)** `[COMPLETED]`
+  - [x] Fix `isTrustedMac` and `installMac` in `TrustStoreInstaller.kt` using standard `security find-certificate -a -Z`
+  - [x] Fix `isTrustedWindows` and `installWindows` in `TrustStoreInstaller.kt` with proper `certutil -user -store Root` syntax
+  - [x] Add `isTrustedLinux` bundle scanner and distribution instruction generator
+- [x] **Phase 3: Platform-Adaptive Desktop Certificate UI (`:ui:desktop:certificate`)** `[COMPLETED]`
+  - [x] Create `SystemTrustStatusRow.kt` replacing `WindowsTrustStatusRow.kt`
+  - [x] Update `CertificateSidebar.kt` to bind `SystemTrustStatusRow` with current `HostPlatform`
+  - [x] Refactor `ActiveRootCaCard.kt` to prevent false positive trust badge
+- [x] **Phase 4: Full Multi-Module Verification & Regression Testing** `[COMPLETED]`
+  - [x] Execute full unit and regression test suites across all modules
 
 
 

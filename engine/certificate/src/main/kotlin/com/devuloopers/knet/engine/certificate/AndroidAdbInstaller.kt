@@ -2,6 +2,7 @@ package com.devuloopers.knet.engine.certificate
 
 import com.devuloopers.knet.core.logger.KNetLogger
 import java.util.concurrent.TimeUnit
+import kotlin.time.Duration.Companion.seconds
 
 private const val TAG = "AndroidAdbInstaller"
 
@@ -21,7 +22,7 @@ sealed interface AdbResult {
  */
 object AndroidAdbInstaller {
 
-    private const val COMMAND_TIMEOUT_SECONDS = 5L
+    private val COMMAND_TIMEOUT = 5.seconds
 
     /**
      * Lists currently connected Android devices and emulators.
@@ -32,7 +33,7 @@ object AndroidAdbInstaller {
         return try {
             val process = ProcessBuilder("adb", "devices").start()
             val output = process.inputStream.bufferedReader().readText()
-            process.waitFor(COMMAND_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            process.waitFor(COMMAND_TIMEOUT.inWholeSeconds, TimeUnit.SECONDS)
 
             output.lines()
                 .drop(1) // Skip "List of devices attached" header
@@ -83,7 +84,7 @@ object AndroidAdbInstaller {
         return try {
             val process = ProcessBuilder(*command).start()
             val stderr = process.errorStream.bufferedReader().readText()
-            val completed = process.waitFor(COMMAND_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            val completed = process.waitFor(COMMAND_TIMEOUT.inWholeSeconds, TimeUnit.SECONDS)
 
             if (completed && process.exitValue() == 0) {
                 KNetLogger.info(TAG) { successMessage }

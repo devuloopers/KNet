@@ -21,11 +21,13 @@ import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.certificate.model.CaDetails
 import com.devuloopers.knet.ui.desktop.certificate.model.CaStatus
+import com.devuloopers.knet.ui.desktop.certificate.model.TrustInstallationState
 
 @Composable
 fun ActiveRootCaCard(
     caDetails: CaDetails,
     caStatus: CaStatus = CaStatus.AVAILABLE,
+    trustState: TrustInstallationState = TrustInstallationState.IDLE,
     modifier: Modifier = Modifier
 ) {
     val themeColors = KNetTheme.colors
@@ -117,7 +119,7 @@ fun ActiveRootCaCard(
                 overflow = TextOverflow.Ellipsis
             )
 
-            if (isAvailable) {
+            if (trustState == TrustInstallationState.INSTALLED) {
                 Spacer(modifier = Modifier.height(8.dp))
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -138,3 +140,4 @@ fun ActiveRootCaCard(
         }
     }
 }
+

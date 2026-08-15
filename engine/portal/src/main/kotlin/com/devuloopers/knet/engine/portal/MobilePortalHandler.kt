@@ -178,17 +178,9 @@ class MobilePortalHandler(
      */
     private fun isLocalMachineIp(host: String): Boolean {
         return try {
-            val interfaces = NetworkInterface.getNetworkInterfaces()
-            while (interfaces.hasMoreElements()) {
-                val iface = interfaces.nextElement()
-                val addrs = iface.inetAddresses
-                while (addrs.hasMoreElements()) {
-                    if (addrs.nextElement().hostAddress == host) {
-                        return true
-                    }
-                }
+            NetworkInterface.getNetworkInterfaces()?.toList().orEmpty().any { iface ->
+                iface.inetAddresses.toList().any { it.hostAddress == host }
             }
-            false
         } catch (_: Exception) {
             false
         }
@@ -206,21 +198,14 @@ class MobilePortalHandler(
             }
         }
         return try {
-            val interfaces = NetworkInterface.getNetworkInterfaces()
-            while (interfaces.hasMoreElements()) {
-                val iface = interfaces.nextElement()
-                if (iface.isLoopback || !iface.isUp) continue
-                val addrs = iface.inetAddresses
-                while (addrs.hasMoreElements()) {
-                    val addr = addrs.nextElement()
-                    if (!addr.isLoopbackAddress && addr is java.net.Inet4Address) {
-                        return addr.hostAddress
-                    }
-                }
-            }
-            "127.0.0.1"
+            val nonLoopbackIpv4 = NetworkInterface.getNetworkInterfaces()?.toList().orEmpty()
+                .filter { it.isUp && !it.isLoopback }
+                .flatMap { it.inetAddresses.toList() }
+                .firstOrNull { !it.isLoopbackAddress && it is java.net.Inet4Address }
+            nonLoopbackIpv4?.hostAddress ?: "127.0.0.1"
         } catch (_: Exception) {
             "127.0.0.1"
         }
     }
 }
+

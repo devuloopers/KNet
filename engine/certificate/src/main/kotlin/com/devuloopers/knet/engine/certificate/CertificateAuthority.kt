@@ -21,14 +21,23 @@ import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter
 import org.bouncycastle.openssl.jcajce.JcaPEMWriter
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
 import org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder
-import java.io.*
+import java.io.ByteArrayInputStream
+import java.io.File
+import java.io.FileReader
+import java.io.FileWriter
+import java.io.Reader
+import java.io.StringReader
+import java.io.StringWriter
+import java.io.Writer
 import java.math.BigInteger
 import java.security.KeyPairGenerator
 import java.security.PrivateKey
 import java.security.SecureRandom
 import java.security.Security
 import java.security.cert.X509Certificate
-import java.util.*
+import java.util.Date
+
+
 
 /**
  * Represents the Certificate Authority (CA) used by KNet to intercept and decrypt HTTPS traffic.

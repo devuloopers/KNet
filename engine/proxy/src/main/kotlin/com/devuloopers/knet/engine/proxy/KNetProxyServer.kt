@@ -19,9 +19,14 @@ import io.netty.handler.logging.LogLevel
 import io.netty.handler.logging.LoggingHandler
 import io.netty.util.ResourceLeakDetector
 import io.netty.util.concurrent.GlobalEventExecutor
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import java.net.InetSocketAddress
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicBoolean
+
 
 /**
  * Netty-based asynchronous proxy server that listens on a port, intercepts HTTP/HTTPS requests,
@@ -52,6 +57,7 @@ class KNetProxyServer(
     private var bossGroup: EventLoopGroup? = null
     private var workerGroup: EventLoopGroup? = null
     private var serverChannel: Channel? = null
+    private var serverScope: kotlinx.coroutines.CoroutineScope? = null
     private val activeChannels: ChannelGroup = DefaultChannelGroup(GlobalEventExecutor.INSTANCE)
 
     /**
@@ -67,6 +73,9 @@ class KNetProxyServer(
         }
 
         ResourceLeakDetector.setLevel(ResourceLeakDetector.Level.ADVANCED)
+
+        val scope = kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO)
+        serverScope = scope
 
         bossGroup = NioEventLoopGroup(1)
         workerGroup = NioEventLoopGroup()
@@ -85,7 +94,7 @@ class KNetProxyServer(
 
                     pipelineInitializers.forEach { it(pipeline) }
 
-                    pipeline.addLast("proxyHandler", KNetProxyHandler(ca, certCache, listener, keyManagerProvider))
+                    pipeline.addLast("proxyHandler", KNetProxyHandler(ca, certCache, listener, keyManagerProvider, proxyScope = scope))
                 }
             })
 
@@ -111,15 +120,20 @@ class KNetProxyServer(
             return
         }
 
+        serverScope?.cancel()
+        serverScope = null
+
+
         flushActiveChannels()
         serverChannel?.close()?.syncUninterruptibly()
         serverChannel = null
 
-        bossGroup?.shutdownGracefully()
-        workerGroup?.shutdownGracefully()
+        bossGroup?.shutdownGracefully(100, 2000, java.util.concurrent.TimeUnit.MILLISECONDS)
+        workerGroup?.shutdownGracefully(100, 2000, java.util.concurrent.TimeUnit.MILLISECONDS)
         bossGroup = null
         workerGroup = null
     }
+
 
     /**
      * Returns true if the proxy server is currently running and listening for traffic.

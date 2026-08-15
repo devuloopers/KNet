@@ -8,14 +8,19 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.devuloopers.knet.domain.util.HostPlatform
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.certificate.model.CaDetails
 import com.devuloopers.knet.ui.desktop.certificate.model.TrustInstallationState
 
+/**
+ * Sidebar dashboard column displaying Root CA status and system trust installer.
+ */
 @Composable
 fun CertificateSidebar(
     caDetails: CaDetails,
     trustState: TrustInstallationState,
+    platform: HostPlatform = HostPlatform.current(),
     onInstallTrustClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -52,11 +57,15 @@ fun CertificateSidebar(
 
                 Spacer(modifier = Modifier.height(12.dp))
                 
-                ActiveRootCaCard(caDetails = caDetails)
+                ActiveRootCaCard(
+                    caDetails = caDetails,
+                    trustState = trustState
+                )
                 
                 Spacer(modifier = Modifier.height(12.dp))
 
-                WindowsTrustStatusRow(
+                SystemTrustStatusRow(
+                    platform = platform,
                     trustState = trustState,
                     onInstallClicked = onInstallTrustClick
                 )

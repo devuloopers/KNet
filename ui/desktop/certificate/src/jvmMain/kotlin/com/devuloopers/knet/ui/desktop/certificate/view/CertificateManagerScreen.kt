@@ -38,8 +38,10 @@ public fun CertificateManagerScreen(
             CertificateSidebar(
                 caDetails = uiState.caDetails,
                 trustState = uiState.trustState,
+                platform = uiState.platform,
                 onInstallTrustClick = { viewModel.processIntent(CertificateIntent.InstallTrust) }
             )
+
 
             // Center Column: Client certificates list and domain rule builders
             CertificateCenterPanel(

@@ -1,7 +1,8 @@
 package com.devuloopers.knet.engine.portal
 
 import java.security.cert.X509Certificate
-import java.util.Base64
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 
 /**
  * Utility for generating Apple `.mobileconfig` Configuration Profiles.
@@ -21,12 +22,13 @@ object AppleProfileGenerator {
      * @param organization The organization name for the configuration profile (default: "Devuloopers").
      * @return Formatted XML string compliant with Apple Configuration Profile specifications.
      */
+    @OptIn(ExperimentalEncodingApi::class)
     fun generateMobileConfig(
         caCertificate: X509Certificate,
         displayName: String = "KNet Root CA",
         organization: String = "Devuloopers"
     ): String {
-        val base64Cert = Base64.getMimeEncoder(64, "\n".toByteArray()).encodeToString(caCertificate.encoded)
+        val base64Cert = Base64.Mime.encode(caCertificate.encoded)
         val template = TemplateLoader.load(TEMPLATE_PATH)
 
         return template
@@ -35,3 +37,4 @@ object AppleProfileGenerator {
             .replace("{{ORGANIZATION}}", organization)
     }
 }
+
