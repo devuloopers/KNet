@@ -11,8 +11,13 @@ import com.devuloopers.knet.ui.desktop.breakpointmanager.mapper.toDomainRule
 import com.devuloopers.knet.ui.desktop.breakpointmanager.mapper.toUiModel
 import com.devuloopers.knet.ui.desktop.breakpointmanager.model.BreakpointManagerState
 import com.devuloopers.knet.ui.desktop.breakpointmanager.model.BreakpointRuleUiModel
+import com.devuloopers.knet.ui.desktop.breakpointmanager.model.ResolvedInterceptPayload
+import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * ViewModel managing presentation state and domain UseCase interactions for Breakpoint Manager Screen and Live Intercept Drawer.
@@ -30,7 +35,8 @@ class BreakpointManagerViewModel(
     private val forwardInterceptedRequestUseCase: ForwardInterceptedRequestUseCase,
     private val forwardInterceptedResponseUseCase: ForwardInterceptedResponseUseCase,
     private val dropInterceptedTransactionUseCase: DropInterceptedTransactionUseCase,
-    private val clearInterceptionSessionsUseCase: ClearInterceptionSessionsUseCase
+    private val clearInterceptionSessionsUseCase: ClearInterceptionSessionsUseCase,
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(BreakpointManagerState())
@@ -50,15 +56,50 @@ class BreakpointManagerViewModel(
             }
             .launchIn(viewModelScope)
 
-        // Reactive stream of active suspended in-flight HTTP connections via domain UseCase
+        // Reactive stream of active suspended in-flight HTTP connections via domain UseCase.
+        // For each new transaction that has not yet been resolved, payload decoding and format
+        // detection are dispatched off-thread (Dispatchers.Default) via PayloadResolver so
+        // that LiveInterceptDrawer receives pre-computed ResolvedInterceptPayload objects.
         observeActiveInterceptionsUseCase()
             .onEach { events ->
+                val currentPayloads = _uiState.value.resolvedPayloads
+                val activeIds = events.map { it.id }.toSet()
+
+                // Prune entries for transactions that have left the queue.
+                val prunedPayloads = currentPayloads.filterKeys { it in activeIds }.toMutableMap()
+
+                // Resolve payloads for any new transactions not yet in the cache.
+                val newTransactions = events.filter { it.id !in prunedPayloads }
+                if (newTransactions.isNotEmpty()) {
+                    val freshResolved = withContext(ioDispatcher) {
+                        newTransactions.associate { tx ->
+                            val requestBodySpec = PayloadInspectionSpec.fromBytes(
+                                body = tx.request.body,
+                                headers = tx.request.headers
+                            )
+                            val responseBodySpec = tx.response?.let { response ->
+                                PayloadInspectionSpec.fromBytes(
+                                    body = response.body,
+                                    headers = response.headers
+                                )
+                            } ?: PayloadInspectionSpec.EMPTY
+                            tx.id to ResolvedInterceptPayload(
+                                transactionId = tx.id,
+                                requestPayloadSpec = requestBodySpec,
+                                responsePayloadSpec = responseBodySpec
+                            )
+                        }
+                    }
+                    prunedPayloads.putAll(freshResolved)
+                }
+
                 _uiState.update { current ->
                     val stillSelected = events.find { it.id == current.activeEvent?.id }
                     val activeEv = stillSelected ?: events.firstOrNull()
                     current.copy(
                         activeEvents = events,
-                        activeEvent = activeEv
+                        activeEvent = activeEv,
+                        resolvedPayloads = prunedPayloads
                     )
                 }
             }

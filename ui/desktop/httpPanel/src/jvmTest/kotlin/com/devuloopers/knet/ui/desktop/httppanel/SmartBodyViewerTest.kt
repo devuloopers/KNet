@@ -3,7 +3,7 @@ package com.devuloopers.knet.ui.desktop.httppanel
 import com.devuloopers.knet.engine.formatter.model.BodyFormat
 import com.devuloopers.knet.engine.formatter.registry.BodyFormatterRegistry
 import com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage
-import com.devuloopers.knet.ui.desktop.httppanel.model.BodyInspectionSpec
+import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -17,14 +17,14 @@ import kotlin.test.assertTrue
 class SmartBodyViewerTest {
 
     @Test
-    fun testBodyInspectionSpecEmptyBehavior() {
-        val emptySpec = BodyInspectionSpec()
+    fun testPayloadInspectionSpecEmptyBehavior() {
+        val emptySpec = PayloadInspectionSpec()
         assertTrue(emptySpec.isEmpty)
 
-        val preparingSpec = BodyInspectionSpec(isPreparing = true)
+        val preparingSpec = PayloadInspectionSpec(isPreparing = true)
         assertFalse(preparingSpec.isEmpty)
 
-        val payloadSpec = BodyInspectionSpec(rawBody = "{\"key\":\"value\"}")
+        val payloadSpec = PayloadInspectionSpec(rawBody = "{\"key\":\"value\"}")
         assertFalse(payloadSpec.isEmpty)
     }
 

@@ -750,6 +750,47 @@ This document serves as the live project tracking board for implementing seamles
   - [x] Run `./gradlew :data:desktop:jvmTest` (all passed)
   - [x] Run full project multi-module test suite (132 tasks, 0 failures)
 
+---
+
+## Phase 52: Polymorphic Strongly-Typed Payload Strategy Architecture `[COMPLETED]`
+
+- [x] **Phase 1: Domain Sealed Hierarchy & Strategy Contracts (`:core:domain`)** `[COMPLETED]`
+  - [x] Create `StructuredPayloadState.kt`
+  - [x] Create `PayloadStrategy.kt`
+  - [x] Create `PayloadStrategyRegistry.kt`
+  - [x] Remove legacy `PayloadMapper.kt` and `PayloadMapperRegistry.kt`
+- [x] **Phase 2: Presentation Strategy & UseCase (`:ui:desktop:httpPanel`)** `[COMPLETED]`
+  - [x] Update `GraphQlPayloadMapper.kt` to implement `PayloadStrategy`
+  - [x] Update `SyncBodyStateUseCase.kt` to use `PayloadStrategyRegistry` directly
+  - [x] Update `HttpPanelModule.kt` Koin bindings
+- [x] **Phase 3: Automated Verification** `[COMPLETED]`
+  - [x] Update `GraphQlPayloadMapperTest.kt`
+  - [x] Run full project multi-module test suite (132 tasks, 0 failures)
+
+---
+
+## Phase 53: Single-Pass Non-Duplicated Interception & Inspection Data Pipeline `[COMPLETED]`
+
+- [x] **Phase 1: Canonical Inspection Spec & Off-Thread Factory (`:ui:desktop:httpPanel`)** `[COMPLETED]`
+  - [x] Standardize on `BodyInspectionSpec.kt` with `EMPTY` sentinel and `fromBytes(body, headers)` single-pass factory
+  - [x] Remove duplicate intermediate carrier classes (`ResolvedPayload.kt`, `PayloadResolver.kt`)
+  - [x] Add `fromResolved(spec: BodyInspectionSpec)` companion factories to `RequestBodyState` and `ResponseBodyState` in `BodyModels.kt`
+- [x] **Phase 2: Traffic Inspector Pipeline (`:ui:desktop:traffic` & `:ui:desktop:httpPanel`)** `[COMPLETED]`
+  - [x] Update `InspectorPreparedState.kt` to store `requestBodySpec: BodyInspectionSpec` and `responseBodySpec: BodyInspectionSpec`
+  - [x] Update `TrafficViewModel.kt` to decode and resolve payload formats off-thread via `BodyInspectionSpec.fromBytes()` in a single pass
+  - [x] Update `RequestViewPanel.kt` and `ResponseViewPanel.kt` to accept `bodySpec: BodyInspectionSpec? = null` directly, eliminating redundant parameters
+  - [x] Update `TrafficInspectorPanel.kt` to wire `preparedState.requestBodySpec` and `responseBodySpec` directly into view panels
+- [x] **Phase 3: Breakpoint Live Intercept Pipeline (`:ui:desktop:breakpointManager` & `:data:desktop`)** `[COMPLETED]`
+  - [x] Update `ResolvedInterceptPayload.kt` carrier model to hold `requestBodySpec` and `responseBodySpec`
+  - [x] Add `resolvedPayloads: Map<String, ResolvedInterceptPayload>` to `BreakpointManagerState.kt`
+  - [x] Update `BreakpointManagerViewModel.kt` to resolve payloads off-thread on event arrival via `BodyInspectionSpec.fromBytes()`
+  - [x] Update `LiveInterceptDrawer.kt` to instantiate body state via `fromResolved()` using pre-computed `BodyInspectionSpec`
+  - [x] Update `WorkspaceHost.kt` to forward `breakpointState.resolvedPayloads` into `LiveInterceptDrawer`
+  - [x] Clean up `InterceptionSessionRepositoryImpl.kt` default constructor to avoid hardcoding domain inspectors
+- [x] **Phase 4: Automated Multi-Module Verification** `[COMPLETED]`
+  - [x] Run test suite across `:ui:desktop:httpPanel`, `:ui:desktop:traffic`, `:ui:desktop:breakpointManager`, `:data:desktop`, `:ui:desktop:apistudio`, and `:ui:desktop:app` (`BUILD SUCCESSFUL in 7s`)
+
+
 
 
 

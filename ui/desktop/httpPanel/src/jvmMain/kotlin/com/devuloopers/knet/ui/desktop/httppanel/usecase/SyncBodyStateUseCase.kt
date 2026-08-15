@@ -1,23 +1,23 @@
 package com.devuloopers.knet.ui.desktop.httppanel.usecase
 
 import com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType
-import com.devuloopers.knet.domain.payload.PayloadMapper
-import com.devuloopers.knet.domain.payload.PayloadMapperRegistry
+import com.devuloopers.knet.domain.payload.PayloadStrategyRegistry
+import com.devuloopers.knet.domain.payload.StructuredPayloadState
 import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlState
 import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyMode
 import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyState
 
 /**
  * Presentation UseCase responsible for synchronizing [RequestBodyState] mode transitions,
- * GraphQL state parsing, and payload serialization dynamically via [PayloadMapperRegistry].
+ * GraphQL state parsing, and payload serialization dynamically via [PayloadStrategyRegistry].
  *
  * Provides a single, 100% reusable, and testable source of truth for request body state transitions
  * across any ViewModel (API Studio, Traffic Inspector, Mock Server, Scripting Engine).
  *
- * @param mapperRegistry Injected [PayloadMapperRegistry] resolving payload mappers dynamically by [RequestBodyType].
+ * @param strategyRegistry Injected [PayloadStrategyRegistry] resolving payload strategies dynamically by [RequestBodyType].
  */
 public class SyncBodyStateUseCase(
-    private val mapperRegistry: PayloadMapperRegistry
+    private val strategyRegistry: PayloadStrategyRegistry
 ) {
 
     /**
@@ -40,8 +40,13 @@ public class SyncBodyStateUseCase(
      * Updates structured [GraphQlState], automatically serializing it back into transport [RequestBodyState.payloadText].
      */
     public fun updateGraphQlState(currentState: RequestBodyState, newGraphQlState: GraphQlState): RequestBodyState {
-        val mapper = mapperRegistry.getMapper<GraphQlState>(RequestBodyType.GRAPHQL)
-        val serializedPayload = mapper?.serializePayload(newGraphQlState) ?: currentState.payloadText
+        val payloadState = StructuredPayloadState.GraphQL(
+            queryText = newGraphQlState.queryText,
+            variablesText = newGraphQlState.variablesText,
+            operationName = newGraphQlState.operationName,
+            extensionsText = newGraphQlState.extensionsText
+        )
+        val serializedPayload = strategyRegistry.serialize(RequestBodyType.GRAPHQL, payloadState)
 
         return currentState.copy(
             graphQlState = newGraphQlState,
@@ -61,7 +66,14 @@ public class SyncBodyStateUseCase(
     }
 
     private fun parseGraphQlState(payload: String): GraphQlState {
-        val mapper = mapperRegistry.getMapper<GraphQlState>(RequestBodyType.GRAPHQL)
-        return mapper?.parsePayload(payload) ?: GraphQlState(queryText = payload)
+        return when (val parsed = strategyRegistry.parse(RequestBodyType.GRAPHQL, payload)) {
+            is StructuredPayloadState.GraphQL -> GraphQlState(
+                queryText = parsed.queryText,
+                variablesText = parsed.variablesText,
+                operationName = parsed.operationName,
+                extensionsText = parsed.extensionsText
+            )
+            is StructuredPayloadState.RawText -> GraphQlState(queryText = parsed.content)
+        }
     }
 }

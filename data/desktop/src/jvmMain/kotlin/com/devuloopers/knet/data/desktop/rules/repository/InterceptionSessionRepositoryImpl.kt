@@ -21,11 +21,7 @@ import kotlinx.coroutines.flow.map
  */
 class InterceptionSessionRepositoryImpl(
     private val sessionManager: InterceptSessionManager = InterceptSessionManager,
-    private val protocolInspectorRegistry: ProtocolInspectorRegistry = ProtocolInspectorRegistry(
-        listOf(
-            GraphQLProtocolInspector()
-        )
-    )
+    private val protocolInspectorRegistry: ProtocolInspectorRegistry = ProtocolInspectorRegistry()
 ) : InterceptionSessionRepository {
 
     override val activeInterceptions: Flow<List<InterceptedTransaction>> =

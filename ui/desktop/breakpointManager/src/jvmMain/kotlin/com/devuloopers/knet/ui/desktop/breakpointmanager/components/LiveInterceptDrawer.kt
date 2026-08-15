@@ -26,7 +26,8 @@ import com.devuloopers.knet.domain.clientNetwork.model.HttpResponse
 import com.devuloopers.knet.domain.protocol.model.InterceptionMetadata
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.InterceptedTransaction
-import com.devuloopers.knet.domain.util.decodeBodyToText
+import com.devuloopers.knet.ui.desktop.breakpointmanager.model.ResolvedInterceptPayload
+import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
@@ -62,6 +63,7 @@ fun LiveInterceptDrawer(
     events: List<InterceptedTransaction>,
     activeEvent: InterceptedTransaction?,
     isVisible: Boolean,
+    resolvedPayloads: Map<String, ResolvedInterceptPayload> = emptyMap(),
     onSelectEvent: (eventId: String) -> Unit,
     onDropItem: (eventId: String) -> Unit,
     onDropAll: () -> Unit,
@@ -105,13 +107,15 @@ fun LiveInterceptDrawer(
         modifier = modifier
     ) {
         val eventToRender = currentActiveEvent ?: return@AnimatedVisibility
+        val preResolved = resolvedPayloads[eventToRender.id]
 
         var editedReqHeaders by remember(eventToRender.id) {
             mutableStateOf(eventToRender.request.headers)
         }
         var reqBodyState by remember(eventToRender.id) {
-            val rawBodyText = decodeBodyToText(eventToRender.request.body, eventToRender.request.headers)
-            mutableStateOf(RequestBodyState.fromPayload(eventToRender.request.headers, rawBodyText))
+            val spec = preResolved?.requestPayloadSpec
+                ?: PayloadInspectionSpec.fromBytes(eventToRender.request.body, eventToRender.request.headers)
+            mutableStateOf(RequestBodyState.fromResolved(spec))
         }
         var activeReqSubTab by remember(eventToRender.id) {
             mutableStateOf(InspectorSubTab.BODY)
@@ -127,8 +131,9 @@ fun LiveInterceptDrawer(
             mutableStateOf(eventToRender.response?.headers ?: emptyList())
         }
         var respBodyState by remember(eventToRender.id) {
-            val rawBodyText = decodeBodyToText(eventToRender.response?.body, eventToRender.response?.headers ?: emptyList())
-            mutableStateOf(ResponseBodyState.fromPayload(eventToRender.response?.headers ?: emptyList(), rawBodyText))
+            val spec = preResolved?.responsePayloadSpec
+                ?: PayloadInspectionSpec.fromBytes(eventToRender.response?.body, eventToRender.response?.headers ?: emptyList())
+            mutableStateOf(ResponseBodyState.fromResolved(spec))
         }
         var activeRespSubTab by remember(eventToRender.id) {
             mutableStateOf(InspectorSubTab.BODY)

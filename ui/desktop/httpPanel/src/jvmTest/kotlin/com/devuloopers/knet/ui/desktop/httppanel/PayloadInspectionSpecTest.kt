@@ -2,7 +2,7 @@ package com.devuloopers.knet.ui.desktop.httppanel
 
 import com.devuloopers.knet.engine.formatter.model.BodyFormat
 import com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage
-import com.devuloopers.knet.ui.desktop.httppanel.model.BodyInspectionSpec
+import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -11,20 +11,20 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Unit tests verifying [BodyInspectionSpec.fromPayload] format resolution,
+ * Unit tests verifying [PayloadInspectionSpec.fromPayload] format resolution,
  * [CodeLanguage] mapping, and formattedText properties.
  */
-class BodyInspectionSpecTest {
+class PayloadInspectionSpecTest {
 
     @Test
     fun testEmptyPayloadReturnsNullResolvedFormatAndPlainLanguage() {
-        val emptySpec = BodyInspectionSpec.fromPayload(emptyList(), "")
+        val emptySpec = PayloadInspectionSpec.fromPayload(emptyList(), "")
         assertTrue(emptySpec.isEmpty)
         assertNull(emptySpec.resolvedFormat)
         assertEquals(CodeLanguage.PLAIN, emptySpec.codeLanguage)
         assertEquals("", emptySpec.formattedText)
 
-        val blankSpec = BodyInspectionSpec.fromPayload(emptyMap(), "   \n  \t ")
+        val blankSpec = PayloadInspectionSpec.fromPayload(emptyMap(), "   \n  \t ")
         assertTrue(blankSpec.isEmpty)
         assertNull(blankSpec.resolvedFormat)
         assertEquals(CodeLanguage.PLAIN, blankSpec.codeLanguage)
@@ -35,7 +35,7 @@ class BodyInspectionSpecTest {
         val headers = mapOf("content-type" to "application/json")
         val jsonText = """{"status":"active","count":100}"""
 
-        val spec = BodyInspectionSpec.fromPayload(headers, jsonText)
+        val spec = PayloadInspectionSpec.fromPayload(headers, jsonText)
 
         assertFalse(spec.isEmpty)
         assertIs<BodyFormat.Json>(spec.resolvedFormat)
@@ -53,7 +53,7 @@ class BodyInspectionSpecTest {
             }
         """.trimIndent()
 
-        val spec = BodyInspectionSpec.fromPayload(headers, gqlPayload)
+        val spec = PayloadInspectionSpec.fromPayload(headers, gqlPayload)
 
         assertFalse(spec.isEmpty)
         assertIs<BodyFormat.GraphQL>(spec.resolvedFormat)
@@ -66,7 +66,7 @@ class BodyInspectionSpecTest {
         val headers = mapOf("content-type" to "application/xml")
         val xmlText = "<response><item id=\"1\"/></response>"
 
-        val spec = BodyInspectionSpec.fromPayload(headers, xmlText)
+        val spec = PayloadInspectionSpec.fromPayload(headers, xmlText)
 
         assertFalse(spec.isEmpty)
         assertIs<BodyFormat.Xml>(spec.resolvedFormat)
@@ -79,7 +79,7 @@ class BodyInspectionSpecTest {
         val headers = mapOf("content-type" to "text/html")
         val htmlText = "<!DOCTYPE html><html><body><h1>Title</h1></body></html>"
 
-        val spec = BodyInspectionSpec.fromPayload(headers, htmlText)
+        val spec = PayloadInspectionSpec.fromPayload(headers, htmlText)
 
         assertFalse(spec.isEmpty)
         assertIs<BodyFormat.Html>(spec.resolvedFormat)
@@ -92,7 +92,7 @@ class BodyInspectionSpecTest {
         val headers = mapOf("content-type" to "text/javascript")
         val jsText = "function test() { console.log('hello'); }"
 
-        val spec = BodyInspectionSpec.fromPayload(headers, jsText)
+        val spec = PayloadInspectionSpec.fromPayload(headers, jsText)
 
         assertFalse(spec.isEmpty)
         assertIs<BodyFormat.Js>(spec.resolvedFormat)
@@ -105,7 +105,7 @@ class BodyInspectionSpecTest {
         val headers = mapOf("content-type" to "text/plain")
         val text = "Simple raw string"
 
-        val spec = BodyInspectionSpec.fromPayload(headers, text)
+        val spec = PayloadInspectionSpec.fromPayload(headers, text)
 
         assertFalse(spec.isEmpty)
         assertIs<BodyFormat.RawText>(spec.resolvedFormat)

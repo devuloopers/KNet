@@ -26,7 +26,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.components.InspectorSubTabRow
 import com.devuloopers.knet.ui.desktop.httppanel.components.NetworkErrorCard
 import com.devuloopers.knet.ui.desktop.httppanel.components.ResponseSummaryHeader
 import com.devuloopers.knet.ui.desktop.httppanel.components.SmartBodyViewer
-import com.devuloopers.knet.ui.desktop.httppanel.model.BodyInspectionSpec
+import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
 import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
 
 /**
@@ -45,6 +45,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
 @Composable
 public fun ResponseViewPanel(
     spec: NetworkResponseSpec,
+    payloadSpec: PayloadInspectionSpec? = null,
     isPreparing: Boolean = false,
     activeSubTab: InspectorSubTab = InspectorSubTab.BODY,
     onSubTabSelected: (InspectorSubTab) -> Unit = {},
@@ -150,15 +151,15 @@ public fun ResponseViewPanel(
             ) {
                 when (localActiveTab) {
                     InspectorSubTab.BODY -> {
-                        val bodySpec = remember(spec.headers, spec.responseBody, isPreparing) {
-                            BodyInspectionSpec(
+                        val effectiveBodySpec = remember(spec.headers, spec.responseBody, isPreparing, payloadSpec) {
+                            payloadSpec ?: PayloadInspectionSpec(
                                 headers = spec.headers,
                                 rawBody = spec.responseBody,
                                 isPreparing = isPreparing
                             )
                         }
                         SmartBodyViewer(
-                            spec = bodySpec,
+                            spec = effectiveBodySpec,
                             emptyTitle = "No Response Body",
                             emptySubtitle = "This response returned no body payload (e.g. HTTP 204 No Content or HTTP 304 Not Modified)",
                             modifier = Modifier.fillMaxSize()

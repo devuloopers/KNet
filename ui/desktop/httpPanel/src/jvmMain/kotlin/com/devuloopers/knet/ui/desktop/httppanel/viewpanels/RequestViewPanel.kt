@@ -15,7 +15,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.httppanel.components.InspectorSubTabRow
 import com.devuloopers.knet.ui.desktop.httppanel.components.RequestSummaryHeader
 import com.devuloopers.knet.ui.desktop.httppanel.components.SmartBodyViewer
-import com.devuloopers.knet.ui.desktop.httppanel.model.BodyInspectionSpec
+import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
 import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
 
 /**
@@ -35,6 +35,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
 @Composable
 public fun RequestViewPanel(
     spec: NetworkRequestSpec,
+    payloadSpec: PayloadInspectionSpec? = null,
     isPreparing: Boolean = false,
     activeSubTab: InspectorSubTab = InspectorSubTab.BODY,
     onSubTabSelected: (InspectorSubTab) -> Unit = {},
@@ -91,15 +92,15 @@ public fun RequestViewPanel(
         ) {
             when (localActiveTab) {
                 InspectorSubTab.BODY -> {
-                    val bodySpec = remember(spec.headers, spec.bodyPayload, isPreparing) {
-                        BodyInspectionSpec(
+                    val effectiveBodySpec = remember(spec.headers, spec.bodyPayload, isPreparing, payloadSpec) {
+                        payloadSpec ?: PayloadInspectionSpec(
                             headers = spec.headers,
                             rawBody = spec.bodyPayload,
                             isPreparing = isPreparing
                         )
                     }
                     SmartBodyViewer(
-                        spec = bodySpec,
+                        spec = effectiveBodySpec,
                         emptyTitle = "No Request Body",
                         emptySubtitle = "This request was sent without a body payload (e.g. GET or HEAD request)",
                         modifier = Modifier.fillMaxSize()

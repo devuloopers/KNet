@@ -81,6 +81,12 @@ private class FakeTestInterceptionSessionRepository : InterceptionSessionReposit
         _activeInterceptions.value = _activeInterceptions.value.filterNot { it.id == transactionId }
     }
 
+    override suspend fun dropMatching(url: String, method: String) {
+        _activeInterceptions.value = _activeInterceptions.value.filterNot {
+            it.url.equals(url, ignoreCase = true) && it.method.equals(method, ignoreCase = true)
+        }
+    }
+
     override suspend fun clearAll() {
         _activeInterceptions.value = emptyList()
     }
@@ -117,7 +123,8 @@ class BreakpointManagerViewModelTest {
             forwardInterceptedRequestUseCase = ForwardInterceptedRequestUseCase(sessionRepo),
             forwardInterceptedResponseUseCase = ForwardInterceptedResponseUseCase(sessionRepo),
             dropInterceptedTransactionUseCase = DropInterceptedTransactionUseCase(sessionRepo),
-            clearInterceptionSessionsUseCase = ClearInterceptionSessionsUseCase(sessionRepo)
+            clearInterceptionSessionsUseCase = ClearInterceptionSessionsUseCase(sessionRepo),
+            ioDispatcher = UnconfinedTestDispatcher()
         )
     }
 

@@ -131,6 +131,7 @@ fun KNetWorkspaceHost(
             events = breakpointState.activeEvents,
             activeEvent = breakpointState.activeEvent,
             isVisible = breakpointState.activeEvent != null,
+            resolvedPayloads = breakpointState.resolvedPayloads,
             onSelectEvent = { eventId ->
                 breakpointViewModel.selectActiveEvent(eventId)
             },

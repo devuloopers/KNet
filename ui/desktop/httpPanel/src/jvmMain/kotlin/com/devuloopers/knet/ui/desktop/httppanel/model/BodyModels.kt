@@ -344,6 +344,75 @@ data class RequestBodyState(
                 }
             }
         }
+
+        /**
+         * Constructs a [RequestBodyState] directly from a pre-resolved [PayloadInspectionSpec],
+         * bypassing [BodyFormatterRegistry] entirely. The [BodyFormat] has already been
+         * computed off-thread — this method only maps it to the appropriate [RequestBodyMode].
+         *
+         * @param spec Pre-resolved [PayloadInspectionSpec].
+         * @return Hydrated [RequestBodyState] configured for request authoring.
+         */
+        fun fromResolved(spec: PayloadInspectionSpec): RequestBodyState {
+            val trimmed = spec.rawBody.trim()
+            if (trimmed.isEmpty()) {
+                return RequestBodyState(mode = RequestBodyMode.NONE, payloadText = "")
+            }
+            return when (val format = spec.resolvedFormat) {
+                is BodyFormat.GraphQL -> {
+                    val parsedGraphQlState = GraphQlPayloadMapper().parsePayload(trimmed)
+                    RequestBodyState(
+                        mode = RequestBodyMode.GRAPHQL,
+                        payloadText = trimmed,
+                        graphQlState = parsedGraphQlState
+                    )
+                }
+                is BodyFormat.FormData -> {
+                    val entries = format.pairs.mapIndexed { idx, (k, v) ->
+                        KeyValueEntry(id = "form_$idx", key = k, value = v)
+                    }
+                    RequestBodyState(
+                        mode = RequestBodyMode.FORM_DATA,
+                        payloadText = trimmed,
+                        formDataEntries = entries
+                    )
+                }
+                is BodyFormat.Json -> RequestBodyState(
+                    mode = RequestBodyMode.JSON,
+                    payloadText = format.formattedText
+                )
+                is BodyFormat.Cbor -> RequestBodyState(
+                    mode = RequestBodyMode.JSON,
+                    payloadText = format.formattedText
+                )
+                is BodyFormat.Xml -> RequestBodyState(
+                    mode = RequestBodyMode.RAW,
+                    rawSubFormat = RawSubFormat.XML,
+                    payloadText = format.formattedText
+                )
+                is BodyFormat.Html -> RequestBodyState(
+                    mode = RequestBodyMode.RAW,
+                    rawSubFormat = RawSubFormat.HTML,
+                    payloadText = format.formattedText
+                )
+                is BodyFormat.Js -> RequestBodyState(
+                    mode = RequestBodyMode.RAW,
+                    rawSubFormat = RawSubFormat.JAVASCRIPT,
+                    payloadText = format.formattedText
+                )
+                is BodyFormat.Css -> RequestBodyState(
+                    mode = RequestBodyMode.RAW,
+                    rawSubFormat = RawSubFormat.TEXT,
+                    payloadText = format.formattedText
+                )
+                null -> RequestBodyState(mode = RequestBodyMode.NONE, payloadText = "")
+                else -> RequestBodyState(
+                    mode = RequestBodyMode.RAW,
+                    rawSubFormat = RawSubFormat.TEXT,
+                    payloadText = trimmed
+                )
+            }
+        }
     }
 }
 
@@ -442,6 +511,40 @@ data class ResponseBodyState(
                         payloadText = trimmed
                     )
                 }
+            }
+        }
+
+        /**
+         * Constructs a [ResponseBodyState] directly from a pre-resolved [PayloadInspectionSpec],
+         * bypassing [BodyFormatterRegistry] entirely. The [BodyFormat] has already been
+         * computed off-thread — this method only maps it to the appropriate [ResponseBodyMode].
+         *
+         * @param spec Pre-resolved [PayloadInspectionSpec].
+         * @return Hydrated [ResponseBodyState] configured for response editing.
+         */
+        fun fromResolved(spec: PayloadInspectionSpec): ResponseBodyState {
+            val trimmed = spec.rawBody.trim()
+            if (trimmed.isEmpty()) {
+                return ResponseBodyState(mode = ResponseBodyMode.NONE, payloadText = "")
+            }
+            val headersMap = spec.headers.toMap()
+            val isTextPlain = headersMap.entries.find {
+                it.key.equals("content-type", ignoreCase = true)
+            }?.value?.contains("text/plain", ignoreCase = true) == true
+
+            return when (val format = spec.resolvedFormat) {
+                is BodyFormat.Json -> ResponseBodyState(mode = ResponseBodyMode.JSON, payloadText = format.formattedText)
+                is BodyFormat.Cbor -> ResponseBodyState(mode = ResponseBodyMode.JSON, payloadText = format.formattedText)
+                is BodyFormat.GraphQL -> ResponseBodyState(mode = ResponseBodyMode.JSON, payloadText = trimmed)
+                is BodyFormat.Xml -> ResponseBodyState(mode = ResponseBodyMode.XML, payloadText = format.formattedText)
+                is BodyFormat.Html -> ResponseBodyState(mode = ResponseBodyMode.HTML, payloadText = format.formattedText)
+                is BodyFormat.Js -> ResponseBodyState(mode = ResponseBodyMode.RAW, payloadText = format.formattedText)
+                is BodyFormat.Css -> ResponseBodyState(mode = ResponseBodyMode.RAW, payloadText = format.formattedText)
+                null -> ResponseBodyState(mode = ResponseBodyMode.NONE, payloadText = "")
+                else -> ResponseBodyState(
+                    mode = if (isTextPlain) ResponseBodyMode.TEXT else ResponseBodyMode.RAW,
+                    payloadText = trimmed
+                )
             }
         }
     }

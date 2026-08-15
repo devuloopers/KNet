@@ -157,6 +157,7 @@ fun TrafficInspectorPanel(
                         }
                         RequestViewPanel(
                             spec = requestSpec,
+                            payloadSpec = preparedState.requestPayloadSpec.takeIf { !it.isEmpty },
                             isPreparing = preparedState.isPreparing,
                             activeSubTab = mappedReqSubTab,
                             onSubTabSelected = { newSubTab ->
@@ -197,6 +198,7 @@ fun TrafficInspectorPanel(
                         }
                         ResponseViewPanel(
                             spec = responseSpec,
+                            payloadSpec = preparedState.responsePayloadSpec.takeIf { !it.isEmpty },
                             isPreparing = preparedState.isPreparing,
                             activeSubTab = mappedResSubTab,
                             onSubTabSelected = { newSubTab ->

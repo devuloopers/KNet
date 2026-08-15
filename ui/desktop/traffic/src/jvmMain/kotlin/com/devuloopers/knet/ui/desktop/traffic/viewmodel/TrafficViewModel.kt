@@ -16,9 +16,9 @@ import com.devuloopers.knet.domain.traffic.usecase.ClearLiveTrafficUseCase
 import com.devuloopers.knet.domain.traffic.usecase.ExportTrafficToSpecUseCase
 import com.devuloopers.knet.domain.traffic.usecase.GetLiveTrafficUseCase
 import com.devuloopers.knet.domain.traffic.usecase.LoadTransactionBodyUseCase
-import com.devuloopers.knet.domain.util.decodeBodyToText
+import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
 import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
-import com.devuloopers.knet.ui.desktop.httppanel.model.BodyInspectionSpec
+
 import com.devuloopers.knet.ui.desktop.traffic.model.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
@@ -26,7 +26,6 @@ import kotlin.time.Duration.Companion.milliseconds
 import com.devuloopers.knet.domain.rules.model.RuleModel
 import com.devuloopers.knet.domain.rules.usecase.ObserveRulesUseCase
 import com.devuloopers.knet.domain.rules.usecase.SaveRuleUseCase
-import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 /**
@@ -171,13 +170,14 @@ class TrafficViewModel(
                         val prepared = kotlinx.coroutines.withContext(Dispatchers.Default) {
                             val body = loadTransactionBodyUseCase.execute(tx.transactionId)
 
-                            val reqBodyText = decodeBodyToText(body.requestBody, body.requestHeaders)
-                            val respBodyText = decodeBodyToText(body.responseBody, body.responseHeaders)
+                            // Single pass: decode bytes + resolve BodyFormat off-thread together.
+                            val requestBodySpec = PayloadInspectionSpec.fromBytes(body.requestBody, body.requestHeaders)
+                            val responseBodySpec = PayloadInspectionSpec.fromBytes(body.responseBody, body.responseHeaders)
 
                             val state = InspectorPreparedState(
                                 transactionId = tx.transactionId,
-                                requestBodyText = reqBodyText,
-                                responseBodyText = respBodyText,
+                                requestPayloadSpec = requestBodySpec,
+                                responsePayloadSpec = responseBodySpec,
                                 isPreparing = false
                             )
 

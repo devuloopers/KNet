@@ -12,7 +12,7 @@ import com.devuloopers.knet.ui.core.components.placeholder.KNetEmptyStatePlaceho
 import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
 import com.devuloopers.knet.ui.desktop.codeeditor.api.KNetCodeEditor
 import com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage
-import com.devuloopers.knet.ui.desktop.httppanel.model.BodyInspectionSpec
+import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
 
 /**
  * Polymorphic, strongly-typed body viewer composable that resolves payload format
@@ -24,14 +24,14 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.BodyInspectionSpec
  * - Structured Text (JSON, XML, HTML, JS, CSS, CBOR, Protobuf): [KNetCodeEditor] with accurate language syntax highlighting.
  * - Raw/Plain Text: [KNetCodeEditor] in plain text mode.
  *
- * @param spec Strongly-typed [BodyInspectionSpec] holding headers, raw payload, and preparation state.
+ * @param spec Strongly-typed [PayloadInspectionSpec] holding headers, raw payload, and preparation state.
  * @param emptyTitle Title for empty state placeholder.
  * @param emptySubtitle Subtitle for empty state placeholder.
  * @param modifier Composable layout modifier.
  */
 @Composable
 public fun SmartBodyViewer(
-    spec: BodyInspectionSpec,
+    spec: PayloadInspectionSpec,
     emptyTitle: String = "No Body Payload",
     emptySubtitle: String = "This transaction contained no request or response body payload.",
     modifier: Modifier = Modifier

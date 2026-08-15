@@ -1,15 +1,14 @@
 package com.devuloopers.knet.ui.desktop.httppanel.mapper
 
 import com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType
-import com.devuloopers.knet.domain.payload.PayloadMapper
+import com.devuloopers.knet.domain.payload.PayloadStrategy
+import com.devuloopers.knet.domain.payload.StructuredPayloadState
 import com.devuloopers.knet.engine.formatter.formatters.GraphQLBodyFormatter
 import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlState
 import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlSubTab
 import kotlinx.serialization.EncodeDefault
 import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -19,7 +18,7 @@ import kotlinx.serialization.json.JsonObject
  */
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
-public data class GraphQlPayloadDto(
+data class GraphQlPayloadDto(
     @EncodeDefault(EncodeDefault.Mode.NEVER)
     val query: String? = null,
     @EncodeDefault(EncodeDefault.Mode.NEVER)
@@ -31,7 +30,7 @@ public data class GraphQlPayloadDto(
 )
 
 /**
- * Thread-safe [PayloadMapper] strategy implementation responsible for bidirectional
+ * Thread-safe [PayloadStrategy] implementation responsible for bidirectional
  * transformation between serialized HTTP POST GraphQL JSON payload strings and structured [GraphQlState] models.
  *
  * Leverages Kotlin Serialization DTO ([GraphQlPayloadDto]) for direct deserialization and serialization,
@@ -40,7 +39,7 @@ public data class GraphQlPayloadDto(
  * @param jsonFormatter Configurable JSON formatter used for pretty-printing `$variables` and `$extensions`.
  * @param graphQlFormatter Formatter used for pretty-printing GraphQL query document AST syntax.
  */
-public class GraphQlPayloadMapper(
+class GraphQlPayloadMapper(
     private val jsonFormatter: Json = Json {
         prettyPrint = true
         ignoreUnknownKeys = true
@@ -48,9 +47,33 @@ public class GraphQlPayloadMapper(
         explicitNulls = false
     },
     private val graphQlFormatter: GraphQLBodyFormatter = GraphQLBodyFormatter()
-) : PayloadMapper<GraphQlState> {
+) : PayloadStrategy {
 
     override val bodyType: RequestBodyType = RequestBodyType.GRAPHQL
+
+    override fun parse(rawText: String): StructuredPayloadState {
+        val state = parsePayload(rawText)
+        return StructuredPayloadState.GraphQL(
+            queryText = state.queryText,
+            variablesText = state.variablesText,
+            operationName = state.operationName,
+            extensionsText = state.extensionsText
+        )
+    }
+
+    override fun serialize(state: StructuredPayloadState): String {
+        val graphQl = when (state) {
+            is StructuredPayloadState.GraphQL -> GraphQlState(
+                queryText = state.queryText,
+                variablesText = state.variablesText,
+                operationName = state.operationName,
+                extensionsText = state.extensionsText
+            )
+
+            is StructuredPayloadState.RawText -> return state.content
+        }
+        return serializePayload(graphQl)
+    }
 
     /**
      * Parses a raw payload string (JSON blob or raw GraphQL query text) into a structured [GraphQlState].
@@ -59,7 +82,7 @@ public class GraphQlPayloadMapper(
      * @param payloadText Raw body payload string (e.g., from Traffic capture or saved session).
      * @return Formatted [GraphQlState] with populated query, variables, operationName, and extensions.
      */
-    override fun parsePayload(payloadText: String): GraphQlState {
+    fun parsePayload(payloadText: String): GraphQlState {
         val trimmed = payloadText.trim()
         if (trimmed.isEmpty()) {
             return GraphQlState()
@@ -71,8 +94,10 @@ public class GraphQlPayloadMapper(
                 val dto = jsonFormatter.decodeFromString<GraphQlPayloadDto>(trimmed)
                 if (dto.query != null || dto.operationName != null) {
                     val formattedQuery = dto.query?.let { graphQlFormatter.formatQuery(it) } ?: ""
-                    val varsStr = dto.variables?.let { jsonFormatter.encodeToString(it) } ?: GraphQlState.DEFAULT_JSON_OBJECT_PLACEHOLDER
-                    val extStr = dto.extensions?.let { jsonFormatter.encodeToString(it) } ?: GraphQlState.DEFAULT_JSON_OBJECT_PLACEHOLDER
+                    val varsStr = dto.variables?.let { jsonFormatter.encodeToString(it) }
+                        ?: GraphQlState.DEFAULT_JSON_OBJECT_PLACEHOLDER
+                    val extStr = dto.extensions?.let { jsonFormatter.encodeToString(it) }
+                        ?: GraphQlState.DEFAULT_JSON_OBJECT_PLACEHOLDER
 
                     return GraphQlState(
                         queryText = formattedQuery,
@@ -103,13 +128,16 @@ public class GraphQlPayloadMapper(
      * @param state Target [GraphQlState] containing query, variables, operationName, and extensions.
      * @return Serialized JSON string suitable for HTTP transport.
      */
-    override fun serializePayload(state: GraphQlState): String {
+    fun serializePayload(state: GraphQlState): String {
         val trimmedQuery = state.queryText.trim()
         val trimmedOpName = state.operationName.trim()
         val varsJsonElement = parseJsonElementOrNull(state.variablesText)
         val extJsonElement = parseJsonElementOrNull(state.extensionsText)
 
-        if (trimmedQuery.isEmpty() && trimmedOpName.isEmpty() && varsJsonElement == null && extJsonElement == null) {
+        if (
+            trimmedQuery.isEmpty() && trimmedOpName.isEmpty() &&
+            varsJsonElement == null && extJsonElement == null
+            ) {
             return ""
         }
 

@@ -2,9 +2,11 @@ package com.devuloopers.knet.data.desktop.rules.repository
 
 import com.devuloopers.knet.domain.clientNetwork.model.HttpRequest
 import com.devuloopers.knet.domain.clientNetwork.model.HttpResponse
+import com.devuloopers.knet.domain.protocol.inspector.registry.ProtocolInspectorRegistry
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.engine.interceptor.InterceptResult
 import com.devuloopers.knet.engine.interceptor.InterceptSessionManager
+import com.devuloopers.knet.engine.protocol.inspector.graphql.GraphQLProtocolInspector
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -21,7 +23,10 @@ import kotlin.test.assertTrue
 @OptIn(ExperimentalCoroutinesApi::class)
 class InterceptionSessionRepositoryImplTest {
 
-    private val repository = InterceptionSessionRepositoryImpl(InterceptSessionManager)
+    private val repository = InterceptionSessionRepositoryImpl(
+        sessionManager = InterceptSessionManager,
+        protocolInspectorRegistry = ProtocolInspectorRegistry(listOf(GraphQLProtocolInspector()))
+    )
 
     @BeforeTest
     fun setUp() {

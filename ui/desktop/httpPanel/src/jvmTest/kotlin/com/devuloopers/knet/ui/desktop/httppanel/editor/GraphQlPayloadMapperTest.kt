@@ -63,4 +63,17 @@ class GraphQlPayloadMapperTest {
         assertTrue(json.contains("GetUser"))
         assertTrue(json.contains("\"id\": \"1\""))
     }
+
+    @Test
+    fun testPayloadStrategyPolymorphicParsingAndSerialization() {
+        val samplePayload = """{"query":"query Test { test }","operationName":"Test"}"""
+        val parsed = mapper.parse(samplePayload)
+
+        assertTrue(parsed is com.devuloopers.knet.domain.payload.StructuredPayloadState.GraphQL)
+        assertEquals("Test", parsed.operationName)
+
+        val serialized = mapper.serialize(parsed)
+        assertTrue(serialized.contains("query Test"))
+        assertTrue(serialized.contains("Test"))
+    }
 }

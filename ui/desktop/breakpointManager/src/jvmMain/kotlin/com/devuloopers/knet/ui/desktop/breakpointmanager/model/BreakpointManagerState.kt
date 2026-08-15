@@ -12,6 +12,9 @@ import com.devuloopers.knet.domain.rules.model.InterceptedTransaction
  * @param editingRule Non-null if editing an existing rule; null if creating a new rule.
  * @param activeEvents List of all in-flight suspended HTTP connection events.
  * @param activeEvent The currently selected or top in-flight suspended HTTP connection event.
+ * @param resolvedPayloads Map from transaction ID to its pre-resolved request/response payloads.
+ *   Computed once off-thread by [BreakpointManagerViewModel] via [PayloadInspectionSpec.fromBytes], so that
+ *   [LiveInterceptDrawer] never calls [BodyFormatterRegistry] at Compose render time.
  */
 data class BreakpointManagerState(
     val isGlobalInterceptionEnabled: Boolean = true,
@@ -20,7 +23,8 @@ data class BreakpointManagerState(
     val isAddEditDialogVisible: Boolean = false,
     val editingRule: BreakpointRuleUiModel? = null,
     val activeEvents: List<InterceptedTransaction> = emptyList(),
-    val activeEvent: InterceptedTransaction? = null
+    val activeEvent: InterceptedTransaction? = null,
+    val resolvedPayloads: Map<String, ResolvedInterceptPayload> = emptyMap()
 ) {
     /**
      * Filtered list of rules matching the active search query.
