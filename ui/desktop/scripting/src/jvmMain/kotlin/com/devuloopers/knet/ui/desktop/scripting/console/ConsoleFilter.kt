@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.devuloopers.knet.ui.core.input.KNetDropdown
+import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdown
 
 /**
  * Dropdown filter selector for ConsoleView levels.
@@ -20,10 +20,10 @@ fun ConsoleFilter(
     val options = listOf("ALL", "INFO", "WARN", "ERROR", "DEBUG")
     Row(modifier = modifier.padding(vertical = 4.dp)) {
         KNetDropdown(
-            items = options,
             selectedItem = selectedFilter,
-            itemLabel = { it },
+            items = options,
             onItemSelected = onFilterSelected,
+            itemText = { it },
             modifier = Modifier.width(120.dp)
         )
     }

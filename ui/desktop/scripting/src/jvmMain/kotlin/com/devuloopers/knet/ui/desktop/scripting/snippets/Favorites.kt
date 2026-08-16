@@ -10,9 +10,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.devuloopers.knet.ui.core.theme.KNetColors
+import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
+import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.scripting.model.ScriptSnippet
 
 /**
@@ -24,22 +25,31 @@ fun Favorites(
     onSnippetSelect: (ScriptSnippet) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val themeColors = KNetTheme.colors
+    val typography = KNetTheme.typography
+
     Column(modifier = modifier.padding(8.dp)) {
         Text(
             text = "Favorite Snippets",
-            color = KNetColors.TextPrimary,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
+            style = typography.caption.copy(
+                color = themeColors.textPrimary,
+                fontWeight = FontWeight.Bold
+            ),
+            maxLines = 1,
+            softWrap = false,
             modifier = Modifier.padding(bottom = 6.dp)
         )
         LazyColumn {
             items(favoriteSnippets) { snippet ->
                 Text(
-                    text = "★ ${snippet.title}",
-                    color = KNetColors.ActiveBlue,
-                    fontSize = 11.sp,
+                    text = snippet.title,
+                    style = typography.caption.copy(color = themeColors.accent),
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
                         .fillMaxWidth()
+                        .handCursor()
                         .clickable { onSnippetSelect(snippet) }
                         .padding(vertical = 4.dp)
                 )
@@ -47,3 +57,4 @@ fun Favorites(
         }
     }
 }
+

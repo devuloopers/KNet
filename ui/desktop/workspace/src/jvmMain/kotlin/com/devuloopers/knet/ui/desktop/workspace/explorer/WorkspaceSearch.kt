@@ -2,7 +2,7 @@ package com.devuloopers.knet.ui.desktop.workspace.explorer
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import com.devuloopers.knet.ui.core.layout.WidgetSearchBar
+import com.devuloopers.knet.ui.core.components.input.KNetSearchField
 
 /**
  * Workspace search bar primitive wrapper for explorer sidebars.
@@ -17,10 +17,11 @@ fun WorkspaceSearch(
     onQueryChange: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    WidgetSearchBar(
+    KNetSearchField(
         query = query,
         onQueryChange = onQueryChange,
         placeholder = "Filter collections & requests...",
         modifier = modifier
     )
 }
+

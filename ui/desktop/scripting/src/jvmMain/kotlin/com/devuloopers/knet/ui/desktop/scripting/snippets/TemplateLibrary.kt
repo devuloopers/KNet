@@ -10,9 +10,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.devuloopers.knet.ui.core.theme.KNetColors
+import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
+import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.scripting.model.ScriptTemplate
 
 /**
@@ -24,12 +25,18 @@ public fun TemplateLibrary(
     onTemplateSelect: (ScriptTemplate) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val themeColors = KNetTheme.colors
+    val typography = KNetTheme.typography
+
     Column(modifier = modifier.padding(8.dp)) {
         Text(
             text = "Template Library",
-            color = KNetColors.TextPrimary,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
+            style = typography.caption.copy(
+                color = themeColors.textPrimary,
+                fontWeight = FontWeight.Bold
+            ),
+            maxLines = 1,
+            softWrap = false,
             modifier = Modifier.padding(bottom = 6.dp)
         )
         LazyColumn {
@@ -37,19 +44,26 @@ public fun TemplateLibrary(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .handCursor()
                         .clickable { onTemplateSelect(template) }
                         .padding(vertical = 6.dp)
                 ) {
                     Text(
                         text = template.name,
-                        color = KNetColors.TextPrimary,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold
+                        style = typography.caption.copy(
+                            color = themeColors.textPrimary,
+                            fontWeight = FontWeight.SemiBold
+                        ),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = template.description,
-                        color = KNetColors.TextSecondary,
-                        fontSize = 10.sp,
+                        style = typography.caption.copy(color = themeColors.textSecondary),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(top = 2.dp)
                     )
                 }
@@ -57,3 +71,4 @@ public fun TemplateLibrary(
         }
     }
 }
+

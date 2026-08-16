@@ -10,11 +10,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.devuloopers.knet.ui.core.theme.KNetColors
+import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
+import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.scripting.model.ScriptDiagnostic
-
 import com.devuloopers.knet.ui.desktop.scripting.model.ScriptDiagnosticSeverity
 
 /**
@@ -22,30 +22,48 @@ import com.devuloopers.knet.ui.desktop.scripting.model.ScriptDiagnosticSeverity
  */
 @Composable
 fun ProblemsView(
-    diagnostics: List<ScriptDiagnostic>, onDiagnosticSelect: (ScriptDiagnostic) -> Unit, modifier: Modifier = Modifier
+    diagnostics: List<ScriptDiagnostic>,
+    onDiagnosticSelect: (ScriptDiagnostic) -> Unit,
+    modifier: Modifier = Modifier
 ) {
+    val themeColors = KNetTheme.colors
+    val typography = KNetTheme.typography
+
     val problems = diagnostics.filter {
         it.severity == ScriptDiagnosticSeverity.ERROR || it.severity == ScriptDiagnosticSeverity.WARNING
     }
     Column(modifier = modifier.padding(8.dp)) {
         Text(
             text = "Problems (${problems.size})",
-            color = KNetColors.TextPrimary,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
+            style = typography.caption.copy(
+                color = themeColors.textPrimary,
+                fontWeight = FontWeight.Bold
+            ),
+            maxLines = 1,
+            softWrap = false,
             modifier = Modifier.padding(bottom = 6.dp)
         )
         LazyColumn {
             items(problems) { problem ->
-                val color =
-                    if (problem.severity == ScriptDiagnosticSeverity.ERROR) KNetColors.ErrorRed else KNetColors.WarningOrange
+                val color = if (problem.severity == ScriptDiagnosticSeverity.ERROR) {
+                    themeColors.semantic.error
+                } else {
+                    themeColors.semantic.warning
+                }
                 Text(
                     text = "Line ${problem.line}: ${problem.message}",
-                    color = color,
-                    fontSize = 11.sp,
-                    modifier = Modifier.fillMaxWidth().clickable { onDiagnosticSelect(problem) }
-                        .padding(vertical = 4.dp))
+                    style = typography.caption.copy(color = color),
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .handCursor()
+                        .clickable { onDiagnosticSelect(problem) }
+                        .padding(vertical = 4.dp)
+                )
             }
         }
     }
 }
+

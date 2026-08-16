@@ -5,7 +5,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.devuloopers.knet.ui.core.input.CopyActionButton
+import com.devuloopers.knet.ui.core.components.button.KNetCopyButton
 import com.devuloopers.knet.ui.desktop.scripting.model.ConsoleLogEntry
 
 /**
@@ -18,6 +18,6 @@ public fun ConsoleActions(
 ) {
     val fullLogText = logs.joinToString("\n") { "[${it.level.name}] ${it.message}" }
     Row(modifier = modifier.padding(vertical = 4.dp)) {
-        CopyActionButton(textToCopy = fullLogText)
+        KNetCopyButton(textToCopy = fullLogText)
     }
 }

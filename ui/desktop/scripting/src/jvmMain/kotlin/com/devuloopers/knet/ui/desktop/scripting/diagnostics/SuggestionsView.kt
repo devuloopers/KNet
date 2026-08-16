@@ -10,11 +10,12 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.devuloopers.knet.ui.core.theme.KNetColors
+import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
+import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.scripting.model.ScriptDiagnostic
-
 import com.devuloopers.knet.ui.desktop.scripting.model.ScriptDiagnosticSeverity
 
 /**
@@ -26,23 +27,32 @@ fun SuggestionsView(
     onSuggestionSelect: (ScriptDiagnostic) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val themeColors = KNetTheme.colors
+    val typography = KNetTheme.typography
+
     val suggestions = diagnostics.filter { it.severity == ScriptDiagnosticSeverity.SUGGESTION }
     Column(modifier = modifier.padding(8.dp)) {
         Text(
             text = "Suggestions (${suggestions.size})",
-            color = KNetColors.TextPrimary,
-            fontSize = 12.sp,
-            fontWeight = FontWeight.Bold,
+            style = typography.caption.copy(
+                color = themeColors.textPrimary,
+                fontWeight = FontWeight.Bold
+            ),
+            maxLines = 1,
+            softWrap = false,
             modifier = Modifier.padding(bottom = 6.dp)
         )
         LazyColumn {
             items(suggestions) { suggestion ->
                 Text(
                     text = "Line ${suggestion.line}: ${suggestion.message}",
-                    color = KNetColors.ActiveBlue,
-                    fontSize = 11.sp,
+                    style = typography.caption.copy(color = themeColors.accent),
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier
                         .fillMaxWidth()
+                        .handCursor()
                         .clickable { onSuggestionSelect(suggestion) }
                         .padding(vertical = 4.dp)
                 )
@@ -51,4 +61,5 @@ fun SuggestionsView(
     }
 }
 
-val SuggestionsHeight: androidx.compose.ui.unit.Dp = 100.dp
+val SuggestionsHeight: Dp = 100.dp
+

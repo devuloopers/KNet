@@ -1,6 +1,6 @@
 package com.devuloopers.knet.ui.desktop.scripting
 
-import com.devuloopers.knet.ui.core.table.KeyValuePair
+import com.devuloopers.knet.ui.core.components.keyvalue.KeyValueEntry
 import com.devuloopers.knet.ui.desktop.scripting.model.ExecutionContext
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -12,8 +12,10 @@ class ExecutionContextTest {
 
     @Test
     fun `ExecutionContext attributes match headers`() {
-        val requests = listOf(KeyValuePair("Content-Type", "application/json"))
+        val requests = listOf(KeyValueEntry(id = "1", key = "Content-Type", value = "application/json"))
         val context = ExecutionContext(requests = requests)
         assertEquals(requests, context.requests)
     }
 }
+
+

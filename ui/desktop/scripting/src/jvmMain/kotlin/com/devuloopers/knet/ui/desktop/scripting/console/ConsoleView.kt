@@ -2,7 +2,6 @@ package com.devuloopers.knet.ui.desktop.scripting.console
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -14,10 +13,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.devuloopers.knet.ui.core.theme.KNetColors
-import com.devuloopers.knet.ui.core.theme.KNetShapes
+import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.scripting.model.ConsoleLogEntry
 import com.devuloopers.knet.ui.desktop.scripting.model.ConsoleLogLevel
 
@@ -31,6 +30,8 @@ public fun ConsoleView(
     autoScroll: Boolean,
     modifier: Modifier = Modifier
 ) {
+    val themeColors = KNetTheme.colors
+    val shapes = KNetTheme.shapes
     val listState = rememberLazyListState()
     val filteredLogs = if (filter == "ALL") logs else logs.filter { it.level.name == filter }
 
@@ -43,25 +44,29 @@ public fun ConsoleView(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(KNetColors.SurfaceDark, KNetShapes.Medium)
+            .background(themeColors.surfaceVariant, shapes.medium)
             .padding(6.dp)
     ) {
         LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
             items(filteredLogs) { entry ->
                 val color = when (entry.level) {
-                    ConsoleLogLevel.ERROR -> KNetColors.ErrorRed
-                    ConsoleLogLevel.WARN -> KNetColors.WarningOrange
-                    ConsoleLogLevel.DEBUG -> KNetColors.ActiveBlue
-                    ConsoleLogLevel.INFO -> KNetColors.TextPrimary
+                    ConsoleLogLevel.ERROR -> themeColors.semantic.error
+                    ConsoleLogLevel.WARN -> themeColors.semantic.warning
+                    ConsoleLogLevel.DEBUG -> themeColors.accent
+                    ConsoleLogLevel.INFO -> themeColors.textPrimary
                 }
                 Text(
                     text = "[${entry.level.name}] ${entry.message}",
                     color = color,
                     fontFamily = FontFamily.Monospace,
                     fontSize = 11.sp,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp)
                 )
             }
         }
     }
 }
+

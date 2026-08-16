@@ -10,11 +10,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.devuloopers.knet.ui.core.icon.KNetIcons
-import com.devuloopers.knet.ui.core.theme.KNetColors
-import com.devuloopers.knet.ui.core.theme.KNetShapes
+import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
+import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
+import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 /**
  * Tree node model for generic hierarchical tree views in KNet explorers.
@@ -69,6 +69,10 @@ private fun <T> TreeNodeRow(
     onNodeToggle: (String) -> Unit,
     onNodeSelect: (TreeNode<T>) -> Unit
 ) {
+    val themeColors = KNetTheme.colors
+    val typography = KNetTheme.typography
+    val shapes = KNetTheme.shapes
+
     val isExpanded = expandedNodeIds.contains(node.id)
     val isSelected = node.id == selectedNodeId
     val hasChildren = node.children.isNotEmpty()
@@ -77,9 +81,10 @@ private fun <T> TreeNodeRow(
         modifier = Modifier
             .fillMaxWidth()
             .background(
-                color = if (isSelected) KNetColors.SelectedRowHighlight else KNetColors.SurfaceDark,
-                shape = KNetShapes.Small
+                color = if (isSelected) themeColors.interaction.selectedOverlay else themeColors.surface,
+                shape = shapes.small
             )
+            .handCursor()
             .clickable { onNodeSelect(node) }
             .padding(start = (depth * 12 + 6).dp, top = 4.dp, bottom = 4.dp, end = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -87,11 +92,12 @@ private fun <T> TreeNodeRow(
     ) {
         if (hasChildren) {
             Icon(
-                imageVector = if (isExpanded) KNetIcons.ChevronDown else KNetIcons.ChevronUp,
+                imageVector = if (isExpanded) KNetIcons.ChevronDown else KNetIcons.ChevronRight,
                 contentDescription = "Expand tree node",
-                tint = KNetColors.TextSecondary,
+                tint = themeColors.textSecondary,
                 modifier = Modifier
                     .size(10.dp)
+                    .handCursor()
                     .clickable { onNodeToggle(node.id) }
             )
         } else {
@@ -102,16 +108,20 @@ private fun <T> TreeNodeRow(
             Icon(
                 imageVector = node.icon,
                 contentDescription = node.label,
-                tint = if (isSelected) KNetColors.ActiveBlue else KNetColors.TextSecondary,
+                tint = if (isSelected) themeColors.accent else themeColors.textSecondary,
                 modifier = Modifier.size(12.dp)
             )
         }
 
         Text(
             text = node.label,
-            color = if (isSelected) KNetColors.ActiveBlue else KNetColors.TextPrimary,
-            fontSize = 11.sp,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+            style = typography.caption.copy(
+                color = if (isSelected) themeColors.accent else themeColors.textPrimary,
+                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+            ),
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis
         )
     }
 
@@ -128,3 +138,4 @@ private fun <T> TreeNodeRow(
         }
     }
 }
+

@@ -9,9 +9,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.devuloopers.knet.ui.core.theme.KNetColors
+import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
+import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.scripting.model.TrafficScript
 
 /**
@@ -24,23 +25,32 @@ public fun ScriptTabs(
     onScriptSelect: (TrafficScript) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val themeColors = KNetTheme.colors
+    val typography = KNetTheme.typography
+
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .background(KNetColors.BackgroundDark)
+            .background(themeColors.surface)
             .padding(vertical = 4.dp)
     ) {
         openScripts.forEach { script ->
             val isSelected = script.id == activeScript?.id
             Text(
                 text = script.name + if (script.isDirty) "*" else "",
-                color = if (isSelected) KNetColors.ActiveBlue else KNetColors.TextSecondary,
-                fontSize = 11.sp,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                style = typography.caption.copy(
+                    color = if (isSelected) themeColors.accent else themeColors.textSecondary,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                ),
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier
+                    .handCursor()
                     .clickable { onScriptSelect(script) }
                     .padding(horizontal = 8.dp, vertical = 4.dp)
             )
         }
     }
 }
+

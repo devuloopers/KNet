@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.devuloopers.knet.ui.core.feedback.EmptyState
+import com.devuloopers.knet.ui.core.components.placeholder.KNetEmptyStatePlaceholder
 
 /**
  * History explorer view managing past HTTP request logs and session history.
@@ -18,9 +18,10 @@ fun HistoryExplorer(
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier.fillMaxSize().padding(6.dp)) {
-        EmptyState(
+        KNetEmptyStatePlaceholder(
             title = "No History Logs",
-            description = "Captured proxy requests will appear here."
+            subtitle = "Captured proxy requests will appear here."
         )
     }
 }
+

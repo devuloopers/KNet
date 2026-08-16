@@ -8,7 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import com.devuloopers.knet.ui.core.theme.KNetColors
+import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 /**
  * Resizable vertical/horizontal splitter divider handle for workspace panels.
@@ -21,10 +21,13 @@ fun WorkspaceSplitter(
     modifier: Modifier = Modifier,
     thickness: Dp = 1.dp
 ) {
+    val themeColors = KNetTheme.colors
+
     Box(
         modifier = modifier
             .width(thickness)
             .fillMaxHeight()
-            .background(KNetColors.BorderDark)
+            .background(themeColors.border)
     )
 }
+

@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.devuloopers.knet.ui.core.feedback.EmptyState
+import com.devuloopers.knet.ui.core.components.placeholder.KNetEmptyStatePlaceholder
 
 /**
  * Collections explorer view managing API Postman collections, folders, and request items.
@@ -29,9 +29,10 @@ fun CollectionsExplorer(
             onQueryChange = {},
             modifier = Modifier.padding(bottom = 6.dp)
         )
-        EmptyState(
+        KNetEmptyStatePlaceholder(
             title = "No Collections",
-            description = "Import or create a Postman API collection."
+            subtitle = "Import or create a Postman API collection."
         )
     }
 }
+

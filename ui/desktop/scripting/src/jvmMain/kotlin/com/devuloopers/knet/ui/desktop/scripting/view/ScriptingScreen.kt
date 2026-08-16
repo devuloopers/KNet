@@ -15,20 +15,19 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.devuloopers.knet.ui.core.theme.KNetColors
+import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import com.devuloopers.knet.ui.desktop.scripting.console.ConsoleActions
+import com.devuloopers.knet.ui.desktop.scripting.console.ConsoleFilter
+import com.devuloopers.knet.ui.desktop.scripting.console.ConsoleToolbar
+import com.devuloopers.knet.ui.desktop.scripting.console.ConsoleView
+import com.devuloopers.knet.ui.desktop.scripting.diagnostics.DiagnosticsView
 import com.devuloopers.knet.ui.desktop.scripting.model.ScriptingIntent
 import com.devuloopers.knet.ui.desktop.scripting.viewmodel.ScriptingViewModel
-import com.devuloopers.knet.ui.desktop.scripting.workspace.ScriptEditor
-import com.devuloopers.knet.ui.desktop.scripting.workspace.ScriptTabs
-import com.devuloopers.knet.ui.desktop.scripting.workspace.ScriptExplorer
-import com.devuloopers.knet.ui.desktop.scripting.workspace.VariablesExplorer
 import com.devuloopers.knet.ui.desktop.scripting.workspace.ContextExplorer
-import com.devuloopers.knet.ui.desktop.scripting.console.ConsoleView
-import com.devuloopers.knet.ui.desktop.scripting.console.ConsoleToolbar
-import com.devuloopers.knet.ui.desktop.scripting.console.ConsoleFilter
-import com.devuloopers.knet.ui.desktop.scripting.console.ConsoleActions
-import com.devuloopers.knet.ui.desktop.scripting.diagnostics.DiagnosticsView
+import com.devuloopers.knet.ui.desktop.scripting.workspace.ScriptEditor
+import com.devuloopers.knet.ui.desktop.scripting.workspace.ScriptExplorer
+import com.devuloopers.knet.ui.desktop.scripting.workspace.ScriptTabs
+import com.devuloopers.knet.ui.desktop.scripting.workspace.VariablesExplorer
 
 /**
  * ScriptingScreen renders KNet's primary Automation Development Environment.
@@ -38,12 +37,14 @@ public fun ScriptingScreen(
     viewModel: ScriptingViewModel,
     modifier: Modifier = Modifier
 ) {
+    val themeColors = KNetTheme.colors
+    val typography = KNetTheme.typography
     val uiState by viewModel.uiState.collectAsState()
 
     Row(
         modifier = modifier
             .fillMaxSize()
-            .background(KNetColors.BackgroundDark)
+            .background(themeColors.background)
     ) {
         // Left Column: script lists
         ScriptExplorer(
@@ -74,8 +75,9 @@ public fun ScriptingScreen(
             } else {
                 Text(
                     text = "No script open. Select one from explorer.",
-                    color = KNetColors.TextSecondary,
-                    fontSize = 11.sp,
+                    style = typography.caption.copy(color = themeColors.textSecondary),
+                    maxLines = 1,
+                    softWrap = false,
                     modifier = Modifier.padding(16.dp)
                 )
             }
@@ -89,7 +91,7 @@ public fun ScriptingScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(KNetColors.SurfaceDark)
+                        .background(themeColors.surfaceVariant)
                 ) {
                     ConsoleToolbar(
                         autoScroll = uiState.autoScroll,
@@ -127,3 +129,4 @@ public fun ScriptingScreen(
         }
     }
 }
+

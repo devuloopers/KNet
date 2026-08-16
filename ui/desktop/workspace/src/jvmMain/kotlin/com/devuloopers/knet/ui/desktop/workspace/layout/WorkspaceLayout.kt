@@ -9,7 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.devuloopers.knet.ui.core.theme.KNetColors
+import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.workspace.explorer.CollectionsExplorer
 import com.devuloopers.knet.ui.desktop.workspace.explorer.EnvironmentExplorer
 import com.devuloopers.knet.ui.desktop.workspace.explorer.HistoryExplorer
@@ -31,15 +31,16 @@ fun WorkspaceLayout(
     viewModel: WorkspaceViewModel,
     modifier: Modifier = Modifier
 ) {
+    val themeColors = KNetTheme.colors
     val uiState by viewModel.uiState.collectAsState()
 
     when (val state = uiState) {
         is WorkspaceState.Loading -> {
             Box(
-                modifier = modifier.fillMaxSize().background(KNetColors.BackgroundDark),
+                modifier = modifier.fillMaxSize().background(themeColors.background),
                 contentAlignment = Alignment.Center
             ) {
-                CircularProgressIndicator(color = KNetColors.ActiveBlue)
+                CircularProgressIndicator(color = themeColors.accent)
             }
         }
 
@@ -47,14 +48,14 @@ fun WorkspaceLayout(
             Row(
                 modifier = modifier
                     .fillMaxSize()
-                    .background(KNetColors.BackgroundDark)
+                    .background(themeColors.background)
             ) {
                 // Explorer Sidebar
                 Box(
                     modifier = Modifier
                         .width(state.layout.explorerWidthDp.dp)
                         .fillMaxHeight()
-                        .background(KNetColors.SurfaceDark)
+                        .background(themeColors.surface)
                 ) {
                     when (state.activeExplorer) {
                         ExplorerType.COLLECTIONS -> CollectionsExplorer(
@@ -75,9 +76,10 @@ fun WorkspaceLayout(
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .background(KNetColors.BackgroundDark)
+                        .background(themeColors.background)
                 )
             }
         }
     }
 }
+
