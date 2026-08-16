@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -18,6 +19,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
@@ -61,21 +63,30 @@ public fun BreakpointManagerScreen(
                 verticalAlignment = Alignment.Top
             ) {
                 // Title & Description
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Column(
+                    modifier = Modifier.weight(1f, fill = false),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
                     Text(
                         text = "Breakpoint Manager",
                         style = typography.titleLarge.copy(
                             color = themeColors.textPrimary,
                             fontWeight = FontWeight.Bold,
                             fontSize = 24.sp
-                        )
+                        ),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = "Define rules to pause in-flight HTTP requests and responses",
                         style = typography.caption.copy(
                             color = themeColors.textMuted,
                             fontSize = 13.sp
-                        )
+                        ),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -95,7 +106,9 @@ public fun BreakpointManagerScreen(
                             color = themeColors.textPrimary,
                             fontWeight = FontWeight.Bold,
                             fontSize = 11.sp
-                        )
+                        ),
+                        maxLines = 1,
+                        softWrap = false
                     )
                     KNetSwitch(
                         checked = state.isGlobalInterceptionEnabled,
@@ -113,7 +126,9 @@ public fun BreakpointManagerScreen(
                 KNetTextField(
                     value = state.searchQuery,
                     onValueChange = { viewModel.updateSearchQuery(it) },
-                    modifier = Modifier.width(320.dp),
+                    modifier = Modifier
+                        .widthIn(min = 160.dp, max = 320.dp)
+                        .weight(1f, fill = false),
                     config = InputFieldConfig(
                         placeholder = "Search rules...",
                         backgroundColor = themeColors.surfaceVariant,
@@ -125,7 +140,11 @@ public fun BreakpointManagerScreen(
                     onClick = { viewModel.openAddDialog() },
                     variant = ButtonVariant.Primary
                 ) {
-                    Text("+ Add Rule")
+                    Text(
+                        text = "+ Add Rule",
+                        maxLines = 1,
+                        softWrap = false
+                    )
                 }
             }
 
@@ -135,7 +154,7 @@ public fun BreakpointManagerScreen(
                 onToggleStatus = { viewModel.toggleRuleStatus(it) },
                 onEditRule = { viewModel.openEditDialog(it) },
                 onDeleteRule = { viewModel.deleteRule(it) },
-                modifier = Modifier.weight(1f)
+                modifier = Modifier.weight(1f).fillMaxWidth()
             )
         }
 

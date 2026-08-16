@@ -35,18 +35,18 @@ import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 /**
- * Data holder for navigation destination items including label, vector icon, and keyboard shortcut badge.
+ * Data holder for navigation destination items including label, vector icon, and optional keyboard shortcut badge.
  *
  * @property destination Target sealed destination screen.
  * @property label Display title text.
  * @property icon Material vector icon.
- * @property shortcut Keyboard shortcut string label (e.g. "Ctrl+1").
+ * @property shortcut Optional keyboard shortcut string label (e.g. "Ctrl+1").
  */
 public data class NavigationDestinationInfo(
     val destination: DesktopDestination,
     val label: String,
     val icon: ImageVector,
-    val shortcut: String
+    val shortcut: String? = null
 )
 
 /**
@@ -138,6 +138,7 @@ public fun NavigationRailRowItem(
                     typography.bodyMedium.copy(color = textColor)
                 },
                 maxLines = 1,
+                softWrap = false,
                 modifier = Modifier
                     .offset(x = labelOffset)
                     .alpha(labelAlpha)
@@ -145,23 +146,27 @@ public fun NavigationRailRowItem(
 
             Spacer(modifier = Modifier.weight(1f))
 
-            // Right-aligned Keyboard Shortcut Badge
-            Box(
-                modifier = Modifier
-                    .padding(end = 8.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(if (isSelected) themeColors.interaction.selectedOverlay else themeColors.interaction.hoverOverlay)
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                    .alpha(labelAlpha),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = info.shortcut,
-                    style = typography.caption.copy(
-                        color = if (isSelected) themeColors.accent else themeColors.textMuted,
-                        fontWeight = FontWeight.SemiBold
+            // Right-aligned Keyboard Shortcut Badge (if present)
+            if (!info.shortcut.isNullOrBlank()) {
+                Box(
+                    modifier = Modifier
+                        .padding(end = 8.dp)
+                        .clip(RoundedCornerShape(4.dp))
+                        .background(if (isSelected) themeColors.interaction.selectedOverlay else themeColors.interaction.hoverOverlay)
+                        .padding(horizontal = 6.dp, vertical = 2.dp)
+                        .alpha(labelAlpha),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = info.shortcut,
+                        style = typography.caption.copy(
+                            color = if (isSelected) themeColors.accent else themeColors.textMuted,
+                            fontWeight = FontWeight.SemiBold
+                        ),
+                        maxLines = 1,
+                        softWrap = false
                     )
-                )
+                }
             }
         }
     }

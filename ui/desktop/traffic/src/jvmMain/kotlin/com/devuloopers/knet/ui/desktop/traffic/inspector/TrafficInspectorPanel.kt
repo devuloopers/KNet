@@ -39,7 +39,7 @@ import com.devuloopers.knet.ui.desktop.traffic.model.*
 fun TrafficInspectorPanel(
     selectedTransaction: TrafficItemUiState?,
     activeTab: InspectorTab,
-    activeRequestSubTab: RequestSubTab = RequestSubTab.HEADERS,
+    activeRequestSubTab: RequestSubTab = RequestSubTab.BODY,
     activeResponseSubTab: ResponseSubTab = ResponseSubTab.BODY,
     previewMode: PreviewFormatMode,
     preparedState: InspectorPreparedState = InspectorPreparedState(),

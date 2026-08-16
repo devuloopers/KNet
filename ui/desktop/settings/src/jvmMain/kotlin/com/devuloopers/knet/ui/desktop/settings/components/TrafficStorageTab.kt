@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.dropdown.KNetSearchableDropdown
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
@@ -33,12 +34,17 @@ fun TrafficStorageTab(
         Column {
             Text(
                 text = "Traffic & Storage",
-                style = typography.titleLarge.copy(color = themeColors.textPrimary)
+                style = typography.titleLarge.copy(color = themeColors.textPrimary),
+                maxLines = 1,
+                softWrap = false
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "Manage live traffic session flushing and payload memory limits.",
-                style = typography.bodyMedium.copy(color = themeColors.textSecondary)
+                style = typography.bodyMedium.copy(color = themeColors.textSecondary),
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
             )
         }
 
@@ -50,12 +56,18 @@ fun TrafficStorageTab(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Auto-Clear Traffic on Startup",
-                        style = typography.titleSmall.copy(color = themeColors.textPrimary)
+                        style = typography.titleSmall.copy(color = themeColors.textPrimary),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = "Automatically flushes previous traffic records when KNet launches.",
-                        style = typography.bodySmall.copy(color = themeColors.textSecondary)
+                        style = typography.bodySmall.copy(color = themeColors.textSecondary),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -78,12 +90,18 @@ fun TrafficStorageTab(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Payload Size Cache Limit",
-                        style = typography.titleSmall.copy(color = themeColors.textPrimary)
+                        style = typography.titleSmall.copy(color = themeColors.textPrimary),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = "Maximum response body payload size cached per transaction.",
-                        style = typography.bodySmall.copy(color = themeColors.textSecondary)
+                        style = typography.bodySmall.copy(color = themeColors.textSecondary),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 

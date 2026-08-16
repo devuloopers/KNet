@@ -15,6 +15,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.httppanel.components.EndpointCard
@@ -119,12 +120,18 @@ private fun OverviewGridRow(
         Text(
             text = label,
             style = typography.bodySmall.copy(color = themeColors.textSecondary),
-            modifier = Modifier.width(130.dp)
+            modifier = Modifier.width(130.dp),
+            maxLines = 1,
+            softWrap = false
         )
         Text(
             text = value,
             style = if (isMono) typography.codeSmall.copy(color = valueColor)
-            else typography.bodySmall.copy(color = valueColor)
+            else typography.bodySmall.copy(color = valueColor),
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false)
         )
     }
 }

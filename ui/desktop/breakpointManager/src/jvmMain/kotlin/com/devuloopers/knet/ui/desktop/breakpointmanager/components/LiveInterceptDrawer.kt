@@ -7,7 +7,9 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -172,6 +174,7 @@ fun LiveInterceptDrawer(
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
                         // Tier 1: Status Badges & Close Button
+                        val badgeScrollState = rememberScrollState()
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
@@ -180,7 +183,9 @@ fun LiveInterceptDrawer(
                             Row(
                                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                                 verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .horizontalScroll(badgeScrollState)
                             ) {
                                 // Status Badge
                                 Box(
@@ -195,7 +200,9 @@ fun LiveInterceptDrawer(
                                             color = themeColors.semantic.warning,
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 10.sp
-                                        )
+                                        ),
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 }
 
@@ -216,7 +223,9 @@ fun LiveInterceptDrawer(
                                             color = phaseColor,
                                             fontWeight = FontWeight.Bold,
                                             fontSize = 10.sp
-                                        )
+                                        ),
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                 }
 
@@ -252,7 +261,9 @@ fun LiveInterceptDrawer(
                                                 color = protocolHeaderColor,
                                                 fontWeight = FontWeight.Bold,
                                                 fontSize = 10.sp
-                                            )
+                                            ),
+                                            maxLines = 1,
+                                            softWrap = false
                                         )
                                     }
                                 }
@@ -289,11 +300,13 @@ fun LiveInterceptDrawer(
                     }
 
                     // Action Control Toolbar ([FORWARD], [DROP], [DISABLE RULE])
+                    val toolbarScrollState = rememberScrollState()
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .background(themeColors.background)
                             .border(width = 1.dp, color = themeColors.border)
+                            .horizontalScroll(toolbarScrollState)
                             .padding(horizontal = 16.dp, vertical = 10.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -336,7 +349,12 @@ fun LiveInterceptDrawer(
                             },
                             variant = ButtonVariant.Primary
                         ) {
-                            Text(text = forwardLabel, style = typography.caption.copy(fontWeight = FontWeight.Bold))
+                            Text(
+                                text = forwardLabel,
+                                style = typography.caption.copy(fontWeight = FontWeight.Bold),
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
 
                         // Drop Button
@@ -344,7 +362,12 @@ fun LiveInterceptDrawer(
                             onClick = onDrop,
                             variant = ButtonVariant.Secondary
                         ) {
-                            Text(text = "DROP", style = typography.caption.copy(fontWeight = FontWeight.Bold))
+                            Text(
+                                text = "DROP",
+                                style = typography.caption.copy(fontWeight = FontWeight.Bold),
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
 
                         // Disable Rule Button
@@ -352,7 +375,12 @@ fun LiveInterceptDrawer(
                             onClick = onDisableRule,
                             variant = ButtonVariant.Secondary
                         ) {
-                            Text(text = "DISABLE RULE", style = typography.caption.copy(fontWeight = FontWeight.Bold))
+                            Text(
+                                text = "DISABLE RULE",
+                                style = typography.caption.copy(fontWeight = FontWeight.Bold),
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
                     }
 

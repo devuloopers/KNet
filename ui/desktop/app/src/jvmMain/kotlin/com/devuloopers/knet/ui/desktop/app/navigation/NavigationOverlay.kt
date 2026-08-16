@@ -70,17 +70,17 @@ public fun NavigationOverlay(
     val themeColors = KNetTheme.colors
 
     val topSection = listOf(
-        NavigationDestinationInfo(DesktopDestination.Traffic, "Traffic", Icons.Default.WifiTethering, "Ctrl+1"),
-        NavigationDestinationInfo(DesktopDestination.ApiStudio, "API Studio", Icons.Default.Navigation, "Ctrl+2"),
-        NavigationDestinationInfo(DesktopDestination.Breakpoints, "Intercepts", Icons.Default.PauseCircle, "Ctrl+3")
+        NavigationDestinationInfo(DesktopDestination.Traffic, "Traffic", Icons.Default.WifiTethering),
+        NavigationDestinationInfo(DesktopDestination.ApiStudio, "API Studio", Icons.Default.Navigation),
+        NavigationDestinationInfo(DesktopDestination.Breakpoints, "Intercepts", Icons.Default.PauseCircle)
     )
 
     val middleSection = listOf(
-        NavigationDestinationInfo(DesktopDestination.Certificate, "Certificates", Icons.Default.Lock, "Ctrl+4")
+        NavigationDestinationInfo(DesktopDestination.Certificate, "Certificates", Icons.Default.Lock)
     )
 
     val bottomSection = listOf(
-        NavigationDestinationInfo(DesktopDestination.Settings, "Settings", Icons.Default.Settings, "Ctrl+,")
+        NavigationDestinationInfo(DesktopDestination.Settings, "Settings", Icons.Default.Settings)
     )
 
     Column(

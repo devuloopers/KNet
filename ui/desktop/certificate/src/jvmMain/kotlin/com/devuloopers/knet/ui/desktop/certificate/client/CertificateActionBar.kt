@@ -38,7 +38,9 @@ fun CertificateActionBar(
             query = searchQuery,
             onQueryChange = onSearchChange,
             placeholder = "Filter by alias or domain...",
-            modifier = Modifier.width(360.dp)
+            modifier = Modifier
+                .widthIn(min = 160.dp, max = 360.dp)
+                .weight(1f, fill = false)
         )
 
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -67,14 +69,22 @@ fun CertificateActionBar(
                         modifier = Modifier.size(16.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Import Client Cert")
+                    Text(
+                        text = "Import Client Cert",
+                        maxLines = 1,
+                        softWrap = false
+                    )
                 }
             } else {
                 KNetButton(
                     onClick = onAddRuleClick,
                     variant = ButtonVariant.Primary
                 ) {
-                    Text("Add mTLS Rule")
+                    Text(
+                        text = "Add mTLS Rule",
+                        maxLines = 1,
+                        softWrap = false
+                    )
                 }
             }
         }

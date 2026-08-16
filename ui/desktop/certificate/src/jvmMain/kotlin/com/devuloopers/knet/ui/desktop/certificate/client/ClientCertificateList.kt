@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.badge.KNetBadge
 import com.devuloopers.knet.ui.core.components.empty.EmptyState
@@ -117,7 +118,11 @@ private fun ClientCertificateCard(
                     Text(
                         text = cert.alias,
                         style = typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                        color = if (isSelected) themeColors.accent else themeColors.textPrimary
+                        color = if (isSelected) themeColors.accent else themeColors.textPrimary,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     KNetBadge(
@@ -140,7 +145,10 @@ private fun ClientCertificateCard(
                     Text(
                         text = cert.host,
                         style = typography.bodySmall,
-                        color = themeColors.textSecondary
+                        color = themeColors.textSecondary,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 
@@ -149,7 +157,10 @@ private fun ClientCertificateCard(
                 Text(
                     text = "Expires in ${cert.daysUntilExpiration} days",
                     style = typography.labelSmall,
-                    color = expiryColor
+                    color = expiryColor,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 

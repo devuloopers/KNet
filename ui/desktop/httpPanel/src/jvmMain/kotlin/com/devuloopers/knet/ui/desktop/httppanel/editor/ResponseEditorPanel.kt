@@ -146,7 +146,7 @@ fun ResponseEditorPanel(
 
         // 2. Sub-Tabs Header Navigation Bar
         InspectorSubTabRow(
-            tabs = InspectorSubTab.ResponseTabs,
+            tabs = InspectorSubTab.ResponseEditorTabs,
             activeTab = localActiveTab,
             onTabSelected = { newTab ->
                 localActiveTab = newTab

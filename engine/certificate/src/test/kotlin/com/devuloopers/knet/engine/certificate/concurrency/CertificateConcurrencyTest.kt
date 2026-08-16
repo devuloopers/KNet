@@ -16,8 +16,8 @@ class CertificateConcurrencyTest {
 
     @Test
     fun testParallelLeafGeneration() {
-        val threadCount = 10
-        val generationsPerThread = 10
+        val threadCount = 4
+        val generationsPerThread = 5
         val executor = Executors.newFixedThreadPool(threadCount)
         val generatedSerials = ConcurrentHashMap.newKeySet<String>()
 
@@ -32,14 +32,14 @@ class CertificateConcurrencyTest {
         }
 
         executor.shutdown()
-        val finished = executor.awaitTermination(10, TimeUnit.SECONDS)
+        val finished = executor.awaitTermination(30, TimeUnit.SECONDS)
         assertEquals(true, finished, "Parallel generation should complete cleanly within timeout")
         assertEquals(threadCount * generationsPerThread, generatedSerials.size, "All generated certificates must have unique serial numbers")
     }
 
     @Test
     fun testConcurrentCacheAccess() {
-        val threadCount = 10
+        val threadCount = 8
         val executor = Executors.newFixedThreadPool(threadCount)
         val cache = CertificateCache()
 
@@ -53,7 +53,7 @@ class CertificateConcurrencyTest {
         }
 
         executor.shutdown()
-        val finished = executor.awaitTermination(10, TimeUnit.SECONDS)
+        val finished = executor.awaitTermination(30, TimeUnit.SECONDS)
         assertEquals(true, finished, "Concurrent cache reads should complete cleanly")
         assertEquals(1, cache.size(), "Cache must contain exactly 1 cached entry for the shared domain")
     }

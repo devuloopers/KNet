@@ -101,7 +101,10 @@ public fun TrafficTable(
                     Text(
                         text = "No captured traffic matching current filters",
                         style = typography.caption,
-                        color = themeColors.textSecondary
+                        color = themeColors.textSecondary,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             } else {
@@ -158,7 +161,9 @@ public fun TrafficTable(
         ) {
             Text(
                 text = "${transactions.size} Requests",
-                style = typography.caption.copy(color = themeColors.textSecondary)
+                style = typography.caption.copy(color = themeColors.textSecondary),
+                maxLines = 1,
+                softWrap = false
             )
 
             Row(
@@ -167,7 +172,9 @@ public fun TrafficTable(
             ) {
                 Text(
                     text = formattedTotalSize,
-                    style = typography.caption.copy(color = themeColors.textSecondary)
+                    style = typography.caption.copy(color = themeColors.textSecondary),
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
         }
@@ -191,17 +198,37 @@ private fun TableHeaderRow(columnVisibility: ColumnVisibilityState) {
             KNetCell(text = "Timestamp", modifier = Modifier.width(130.dp), color = themeColors.textMuted)
         }
         Box(modifier = Modifier.width(76.dp), contentAlignment = Alignment.CenterStart) {
-            Text(text = "Method", style = typography.codeSmall.copy(color = themeColors.textMuted, fontWeight = FontWeight.Bold))
+            Text(
+                text = "Method",
+                style = typography.codeSmall.copy(color = themeColors.textMuted, fontWeight = FontWeight.Bold),
+                maxLines = 1,
+                softWrap = false
+            )
         }
         Box(modifier = Modifier.width(180.dp), contentAlignment = Alignment.CenterStart) {
-            Text(text = "Host", style = typography.codeSmall.copy(color = themeColors.textMuted, fontWeight = FontWeight.Bold))
+            Text(
+                text = "Host",
+                style = typography.codeSmall.copy(color = themeColors.textMuted, fontWeight = FontWeight.Bold),
+                maxLines = 1,
+                softWrap = false
+            )
         }
         Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-            Text(text = "Path", style = typography.codeSmall.copy(color = themeColors.textMuted, fontWeight = FontWeight.Bold))
+            Text(
+                text = "Path",
+                style = typography.codeSmall.copy(color = themeColors.textMuted, fontWeight = FontWeight.Bold),
+                maxLines = 1,
+                softWrap = false
+            )
         }
         if (columnVisibility.isVisible(TrafficColumn.STATUS)) {
             Box(modifier = Modifier.width(64.dp), contentAlignment = Alignment.CenterStart) {
-                Text(text = "Status", style = typography.codeSmall.copy(color = themeColors.textMuted, fontWeight = FontWeight.Bold))
+                Text(
+                    text = "Status",
+                    style = typography.codeSmall.copy(color = themeColors.textMuted, fontWeight = FontWeight.Bold),
+                    maxLines = 1,
+                    softWrap = false
+                )
             }
         }
         if (columnVisibility.isVisible(TrafficColumn.SIZE)) {
@@ -351,7 +378,9 @@ private fun TableRowItem(
                 }
                 Text(
                     text = displayMethod,
-                    style = typography.codeSmall.copy(color = methodColor, fontWeight = FontWeight.Bold)
+                    style = typography.codeSmall.copy(color = methodColor, fontWeight = FontWeight.Bold),
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
         }
@@ -362,6 +391,7 @@ private fun TableRowItem(
                 text = item.host,
                 style = typography.codeSmall.copy(color = themeColors.textPrimary),
                 maxLines = 1,
+                softWrap = false,
                 overflow = TextOverflow.Ellipsis
             )
         }
@@ -372,6 +402,7 @@ private fun TableRowItem(
                 text = displayPath,
                 style = typography.codeSmall.copy(color = themeColors.textSecondary),
                 maxLines = 1,
+                softWrap = false,
                 overflow = TextOverflow.Ellipsis
             )
         }
@@ -387,7 +418,10 @@ private fun TableRowItem(
                         isCompleted -> "ERR"
                         else -> "In Progress"
                     },
-                    style = typography.codeSmall.copy(color = statusColor, fontWeight = FontWeight.Medium)
+                    style = typography.codeSmall.copy(color = statusColor, fontWeight = FontWeight.Medium),
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }

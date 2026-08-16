@@ -10,6 +10,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.devuloopers.knet.ui.core.components.dropdown.KNetSearchableDropdown
@@ -36,12 +37,17 @@ fun AppearanceTab(
         Column {
             Text(
                 text = "Appearance",
-                style = typography.titleLarge.copy(color = themeColors.textPrimary)
+                style = typography.titleLarge.copy(color = themeColors.textPrimary),
+                maxLines = 1,
+                softWrap = false
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "Customize application color themes and default workspace preferences.",
-                style = typography.bodyMedium.copy(color = themeColors.textSecondary)
+                style = typography.bodyMedium.copy(color = themeColors.textSecondary),
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
             )
         }
 
@@ -55,7 +61,11 @@ fun AppearanceTab(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = "Color Theme",
-                            style = typography.titleSmall.copy(color = themeColors.textPrimary)
+                            style = typography.titleSmall.copy(color = themeColors.textPrimary),
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         UpcomingFeatureBadge()
@@ -63,7 +73,10 @@ fun AppearanceTab(
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = "Select application visual theme mode (Dark theme is currently active).",
-                        style = typography.bodySmall.copy(color = themeColors.textSecondary)
+                        style = typography.bodySmall.copy(color = themeColors.textSecondary),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -89,12 +102,18 @@ fun AppearanceTab(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Default Scripting Language",
-                        style = typography.titleSmall.copy(color = themeColors.textPrimary)
+                        style = typography.titleSmall.copy(color = themeColors.textPrimary),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = "Default language used for pre-request and post-response scripts.",
-                        style = typography.bodySmall.copy(color = themeColors.textSecondary)
+                        style = typography.bodySmall.copy(color = themeColors.textSecondary),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -125,7 +144,9 @@ private fun UpcomingFeatureBadge(modifier: Modifier = Modifier) {
             style = KNetTheme.typography.labelSmall.copy(
                 color = Color(0xFFA78BFA),
                 fontSize = 10.sp
-            )
+            ),
+            maxLines = 1,
+            softWrap = false
         )
     }
 }
@@ -148,7 +169,9 @@ private fun DisabledSegmentedOption(
     ) {
         Text(
             text = label,
-            style = KNetTheme.typography.labelMedium.copy(color = textCol)
+            style = KNetTheme.typography.labelMedium.copy(color = textCol),
+            maxLines = 1,
+            softWrap = false
         )
     }
 }

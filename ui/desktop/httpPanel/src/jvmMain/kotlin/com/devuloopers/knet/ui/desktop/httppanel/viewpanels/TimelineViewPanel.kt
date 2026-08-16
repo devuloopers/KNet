@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
@@ -20,6 +21,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
@@ -161,12 +163,16 @@ private fun TimelineWaterfallRow(
         Text(
             text = label,
             style = typography.bodySmall.copy(color = themeColors.textSecondary),
-            modifier = Modifier.width(130.dp)
+            modifier = Modifier.widthIn(min = 60.dp, max = 130.dp),
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis
         )
 
         Box(
             modifier = Modifier
                 .weight(1f)
+                .widthIn(min = 24.dp)
                 .height(18.dp)
                 .background(Color(0xFF1E1E2E), shape = shapes.small)
                 .padding(horizontal = 2.dp),
@@ -186,7 +192,9 @@ private fun TimelineWaterfallRow(
             style = typography.codeSmall.copy(color = themeColors.textPrimary),
             modifier = Modifier
                 .width(64.dp)
-                .padding(start = 8.dp)
+                .padding(start = 8.dp),
+            maxLines = 1,
+            softWrap = false
         )
     }
 }

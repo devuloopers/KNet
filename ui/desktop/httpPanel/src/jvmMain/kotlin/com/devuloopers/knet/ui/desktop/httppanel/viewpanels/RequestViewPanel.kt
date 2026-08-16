@@ -71,7 +71,7 @@ public fun RequestViewPanel(
 
         // 2. Sub-Tabs Row
         InspectorSubTabRow(
-            tabs = InspectorSubTab.RequestTabs,
+            tabs = InspectorSubTab.RequestInspectorTabs,
             activeTab = localActiveTab,
             onTabSelected = { newTab ->
                 localActiveTab = newTab

@@ -19,7 +19,6 @@ fun BodyFormat?.toCodeLanguage(): CodeLanguage = when (this) {
     is BodyFormat.Cbor,
     is BodyFormat.GrpcWeb,
     is BodyFormat.Protobuf -> CodeLanguage.JSON
-
     is BodyFormat.GraphQL -> CodeLanguage.GRAPHQL
     is BodyFormat.Html -> CodeLanguage.HTML
     is BodyFormat.Xml -> CodeLanguage.XML

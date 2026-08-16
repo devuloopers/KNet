@@ -71,3 +71,7 @@ val generateAppMetadata by tasks.registering {
 
 kotlin.sourceSets.getByName("commonMain").kotlin.srcDir(generateAppMetadata.map { layout.buildDirectory.dir("generated/metadata/kotlin") })
 
+tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask<*>>().configureEach {
+    dependsOn(generateAppMetadata)
+}
+

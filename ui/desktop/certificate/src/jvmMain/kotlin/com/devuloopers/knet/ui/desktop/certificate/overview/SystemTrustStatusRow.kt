@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.domain.util.HostPlatform
 import com.devuloopers.knet.ui.core.components.badge.KNetBadge
@@ -123,12 +124,18 @@ fun SystemTrustStatusRow(
                     Text(
                         text = platformTitle,
                         style = typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
-                        color = themeColors.textPrimary
+                        color = themeColors.textPrimary,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Text(
                         text = platformSubtitle,
                         style = typography.labelSmall,
-                        color = themeColors.textSecondary
+                        color = themeColors.textSecondary,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
@@ -147,7 +154,9 @@ fun SystemTrustStatusRow(
                     Text(
                         text = "Installed & Trusted",
                         style = typography.labelSmall.copy(fontWeight = FontWeight.SemiBold),
-                        color = themeColors.semantic.success
+                        color = themeColors.semantic.success,
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
 
@@ -160,7 +169,11 @@ fun SystemTrustStatusRow(
                     size = ButtonSize.Compact,
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Reinstall Trust")
+                    Text(
+                        text = "Reinstall Trust",
+                        maxLines = 1,
+                        softWrap = false
+                    )
                 }
             } else if (trustState == TrustInstallationState.CHECKING) {
                 Spacer(modifier = Modifier.height(10.dp))
@@ -180,11 +193,13 @@ fun SystemTrustStatusRow(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(
-                        when {
+                        text = when {
                             trustState == TrustInstallationState.INSTALLING -> "Installing..."
                             platform == HostPlatform.LINUX -> "View Install Instructions"
                             else -> "Install Trust"
-                        }
+                        },
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }

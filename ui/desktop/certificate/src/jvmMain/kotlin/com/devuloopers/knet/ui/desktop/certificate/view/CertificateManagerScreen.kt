@@ -2,12 +2,14 @@ package com.devuloopers.knet.ui.desktop.certificate.view
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.certificate.client.CertificateCenterPanel
 import com.devuloopers.knet.ui.desktop.certificate.client.ImportClientCertificateDialog
@@ -28,20 +30,25 @@ public fun CertificateManagerScreen(
     val uiState by viewModel.uiState.collectAsState()
     val themeColors = KNetTheme.colors
 
-    Box(modifier = modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier = modifier.fillMaxSize()) {
+        val hasSelectedCert = uiState.selectedCertificate != null
+        val minWidthForSidebar = if (hasSelectedCert) 1000.dp else 750.dp
+        val showSidebar = maxWidth >= minWidthForSidebar
+
         Row(
             modifier = Modifier
                 .fillMaxSize()
                 .background(themeColors.background)
         ) {
-            // Left Column: Root CA and system trust status
-            CertificateSidebar(
-                caDetails = uiState.caDetails,
-                trustState = uiState.trustState,
-                platform = uiState.platform,
-                onInstallTrustClick = { viewModel.processIntent(CertificateIntent.InstallTrust) }
-            )
-
+            // Left Column: Root CA and system trust status (hides cleanly on compact viewports to avoid crushing)
+            if (showSidebar) {
+                CertificateSidebar(
+                    caDetails = uiState.caDetails,
+                    trustState = uiState.trustState,
+                    platform = uiState.platform,
+                    onInstallTrustClick = { viewModel.processIntent(CertificateIntent.InstallTrust) }
+                )
+            }
 
             // Center Column: Client certificates list and domain rule builders
             CertificateCenterPanel(

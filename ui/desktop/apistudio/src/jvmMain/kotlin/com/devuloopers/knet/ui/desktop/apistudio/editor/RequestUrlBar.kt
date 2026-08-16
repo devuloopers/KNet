@@ -146,7 +146,9 @@ public fun RequestUrlBar(
                     text = "Save",
                     style = typography.titleMedium.copy(
                         fontWeight = FontWeight.SemiBold
-                    )
+                    ),
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
         }
@@ -173,7 +175,9 @@ public fun RequestUrlBar(
                     text = if (isExecuting) "Cancel" else "Send",
                     style = typography.titleMedium.copy(
                         fontWeight = FontWeight.SemiBold
-                    )
+                    ),
+                    maxLines = 1,
+                    softWrap = false
                 )
                 if (!isExecuting) {
                     Icon(

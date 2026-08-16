@@ -25,6 +25,9 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 /**
  * Target URL and HTTP method summary header bar component for the request inspector.
  *
+ * Provides a pinned HTTP method badge on the left, horizontally scrollable target URL in the center,
+ * and pinned export/copy action button on the right.
+ *
  * @param spec Strongly-typed domain request specification.
  * @param onOpenInApiStudio Optional action button callback for 1-click API Studio export.
  * @param modifier Composable layout modifier.
@@ -45,33 +48,48 @@ public fun RequestSummaryHeader(
             .height(44.dp)
             .background(themeColors.surface)
             .border(width = 1.dp, color = themeColors.border)
-            .horizontalScroll(urlScrollState)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
+        // 1. Pinned Method Badge
         Text(
             text = spec.methodString,
             style = typography.codeSmall.copy(
                 color = themeColors.accent,
                 fontWeight = FontWeight.Bold
-            )
+            ),
+            maxLines = 1,
+            softWrap = false
         )
 
         VerticalDivider(modifier = Modifier.padding(vertical = 10.dp))
 
-        Text(
-            text = spec.url.ifEmpty { "(No URL)" },
-            style = typography.codeSmall.copy(color = themeColors.textPrimary)
-        )
+        // 2. Horizontally Scrollable URL Center Area
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .horizontalScroll(urlScrollState),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Text(
+                text = spec.url.ifEmpty { "(No URL)" },
+                style = typography.codeSmall.copy(color = themeColors.textPrimary),
+                maxLines = 1,
+                softWrap = false
+            )
+        }
 
-        Box(modifier = Modifier.weight(1f))
-
+        // 3. Pinned Trailing Action Button
         if (onOpenInApiStudio != null) {
             KNetButton(
                 onClick = onOpenInApiStudio
             ) {
-                Text("Open in API Studio")
+                Text(
+                    text = "Open in API Studio",
+                    maxLines = 1,
+                    softWrap = false
+                )
             }
         } else {
             KNetCopyButton(

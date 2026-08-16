@@ -131,7 +131,7 @@ public fun ResponseViewPanel(
 
             // 2. Response Sub-Tabs Row
             InspectorSubTabRow(
-                tabs = InspectorSubTab.ResponseTabs,
+                tabs = InspectorSubTab.ResponseInspectorTabs,
                 activeTab = localActiveTab,
                 onTabSelected = { newTab ->
                     localActiveTab = newTab

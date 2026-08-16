@@ -12,6 +12,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
@@ -32,7 +33,7 @@ fun ClientCertificatesInfoCard(
     KNetSurface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 8.dp),
+            .padding(vertical = 4.dp),
         color = themeColors.surfaceVariant.copy(alpha = 0.3f),
         border = BorderStroke(1.dp, themeColors.border.copy(alpha = 0.5f)),
         shape = shapes.medium
@@ -53,7 +54,10 @@ fun ClientCertificatesInfoCard(
                 Text(
                     text = "About Client Certificates",
                     style = typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                    color = themeColors.textPrimary
+                    color = themeColors.textPrimary,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
@@ -62,7 +66,10 @@ fun ClientCertificatesInfoCard(
             Text(
                 text = CertificateFileFormat.defaultDescription,
                 style = typography.labelSmall,
-                color = themeColors.textSecondary
+                color = themeColors.textSecondary,
+                maxLines = 2,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
             )
 
             Spacer(modifier = Modifier.height(12.dp))

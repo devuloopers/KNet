@@ -2,8 +2,8 @@ package com.devuloopers.knet.apps.desktop.di
 
 import com.devuloopers.knet.data.desktop.di.DesktopDataModule
 import com.devuloopers.knet.ui.desktop.app.di.desktopAppUiModule
-import com.devuloopers.knet.ui.desktop.httppanel.di.httpPanelModule
 import com.devuloopers.knet.ui.desktop.breakpointmanager.di.breakpointManagerUiModule
+import com.devuloopers.knet.ui.desktop.httppanel.di.httpPanelModule
 import org.koin.core.module.Module
 
 /**
@@ -11,20 +11,20 @@ import org.koin.core.module.Module
  *
  * Organizes application Koin modules cleanly by architectural layer.
  */
-public object DesktopModules {
+object DesktopModules {
 
-    public val core: List<Module> = emptyList()
+    val core: List<Module> = emptyList()
 
-    public val storage: List<Module> = emptyList()
+    val storage: List<Module> = emptyList()
 
-    public val data: List<Module> = DesktopDataModule.all
+    val data: List<Module> = DesktopDataModule.all
 
-    public val engine: List<Module> = emptyList()
+    val engine: List<Module> = emptyList()
 
-    public val ui: List<Module> = listOf(desktopAppUiModule, httpPanelModule, breakpointManagerUiModule)
+    val ui: List<Module> = listOf(desktopAppUiModule, httpPanelModule, breakpointManagerUiModule)
 
     /**
      * Complete aggregated Koin module list for Desktop application assembly.
      */
-    public val all: List<Module> = core + storage + data + engine + ui
+    val all: List<Module> = core + storage + data + engine + ui
 }

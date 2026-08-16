@@ -126,7 +126,9 @@ public fun GraphQLBodyViewer(
         ) {
             // Horizontal scrollable sub-tabs row
             Row(
-                modifier = Modifier.horizontalScroll(rememberScrollState()),
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(spacing.xxs),
                 verticalAlignment = Alignment.CenterVertically
             ) {

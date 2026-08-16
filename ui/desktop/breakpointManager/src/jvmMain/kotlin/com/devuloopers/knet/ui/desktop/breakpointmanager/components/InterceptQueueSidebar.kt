@@ -209,7 +209,8 @@ private fun InterceptQueueItemCard(
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.weight(1f, fill = false)
                 ) {
                     Box(
                         modifier = Modifier
@@ -223,7 +224,9 @@ private fun InterceptQueueItemCard(
                                 color = phaseColor,
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 9.sp
-                            )
+                            ),
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
 
@@ -233,7 +236,9 @@ private fun InterceptQueueItemCard(
                             color = themeColors.textPrimary,
                             fontWeight = FontWeight.Bold,
                             fontSize = 11.sp
-                        )
+                        ),
+                        maxLines = 1,
+                        softWrap = false
                     )
 
                     if (protocolBadge != null) {
@@ -249,7 +254,9 @@ private fun InterceptQueueItemCard(
                                     color = protocolColor,
                                     fontWeight = FontWeight.Bold,
                                     fontSize = 9.sp
-                                )
+                                ),
+                                maxLines = 1,
+                                softWrap = false
                             )
                         }
                     }

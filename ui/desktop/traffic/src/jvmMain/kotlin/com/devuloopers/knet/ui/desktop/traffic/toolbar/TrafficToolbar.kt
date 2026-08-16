@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.domain.proxy.model.ProxyEngineState
 import com.devuloopers.knet.ui.core.components.divider.VerticalDivider
@@ -91,7 +92,9 @@ public fun TrafficToolbar(
                         style = typography.titleSmall.copy(
                             color = if (!isRunning) themeColors.textPrimary else themeColors.textMuted,
                             fontWeight = FontWeight.Medium
-                        )
+                        ),
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
 
@@ -119,7 +122,9 @@ public fun TrafficToolbar(
                         style = typography.titleSmall.copy(
                             color = if (isRunning) themeColors.semantic.error else themeColors.textMuted,
                             fontWeight = FontWeight.Medium
-                        )
+                        ),
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
 
@@ -151,7 +156,10 @@ public fun TrafficToolbar(
                         style = typography.labelMedium.copy(
                             color = themeColors.textSecondary,
                             fontWeight = FontWeight.Medium
-                        )
+                        ),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -176,7 +184,9 @@ public fun TrafficToolbar(
                         text = "Clear",
                         style = typography.bodySmall.copy(
                             color = themeColors.textSecondary
-                        )
+                        ),
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }

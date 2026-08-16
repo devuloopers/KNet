@@ -51,12 +51,11 @@ public fun ResponseSummaryHeader(
             .height(44.dp)
             .background(themeColors.surface)
             .border(width = 1.dp, color = themeColors.border)
-            .horizontalScroll(summaryScrollState)
             .padding(horizontal = 16.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        // Status Code Badge
+        // 1. Pinned Status Code Badge
         KNetHttpStatusBadge(
             statusCode = spec.statusCode,
             statusText = spec.statusText
@@ -64,67 +63,87 @@ public fun ResponseSummaryHeader(
 
         VerticalDivider(modifier = Modifier.padding(vertical = 10.dp))
 
-        // Latency Metric
+        // 2. Horizontally Scrollable Metrics Center Area
         Row(
+            modifier = Modifier
+                .weight(1f)
+                .horizontalScroll(summaryScrollState),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Text(
-                text = "Time:",
-                style = typography.caption.copy(color = themeColors.textMuted)
-            )
-            Text(
-                text = "${spec.durationMs} ms",
-                style = typography.bodySmall.copy(
-                    color = themeColors.accent,
-                    fontWeight = FontWeight.SemiBold
-                )
-            )
-        }
-
-        // Response Size Metric
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text(
-                text = "Size:",
-                style = typography.caption.copy(color = themeColors.textMuted)
-            )
-            Text(
-                text = formattedSize,
-                style = typography.bodySmall.copy(
-                    color = themeColors.textPrimary,
-                    fontWeight = FontWeight.Medium
-                )
-            )
-        }
-
-        // Content-Type Indicator
-        if (!contentType.isNullOrBlank()) {
+            // Latency Metric
             Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    text = "Type:",
-                    style = typography.caption.copy(color = themeColors.textMuted)
+                    text = "Time:",
+                    style = typography.caption.copy(color = themeColors.textMuted),
+                    maxLines = 1,
+                    softWrap = false
                 )
                 Text(
-                    text = contentType,
+                    text = "${spec.durationMs} ms",
                     style = typography.bodySmall.copy(
-                        color = themeColors.textSecondary,
-                        fontWeight = FontWeight.Normal
-                    )
+                        color = themeColors.accent,
+                        fontWeight = FontWeight.SemiBold
+                    ),
+                    maxLines = 1,
+                    softWrap = false
                 )
+            }
+
+            // Response Size Metric
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "Size:",
+                    style = typography.caption.copy(color = themeColors.textMuted),
+                    maxLines = 1,
+                    softWrap = false
+                )
+                Text(
+                    text = formattedSize,
+                    style = typography.bodySmall.copy(
+                        color = themeColors.textPrimary,
+                        fontWeight = FontWeight.Medium
+                    ),
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
+
+            // Content-Type Indicator
+            if (!contentType.isNullOrBlank()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "Type:",
+                        style = typography.caption.copy(color = themeColors.textMuted),
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                    Text(
+                        text = contentType,
+                        style = typography.bodySmall.copy(
+                            color = themeColors.textSecondary,
+                            fontWeight = FontWeight.Normal
+                        ),
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
             }
         }
 
-        // Action Toolbar
+        // 3. Pinned Trailing Action Toolbar
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(start = 8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             val copyOptions = buildList {
                 if (spec.headers.isNotEmpty()) {

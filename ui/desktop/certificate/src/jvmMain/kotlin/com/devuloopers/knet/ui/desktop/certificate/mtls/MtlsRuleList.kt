@@ -17,6 +17,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.empty.EmptyState
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
@@ -95,7 +96,10 @@ private fun MtlsRuleCard(
                 Text(
                     text = rule.ruleName,
                     style = typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                    color = themeColors.textPrimary
+                    color = themeColors.textPrimary,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
                 )
                 
                 Spacer(modifier = Modifier.height(4.dp))
@@ -111,7 +115,10 @@ private fun MtlsRuleCard(
                     Text(
                         text = rule.hostPattern,
                         style = typography.bodySmall,
-                        color = themeColors.textSecondary
+                        color = themeColors.textSecondary,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
                 
@@ -120,7 +127,10 @@ private fun MtlsRuleCard(
                 Text(
                     text = "Mapped to Cert: ${rule.certificateAlias}",
                     style = typography.labelSmall,
-                    color = themeColors.textSecondary
+                    color = themeColors.textSecondary,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 

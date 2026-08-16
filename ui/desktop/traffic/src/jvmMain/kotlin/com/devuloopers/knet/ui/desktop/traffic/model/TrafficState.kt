@@ -65,7 +65,7 @@ data class TrafficState(
     val selectedStatusFilter: StatusFilter = StatusFilter.ALL,
     val autoScroll: Boolean = true,
     val activeInspectorTab: InspectorTab = InspectorTab.OVERVIEW,
-    val activeRequestSubTab: RequestSubTab = RequestSubTab.HEADERS,
+    val activeRequestSubTab: RequestSubTab = RequestSubTab.BODY,
     val activeResponseSubTab: ResponseSubTab = ResponseSubTab.BODY,
     val previewFormatMode: PreviewFormatMode = PreviewFormatMode.PRETTY,
     val columnVisibility: ColumnVisibilityState = ColumnVisibilityState(),

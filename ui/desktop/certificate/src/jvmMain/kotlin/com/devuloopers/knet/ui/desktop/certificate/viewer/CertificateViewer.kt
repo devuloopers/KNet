@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.badge.KNetBadge
 import com.devuloopers.knet.ui.core.components.button.KNetCopyButton
@@ -41,7 +42,7 @@ fun CertificateViewer(
     KNetSurface(
         modifier = modifier
             .fillMaxHeight()
-            .width(360.dp),
+            .widthIn(min = 280.dp, max = 360.dp),
         color = themeColors.surfaceVariant,
         border = BorderStroke(1.dp, themeColors.border)
     ) {
@@ -92,7 +93,10 @@ fun CertificateViewer(
                         Text(
                             text = certificate.alias,
                             style = typography.titleSmall.copy(fontWeight = FontWeight.Bold),
-                            color = themeColors.textPrimary
+                            color = themeColors.textPrimary,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         KNetBadge(
@@ -110,7 +114,9 @@ fun CertificateViewer(
                     Text(
                         text = certificate.subjectDn.ifBlank { certificate.subject },
                         style = typography.bodySmall,
-                        color = themeColors.textPrimary
+                        color = themeColors.textPrimary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -118,7 +124,9 @@ fun CertificateViewer(
                     Text(
                         text = certificate.issuerDn.ifBlank { "CN=KNet Proxy Local CA" },
                         style = typography.bodySmall,
-                        color = themeColors.textPrimary
+                        color = themeColors.textPrimary,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -126,7 +134,10 @@ fun CertificateViewer(
                     Text(
                         text = certificate.serialNumber.ifBlank { "N/A" },
                         style = typography.bodySmall,
-                        color = themeColors.textPrimary
+                        color = themeColors.textPrimary,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -134,13 +145,19 @@ fun CertificateViewer(
                     Text(
                         text = "${certificate.expiration} (${certificate.daysUntilExpiration} days remaining)",
                         style = typography.bodySmall,
-                        color = themeColors.textPrimary
+                        color = themeColors.textPrimary,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
                 if (certificate.sanList.isNotEmpty()) {
                     KNetInspectorRow(label = "SANs") {
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
                             certificate.sanList.forEach { san ->
                                 KNetBadge(text = san)
                             }
@@ -152,7 +169,10 @@ fun CertificateViewer(
                     Text(
                         text = certificate.publicKeyAlgorithm,
                         style = typography.bodySmall.copy(fontWeight = FontWeight.Bold),
-                        color = themeColors.textPrimary
+                        color = themeColors.textPrimary,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -167,7 +187,10 @@ fun CertificateViewer(
                                 text = certificate.sha256Fingerprint,
                                 style = typography.caption,
                                 color = themeColors.textSecondary,
-                                modifier = Modifier.weight(1f)
+                                modifier = Modifier.weight(1f),
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             KNetCopyButton(textToCopy = certificate.sha256Fingerprint)

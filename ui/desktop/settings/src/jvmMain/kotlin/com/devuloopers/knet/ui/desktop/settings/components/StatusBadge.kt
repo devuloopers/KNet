@@ -34,7 +34,9 @@ fun StatusBadge(
             style = KNetTheme.typography.labelSmall.copy(
                 color = textColors,
                 fontSize = 10.sp
-            )
+            ),
+            maxLines = 1,
+            softWrap = false
         )
     }
 }

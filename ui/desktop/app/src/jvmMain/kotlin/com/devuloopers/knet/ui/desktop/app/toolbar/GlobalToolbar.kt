@@ -41,7 +41,11 @@ public fun KNetGlobalToolbar(
                 variant = ButtonVariant.Primary
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("+ New ▾")
+                    Text(
+                        text = "+ New ▾",
+                        maxLines = 1,
+                        softWrap = false
+                    )
                 }
             }
 
@@ -54,7 +58,11 @@ public fun KNetGlobalToolbar(
 
         ToolbarGroup {
             KNetButton(onClick = {}, variant = ButtonVariant.Ghost) {
-                Text("∇ Filter")
+                Text(
+                    text = "∇ Filter",
+                    maxLines = 1,
+                    softWrap = false
+                )
             }
         }
 
@@ -77,7 +85,11 @@ public fun KNetGlobalToolbar(
                 onClick = onThemeModeToggle,
                 variant = ButtonVariant.Secondary
             ) {
-                Text("Theme: ${currentThemeMode.name} ▾")
+                Text(
+                    text = "Theme: ${currentThemeMode.name} ▾",
+                    maxLines = 1,
+                    softWrap = false
+                )
             }
         }
     }

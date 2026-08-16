@@ -77,7 +77,7 @@ fun RequestEditorPanel(
     Column(modifier = modifier.fillMaxSize()) {
         // 1. Sub-Tabs Header Navigation Bar
         InspectorSubTabRow(
-            tabs = InspectorSubTab.RequestTabs,
+            tabs = InspectorSubTab.RequestEditorTabs,
             activeTab = localActiveTab,
             onTabSelected = { newTab ->
                 localActiveTab = newTab

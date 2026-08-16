@@ -87,8 +87,11 @@ fun ActiveRootCaCard(
                         style = typography.bodyMedium.copy(fontWeight = FontWeight.Bold),
                         color = themeColors.textPrimary,
                         maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false)
                     )
+                    Spacer(modifier = Modifier.width(8.dp))
                     KNetBadge(
                         text = statusText,
                         containerColor = statusBg,
@@ -105,6 +108,7 @@ fun ActiveRootCaCard(
                 style = typography.labelSmall,
                 color = themeColors.textSecondary,
                 maxLines = 1,
+                softWrap = false,
                 overflow = TextOverflow.Ellipsis
             )
 
@@ -116,6 +120,7 @@ fun ActiveRootCaCard(
                 style = typography.labelSmall,
                 color = themeColors.textSecondary,
                 maxLines = 1,
+                softWrap = false,
                 overflow = TextOverflow.Ellipsis
             )
 
@@ -133,7 +138,10 @@ fun ActiveRootCaCard(
                     Text(
                         text = "Trusted by this system",
                         style = typography.labelSmall,
-                        color = themeColors.semantic.success
+                        color = themeColors.semantic.success,
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }

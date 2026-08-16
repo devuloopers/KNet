@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.domain.workspace.model.TimeoutUnit
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
@@ -49,12 +50,17 @@ fun NetworkProxyTab(
         Column {
             Text(
                 text = "Network & Proxy",
-                style = typography.titleLarge.copy(color = themeColors.textPrimary)
+                style = typography.titleLarge.copy(color = themeColors.textPrimary),
+                maxLines = 1,
+                softWrap = false
             )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = "Configure interception settings, ports, timeouts, and certificate trust stores.",
-                style = typography.bodyMedium.copy(color = themeColors.textSecondary)
+                style = typography.bodyMedium.copy(color = themeColors.textSecondary),
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
             )
         }
 
@@ -67,12 +73,18 @@ fun NetworkProxyTab(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Proxy Listening Port",
-                        style = typography.titleSmall.copy(color = themeColors.textPrimary)
+                        style = typography.titleSmall.copy(color = themeColors.textPrimary),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = "Port number for incoming proxy traffic interception.",
-                        style = typography.bodySmall.copy(color = themeColors.textSecondary)
+                        style = typography.bodySmall.copy(color = themeColors.textSecondary),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -96,12 +108,18 @@ fun NetworkProxyTab(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Live Interception Timeout",
-                        style = typography.titleSmall.copy(color = themeColors.textPrimary)
+                        style = typography.titleSmall.copy(color = themeColors.textPrimary),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = "Maximum duration suspended traffic remains paused before auto-dropping.",
-                        style = typography.bodySmall.copy(color = themeColors.textSecondary)
+                        style = typography.bodySmall.copy(color = themeColors.textSecondary),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -141,12 +159,18 @@ fun NetworkProxyTab(
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "API Studio Request Timeout",
-                        style = typography.titleSmall.copy(color = themeColors.textPrimary)
+                        style = typography.titleSmall.copy(color = themeColors.textPrimary),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = "Maximum execution duration allowed for API Studio client HTTP requests.",
-                        style = typography.bodySmall.copy(color = themeColors.textSecondary)
+                        style = typography.bodySmall.copy(color = themeColors.textSecondary),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -187,7 +211,11 @@ fun NetworkProxyTab(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
                             text = "Operating System Trust Store",
-                            style = typography.titleSmall.copy(color = themeColors.textPrimary)
+                            style = typography.titleSmall.copy(color = themeColors.textPrimary),
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         StatusBadge(isTrusted = state.isCaTrusted)
@@ -195,7 +223,10 @@ fun NetworkProxyTab(
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
                         text = "Root CA certificate used for HTTPS traffic decryption.",
-                        style = typography.bodySmall.copy(color = themeColors.textSecondary)
+                        style = typography.bodySmall.copy(color = themeColors.textSecondary),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -204,7 +235,11 @@ fun NetworkProxyTab(
                     enabled = !state.isInstallingCa,
                     variant = ButtonVariant.Secondary
                 ) {
-                    Text(if (state.isInstallingCa) "Installing..." else "Install Root CA into OS")
+                    Text(
+                        text = if (state.isInstallingCa) "Installing..." else "Install Root CA into OS",
+                        maxLines = 1,
+                        softWrap = false
+                    )
                 }
             }
         }
@@ -219,12 +254,18 @@ fun NetworkProxyTab(
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Data Directory",
-                            style = typography.titleSmall.copy(color = themeColors.textPrimary)
+                            style = typography.titleSmall.copy(color = themeColors.textPrimary),
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = "Location where application data and configs are stored.",
-                            style = typography.bodySmall.copy(color = themeColors.textSecondary)
+                            style = typography.bodySmall.copy(color = themeColors.textSecondary),
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
 
@@ -240,7 +281,11 @@ fun NetworkProxyTab(
                                 tint = themeColors.textPrimary
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Open Directory")
+                            Text(
+                                text = "Open Directory",
+                                maxLines = 1,
+                                softWrap = false
+                            )
                         }
                     }
                 }
@@ -261,6 +306,9 @@ fun NetworkProxyTab(
                             color = themeColors.textPrimary,
                             fontFamily = FontFamily.Monospace
                         ),
+                        maxLines = 1,
+                        softWrap = false,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
                     IconButton(

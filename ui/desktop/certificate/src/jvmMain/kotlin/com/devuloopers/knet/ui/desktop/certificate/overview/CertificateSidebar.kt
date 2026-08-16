@@ -3,6 +3,8 @@ package com.devuloopers.knet.ui.desktop.certificate.overview
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -26,17 +28,19 @@ fun CertificateSidebar(
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
+    val scrollState = rememberScrollState()
 
     Column(
         modifier = modifier
             .fillMaxHeight()
-            .width(280.dp)
+            .width(300.dp)
             .background(themeColors.surface)
-            .padding(16.dp)
+            .verticalScroll(scrollState)
+            .padding(12.dp)
     ) {
         SystemTrustHeader()
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
         Box(
             modifier = Modifier
@@ -46,23 +50,25 @@ fun CertificateSidebar(
                     color = themeColors.border,
                     shape = androidx.compose.foundation.shape.RoundedCornerShape(8.dp)
                 )
-                .padding(16.dp)
+                .padding(10.dp)
         ) {
             Column {
                 Text(
                     text = "TRUST STATUS",
                     style = typography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                    color = themeColors.textSecondary
+                    color = themeColors.textSecondary,
+                    maxLines = 1,
+                    softWrap = false
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
                 
                 ActiveRootCaCard(
                     caDetails = caDetails,
                     trustState = trustState
                 )
                 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 SystemTrustStatusRow(
                     platform = platform,
@@ -70,7 +76,7 @@ fun CertificateSidebar(
                     onInstallClicked = onInstallTrustClick
                 )
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(10.dp))
 
                 ClientCertificatesInfoCard()
             }

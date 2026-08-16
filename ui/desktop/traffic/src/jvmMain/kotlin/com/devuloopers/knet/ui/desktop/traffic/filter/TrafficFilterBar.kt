@@ -219,7 +219,9 @@ private fun ColumnsToggleDropdown(
         ) {
             Text(
                 text = "Columns",
-                style = typography.labelMedium.copy(color = themeColors.textSecondary)
+                style = typography.labelMedium.copy(color = themeColors.textSecondary),
+                maxLines = 1,
+                softWrap = false
             )
             Icon(
                 imageVector = Icons.Default.ArrowDropDown,
@@ -270,7 +272,9 @@ private fun ColumnCheckboxItem(
                 )
                 Text(
                     text = label,
-                    style = typography.labelMedium.copy(color = themeColors.textPrimary)
+                    style = typography.labelMedium.copy(color = themeColors.textPrimary),
+                    maxLines = 1,
+                    softWrap = false
                 )
             }
         },
@@ -305,14 +309,18 @@ private fun FilterCountChip(
             text = label,
             style = typography.labelMedium.copy(
                 color = themeColors.textSecondary
-            )
+            ),
+            maxLines = 1,
+            softWrap = false
         )
         Text(
             text = "$count",
             style = typography.labelMedium.copy(
                 color = countColor,
                 fontWeight = FontWeight.Bold
-            )
+            ),
+            maxLines = 1,
+            softWrap = false
         )
     }
 }

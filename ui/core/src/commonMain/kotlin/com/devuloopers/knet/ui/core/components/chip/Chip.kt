@@ -38,7 +38,9 @@ public fun KNetChip(
     ) {
         Text(
             text = text,
-            style = typography.labelSmall.copy(color = textColor)
+            style = typography.labelSmall.copy(color = textColor),
+            maxLines = 1,
+            softWrap = false
         )
     }
 }

@@ -4,7 +4,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Palette
@@ -32,6 +34,7 @@ fun SettingsSidebar(
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
+    val sidebarScrollState = rememberScrollState()
 
     Column(
         modifier = modifier
@@ -39,11 +42,14 @@ fun SettingsSidebar(
             .fillMaxHeight()
             .background(themeColors.surface)
             .border(1.dp, themeColors.border)
+            .verticalScroll(sidebarScrollState)
             .padding(vertical = 16.dp, horizontal = 12.dp)
     ) {
         Text(
             text = "Settings",
             style = typography.titleSmall.copy(color = themeColors.textPrimary),
+            maxLines = 1,
+            softWrap = false,
             modifier = Modifier.padding(start = 8.dp, bottom = 16.dp)
         )
 
@@ -106,7 +112,9 @@ private fun SidebarNavItem(
         Spacer(modifier = Modifier.width(10.dp))
         Text(
             text = label,
-            style = typography.bodySmall.copy(color = contentColor)
+            style = typography.bodySmall.copy(color = contentColor),
+            maxLines = 1,
+            softWrap = false
         )
     }
 }

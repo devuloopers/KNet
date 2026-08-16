@@ -13,8 +13,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.isCtrlPressed
-import androidx.compose.ui.input.key.isMetaPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.Dp
@@ -62,7 +60,7 @@ public class NavigationState {
     }
 
     /**
-     * Handles global navigation key events (Escape collapse, Ctrl+1..Ctrl+5, Ctrl+,).
+     * Handles global navigation key events (Escape collapse).
      *
      * @param keyEvent Key press event.
      * @param onDestinationSelected Callback to navigate to a target destination.
@@ -74,26 +72,9 @@ public class NavigationState {
     ): Boolean {
         if (keyEvent.type != KeyEventType.KeyDown) return false
 
-        val isModifierPressed = keyEvent.isCtrlPressed || keyEvent.isMetaPressed
         return when {
             keyEvent.key == Key.Escape && isExpanded -> {
                 isExpanded = false
-                true
-            }
-            isModifierPressed && keyEvent.key == Key.One -> {
-                onDestinationSelected(DesktopDestination.Traffic)
-                true
-            }
-            isModifierPressed && keyEvent.key == Key.Two -> {
-                onDestinationSelected(DesktopDestination.ApiStudio)
-                true
-            }
-            isModifierPressed && keyEvent.key == Key.Three -> {
-                onDestinationSelected(DesktopDestination.Certificate)
-                true
-            }
-            isModifierPressed && keyEvent.key == Key.Comma -> {
-                onDestinationSelected(DesktopDestination.Settings)
                 true
             }
             else -> false

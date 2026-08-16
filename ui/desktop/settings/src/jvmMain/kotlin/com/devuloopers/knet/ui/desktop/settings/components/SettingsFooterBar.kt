@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
@@ -39,7 +40,10 @@ fun SettingsFooterBar(
             if (message != null) {
                 Text(
                     text = "✓ $message",
-                    style = typography.bodySmall.copy(color = Color(0xFF10B981))
+                    style = typography.bodySmall.copy(color = Color(0xFF10B981)),
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -48,7 +52,11 @@ fun SettingsFooterBar(
             onClick = onResetDefaults,
             variant = ButtonVariant.Ghost
         ) {
-            Text("Reset Defaults")
+            Text(
+                text = "Reset Defaults",
+                maxLines = 1,
+                softWrap = false
+            )
         }
     }
 }

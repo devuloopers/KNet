@@ -1,7 +1,9 @@
 package com.devuloopers.knet.ui.desktop.certificate.client
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -17,10 +19,12 @@ fun CertificateTabBar(
     modifier: Modifier = Modifier
 ) {
     val themeColors = KNetTheme.colors
+    val tabScrollState = rememberScrollState()
 
     Row(
         modifier = modifier
             .fillMaxWidth()
+            .horizontalScroll(tabScrollState)
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .height(36.dp)
             .background(themeColors.background),

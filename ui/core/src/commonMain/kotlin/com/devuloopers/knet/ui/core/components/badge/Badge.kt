@@ -34,7 +34,9 @@ public fun KNetBadge(
     ) {
         Text(
             text = text,
-            style = typography.labelSmall.copy(color = contentColor)
+            style = typography.labelSmall.copy(color = contentColor),
+            maxLines = 1,
+            softWrap = false
         )
     }
 }
