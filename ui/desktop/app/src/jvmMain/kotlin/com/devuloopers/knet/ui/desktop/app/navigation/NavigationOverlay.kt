@@ -1,6 +1,7 @@
 package com.devuloopers.knet.ui.desktop.app.navigation
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -36,10 +37,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import com.devuloopers.knet.domain.config.AppMetadata
 import com.devuloopers.knet.ui.core.foundation.elevation.KNetLayers
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
@@ -194,26 +197,19 @@ private fun NavigationBrandingFooter(
     ) {
         Spacer(modifier = Modifier.width(3.dp))
 
-        // Blue "K" App Logo Tile
+        // High-resolution App Logo Tile
         Box(
             modifier = Modifier.size(42.dp),
             contentAlignment = Alignment.Center
         ) {
-            Box(
+            @Suppress("DEPRECATION")
+            Image(
+                painter = painterResource("icons/KNet.png"),
+                contentDescription = AppMetadata.APP_NAME,
                 modifier = Modifier
                     .size(28.dp)
                     .clip(RoundedCornerShape(6.dp))
-                    .background(themeColors.accent),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = "K",
-                    style = typography.titleSmall.copy(
-                        color = Color.White,
-                        fontWeight = FontWeight.Bold
-                    )
-                )
-            }
+            )
         }
 
         if (presentation.labelAlpha > 0.01f) {
@@ -224,7 +220,7 @@ private fun NavigationBrandingFooter(
                     .alpha(presentation.labelAlpha)
             ) {
                 Text(
-                    text = "KNet",
+                    text = AppMetadata.APP_NAME,
                     style = typography.caption.copy(
                         color = themeColors.textPrimary,
                         fontWeight = FontWeight.Bold,
@@ -233,7 +229,7 @@ private fun NavigationBrandingFooter(
                     maxLines = 1
                 )
                 Text(
-                    text = "Developer Suite v2.0",
+                    text = AppMetadata.APP_VERSION_LABEL,
                     style = typography.caption.copy(
                         color = themeColors.textSecondary,
                         fontSize = 9.sp

@@ -1,10 +1,10 @@
 package com.devuloopers.knet.ui.desktop.codeeditor.syntax
 
-import com.devuloopers.knet.engine.formatter.model.BodyFormat
+import com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage
 
 /**
  * Strategy Registry resolving the appropriate [CodeLanguageHighlighter]
- * strategy for a given payload or format.
+ * strategy for a given [CodeLanguage] or string language identifier.
  */
 object CodeHighlighterRegistry {
     private val jsonHighlighter = JsonLanguageHighlighter()
@@ -16,39 +16,30 @@ object CodeHighlighterRegistry {
     private val plainTextHighlighter = PlainTextLanguageHighlighter()
 
     /**
-     * Resolves the matching [CodeLanguageHighlighter] strategy based on [BodyFormat].
-     */
-    fun resolve(bodyFormat: BodyFormat?): CodeLanguageHighlighter {
-        return when (bodyFormat) {
-            is BodyFormat.Json, is BodyFormat.JsonStream, is BodyFormat.Cbor, is BodyFormat.GrpcWeb -> jsonHighlighter
-            is BodyFormat.Html -> htmlHighlighter
-            is BodyFormat.Xml -> xmlHighlighter
-            is BodyFormat.Js -> jsHighlighter
-            is BodyFormat.Css -> cssHighlighter
-            is BodyFormat.GraphQL -> graphQlHighlighter
-            else -> plainTextHighlighter
-        }
-    }
-
-    /**
      * Resolves the matching [CodeLanguageHighlighter] strategy based on [CodeLanguage].
+     *
+     * @param language Strongly-typed [CodeLanguage] token.
+     * @return Corresponding [CodeLanguageHighlighter] syntax highlighting strategy.
      */
-    fun resolve(language: com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage): CodeLanguageHighlighter {
+    fun resolve(language: CodeLanguage): CodeLanguageHighlighter {
         return when (language) {
-            com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage.JSON -> jsonHighlighter
-            com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage.GRAPHQL -> graphQlHighlighter
-            com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage.XML -> xmlHighlighter
-            com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage.HTML -> htmlHighlighter
-            com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage.JAVASCRIPT -> jsHighlighter
-            com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage.CSS -> cssHighlighter
-            com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage.PLAIN -> plainTextHighlighter
+            CodeLanguage.JSON -> jsonHighlighter
+            CodeLanguage.GRAPHQL -> graphQlHighlighter
+            CodeLanguage.XML -> xmlHighlighter
+            CodeLanguage.HTML -> htmlHighlighter
+            CodeLanguage.JAVASCRIPT -> jsHighlighter
+            CodeLanguage.CSS -> cssHighlighter
+            CodeLanguage.PLAIN -> plainTextHighlighter
         }
     }
 
     /**
      * Resolves strategy by language ID string hint (e.g. "json", "html", "xml", "graphql", "plain").
+     *
+     * @param languageId String language hint.
+     * @return Corresponding [CodeLanguageHighlighter] syntax highlighting strategy.
      */
     fun resolveByLanguage(languageId: String): CodeLanguageHighlighter {
-        return resolve(com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage.fromId(languageId))
+        return resolve(CodeLanguage.fromId(languageId))
     }
 }

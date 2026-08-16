@@ -16,7 +16,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.devuloopers.knet.engine.formatter.model.BodyFormat
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.FoldManager
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.FoldRegion
 import com.devuloopers.knet.ui.desktop.codeeditor.component.EditorHeaderToolbar
@@ -57,7 +56,6 @@ internal fun ReadOnlyCodeViewer(
     document: PreparedDocument?,
     style: CodeEditorStyle,
     languageHint: String?,
-    bodyFormat: BodyFormat?,
     searchQuery: String,
     isFoldingEnabled: Boolean,
     showLineCountHeader: Boolean,

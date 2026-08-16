@@ -32,7 +32,7 @@ data class PayloadInspectionSpec(
      * Resolves the strongly-typed [CodeLanguage] syntax highlighting token for this payload.
      */
     val codeLanguage: CodeLanguage
-        get() = resolvedFormat?.let { CodeLanguage.fromBodyFormat(it) } ?: CodeLanguage.PLAIN
+        get() = resolvedFormat.toCodeLanguage()
 
     /**
      * Formatted, pretty-printed representation of the payload (or raw string if formatting is unavailable).

@@ -10,7 +10,6 @@ kotlin {
     sourceSets {
         commonMain.dependencies {
             api(project(":core:domain"))
-            api(project(":engine:formatter"))
             implementation(project(":ui:core"))
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)

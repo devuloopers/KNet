@@ -4,6 +4,7 @@ import com.devuloopers.knet.engine.formatter.model.BodyFormat
 import com.devuloopers.knet.engine.formatter.registry.BodyFormatterRegistry
 import com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage
 import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
+import com.devuloopers.knet.ui.desktop.httppanel.model.toCodeLanguage
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -47,25 +48,25 @@ class SmartBodyViewerTest {
     @Test
     fun testCodeLanguageResolutionFromBodyFormat() {
         val jsonFormat = BodyFormat.Json("{\"status\":\"ok\"}")
-        assertEquals(CodeLanguage.JSON, CodeLanguage.fromBodyFormat(jsonFormat))
+        assertEquals(CodeLanguage.JSON, jsonFormat.toCodeLanguage())
 
         val gqlFormat = BodyFormat.GraphQL("Query", "GetUser", "query GetUser { id }", "{}")
-        assertEquals(CodeLanguage.GRAPHQL, CodeLanguage.fromBodyFormat(gqlFormat))
+        assertEquals(CodeLanguage.GRAPHQL, gqlFormat.toCodeLanguage())
 
         val xmlFormat = BodyFormat.Xml("<root><item>1</item></root>")
-        assertEquals(CodeLanguage.XML, CodeLanguage.fromBodyFormat(xmlFormat))
+        assertEquals(CodeLanguage.XML, xmlFormat.toCodeLanguage())
 
         val htmlFormat = BodyFormat.Html("<!DOCTYPE html><html><body>Test</body></html>")
-        assertEquals(CodeLanguage.HTML, CodeLanguage.fromBodyFormat(htmlFormat))
+        assertEquals(CodeLanguage.HTML, htmlFormat.toCodeLanguage())
 
         val jsFormat = BodyFormat.Js("console.log('test');")
-        assertEquals(CodeLanguage.JAVASCRIPT, CodeLanguage.fromBodyFormat(jsFormat))
+        assertEquals(CodeLanguage.JAVASCRIPT, jsFormat.toCodeLanguage())
 
         val cssFormat = BodyFormat.Css("body { color: red; }")
-        assertEquals(CodeLanguage.CSS, CodeLanguage.fromBodyFormat(cssFormat))
+        assertEquals(CodeLanguage.CSS, cssFormat.toCodeLanguage())
 
         val rawFormat = BodyFormat.RawText("plain string")
-        assertEquals(CodeLanguage.PLAIN, CodeLanguage.fromBodyFormat(rawFormat))
+        assertEquals(CodeLanguage.PLAIN, rawFormat.toCodeLanguage())
     }
 
     @Test

@@ -1,11 +1,13 @@
 package com.devuloopers.knet.apps.desktop.bootstrap
 
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import com.devuloopers.knet.apps.desktop.config.DesktopConfiguration
 import com.devuloopers.knet.apps.desktop.di.DesktopModules
 import com.devuloopers.knet.apps.desktop.lifecycle.ApplicationLifecycle
 import com.devuloopers.knet.core.logger.KNetLogger
+import com.devuloopers.knet.domain.config.AppMetadata
 import com.devuloopers.knet.ui.desktop.app.window.MainWindow
 import org.koin.core.context.startKoin
 import org.koin.dsl.module
@@ -55,11 +57,13 @@ object DesktopBootstrap {
         }
     }
 
+    @Suppress("DEPRECATION")
     private fun launchDesktopApplication() {
         application {
             Window(
                 onCloseRequest = ::exitApplication,
-                title = "KNet Network Inspector & API Studio"
+                title = AppMetadata.APP_DISPLAY_TITLE,
+                icon = painterResource("icons/KNet.png")
             ) {
                 MainWindow()
             }

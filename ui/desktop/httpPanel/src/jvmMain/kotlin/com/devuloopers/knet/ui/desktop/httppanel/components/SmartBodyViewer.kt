@@ -13,6 +13,7 @@ import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
 import com.devuloopers.knet.ui.desktop.codeeditor.api.KNetCodeEditor
 import com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage
 import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
+import com.devuloopers.knet.ui.desktop.httppanel.model.toCodeLanguage
 
 /**
  * Polymorphic, strongly-typed body viewer composable that resolves payload format
@@ -76,7 +77,7 @@ public fun SmartBodyViewer(
 
         else -> {
             val displayText = (format as? BodyFormat.HasTextContent)?.textContent?.ifEmpty { spec.rawBody } ?: spec.rawBody
-            val codeLanguage = CodeLanguage.fromBodyFormat(format)
+            val codeLanguage = format.toCodeLanguage()
 
             KNetCodeEditor(
                 code = displayText,

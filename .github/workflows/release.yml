@@ -1,0 +1,100 @@
+name: Release Packages
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. 1.0.0)'
+        required: true
+        default: '1.0.0'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    name: Build (${{ matrix.os_name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            os_name: macOS
+            setup_linux_tools: false
+            tasks: packageDmg
+            artifact_patterns: apps/desktop/build/compose/binaries/main/dmg/*.dmg
+            create_tarball: false
+
+          - os: windows-latest
+            os_name: Windows
+            setup_linux_tools: false
+            tasks: packageMsi
+            artifact_patterns: apps/desktop/build/compose/binaries/main/msi/*.msi
+            create_tarball: false
+
+          - os: ubuntu-latest
+            os_name: Linux
+            setup_linux_tools: true
+            tasks: packageDeb packageRpm createDistributable
+            artifact_patterns: |
+              apps/desktop/build/compose/binaries/main/deb/*.deb
+              apps/desktop/build/compose/binaries/main/rpm/*.rpm
+              apps/desktop/build/compose/binaries/main/*.tar.gz
+            create_tarball: true
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Install Linux Packaging Tools (Deb & RPM)
+        if: matrix.setup_linux_tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rpm fakeroot
+
+      - name: Extract Release Version
+        id: get_version
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "Building KNet release version: $VERSION"
+
+      - name: Grant execute permission for gradlew
+        shell: bash
+        run: chmod +x gradlew
+
+      - name: Build Native Distribution Packages
+        run: ./gradlew ${{ matrix.tasks }} -Pknet.app.version=${{ steps.get_version.outputs.VERSION }}
+
+      - name: Create Linux Universal Portable Tarball
+        if: matrix.create_tarball
+        shell: bash
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          cd apps/desktop/build/compose/binaries/main
+          tar -czvf "knet-${VERSION}-linux-x64.tar.gz" -C app .
+          echo "Linux universal portable tarball created: knet-${VERSION}-linux-x64.tar.gz"
+
+      - name: Upload Artifacts to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.artifact_patterns }}
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
