@@ -71,11 +71,14 @@ jobs:
         run: |
           if [ -n "${{ inputs.version }}" ]; then
             VERSION="${{ inputs.version }}"
+            TAG_NAME="${{ inputs.version }}"
           else
             VERSION="${GITHUB_REF_NAME#v}"
+            TAG_NAME="${GITHUB_REF_NAME}"
           fi
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          echo "Building KNet release version: $VERSION"
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "Building KNet release version: $VERSION with tag: $TAG_NAME"
 
       - name: Grant execute permission for gradlew
         shell: bash
@@ -97,6 +100,8 @@ jobs:
       - name: Upload Artifacts to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.get_version.outputs.TAG_NAME }}
+          name: KNet v${{ steps.get_version.outputs.VERSION }}
           files: ${{ matrix.artifact_patterns }}
           generate_release_notes: true
         env:
