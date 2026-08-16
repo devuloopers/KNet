@@ -64,6 +64,19 @@ compose.desktop {
             packageVersion = appVersion
             description = "$appName $appDescription"
 
+            modules(
+                "java.compiler",
+                "java.instrument",
+                "java.management",
+                "java.naming",
+                "java.scripting",
+                "java.sql",
+                "java.security.jgss",
+                "jdk.unsupported",
+                "jdk.crypto.ec",
+                "jdk.crypto.cryptoki"
+            )
+
             macOS {
                 iconFile.set(project.file("src/jvmMain/resources/icons/KNet.icns"))
                 bundleID = appPackageId

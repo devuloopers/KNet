@@ -59,6 +59,7 @@ data class TrafficState(
     val selectedTransactionId: String? = null,
     val captureState: CaptureState = CaptureState.STOPPED,
     val engineState: ProxyEngineState = ProxyEngineState.Stopped,
+    val engineErrorMessage: String? = null,
     val searchQuery: String = "",
     val selectedProtocolFilter: ProtocolFilter = ProtocolFilter.ALL,
     val selectedMethodFilter: MethodFilter = MethodFilter.ALL,

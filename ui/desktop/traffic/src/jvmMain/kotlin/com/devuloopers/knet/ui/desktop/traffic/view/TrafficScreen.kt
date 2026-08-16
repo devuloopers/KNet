@@ -11,6 +11,7 @@ import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
 import com.devuloopers.knet.ui.core.components.split.HorizontalSplitPane
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import com.devuloopers.knet.ui.desktop.traffic.banner.TrafficErrorBanner
 import com.devuloopers.knet.ui.desktop.traffic.filter.TrafficFilterBar
 import com.devuloopers.knet.ui.desktop.traffic.filter.TrafficFilterBarActions
 import com.devuloopers.knet.ui.desktop.traffic.filter.TrafficFilterBarState
@@ -105,6 +106,12 @@ fun TrafficScreen(
             TrafficToolbar(
                 state = toolbarState,
                 actions = toolbarActions
+            )
+
+            // 1.1 Error Banner (Visible when engine error occurs)
+            TrafficErrorBanner(
+                errorMessage = state.engineErrorMessage,
+                onDismiss = { viewModel.processIntent(TrafficIntent.DismissEngineError) }
             )
 
             // 2. Quick Filters Row (40dp)

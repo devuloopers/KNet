@@ -207,9 +207,16 @@ class TrafficViewModel(
                     } else {
                         CaptureState.STOPPED
                     }
+                    val errorMessage = when (state) {
+                        is ProxyEngineState.Error -> state.message
+                        is ProxyEngineState.Running,
+                        is ProxyEngineState.Starting -> null
+                        else -> current.engineErrorMessage
+                    }
                     current.copy(
                         engineState = state,
-                        captureState = capState
+                        captureState = capState,
+                        engineErrorMessage = errorMessage
                     )
                 }
             }
@@ -283,6 +290,10 @@ class TrafficViewModel(
 
             is TrafficIntent.ToggleAutoScroll -> {
                 _uiState.update { it.copy(autoScroll = !it.autoScroll) }
+            }
+
+            is TrafficIntent.DismissEngineError -> {
+                _uiState.update { it.copy(engineErrorMessage = null) }
             }
 
             is TrafficIntent.Search -> {

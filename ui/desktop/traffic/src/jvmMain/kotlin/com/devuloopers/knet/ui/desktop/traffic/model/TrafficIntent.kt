@@ -12,6 +12,7 @@ sealed interface TrafficIntent {
     data object StopCapture : TrafficIntent
     data object ClearFeed : TrafficIntent
     data object ToggleAutoScroll : TrafficIntent
+    data object DismissEngineError : TrafficIntent
 
     data class Search(val query: String) : TrafficIntent
     data class FilterByProtocol(val protocol: ProtocolFilter) : TrafficIntent
