@@ -82,7 +82,8 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build Native Distribution Packages
-        run: ./gradlew ${{ matrix.tasks }} -Pknet.app.version=${{ steps.get_version.outputs.VERSION }}
+        shell: bash
+        run: ./gradlew ${{ matrix.tasks }} "-Pknet.app.version=${{ steps.get_version.outputs.VERSION }}"
 
       - name: Create Linux Universal Portable Tarball
         if: matrix.create_tarball
