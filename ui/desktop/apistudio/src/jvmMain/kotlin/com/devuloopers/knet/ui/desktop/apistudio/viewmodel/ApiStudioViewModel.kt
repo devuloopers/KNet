@@ -18,6 +18,7 @@ import com.devuloopers.knet.ui.desktop.apistudio.response.ResponseSubTab
 import com.devuloopers.knet.ui.desktop.apistudio.usecase.AutoSaveApiSessionUseCase
 import com.devuloopers.knet.ui.desktop.apistudio.usecase.ExecuteScriptedApiRequestUseCase
 import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlState
+import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
 import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyMode
 import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyState
 import com.devuloopers.knet.ui.desktop.httppanel.usecase.SyncBodyStateUseCase
@@ -383,9 +384,11 @@ class ApiStudioViewModel(
         val mappedAuthState = normalizedSpec.auth.toAuthState()
 
         _uiState.update { state ->
-            val hydratedBodyState = RequestBodyState.fromPayload(
-                headers = normalizedSpec.headers,
-                rawBody = normalizedSpec.bodyPayload
+            val hydratedBodyState = RequestBodyState.from(
+                PayloadInspectionSpec.fromPayload(
+                    headers = normalizedSpec.headers,
+                    rawBody = normalizedSpec.bodyPayload
+                )
             )
             val importedEditorState = RequestEditorState(
                 method = normalizedSpec.methodString,

@@ -2,8 +2,6 @@ package com.devuloopers.knet.ui.desktop.httppanel.editor
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,7 +10,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -29,7 +26,6 @@ import com.devuloopers.knet.ui.core.components.keyvalue.KeyValueEntry
 import com.devuloopers.knet.ui.core.components.tabs.KNetTab
 import com.devuloopers.knet.ui.core.components.tabs.ScrollableTabRow
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
-import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
 import com.devuloopers.knet.ui.desktop.codeeditor.api.KNetCodeEditor
@@ -245,7 +241,7 @@ public fun RequestBodyEditor(
                         if (onGraphQlStateChange != null) {
                             onGraphQlStateChange(updatedGraphQlState)
                         } else {
-                            val newPayload = graphQlMapper.serializePayload(updatedGraphQlState)
+                            val newPayload = graphQlMapper.serializeFromUi(updatedGraphQlState)
                             onStateChange(
                                 state.copy(
                                     graphQlState = updatedGraphQlState,

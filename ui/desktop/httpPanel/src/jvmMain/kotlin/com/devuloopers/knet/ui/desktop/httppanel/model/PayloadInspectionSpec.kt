@@ -38,19 +38,7 @@ data class PayloadInspectionSpec(
      * Formatted, pretty-printed representation of the payload (or raw string if formatting is unavailable).
      */
     val formattedText: String
-        get() = when (val format = resolvedFormat) {
-            is BodyFormat.Json -> format.formattedText
-            is BodyFormat.Xml -> format.formattedText
-            is BodyFormat.Html -> format.formattedText
-            is BodyFormat.Js -> format.formattedText
-            is BodyFormat.Css -> format.formattedText
-            is BodyFormat.GraphQL -> format.queryText
-            is BodyFormat.Cbor,
-            is BodyFormat.Protobuf,
-            is BodyFormat.GrpcWeb -> BodyFormatterRegistry.prettyPrintBody(headers.toMap(), rawBody)
-
-            else -> rawBody
-        }
+        get() = (resolvedFormat as? BodyFormat.HasTextContent)?.textContent?.ifEmpty { rawBody } ?: rawBody
 
     companion object {
         /**

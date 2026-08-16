@@ -52,7 +52,7 @@ class GraphQlPayloadMapper(
     override val bodyType: RequestBodyType = RequestBodyType.GRAPHQL
 
     override fun parse(rawText: String): StructuredPayloadState {
-        val state = parsePayload(rawText)
+        val state = parseToUi(rawText)
         return StructuredPayloadState.GraphQL(
             queryText = state.queryText,
             variablesText = state.variablesText,
@@ -72,17 +72,17 @@ class GraphQlPayloadMapper(
 
             is StructuredPayloadState.RawText -> return state.content
         }
-        return serializePayload(graphQl)
+        return serializeFromUi(graphQl)
     }
 
     /**
-     * Parses a raw payload string (JSON blob or raw GraphQL query text) into a structured [GraphQlState].
+     * Parses a raw payload string (JSON blob or raw GraphQL query text) into a structured UI [GraphQlState].
      * Automatically pretty-prints query document AST syntax, variables, and extensions.
      *
      * @param payloadText Raw body payload string (e.g., from Traffic capture or saved session).
      * @return Formatted [GraphQlState] with populated query, variables, operationName, and extensions.
      */
-    fun parsePayload(payloadText: String): GraphQlState {
+    fun parseToUi(payloadText: String): GraphQlState {
         val trimmed = payloadText.trim()
         if (trimmed.isEmpty()) {
             return GraphQlState()
@@ -123,12 +123,12 @@ class GraphQlPayloadMapper(
     }
 
     /**
-     * Serializes a structured [GraphQlState] model back into a valid HTTP POST JSON payload string.
+     * Serializes a structured UI [GraphQlState] model back into a valid HTTP POST JSON payload string.
      *
      * @param state Target [GraphQlState] containing query, variables, operationName, and extensions.
      * @return Serialized JSON string suitable for HTTP transport.
      */
-    fun serializePayload(state: GraphQlState): String {
+    fun serializeFromUi(state: GraphQlState): String {
         val trimmedQuery = state.queryText.trim()
         val trimmedOpName = state.operationName.trim()
         val varsJsonElement = parseJsonElementOrNull(state.variablesText)

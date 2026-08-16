@@ -224,16 +224,7 @@ class TrafficViewModel(
             }
         }
 
-        // 3. Observe Room DB Active Breakpoint Rules for Traffic Row Highlighting
-        viewModelScope.launch {
-            observeRulesUseCase.execute().collect { rules ->
-                _uiState.update { current ->
-                    current.copy(activeBreakpointRules = rules)
-                }
-            }
-        }
-
-        // 4. Observe Live Traffic Database Stream — GetLiveTrafficUseCase handles domain filtering.
+        // 3. Observe Live Traffic Database Stream — GetLiveTrafficUseCase handles domain filtering.
         viewModelScope.launch {
             getLiveTrafficUseCase.execute(ProtocolFilter.ALL, "").conflate().collect { liveState ->
                     when (liveState) {

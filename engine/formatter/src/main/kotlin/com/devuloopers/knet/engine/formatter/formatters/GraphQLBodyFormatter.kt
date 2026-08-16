@@ -26,15 +26,26 @@ class GraphQLBodyFormatter : BodyFormatter {
      * @param queryText Raw GraphQL query document text.
      * @return Pretty-printed GraphQL document syntax, or the trimmed raw string if syntax is malformed.
      */
-    fun formatQuery(queryText: String): String {
-        val trimmed = queryText.trim()
-        if (trimmed.isEmpty()) return ""
+    fun formatQuery(queryText: String): String = Companion.formatQuery(queryText)
 
-        return try {
-            val document = Parser().parseDocument(trimmed)
-            AstPrinter.printAst(document)
-        } catch (_: Exception) {
-            trimmed
+    companion object {
+        /**
+         * Formats a raw GraphQL query, mutation, or subscription document string into
+         * spec-compliant multi-line indented GraphQL AST syntax via `graphql-java`.
+         *
+         * @param queryText Raw GraphQL query document text.
+         * @return Pretty-printed GraphQL document syntax, or the trimmed raw string if syntax is malformed.
+         */
+        fun formatQuery(queryText: String): String {
+            val trimmed = queryText.trim()
+            if (trimmed.isEmpty()) return ""
+
+            return try {
+                val document = Parser().parseDocument(trimmed)
+                AstPrinter.printAst(document)
+            } catch (_: Exception) {
+                trimmed
+            }
         }
     }
 

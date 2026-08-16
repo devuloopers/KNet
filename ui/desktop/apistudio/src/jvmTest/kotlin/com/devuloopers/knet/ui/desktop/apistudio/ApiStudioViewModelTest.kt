@@ -496,7 +496,7 @@ class ApiStudioViewModelTest {
     }
 
     @Test
-    fun `importRequestSpec auto detects and hydrates GraphQL payload via RequestBodyState fromPayload`() = runTest {
+    fun `importRequestSpec auto detects and hydrates GraphQL payload via RequestBodyState from`() = runTest {
         val testExecutor = TestHttpExecutor()
         val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(testExecutor))
 

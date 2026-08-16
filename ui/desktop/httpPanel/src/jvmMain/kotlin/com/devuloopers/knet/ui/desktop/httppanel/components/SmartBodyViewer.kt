@@ -58,7 +58,7 @@ public fun SmartBodyViewer(
     when (format) {
         is BodyFormat.GraphQL -> {
             val formattedJson = remember(spec.rawBody) {
-                JsonBodyFormatter().prettyPrintJson(spec.rawBody)
+                JsonBodyFormatter.prettyPrintJson(spec.rawBody)
             }
             GraphQLBodyViewer(
                 format = format,
@@ -75,22 +75,8 @@ public fun SmartBodyViewer(
         }
 
         else -> {
-            val (codeLanguage, displayText) = when (format) {
-                is BodyFormat.Json -> CodeLanguage.JSON to format.formattedText
-                is BodyFormat.Xml -> CodeLanguage.XML to format.formattedText
-                is BodyFormat.Html -> CodeLanguage.HTML to format.formattedText
-                is BodyFormat.Js -> CodeLanguage.JAVASCRIPT to format.formattedText
-                is BodyFormat.Css -> CodeLanguage.CSS to format.formattedText
-                is BodyFormat.Cbor,
-                is BodyFormat.Protobuf,
-                is BodyFormat.GrpcWeb -> {
-                    val prettyText = remember(spec.headers, spec.rawBody) {
-                        BodyFormatterRegistry.prettyPrintBody(headersMap, spec.rawBody)
-                    }
-                    CodeLanguage.JSON to prettyText
-                }
-                else -> CodeLanguage.PLAIN to spec.rawBody
-            }
+            val displayText = (format as? BodyFormat.HasTextContent)?.textContent?.ifEmpty { spec.rawBody } ?: spec.rawBody
+            val codeLanguage = CodeLanguage.fromBodyFormat(format)
 
             KNetCodeEditor(
                 code = displayText,

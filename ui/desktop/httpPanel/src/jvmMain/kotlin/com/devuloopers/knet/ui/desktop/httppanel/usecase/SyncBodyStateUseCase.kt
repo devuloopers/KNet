@@ -27,11 +27,15 @@ public class SyncBodyStateUseCase(
     public fun switchMode(currentState: RequestBodyState, targetMode: RequestBodyMode): RequestBodyState {
         if (currentState.mode == targetMode) return currentState
 
-        val updatedGraphQlState = if (targetMode == RequestBodyMode.GRAPHQL && currentState.graphQlState.queryText.isEmpty() && currentState.payloadText.isNotEmpty()) {
-            parseGraphQlState(currentState.payloadText)
-        } else {
-            currentState.graphQlState
-        }
+        val updatedGraphQlState =
+            if (
+                targetMode == RequestBodyMode.GRAPHQL && currentState.graphQlState.queryText.isEmpty() &&
+                currentState.payloadText.isNotEmpty()) {
+                parseGraphQlState(currentState.payloadText
+                )
+            } else {
+                currentState.graphQlState
+            }
 
         return currentState.copy(mode = targetMode, graphQlState = updatedGraphQlState)
     }
@@ -73,6 +77,7 @@ public class SyncBodyStateUseCase(
                 operationName = parsed.operationName,
                 extensionsText = parsed.extensionsText
             )
+
             is StructuredPayloadState.RawText -> GraphQlState(queryText = parsed.content)
         }
     }

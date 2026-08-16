@@ -1,5 +1,6 @@
 package com.devuloopers.knet.ui.desktop.httppanel
 
+import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
 import com.devuloopers.knet.ui.desktop.httppanel.model.RawSubFormat
 import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyMode
 import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyState
@@ -10,22 +11,25 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Unit tests verifying [RequestBodyState.fromPayload] and [ResponseBodyState.fromPayload]
- * automatic format detection and payload model hydration across all supported HTTP payload formats.
+ * Unit tests verifying [RequestBodyState.from] and [ResponseBodyState.from]
+ * mapping from pre-resolved [PayloadInspectionSpec] across all supported HTTP payload formats.
  */
 class BodyStateFromPayloadTest {
 
     @Test
     fun testEmptyOrBlankPayloadReturnsNoneMode() {
-        val emptyReqState = RequestBodyState.fromPayload(emptyList(), "")
+        val emptyReqSpec = PayloadInspectionSpec.fromPayload(emptyList(), "")
+        val emptyReqState = RequestBodyState.from(emptyReqSpec)
         assertEquals(RequestBodyMode.NONE, emptyReqState.mode)
         assertEquals("", emptyReqState.payloadText)
 
-        val blankReqState = RequestBodyState.fromPayload(emptyList(), "   \n  \t  ")
+        val blankReqSpec = PayloadInspectionSpec.fromPayload(emptyList(), "   \n  \t  ")
+        val blankReqState = RequestBodyState.from(blankReqSpec)
         assertEquals(RequestBodyMode.NONE, blankReqState.mode)
         assertEquals("", blankReqState.payloadText)
 
-        val emptyRespState = ResponseBodyState.fromPayload(emptyList(), "")
+        val emptyRespSpec = PayloadInspectionSpec.fromPayload(emptyList(), "")
+        val emptyRespState = ResponseBodyState.from(emptyRespSpec)
         assertEquals(ResponseBodyMode.NONE, emptyRespState.mode)
         assertEquals("", emptyRespState.payloadText)
     }
@@ -46,7 +50,8 @@ class BodyStateFromPayloadTest {
             }
         """.trimIndent()
 
-        val state = RequestBodyState.fromPayload(headers, graphQlJson)
+        val spec = PayloadInspectionSpec.fromPayload(headers, graphQlJson)
+        val state = RequestBodyState.from(spec)
 
         assertEquals(RequestBodyMode.GRAPHQL, state.mode)
         assertEquals("FormattedQuotes", state.graphQlState.operationName)
@@ -60,7 +65,8 @@ class BodyStateFromPayloadTest {
         val headers = listOf("content-type" to "application/x-www-form-urlencoded")
         val formPayload = "grant_type=client_credentials&client_id=knet_client_123"
 
-        val state = RequestBodyState.fromPayload(headers, formPayload)
+        val spec = PayloadInspectionSpec.fromPayload(headers, formPayload)
+        val state = RequestBodyState.from(spec)
 
         assertEquals(RequestBodyMode.FORM_DATA, state.mode)
         assertEquals(2, state.formDataEntries.size)
@@ -75,12 +81,14 @@ class BodyStateFromPayloadTest {
         val headers = listOf("content-type" to "application/json")
         val jsonPayload = """{"status":"active","count":42}"""
 
-        val reqState = RequestBodyState.fromPayload(headers, jsonPayload)
+        val spec = PayloadInspectionSpec.fromPayload(headers, jsonPayload)
+
+        val reqState = RequestBodyState.from(spec)
         assertEquals(RequestBodyMode.JSON, reqState.mode)
         assertTrue(reqState.payloadText.contains("\n"), "JSON payload should be auto pretty-printed with newlines")
         assertTrue(reqState.payloadText.contains("\"status\": \"active\""))
 
-        val respState = ResponseBodyState.fromPayload(headers, jsonPayload)
+        val respState = ResponseBodyState.from(spec)
         assertEquals(ResponseBodyMode.JSON, respState.mode)
         assertTrue(respState.payloadText.contains("\n"), "Response JSON should be auto pretty-printed with newlines")
     }
@@ -90,13 +98,15 @@ class BodyStateFromPayloadTest {
         val headers = listOf("content-type" to "application/xml")
         val xmlPayload = "<response><status>success</status></response>"
 
-        val reqState = RequestBodyState.fromPayload(headers, xmlPayload)
+        val spec = PayloadInspectionSpec.fromPayload(headers, xmlPayload)
+
+        val reqState = RequestBodyState.from(spec)
         assertEquals(RequestBodyMode.RAW, reqState.mode)
         assertEquals(RawSubFormat.XML, reqState.rawSubFormat)
         assertTrue(reqState.payloadText.contains("\n"), "XML payload should be auto formatted with newlines")
         assertTrue(reqState.payloadText.contains("<status>success</status>"))
 
-        val respState = ResponseBodyState.fromPayload(headers, xmlPayload)
+        val respState = ResponseBodyState.from(spec)
         assertEquals(ResponseBodyMode.XML, respState.mode)
         assertTrue(respState.payloadText.contains("<status>success</status>"))
     }
@@ -106,13 +116,15 @@ class BodyStateFromPayloadTest {
         val headers = listOf("content-type" to "text/html")
         val htmlPayload = "<!DOCTYPE html><html><body><h1>Hello</h1></body></html>"
 
-        val reqState = RequestBodyState.fromPayload(headers, htmlPayload)
+        val spec = PayloadInspectionSpec.fromPayload(headers, htmlPayload)
+
+        val reqState = RequestBodyState.from(spec)
         assertEquals(RequestBodyMode.RAW, reqState.mode)
         assertEquals(RawSubFormat.HTML, reqState.rawSubFormat)
         assertTrue(reqState.payloadText.contains("<h1>"), "HTML payload should contain h1 tag")
         assertTrue(reqState.payloadText.contains("Hello"), "HTML payload should contain Hello")
 
-        val respState = ResponseBodyState.fromPayload(headers, htmlPayload)
+        val respState = ResponseBodyState.from(spec)
         assertEquals(ResponseBodyMode.HTML, respState.mode)
         assertTrue(respState.payloadText.contains("<h1>"))
     }
@@ -122,12 +134,14 @@ class BodyStateFromPayloadTest {
         val headers = listOf("content-type" to "text/plain")
         val plainText = "Hello KNet Desktop"
 
-        val reqState = RequestBodyState.fromPayload(headers, plainText)
+        val spec = PayloadInspectionSpec.fromPayload(headers, plainText)
+
+        val reqState = RequestBodyState.from(spec)
         assertEquals(RequestBodyMode.RAW, reqState.mode)
         assertEquals(RawSubFormat.TEXT, reqState.rawSubFormat)
         assertEquals(plainText, reqState.payloadText)
 
-        val respState = ResponseBodyState.fromPayload(headers, plainText)
+        val respState = ResponseBodyState.from(spec)
         assertEquals(ResponseBodyMode.TEXT, respState.mode)
         assertEquals(plainText, respState.payloadText)
     }

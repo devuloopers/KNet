@@ -790,6 +790,92 @@ This document serves as the live project tracking board for implementing seamles
 - [x] **Phase 4: Automated Multi-Module Verification** `[COMPLETED]`
   - [x] Run test suite across `:ui:desktop:httpPanel`, `:ui:desktop:traffic`, `:ui:desktop:breakpointManager`, `:data:desktop`, `:ui:desktop:apistudio`, and `:ui:desktop:app` (`BUILD SUCCESSFUL in 7s`)
 
+---
+
+## Phase 33: BodyModels.kt & GraphQlPayloadMapper API Streamlining `[COMPLETED]`
+
+- [x] **Phase 1: GraphQlPayloadMapper Directional API Design** `[COMPLETED]`
+  - [x] Standardized on `parseToUi(payloadText): GraphQlState` and `serializeFromUi(state): String`
+  - [x] Overrides `parse()` and `serialize()` for domain `PayloadStrategy` interface delegation
+  - [x] Updated all callers in `RequestBodyEditor.kt`, `BodyModels.kt`, and `GraphQlPayloadMapperTest.kt`
+- [x] **Phase 2: BodyModels.kt Canonical Factory & Deduplication** `[COMPLETED]`
+  - [x] Streamlined `RequestBodyState.Companion` and `ResponseBodyState.Companion` to a single canonical `from(spec: PayloadInspectionSpec)` factory
+  - [x] Eliminated duplicate `when (BodyFormat)` branches
+  - [x] Extracted `BodyFormat.resolvedText(fallback)` extension function to eliminate duplicated `format.formattedText` accesses across request and response states
+  - [x] Extracted shared `BodyFormatters` singleton (`JsonBodyFormatter`, `XmlBodyFormatter`, `GraphQLBodyFormatter`)
+  - [x] Deduplicated `GraphQlSubTab.prettify` JSON formatting helper
+  - [x] Updated `LiveInterceptDrawer.kt`, `ApiStudioScreen.kt`, `ApiStudioViewModel.kt`, `ResponseEditorPanelTest.kt`, and `BodyStateFromPayloadTest.kt`
+- [x] **Phase 3: Domain-Grouped Model Decomposition** `[COMPLETED]`
+  - [x] Decomposed `BodyModels.kt` into `RequestBodyModels.kt`, `ResponseBodyModels.kt`, `GraphQlModels.kt`, and `BodyFormatters.kt`
+  - [x] Removed monolithic `BodyModels.kt` with zero downstream import changes
+- [x] **Phase 4: Documentation & Multi-Module Verification** `[COMPLETED]`
+  - [x] Updated `project_docs/interception_and_inspection_pipeline.md`
+  - [x] 100% passing test suite across all 22 modules (`BUILD SUCCESSFUL`)
+
+---
+
+## Phase 34: Elevate Formatting Utilities to `:engine:formatter` `[COMPLETED]`
+
+- [x] **Phase 1: Formatter Engine Companion Enhancements** `[COMPLETED]`
+  - [x] Added `JsonBodyFormatter.prettyPrintJson(raw)` to `companion object`
+  - [x] Added `XmlBodyFormatter.prettyPrint(body)` to `companion object`
+  - [x] Added `GraphQLBodyFormatter.formatQuery(queryText)` to `companion object`
+  - [x] Added `BodyFormat.resolvedText(fallback)` extension function in `:engine:formatter:model:BodyFormat.kt`
+- [x] **Phase 2: UI Layer Decoupling & Cleanup** `[COMPLETED]`
+  - [x] Updated `RequestBodyModels.kt`, `ResponseBodyModels.kt`, `GraphQlModels.kt`, and `SmartBodyViewer.kt` to use engine companions directly
+  - [x] Deleted obsolete `BodyFormatters.kt` from `:ui:desktop:httpPanel`
+- [x] **Phase 3: Automated Multi-Module Verification** `[COMPLETED]`
+  - [x] 100% passing test suite across `:engine:formatter` and UI modules (`BUILD SUCCESSFUL in 13s`)
+
+---
+
+## Phase 35: Resolve Audit Findings: Formatted Text Delegation & Duplicate Rule Flow Cleanup `[COMPLETED]`
+
+- [x] **Phase 1: Formatted Text Delegation** `[COMPLETED]`
+  - [x] Added `is BodyFormat.GraphQL -> queryText` handling to `BodyFormat.resolvedText()` in `:engine:formatter:model:BodyFormat.kt`
+  - [x] Simplified `PayloadInspectionSpec.formattedText` to delegate directly to `resolvedFormat?.resolvedText(rawBody) ?: rawBody` in `:ui:desktop:httpPanel:model:PayloadInspectionSpec.kt`
+- [x] **Phase 2: Remove Redundant Rule Flow Collector** `[COMPLETED]`
+  - [x] Removed duplicate second `observeRulesUseCase.execute().collect { ... }` in `TrafficViewModel.kt`, preserving clean single reactive subscription
+- [x] **Phase 3: Documentation & Verification** `[COMPLETED]`
+  - [x] Created `project_docs/netty_to_ui_data_lifecycle.md` and updated audit table
+  - [x] 100% passing test suite across all 22 modules (`BUILD SUCCESSFUL in 13s`)
+
+---
+
+## Phase 36: Self-Describing Polymorphic BodyFormat Hierarchy & Streamlined UI Mapping `[COMPLETED]`
+
+- [x] **Phase 1: Self-Describing `BodyFormat` Hierarchy** `[COMPLETED]`
+  - [x] Defined `abstract val badgeLabel: String` and `abstract val resolvedTextContent: String` on `BodyFormat` sealed class
+  - [x] Implemented properties directly on all 14 variants in `:engine:formatter:model:BodyFormat.kt`
+  - [x] Delegated `fun BodyFormat.resolvedText()` directly to `resolvedTextContent`
+- [x] **Phase 2: Streamline Formatter Registry & UI SmartBodyViewer** `[COMPLETED]`
+  - [x] Simplified `BodyFormatterRegistry.prettyPrintBody()` to delegate directly to `resolveFormat(...).resolvedTextContent`
+  - [x] Streamlined `SmartBodyViewer.kt` by replacing verbose inner `when` expressions with universal `KNetCodeEditor(code = format.resolvedTextContent, language = CodeLanguage.fromBodyFormat(format))`
+- [x] **Phase 3: Automated Multi-Module Verification** `[COMPLETED]`
+  - [x] 100% passing test suite across all modules (`BUILD SUCCESSFUL in 12s`, 133 tasks, 0 failures)
+
+---
+
+## Phase 38: BodyFormat Sealed Interface & HasTextContent Capability Architecture `[COMPLETED]`
+
+- [x] **Phase 1: Sealed Interface & Capability Interface Refactoring** `[COMPLETED]`
+  - [x] Converted `BodyFormat` from `sealed class` to `sealed interface`
+  - [x] Retained `val badgeLabel: String` on the base `BodyFormat` interface
+  - [x] Introduced nested `interface HasTextContent { val textContent: String }` capability contract
+  - [x] Implemented `HasTextContent` on 9 single-document text variants (`Json`, `Xml`, `Html`, `Js`, `Css`, `Cbor`, `Protobuf`, `RawText`, `GraphQL`)
+  - [x] Kept stream (`JsonStream`, `SseStream`, `GrpcWeb`), structured (`FormData`), and binary (`Image`) variants purely as domain models without synthetic text properties
+- [x] **Phase 2: Consumer Integration & Display Utility Refinement** `[COMPLETED]`
+  - [x] Updated `BodyFormatterRegistry.prettyPrintBody()` to cleanly format structured/stream variants while delegating `HasTextContent` to `textContent`
+  - [x] Updated `SmartBodyViewer.kt` and `PayloadInspectionSpec.kt` to use `HasTextContent.textContent`
+  - [x] Updated `RequestBodyModels.kt` and `ResponseBodyModels.kt` to use `format.textContent`
+- [x] **Phase 3: Automated Multi-Module Verification** `[COMPLETED]`
+  - [x] 100% passing test suite across all modules (`BUILD SUCCESSFUL in 13s`, 133 tasks, 0 failures)
+
+
+
+
+
+
 
 
 

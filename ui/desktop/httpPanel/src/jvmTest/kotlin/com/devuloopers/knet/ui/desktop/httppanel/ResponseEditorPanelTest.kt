@@ -2,6 +2,7 @@ package com.devuloopers.knet.ui.desktop.httppanel
 
 import com.devuloopers.knet.ui.desktop.httppanel.editor.ResponseEditorPanelActions
 import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
+import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
 import com.devuloopers.knet.ui.desktop.httppanel.model.ResponseBodyMode
 import com.devuloopers.knet.ui.desktop.httppanel.model.ResponseBodyState
 import kotlin.test.Test
@@ -30,8 +31,8 @@ class ResponseEditorPanelTest {
 
         actions.onStatusCodeChanged(404)
         actions.onStatusTextChanged("Not Found")
-        actions.onBodyStateChanged(ResponseBodyState(mode = ResponseBodyMode.JSON, payloadText = "{\"error\":\"not found\"}"))
-        actions.onHeadersChanged(listOf("Content-Type" to "application/json"))
+        actions.onBodyStateChanged(ResponseBodyState(mode = ResponseBodyMode.JSON))
+        actions.onHeadersChanged(listOf("content-type" to "application/json"))
         actions.onCookiesChanged(listOf("session" to "xyz"))
         actions.onSubTabSelected(InspectorSubTab.HEADERS)
 
@@ -46,22 +47,22 @@ class ResponseEditorPanelTest {
     @Test
     fun testResponseBodyModeResolutionFromPayload() {
         val jsonHeaders = listOf("content-type" to "application/json")
-        val jsonState = ResponseBodyState.fromPayload(jsonHeaders, "{\"status\": \"ok\"}")
+        val jsonState = ResponseBodyState.from(PayloadInspectionSpec.fromPayload(jsonHeaders, "{\"status\": \"ok\"}"))
         assertEquals(ResponseBodyMode.JSON, jsonState.mode)
 
         val xmlHeaders = listOf("content-type" to "application/xml")
-        val xmlState = ResponseBodyState.fromPayload(xmlHeaders, "<response><status>ok</status></response>")
+        val xmlState = ResponseBodyState.from(PayloadInspectionSpec.fromPayload(xmlHeaders, "<response><status>ok</status></response>"))
         assertEquals(ResponseBodyMode.XML, xmlState.mode)
 
         val htmlHeaders = listOf("content-type" to "text/html")
-        val htmlState = ResponseBodyState.fromPayload(htmlHeaders, "<html><body>Hello</body></html>")
+        val htmlState = ResponseBodyState.from(PayloadInspectionSpec.fromPayload(htmlHeaders, "<html><body>Hello</body></html>"))
         assertEquals(ResponseBodyMode.HTML, htmlState.mode)
 
         val textHeaders = listOf("content-type" to "text/plain")
-        val textState = ResponseBodyState.fromPayload(textHeaders, "OK")
+        val textState = ResponseBodyState.from(PayloadInspectionSpec.fromPayload(textHeaders, "OK"))
         assertEquals(ResponseBodyMode.TEXT, textState.mode)
 
-        val emptyState = ResponseBodyState.fromPayload(emptyList(), "")
+        val emptyState = ResponseBodyState.from(PayloadInspectionSpec.fromPayload(emptyList(), ""))
         assertEquals(ResponseBodyMode.NONE, emptyState.mode)
     }
 

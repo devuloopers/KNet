@@ -2,7 +2,6 @@ package com.devuloopers.knet.engine.formatter.formatters
 
 import com.devuloopers.knet.engine.formatter.BodyFormatter
 import com.devuloopers.knet.engine.formatter.model.BodyFormat
-import com.devuloopers.knet.engine.formatter.model.GrpcWebFrame
 import com.google.protobuf.DynamicMessage
 import com.google.protobuf.util.JsonFormat
 import java.nio.ByteBuffer
@@ -41,7 +40,7 @@ class GrpcWebBodyFormatter(
             return BodyFormat.RawText(bodyText)
         }
 
-        val frames = mutableListOf<GrpcWebFrame>()
+        val frames = mutableListOf<BodyFormat.GrpcWeb.Frame>()
         var offset = 0
 
         while (offset + 5 <= rawBytes.size) {
@@ -86,7 +85,7 @@ class GrpcWebBodyFormatter(
                 }
             }
 
-            frames.add(GrpcWebFrame(isTrailer, payloadHex, decodedText))
+            frames.add(BodyFormat.GrpcWeb.Frame(isTrailer, payloadHex, decodedText))
         }
 
         if (frames.isEmpty() && bodyText.isNotEmpty()) {

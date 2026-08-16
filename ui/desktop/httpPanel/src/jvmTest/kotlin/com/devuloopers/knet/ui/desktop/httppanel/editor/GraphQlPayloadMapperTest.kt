@@ -11,7 +11,7 @@ class GraphQlPayloadMapperTest {
     private val mapper = GraphQlPayloadMapper()
 
     @Test
-    fun parsePayload_givenComplexNestedJsonPayload_parsesAndAutoFormatsQueryVariablesOperationNameAndExtensions() {
+    fun parseToUi_givenComplexNestedJsonPayload_parsesAndAutoFormatsQueryVariablesOperationNameAndExtensions() {
         val samplePayload = """
             {
               "query": "query SectionsData($${"id"}s: [ID!]!, $${"partner"}: String!) { sections(ids: $${"id"}s, partner: $${"partner"}) { id title } }",
@@ -33,7 +33,7 @@ class GraphQlPayloadMapperTest {
             }
         """.trimIndent()
 
-        val state = mapper.parsePayload(samplePayload)
+        val state = mapper.parseToUi(samplePayload)
 
         assertTrue(state.queryText.contains("query SectionsData"))
         assertTrue(state.queryText.contains("sections(ids: \$ids, partner: \$partner)"))
@@ -46,8 +46,8 @@ class GraphQlPayloadMapperTest {
     }
 
     @Test
-    fun serializePayload_givenGraphQlState_serializesToValidJson() {
-        val state = mapper.parsePayload(
+    fun serializeToUi_givenGraphQlState_serializesFromValidJson() {
+        val state = mapper.parseToUi(
             """
             {
               "query": "query GetUser { user { id } }",
@@ -57,7 +57,7 @@ class GraphQlPayloadMapperTest {
             """.trimIndent()
         )
 
-        val json = mapper.serializePayload(state)
+        val json = mapper.serializeFromUi(state)
 
         assertTrue(json.contains("\"query\""))
         assertTrue(json.contains("GetUser"))

@@ -34,44 +34,55 @@ class XmlBodyFormatter : BodyFormatter {
      * @param body Raw XML string.
      * @return Indented XML string.
      */
-    fun prettyPrint(body: String): String {
-        val trimmed = body.trim()
-        if (trimmed.isEmpty()) return body
+    fun prettyPrint(body: String): String = Companion.prettyPrint(body)
 
-        return try {
-            formatXmlString(trimmed)
-        } catch (_: Exception) {
-            formatXmlSoftFallback(trimmed)
-        }
-    }
+    companion object {
+        /**
+         * Formats an XML string with indentation using Jackson XmlMapper, falling back to a
+         * manual indent formatter for malformed or truncated input.
+         *
+         * @param body Raw XML string.
+         * @return Indented XML string.
+         */
+        fun prettyPrint(body: String): String {
+            val trimmed = body.trim()
+            if (trimmed.isEmpty()) return body
 
-    private fun formatXmlString(input: String): String {
-        val node = xmlMapper.readTree(input)
-        return xmlMapper.writeValueAsString(node).trim()
-    }
-
-    private fun formatXmlSoftFallback(input: String): String {
-        val builder = StringBuilder()
-        var indentLevel = 0
-        val lines = input.replace("><", ">\n<").split("\n")
-
-        for (rawLine in lines) {
-            val line = rawLine.trim()
-            if (line.isEmpty()) continue
-
-            if (line.startsWith("</")) {
-                indentLevel = (indentLevel - 1).coerceAtLeast(0)
-            }
-
-            builder.append("  ".repeat(indentLevel)).append(line).append("\n")
-
-            if (line.startsWith("<") && !line.startsWith("</") && !line.startsWith("<?") && !line.startsWith("<!--") && !line.endsWith(
-                    "/>"
-                ) && !line.contains("</")
-            ) {
-                indentLevel++
+            return try {
+                formatXmlString(trimmed)
+            } catch (_: Exception) {
+                formatXmlSoftFallback(trimmed)
             }
         }
-        return builder.toString().trimEnd()
+
+        private fun formatXmlString(input: String): String {
+            val node = xmlMapper.readTree(input)
+            return xmlMapper.writeValueAsString(node).trim()
+        }
+
+        private fun formatXmlSoftFallback(input: String): String {
+            val builder = StringBuilder()
+            var indentLevel = 0
+            val lines = input.replace("><", ">\n<").split("\n")
+
+            for (rawLine in lines) {
+                val line = rawLine.trim()
+                if (line.isEmpty()) continue
+
+                if (line.startsWith("</")) {
+                    indentLevel = (indentLevel - 1).coerceAtLeast(0)
+                }
+
+                builder.append("  ".repeat(indentLevel)).append(line).append("\n")
+
+                if (line.startsWith("<") && !line.startsWith("</") && !line.startsWith("<?") && !line.startsWith("<!--") && !line.endsWith(
+                        "/>"
+                    ) && !line.contains("</")
+                ) {
+                    indentLevel++
+                }
+            }
+            return builder.toString().trimEnd()
+        }
     }
 }

@@ -120,26 +120,17 @@ object BodyFormatterRegistry {
                     if (format.variablesJson.isNotEmpty()) "\n\n# Variables / Arguments:\n${format.variablesJson}" else ""
                 "# GraphQL ${format.operationType}$opName:\n${format.queryText}$varsStr"
             }
-
-            is BodyFormat.Json -> format.formattedText
-            is BodyFormat.JsonStream -> format.frames.joinToString("\n\n")
-            is BodyFormat.FormData -> format.pairs.joinToString("\n") { "${it.first} = ${it.second}" }
-            is BodyFormat.SseStream -> format.events.joinToString("\n")
-            is BodyFormat.Protobuf -> format.descriptor
-            is BodyFormat.Image -> format.label
-            is BodyFormat.Html -> format.formattedText
-            is BodyFormat.Xml -> format.formattedText
-            is BodyFormat.Cbor -> format.formattedText
-            is BodyFormat.Js -> format.formattedText
-            is BodyFormat.Css -> format.formattedText
             is BodyFormat.GrpcWeb -> {
                 format.frames.joinToString("\n\n") { frame ->
                     val type = if (frame.isTrailer) "=== gRPC-Web Trailer ===" else "=== gRPC-Web Data Frame ==="
                     "$type\n${frame.decodedJsonOrText}"
                 }
             }
-
-            is BodyFormat.RawText -> format.text
+            is BodyFormat.FormData -> format.pairs.joinToString("\n") { "${it.first} = ${it.second}" }
+            is BodyFormat.JsonStream -> format.frames.joinToString("\n\n")
+            is BodyFormat.SseStream -> format.events.joinToString("\n")
+            is BodyFormat.Image -> format.label
+            is BodyFormat.HasTextContent -> format.textContent
         }
     }
 }

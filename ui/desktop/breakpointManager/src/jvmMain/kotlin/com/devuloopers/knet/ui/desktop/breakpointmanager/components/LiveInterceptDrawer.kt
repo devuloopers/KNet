@@ -115,7 +115,7 @@ fun LiveInterceptDrawer(
         var reqBodyState by remember(eventToRender.id) {
             val spec = preResolved?.requestPayloadSpec
                 ?: PayloadInspectionSpec.fromBytes(eventToRender.request.body, eventToRender.request.headers)
-            mutableStateOf(RequestBodyState.fromResolved(spec))
+            mutableStateOf(RequestBodyState.from(spec))
         }
         var activeReqSubTab by remember(eventToRender.id) {
             mutableStateOf(InspectorSubTab.BODY)
@@ -133,7 +133,7 @@ fun LiveInterceptDrawer(
         var respBodyState by remember(eventToRender.id) {
             val spec = preResolved?.responsePayloadSpec
                 ?: PayloadInspectionSpec.fromBytes(eventToRender.response?.body, eventToRender.response?.headers ?: emptyList())
-            mutableStateOf(ResponseBodyState.fromResolved(spec))
+            mutableStateOf(ResponseBodyState.from(spec))
         }
         var activeRespSubTab by remember(eventToRender.id) {
             mutableStateOf(InspectorSubTab.BODY)

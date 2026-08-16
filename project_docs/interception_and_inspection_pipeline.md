@@ -43,11 +43,11 @@ The frozen architecture enforces three strict rules:
            ▼                              │                              │
    LiveInterceptDrawer                    │                     RequestViewPanel / ResponseViewPanel
            │                              │                              │
- RequestBodyState.fromResolved()          │                              ▼
- ResponseBodyState.fromResolved()         │                       SmartBodyViewer (Instant Render)
-           │                              │
-           ▼ (User Edits / Forwards)      │
- [ Resume / Drop Signal ] ────────────────┘
+  RequestBodyState.from()                  │                              ▼
+  ResponseBodyState.from()                 │                       SmartBodyViewer (Instant Render)
+            │                              │
+            ▼ (User Edits / Forwards)      │
+  [ Resume / Drop Signal ] ────────────────┘
 ```
 
 ---
@@ -90,8 +90,8 @@ The frozen architecture enforces three strict rules:
 - **Class**: [`com.devuloopers.knet.ui.desktop.breakpointmanager.components.LiveInterceptDrawer`](file:///Users/devuloopers/Development/KNet/ui/desktop/breakpointManager/src/jvmMain/kotlin/com/devuloopers/knet/ui/desktop/breakpointmanager/components/LiveInterceptDrawer.kt)
 - **Action**: Retrieves the pre-computed `ResolvedInterceptPayload` from `resolvedPayloads[eventToRender.id]`.
 - **Functions**:
-  - `RequestBodyState.fromResolved(preResolved.requestPayloadSpec)`
-  - `ResponseBodyState.fromResolved(preResolved.responsePayloadSpec)`
+  - `RequestBodyState.from(preResolved.requestPayloadSpec)`
+  - `ResponseBodyState.from(preResolved.responsePayloadSpec)`
 - **Result**: Editor tabs, syntax highlighters, and form-data tables populate instantly without any blocking or re-parsing.
 
 ---
@@ -136,7 +136,7 @@ The frozen architecture enforces three strict rules:
 | **Domain** | [`BodyUtils.kt`](file:///Users/devuloopers/Development/KNet/core/domain/src/commonMain/kotlin/com/devuloopers/knet/domain/util/BodyUtils.kt) | Pure multiplatform `decodeBodyToText(body, headers)` byte decompressor. |
 | **Domain** | [`InterceptedTransaction.kt`](file:///Users/devuloopers/Development/KNet/core/domain/src/commonMain/kotlin/com/devuloopers/knet/domain/rules/model/InterceptedTransaction.kt) | Pure domain model of a suspended in-flight transaction with rich metadata. |
 | **UI Model**| [`PayloadInspectionSpec.kt`](file:///Users/devuloopers/Development/KNet/ui/desktop/httpPanel/src/jvmMain/kotlin/com/devuloopers/knet/ui/desktop/httppanel/model/PayloadInspectionSpec.kt) | Canonical carrier holding `headers`, `rawBody`, `resolvedFormat: BodyFormat?`, and `isPreparing`. |
-| **UI Model**| [`BodyModels.kt`](file:///Users/devuloopers/Development/KNet/ui/desktop/httpPanel/src/jvmMain/kotlin/com/devuloopers/knet/ui/desktop/httppanel/model/BodyModels.kt) | `RequestBodyState.fromResolved(spec)` & `ResponseBodyState.fromResolved(spec)` factories. |
+| **UI Model**| [`RequestBodyModels.kt`](file:///Users/devuloopers/Development/KNet/ui/desktop/httpPanel/src/jvmMain/kotlin/com/devuloopers/knet/ui/desktop/httppanel/model/RequestBodyModels.kt) & [`ResponseBodyModels.kt`](file:///Users/devuloopers/Development/KNet/ui/desktop/httpPanel/src/jvmMain/kotlin/com/devuloopers/knet/ui/desktop/httppanel/model/ResponseBodyModels.kt) | `RequestBodyState.from(spec)` & `ResponseBodyState.from(spec)` factories. |
 | **UI Model**| [`InspectorPreparedState.kt`](file:///Users/devuloopers/Development/KNet/ui/desktop/traffic/src/jvmMain/kotlin/com/devuloopers/knet/ui/desktop/traffic/model/InspectorPreparedState.kt) | Traffic inspector state carrying pre-resolved `requestPayloadSpec` and `responsePayloadSpec`. |
 | **UI Model**| [`ResolvedInterceptPayload.kt`](file:///Users/devuloopers/Development/KNet/ui/desktop/breakpointManager/src/jvmMain/kotlin/com/devuloopers/knet/ui/desktop/breakpointmanager/model/ResolvedInterceptPayload.kt) | In-flight transaction payload carrier holding `requestPayloadSpec` and `responsePayloadSpec`. |
 | **ViewModel**| [`TrafficViewModel.kt`](file:///Users/devuloopers/Development/KNet/ui/desktop/traffic/src/jvmMain/kotlin/com/devuloopers/knet/ui/desktop/traffic/viewmodel/TrafficViewModel.kt) | Off-thread payload resolution on transaction selection via `PayloadInspectionSpec.fromBytes()`. |
@@ -145,6 +145,7 @@ The frozen architecture enforces three strict rules:
 | **UI View** | [`RequestViewPanel.kt`](file:///Users/devuloopers/Development/KNet/ui/desktop/httpPanel/src/jvmMain/kotlin/com/devuloopers/knet/ui/desktop/httppanel/viewpanels/RequestViewPanel.kt) | Universal HTTP request panel consuming `payloadSpec: PayloadInspectionSpec? = null`. |
 | **UI View** | [`ResponseViewPanel.kt`](file:///Users/devuloopers/Development/KNet/ui/desktop/httpPanel/src/jvmMain/kotlin/com/devuloopers/knet/ui/desktop/httppanel/viewpanels/ResponseViewPanel.kt) | Universal HTTP response panel consuming `payloadSpec: PayloadInspectionSpec? = null`. |
 | **UI View** | [`SmartBodyViewer.kt`](file:///Users/devuloopers/Development/KNet/ui/desktop/httpPanel/src/jvmMain/kotlin/com/devuloopers/knet/ui/desktop/httppanel/components/SmartBodyViewer.kt) | Polymorphic body viewer rendering based directly on `spec.resolvedFormat`. |
+| **UI Mapper**| [`GraphQlPayloadMapper.kt`](file:///Users/devuloopers/Development/KNet/ui/desktop/httpPanel/src/jvmMain/kotlin/com/devuloopers/knet/ui/desktop/httppanel/mapper/GraphQlPayloadMapper.kt) | Maps between raw JSON GraphQL wire format and UI `GraphQlState` via `parseToUi()` and `serializeFromUi()`. |
 
 ---
 
