@@ -26,40 +26,36 @@ jobs:
         include:
           - os: macos-latest
             os_name: macOS
+            artifact_id: macos
             setup_linux_tools: false
+            setup_windows_tools: false
             tasks: createDistributable packageDmg
-            artifact_patterns: apps/desktop/build/compose/binaries/main/dmg/*.dmg
             create_tarball: false
 
           - os: windows-latest
             os_name: Windows
+            artifact_id: windows
             setup_linux_tools: false
+            setup_windows_tools: true
             tasks: packageMsi packageExe
-            artifact_patterns: |
-              apps/desktop/build/compose/binaries/main/msi/*.msi
-              apps/desktop/build/compose/binaries/main/exe/*.exe
             create_tarball: false
 
           - os: ubuntu-latest
             os_name: Linux (x64)
+            artifact_id: linux-x64
             setup_linux_tools: true
+            setup_windows_tools: false
             tasks: packageDeb packageRpm createDistributable
             arch_suffix: x64
-            artifact_patterns: |
-              apps/desktop/build/compose/binaries/main/deb/*.deb
-              apps/desktop/build/compose/binaries/main/rpm/*.rpm
-              apps/desktop/build/compose/binaries/main/*.tar.gz
             create_tarball: true
 
           - os: ubuntu-24.04-arm
             os_name: Linux (ARM64)
+            artifact_id: linux-arm64
             setup_linux_tools: true
+            setup_windows_tools: false
             tasks: packageDeb packageRpm createDistributable
             arch_suffix: arm64
-            artifact_patterns: |
-              apps/desktop/build/compose/binaries/main/deb/*.deb
-              apps/desktop/build/compose/binaries/main/rpm/*.rpm
-              apps/desktop/build/compose/binaries/main/*.tar.gz
             create_tarball: true
 
     steps:
@@ -77,7 +73,25 @@ jobs:
         if: matrix.setup_linux_tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y rpm fakeroot
+          sudo apt-get install -y rpm fakeroot binutils
+
+      - name: Setup WiX Toolset (Windows)
+        if: matrix.setup_windows_tools
+        shell: pwsh
+        run: |
+          $wix3_11 = "C:\Program Files (x86)\WiX Toolset v3.11\bin"
+          $wix3_14 = "C:\Program Files (x86)\WiX Toolset v3.14\bin"
+          if (Test-Path $wix3_11) {
+            Write-Host "Found WiX Toolset v3.11 at $wix3_11"
+            "$wix3_11" | Out-File -Append -FilePath $env:GITHUB_PATH
+          } elseif (Test-Path $wix3_14) {
+            Write-Host "Found WiX Toolset v3.14 at $wix3_14"
+            "$wix3_14" | Out-File -Append -FilePath $env:GITHUB_PATH
+          } else {
+            Write-Host "Installing WiX Toolset via Chocolatey..."
+            choco install wixtoolset -y --no-progress
+            "$wix3_11" | Out-File -Append -FilePath $env:GITHUB_PATH
+          }
 
       - name: Extract Release Version
         id: get_version
@@ -104,12 +118,13 @@ jobs:
         shell: bash
         run: |
           VERSION="${{ steps.get_version.outputs.VERSION }}"
-          echo "Installing create-dmg..."
-          brew install create-dmg || true
+          echo "Installing create-dmg and fileicon..."
+          brew install create-dmg fileicon || true
 
           APP_PATH="apps/desktop/build/compose/binaries/main/app/KNet.app"
           ICON_PATH="apps/desktop/src/jvmMain/resources/icons/KNet.icns"
           BG_PATH="brand/dmg/knet-dmg-background.png"
+          RAW_DMG="apps/desktop/build/compose/binaries/main/dmg/KNet-${VERSION}.dmg"
           BRANDED_DMG="apps/desktop/build/compose/binaries/main/dmg/KNet-${VERSION}-mac.dmg"
 
           if [ -d "$APP_PATH" ]; then
@@ -129,9 +144,18 @@ jobs:
               "${APP_PATH}" || true
 
             if [ -f "${BRANDED_DMG}" ]; then
-              echo "Branded macOS DMG created successfully at ${BRANDED_DMG}"
+              echo "Stamping KNet icon onto the DMG file in Finder..."
+              fileicon set "${BRANDED_DMG}" "${ICON_PATH}" || true
+              echo "Branded macOS DMG ready at ${BRANDED_DMG}"
             else
-              echo "create-dmg finished; fallback standard DMG will be published."
+              echo "create-dmg failed; stamping icon on the standard Compose DMG as fallback..."
+              fileicon set "${RAW_DMG}" "${ICON_PATH}" || true
+            fi
+
+            # Remove the raw Compose DMG so only one DMG is ever staged and published
+            if [ -f "${RAW_DMG}" ] && [ -f "${BRANDED_DMG}" ]; then
+              rm -f "${RAW_DMG}"
+              echo "Removed raw Compose DMG to prevent duplicate upload."
             fi
           fi
 
@@ -145,11 +169,46 @@ jobs:
           tar -czvf "knet-${VERSION}-linux-${ARCH}.tar.gz" -C app .
           echo "Linux portable tarball created: knet-${VERSION}-linux-${ARCH}.tar.gz"
 
+      - name: Stage Release Artifacts
+        shell: bash
+        run: |
+          mkdir -p dist-packages
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+
+          # macOS: Prefer branded DMG; fallback to standard Compose DMG
+          BRANDED="apps/desktop/build/compose/binaries/main/dmg/KNet-${VERSION}-mac.dmg"
+          COMPOSE_DMG="apps/desktop/build/compose/binaries/main/dmg/KNet-${VERSION}.dmg"
+          if [ -f "${BRANDED}" ]; then
+            cp "${BRANDED}" dist-packages/
+            echo "Staged branded macOS DMG: ${BRANDED}"
+          elif [ -f "${COMPOSE_DMG}" ]; then
+            cp "${COMPOSE_DMG}" dist-packages/
+            echo "Staged standard macOS DMG: ${COMPOSE_DMG}"
+          fi
+
+          # Windows: MSI & EXE
+          find apps/desktop/build/compose/binaries/main/msi -name '*.msi' 2>/dev/null -exec cp {} dist-packages/ \;
+          find apps/desktop/build/compose/binaries/main/exe -name '*.exe' 2>/dev/null -exec cp {} dist-packages/ \;
+
+          # Linux: DEB, RPM, Portable Tarball
+          find apps/desktop/build/compose/binaries/main/deb -name '*.deb' 2>/dev/null -exec cp {} dist-packages/ \;
+          find apps/desktop/build/compose/binaries/main/rpm -name '*.rpm' 2>/dev/null -exec cp {} dist-packages/ \;
+          find apps/desktop/build/compose/binaries/main -maxdepth 1 -name '*.tar.gz' 2>/dev/null -exec cp {} dist-packages/ \;
+
+          echo "Staged files in dist-packages/ for upload:"
+          ls -la dist-packages/
+
+          STAGED=$(ls dist-packages/ | wc -l)
+          if [ "$STAGED" -eq 0 ]; then
+            echo "ERROR: No distribution packages were staged for upload!"
+            exit 1
+          fi
+
       - name: Upload Staged Release Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: knet-release-packages-${{ matrix.os_name }}
-          path: ${{ matrix.artifact_patterns }}
+          name: knet-release-packages-${{ matrix.artifact_id }}
+          path: dist-packages/*
           if-no-files-found: error
           retention-days: 1
 
@@ -186,8 +245,8 @@ jobs:
       - name: Inspect Downloaded Packages
         shell: bash
         run: |
-          echo "Packages ready for publishing in release-dist/:"
-          ls -lh release-dist/
+          echo "All packages ready for publishing in release-dist/:"
+          ls -la release-dist/
 
       - name: Create Single GitHub Release with Changelog
         uses: softprops/action-gh-release@v2
