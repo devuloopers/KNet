@@ -179,26 +179,31 @@ jobs:
           BRANDED="apps/desktop/build/compose/binaries/main/dmg/KNet-${VERSION}-mac.dmg"
           COMPOSE_DMG="apps/desktop/build/compose/binaries/main/dmg/KNet-${VERSION}.dmg"
           if [ -f "${BRANDED}" ]; then
-            cp "${BRANDED}" dist-packages/
+            cp -f "${BRANDED}" dist-packages/
             echo "Staged branded macOS DMG: ${BRANDED}"
           elif [ -f "${COMPOSE_DMG}" ]; then
-            cp "${COMPOSE_DMG}" dist-packages/
+            cp -f "${COMPOSE_DMG}" dist-packages/
             echo "Staged standard macOS DMG: ${COMPOSE_DMG}"
           fi
 
-          # Windows: MSI & EXE
-          find apps/desktop/build/compose/binaries/main/msi -name '*.msi' 2>/dev/null -exec cp {} dist-packages/ \;
-          find apps/desktop/build/compose/binaries/main/exe -name '*.exe' 2>/dev/null -exec cp {} dist-packages/ \;
-
-          # Linux: DEB, RPM, Portable Tarball
-          find apps/desktop/build/compose/binaries/main/deb -name '*.deb' 2>/dev/null -exec cp {} dist-packages/ \;
-          find apps/desktop/build/compose/binaries/main/rpm -name '*.rpm' 2>/dev/null -exec cp {} dist-packages/ \;
-          find apps/desktop/build/compose/binaries/main -maxdepth 1 -name '*.tar.gz' 2>/dev/null -exec cp {} dist-packages/ \;
+          # Windows (MSI, EXE) and Linux (DEB, RPM)
+          if [ -d "apps/desktop/build/compose/binaries/main" ]; then
+            for dir in msi exe deb rpm; do
+              if [ -d "apps/desktop/build/compose/binaries/main/$dir" ]; then
+                cp -f apps/desktop/build/compose/binaries/main/$dir/* dist-packages/ 2>/dev/null || true
+              fi
+            done
+            for tarball in apps/desktop/build/compose/binaries/main/*.tar.gz; do
+              if [ -f "$tarball" ]; then
+                cp -f "$tarball" dist-packages/ 2>/dev/null || true
+              fi
+            done
+          fi
 
           echo "Staged files in dist-packages/ for upload:"
           ls -la dist-packages/
 
-          STAGED=$(ls dist-packages/ | wc -l)
+          STAGED=$(ls -1 dist-packages/ 2>/dev/null | wc -l)
           if [ "$STAGED" -eq 0 ]; then
             echo "ERROR: No distribution packages were staged for upload!"
             exit 1
