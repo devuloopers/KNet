@@ -37,7 +37,7 @@ jobs:
             artifact_id: windows
             setup_linux_tools: false
             setup_windows_tools: true
-            tasks: packageMsi packageExe
+            tasks: packageMsi packageExe createDistributable
             create_tarball: false
 
           - os: ubuntu-latest
@@ -159,15 +159,62 @@ jobs:
             fi
           fi
 
+      - name: Package macOS Portable Zip
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          APP_DIR="apps/desktop/build/compose/binaries/main/app"
+          if [ -d "$APP_DIR/KNet.app" ]; then
+            echo "Creating macOS portable ZIP with native bundle metadata..."
+            cd "$APP_DIR"
+            ditto -c -k --sequesterRsrc --keepParent "KNet.app" "KNet-${VERSION}-mac.zip"
+            echo "macOS portable ZIP created: KNet-${VERSION}-mac.zip"
+          fi
+
+      - name: Package Windows Portable Zip
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $version = "${{ steps.get_version.outputs.VERSION }}"
+          $appPath = "apps/desktop/build/compose/binaries/main/app"
+          if (Test-Path $appPath) {
+            Write-Host "Creating Windows portable ZIP from $appPath..."
+            Compress-Archive -Path "$appPath\*" -DestinationPath "apps/desktop/build/compose/binaries/main/KNet-$version-windows-x64.zip" -Force
+            Write-Host "Windows portable ZIP created: KNet-$version-windows-x64.zip"
+          }
+
       - name: Create Linux Portable Tarball
         if: matrix.create_tarball
         shell: bash
         run: |
           VERSION="${{ steps.get_version.outputs.VERSION }}"
           ARCH="${{ matrix.arch_suffix }}"
-          cd apps/desktop/build/compose/binaries/main
-          tar -czvf "knet-${VERSION}-linux-${ARCH}.tar.gz" -C app .
-          echo "Linux portable tarball created: knet-${VERSION}-linux-${ARCH}.tar.gz"
+          APP_DIR="apps/desktop/build/compose/binaries/main/app"
+          ICON_SRC="apps/desktop/src/jvmMain/resources/icons/KNet.png"
+
+          if [ -d "$APP_DIR" ]; then
+            echo "Adding GUI launcher and desktop integration to portable Linux bundle..."
+            cp "$ICON_SRC" "$APP_DIR/knet.png"
+
+            cat << 'EOF' > "$APP_DIR/knet.desktop"
+[Desktop Entry]
+Name=KNet
+Comment=Network Inspector & API Studio
+Exec=bin/knet
+Icon=knet
+Terminal=false
+Type=Application
+Categories=Development;Network;
+StartupWMClass=com-devuloopers-knet-apps-desktop-MainKt
+EOF
+            chmod +x "$APP_DIR/knet.desktop"
+            chmod +x "$APP_DIR/bin/knet" 2>/dev/null || true
+
+            cd apps/desktop/build/compose/binaries/main
+            tar -czvf "knet-${VERSION}-linux-${ARCH}.tar.gz" -C app .
+            echo "Linux portable tarball created: knet-${VERSION}-linux-${ARCH}.tar.gz"
+          fi
 
       - name: Stage Release Artifacts
         shell: bash
@@ -184,6 +231,20 @@ jobs:
           elif [ -f "${COMPOSE_DMG}" ]; then
             cp -f "${COMPOSE_DMG}" dist-packages/
             echo "Staged standard macOS DMG: ${COMPOSE_DMG}"
+          fi
+
+          # macOS: Portable ZIP
+          MAC_ZIP="apps/desktop/build/compose/binaries/main/app/KNet-${VERSION}-mac.zip"
+          if [ -f "${MAC_ZIP}" ]; then
+            cp -f "${MAC_ZIP}" dist-packages/
+            echo "Staged macOS portable ZIP: ${MAC_ZIP}"
+          fi
+
+          # Windows: Portable ZIP
+          WIN_ZIP="apps/desktop/build/compose/binaries/main/KNet-${VERSION}-windows-x64.zip"
+          if [ -f "${WIN_ZIP}" ]; then
+            cp -f "${WIN_ZIP}" dist-packages/
+            echo "Staged Windows portable ZIP: ${WIN_ZIP}"
           fi
 
           # Windows (MSI, EXE) and Linux (DEB, RPM)
@@ -253,11 +314,39 @@ jobs:
           echo "All packages ready for publishing in release-dist/:"
           ls -la release-dist/
 
+      - name: Generate Formatted Release Distribution Notes
+        shell: bash
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          TAG_NAME="${{ steps.get_version.outputs.TAG_NAME }}"
+          REPO="${{ github.repository }}"
+          BASE_URL="https://github.com/${REPO}/releases/download/${TAG_NAME}"
+
+          cat << 'EOF' > release_body.md
+          ### Downloads & Packages
+
+          | Platform | Architecture | Primary Installer | Portable / Alternative |
+          |:---|:---|:---|:---|
+          EOF
+
+          cat << EOF >> release_body.md
+          | **macOS** | Universal (Apple Silicon & Intel) | [\`KNet-${VERSION}-mac.dmg\`](${BASE_URL}/KNet-${VERSION}-mac.dmg) | [\`KNet-${VERSION}-mac.zip\`](${BASE_URL}/KNet-${VERSION}-mac.zip) |
+          | **Windows** | x64 | [\`KNet-${VERSION}.exe\`](${BASE_URL}/KNet-${VERSION}.exe)<br>[\`KNet-${VERSION}.msi\`](${BASE_URL}/KNet-${VERSION}.msi) | [\`KNet-${VERSION}-windows-x64.zip\`](${BASE_URL}/KNet-${VERSION}-windows-x64.zip) |
+          | **Linux** | x64 (amd64) | [\`knet_${VERSION}-1_amd64.deb\`](${BASE_URL}/knet_${VERSION}-1_amd64.deb)<br>[\`knet-${VERSION}-1.x86_64.rpm\`](${BASE_URL}/knet-${VERSION}-1.x86_64.rpm) | [\`knet-${VERSION}-linux-x64.tar.gz\`](${BASE_URL}/knet-${VERSION}-linux-x64.tar.gz) |
+          | **Linux** | ARM64 (aarch64) | [\`knet_${VERSION}-1_arm64.deb\`](${BASE_URL}/knet_${VERSION}-1_arm64.deb)<br>[\`knet-${VERSION}-1.aarch64.rpm\`](${BASE_URL}/knet-${VERSION}-1.aarch64.rpm) | [\`knet-${VERSION}-linux-arm64.tar.gz\`](${BASE_URL}/knet-${VERSION}-linux-arm64.tar.gz) |
+
+          ---
+          EOF
+
+          echo "Generated release_body.md:"
+          cat release_body.md
+
       - name: Create Single GitHub Release with Changelog
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.get_version.outputs.TAG_NAME }}
           name: KNet v${{ steps.get_version.outputs.VERSION }}
+          body_path: release_body.md
           files: release-dist/*
           generate_release_notes: true
         env:
