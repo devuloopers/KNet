@@ -1,6 +1,6 @@
 name: Release Packages
 
-on:
+'on':
   push:
     tags:
       - 'v*'
@@ -197,17 +197,7 @@ jobs:
             echo "Adding GUI launcher and desktop integration to portable Linux bundle..."
             cp "$ICON_SRC" "$APP_DIR/knet.png"
 
-            cat << 'EOF' > "$APP_DIR/knet.desktop"
-[Desktop Entry]
-Name=KNet
-Comment=Network Inspector & API Studio
-Exec=bin/knet
-Icon=knet
-Terminal=false
-Type=Application
-Categories=Development;Network;
-StartupWMClass=com-devuloopers-knet-apps-desktop-MainKt
-EOF
+            printf "[Desktop Entry]\nName=KNet\nComment=Network Inspector & API Studio\nExec=bin/knet\nIcon=knet\nTerminal=false\nType=Application\nCategories=Development;Network;\nStartupWMClass=com-devuloopers-knet-apps-desktop-MainKt\n" > "$APP_DIR/knet.desktop"
             chmod +x "$APP_DIR/knet.desktop"
             chmod +x "$APP_DIR/bin/knet" 2>/dev/null || true
 
@@ -322,21 +312,18 @@ EOF
           REPO="${{ github.repository }}"
           BASE_URL="https://github.com/${REPO}/releases/download/${TAG_NAME}"
 
-          cat << 'EOF' > release_body.md
-          ### Downloads & Packages
-
-          | Platform | Architecture | Primary Installer | Portable / Alternative |
-          |:---|:---|:---|:---|
-          EOF
-
-          cat << EOF >> release_body.md
-          | **macOS** | Universal (Apple Silicon & Intel) | [\`KNet-${VERSION}-mac.dmg\`](${BASE_URL}/KNet-${VERSION}-mac.dmg) | [\`KNet-${VERSION}-mac.zip\`](${BASE_URL}/KNet-${VERSION}-mac.zip) |
-          | **Windows** | x64 | [\`KNet-${VERSION}.exe\`](${BASE_URL}/KNet-${VERSION}.exe)<br>[\`KNet-${VERSION}.msi\`](${BASE_URL}/KNet-${VERSION}.msi) | [\`KNet-${VERSION}-windows-x64.zip\`](${BASE_URL}/KNet-${VERSION}-windows-x64.zip) |
-          | **Linux** | x64 (amd64) | [\`knet_${VERSION}-1_amd64.deb\`](${BASE_URL}/knet_${VERSION}-1_amd64.deb)<br>[\`knet-${VERSION}-1.x86_64.rpm\`](${BASE_URL}/knet-${VERSION}-1.x86_64.rpm) | [\`knet-${VERSION}-linux-x64.tar.gz\`](${BASE_URL}/knet-${VERSION}-linux-x64.tar.gz) |
-          | **Linux** | ARM64 (aarch64) | [\`knet_${VERSION}-1_arm64.deb\`](${BASE_URL}/knet_${VERSION}-1_arm64.deb)<br>[\`knet-${VERSION}-1.aarch64.rpm\`](${BASE_URL}/knet-${VERSION}-1.aarch64.rpm) | [\`knet-${VERSION}-linux-arm64.tar.gz\`](${BASE_URL}/knet-${VERSION}-linux-arm64.tar.gz) |
-
-          ---
-          EOF
+          {
+            echo "### Downloads & Packages"
+            echo ""
+            echo "| Platform | Architecture | Primary Installer | Portable / Alternative |"
+            echo "|:---|:---|:---|:---|"
+            echo "| **macOS** | Universal (Apple Silicon & Intel) | [\`KNet-${VERSION}-mac.dmg\`](${BASE_URL}/KNet-${VERSION}-mac.dmg) | [\`KNet-${VERSION}-mac.zip\`](${BASE_URL}/KNet-${VERSION}-mac.zip) |"
+            echo "| **Windows** | x64 | [\`KNet-${VERSION}.exe\`](${BASE_URL}/KNet-${VERSION}.exe)<br>[\`KNet-${VERSION}.msi\`](${BASE_URL}/KNet-${VERSION}.msi) | [\`KNet-${VERSION}-windows-x64.zip\`](${BASE_URL}/KNet-${VERSION}-windows-x64.zip) |"
+            echo "| **Linux** | x64 (amd64) | [\`knet_${VERSION}-1_amd64.deb\`](${BASE_URL}/knet_${VERSION}-1_amd64.deb)<br>[\`knet-${VERSION}-1.x86_64.rpm\`](${BASE_URL}/knet-${VERSION}-1.x86_64.rpm) | [\`knet-${VERSION}-linux-x64.tar.gz\`](${BASE_URL}/knet-${VERSION}-linux-x64.tar.gz) |"
+            echo "| **Linux** | ARM64 (aarch64) | [\`knet_${VERSION}-1_arm64.deb\`](${BASE_URL}/knet_${VERSION}-1_arm64.deb)<br>[\`knet-${VERSION}-1.aarch64.rpm\`](${BASE_URL}/knet-${VERSION}-1.aarch64.rpm) | [\`knet-${VERSION}-linux-arm64.tar.gz\`](${BASE_URL}/knet-${VERSION}-linux-arm64.tar.gz) |"
+            echo ""
+            echo "---"
+          } > release_body.md
 
           echo "Generated release_body.md:"
           cat release_body.md
