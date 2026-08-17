@@ -27,21 +27,35 @@ jobs:
           - os: macos-latest
             os_name: macOS
             setup_linux_tools: false
-            tasks: packageDmg
+            tasks: createDistributable packageDmg
             artifact_patterns: apps/desktop/build/compose/binaries/main/dmg/*.dmg
             create_tarball: false
 
           - os: windows-latest
             os_name: Windows
             setup_linux_tools: false
-            tasks: packageMsi
-            artifact_patterns: apps/desktop/build/compose/binaries/main/msi/*.msi
+            tasks: packageMsi packageExe
+            artifact_patterns: |
+              apps/desktop/build/compose/binaries/main/msi/*.msi
+              apps/desktop/build/compose/binaries/main/exe/*.exe
             create_tarball: false
 
           - os: ubuntu-latest
-            os_name: Linux
+            os_name: Linux (x64)
             setup_linux_tools: true
             tasks: packageDeb packageRpm createDistributable
+            arch_suffix: x64
+            artifact_patterns: |
+              apps/desktop/build/compose/binaries/main/deb/*.deb
+              apps/desktop/build/compose/binaries/main/rpm/*.rpm
+              apps/desktop/build/compose/binaries/main/*.tar.gz
+            create_tarball: true
+
+          - os: ubuntu-24.04-arm
+            os_name: Linux (ARM64)
+            setup_linux_tools: true
+            tasks: packageDeb packageRpm createDistributable
+            arch_suffix: arm64
             artifact_patterns: |
               apps/desktop/build/compose/binaries/main/deb/*.deb
               apps/desktop/build/compose/binaries/main/rpm/*.rpm
@@ -88,14 +102,51 @@ jobs:
         shell: bash
         run: ./gradlew ${{ matrix.tasks }} "-Pknet.app.version=${{ steps.get_version.outputs.VERSION }}"
 
-      - name: Create Linux Universal Portable Tarball
+      - name: Build Branded macOS DMG
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          VERSION="${{ steps.get_version.outputs.VERSION }}"
+          echo "Installing create-dmg..."
+          brew install create-dmg || true
+
+          APP_PATH="apps/desktop/build/compose/binaries/main/app/KNet.app"
+          ICON_PATH="apps/desktop/src/jvmMain/resources/icons/KNet.icns"
+          BG_PATH="brand/dmg/knet-dmg-background.png"
+          BRANDED_DMG="apps/desktop/build/compose/binaries/main/dmg/KNet-${VERSION}-mac.dmg"
+
+          if [ -d "$APP_PATH" ]; then
+            echo "Creating branded DMG using create-dmg..."
+            create-dmg \
+              --volname "KNet ${VERSION}" \
+              --volicon "${ICON_PATH}" \
+              --background "${BG_PATH}" \
+              --window-pos 200 120 \
+              --window-size 560 380 \
+              --icon-size 96 \
+              --icon "KNet.app" 140 190 \
+              --hide-extension "KNet.app" \
+              --app-drop-link 420 190 \
+              --no-internet-enable \
+              "${BRANDED_DMG}" \
+              "${APP_PATH}" || true
+
+            if [ -f "${BRANDED_DMG}" ]; then
+              echo "Branded macOS DMG created successfully at ${BRANDED_DMG}"
+            else
+              echo "create-dmg finished; fallback standard DMG will be published."
+            fi
+          fi
+
+      - name: Create Linux Portable Tarball
         if: matrix.create_tarball
         shell: bash
         run: |
           VERSION="${{ steps.get_version.outputs.VERSION }}"
+          ARCH="${{ matrix.arch_suffix }}"
           cd apps/desktop/build/compose/binaries/main
-          tar -czvf "knet-${VERSION}-linux-x64.tar.gz" -C app .
-          echo "Linux universal portable tarball created: knet-${VERSION}-linux-x64.tar.gz"
+          tar -czvf "knet-${VERSION}-linux-${ARCH}.tar.gz" -C app .
+          echo "Linux portable tarball created: knet-${VERSION}-linux-${ARCH}.tar.gz"
 
       - name: Upload Artifacts to GitHub Release
         uses: softprops/action-gh-release@v2

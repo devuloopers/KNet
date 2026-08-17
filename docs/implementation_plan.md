@@ -20,3 +20,10 @@
 * Replaced legacy application resources in `apps/desktop/src/jvmMain/resources/icons/` with the official centered icons (`KNet.icns`, `KNet.ico`, `KNet.png`, `KNet.svg`).
 * Verified Compose Desktop window icon (`DesktopBootstrap.kt`) and sidebar branding badge (`NavigationOverlay.kt`).
 * Verified native packaging builds with `./gradlew :apps:desktop:createDistributable` and `./gradlew :apps:desktop:packageDmg` (`apps/desktop/build/compose/binaries/main/dmg/KNet-1.0.0.dmg`).
+
+## Phase 6: Multi-Platform Installer Branding & ARM64 Linux Support [COMPLETED]
+* Configured `TargetFormat.Exe` alongside `TargetFormat.Msi` in `apps/desktop/build.gradle.kts` with consistent `upgradeUuid`, `perUserInstall`, and `shortcut` options so Windows setup executables embed `KNet.ico` directly into the PE header.
+* Designed high-DPI Retina installer window background (`brand/dmg/knet-dmg-background.png`, `brand/dmg/knet-dmg-background@2x.png`) with KNet dark theme, logo, and drag-to-Applications layout.
+* Configured `.github/workflows/release.yml` with `create-dmg` post-processing for macOS branded DMG packaging (`KNet-${VERSION}-mac.dmg`).
+* Added `ubuntu-24.04-arm` native GitHub runner matrix target in `.github/workflows/release.yml` to build Linux ARM64 packages (`.deb`, `.rpm`, and `knet-${VERSION}-linux-arm64.tar.gz`).
+* Verified with `./gradlew check :apps:desktop:createDistributable` (236 tasks passed).

@@ -57,6 +57,7 @@ compose.desktop {
             targetFormats(
                 TargetFormat.Dmg,
                 TargetFormat.Msi,
+                TargetFormat.Exe,
                 TargetFormat.Deb,
                 TargetFormat.Rpm
             )
@@ -85,12 +86,17 @@ compose.desktop {
             windows {
                 iconFile.set(project.file("src/jvmMain/resources/icons/KNet.ico"))
                 menuGroup = appName
+                upgradeUuid = "6B9CA9A8-D3D6-4B4A-9BE5-1D1C3B4E9F20"
+                perUserInstall = false
+                shortcut = true
+                menu = true
             }
             linux {
                 iconFile.set(project.file("src/jvmMain/resources/icons/KNet.png"))
                 packageName = appName.lowercase()
                 appCategory = "Development;Network;"
                 menuGroup = "Development"
+                shortcut = true
             }
         }
     }
