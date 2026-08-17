@@ -17,7 +17,7 @@ permissions:
   contents: write
 
 jobs:
-  build-and-release:
+  build-packages:
     name: Build (${{ matrix.os_name }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -85,14 +85,11 @@ jobs:
         run: |
           if [ -n "${{ inputs.version }}" ]; then
             VERSION="${{ inputs.version }}"
-            TAG_NAME="${{ inputs.version }}"
           else
             VERSION="${GITHUB_REF_NAME#v}"
-            TAG_NAME="${GITHUB_REF_NAME}"
           fi
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_OUTPUT
-          echo "Building KNet release version: $VERSION with tag: $TAG_NAME"
+          echo "Building KNet release version: $VERSION"
 
       - name: Grant execute permission for gradlew
         shell: bash
@@ -148,12 +145,56 @@ jobs:
           tar -czvf "knet-${VERSION}-linux-${ARCH}.tar.gz" -C app .
           echo "Linux portable tarball created: knet-${VERSION}-linux-${ARCH}.tar.gz"
 
-      - name: Upload Artifacts to GitHub Release
+      - name: Upload Staged Release Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: knet-release-packages-${{ matrix.os_name }}
+          path: ${{ matrix.artifact_patterns }}
+          if-no-files-found: error
+          retention-days: 1
+
+  publish-release:
+    name: Publish Single GitHub Release
+    needs: build-packages
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Extract Release Version
+        id: get_version
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.version }}" ]; then
+            VERSION="${{ inputs.version }}"
+            TAG_NAME="${{ inputs.version }}"
+          else
+            VERSION="${GITHUB_REF_NAME#v}"
+            TAG_NAME="${GITHUB_REF_NAME}"
+          fi
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "Publishing KNet release version: $VERSION with tag: $TAG_NAME"
+
+      - name: Download All Release Artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: knet-release-packages-*
+          path: release-dist
+          merge-multiple: true
+
+      - name: Inspect Downloaded Packages
+        shell: bash
+        run: |
+          echo "Packages ready for publishing in release-dist/:"
+          ls -lh release-dist/
+
+      - name: Create Single GitHub Release with Changelog
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.get_version.outputs.TAG_NAME }}
           name: KNet v${{ steps.get_version.outputs.VERSION }}
-          files: ${{ matrix.artifact_patterns }}
+          files: release-dist/*
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

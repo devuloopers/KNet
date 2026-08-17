@@ -26,4 +26,5 @@
 * Designed high-DPI Retina installer window background (`brand/dmg/knet-dmg-background.png`, `brand/dmg/knet-dmg-background@2x.png`) with KNet dark theme, logo, and drag-to-Applications layout.
 * Configured `.github/workflows/release.yml` with `create-dmg` post-processing for macOS branded DMG packaging (`KNet-${VERSION}-mac.dmg`).
 * Added `ubuntu-24.04-arm` native GitHub runner matrix target in `.github/workflows/release.yml` to build Linux ARM64 packages (`.deb`, `.rpm`, and `knet-${VERSION}-linux-arm64.tar.gz`).
+* Restructured `.github/workflows/release.yml` into a two-stage pipeline (`build-packages` matrix + single `publish-release` aggregator job) ensuring exactly one single changelog is generated and all multi-platform assets are published atomically.
 * Verified with `./gradlew check :apps:desktop:createDistributable` (236 tasks passed).
