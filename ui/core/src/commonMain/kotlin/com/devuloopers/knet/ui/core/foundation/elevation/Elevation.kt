@@ -13,7 +13,7 @@ import androidx.compose.ui.unit.dp
  * @property level3 High surface elevation for modals and dialogs (8.dp).
  */
 @Immutable
-public data class Elevation(
+data class Elevation(
     val level0: Dp = 0.dp,
     val level1: Dp = 2.dp,
     val level2: Dp = 4.dp,
@@ -23,4 +23,4 @@ public data class Elevation(
 /**
  * Default Elevation instance.
  */
-public val KNetElevation: Elevation = Elevation()
+val KNetElevation: Elevation = Elevation()

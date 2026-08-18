@@ -19,12 +19,12 @@ import com.devuloopers.knet.ui.core.foundation.spacing.Spacing
 import com.devuloopers.knet.ui.core.foundation.typography.KNetTypography
 import com.devuloopers.knet.ui.core.foundation.typography.Typography
 
-public val LocalColors = staticCompositionLocalOf<Colors> { KNetDarkColors }
-public val LocalTypography = staticCompositionLocalOf<Typography> { KNetTypography }
-public val LocalSpacing = staticCompositionLocalOf<Spacing> { KNetSpacing }
-public val LocalShapes = staticCompositionLocalOf<Shapes> { KNetShapes }
-public val LocalDimensions = staticCompositionLocalOf<Dimensions> { KNetDimensions }
-public val LocalElevation = staticCompositionLocalOf<Elevation> { KNetElevation }
-public val LocalMotion = staticCompositionLocalOf<Motion> { KNetMotion }
-public val LocalIcons = staticCompositionLocalOf<KNetIcons> { KNetIcons }
-public val LocalResources = staticCompositionLocalOf<ResourceProvider> { KNetResourceProvider }
+val LocalColors = staticCompositionLocalOf<Colors> { KNetDarkColors }
+val LocalTypography = staticCompositionLocalOf<Typography> { KNetTypography }
+val LocalSpacing = staticCompositionLocalOf<Spacing> { KNetSpacing }
+val LocalShapes = staticCompositionLocalOf<Shapes> { KNetShapes }
+val LocalDimensions = staticCompositionLocalOf<Dimensions> { KNetDimensions }
+val LocalElevation = staticCompositionLocalOf<Elevation> { KNetElevation }
+val LocalMotion = staticCompositionLocalOf<Motion> { KNetMotion }
+val LocalIcons = staticCompositionLocalOf<KNetIcons> { KNetIcons }
+val LocalResources = staticCompositionLocalOf<ResourceProvider> { KNetResourceProvider }

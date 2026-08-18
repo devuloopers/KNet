@@ -2,15 +2,16 @@ package com.devuloopers.knet.ui.desktop.breakpointmanager.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.devuloopers.knet.domain.clientNetwork.model.HttpRequest
-import com.devuloopers.knet.domain.clientNetwork.model.HttpResponse
-import com.devuloopers.knet.domain.collection.model.HttpMethod
+import com.devuloopers.knet.application.port.breakpoint.BreakpointRequestEdit
+import com.devuloopers.knet.application.port.breakpoint.BreakpointResponseEdit
+import com.devuloopers.knet.application.usecase.breakpoint.ClearPendingBreakpointsUseCase
+import com.devuloopers.knet.application.usecase.breakpoint.ObservePendingBreakpointsUseCase
+import com.devuloopers.knet.application.usecase.breakpoint.ResolveBreakpointUseCase
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
+import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.rules.usecase.*
-import com.devuloopers.knet.ui.desktop.breakpointmanager.mapper.toDomainRule
-import com.devuloopers.knet.ui.desktop.breakpointmanager.mapper.toUiModel
+import com.devuloopers.knet.traffic.model.http.HttpMethod
 import com.devuloopers.knet.ui.desktop.breakpointmanager.model.BreakpointManagerState
-import com.devuloopers.knet.ui.desktop.breakpointmanager.model.BreakpointRuleUiModel
 import com.devuloopers.knet.ui.desktop.breakpointmanager.model.ResolvedInterceptPayload
 import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
 import kotlinx.coroutines.CoroutineDispatcher
@@ -27,15 +28,13 @@ import kotlinx.coroutines.withContext
 class BreakpointManagerViewModel(
     getRulesUseCase: GetRulesUseCase,
     observeGlobalInterceptionUseCase: ObserveGlobalInterceptionUseCase,
-    observeActiveInterceptionsUseCase: ObserveActiveInterceptionsUseCase,
+    observePendingBreakpointsUseCase: ObservePendingBreakpointsUseCase,
     private val saveRuleUseCase: SaveRuleUseCase,
     private val toggleRuleUseCase: ToggleRuleUseCase,
     private val deleteRuleUseCase: DeleteRuleUseCase,
     private val toggleGlobalInterceptionUseCase: ToggleGlobalInterceptionUseCase,
-    private val forwardInterceptedRequestUseCase: ForwardInterceptedRequestUseCase,
-    private val forwardInterceptedResponseUseCase: ForwardInterceptedResponseUseCase,
-    private val dropInterceptedTransactionUseCase: DropInterceptedTransactionUseCase,
-    private val clearInterceptionSessionsUseCase: ClearInterceptionSessionsUseCase,
+    private val resolveBreakpointUseCase: ResolveBreakpointUseCase,
+    private val clearPendingBreakpointsUseCase: ClearPendingBreakpointsUseCase,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) : ViewModel() {
 
@@ -45,8 +44,7 @@ class BreakpointManagerViewModel(
     init {
         getRulesUseCase()
             .onEach { rules ->
-                val uiRules = rules.map { it.toUiModel() }
-                _uiState.update { it.copy(rules = uiRules) }
+                _uiState.update { it.copy(rules = rules) }
             }
             .launchIn(viewModelScope)
 
@@ -60,7 +58,7 @@ class BreakpointManagerViewModel(
         // For each new transaction that has not yet been resolved, payload decoding and format
         // detection are dispatched off-thread (Dispatchers.Default) via PayloadResolver so
         // that LiveInterceptDrawer receives pre-computed ResolvedInterceptPayload objects.
-        observeActiveInterceptionsUseCase()
+        observePendingBreakpointsUseCase.execute()
             .onEach { events ->
                 val currentPayloads = _uiState.value.resolvedPayloads
                 val activeIds = events.map { it.id }.toSet()
@@ -74,13 +72,13 @@ class BreakpointManagerViewModel(
                     val freshResolved = withContext(ioDispatcher) {
                         newTransactions.associate { tx ->
                             val requestBodySpec = PayloadInspectionSpec.fromBytes(
-                                body = tx.request.body,
-                                headers = tx.request.headers
+                                body = tx.candidate.requestBody?.copyBytes(),
+                                headers = tx.candidate.request.head.headers.map { it.name.value to it.value }
                             )
-                            val responseBodySpec = tx.response?.let { response ->
+                            val responseBodySpec = tx.candidate.response?.let { response ->
                                 PayloadInspectionSpec.fromBytes(
-                                    body = response.body,
-                                    headers = response.headers
+                                    body = tx.candidate.responseBody?.copyBytes(),
+                                    headers = response.head.headers.map { it.name.value to it.value }
                                 )
                             } ?: PayloadInspectionSpec.EMPTY
                             tx.id to ResolvedInterceptPayload(
@@ -127,25 +125,25 @@ class BreakpointManagerViewModel(
      */
     fun dropAllEvents() {
         viewModelScope.launch {
-            clearInterceptionSessionsUseCase()
+            clearPendingBreakpointsUseCase.execute()
         }
     }
 
-    fun forwardRequest(transactionId: String, modifiedRequest: HttpRequest) {
+    fun forwardRequest(transactionId: String, modifiedRequest: BreakpointRequestEdit) {
         viewModelScope.launch {
-            forwardInterceptedRequestUseCase(transactionId, modifiedRequest)
+            resolveBreakpointUseCase.resumeRequest(transactionId, modifiedRequest)
         }
     }
 
-    fun forwardResponse(transactionId: String, modifiedResponse: HttpResponse) {
+    fun forwardResponse(transactionId: String, modifiedResponse: BreakpointResponseEdit) {
         viewModelScope.launch {
-            forwardInterceptedResponseUseCase(transactionId, modifiedResponse)
+            resolveBreakpointUseCase.resumeResponse(transactionId, modifiedResponse)
         }
     }
 
     fun dropEvent(transactionId: String) {
         viewModelScope.launch {
-            dropInterceptedTransactionUseCase(transactionId)
+            resolveBreakpointUseCase.drop(transactionId)
         }
     }
 
@@ -192,7 +190,7 @@ class BreakpointManagerViewModel(
         _uiState.update { it.copy(isAddEditDialogVisible = true, editingRule = null) }
     }
 
-    fun openEditDialog(rule: BreakpointRuleUiModel) {
+    fun openEditDialog(rule: BreakpointRule) {
         _uiState.update { it.copy(isAddEditDialogVisible = true, editingRule = rule) }
     }
 
@@ -210,8 +208,9 @@ class BreakpointManagerViewModel(
         val currentEditing = _uiState.value.editingRule
         val targetId = currentEditing?.id ?: @OptIn(kotlin.uuid.ExperimentalUuidApi::class) kotlin.uuid.Uuid.random().toString()
 
-        val uiModel = BreakpointRuleUiModel(
+        val rule = BreakpointRule(
             id = targetId,
+            name = urlPattern,
             urlPattern = urlPattern,
             method = method,
             phase = phase,
@@ -220,13 +219,13 @@ class BreakpointManagerViewModel(
         )
 
         viewModelScope.launch {
-            saveRuleUseCase.execute(uiModel.toDomainRule())
+            saveRuleUseCase.execute(rule)
             _uiState.update { state ->
                 val existingIndex = state.rules.indexOfFirst { it.id == targetId }
                 val newRules = if (existingIndex >= 0) {
-                    state.rules.toMutableList().apply { set(existingIndex, uiModel) }
+                    state.rules.toMutableList().apply { set(existingIndex, rule) }
                 } else {
-                    state.rules + uiModel
+                    state.rules + rule
                 }
                 state.copy(rules = newRules, isAddEditDialogVisible = false, editingRule = null)
             }

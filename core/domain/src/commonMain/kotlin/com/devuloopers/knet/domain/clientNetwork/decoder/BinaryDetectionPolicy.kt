@@ -7,15 +7,15 @@ package com.devuloopers.knet.domain.clientNetwork.decoder
  * @property maxControlCharRatio Maximum allowable ratio of non-printable control characters before classifying as binary (default: 0.08 / 8%).
  * @property allowNullBytes If false, presence of null bytes (`0x00`) immediately classifies payload as binary.
  */
-public data class BinaryDetectionPolicy(
+data class BinaryDetectionPolicy(
     val maxSampleSizeBytes: Int = 4096,
     val maxControlCharRatio: Double = 0.08,
     val allowNullBytes: Boolean = false
 ) {
-    public companion object {
+    companion object {
         /**
          * Default strict binary inspection policy.
          */
-        public val DEFAULT: BinaryDetectionPolicy = BinaryDetectionPolicy()
+        val DEFAULT: BinaryDetectionPolicy = BinaryDetectionPolicy()
     }
 }

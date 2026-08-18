@@ -1,6 +1,6 @@
 package com.devuloopers.knet.domain.rules.usecase
 
-import com.devuloopers.knet.domain.rules.model.RuleModel
+import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.rules.repository.RulesRepository
 import kotlinx.coroutines.flow.Flow
 
@@ -10,11 +10,11 @@ import kotlinx.coroutines.flow.Flow
 class ObserveRulesUseCase(
     private val repository: RulesRepository
 ) {
-    operator fun invoke(): Flow<List<RuleModel>> {
+    operator fun invoke(): Flow<List<BreakpointRule>> {
         return repository.rulesFlow
     }
 
-    fun execute(): Flow<List<RuleModel>> {
+    fun execute(): Flow<List<BreakpointRule>> {
         return repository.rulesFlow
     }
 }

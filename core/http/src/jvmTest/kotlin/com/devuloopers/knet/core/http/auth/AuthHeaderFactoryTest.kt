@@ -1,6 +1,6 @@
 package com.devuloopers.knet.core.http.auth
 
-import com.devuloopers.knet.core.http.model.AuthType
+import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
 import kotlin.io.encoding.Base64
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -33,15 +33,7 @@ class AuthHeaderFactoryTest {
 
     @Test
     fun testNoneAuthHeader() {
-        fun resolveHeader(type: AuthType): Pair<String, String>? {
-            return when (type) {
-                AuthType.BEARER_TOKEN -> Pair("Authorization", "Bearer token")
-                AuthType.BASIC_AUTH -> Pair("Authorization", "Basic abc")
-                AuthType.API_KEY -> Pair("X-API-Key", "key")
-                AuthType.NONE -> null
-            }
-        }
-
-        assertNull(resolveHeader(AuthType.NONE))
+        val auth: ApiRequestAuth = ApiRequestAuth.None
+        assertNull((auth as? ApiRequestAuth.Bearer)?.token)
     }
 }

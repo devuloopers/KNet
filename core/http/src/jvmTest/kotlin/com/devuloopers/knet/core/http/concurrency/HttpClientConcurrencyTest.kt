@@ -1,6 +1,7 @@
 package com.devuloopers.knet.core.http.concurrency
 
 import com.devuloopers.knet.core.http.client.KNetApiClient
+import com.devuloopers.knet.traffic.model.http.HttpMethod
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
@@ -15,7 +16,7 @@ class HttpClientConcurrencyTest {
 
         val tasks = (1..10).map {
             async {
-                client.execute("https://httpbin.org/get", method = "GET")
+                client.executeDetailed("https://httpbin.org/get", method = HttpMethod.GET)
             }
         }
 

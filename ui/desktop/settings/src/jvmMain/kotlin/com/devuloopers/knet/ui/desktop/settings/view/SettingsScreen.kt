@@ -7,16 +7,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.*
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.unit.dp
+import com.devuloopers.knet.ui.core.foundation.clipboard.setPlainText
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.settings.components.*
 import com.devuloopers.knet.ui.desktop.settings.model.SettingsIntent
 import com.devuloopers.knet.ui.desktop.settings.model.SettingsState
 import com.devuloopers.knet.ui.desktop.settings.model.SettingsTab
 import com.devuloopers.knet.ui.desktop.settings.viewmodel.SettingsViewModel
-import java.awt.datatransfer.StringSelection
 import kotlinx.coroutines.launch
 
 /**
@@ -84,7 +83,7 @@ internal fun SettingsScreenContent(
                             onIntent = onIntent,
                             onCopyPath = {
                                 coroutineScope.launch {
-                                    clipboard.setClipEntry(ClipEntry(StringSelection(state.dataDirectory)))
+                                    clipboard.setPlainText(state.dataDirectory)
                                 }
                             }
                         )

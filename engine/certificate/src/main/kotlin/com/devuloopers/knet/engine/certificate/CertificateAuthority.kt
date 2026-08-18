@@ -37,8 +37,6 @@ import java.security.Security
 import java.security.cert.X509Certificate
 import java.util.Date
 
-
-
 /**
  * Represents the Certificate Authority (CA) used by KNet to intercept and decrypt HTTPS traffic.
  * This class holds the CA's private key and its self-signed X.509 certificate.
@@ -110,7 +108,7 @@ class CertificateAuthority(
             val subjectDN = X500Name("CN=$commonName, O=$org, C=US")
             val serial = BigInteger(160, SecureRandom())
             val notBefore = Date()
-            val notAfter = Date(System.currentTimeMillis() + validityDays * 24L * 60L * 60L * 1000L)
+            val notAfter = Date(kotlin.time.Clock.System.now().toEpochMilliseconds() + validityDays * 24L * 60L * 60L * 1000L)
 
             val certBuilder = JcaX509v3CertificateBuilder(
                 subjectDN,
@@ -224,13 +222,15 @@ class CertificateAuthority(
      * @param keyFile The destination file for the private key.
      */
     fun saveToPem(certFile: File, keyFile: File) {
-        certFile.parentFile?.mkdirs()
-        keyFile.parentFile?.mkdirs()
+        certFile.parentFile?.let(CertificateFileSecurity::secureDirectory)
+        keyFile.parentFile?.let(CertificateFileSecurity::secureDirectory)
         certFile.writer().use { certWriter ->
             keyFile.writer().use { keyWriter ->
                 saveToPem(certWriter, keyWriter)
             }
         }
+        CertificateFileSecurity.secureSecretFile(certFile)
+        CertificateFileSecurity.secureSecretFile(keyFile)
     }
 
     /**

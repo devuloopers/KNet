@@ -7,7 +7,7 @@ import com.devuloopers.knet.domain.collection.repository.CollectionsRepository
  *
  * @param repository The repository managing collection data.
  */
-public class DeleteUnsavedRequestUseCase(
+class DeleteUnsavedRequestUseCase(
     private val repository: CollectionsRepository
 ) {
     /**
@@ -15,7 +15,7 @@ public class DeleteUnsavedRequestUseCase(
      *
      * @param requestId The ID of the unsaved request to delete.
      */
-    public suspend fun execute(requestId: String) {
+    suspend fun execute(requestId: String) {
         repository.deleteUnsavedRequest(requestId)
     }
 }

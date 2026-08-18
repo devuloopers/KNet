@@ -19,7 +19,6 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.devuloopers.knet.domain.util.HostPlatform
 import com.devuloopers.knet.ui.core.components.badge.KNetBadge
 import com.devuloopers.knet.ui.core.components.button.ButtonDefaults
 import com.devuloopers.knet.ui.core.components.button.ButtonSize
@@ -27,6 +26,7 @@ import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import com.devuloopers.knet.ui.desktop.certificate.model.HostPlatform
 import com.devuloopers.knet.ui.desktop.certificate.model.TrustInstallationState
 
 /**

@@ -14,7 +14,7 @@ import com.devuloopers.knet.ui.core.components.input.KNetSearchField
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 @Composable
-public fun KNetSearchContainer(
+fun KNetSearchContainer(
     query: String,
     onQueryChange: (String) -> Unit,
     modifier: Modifier = Modifier,

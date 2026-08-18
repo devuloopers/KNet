@@ -1,23 +1,23 @@
 package com.devuloopers.knet.ui.desktop.certificate
 
-import com.devuloopers.knet.ui.desktop.certificate.model.ClientCertificate
+import com.devuloopers.knet.application.port.certificate.ClientCertificateSummary
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Unit tests verifying properties and behavior of the [ClientCertificate] presentation model.
+ * Unit tests verifying properties of the canonical client-certificate summary.
  */
-public class ClientCertificateDialogTest {
+class ClientCertificateDialogTest {
 
     /**
-     * Verifies that the [ClientCertificate] constructor assigns all fields correctly.
+     * Verifies that the canonical constructor assigns all fields correctly.
      *
      * Design Intent: UI dialogs bind these properties to text inputs for client certificate registration.
      */
     @Test
-    public fun testClientCertificateProperties() {
-        val cert = ClientCertificate(
+    fun testClientCertificateProperties() {
+        val cert = ClientCertificateSummary(
             alias = "my-client-cert",
             subject = "CN=my-client-cert, O=Devuloopers",
             host = "*.api.example.com",

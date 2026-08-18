@@ -14,15 +14,15 @@ import com.devuloopers.knet.ui.core.components.input.KNetTextField
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.core.components.chip.KNetTag
 import com.devuloopers.knet.ui.core.components.dropdown.KNetSearchableDropdown
-import com.devuloopers.knet.ui.desktop.certificate.model.ClientCertificate
-import com.devuloopers.knet.ui.desktop.certificate.model.MtlsRule
+import com.devuloopers.knet.application.port.certificate.ClientCertificateSummary
+import com.devuloopers.knet.application.port.certificate.MtlsRuleSpec
 
 @Composable
 fun AddEditMtlsRuleDialog(
-    availableCertificates: List<ClientCertificate>,
+    availableCertificates: List<ClientCertificateSummary>,
     onDismiss: () -> Unit,
-    onSave: (MtlsRule) -> Unit,
-    initialRule: MtlsRule? = null,
+    onSave: (MtlsRuleSpec) -> Unit,
+    initialRule: MtlsRuleSpec? = null,
     modifier: Modifier = Modifier
 ) {
     var ruleName by remember { mutableStateOf(initialRule?.ruleName ?: "") }
@@ -118,7 +118,7 @@ fun AddEditMtlsRuleDialog(
                     onClick = {
                         if (ruleName.isNotBlank() && hostPattern.isNotBlank() && certAlias.isNotBlank()) {
                             onSave(
-                                MtlsRule(
+                                MtlsRuleSpec(
                                     ruleName = ruleName,
                                     hostPattern = hostPattern,
                                     certificateAlias = certAlias,

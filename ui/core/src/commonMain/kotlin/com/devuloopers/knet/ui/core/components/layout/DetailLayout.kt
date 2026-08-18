@@ -4,7 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
 @Composable
-public fun DetailLayout(
+fun DetailLayout(
     modifier: Modifier = Modifier,
     title: String? = null,
     actions: (@Composable () -> Unit)? = null,

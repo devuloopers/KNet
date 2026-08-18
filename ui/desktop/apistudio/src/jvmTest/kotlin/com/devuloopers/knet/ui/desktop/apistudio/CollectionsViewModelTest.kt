@@ -2,7 +2,7 @@ package com.devuloopers.knet.ui.desktop.apistudio
 
 import com.devuloopers.knet.domain.collection.model.ApiCollection
 import com.devuloopers.knet.domain.collection.model.CollectionFolder
-import com.devuloopers.knet.domain.collection.model.HttpMethod
+import com.devuloopers.knet.traffic.model.http.HttpMethod
 import com.devuloopers.knet.domain.collection.model.SavedApiRequest
 import com.devuloopers.knet.domain.collection.repository.CollectionsRepository
 import com.devuloopers.knet.domain.collection.usecase.ObserveCollectionsUseCase

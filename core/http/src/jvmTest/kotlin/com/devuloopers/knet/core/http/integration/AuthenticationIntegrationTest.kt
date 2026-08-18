@@ -1,7 +1,8 @@
 package com.devuloopers.knet.core.http.integration
 
 import com.devuloopers.knet.core.http.client.KNetApiClient
-import com.devuloopers.knet.core.http.model.AuthType
+import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
+import com.devuloopers.knet.traffic.model.http.HttpMethod
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -12,11 +13,10 @@ class AuthenticationIntegrationTest {
     @Test
     fun testBearerAuthenticationIntegration() = runBlocking {
         val client = KNetApiClient()
-        val result = client.execute(
+        val result = client.executeDetailed(
             url = "https://httpbin.org/bearer",
-            method = "GET",
-            authType = AuthType.BEARER_TOKEN,
-            authToken = "integration_secret_token"
+            method = HttpMethod.GET,
+            auth = ApiRequestAuth.Bearer("integration_secret_token")
         )
 
         assertNotNull(result)

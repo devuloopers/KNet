@@ -15,7 +15,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.devuloopers.knet.domain.network.model.NetworkResponseSpec
+import com.devuloopers.knet.traffic.model.ExchangeTimings
+import com.devuloopers.knet.traffic.model.http.ResponseHead
 import com.devuloopers.knet.ui.core.components.badge.KNetHttpStatusBadge
 import com.devuloopers.knet.ui.core.components.button.KNetCopyDropdownButton
 import com.devuloopers.knet.ui.core.components.button.KNetCopyOption
@@ -27,17 +28,21 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 /**
  * Top summary bar component for the response inspector rendering HTTP status badge, latency, response size, content-type, copy options, and clear response button.
  *
- * @param spec Strongly-typed domain response specification.
+ * @param head Canonical response metadata.
+ * @param timings Canonical exchange timings.
  * @param formattedSize Formatted response body byte size string (e.g. "2.5 KB", "300 B").
  * @param contentType Optional content-type header string (e.g. "application/json").
  * @param onClearResponse Optional event callback when user clears response output.
  * @param modifier Composable layout modifier.
  */
 @Composable
-public fun ResponseSummaryHeader(
-    spec: NetworkResponseSpec,
+fun ResponseSummaryHeader(
+    head: ResponseHead,
+    timings: ExchangeTimings,
     formattedSize: String,
     contentType: String? = null,
+    responseBody: String = "",
+    cookies: List<Pair<String, String>> = emptyList(),
     onClearResponse: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -57,8 +62,8 @@ public fun ResponseSummaryHeader(
     ) {
         // 1. Pinned Status Code Badge
         KNetHttpStatusBadge(
-            statusCode = spec.statusCode,
-            statusText = spec.statusText
+            statusCode = head.status.code,
+            statusText = head.reasonPhrase.orEmpty(),
         )
 
         VerticalDivider(modifier = Modifier.padding(vertical = 10.dp))
@@ -83,7 +88,7 @@ public fun ResponseSummaryHeader(
                     softWrap = false
                 )
                 Text(
-                    text = "${spec.durationMs} ms",
+                    text = "${timings.totalMillis ?: 0L} ms",
                     style = typography.bodySmall.copy(
                         color = themeColors.accent,
                         fontWeight = FontWeight.SemiBold
@@ -146,18 +151,18 @@ public fun ResponseSummaryHeader(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             val copyOptions = buildList {
-                if (spec.headers.isNotEmpty()) {
-                    val formattedHeaders = spec.headers.joinToString("\n") { "${it.first}: ${it.second}" }
+                if (head.headers.isNotEmpty()) {
+                    val formattedHeaders = head.headers.joinToString("\n") { "${it.name.value}: ${it.value}" }
                     add(KNetCopyOption("Response Headers") { formattedHeaders })
                 }
-                if (spec.cookies.isNotEmpty()) {
-                    val formattedCookies = spec.cookies.joinToString("; ") { "${it.first}=${it.second}" }
+                if (cookies.isNotEmpty()) {
+                    val formattedCookies = cookies.joinToString("; ") { "${it.first}=${it.second}" }
                     add(KNetCopyOption("Cookies") { formattedCookies })
                 }
             }
 
             KNetCopyDropdownButton(
-                primaryTextToCopy = { spec.responseBody },
+                primaryTextToCopy = { responseBody },
                 options = copyOptions
             )
 

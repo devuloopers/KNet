@@ -10,9 +10,9 @@ kotlin {
     sourceSets {
         val jvmMain by getting {
             dependencies {
+                implementation(project(":application"))
                 implementation(project(":ui:core"))
                 implementation(project(":ui:desktop:httpPanel"))
-                implementation(project(":engine:formatter"))
                 implementation(project(":core:domain"))
                 implementation(project(":core:logger"))
                 implementation(libs.compose.runtime)
@@ -23,9 +23,6 @@ kotlin {
                 implementation(libs.compose.uiToolingPreview)
                 implementation(libs.androidx.lifecycle.viewmodelCompose)
                 implementation(libs.androidx.lifecycle.runtimeCompose)
-                implementation(libs.koin.core)
-                implementation(libs.koin.compose)
-                implementation(libs.koin.compose.viewmodel)
                 implementation(compose.materialIconsExtended)
             }
         }
@@ -33,6 +30,7 @@ kotlin {
             dependencies {
                 implementation(kotlin("test"))
                 implementation(libs.kotlinx.coroutines.test)
+                implementation(project(":engine:formatter"))
             }
         }
     }

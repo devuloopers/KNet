@@ -7,7 +7,8 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.devuloopers.knet.engine.script.api.ScriptLanguage
+import com.devuloopers.knet.scripting.model.ScriptLanguage
+import com.devuloopers.knet.scripting.model.ScriptPhase
 import com.devuloopers.knet.ui.core.components.divider.HorizontalDivider
 import com.devuloopers.knet.ui.core.components.keyvalue.KNetKeyValueEditor
 import com.devuloopers.knet.ui.core.components.keyvalue.KeyValueEntry

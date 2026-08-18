@@ -21,7 +21,7 @@ import kotlinx.serialization.Serializable
  * @property filePath Absolute file path of saved keypair on disk.
  */
 @Serializable
-public data class EngineClientCertificate(
+data class EngineClientCertificate(
     val alias: String,
     val subject: String,
     val host: String,

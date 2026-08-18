@@ -14,7 +14,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.ui.desktop.scripting.model.ScriptSnippet
+import com.devuloopers.knet.scripting.model.ScriptSnippet
 
 /**
  * Favorites panel displaying starred snippets.
@@ -57,4 +57,3 @@ fun Favorites(
         }
     }
 }
-

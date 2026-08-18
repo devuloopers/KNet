@@ -23,11 +23,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.devuloopers.knet.domain.clientNetwork.model.HttpRequest
-import com.devuloopers.knet.domain.clientNetwork.model.HttpResponse
-import com.devuloopers.knet.domain.protocol.model.InterceptionMetadata
+import com.devuloopers.knet.application.port.breakpoint.BreakpointBody
+import com.devuloopers.knet.application.port.breakpoint.BreakpointRequestEdit
+import com.devuloopers.knet.application.port.breakpoint.BreakpointResponseEdit
+import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
-import com.devuloopers.knet.domain.rules.model.InterceptedTransaction
+import com.devuloopers.knet.traffic.model.absoluteUrl
+import com.devuloopers.knet.traffic.model.http.HeaderField
+import com.devuloopers.knet.traffic.model.http.HeaderName
+import com.devuloopers.knet.traffic.model.http.HttpStatus
 import com.devuloopers.knet.ui.desktop.breakpointmanager.model.ResolvedInterceptPayload
 import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
@@ -62,15 +66,15 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.ResponseBodyState
  */
 @Composable
 fun LiveInterceptDrawer(
-    events: List<InterceptedTransaction>,
-    activeEvent: InterceptedTransaction?,
+    events: List<PendingBreakpoint>,
+    activeEvent: PendingBreakpoint?,
     isVisible: Boolean,
     resolvedPayloads: Map<String, ResolvedInterceptPayload> = emptyMap(),
     onSelectEvent: (eventId: String) -> Unit,
     onDropItem: (eventId: String) -> Unit,
     onDropAll: () -> Unit,
-    onForwardRequest: (modifiedRequest: HttpRequest) -> Unit,
-    onForwardResponse: (modifiedResponse: HttpResponse) -> Unit,
+    onForwardRequest: (modifiedRequest: BreakpointRequestEdit) -> Unit,
+    onForwardResponse: (modifiedResponse: BreakpointResponseEdit) -> Unit,
     onDrop: () -> Unit,
     onDisableRule: () -> Unit,
     onDismiss: () -> Unit,
@@ -110,13 +114,19 @@ fun LiveInterceptDrawer(
     ) {
         val eventToRender = currentActiveEvent ?: return@AnimatedVisibility
         val preResolved = resolvedPayloads[eventToRender.id]
+        val candidate = eventToRender.candidate
+        val request = candidate.request
+        val response = candidate.response
 
         var editedReqHeaders by remember(eventToRender.id) {
-            mutableStateOf(eventToRender.request.headers)
+            mutableStateOf(request.head.headers.map { it.name.value to it.value })
         }
         var reqBodyState by remember(eventToRender.id) {
             val spec = preResolved?.requestPayloadSpec
-                ?: PayloadInspectionSpec.fromBytes(eventToRender.request.body, eventToRender.request.headers)
+                ?: PayloadInspectionSpec.fromBytes(
+                    candidate.requestBody?.copyBytes(),
+                    request.head.headers.map { it.name.value to it.value },
+                )
             mutableStateOf(RequestBodyState.from(spec))
         }
         var activeReqSubTab by remember(eventToRender.id) {
@@ -124,17 +134,20 @@ fun LiveInterceptDrawer(
         }
 
         var editedStatusCode by remember(eventToRender.id) {
-            mutableStateOf(eventToRender.response?.statusCode ?: 200)
+            mutableStateOf(response?.head?.status?.code ?: 200)
         }
         var editedStatusText by remember(eventToRender.id) {
-            mutableStateOf(eventToRender.response?.statusText ?: "OK")
+            mutableStateOf(response?.head?.reasonPhrase ?: "OK")
         }
         var editedRespHeaders by remember(eventToRender.id) {
-            mutableStateOf(eventToRender.response?.headers ?: emptyList())
+            mutableStateOf(response?.head?.headers?.map { it.name.value to it.value }.orEmpty())
         }
         var respBodyState by remember(eventToRender.id) {
             val spec = preResolved?.responsePayloadSpec
-                ?: PayloadInspectionSpec.fromBytes(eventToRender.response?.body, eventToRender.response?.headers ?: emptyList())
+                ?: PayloadInspectionSpec.fromBytes(
+                    candidate.responseBody?.copyBytes(),
+                    response?.head?.headers?.map { it.name.value to it.value }.orEmpty(),
+                )
             mutableStateOf(ResponseBodyState.from(spec))
         }
         var activeRespSubTab by remember(eventToRender.id) {
@@ -207,7 +220,7 @@ fun LiveInterceptDrawer(
                                 }
 
                                 // Intercept Phase Badge
-                                val isRequestPhase = eventToRender.phase == BreakpointPhase.REQUEST
+                                val isRequestPhase = candidate.phase == BreakpointPhase.REQUEST
                                 val phaseColor = if (isRequestPhase) themeColors.semantic.info else themeColors.semantic.success
                                 val phaseLabel = if (isRequestPhase) "REQUEST INTERCEPT" else "RESPONSE INTERCEPT"
 
@@ -230,22 +243,16 @@ fun LiveInterceptDrawer(
                                 }
 
                                 // Protocol / Payload Badge
-                                val contentTypeHeader = eventToRender.response?.headers?.firstOrNull { it.first.equals("Content-Type", ignoreCase = true) }?.second
-                                    ?: eventToRender.request.headers.firstOrNull { it.first.equals("Content-Type", ignoreCase = true) }?.second
+                                val contentTypeHeader = response?.head?.headers
+                                    ?.firstOrNull { it.name.value.equals("Content-Type", ignoreCase = true) }?.value
+                                    ?: request.head.headers
+                                        .firstOrNull { it.name.value.equals("Content-Type", ignoreCase = true) }?.value
 
-                                val (protocolHeaderLabel, protocolHeaderColor) = when (val meta = eventToRender.metadata) {
-                                    is InterceptionMetadata.GraphQL -> {
-                                        val op = if (!meta.operationName.isNullOrBlank()) "${meta.operationName} (${meta.operationType})" else meta.operationType
-                                        "GRAPHQL: $op" to Color(0xFFCBA6F7)
-                                    }
-                                    is InterceptionMetadata.Grpc -> "gRPC: ${meta.serviceName}/${meta.methodName}" to Color(0xFF89DCEB)
-                                    is InterceptionMetadata.Protobuf -> "PROTOBUF" to Color(0xFF89DCEB)
-                                    else -> when {
-                                        contentTypeHeader?.contains("json", ignoreCase = true) == true -> "JSON" to themeColors.semantic.info
-                                        contentTypeHeader?.contains("xml", ignoreCase = true) == true -> "XML" to themeColors.semantic.warning
-                                        contentTypeHeader?.contains("form", ignoreCase = true) == true -> "FORM-DATA" to Color(0xFFFAB387)
-                                        else -> null to themeColors.textSecondary
-                                    }
+                                val (protocolHeaderLabel, protocolHeaderColor) = when {
+                                    contentTypeHeader?.contains("json", ignoreCase = true) == true -> "JSON" to themeColors.semantic.info
+                                    contentTypeHeader?.contains("xml", ignoreCase = true) == true -> "XML" to themeColors.semantic.warning
+                                    contentTypeHeader?.contains("form", ignoreCase = true) == true -> "FORM-DATA" to Color(0xFFFAB387)
+                                    else -> null to themeColors.textSecondary
                                 }
 
                                 if (protocolHeaderLabel != null) {
@@ -283,7 +290,7 @@ fun LiveInterceptDrawer(
                         }
 
                         // Tier 2: Standardized EndpointCard with Full URL, HTTP Method, and Copy Action
-                        val methodColor = when (eventToRender.method.uppercase()) {
+                        val methodColor = when (request.head.method.token.uppercase()) {
                             "GET" -> themeColors.semantic.success
                             "POST" -> themeColors.semantic.info
                             "PUT" -> themeColors.semantic.warning
@@ -292,8 +299,8 @@ fun LiveInterceptDrawer(
                         }
 
                         EndpointCard(
-                            method = eventToRender.method,
-                            endpoint = eventToRender.url,
+                            method = request.head.method.token,
+                            endpoint = request.absoluteUrl(),
                             methodColor = methodColor,
                             modifier = Modifier.fillMaxWidth()
                         )
@@ -312,7 +319,7 @@ fun LiveInterceptDrawer(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         // Dynamic Forward Button
-                        val isRequestPhase = eventToRender.phase == BreakpointPhase.REQUEST
+                        val isRequestPhase = candidate.phase == BreakpointPhase.REQUEST
                         val forwardLabel = if (isRequestPhase) "FORWARD REQUEST" else "FORWARD RESPONSE"
 
                         KNetButton(
@@ -321,28 +328,37 @@ fun LiveInterceptDrawer(
                                     val headersToForward = editedReqHeaders.filterNot {
                                         it.first.equals("Content-Encoding", ignoreCase = true)
                                     }
-                                    val modifiedReq = HttpRequest(
-                                        id = eventToRender.request.id,
-                                        method = eventToRender.request.method,
-                                        url = eventToRender.request.url,
-                                        protocol = eventToRender.request.protocol,
-                                        headers = headersToForward,
-                                        body = reqBodyState.payloadText.encodeToByteArray(),
-                                        timestamp = eventToRender.request.timestamp,
-                                        isIntercepted = true,
-                                        matchedRuleId = eventToRender.request.matchedRuleId
+                                    val modifiedReq = BreakpointRequestEdit(
+                                        request = request.copy(
+                                            head = request.head.copy(
+                                                headers = headersToForward.map { (name, value) ->
+                                                    HeaderField(HeaderName(name), value)
+                                                }
+                                            )
+                                        ),
+                                        body = reqBodyState.payloadText.encodeToByteArray()
+                                            .takeIf(ByteArray::isNotEmpty)
+                                            ?.let(::BreakpointBody),
                                     )
                                     onForwardRequest(modifiedReq)
                                 } else {
                                     val headersToForward = editedRespHeaders.filterNot {
                                         it.first.equals("Content-Encoding", ignoreCase = true)
                                     }
-                                    val modifiedResp = HttpResponse(
-                                        statusCode = editedStatusCode,
-                                        statusText = editedStatusText,
-                                        headers = headersToForward,
-                                        body = respBodyState.payloadText.encodeToByteArray(),
-                                        timestamp = eventToRender.response?.timestamp ?: System.currentTimeMillis()
+                                    val originalResponse = requireNotNull(response)
+                                    val modifiedResp = BreakpointResponseEdit(
+                                        response = originalResponse.copy(
+                                            head = originalResponse.head.copy(
+                                                status = HttpStatus(editedStatusCode),
+                                                reasonPhrase = editedStatusText.takeIf(String::isNotBlank),
+                                                headers = headersToForward.map { (name, value) ->
+                                                    HeaderField(HeaderName(name), value)
+                                                },
+                                            )
+                                        ),
+                                        body = respBodyState.payloadText.encodeToByteArray()
+                                            .takeIf(ByteArray::isNotEmpty)
+                                            ?.let(::BreakpointBody),
                                     )
                                     onForwardResponse(modifiedResp)
                                 }
@@ -390,7 +406,7 @@ fun LiveInterceptDrawer(
                             .weight(1f)
                             .fillMaxWidth()
                     ) {
-                        if (eventToRender.phase == BreakpointPhase.REQUEST || eventToRender.phase == BreakpointPhase.BOTH) {
+                        if (candidate.phase == BreakpointPhase.REQUEST) {
                             RequestEditorPanel(
                                 bodyState = reqBodyState,
                                 headers = editedReqHeaders,
@@ -429,4 +445,3 @@ fun LiveInterceptDrawer(
         }
     }
 }
-

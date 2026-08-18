@@ -2,7 +2,7 @@ package com.devuloopers.knet.ui.core.components.menu
 
 import androidx.compose.ui.graphics.vector.ImageVector
 
-public data class MenuItem(
+data class MenuItem(
     val label: String,
     val onClick: () -> Unit,
     val isEnabled: Boolean = true,

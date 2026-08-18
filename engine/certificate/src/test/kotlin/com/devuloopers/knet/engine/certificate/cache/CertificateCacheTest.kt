@@ -35,14 +35,14 @@ class CertificateCacheTest {
     }
 
     @Test
-    fun testMaxEntriesThresholdSafeguard() {
+    fun testMaxEntriesUsesLeastRecentlyUsedEviction() {
         val boundedCache = CertificateCache(maxEntries = 2)
         boundedCache.get("domain1.com", ca)
         boundedCache.get("domain2.com", ca)
         assertEquals(2, boundedCache.size())
 
-        // Exceeding threshold triggers clear-all safeguard
+        // Exceeding the bound evicts one least-recently-used entry instead of causing a cache stampede.
         boundedCache.get("domain3.com", ca)
-        assertEquals(1, boundedCache.size())
+        assertEquals(2, boundedCache.size())
     }
 }

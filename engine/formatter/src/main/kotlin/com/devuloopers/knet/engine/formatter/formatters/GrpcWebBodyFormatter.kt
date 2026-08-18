@@ -5,7 +5,6 @@ import com.devuloopers.knet.engine.formatter.model.BodyFormat
 import com.google.protobuf.DynamicMessage
 import com.google.protobuf.util.JsonFormat
 import java.nio.ByteBuffer
-import java.nio.charset.StandardCharsets
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
@@ -30,7 +29,7 @@ class GrpcWebBodyFormatter(
         val isBase64Text = contentType.lowercase().contains("grpc-web-text")
 
         val rawBytes = try {
-            val rawStringBytes = bodyText.toByteArray(StandardCharsets.ISO_8859_1)
+            val rawStringBytes = bodyText.toByteArray(Charsets.ISO_8859_1)
             if (isBase64Text) {
                 Base64.decode(bodyText.trim())
             } else {
@@ -57,12 +56,12 @@ class GrpcWebBodyFormatter(
             val payloadHex = payloadBytes.joinToString("") { "%02X".format(it) }
 
             val decodedText = if (isTrailer) {
-                String(payloadBytes, StandardCharsets.UTF_8).trim()
+                payloadBytes.decodeToString().trim()
             } else {
                 val mimeLower = contentType.lowercase()
                 when {
                     mimeLower.contains("json") -> {
-                        val rawJson = String(payloadBytes, StandardCharsets.UTF_8)
+                        val rawJson = payloadBytes.decodeToString()
                         jsonFormatter.prettyPrintJson(rawJson)
                     }
                     else -> {
@@ -112,4 +111,3 @@ class GrpcWebBodyFormatter(
         }.trim()
     }
 }
-

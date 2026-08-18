@@ -6,7 +6,6 @@ import io.netty.handler.codec.http.DefaultFullHttpResponse
 import io.netty.handler.codec.http.HttpMethod
 import io.netty.handler.codec.http.HttpResponseStatus
 import io.netty.handler.codec.http.HttpVersion
-import java.nio.charset.StandardCharsets
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Test
@@ -14,40 +13,41 @@ import org.junit.Test
 class HttpMapperTest {
 
     @Test
-    fun testMapRequestFromNettyToDomainModel() {
-        val bodyContent = "{\"user\":\"alice\"}".toByteArray(StandardCharsets.UTF_8)
+    fun mapsNettyRequestToCanonicalContext() {
         val nettyReq = DefaultFullHttpRequest(
             HttpVersion.HTTP_1_1,
             HttpMethod.POST,
             "/api/v1/user",
-            Unpooled.wrappedBuffer(bodyContent)
+            Unpooled.EMPTY_BUFFER,
         )
         nettyReq.headers().set("Content-Type", "application/json")
 
-        val domainReq = HttpMapper.mapRequest(nettyReq, "httpbin.org", isSsl = true)
+        val context = HttpMapper.mapRequestContext(
+            nettyReq = nettyReq,
+            isSsl = true,
+            host = "httpbin.org",
+            port = 443,
+            relativeUri = "/api/v1/user",
+        )
 
-        assertNotNull(domainReq.id)
-        assertEquals("POST", domainReq.method)
-        assertEquals("https://httpbin.org/api/v1/user", domainReq.url)
-        assertEquals("HTTP/1.1", domainReq.protocol)
-        assertNotNull(domainReq.body)
-        assertEquals("{\"user\":\"alice\"}", String(domainReq.body!!, StandardCharsets.UTF_8))
+        assertNotNull(context.exchangeId.value)
+        assertEquals("POST", context.request.head.method.token)
+        assertEquals("HTTP/1.1", context.request.head.protocol.token)
+        assertEquals("application/json", context.request.head.headers.single().value)
     }
 
     @Test
-    fun testMapResponseFromNettyToDomainModel() {
-        val bodyContent = "OK".toByteArray(StandardCharsets.UTF_8)
+    fun mapsNettyResponseToCanonicalHead() {
         val nettyRes = DefaultFullHttpResponse(
             HttpVersion.HTTP_1_1,
             HttpResponseStatus.OK,
-            Unpooled.wrappedBuffer(bodyContent)
+            Unpooled.EMPTY_BUFFER,
         )
 
-        val domainRes = HttpMapper.mapResponse(nettyRes)
+        val responseHead = HttpMapper.mapResponseHead(nettyRes)
 
-        assertEquals(200, domainRes.statusCode)
-        assertEquals("OK", domainRes.statusText)
-        assertNotNull(domainRes.body)
-        assertEquals("OK", String(domainRes.body!!, StandardCharsets.UTF_8))
+        assertEquals(200, responseHead.status.code)
+        assertEquals("OK", responseHead.reasonPhrase)
+        assertEquals("HTTP/1.1", responseHead.protocol.token)
     }
 }

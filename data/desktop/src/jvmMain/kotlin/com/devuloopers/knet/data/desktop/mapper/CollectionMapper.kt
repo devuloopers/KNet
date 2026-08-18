@@ -8,9 +8,9 @@ import com.devuloopers.knet.storage.apistudio.entity.CollectionFolderEntity
 /**
  * Maps between SQLite Room collection entities and Domain collection models.
  */
-public object CollectionMapper {
+object CollectionMapper {
 
-    public fun mapEntityToDomain(
+    fun mapEntityToDomain(
         entity: CollectionEntity,
         folders: List<CollectionFolderEntity> = emptyList()
     ): ApiCollection {
@@ -21,7 +21,7 @@ public object CollectionMapper {
         )
     }
 
-    public fun mapFolderEntityToDomain(entity: CollectionFolderEntity): CollectionFolder {
+    fun mapFolderEntityToDomain(entity: CollectionFolderEntity): CollectionFolder {
         return CollectionFolder(
             id = entity.id,
             name = entity.name,
@@ -29,7 +29,7 @@ public object CollectionMapper {
         )
     }
 
-    public fun mapDomainToEntity(collection: ApiCollection): CollectionEntity {
+    fun mapDomainToEntity(collection: ApiCollection): CollectionEntity {
         return CollectionEntity(
             id = collection.id,
             name = collection.name

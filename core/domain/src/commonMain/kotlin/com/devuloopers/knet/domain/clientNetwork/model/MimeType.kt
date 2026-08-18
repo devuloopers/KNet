@@ -5,7 +5,7 @@ package com.devuloopers.knet.domain.clientNetwork.model
  *
  * @property value Standard HTTP Content-Type header string representation.
  */
-public enum class MimeType(public val value: String) {
+enum class MimeType(val value: String) {
     APPLICATION_JSON("application/json"),
     APPLICATION_XML("application/xml"),
     APPLICATION_FORM_URLENCODED("application/x-www-form-urlencoded"),
@@ -16,14 +16,14 @@ public enum class MimeType(public val value: String) {
     APPLICATION_OCTET_STREAM("application/octet-stream"),
     UNKNOWN("");
 
-    public companion object {
+    companion object {
         /**
          * Resolves a raw MIME type string or Content-Type header value into a strongly-typed [MimeType] enum.
          *
          * @param rawMime Content-Type header or raw MIME string (e.g. "application/json; charset=utf-8").
          * @return Resolved [MimeType] enum instance.
          */
-        public fun fromString(rawMime: String): MimeType {
+        fun fromString(rawMime: String): MimeType {
             val clean = rawMime.substringBefore(";").trim().lowercase()
             return when {
                 clean.contains("json") -> APPLICATION_JSON

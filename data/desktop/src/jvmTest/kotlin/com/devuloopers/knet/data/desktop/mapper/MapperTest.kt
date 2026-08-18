@@ -1,15 +1,14 @@
 package com.devuloopers.knet.data.desktop.mapper
 
-import com.devuloopers.knet.domain.collection.model.HttpMethod
 import com.devuloopers.knet.storage.apistudio.entity.CollectionEntity
 import com.devuloopers.knet.storage.apistudio.entity.CollectionFolderEntity
 import com.devuloopers.knet.storage.apistudio.entity.SavedRequestEntity
-import com.devuloopers.knet.storage.traffic.entity.HttpTransactionEntity
+import com.devuloopers.knet.traffic.model.http.HttpMethod
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 /**
- * Unit tests verifying [CollectionMapper], [RequestMapper], and [TransactionMapper] mapping accuracy.
+ * Unit tests verifying collection and saved-request persistence mapping accuracy.
  */
 class MapperTest {
 
@@ -52,65 +51,5 @@ class MapperTest {
         val entityBack = RequestMapper.mapDomainToEntity(domain, "c-100")
         assertEquals("req-1", entityBack.id)
         assertEquals("GET", entityBack.method)
-    }
-
-    @Test
-    fun testTransactionMapperMapsEntityToDomain() {
-        val entity = HttpTransactionEntity(
-            id = "tx-500",
-            method = "POST",
-            url = "https://api.knet.dev/login",
-            requestHeadersJson = "Content-Type:application/json",
-            requestBodyPath = null,
-            requestBodySize = 120L,
-            responseStatusCode = 200,
-            responseStatusText = "OK",
-            responseHeadersJson = "Content-Type:application/json;\nCache-Control:no-cache",
-            responseBodyPath = null,
-            responseBodySize = 450L,
-            durationMs = 120L,
-            timestamp = 1000L
-        )
-
-        val domain = TransactionMapper.mapEntityToDomain(entity)
-
-        assertEquals("tx-500", domain.id)
-        assertEquals("POST", domain.request.method)
-        assertEquals(200, domain.response?.statusCode)
-        assertEquals(2, domain.response?.headers?.size)
-        assertEquals(120L, domain.requestBodySize, "Request body size mapping should propagate correctly to Domain")
-        assertEquals(450L, domain.responseBodySize, "Response body size mapping should propagate correctly to Domain")
-
-        val mappedEntity = TransactionMapper.mapDomainToEntity(domain)
-        assertEquals(120L, mappedEntity.requestBodySize, "Request body size mapping should propagate correctly to Entity")
-        assertEquals(450L, mappedEntity.responseBodySize, "Response body size mapping should propagate correctly to Entity")
-    }
-
-    @Test
-    fun testTransactionMapperSupportsJsonHeaderArrays() {
-        val entity = HttpTransactionEntity(
-            id = "tx-600",
-            method = "GET",
-            url = "https://stg-04astra.cnbc.com/graphql",
-            requestHeadersJson = "[[\"User-Agent\",\"CNBC-Android/9.0.0\"],[\"Accept-Encoding\",\"gzip\"]]",
-            requestBodyPath = null,
-            requestBodySize = 0L,
-            responseStatusCode = 200,
-            responseStatusText = "OK",
-            responseHeadersJson = "[[\"Content-Type\",\"application/json\"],[\"Content-Encoding\",\"gzip\"]]",
-            responseBodyPath = null,
-            responseBodySize = 3470L,
-            durationMs = 507L,
-            timestamp = 1000L
-        )
-
-        val domain = TransactionMapper.mapEntityToDomain(entity)
-
-        assertEquals("tx-600", domain.id)
-        assertEquals(2, domain.request.headers.size)
-        assertEquals("gzip", domain.request.headers.firstOrNull { it.first.equals("Accept-Encoding", ignoreCase = true) }?.second)
-
-        assertEquals(2, domain.response?.headers?.size)
-        assertEquals("gzip", domain.response?.headers?.firstOrNull { it.first.equals("Content-Encoding", ignoreCase = true) }?.second)
     }
 }

@@ -1,6 +1,7 @@
 package com.devuloopers.knet.ui.desktop.breakpointmanager.model
 
-import com.devuloopers.knet.domain.rules.model.InterceptedTransaction
+import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
+import com.devuloopers.knet.domain.rules.model.BreakpointRule
 
 /**
  * Presentation UI State for Breakpoint Manager Screen and Live Intercept Drawer.
@@ -19,23 +20,23 @@ import com.devuloopers.knet.domain.rules.model.InterceptedTransaction
 data class BreakpointManagerState(
     val isGlobalInterceptionEnabled: Boolean = true,
     val searchQuery: String = "",
-    val rules: List<BreakpointRuleUiModel> = emptyList(),
+    val rules: List<BreakpointRule> = emptyList(),
     val isAddEditDialogVisible: Boolean = false,
-    val editingRule: BreakpointRuleUiModel? = null,
-    val activeEvents: List<InterceptedTransaction> = emptyList(),
-    val activeEvent: InterceptedTransaction? = null,
+    val editingRule: BreakpointRule? = null,
+    val activeEvents: List<PendingBreakpoint> = emptyList(),
+    val activeEvent: PendingBreakpoint? = null,
     val resolvedPayloads: Map<String, ResolvedInterceptPayload> = emptyMap()
 ) {
     /**
      * Filtered list of rules matching the active search query.
      */
-    val filteredRules: List<BreakpointRuleUiModel>
+    val filteredRules: List<BreakpointRule>
         get() {
             if (searchQuery.isBlank()) return rules
             val query = searchQuery.trim().lowercase()
             return rules.filter { rule ->
                 rule.urlPattern.lowercase().contains(query) ||
-                        (rule.method?.name?.lowercase()?.contains(query) ?: "all".contains(query))
+                        (rule.method?.token?.lowercase()?.contains(query) ?: "all".contains(query))
             }
         }
 }

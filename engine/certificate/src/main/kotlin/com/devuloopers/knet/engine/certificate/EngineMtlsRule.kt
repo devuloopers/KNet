@@ -11,7 +11,7 @@ import kotlinx.serialization.Serializable
  * @property enabled Toggle indicating whether this rule is active.
  */
 @Serializable
-public data class EngineMtlsRule(
+data class EngineMtlsRule(
     val ruleName: String,
     val hostPattern: String,
     val certificateAlias: String,

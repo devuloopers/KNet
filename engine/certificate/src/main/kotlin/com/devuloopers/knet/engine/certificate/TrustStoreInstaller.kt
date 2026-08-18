@@ -3,7 +3,6 @@ package com.devuloopers.knet.engine.certificate
 import java.io.File
 import java.security.MessageDigest
 import java.security.cert.X509Certificate
-import java.util.Locale
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import kotlin.io.encoding.Base64
@@ -43,7 +42,7 @@ object TrustStoreInstaller {
      */
     @OptIn(ExperimentalEncodingApi::class)
     fun install(caCertificate: X509Certificate): InstallationResult {
-        val os = System.getProperty("os.name").lowercase(Locale.ENGLISH)
+        val os = System.getProperty("os.name").lowercase()
         val tempCertFile = File.createTempFile("knet_root_ca", ".crt")
 
         return try {
@@ -78,7 +77,7 @@ object TrustStoreInstaller {
      * @return True if the OS trust store contains a matching certificate fingerprint, false otherwise.
      */
     fun isTrusted(caCertificate: X509Certificate): Boolean {
-        val os = System.getProperty("os.name").lowercase(Locale.ENGLISH)
+        val os = System.getProperty("os.name").lowercase()
         return try {
             when {
                 os.contains("win") -> isTrustedWindows(caCertificate)

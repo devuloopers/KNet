@@ -19,7 +19,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * Lightweight surface container composable.
  */
 @Composable
-public fun KNetSurface(
+fun KNetSurface(
     modifier: Modifier = Modifier,
     color: Color = KNetTheme.colors.surface,
     contentColor: Color = KNetTheme.colors.textPrimary,

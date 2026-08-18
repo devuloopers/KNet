@@ -25,7 +25,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * @param navigationState Single source of truth interaction state coordinator.
  */
 @Composable
-public fun NavigationRail(
+fun NavigationRail(
     currentDestination: DesktopDestination,
     onDestinationSelected: (DesktopDestination) -> Unit,
     modifier: Modifier = Modifier,

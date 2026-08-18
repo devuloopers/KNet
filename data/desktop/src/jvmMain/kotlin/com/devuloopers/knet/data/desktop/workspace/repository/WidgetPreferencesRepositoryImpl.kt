@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.devuloopers.knet.core.http.client.KNetApiClient
+import com.devuloopers.knet.application.port.breakpoint.BreakpointControlPort
 import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
 import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
 import kotlinx.coroutines.flow.Flow
@@ -24,7 +25,8 @@ import kotlinx.coroutines.flow.map
  */
 class WidgetPreferencesRepositoryImpl(
     private val dataStore: DataStore<Preferences>,
-    private val apiClient: KNetApiClient? = null
+    private val apiClient: KNetApiClient? = null,
+    private val breakpointControl: BreakpointControlPort? = null,
 ) : WidgetPreferencesRepository {
 
     private companion object {
@@ -54,7 +56,7 @@ class WidgetPreferencesRepositoryImpl(
         val apiStudioTimeout = preferences[keyApiStudioTimeout] ?: 60
 
         // Synchronize Netty and Ktor
-        com.devuloopers.knet.engine.interceptor.InterceptCoordinator.setTimeoutSeconds(liveTimeout)
+        breakpointControl?.setDecisionTimeoutMillis(liveTimeout * 1_000L)
         apiClient?.updateTimeoutSeconds(apiStudioTimeout)
 
         WorkspaceLayoutSettings(
@@ -82,7 +84,7 @@ class WidgetPreferencesRepositoryImpl(
 
     override suspend fun saveSettings(settings: WorkspaceLayoutSettings) {
         // Synchronize Netty and Ktor
-        com.devuloopers.knet.engine.interceptor.InterceptCoordinator.setTimeoutSeconds(settings.liveInterceptionTimeoutSeconds)
+        breakpointControl?.setDecisionTimeoutMillis(settings.liveInterceptionTimeoutSeconds * 1_000L)
         apiClient?.updateTimeoutSeconds(settings.apiStudioTimeoutSeconds)
 
         dataStore.edit { preferences ->

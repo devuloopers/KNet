@@ -1,6 +1,6 @@
 package com.devuloopers.knet.ui.desktop.scripting
 
-import com.devuloopers.knet.ui.desktop.scripting.model.ScriptSnippet
+import com.devuloopers.knet.scripting.model.ScriptSnippet
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

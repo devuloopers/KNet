@@ -21,7 +21,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * @param modifier Layout modifier.
  */
 @Composable
-public fun ToolbarHost(
+fun ToolbarHost(
     actions: List<ToolbarAction>,
     modifier: Modifier = Modifier
 ) {

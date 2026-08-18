@@ -12,7 +12,7 @@ import kotlin.test.assertTrue
 /**
  * Unit tests verifying default values and copy constructors of [CertificateState].
  */
-public class CertificateStateTest {
+class CertificateStateTest {
 
     /**
      * Verifies that the default properties of [CertificateState] are initialized correctly.
@@ -20,7 +20,7 @@ public class CertificateStateTest {
      * Design Intent: Assures UI widgets load with reasonable empty/default states before asynchronous loading.
      */
     @Test
-    public fun testCertificateStateDefaultValues() {
+    fun testCertificateStateDefaultValues() {
         val state = CertificateState()
         assertEquals(CaStatus.MISSING, state.caStatus)
         assertEquals(TrustInstallationState.CHECKING, state.trustState)

@@ -1,6 +1,6 @@
 package com.devuloopers.knet.domain.rules.usecase
 
-import com.devuloopers.knet.domain.rules.model.RuleModel
+import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.rules.repository.RulesRepository
 
 /**
@@ -14,11 +14,11 @@ class SaveRuleUseCase(
     /**
      * Persists or updates a rule entity.
      */
-    suspend fun execute(rule: RuleModel) {
+    suspend fun execute(rule: BreakpointRule) {
         repository.saveRule(rule)
     }
 
-    suspend operator fun invoke(rule: RuleModel) {
+    suspend operator fun invoke(rule: BreakpointRule) {
         execute(rule)
     }
 }

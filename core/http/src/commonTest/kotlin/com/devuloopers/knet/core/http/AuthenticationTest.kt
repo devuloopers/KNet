@@ -1,7 +1,7 @@
 package com.devuloopers.knet.core.http
 
 import com.devuloopers.knet.core.http.client.KNetApiClient
-import com.devuloopers.knet.core.http.model.AuthType
+import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpStatusCode
@@ -22,10 +22,9 @@ class AuthenticationTest {
         }
 
         val client = KNetApiClient(customEngine = mockEngine)
-        val result = client.execute(
+        val result = client.executeDetailed(
             url = "https://api.knet.dev/protected",
-            authType = AuthType.BEARER_TOKEN,
-            authToken = "secret-token-123"
+            auth = ApiRequestAuth.Bearer("secret-token-123")
         )
 
         assertTrue(result.isSuccess)
@@ -40,10 +39,9 @@ class AuthenticationTest {
         }
 
         val client = KNetApiClient(customEngine = mockEngine)
-        val result = client.execute(
+        val result = client.executeDetailed(
             url = "https://api.knet.dev/admin",
-            authType = AuthType.BASIC_AUTH,
-            authToken = "admin:password"
+            auth = ApiRequestAuth.Basic("admin", "password")
         )
 
         assertTrue(result.isSuccess)
@@ -58,10 +56,9 @@ class AuthenticationTest {
         }
 
         val client = KNetApiClient(customEngine = mockEngine)
-        val result = client.execute(
+        val result = client.executeDetailed(
             url = "https://api.knet.dev/data",
-            authType = AuthType.API_KEY,
-            authToken = "key-xyz-789"
+            auth = ApiRequestAuth.ApiKey(value = "key-xyz-789")
         )
 
         assertTrue(result.isSuccess)

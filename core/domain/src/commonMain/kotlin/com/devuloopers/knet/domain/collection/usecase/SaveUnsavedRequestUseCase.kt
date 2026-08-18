@@ -8,7 +8,7 @@ import com.devuloopers.knet.domain.collection.repository.CollectionsRepository
  *
  * @param repository Interface for accessing collection data storage.
  */
-public class SaveUnsavedRequestUseCase(
+class SaveUnsavedRequestUseCase(
     private val repository: CollectionsRepository
 ) {
     /**
@@ -16,7 +16,7 @@ public class SaveUnsavedRequestUseCase(
      *
      * @param request Target unsaved API request entity to save.
      */
-    public suspend fun execute(request: SavedApiRequest) {
+    suspend fun execute(request: SavedApiRequest) {
         repository.saveUnsavedRequest(request)
     }
 }

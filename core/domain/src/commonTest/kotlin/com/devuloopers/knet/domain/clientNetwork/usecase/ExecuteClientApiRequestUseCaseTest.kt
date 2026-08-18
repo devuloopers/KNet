@@ -2,19 +2,21 @@ package com.devuloopers.knet.domain.clientNetwork.usecase
 
 import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor
 import com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult
-import com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType
+import com.devuloopers.knet.domain.clientNetwork.model.OutboundRequestBody
 import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
-import com.devuloopers.knet.domain.collection.model.HttpMethod
+import com.devuloopers.knet.traffic.model.ExchangeTimings
+import com.devuloopers.knet.traffic.model.http.HttpMethod
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class FakeHttpExecutor : HttpExecutor {
     var lastExecutedUrl: String = ""
     var lastExecutedMethod: HttpMethod = HttpMethod.GET
-    var lastCustomMethod: String? = null
     var lastHeaders: Map<String, String> = emptyMap()
     var lastProxyPort: Int? = null
     var shouldFail: Boolean = false
@@ -22,17 +24,13 @@ class FakeHttpExecutor : HttpExecutor {
     override suspend fun execute(
         url: String,
         method: HttpMethod,
-        customMethod: String?,
         headers: Map<String, String>,
-        body: String,
-        bodyType: RequestBodyType,
-        formParameters: Map<String, String>,
+        body: OutboundRequestBody,
         auth: ApiRequestAuth,
         proxyPort: Int?
     ): ExecutionResult {
         lastExecutedUrl = url
         lastExecutedMethod = method
-        lastCustomMethod = customMethod
         lastHeaders = headers
         lastProxyPort = proxyPort
 
@@ -46,7 +44,7 @@ class FakeHttpExecutor : HttpExecutor {
             headers = mapOf("Content-Type" to "application/json"),
             cookies = mapOf("session" to "abc123xyz"),
             responseBody = "{\"status\": \"success\"}",
-            latencyMs = 45L,
+            timings = ExchangeTimings(totalMillis = 45L),
             responseSizeBytes = 24L,
             isSuccess = true
         )
@@ -68,8 +66,7 @@ class ExecuteClientApiRequestUseCaseTest {
             headers = mapOf("Accept" to "application/json"),
             queryParams = mapOf("page" to "1", "sort" to "desc"),
             cookies = mapOf("theme" to "dark"),
-            body = "{\"name\": \"KNet\"}",
-            bodyType = RequestBodyType.JSON,
+            body = OutboundRequestBody.Json("{\"name\": \"KNet\"}"),
             auth = ApiRequestAuth.None,
             proxyPort = 8080
         )
@@ -122,13 +119,11 @@ class ExecuteClientApiRequestUseCaseTest {
 
         val result = useCase(
             url = "https://api.example.com/v1/resource",
-            method = HttpMethod.CUSTOM,
-            customMethod = "PROPFIND"
+            method = HttpMethod.fromToken("PROPFIND")
         )
 
         assertTrue(result.isSuccess)
-        assertEquals(HttpMethod.CUSTOM, fakeExecutor.lastExecutedMethod)
-        assertEquals("PROPFIND", fakeExecutor.lastCustomMethod)
+        assertEquals(HttpMethod.fromToken("PROPFIND"), fakeExecutor.lastExecutedMethod)
     }
 
     @Test
@@ -145,6 +140,26 @@ class ExecuteClientApiRequestUseCaseTest {
         assertEquals(0, result.statusCode)
         assertEquals("Execution Error", result.statusText)
         assertEquals("Network connection failed", result.errorMessage)
+    }
+
+    @Test
+    fun `execution cancellation is propagated instead of converted to a result`() = runTest {
+        val cancellingExecutor = object : HttpExecutor {
+            override suspend fun execute(
+                url: String,
+                method: HttpMethod,
+                headers: Map<String, String>,
+                body: OutboundRequestBody,
+                auth: ApiRequestAuth,
+                proxyPort: Int?,
+            ): ExecutionResult = throw CancellationException("cancelled")
+
+            override fun close() = Unit
+        }
+
+        assertFailsWith<CancellationException> {
+            ExecuteClientApiRequestUseCase(cancellingExecutor)(url = "https://api.example.com/cancel")
+        }
     }
 
     @Test

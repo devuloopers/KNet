@@ -22,7 +22,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import androidx.compose.foundation.layout.Spacer
 
 @Composable
-public fun TreeNode(
+fun TreeNode(
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,

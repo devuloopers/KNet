@@ -21,7 +21,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -30,11 +32,12 @@ import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.domain.clientNetwork.decoder.BinaryCategory
 import com.devuloopers.knet.domain.rules.model.matchesTransaction
 import com.devuloopers.knet.domain.clientNetwork.decoder.MediaTypeInspector
-import com.devuloopers.knet.domain.traffic.model.TrafficItemUiState
+import com.devuloopers.knet.ui.desktop.traffic.model.TrafficRowUiState
 import com.devuloopers.knet.ui.core.components.table.KNetCell
 import com.devuloopers.knet.ui.core.components.table.KNetRow
 import com.devuloopers.knet.ui.core.components.table.KNetTableHeader
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import com.devuloopers.knet.ui.core.foundation.time.KNetDateTime
 import com.devuloopers.knet.ui.desktop.traffic.model.ColumnVisibilityState
 import com.devuloopers.knet.ui.desktop.traffic.model.TrafficColumn
 
@@ -45,8 +48,8 @@ import com.devuloopers.knet.ui.core.components.menu.KNetContextMenuArea
  * High-density virtualized traffic feed table using standardized :ui:core table primitives and tokens.
  */
 @Composable
-public fun TrafficTable(
-    transactions: List<TrafficItemUiState>,
+fun TrafficTable(
+    transactions: List<TrafficRowUiState>,
     selectedId: String?,
     autoScroll: Boolean,
     onSelectTransaction: (String) -> Unit,
@@ -55,7 +58,9 @@ public fun TrafficTable(
     columnVisibility: ColumnVisibilityState = ColumnVisibilityState(),
     onSendToApiStudio: (String) -> Unit = {},
     onAddBreakpointRule: (String) -> Unit = {},
-    activeRules: List<com.devuloopers.knet.domain.rules.model.RuleModel> = emptyList()
+    activeRules: List<com.devuloopers.knet.domain.rules.model.BreakpointRule> = emptyList(),
+    canLoadMore: Boolean = false,
+    onLoadMore: () -> Unit = {},
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -66,14 +71,14 @@ public fun TrafficTable(
             .background(themeColors.background)
     ) {
         val listState = androidx.compose.foundation.lazy.rememberLazyListState()
-        val todayDateState = remember { mutableStateOf(java.time.LocalDate.now()) }
+        val todayDateState = remember { mutableStateOf(KNetDateTime.currentDateKey()) }
 
         LaunchedEffect(Unit) {
             while (true) {
                 delay(30_000L)
-                val currentLocalDate = java.time.LocalDate.now()
-                if (todayDateState.value != currentLocalDate) {
-                    todayDateState.value = currentLocalDate
+                val currentDateKey = KNetDateTime.currentDateKey()
+                if (todayDateState.value != currentDateKey) {
+                    todayDateState.value = currentDateKey
                 }
             }
         }
@@ -82,6 +87,16 @@ public fun TrafficTable(
             if (autoScroll && transactions.isNotEmpty()) {
                 listState.scrollToItem(0)
             }
+        }
+
+        LaunchedEffect(listState, transactions.size, canLoadMore) {
+            snapshotFlow { listState.layoutInfo.visibleItemsInfo.lastOrNull()?.index }
+                .distinctUntilChanged()
+                .collect { lastVisibleIndex ->
+                    if (canLoadMore && lastVisibleIndex != null && lastVisibleIndex >= transactions.lastIndex - 12) {
+                        onLoadMore()
+                    }
+                }
         }
 
         // Sticky Table Header Row
@@ -245,11 +260,11 @@ private fun TableHeaderRow(columnVisibility: ColumnVisibilityState) {
 
 @Composable
 private fun TableRowItem(
-    item: TrafficItemUiState,
+    item: TrafficRowUiState,
     isSelected: Boolean,
     columnVisibility: ColumnVisibilityState,
-    todayDate: java.time.LocalDate,
-    activeRules: List<com.devuloopers.knet.domain.rules.model.RuleModel>,
+    todayDate: String,
+    activeRules: List<com.devuloopers.knet.domain.rules.model.BreakpointRule>,
     onClick: () -> Unit
 ) {
     val themeColors = KNetTheme.colors
@@ -258,10 +273,7 @@ private fun TableRowItem(
     // Highlight is strictly driven by Netty interception SSOT
     val isMatchedByBreakpoint = item.isIntercepted
 
-    val displayMethod = when (item.interceptionMetadata) {
-        is com.devuloopers.knet.domain.protocol.model.InterceptionMetadata.GraphQL -> "GQL"
-        else -> item.method
-    }
+    val displayMethod = item.method
 
     val methodColor = when (displayMethod.uppercase()) {
         "GQL" -> androidx.compose.ui.graphics.Color(0xFFCBA6F7)
@@ -291,11 +303,7 @@ private fun TableRowItem(
         ?: item.responseHeaders.entries.firstOrNull { it.key.equals("Content-Type", ignoreCase = true) }?.value
         ?: item.requestHeaders.entries.firstOrNull { it.key.equals("Content-Type", ignoreCase = true) }?.value
 
-    val inferredType = when (val metadata = item.interceptionMetadata) {
-        is com.devuloopers.knet.domain.protocol.model.InterceptionMetadata.GraphQL -> "GraphQL"
-        is com.devuloopers.knet.domain.protocol.model.InterceptionMetadata.Grpc -> "gRPC"
-        is com.devuloopers.knet.domain.protocol.model.InterceptionMetadata.Protobuf -> "Proto"
-        else -> when (val category = MediaTypeInspector.inspectCategory(contentTypeHeader)) {
+    val inferredType = when (val category = MediaTypeInspector.inspectCategory(contentTypeHeader)) {
             BinaryCategory.OHTTP -> "OHTTP"
             BinaryCategory.PROTOBUF -> "Proto"
             BinaryCategory.CBOR -> "CBOR"
@@ -315,20 +323,9 @@ private fun TableRowItem(
                 item.method == "WS" || item.protocol == "WS" -> "WS"
                 else -> "Other"
             }
-        }
     }
 
-    val displayPath = when (val metadata = item.interceptionMetadata) {
-        is com.devuloopers.knet.domain.protocol.model.InterceptionMetadata.GraphQL -> {
-            val opName = metadata.operationName
-            val opType = metadata.operationType
-            when {
-                !opName.isNullOrBlank() -> "${item.path} • $opName ($opType)"
-                else -> "${item.path} ($opType)"
-            }
-        }
-        else -> item.path
-    }
+    val displayPath = item.path
 
     val rowBackgroundModifier = if (isMatchedByBreakpoint) {
         Modifier.background(themeColors.semantic.warning.copy(alpha = 0.18f))
@@ -459,20 +456,16 @@ private fun formatTimestamp(
     epochMillis: Long,
     fallbackFormatted: String,
     fallbackGroup: String,
-    todayDate: java.time.LocalDate
+    todayDate: String
 ): String {
     if (epochMillis <= 0L) return fallbackFormatted.ifEmpty { fallbackGroup }
     return try {
-        val txInstant = java.time.Instant.ofEpochMilli(epochMillis)
-        val txDateTime = java.time.LocalDateTime.ofInstant(txInstant, java.time.ZoneId.systemDefault())
-
-        if (txDateTime.toLocalDate() == todayDate) {
-            txDateTime.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss"))
+        if (KNetDateTime.dateKey(epochMillis) == todayDate) {
+            KNetDateTime.time(epochMillis)
         } else {
-            txDateTime.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss - dd/MM"))
+            KNetDateTime.timeAndDayMonth(epochMillis)
         }
     } catch (_: Throwable) {
         fallbackFormatted.ifEmpty { fallbackGroup }
     }
 }
-

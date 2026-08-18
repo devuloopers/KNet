@@ -18,4 +18,18 @@ class FormDataBodyFormatterTest {
         assertEquals(3, result.pairs.size)
         assertEquals("name" to "KNet", result.pairs[0])
     }
+
+    @Test
+    fun `form decoding supports encoded keys UTF-8 and plus spaces`() {
+        val result = formatter.format(
+            headers = mapOf("content-type" to "application/x-www-form-urlencoded"),
+            bodyText = "display+name=KNet+Desktop&%E8%A8%80%E8%AA%9E=Kotlin",
+        )
+
+        assertTrue(result is BodyFormat.FormData)
+        assertEquals(
+            listOf("display name" to "KNet Desktop", "言語" to "Kotlin"),
+            result.pairs,
+        )
+    }
 }

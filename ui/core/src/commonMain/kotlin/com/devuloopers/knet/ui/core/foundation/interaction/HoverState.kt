@@ -6,6 +6,6 @@ import androidx.compose.runtime.Immutable
  * Reusable hover interaction state holder.
  */
 @Immutable
-public data class HoverState(
+data class HoverState(
     val isHovered: Boolean = false
 )

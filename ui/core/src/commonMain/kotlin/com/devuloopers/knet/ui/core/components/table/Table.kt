@@ -21,7 +21,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * High-density IDE Table Header Row.
  */
 @Composable
-public fun KNetTableHeader(
+fun KNetTableHeader(
     modifier: Modifier = Modifier,
     content: @Composable RowScope.() -> Unit
 ) {
@@ -42,7 +42,7 @@ public fun KNetTableHeader(
  * High-density IDE Table Row.
  */
 @Composable
-public fun KNetRow(
+fun KNetRow(
     onClick: () -> Unit,
     selected: Boolean = false,
     modifier: Modifier = Modifier,
@@ -67,7 +67,7 @@ public fun KNetRow(
  * High-density Table Cell.
  */
 @Composable
-public fun KNetCell(
+fun KNetCell(
     text: String,
     modifier: Modifier = Modifier,
     isHeader: Boolean = false,

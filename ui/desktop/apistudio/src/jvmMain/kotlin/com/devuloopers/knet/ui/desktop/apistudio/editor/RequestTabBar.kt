@@ -33,7 +33,7 @@ import com.devuloopers.knet.ui.desktop.apistudio.theme.ApiStudioColors
  * Top horizontal request tab bar for switching open API requests in API Studio.
  */
 @Composable
-public fun RequestTabBar(
+fun RequestTabBar(
     tabs: List<RequestTab>,
     activeTabId: String,
     onTabSelected: (String) -> Unit,

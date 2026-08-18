@@ -14,6 +14,6 @@ import com.devuloopers.knet.domain.workspace.model.EnvironmentStore
 data class ExecutionContext(
     val request: SavedApiRequest,
     val environmentStore: EnvironmentStore = EnvironmentStore(),
-    val startedAt: Long = System.currentTimeMillis(),
+    val startedAt: Long,
     var response: ExecutionResult? = null
 )

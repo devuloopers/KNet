@@ -17,7 +17,7 @@ import com.devuloopers.knet.ui.core.components.input.KNetTextField
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 @Composable
-public fun SampleForm(
+fun SampleForm(
     modifier: Modifier = Modifier
 ) {
     var textValue by remember { mutableStateOf("") }

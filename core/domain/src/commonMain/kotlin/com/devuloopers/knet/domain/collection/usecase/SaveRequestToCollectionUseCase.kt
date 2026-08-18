@@ -10,7 +10,7 @@ import com.devuloopers.knet.domain.collection.repository.CollectionsRepository
  *
  * @param repository Interface for accessing collection data storage.
  */
-public class SaveRequestToCollectionUseCase(
+class SaveRequestToCollectionUseCase(
     private val repository: CollectionsRepository
 ) {
     /**
@@ -21,7 +21,7 @@ public class SaveRequestToCollectionUseCase(
      * @param request Saved request model to assign.
      * @param unsavedRequestIdToDelete Id of transient unsaved session to remove upon promotion.
      */
-    public suspend fun executeNew(
+    suspend fun executeNew(
         collection: ApiCollection,
         folder: CollectionFolder,
         request: SavedApiRequest,
@@ -43,7 +43,7 @@ public class SaveRequestToCollectionUseCase(
      * @param request Saved request model to insert or update.
      * @param unsavedRequestIdToDelete Optional unsaved request ID to delete if promoting from unsaved session.
      */
-    public suspend fun executeExisting(
+    suspend fun executeExisting(
         collectionId: String,
         folderId: String,
         request: SavedApiRequest,

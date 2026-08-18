@@ -89,8 +89,7 @@ class EditorPerformanceBenchmarkTest {
         // Benchmark Substring + Trim (Allocates String objects)
         val substringTimeNanos = measureNanoTime {
             repeat(iterations) {
-                @Suppress("DEPRECATION")
-                val isSpace = testLine.substring(nextQuote + 1, colonIndex).trim().isEmpty()
+                val isSpace = testLine.substring(nextQuote + 1, colonIndex).trim().length == 0
                 assertTrue(isSpace)
             }
         }
@@ -108,7 +107,7 @@ class EditorPerformanceBenchmarkTest {
 
         println("=== 🧠 Zero-Allocation Whitespace Check Benchmark ===")
         println("Iterations: 100,000 passes")
-        println("Legacy Substring + Trim Time: ${kotlin.math.round(subMs * 100) / 100.0} ms")
+        println("Substring + Trim Baseline: ${kotlin.math.round(subMs * 100) / 100.0} ms")
         println("Zero-Allocation Inline Check Time: ${kotlin.math.round(zeroMs * 100) / 100.0} ms")
         println("Memory Gain: 100,000 short-lived String objects saved")
         println("=====================================================")

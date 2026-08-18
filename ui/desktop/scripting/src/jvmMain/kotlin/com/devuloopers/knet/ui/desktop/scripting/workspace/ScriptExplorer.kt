@@ -22,7 +22,7 @@ import com.devuloopers.knet.ui.desktop.scripting.model.TrafficScript
  * Script explorer showing available scripts.
  */
 @Composable
-public fun ScriptExplorer(
+fun ScriptExplorer(
     scripts: List<TrafficScript>,
     onScriptSelect: (TrafficScript) -> Unit,
     modifier: Modifier = Modifier

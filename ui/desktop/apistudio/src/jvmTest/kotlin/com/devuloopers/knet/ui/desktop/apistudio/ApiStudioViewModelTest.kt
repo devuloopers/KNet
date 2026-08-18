@@ -1,16 +1,31 @@
 package com.devuloopers.knet.ui.desktop.apistudio
 
+import com.devuloopers.knet.application.port.proxy.ProxyRuntimeConfiguration
+import com.devuloopers.knet.application.port.proxy.ProxyRuntimeHandle
+import com.devuloopers.knet.application.port.proxy.ProxyRuntimePort
+import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
+import com.devuloopers.knet.application.port.proxy.ProxyStartResult
+import com.devuloopers.knet.application.port.proxy.ProxyStopReason
+import com.devuloopers.knet.application.port.proxy.ProxyStopResult
+import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUseCase
+import com.devuloopers.knet.application.port.breakpoint.BreakpointControlPort
+import com.devuloopers.knet.application.port.breakpoint.BreakpointDecision
+import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
+import com.devuloopers.knet.application.usecase.breakpoint.DropMatchingBreakpointsUseCase
+import com.devuloopers.knet.connectivity.model.ProxyAccessRequirement
+import com.devuloopers.knet.connectivity.model.ProxyEndpoint
+import com.devuloopers.knet.connectivity.model.ProxyEndpointScope
+import com.devuloopers.knet.connectivity.model.ProxyEndpointSnapshot
+import com.devuloopers.knet.connectivity.model.ProxyEndpointVersion
 import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor
 import com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult
-import com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType
+import com.devuloopers.knet.domain.clientNetwork.model.OutboundRequestBody
 import com.devuloopers.knet.domain.clientNetwork.usecase.ExecuteClientApiRequestUseCase
 import com.devuloopers.knet.domain.clientNetwork.usecase.FormatResponseBodyUseCase
 import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
-import com.devuloopers.knet.domain.collection.model.HttpMethod
-import com.devuloopers.knet.domain.proxy.model.ProxyEngineState
-import com.devuloopers.knet.domain.proxy.repository.ProxyEngineRepository
-import com.devuloopers.knet.domain.proxy.usecase.ObserveProxyEngineStateUseCase
-import com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction
+import com.devuloopers.knet.traffic.model.http.HttpMethod
+import com.devuloopers.knet.traffic.model.ExchangeTimings
+import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
 import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
 import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
@@ -23,6 +38,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -44,11 +60,8 @@ class TestHttpExecutor : HttpExecutor {
     override suspend fun execute(
         url: String,
         method: HttpMethod,
-        customMethod: String?,
         headers: Map<String, String>,
-        body: String,
-        bodyType: RequestBodyType,
-        formParameters: Map<String, String>,
+        body: OutboundRequestBody,
         auth: ApiRequestAuth,
         proxyPort: Int?
     ): ExecutionResult {
@@ -63,7 +76,7 @@ class TestHttpExecutor : HttpExecutor {
             headers = mapOf("content-type" to "application/json"),
             cookies = mapOf("session" to "xyz123"),
             responseBody = "{\"status\":\"success\"}",
-            latencyMs = 42L,
+            timings = ExchangeTimings(totalMillis = 42L),
             responseSizeBytes = 20L,
             isSuccess = true
         )
@@ -73,22 +86,52 @@ class TestHttpExecutor : HttpExecutor {
 }
 
 /**
- * Test factory that creates an [ObserveProxyEngineStateUseCase] stub backed by a
+ * Test factory that creates an [ObserveProxyRuntimeStateUseCase] stub backed by a
  * [MutableStateFlow] emitting the given [initialState].
- * Defaults to [ProxyEngineState.Stopped] so tests run without proxy routing by default.
+ * Defaults to [ProxyRuntimeState.Stopped] so tests run without proxy routing by default.
  */
-fun createTestObserveProxyEngineStateUseCase(
-    initialState: ProxyEngineState = ProxyEngineState.Stopped
-): ObserveProxyEngineStateUseCase {
-    val stateFlow = MutableStateFlow(initialState)
-    return ObserveProxyEngineStateUseCase(
-        repository = object : ProxyEngineRepository {
-            override fun engineState(): Flow<ProxyEngineState> = stateFlow
-            override suspend fun start(port: Int) { stateFlow.value = ProxyEngineState.Running(port) }
-            override suspend fun stop() { stateFlow.value = ProxyEngineState.Stopped }
-        }
-    )
+fun createTestObserveProxyRuntimeStateUseCase(
+    initialState: ProxyRuntimeState = ProxyRuntimeState.Stopped
+): ObserveProxyRuntimeStateUseCase = ObserveProxyRuntimeStateUseCase(TestProxyRuntime(initialState))
+
+class TestProxyRuntime(
+    initialState: ProxyRuntimeState = ProxyRuntimeState.Stopped,
+) : ProxyRuntimePort {
+    private val mutableState = MutableStateFlow(initialState)
+    override val state: StateFlow<ProxyRuntimeState> = mutableState
+
+    fun publish(state: ProxyRuntimeState) {
+        mutableState.value = state
+    }
+
+    override suspend fun start(configuration: ProxyRuntimeConfiguration): ProxyStartResult {
+        val running = runningProxyRuntimeState(configuration.bindings.first().port)
+        mutableState.value = running
+        return ProxyStartResult.Running(running.handle)
+    }
+
+    override suspend fun stop(reason: ProxyStopReason): ProxyStopResult {
+        mutableState.value = ProxyRuntimeState.Stopped
+        return ProxyStopResult.Stopped
+    }
 }
+
+fun runningProxyRuntimeState(port: Int): ProxyRuntimeState.Running = ProxyRuntimeState.Running(
+    ProxyRuntimeHandle(
+        runtimeId = "test-runtime-$port",
+        endpoints = ProxyEndpointSnapshot(
+            version = ProxyEndpointVersion(1L),
+            endpoints = listOf(
+                ProxyEndpoint(
+                    host = "127.0.0.1",
+                    port = port,
+                    scope = ProxyEndpointScope.LOOPBACK,
+                    accessRequirement = ProxyAccessRequirement.LOCAL_PROCESS,
+                )
+            ),
+        ),
+    )
+)
 
 fun createTestLayoutUseCases(
     initialSettings: WorkspaceLayoutSettings = WorkspaceLayoutSettings()
@@ -104,33 +147,35 @@ fun createTestLayoutUseCases(
 }
 
 
-private class FakeTestInterceptionSessionRepository : com.devuloopers.knet.domain.rules.repository.InterceptionSessionRepository {
-    var droppedTransactionId: String? = null
+class FakeTestBreakpointControl : BreakpointControlPort {
     var droppedUrl: String? = null
     var droppedMethod: String? = null
 
-    override val activeInterceptions = kotlinx.coroutines.flow.emptyFlow<List<com.devuloopers.knet.domain.rules.model.InterceptedTransaction>>()
-    override suspend fun forwardRequest(transactionId: String, modifiedRequest: com.devuloopers.knet.domain.clientNetwork.model.HttpRequest) {}
-    override suspend fun forwardResponse(transactionId: String, modifiedResponse: com.devuloopers.knet.domain.clientNetwork.model.HttpResponse) {}
-    override suspend fun dropTransaction(transactionId: String) {
-        droppedTransactionId = transactionId
+    override val pendingBreakpoints = MutableStateFlow<List<PendingBreakpoint>>(emptyList())
+    override val isEnabled = MutableStateFlow(true)
+    override fun replaceRules(rules: List<BreakpointRule>) = Unit
+    override fun setEnabled(enabled: Boolean) {
+        isEnabled.value = enabled
     }
-    override suspend fun dropMatching(url: String, method: String) {
+    override fun setDecisionTimeoutMillis(timeoutMillis: Long) = Unit
+    override suspend fun resolve(pendingId: String, decision: BreakpointDecision): Boolean = true
+    override suspend fun dropMatching(url: String, method: String): Int {
         droppedUrl = url
         droppedMethod = method
+        return 1
     }
-    override suspend fun clearAll() {}
+    override suspend fun clear(): Int = 0
 }
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ApiStudioViewModelTest {
 
     private val testDispatcher = StandardTestDispatcher()
-    private val fakeInterceptionRepo = FakeTestInterceptionSessionRepository()
+    private val fakeBreakpointControl = FakeTestBreakpointControl()
 
     private fun createTestViewModel(
         executeUseCase: ExecuteClientApiRequestUseCase,
-        interceptionRepo: com.devuloopers.knet.domain.rules.repository.InterceptionSessionRepository = fakeInterceptionRepo
+        breakpointControl: BreakpointControlPort = fakeBreakpointControl
     ): ApiStudioViewModel {
         val (getLayoutUseCase, saveLayoutUseCase) = createTestLayoutUseCases()
         return ApiStudioViewModel(
@@ -139,11 +184,11 @@ class ApiStudioViewModelTest {
                 formatResponseBodyUseCase = FormatResponseBodyUseCase(),
                 ioDispatcher = testDispatcher
             ),
-            observeProxyEngineStateUseCase = createTestObserveProxyEngineStateUseCase(),
+            observeProxyRuntimeStateUseCase = createTestObserveProxyRuntimeStateUseCase(),
             getWorkspaceLayoutUseCase = getLayoutUseCase,
             saveWorkspaceLayoutUseCase = saveLayoutUseCase,
             importRequestToStudioUseCase = com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCase(),
-            dropInterceptedTransactionUseCase = com.devuloopers.knet.domain.rules.usecase.DropInterceptedTransactionUseCase(interceptionRepo),
+            dropMatchingBreakpointsUseCase = DropMatchingBreakpointsUseCase(breakpointControl),
             ioDispatcher = testDispatcher
         )
     }
@@ -164,11 +209,11 @@ class ApiStudioViewModelTest {
         assertEquals(1, state.tabs.size)
         assertEquals("tab_1", state.activeTabId)
         assertEquals(ExecutionState.IDLE, state.executionState)
-        assertNull(state.responsePresentation)
+        assertNull(state.responseInspection)
     }
 
     @Test
-    fun `executeRequest maps queryParams headers cookies auth and updates response presentation`() = runTest {
+    fun `executeRequest maps queryParams headers cookies auth and updates response inspection`() = runTest {
         val testExecutor = TestHttpExecutor()
         val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(testExecutor))
 
@@ -179,11 +224,11 @@ class ApiStudioViewModelTest {
 
         val state = viewModel.uiState.value
         assertEquals(ExecutionState.SUCCESS, state.executionState)
-        assertNotNull(state.responsePresentation)
-        assertEquals(200, state.responsePresentation?.statusCode)
-        assertEquals("OK", state.responsePresentation?.statusText)
-        assertEquals("application/json", state.responsePresentation?.mimeType)
-        assertTrue(state.responsePresentation?.body?.contains("\"status\": \"success\"") == true)
+        val response = assertNotNull(state.responseInspection)
+        assertEquals(200, response.statusCode)
+        assertEquals("OK", response.statusText)
+        assertEquals("application/json", response.headers["content-type"])
+        assertTrue(response.responseBody.contains("\"status\": \"success\""))
     }
 
     @Test
@@ -269,8 +314,8 @@ class ApiStudioViewModelTest {
         viewModel.updateHeaders(listOf("Authorization" to "Bearer token_123", "X-Custom" to "HeaderValue"))
         viewModel.updateBodyPayload("{\"name\": \"KNet\"}")
         viewModel.updateBodyMode(com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyMode.JSON)
-        viewModel.updateAuthState(com.devuloopers.knet.ui.desktop.apistudio.model.AuthState(
-            authType = com.devuloopers.knet.ui.desktop.apistudio.model.AuthType.BEARER_TOKEN,
+        viewModel.updateAuthState(com.devuloopers.knet.ui.desktop.httppanel.model.AuthState(
+            authType = com.devuloopers.knet.ui.desktop.httppanel.model.AuthType.BEARER_TOKEN,
             bearerToken = "secret_token_abc"
         ))
         viewModel.updateCookies(listOf("session_id" to "sess_999"))
@@ -292,11 +337,11 @@ class ApiStudioViewModelTest {
         assertEquals("session_id" to "sess_999", state.cookies[0])
         assertEquals("// pre-request", state.preRequestScript)
         assertEquals("// test assertion", state.testScript)
-        assertEquals(com.devuloopers.knet.ui.desktop.apistudio.model.RequestSubTab.HEADERS, state.activeSubTab)
+        assertEquals(com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab.HEADERS, state.activeSubTab)
     }
 
     @Test
-    fun `clearResponse resets responsePresentation to null and executionState to IDLE`() = runTest {
+    fun `clearResponse resets response inspection to null and executionState to IDLE`() = runTest {
         val testExecutor = TestHttpExecutor()
         val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(testExecutor))
 
@@ -304,12 +349,12 @@ class ApiStudioViewModelTest {
         viewModel.executeRequest()
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertNotNull(viewModel.uiState.value.responsePresentation)
+        assertNotNull(viewModel.uiState.value.responseInspection)
         assertEquals(ExecutionState.SUCCESS, viewModel.uiState.value.executionState)
 
         viewModel.clearResponse()
 
-        assertNull(viewModel.uiState.value.responsePresentation)
+        assertNull(viewModel.uiState.value.responseInspection)
         assertEquals(ExecutionState.IDLE, viewModel.uiState.value.executionState)
     }
 
@@ -329,7 +374,7 @@ class ApiStudioViewModelTest {
         // Advance remaining time until idle (past 200ms)
         testDispatcher.scheduler.advanceUntilIdle()
         assertEquals(ExecutionState.SUCCESS, viewModel.uiState.value.executionState)
-        assertNotNull(viewModel.uiState.value.responsePresentation)
+        assertNotNull(viewModel.uiState.value.responseInspection)
     }
 
 
@@ -339,11 +384,8 @@ class ApiStudioViewModelTest {
             override suspend fun execute(
                 url: String,
                 method: HttpMethod,
-                customMethod: String?,
                 headers: Map<String, String>,
-                body: String,
-                bodyType: RequestBodyType,
-                formParameters: Map<String, String>,
+                body: OutboundRequestBody,
                 auth: ApiRequestAuth,
                 proxyPort: Int?
             ): ExecutionResult {
@@ -370,10 +412,10 @@ class ApiStudioViewModelTest {
 
         val state = viewModel.uiState.value
         assertEquals(ExecutionState.ERROR, state.executionState)
-        assertNotNull(state.responsePresentation)
-        assertEquals(0, state.responsePresentation?.statusCode)
-        assertTrue(state.responsePresentation?.failureReason is com.devuloopers.knet.domain.clientNetwork.model.NetworkFailureReason.HostNotFound)
-        assertEquals("api.example.com", (state.responsePresentation?.failureReason as com.devuloopers.knet.domain.clientNetwork.model.NetworkFailureReason.HostNotFound).host)
+        val response = assertNotNull(state.responseInspection)
+        assertEquals(0, response.statusCode)
+        assertTrue(response.failureReason is com.devuloopers.knet.domain.clientNetwork.model.NetworkFailureReason.HostNotFound)
+        assertEquals("api.example.com", response.failureReason.host)
     }
 
     @Test
@@ -404,7 +446,7 @@ class ApiStudioViewModelTest {
     }
 
     @Test
-    fun clearSessionContext_resetsEditorStateResponsePresentationAndSessionContextToNone() = runTest(testDispatcher) {
+    fun clearSessionContext_resetsEditorStateResponseInspectionAndSessionContextToNone() = runTest(testDispatcher) {
         val testExecutor = TestHttpExecutor()
         val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(testExecutor))
 
@@ -414,7 +456,7 @@ class ApiStudioViewModelTest {
         viewModel.executeRequest()
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertNotNull(viewModel.uiState.value.responsePresentation)
+        assertNotNull(viewModel.uiState.value.responseInspection)
         assertEquals("https://stg-04astra.cnbc.com/graphql", viewModel.uiState.value.editorState.url)
 
         viewModel.clearSessionContext()
@@ -423,7 +465,7 @@ class ApiStudioViewModelTest {
         assertEquals("", state.editorState.url)
         assertEquals("GET", state.editorState.method)
         assertEquals("", state.editorState.bodyPayload)
-        assertNull(state.responsePresentation)
+        assertNull(state.responseInspection)
         assertEquals(ExecutionState.IDLE, state.executionState)
         assertEquals(com.devuloopers.knet.ui.desktop.apistudio.model.SessionType.NONE, state.editorState.sessionType)
         assertEquals(com.devuloopers.knet.ui.desktop.apistudio.model.SessionContext.None, state.sessionContext)
@@ -521,19 +563,19 @@ class ApiStudioViewModelTest {
         val testExecutor = TestHttpExecutor()
         val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(testExecutor))
 
-        viewModel.updateScriptLanguage(com.devuloopers.knet.engine.script.api.ScriptLanguage.KOTLIN)
+        viewModel.updateScriptLanguage(com.devuloopers.knet.scripting.model.ScriptLanguage.KOTLIN)
 
         val state = viewModel.uiState.value.editorState
-        assertEquals(com.devuloopers.knet.engine.script.api.ScriptLanguage.KOTLIN, state.scriptLanguage)
+        assertEquals(com.devuloopers.knet.scripting.model.ScriptLanguage.KOTLIN, state.scriptLanguage)
     }
 
     @Test
     fun `cancelExecution resets executionState to IDLE and invokes dropInterceptedTransactionUseCase`() = runTest {
         val testExecutor = TestHttpExecutor()
-        val customInterceptionRepo = FakeTestInterceptionSessionRepository()
+        val customInterceptionRepo = FakeTestBreakpointControl()
         val viewModel = createTestViewModel(
             executeUseCase = ExecuteClientApiRequestUseCase(testExecutor),
-            interceptionRepo = customInterceptionRepo
+            breakpointControl = customInterceptionRepo
         )
 
         viewModel.updateUrl("https://api.example.com/cancel-test")
@@ -554,11 +596,8 @@ class ApiStudioViewModelTest {
             override suspend fun execute(
                 url: String,
                 method: HttpMethod,
-                customMethod: String?,
                 headers: Map<String, String>,
-                body: String,
-                bodyType: RequestBodyType,
-                formParameters: Map<String, String>,
+                body: OutboundRequestBody,
                 auth: ApiRequestAuth,
                 proxyPort: Int?
             ): ExecutionResult {
@@ -567,7 +606,7 @@ class ApiStudioViewModelTest {
                     statusText = "Timeout",
                     headers = emptyMap(),
                     responseBody = "",
-                    latencyMs = 10000L,
+                    timings = ExchangeTimings(totalMillis = 10000L),
                     responseSizeBytes = 0L,
                     isSuccess = false,
                     errorMessage = "Request timeout has expired"
@@ -577,10 +616,10 @@ class ApiStudioViewModelTest {
             override fun close() {}
         }
 
-        val customInterceptionRepo = FakeTestInterceptionSessionRepository()
+        val customInterceptionRepo = FakeTestBreakpointControl()
         val viewModel = createTestViewModel(
             executeUseCase = ExecuteClientApiRequestUseCase(failingExecutor),
-            interceptionRepo = customInterceptionRepo
+            breakpointControl = customInterceptionRepo
         )
 
         viewModel.updateUrl("https://api.example.com/timeout-test")

@@ -22,7 +22,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * Delegates to [KNetTextField] for single source of truth and text overflow hover popup capabilities.
  */
 @Composable
-public fun KNetSearchField(
+fun KNetSearchField(
     query: String,
     onQueryChange: (String) -> Unit,
     modifier: Modifier = Modifier,

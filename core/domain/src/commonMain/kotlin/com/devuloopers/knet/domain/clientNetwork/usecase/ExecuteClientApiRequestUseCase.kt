@@ -2,9 +2,10 @@ package com.devuloopers.knet.domain.clientNetwork.usecase
 
 import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor
 import com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult
-import com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType
+import com.devuloopers.knet.domain.clientNetwork.model.OutboundRequestBody
 import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
-import com.devuloopers.knet.domain.collection.model.HttpMethod
+import com.devuloopers.knet.traffic.model.http.HttpMethod
+import kotlinx.coroutines.CancellationException
 
 /**
  * Domain UseCase that handles executing outbound client HTTP/HTTPS API requests using strongly-typed contracts.
@@ -21,13 +22,11 @@ class ExecuteClientApiRequestUseCase(
      * Executes an API request and returns domain [ExecutionResult].
      *
      * @param url Request URL.
-     * @param method Strongly-typed HTTP Method enum (GET, POST, PUT, DELETE, etc.).
-     * @param customMethod Optional custom HTTP method string if method == HttpMethod.CUSTOM.
+     * @param method Extension-safe HTTP method shared by all request-producing features.
      * @param headers Map of header key-values.
      * @param queryParams Map of query parameter key-values to append to URL.
      * @param cookies Map of request cookies to send.
-     * @param body Request body payload string.
-     * @param bodyType Strongly-typed body type enum (NONE, JSON, XML, FORM_DATA, etc.).
+     * @param body Self-contained strongly typed request body.
      * @param auth Strongly-typed polymorphic authorization configuration (None, Bearer, Basic, ApiKey).
      * @param proxyPort Optional proxy port (routes through proxy when non-null; direct when null).
      * @return [ExecutionResult] containing response details.
@@ -35,17 +34,15 @@ class ExecuteClientApiRequestUseCase(
     suspend operator fun invoke(
         url: String,
         method: HttpMethod = HttpMethod.GET,
-        customMethod: String? = null,
         headers: Map<String, String> = emptyMap(),
         queryParams: Map<String, String> = emptyMap(),
         cookies: Map<String, String> = emptyMap(),
-        body: String = "",
-        bodyType: RequestBodyType = RequestBodyType.NONE,
+        body: OutboundRequestBody = OutboundRequestBody.None,
         auth: ApiRequestAuth = ApiRequestAuth.None,
         proxyPort: Int? = null
     ): ExecutionResult {
         val sanitizedUrl = try {
-            validateUseCase.execute(url, method, customMethod)
+            validateUseCase.execute(url)
         } catch (e: Exception) {
             return ExecutionResult(
                 statusCode = 0,
@@ -72,13 +69,13 @@ class ExecuteClientApiRequestUseCase(
             httpExecutor.execute(
                 url = finalUrl,
                 method = method,
-                customMethod = customMethod,
                 headers = mergedHeaders,
                 body = body,
-                bodyType = bodyType,
                 auth = auth,
                 proxyPort = proxyPort
             )
+        } catch (cancellation: CancellationException) {
+            throw cancellation
         } catch (e: Exception) {
             ExecutionResult(
                 statusCode = 0,

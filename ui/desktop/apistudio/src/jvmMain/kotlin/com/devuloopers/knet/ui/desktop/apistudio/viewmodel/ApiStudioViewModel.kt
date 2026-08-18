@@ -2,25 +2,29 @@ package com.devuloopers.knet.ui.desktop.apistudio.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
+import com.devuloopers.knet.application.usecase.breakpoint.DropMatchingBreakpointsUseCase
+import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUseCase
 import com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCase
-import com.devuloopers.knet.domain.clientNetwork.model.MimeType
 import com.devuloopers.knet.domain.network.mapper.NetworkSpecMappers.sanitizeTransportHeaders
 import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
-import com.devuloopers.knet.domain.proxy.model.ProxyEngineState
-import com.devuloopers.knet.domain.proxy.usecase.ObserveProxyEngineStateUseCase
-import com.devuloopers.knet.domain.rules.usecase.DropInterceptedTransactionUseCase
 import com.devuloopers.knet.domain.util.UrlQueryStringParser
 import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
 import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
 import com.devuloopers.knet.domain.workspace.usecase.SaveWorkspaceLayoutUseCase
+import com.devuloopers.knet.scripting.model.ScriptLanguage
+import com.devuloopers.knet.scripting.model.ScriptPhase
 import com.devuloopers.knet.ui.desktop.apistudio.model.*
 import com.devuloopers.knet.ui.desktop.apistudio.response.ResponseSubTab
 import com.devuloopers.knet.ui.desktop.apistudio.usecase.AutoSaveApiSessionUseCase
 import com.devuloopers.knet.ui.desktop.apistudio.usecase.ExecuteScriptedApiRequestUseCase
 import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlState
+import com.devuloopers.knet.ui.desktop.httppanel.model.AuthState
+import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
 import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
 import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyMode
 import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyState
+import com.devuloopers.knet.ui.desktop.httppanel.model.toAuthState
 import com.devuloopers.knet.ui.desktop.httppanel.usecase.SyncBodyStateUseCase
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -29,6 +33,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TimeSource
 import kotlin.uuid.Uuid
 
 /**
@@ -38,22 +43,22 @@ import kotlin.uuid.Uuid
  * via [uiState] and providing public intent methods to mutate state.
  *
  * @param executeScriptedUseCase Presentation UseCase for executing scripted HTTP API requests.
- * @param observeProxyEngineStateUseCase Use case for observing live KNet proxy engine state.
+ * @param observeProxyRuntimeStateUseCase Use case for observing live KNet proxy runtime state.
  * @param getWorkspaceLayoutUseCase Domain UseCase providing workspace layout settings stream.
  * @param saveWorkspaceLayoutUseCase Domain UseCase persisting updated workspace layout settings.
  * @param importRequestToStudioUseCase Domain UseCase validating and normalizing imported request specs.
- * @param dropInterceptedTransactionUseCase Domain UseCase for dropping active suspended interception sessions on cancellation or timeout.
+ * @param dropMatchingBreakpointsUseCase Application use case for dropping a matching suspended breakpoint on cancellation or timeout.
  * @param syncBodyStateUseCase Presentation UseCase synchronizing payload mode switching and GraphQL state models.
  * @param autoSaveApiSessionUseCase Presentation UseCase auto-saving request state updates to Room DB.
  * @param ioDispatcher Coroutine dispatcher for background thread dispatching.
  */
 class ApiStudioViewModel(
     private val executeScriptedUseCase: ExecuteScriptedApiRequestUseCase,
-    observeProxyEngineStateUseCase: ObserveProxyEngineStateUseCase,
+    observeProxyRuntimeStateUseCase: ObserveProxyRuntimeStateUseCase,
     private val getWorkspaceLayoutUseCase: GetWorkspaceLayoutUseCase,
     private val saveWorkspaceLayoutUseCase: SaveWorkspaceLayoutUseCase,
     private val importRequestToStudioUseCase: ImportRequestToStudioUseCase,
-    private val dropInterceptedTransactionUseCase: DropInterceptedTransactionUseCase,
+    private val dropMatchingBreakpointsUseCase: DropMatchingBreakpointsUseCase,
     private val syncBodyStateUseCase: SyncBodyStateUseCase? = null,
     private val autoSaveApiSessionUseCase: AutoSaveApiSessionUseCase? = null,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO
@@ -73,9 +78,9 @@ class ApiStudioViewModel(
 
     init {
         getWorkspaceLayoutUseCase.execute().onEach { settings ->
-            val parsedSubTab = RequestSubTab.entries.find {
+            val parsedSubTab = InspectorSubTab.entries.find {
                 it.name.equals(settings.activeRequestSubTab, ignoreCase = true)
-            } ?: RequestSubTab.BODY
+            } ?: InspectorSubTab.BODY
 
             val parsedScriptPhase = ScriptPhase.entries.find {
                 it.name.equals(settings.activeScriptPhase, ignoreCase = true)
@@ -92,9 +97,9 @@ class ApiStudioViewModel(
                         activeSubTab = parsedSubTab,
                         activeScriptPhase = parsedScriptPhase,
                         activeResponseSubTab = parsedResponseSubTab,
-                        scriptLanguage = com.devuloopers.knet.engine.script.api.ScriptLanguage.entries.find {
+                        scriptLanguage = ScriptLanguage.entries.find {
                             it.name.equals(settings.scriptLanguage, ignoreCase = true)
-                        } ?: com.devuloopers.knet.engine.script.api.ScriptLanguage.JAVASCRIPT
+                        } ?: ScriptLanguage.JAVASCRIPT
                     )
                 )
             }
@@ -104,8 +109,15 @@ class ApiStudioViewModel(
     /**
      * Derived StateFlow of the active proxy port.
      */
-    private val activeProxyPort: StateFlow<Int?> = observeProxyEngineStateUseCase.execute()
-        .map { engineState -> (engineState as? ProxyEngineState.Running)?.port }
+    private val activeProxyPort: StateFlow<Int?> = observeProxyRuntimeStateUseCase.execute()
+        .map { runtimeState ->
+            (runtimeState as? ProxyRuntimeState.Running)
+                ?.handle
+                ?.endpoints
+                ?.endpoints
+                ?.firstOrNull()
+                ?.port
+        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.Eagerly,
@@ -291,7 +303,7 @@ class ApiStudioViewModel(
     /**
      * Updates active sub-tab selection in UDF state.
      */
-    fun updateActiveSubTab(subTab: RequestSubTab) {
+    fun updateActiveSubTab(subTab: InspectorSubTab) {
         _uiState.update { it.copy(editorState = it.editorState.copy(activeSubTab = subTab)) }
         viewModelScope.launch(ioDispatcher) {
             val currentSettings = getWorkspaceLayoutUseCase.execute().firstOrNull()
@@ -312,7 +324,7 @@ class ApiStudioViewModel(
         }
     }
 
-    fun updateScriptLanguage(language: com.devuloopers.knet.engine.script.api.ScriptLanguage) {
+    fun updateScriptLanguage(language: ScriptLanguage) {
         _uiState.update { it.copy(editorState = it.editorState.copy(scriptLanguage = language)) }
         viewModelScope.launch(ioDispatcher) {
             val currentSettings = getWorkspaceLayoutUseCase.execute().firstOrNull()
@@ -354,7 +366,7 @@ class ApiStudioViewModel(
                         sessionType = SessionType.NONE
                     ),
                     executionState = ExecutionState.IDLE,
-                    responsePresentation = null,
+                    responseInspection = null,
                     errorMessage = null,
                     sessionContext = SessionContext.None
                 )
@@ -465,7 +477,7 @@ class ApiStudioViewModel(
                     sessionType = SessionType.NONE
                 ),
                 executionState = ExecutionState.IDLE,
-                responsePresentation = null,
+                responseInspection = null,
                 errorMessage = null,
                 sessionContext = context
             )
@@ -493,7 +505,7 @@ class ApiStudioViewModel(
         _uiState.update {
             it.copy(
                 executionState = ExecutionState.IDLE,
-                responsePresentation = null,
+                responseInspection = null,
                 errorMessage = null
             )
         }
@@ -506,7 +518,7 @@ class ApiStudioViewModel(
         val currentEditor = _uiState.value.editorState
         _uiState.update { it.copy(executionState = ExecutionState.EXECUTING, errorMessage = null) }
 
-        val executionStartTime = System.currentTimeMillis()
+        val executionTimer = TimeSource.Monotonic.markNow()
 
         executionJob?.cancel()
         executionJob = viewModelScope.launch {
@@ -516,30 +528,31 @@ class ApiStudioViewModel(
                     proxyPort = activeProxyPort.value
                 )
 
-                val presentation = ResponsePresentation(
+                val responseInspection = ResponseInspectorState(
                     statusCode = execTuple.result.statusCode,
                     statusText = execTuple.result.statusText,
                     durationMs = execTuple.result.latencyMs,
                     sizeBytes = execTuple.result.responseSizeBytes,
-                    mimeType = if (execTuple.mimeType != MimeType.UNKNOWN) execTuple.mimeType.value else "text/plain",
                     headers = execTuple.result.headers,
                     cookies = execTuple.result.cookies,
-                    body = execTuple.formattedBody,
+                    responseBody = execTuple.formattedBody,
                     testResults = execTuple.testResults,
                     consoleLogs = execTuple.consoleLogs,
-                    failureReason = execTuple.result.failureReason
+                    failureReason = execTuple.result.failureReason,
+                    errorMessage = execTuple.result.errorMessage,
+                    executionState = if (execTuple.result.isSuccess) ExecutionState.SUCCESS else ExecutionState.ERROR,
                 )
 
                 if (!execTuple.result.isSuccess) {
                     // If the request failed or timed out, notify engine to drop any matching suspended session
                     try {
-                        dropInterceptedTransactionUseCase.execute(currentEditor.url, currentEditor.method)
+                        dropMatchingBreakpointsUseCase.execute(currentEditor.url, currentEditor.method)
                     } catch (_: Exception) {
                         // Safe cleanup
                     }
                 }
 
-                val elapsedMs = System.currentTimeMillis() - executionStartTime
+                val elapsedMs = executionTimer.elapsedNow().inWholeMilliseconds
                 if (elapsedMs < MIN_LOADING_DURATION_MS) {
                     delay((MIN_LOADING_DURATION_MS - elapsedMs).milliseconds)
                 }
@@ -547,19 +560,19 @@ class ApiStudioViewModel(
                 _uiState.update {
                     it.copy(
                         executionState = if (execTuple.result.isSuccess) ExecutionState.SUCCESS else ExecutionState.ERROR,
-                        responsePresentation = presentation,
+                        responseInspection = responseInspection,
                         errorMessage = execTuple.result.errorMessage
                     )
                 }
             } catch (e: Exception) {
                 // Notify engine to drop any active suspended interception session
                 try {
-                    dropInterceptedTransactionUseCase.execute(currentEditor.url, currentEditor.method)
+                    dropMatchingBreakpointsUseCase.execute(currentEditor.url, currentEditor.method)
                 } catch (_: Exception) {
                     // Safe cleanup
                 }
 
-                val elapsedMs = System.currentTimeMillis() - executionStartTime
+                val elapsedMs = executionTimer.elapsedNow().inWholeMilliseconds
                 if (elapsedMs < MIN_LOADING_DURATION_MS) {
                     delay((MIN_LOADING_DURATION_MS - elapsedMs).milliseconds)
                 }
@@ -594,7 +607,7 @@ class ApiStudioViewModel(
 
         viewModelScope.launch(ioDispatcher) {
             try {
-                dropInterceptedTransactionUseCase.execute(currentEditor.url, currentEditor.method)
+                dropMatchingBreakpointsUseCase.execute(currentEditor.url, currentEditor.method)
             } catch (_: Exception) { }
         }
     }

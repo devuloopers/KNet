@@ -1,7 +1,8 @@
 package com.devuloopers.knet.core.http
 
 import com.devuloopers.knet.core.http.client.KNetApiClient
-import com.devuloopers.knet.core.http.model.RequestBodyType
+import com.devuloopers.knet.domain.clientNetwork.model.OutboundRequestBody
+import com.devuloopers.knet.traffic.model.http.HttpMethod
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
@@ -22,11 +23,10 @@ class RequestBodyEncodingTest {
         }
 
         val client = KNetApiClient(customEngine = mockEngine)
-        val result = client.execute(
+        val result = client.executeDetailed(
             url = "https://api.knet.dev/json",
-            method = "POST",
-            body = "{\"key\":\"val\"}",
-            bodyType = RequestBodyType.JSON
+            method = HttpMethod.POST,
+            body = OutboundRequestBody.Json("{\"key\":\"val\"}")
         )
 
         assertTrue(result.isSuccess)
@@ -40,11 +40,10 @@ class RequestBodyEncodingTest {
         }
 
         val client = KNetApiClient(customEngine = mockEngine)
-        val result = client.execute(
+        val result = client.executeDetailed(
             url = "https://api.knet.dev/xml",
-            method = "POST",
-            body = "<root><key>val</key></root>",
-            bodyType = RequestBodyType.XML
+            method = HttpMethod.POST,
+            body = OutboundRequestBody.Xml("<root><key>val</key></root>")
         )
 
         assertTrue(result.isSuccess)
@@ -58,11 +57,10 @@ class RequestBodyEncodingTest {
         }
 
         val client = KNetApiClient(customEngine = mockEngine)
-        val result = client.execute(
+        val result = client.executeDetailed(
             url = "https://api.knet.dev/raw",
-            method = "POST",
-            body = "plain text message",
-            bodyType = RequestBodyType.RAW_TEXT
+            method = HttpMethod.POST,
+            body = OutboundRequestBody.Text("plain text message")
         )
 
         assertTrue(result.isSuccess)

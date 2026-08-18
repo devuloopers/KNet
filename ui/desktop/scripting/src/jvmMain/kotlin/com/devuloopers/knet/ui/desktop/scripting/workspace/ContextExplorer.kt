@@ -17,7 +17,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * Context explorer displaying the active request / response properties available to scripts.
  */
 @Composable
-public fun ContextExplorer(
+fun ContextExplorer(
     contextProperties: List<KeyValueEntry>,
     modifier: Modifier = Modifier
 ) {

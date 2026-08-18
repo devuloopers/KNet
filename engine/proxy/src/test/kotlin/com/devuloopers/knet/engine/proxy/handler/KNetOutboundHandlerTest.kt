@@ -19,7 +19,6 @@ class KNetOutboundHandlerTest {
         val outboundHandler = KNetOutboundHandler(
             clientChannel = clientChannel,
             request = dummyRequest,
-            transactionId = "tx_1001"
         )
         val serverChannel = EmbeddedChannel(outboundHandler)
 

@@ -1,98 +1,17 @@
 package com.devuloopers.knet.domain.network.mapper
 
-import com.devuloopers.knet.domain.clientNetwork.model.HttpRequest
-import com.devuloopers.knet.domain.clientNetwork.model.HttpResponse
-import com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction
 import com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType
 import com.devuloopers.knet.domain.collection.model.ApiRequestBody
-import com.devuloopers.knet.domain.collection.model.HttpMethod
 import com.devuloopers.knet.domain.collection.model.RequestHeader
 import com.devuloopers.knet.domain.collection.model.SavedApiRequest
 import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
-import com.devuloopers.knet.domain.network.model.NetworkResponseSpec
 import com.devuloopers.knet.domain.util.UrlQueryStringParser
 
 /**
- * Extension mappers providing zero-data-loss conversions between domain models and unified [NetworkRequestSpec]/[NetworkResponseSpec] policy contracts.
+ * Extension mappers providing zero-data-loss conversions between collection models and the
+ * authored [NetworkRequestSpec] contract.
  */
 object NetworkSpecMappers {
-
-    /**
-     * Converts a raw captured [HttpRequest] domain model into a unified [NetworkRequestSpec].
-     *
-     * @param bodyString Optional explicit string representation of body payload.
-     * @return Formatted [NetworkRequestSpec].
-     */
-    fun HttpRequest.toNetworkRequestSpec(bodyString: String? = null): NetworkRequestSpec {
-        val parsedMethod = parseHttpMethod(this.method)
-        val queryParamsList = UrlQueryStringParser.parseQueryParams(this.url)
-        val cookiesList = extractCookiesFromHeaders(this.headers)
-        val resolvedBody = bodyString ?: this.body?.decodeToString() ?: ""
-        val detectedBodyType = inferRequestBodyType(resolvedBody, this.headers)
-
-        return NetworkRequestSpec(
-            method = parsedMethod.first,
-            customMethod = parsedMethod.second,
-            url = this.url,
-            headers = this.headers.sanitizeTransportHeaders(),
-            queryParams = queryParamsList,
-            cookies = cookiesList,
-            bodyPayload = resolvedBody,
-            bodyType = detectedBodyType,
-            timestamp = this.timestamp
-        )
-    }
-
-    /**
-     * Converts a raw captured [HttpResponse] domain model into a unified [NetworkResponseSpec].
-     *
-     * @param durationMs Execution latency in milliseconds.
-     * @param sizeBytes Response body byte size.
-     * @param bodyString Optional explicit string representation of body payload.
-     * @return Formatted [NetworkResponseSpec].
-     */
-    fun HttpResponse.toNetworkResponseSpec(
-        durationMs: Long = 0L,
-        sizeBytes: Long = (this.body?.size ?: 0).toLong(),
-        bodyString: String? = null
-    ): NetworkResponseSpec {
-        val cookiesList = extractCookiesFromHeaders(this.headers)
-        val resolvedBody = bodyString ?: this.body?.decodeToString() ?: ""
-
-        return NetworkResponseSpec(
-            statusCode = this.statusCode,
-            statusText = this.statusText,
-            durationMs = durationMs,
-            sizeBytes = sizeBytes,
-            responseBody = resolvedBody,
-            headers = this.headers,
-            cookies = cookiesList
-        )
-    }
-
-    /**
-     * Converts a complete [HttpTransaction] feed entity into a unified [NetworkRequestSpec].
-     *
-     * @param bodyString Optional explicit string representation of request body payload.
-     * @return Formatted [NetworkRequestSpec].
-     */
-    fun HttpTransaction.toNetworkRequestSpec(bodyString: String? = null): NetworkRequestSpec {
-        return this.request.toNetworkRequestSpec(bodyString)
-    }
-
-    /**
-     * Converts a complete [HttpTransaction] feed entity into a unified [NetworkResponseSpec].
-     *
-     * @param bodyString Optional explicit string representation of response body payload.
-     * @return Formatted [NetworkResponseSpec], or null if response is unavailable.
-     */
-    fun HttpTransaction.toNetworkResponseSpec(bodyString: String? = null): NetworkResponseSpec? {
-        return this.response?.toNetworkResponseSpec(
-            durationMs = this.durationMs,
-            sizeBytes = this.responseBodySize,
-            bodyString = bodyString
-        )
-    }
 
     /**
      * Converts a [SavedApiRequest] collection entity into a unified [NetworkRequestSpec].
@@ -117,7 +36,6 @@ object NetworkSpecMappers {
 
         return NetworkRequestSpec(
             method = this.method,
-            customMethod = this.customMethod,
             url = this.url,
             headers = headerPairs,
             queryParams = queryParamsList,
@@ -152,22 +70,11 @@ object NetworkSpecMappers {
             id = id,
             name = name,
             method = this.method,
-            customMethod = this.customMethod,
             url = this.url,
             headers = requestHeaders,
             body = ApiRequestBody(content = this.bodyPayload, type = bodyTypeName),
             auth = this.auth
         )
-    }
-
-    private fun parseHttpMethod(method: String): Pair<HttpMethod, String?> {
-        val upper = method.uppercase()
-        return try {
-            val enumVal = HttpMethod.valueOf(upper)
-            enumVal to null
-        } catch (_: Exception) {
-            HttpMethod.CUSTOM to upper
-        }
     }
 
     private fun extractCookiesFromHeaders(headers: List<Pair<String, String>>): List<Pair<String, String>> {
@@ -243,30 +150,4 @@ object NetworkSpecMappers {
         else -> RequestBodyType.NONE
     }
 
-    private fun inferRequestBodyType(body: String, headers: List<Pair<String, String>>): RequestBodyType {
-        if (body.isBlank()) return RequestBodyType.NONE
-        val contentType = headers.firstOrNull { it.first.equals("Content-Type", ignoreCase = true) }?.second ?: ""
-        val acceptType = headers.firstOrNull { it.first.equals("Accept", ignoreCase = true) }?.second ?: ""
-        val trimmedBody = body.trimStart()
-
-        return when {
-            contentType.contains("graphql", ignoreCase = true) ||
-            acceptType.contains("graphql", ignoreCase = true) ||
-            trimmedBody.startsWith("query") ||
-            trimmedBody.startsWith("mutation") ||
-            (trimmedBody.startsWith("{") && (trimmedBody.contains("\"query\"") || trimmedBody.contains("\"mutation\""))) -> RequestBodyType.GRAPHQL
-
-            contentType.contains("json", ignoreCase = true) ||
-            trimmedBody.startsWith("{") ||
-            trimmedBody.startsWith("[") -> RequestBodyType.JSON
-
-            contentType.contains("xml", ignoreCase = true) ||
-            trimmedBody.startsWith("<") -> RequestBodyType.XML
-
-            contentType.contains("form-urlencoded", ignoreCase = true) ||
-            contentType.contains("form-data", ignoreCase = true) -> RequestBodyType.FORM_DATA
-
-            else -> RequestBodyType.RAW_TEXT
-        }
-    }
 }

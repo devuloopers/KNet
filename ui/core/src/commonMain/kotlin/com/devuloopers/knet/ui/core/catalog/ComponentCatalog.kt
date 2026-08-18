@@ -21,7 +21,7 @@ import com.devuloopers.knet.ui.core.components.progress.LinearProgress
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 @Composable
-public fun ComponentCatalog() {
+fun ComponentCatalog() {
     val typography = KNetTheme.typography
     val colors = KNetTheme.colors
     var textValue by remember { mutableStateOf("") }

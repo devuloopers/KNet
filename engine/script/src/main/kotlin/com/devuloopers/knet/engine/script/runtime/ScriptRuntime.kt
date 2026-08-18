@@ -2,7 +2,7 @@ package com.devuloopers.knet.engine.script.runtime
 
 import com.devuloopers.knet.engine.script.api.EnvironmentStore
 import com.devuloopers.knet.engine.script.api.ScriptExecutionResult
-import com.devuloopers.knet.engine.script.api.ScriptLanguage
+import com.devuloopers.knet.scripting.model.ScriptLanguage
 import com.devuloopers.knet.engine.script.api.ScriptRequestModel
 import com.devuloopers.knet.engine.script.api.ScriptResponseModel
 

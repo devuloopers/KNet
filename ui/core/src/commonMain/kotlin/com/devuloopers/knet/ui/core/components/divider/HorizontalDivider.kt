@@ -14,7 +14,7 @@ import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 @Composable
-public fun HorizontalDivider(
+fun HorizontalDivider(
     modifier: Modifier = Modifier,
     thickness: Dp = 1.dp,
     color: Color = KNetTheme.colors.border
@@ -28,7 +28,7 @@ public fun HorizontalDivider(
 }
 
 @Composable
-public fun VerticalDivider(
+fun VerticalDivider(
     modifier: Modifier = Modifier,
     thickness: Dp = 1.dp,
     color: Color = KNetTheme.colors.border

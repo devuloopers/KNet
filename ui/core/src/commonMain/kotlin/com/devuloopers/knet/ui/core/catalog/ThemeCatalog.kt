@@ -9,7 +9,7 @@ import com.devuloopers.knet.ui.core.foundation.responsive.ResponsiveLayout
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 @Composable
-public fun ThemeCatalog() {
+fun ThemeCatalog() {
     val typography = KNetTheme.typography
     val colors = KNetTheme.colors
 
@@ -22,7 +22,7 @@ public fun ThemeCatalog() {
 }
 
 @Composable
-public fun ResponsiveCatalog() {
+fun ResponsiveCatalog() {
     ResponsiveLayout { windowInfo ->
         val typography = KNetTheme.typography
         val colors = KNetTheme.colors

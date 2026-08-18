@@ -12,7 +12,7 @@ import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.divider.HorizontalDivider
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
-public data class PropertyItem(
+data class PropertyItem(
     val label: String,
     val value: String,
     val category: String? = null
@@ -22,7 +22,7 @@ public data class PropertyItem(
  * Domain-agnostic generic property grid component.
  */
 @Composable
-public fun KNetPropertyGrid(
+fun KNetPropertyGrid(
     properties: List<PropertyItem>,
     modifier: Modifier = Modifier
 ) {

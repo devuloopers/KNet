@@ -6,6 +6,12 @@ package com.devuloopers.knet.engine.proxy.pipeline
  */
 object PipelineHandlerNames {
 
+    /** Inbound read-idle timeout handler. */
+    const val READ_TIMEOUT = "readTimeout"
+
+    /** Outbound write-idle timeout handler. */
+    const val WRITE_TIMEOUT = "writeTimeout"
+
     /**
      * Inbound TLS decryption and outbound TLS encryption handler (`io.netty.handler.ssl.SslHandler`).
      *
@@ -22,14 +28,15 @@ object PipelineHandlerNames {
     const val HTTP_CODEC = "httpCodec"
 
     /**
-     * HTTP chunk aggregator (`io.netty.handler.codec.http.HttpObjectAggregator`).
+     * Temporary downstream HTTP chunk aggregator (`io.netty.handler.codec.http.HttpObjectAggregator`).
      *
-     * Buffers streaming HTTP chunks into cohesive `FullHttpRequest` / `FullHttpResponse` instances.
+     * Installed only when desktop composition reports an active breakpoint that still requires a
+     * full request or response. Ordinary traffic never installs it and remains incremental.
      */
     const val HTTP_AGGREGATOR = "httpAggregator"
 
     /**
-     * Primary proxy inbound request handler (`com.devuloopers.knet.engine.proxy.handler.KNetProxyHandler`).
+     * Primary proxy inbound request handler (streaming or bounded breakpoint variant).
      *
      * Handles CONNECT handshakes, target host resolution, loop prevention, and outbound forwarding.
      */
@@ -43,7 +50,7 @@ object PipelineHandlerNames {
     const val OUTBOUND_HANDLER = "outboundHandler"
 
     /**
-     * Maximum allowed aggregated HTTP request/response payload size in bytes (10 MB).
+     * Maximum request size accepted by the opt-in downstream breakpoint aggregator.
      */
     const val MAX_CONTENT_LENGTH_BYTES: Int = 10 * 1024 * 1024
 }

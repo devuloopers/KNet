@@ -6,10 +6,11 @@ import com.devuloopers.knet.engine.script.api.ScriptRequestModel
 import com.devuloopers.knet.engine.script.api.ScriptResponseModel
 import com.devuloopers.knet.engine.script.internal.ExceptionFormatter
 import com.devuloopers.knet.engine.script.internal.ResultCollector
+import kotlin.time.Clock
 
 /**
  * First-class lightweight expression runtime.
- * Provides compatibility when native JSR-223 scripting is unavailable.
+ * Provides the built-in expression evaluator when native JSR-223 scripting is unavailable.
  */
 class ExpressionRuntime : KotlinRuntime {
 
@@ -51,7 +52,7 @@ class ExpressionRuntime : KotlinRuntime {
                     val varName = trimmed.substringAfter(" ").substringBefore("=").trim()
                     val rawVal = trimmed.substringAfter("=").trim()
                     val varVal = if (rawVal.contains("System.currentTimeMillis()")) {
-                        System.currentTimeMillis().toString()
+                        Clock.System.now().toEpochMilliseconds().toString()
                     } else {
                         rawVal.removeSurrounding("\"").removeSurrounding("'")
                     }

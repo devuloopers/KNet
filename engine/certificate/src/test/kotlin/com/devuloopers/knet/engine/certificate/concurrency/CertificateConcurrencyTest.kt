@@ -1,6 +1,8 @@
 package com.devuloopers.knet.engine.certificate.concurrency
 
 import com.devuloopers.knet.engine.certificate.CertificateCache
+import com.devuloopers.knet.engine.certificate.CertificateManagerImpl
+import com.devuloopers.knet.engine.certificate.EngineMtlsRule
 import com.devuloopers.knet.engine.certificate.LeafCertificateGenerator
 import com.devuloopers.knet.engine.certificate.util.TestCertificateFactory
 import java.util.concurrent.ConcurrentHashMap
@@ -9,6 +11,7 @@ import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertSame
 
 class CertificateConcurrencyTest {
 
@@ -56,5 +59,51 @@ class CertificateConcurrencyTest {
         val finished = executor.awaitTermination(30, TimeUnit.SECONDS)
         assertEquals(true, finished, "Concurrent cache reads should complete cleanly")
         assertEquals(1, cache.size(), "Cache must contain exactly 1 cached entry for the shared domain")
+    }
+
+    @Test
+    fun `asynchronous misses for one host share the generated leaf`() {
+        val executor = Executors.newFixedThreadPool(4)
+        val cache = CertificateCache()
+        try {
+            val futures = List(16) {
+                cache.getAsync("single-flight.example", ca, executor)
+            }
+            val leaves = futures.map { future -> future.get(30L, TimeUnit.SECONDS) }
+            leaves.drop(1).forEach { leaf -> assertSame(leaves.first(), leaf) }
+            assertEquals(1, cache.size())
+        } finally {
+            executor.shutdownNow()
+        }
+    }
+
+    @Test
+    fun `certificate manager publishes atomic rule snapshots during concurrent mutation`() {
+        val manager = CertificateManagerImpl(ca = ca)
+        val workers = 8
+        val rulesPerWorker = 50
+        val executor = Executors.newFixedThreadPool(workers)
+        try {
+            val mutations = List(workers) { worker ->
+                executor.submit {
+                    repeat(rulesPerWorker) { index ->
+                        manager.addMtlsRule(
+                            EngineMtlsRule(
+                                ruleName = "rule-$worker-$index",
+                                hostPattern = "service-$worker-$index.example.test",
+                                certificateAlias = "client-$worker",
+                                enabled = true,
+                            ),
+                        )
+                        manager.getMtlsRules()
+                    }
+                }
+            }
+            mutations.forEach { mutation -> mutation.get(30L, TimeUnit.SECONDS) }
+
+            assertEquals(workers * rulesPerWorker, manager.getMtlsRules().size)
+        } finally {
+            executor.shutdownNow()
+        }
     }
 }

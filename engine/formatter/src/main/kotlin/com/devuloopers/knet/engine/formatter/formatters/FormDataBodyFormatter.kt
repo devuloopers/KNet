@@ -2,7 +2,6 @@ package com.devuloopers.knet.engine.formatter.formatters
 
 import com.devuloopers.knet.engine.formatter.BodyFormatter
 import com.devuloopers.knet.engine.formatter.model.BodyFormat
-import java.net.URLDecoder
 
 /**
  * Strategy formatter for `application/x-www-form-urlencoded` and `multipart/form-data` payloads.
@@ -29,13 +28,9 @@ class FormDataBodyFormatter : BodyFormatter {
 
         val pairs = bodyText.trim().split("&").filter { it.contains("=") }.map { pair ->
             val parts = pair.split("=", limit = 2)
-            val key = parts[0]
+            val key = decodeFormComponent(parts[0])
             val rawValue = parts.getOrNull(1) ?: ""
-            val decodedValue = try {
-                URLDecoder.decode(rawValue, Charsets.UTF_8.name())
-            } catch (_: Exception) {
-                rawValue
-            }
+            val decodedValue = decodeFormComponent(rawValue)
             key to decodedValue
         }
         return BodyFormat.FormData(pairs)
@@ -80,4 +75,33 @@ class FormDataBodyFormatter : BodyFormatter {
             .removeSurrounding("\"")
         return boundaryValue.ifEmpty { null }
     }
+}
+
+/** Decodes UTF-8 percent escapes and form-style `+` spaces without a JVM URL decoder. */
+private fun decodeFormComponent(value: String): String {
+    val decoded = StringBuilder(value.length)
+    val escapedBytes = mutableListOf<Byte>()
+
+    fun flushEscapedBytes() {
+        if (escapedBytes.isEmpty()) return
+        decoded.append(ByteArray(escapedBytes.size) { index -> escapedBytes[index] }.decodeToString())
+        escapedBytes.clear()
+    }
+
+    var index = 0
+    while (index < value.length) {
+        val current = value[index]
+        val high = value.getOrNull(index + 1)?.digitToIntOrNull(16)
+        val low = value.getOrNull(index + 2)?.digitToIntOrNull(16)
+        if (current == '%' && high != null && low != null) {
+            escapedBytes += ((high shl 4) or low).toByte()
+            index += 3
+            continue
+        }
+        flushEscapedBytes()
+        decoded.append(if (current == '+') ' ' else current)
+        index++
+    }
+    flushEscapedBytes()
+    return decoded.toString()
 }

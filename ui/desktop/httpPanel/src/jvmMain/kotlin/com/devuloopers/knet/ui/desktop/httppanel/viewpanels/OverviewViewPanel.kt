@@ -29,7 +29,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.NetworkOverviewSpec
  * @param modifier Composable layout modifier.
  */
 @Composable
-public fun OverviewViewPanel(
+fun OverviewViewPanel(
     spec: NetworkOverviewSpec,
     modifier: Modifier = Modifier
 ) {

@@ -37,7 +37,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlSubTab
  * @param modifier Optional modifier applied to the root container layout.
  */
 @Composable
-public fun GraphQlEditor(
+fun GraphQlEditor(
     state: GraphQlState,
     onStateChange: (GraphQlState) -> Unit,
     modifier: Modifier = Modifier
@@ -85,8 +85,10 @@ public fun GraphQlEditor(
                         val updatedQuery = GraphQLQuerySynchronizer.updateOperationName(state.queryText, newOpName)
                         onStateChange(
                             state.copy(
-                                operationName = newOpName,
-                                queryText = updatedQuery
+                                payload = state.payload.copy(
+                                    operationName = newOpName,
+                                    queryText = updatedQuery,
+                                )
                             )
                         )
                     },

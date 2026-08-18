@@ -28,7 +28,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * @param icon Vector icon vector (default: KNetIcons.Info).
  */
 @Composable
-public fun KNetEmptyStatePlaceholder(
+fun KNetEmptyStatePlaceholder(
     title: String,
     subtitle: String,
     modifier: Modifier = Modifier,

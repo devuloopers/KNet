@@ -18,7 +18,7 @@ import kotlin.uuid.Uuid
  * @param updateRequestInCollectionUseCase Domain UseCase for updating saved collection requests in Room DB.
  * @param resolveUniqueSessionTitleUseCase UseCase resolving non-conflicting session titles.
  */
-public class AutoSaveApiSessionUseCase(
+class AutoSaveApiSessionUseCase(
     private val saveUnsavedRequestUseCase: SaveUnsavedRequestUseCase,
     private val updateRequestInCollectionUseCase: UpdateRequestInCollectionUseCase,
     private val resolveUniqueSessionTitleUseCase: ResolveUniqueSessionTitleUseCase = ResolveUniqueSessionTitleUseCase()
@@ -32,7 +32,7 @@ public class AutoSaveApiSessionUseCase(
      * @param existingUnsavedTitles List of active unsaved session titles used for title collision resolution.
      * @param onLinkedIdAssigned Callback invoked if a new unsaved session ID and title are generated.
      */
-    public suspend fun execute(
+    suspend fun execute(
         sessionContext: SessionContext,
         editorState: RequestEditorState,
         existingUnsavedTitles: List<String> = emptyList(),

@@ -23,7 +23,7 @@ class EditorShortcutHandlerTest {
             selection = null,
             caretState = null,
             copyAction = {},
-            pasteAction = { null },
+            pasteAction = {},
             onDocumentLinesChanged = null,
             onSelectionChange = { capturedSelection = it },
             onCaretStateChange = null
@@ -51,7 +51,7 @@ class EditorShortcutHandlerTest {
             selection = updatedSelection,
             caretState = null,
             copyAction = {},
-            pasteAction = { null },
+            pasteAction = {},
             onDocumentLinesChanged = { updatedLines = it },
             onSelectionChange = { updatedSelection = it },
             onCaretStateChange = { updatedCaret = it }
@@ -84,7 +84,7 @@ class EditorShortcutHandlerTest {
             selection = updatedSelection,
             caretState = null,
             copyAction = {},
-            pasteAction = { null },
+            pasteAction = {},
             onDocumentLinesChanged = { updatedLines = it },
             onSelectionChange = { updatedSelection = it },
             onCaretStateChange = { updatedCaret = it }
@@ -100,6 +100,5 @@ class EditorShortcutHandlerTest {
     }
 
 }
-
 
 

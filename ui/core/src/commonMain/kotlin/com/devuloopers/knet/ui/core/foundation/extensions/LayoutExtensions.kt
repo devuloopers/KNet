@@ -5,4 +5,4 @@ import androidx.compose.ui.Modifier
 /**
  * Compose layout helper extension.
  */
-public fun Modifier.fillWidthIf(condition: Boolean): Modifier = this
+fun Modifier.fillWidthIf(condition: Boolean): Modifier = this

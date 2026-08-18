@@ -7,14 +7,14 @@ import androidx.compose.runtime.Immutable
  * Strictly limited to UI visual and text resources (Icons, Fonts, Strings, Images).
  */
 @Immutable
-public interface ResourceProvider {
-    public fun getString(key: String, vararg args: Any): String
+interface ResourceProvider {
+    fun getString(key: String, vararg args: Any): String
 }
 
 /**
  * Default implementation of [ResourceProvider] providing fallback strings.
  */
-public object KNetResourceProvider : ResourceProvider {
+object KNetResourceProvider : ResourceProvider {
     override fun getString(key: String, vararg args: Any): String {
         return if (args.isNotEmpty()) key.format(*args) else key
     }

@@ -17,7 +17,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.devuloopers.knet.domain.network.model.NetworkResponseSpec
+import com.devuloopers.knet.domain.clientNetwork.model.NetworkFailureReason
+import com.devuloopers.knet.traffic.model.ExchangeTimings
+import com.devuloopers.knet.traffic.model.http.ResponseHead
 import com.devuloopers.knet.ui.core.components.divider.HorizontalDivider
 import com.devuloopers.knet.ui.core.components.keyvalue.KNetReadOnlyKeyValueViewer
 import com.devuloopers.knet.ui.core.components.keyvalue.KeyValueEntry
@@ -35,7 +37,8 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
  * Renders status headers, timing/size metrics, response sub-tabs, formatted body viewing
  * via [SmartBodyViewer], headers key-value inspection, and cookie viewers.
  *
- * @param spec Strongly-typed domain response specification.
+ * @param head Canonical response metadata, or null before a response is available.
+ * @param timings Canonical exchange timing values.
  * @param isPreparing True if response payload is actively loading or being formatted.
  * @param activeSubTab Currently selected response sub-tab.
  * @param onSubTabSelected Event callback when user switches sub-tabs.
@@ -43,9 +46,14 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
  * @param modifier Composable layout modifier.
  */
 @Composable
-public fun ResponseViewPanel(
-    spec: NetworkResponseSpec,
-    payloadSpec: PayloadInspectionSpec? = null,
+fun ResponseViewPanel(
+    head: ResponseHead?,
+    timings: ExchangeTimings = ExchangeTimings(),
+    responseSizeBytes: Long = 0L,
+    payloadSpec: PayloadInspectionSpec = PayloadInspectionSpec.EMPTY,
+    cookies: List<Pair<String, String>> = emptyList(),
+    failureReason: NetworkFailureReason? = null,
+    errorMessage: String? = null,
     isPreparing: Boolean = false,
     activeSubTab: InspectorSubTab = InspectorSubTab.BODY,
     onSubTabSelected: (InspectorSubTab) -> Unit = {},
@@ -57,37 +65,48 @@ public fun ResponseViewPanel(
 
     var localActiveTab by remember(activeSubTab) { mutableStateOf(activeSubTab) }
 
-    val formattedSize = remember(spec.sizeBytes) {
+    val formattedSize = remember(responseSizeBytes) {
         when {
-            spec.sizeBytes <= 0 -> "0 B"
-            spec.sizeBytes < 1024 -> "${spec.sizeBytes} B"
-            spec.sizeBytes < 1024 * 1024 -> "${spec.sizeBytes / 1024} KB"
-            else -> "${spec.sizeBytes / (1024 * 1024)} MB"
+            responseSizeBytes <= 0 -> "0 B"
+            responseSizeBytes < 1024 -> "$responseSizeBytes B"
+            responseSizeBytes < 1024 * 1024 -> "${responseSizeBytes / 1024} KB"
+            else -> "${responseSizeBytes / (1024 * 1024)} MB"
         }
     }
 
-    val contentType = remember(spec.headers) {
-        spec.headers.find { it.first.equals("content-type", ignoreCase = true) }?.second ?: ""
+    val responseHeaders = head?.headers.orEmpty()
+    val contentType = remember(responseHeaders) {
+        responseHeaders.find { it.name.value.equals("content-type", ignoreCase = true) }?.value.orEmpty()
     }
 
-    val headerEntries = remember(spec.headers) {
-        spec.headers.mapIndexed { idx, (k, v) -> KeyValueEntry("res_header_$idx", k, v) }
+    val headerEntries = remember(responseHeaders) {
+        responseHeaders.mapIndexed { index, field ->
+            KeyValueEntry("res_header_$index", field.name.value, field.value)
+        }
     }
 
-    val cookieEntries = remember(spec.headers) {
-        spec.headers
-            .filter { it.first.equals("set-cookie", ignoreCase = true) }
-            .mapIndexed { idx, (_, v) -> KeyValueEntry("res_cookie_$idx", "Set-Cookie", v) }
+    val cookieEntries = remember(responseHeaders, cookies) {
+        val values = cookies.ifEmpty {
+            responseHeaders
+                .filter { it.name.value.equals("set-cookie", ignoreCase = true) }
+                .map { "Set-Cookie" to it.value }
+        }
+        values.mapIndexed { index, (name, value) -> KeyValueEntry("res_cookie_$index", name, value) }
     }
 
-    if (spec.isError) {
+    val statusCode = head?.status?.code ?: 0
+    val isGatewayError = statusCode == 502 || statusCode == 503 || statusCode == 504
+    val isError = failureReason != null || isGatewayError || (head == null && !errorMessage.isNullOrBlank())
+    val hasResponse = (head != null || payloadSpec.rawBody.isNotBlank()) && !isGatewayError
+
+    if (isError) {
         NetworkErrorCard(
-            failureReason = spec.failureReason,
-            errorMessage = spec.errorMessage,
+            failureReason = failureReason,
+            errorMessage = errorMessage,
             onClearResponse = onClearResponse,
             modifier = modifier
         )
-    } else if (!spec.hasResponse && spec.statusCode == 0 && spec.responseBody.isBlank()) {
+    } else if (!hasResponse) {
         Box(
             modifier = modifier
                 .fillMaxSize()
@@ -123,9 +142,12 @@ public fun ResponseViewPanel(
         ) {
             // 1. Response Summary Bar
             ResponseSummaryHeader(
-                spec = spec,
+                head = requireNotNull(head),
+                timings = timings,
                 formattedSize = formattedSize,
                 contentType = contentType,
+                responseBody = payloadSpec.formattedText,
+                cookies = cookieEntries.map { it.key to it.value },
                 onClearResponse = onClearResponse
             )
 
@@ -151,12 +173,8 @@ public fun ResponseViewPanel(
             ) {
                 when (localActiveTab) {
                     InspectorSubTab.BODY -> {
-                        val effectiveBodySpec = remember(spec.headers, spec.responseBody, isPreparing, payloadSpec) {
-                            payloadSpec ?: PayloadInspectionSpec(
-                                headers = spec.headers,
-                                rawBody = spec.responseBody,
-                                isPreparing = isPreparing
-                            )
+                        val effectiveBodySpec = remember(payloadSpec, isPreparing) {
+                            payloadSpec.copy(isPreparing = isPreparing || payloadSpec.isPreparing)
                         }
                         SmartBodyViewer(
                             spec = effectiveBodySpec,

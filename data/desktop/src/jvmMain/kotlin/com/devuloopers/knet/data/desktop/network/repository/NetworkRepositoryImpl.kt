@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
  *
  * @param localIpResolver Engine component for host system network interface resolution.
  */
-public class NetworkRepositoryImpl(
+class NetworkRepositoryImpl(
     private val localIpResolver: LocalIpResolver
 ) : NetworkRepository {
 

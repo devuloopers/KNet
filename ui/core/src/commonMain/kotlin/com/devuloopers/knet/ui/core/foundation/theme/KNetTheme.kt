@@ -33,7 +33,7 @@ import com.devuloopers.knet.ui.core.foundation.typography.Typography
  * @param content The composable scope receiving theme providers.
  */
 @Composable
-public fun KNetTheme(
+fun KNetTheme(
     themeMode: ThemeMode = ThemeMode.Dark,
     colors: Colors = if (themeMode == ThemeMode.Light) KNetLightColors else KNetDarkColors,
     typography: Typography = KNetTypography,
@@ -85,48 +85,48 @@ public fun KNetTheme(
 /**
  * Static single object access helper for composable functions consuming KNetTheme properties.
  */
-public object KNetTheme {
-    public val colors: Colors
+object KNetTheme {
+    val colors: Colors
         @Composable
         @ReadOnlyComposable
         get() = LocalColors.current
 
-    public val typography: Typography
+    val typography: Typography
         @Composable
         @ReadOnlyComposable
         get() = LocalTypography.current
 
-    public val spacing: Spacing
+    val spacing: Spacing
         @Composable
         @ReadOnlyComposable
         get() = LocalSpacing.current
 
-    public val shapes: Shapes
+    val shapes: Shapes
         @Composable
         @ReadOnlyComposable
         get() = LocalShapes.current
 
-    public val dimensions: Dimensions
+    val dimensions: Dimensions
         @Composable
         @ReadOnlyComposable
         get() = LocalDimensions.current
 
-    public val elevation: Elevation
+    val elevation: Elevation
         @Composable
         @ReadOnlyComposable
         get() = LocalElevation.current
 
-    public val motion: Motion
+    val motion: Motion
         @Composable
         @ReadOnlyComposable
         get() = LocalMotion.current
 
-    public val icons: KNetIcons
+    val icons: KNetIcons
         @Composable
         @ReadOnlyComposable
         get() = LocalIcons.current
 
-    public val resources: ResourceProvider
+    val resources: ResourceProvider
         @Composable
         @ReadOnlyComposable
         get() = LocalResources.current

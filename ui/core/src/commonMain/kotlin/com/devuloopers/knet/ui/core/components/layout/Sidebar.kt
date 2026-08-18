@@ -21,7 +21,7 @@ import com.devuloopers.knet.ui.core.components.divider.VerticalDivider
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 @Composable
-public fun KNetSidebar(
+fun KNetSidebar(
     modifier: Modifier = Modifier,
     width: Dp = KNetTheme.dimensions.sidebarWidth,
     title: String? = null,

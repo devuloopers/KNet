@@ -3,6 +3,7 @@ plugins {
 }
 
 dependencies {
+    implementation(project(":core:scripting"))
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
 

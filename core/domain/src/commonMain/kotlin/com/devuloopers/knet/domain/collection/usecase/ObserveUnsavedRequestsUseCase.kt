@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
  *
  * @param repository Interface for accessing collection data storage.
  */
-public class ObserveUnsavedRequestsUseCase(
+class ObserveUnsavedRequestsUseCase(
     private val repository: CollectionsRepository
 ) {
     /**
@@ -17,7 +17,7 @@ public class ObserveUnsavedRequestsUseCase(
      *
      * @return Flow emitting reactive list of active unsaved request session tabs.
      */
-    public fun execute(): Flow<List<SavedApiRequest>> {
+    fun execute(): Flow<List<SavedApiRequest>> {
         return repository.observeUnsavedRequests()
     }
 }

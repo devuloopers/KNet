@@ -4,9 +4,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.domain.collection.model.ApiCollection
 import com.devuloopers.knet.domain.collection.model.CollectionFolder
-import com.devuloopers.knet.domain.collection.model.HttpMethod
 import com.devuloopers.knet.domain.collection.model.SavedApiRequest
 import com.devuloopers.knet.domain.collection.usecase.*
+import com.devuloopers.knet.traffic.model.http.HttpMethod
 import com.devuloopers.knet.ui.desktop.apistudio.dialog.CollectionSaveMode
 import com.devuloopers.knet.ui.desktop.apistudio.model.CollectionsState
 import com.devuloopers.knet.ui.desktop.apistudio.model.RequestDomainConverter.toDomainSavedRequest
@@ -177,7 +177,7 @@ class CollectionsViewModel(
     fun createEmptyUnsavedSession(onSuccess: (String, String) -> Unit) {
         val currentUnsavedRequests = _uiState.value.unsavedRequests
         val sessionNumber = currentUnsavedRequests.size + 1
-        val newId = "unsaved_${System.currentTimeMillis()}"
+        val newId = "unsaved_${Uuid.random()}"
         val sessionName = "Unsaved Session $sessionNumber"
 
         val savedReq = SavedApiRequest(
@@ -314,14 +314,14 @@ class CollectionsViewModel(
         currentEditor: RequestEditorState,
         onSaved: (String) -> Unit = {}
     ) {
-        val linkedId = currentEditor.linkedUnsavedId ?: "unsaved_${System.currentTimeMillis()}"
-        val request = currentEditor.toDomainSavedRequest(id = "req_${System.currentTimeMillis()}", name = requestName)
+        val linkedId = currentEditor.linkedUnsavedId ?: "unsaved_${Uuid.random()}"
+        val request = currentEditor.toDomainSavedRequest(id = "req_${Uuid.random()}", name = requestName)
 
         viewModelScope.launch(ioDispatcher) {
             when (mode) {
                 CollectionSaveMode.NEW_COLLECTION -> {
-                    val colId = "col_${System.currentTimeMillis()}"
-                    val folderId = "fld_${System.currentTimeMillis()}"
+                    val colId = "col_${Uuid.random()}"
+                    val folderId = "fld_${Uuid.random()}"
                     val collection = ApiCollection(id = colId, name = newCollectionName)
                     val folder = CollectionFolder(id = folderId, name = "Requests")
 

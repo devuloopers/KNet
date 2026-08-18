@@ -12,7 +12,7 @@ import com.devuloopers.knet.ui.desktop.scripting.model.ConsoleLogEntry
  * Action button container to copy console log lines.
  */
 @Composable
-public fun ConsoleActions(
+fun ConsoleActions(
     logs: List<ConsoleLogEntry>,
     modifier: Modifier = Modifier
 ) {

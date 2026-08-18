@@ -10,10 +10,10 @@ package com.devuloopers.knet.ui.desktop.certificate.model
  * @property displayName Human-readable format name (e.g. "PKCS#12 (.p12)").
  * @property isKeyContainer True if format typically contains both private key and certificate chain.
  */
-public enum class CertificateFileFormat(
-    public val extension: String,
-    public val displayName: String,
-    public val isKeyContainer: Boolean = false
+enum class CertificateFileFormat(
+    val extension: String,
+    val displayName: String,
+    val isKeyContainer: Boolean = false
 ) {
     PKCS12_P12("p12", "PKCS#12 (.p12)", isKeyContainer = true),
     PKCS12_PFX("pfx", "PKCS#12 (.pfx)", isKeyContainer = true),
@@ -21,28 +21,28 @@ public enum class CertificateFileFormat(
     CRT("crt", "CRT Certificate"),
     CER("cer", "CER Certificate");
 
-    public val dotExtension: String get() = ".$extension"
+    val dotExtension: String get() = ".$extension"
 
-    public companion object {
+    companion object {
         /**
          * Raw extension whitelist derived dynamically from [entries].
          */
-        public val allExtensions: List<String> get() = entries.map { it.extension }
+        val allExtensions: List<String> get() = entries.map { it.extension }
 
         /**
          * Dynamic slash-separated extension descriptor string (e.g. ".p12 / .pfx / .pem / .crt / .cer").
          */
-        public val formattedExtensionsLabel: String get() = entries.joinToString(" / ") { it.dotExtension }
+        val formattedExtensionsLabel: String get() = entries.joinToString(" / ") { it.dotExtension }
 
         /**
          * Dynamic description text summarizing supported formats across cards and empty states.
          */
-        public val defaultDescription: String get() =
+        val defaultDescription: String get() =
             "Import a PKCS#12 (.p12/.pfx), PEM, or CER certificate to authenticate mTLS connections for specific domains."
 
         /**
          * Dynamic footer summary label string.
          */
-        public val supportsFooterLabel: String get() = "Supports: PKCS#12, PEM (CRT / CER + Key)"
+        val supportsFooterLabel: String get() = "Supports: PKCS#12, PEM (CRT / CER + Key)"
     }
 }

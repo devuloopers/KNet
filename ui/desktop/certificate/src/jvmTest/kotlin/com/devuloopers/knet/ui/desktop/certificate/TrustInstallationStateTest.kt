@@ -8,7 +8,7 @@ import kotlin.test.assertTrue
 /**
  * Unit tests verifying the enum values and transitions of [TrustInstallationState].
  */
-public class TrustInstallationStateTest {
+class TrustInstallationStateTest {
 
     /**
      * Verifies that the [TrustInstallationState] enum contains all expected progression states.
@@ -16,7 +16,7 @@ public class TrustInstallationStateTest {
      * Design Intent: UI status indicators depend on these state definitions during CA trust store installation.
      */
     @Test
-    public fun testTrustInstallationStateEnumValues() {
+    fun testTrustInstallationStateEnumValues() {
         val states = TrustInstallationState.entries
         assertTrue(states.contains(TrustInstallationState.CHECKING))
         assertTrue(states.contains(TrustInstallationState.IDLE))

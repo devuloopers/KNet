@@ -15,7 +15,7 @@ import kotlinx.coroutines.flow.map
 /**
  * Concrete desktop implementation of [CollectionsRepository] bridging SQLite Room entities ↔ Domain models.
  */
-public class CollectionsRepositoryImpl(
+class CollectionsRepositoryImpl(
     private val collectionDao: CollectionDao
 ) : CollectionsRepository {
 

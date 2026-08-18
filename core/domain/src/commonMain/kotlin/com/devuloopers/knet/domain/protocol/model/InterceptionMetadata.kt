@@ -6,12 +6,12 @@ package com.devuloopers.knet.domain.protocol.model
  * Used by proxy interceptors and traffic loggers to categorize specialized protocols
  * (such as GraphQL, gRPC, or Protobuf) and surface rich metadata in traffic views.
  */
-public sealed interface InterceptionMetadata {
+sealed interface InterceptionMetadata {
 
     /**
      * Standard HTTP/HTTPS network transaction without specialized protocol metadata.
      */
-    public data object GenericHttp : InterceptionMetadata
+    data object GenericHttp : InterceptionMetadata
 
     /**
      * Strongly-typed metadata representing an intercepted GraphQL operation.
@@ -20,7 +20,7 @@ public sealed interface InterceptionMetadata {
      * @property operationType Operation classification ("Query", "Mutation", or "Subscription").
      * @property querySummary Truncated summary of the GraphQL query string for log displays.
      */
-    public data class GraphQL(
+    data class GraphQL(
         val operationName: String?,
         val operationType: String = "Query",
         val querySummary: String = ""
@@ -32,7 +32,7 @@ public sealed interface InterceptionMetadata {
      * @property serviceName Fully-qualified gRPC service name.
      * @property methodName Target gRPC method name.
      */
-    public data class Grpc(
+    data class Grpc(
         val serviceName: String,
         val methodName: String
     ) : InterceptionMetadata
@@ -42,7 +42,7 @@ public sealed interface InterceptionMetadata {
      *
      * @property messageType Optional decoded message type descriptor name.
      */
-    public data class Protobuf(
+    data class Protobuf(
         val messageType: String? = null
     ) : InterceptionMetadata
 }

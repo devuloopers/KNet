@@ -6,7 +6,7 @@ package com.devuloopers.knet.domain.apistudio.usecase
  *
  * SRP: Encapsulates title uniqueness checks, suffix parsing (`(N)`), and monotonic index generation.
  */
-public class ResolveUniqueSessionTitleUseCase {
+class ResolveUniqueSessionTitleUseCase {
 
     /**
      * Resolves a unique display title for a new or imported request session.
@@ -15,7 +15,7 @@ public class ResolveUniqueSessionTitleUseCase {
      * @param existingTitles List of existing active session display titles.
      * @return A guaranteed unique display title string (e.g. `"/v1/users"` or `"/v1/users (2)"`).
      */
-    public fun execute(
+    fun execute(
         baseTitle: String,
         existingTitles: List<String>
     ): String {

@@ -14,68 +14,68 @@ import kotlinx.coroutines.flow.Flow
  * Room Data Access Object (DAO) for API collections, folders, and saved requests.
  */
 @Dao
-public interface CollectionDao {
+interface CollectionDao {
 
     @Query("SELECT * FROM api_collections ORDER BY updatedAt DESC")
-    public fun getAllCollectionsFlow(): Flow<List<CollectionEntity>>
+    fun getAllCollectionsFlow(): Flow<List<CollectionEntity>>
 
     @Query("SELECT * FROM api_collections WHERE id = :id")
-    public suspend fun getCollectionById(id: String): CollectionEntity?
+    suspend fun getCollectionById(id: String): CollectionEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    public suspend fun insertCollection(collection: CollectionEntity)
+    suspend fun insertCollection(collection: CollectionEntity)
 
     @Query("DELETE FROM api_collections WHERE id = :id")
-    public suspend fun deleteCollection(id: String)
+    suspend fun deleteCollection(id: String)
 
     @Query("DELETE FROM collection_folders WHERE collectionId = :collectionId")
-    public suspend fun deleteFoldersForCollection(collectionId: String)
+    suspend fun deleteFoldersForCollection(collectionId: String)
 
     @Query("DELETE FROM saved_requests WHERE collectionId = :collectionId")
-    public suspend fun deleteRequestsForCollection(collectionId: String)
+    suspend fun deleteRequestsForCollection(collectionId: String)
 
     @Transaction
-    public suspend fun deleteCollectionCascadeTx(id: String) {
+    suspend fun deleteCollectionCascadeTx(id: String) {
         deleteCollection(id)
         deleteFoldersForCollection(id)
         deleteRequestsForCollection(id)
     }
 
     @Query("SELECT * FROM collection_folders ORDER BY orderIndex ASC")
-    public fun getAllFoldersFlow(): Flow<List<CollectionFolderEntity>>
+    fun getAllFoldersFlow(): Flow<List<CollectionFolderEntity>>
 
     @Query("SELECT * FROM saved_requests")
-    public fun getAllRequestsFlow(): Flow<List<SavedRequestEntity>>
+    fun getAllRequestsFlow(): Flow<List<SavedRequestEntity>>
 
     @Query("SELECT * FROM collection_folders WHERE collectionId = :collectionId ORDER BY orderIndex ASC")
-    public suspend fun getFoldersForCollection(collectionId: String): List<CollectionFolderEntity>
+    suspend fun getFoldersForCollection(collectionId: String): List<CollectionFolderEntity>
 
     @Query("SELECT * FROM collection_folders WHERE collectionId = :collectionId ORDER BY orderIndex ASC")
-    public fun getFoldersForCollectionFlow(collectionId: String): Flow<List<CollectionFolderEntity>>
+    fun getFoldersForCollectionFlow(collectionId: String): Flow<List<CollectionFolderEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    public suspend fun insertFolder(folder: CollectionFolderEntity)
+    suspend fun insertFolder(folder: CollectionFolderEntity)
 
     @Query("DELETE FROM collection_folders WHERE id = :id")
-    public suspend fun deleteFolder(id: String)
+    suspend fun deleteFolder(id: String)
 
     @Query("SELECT * FROM saved_requests WHERE folderId = :folderId ORDER BY id ASC")
-    public suspend fun getRequestsForFolder(folderId: String): List<SavedRequestEntity>
+    suspend fun getRequestsForFolder(folderId: String): List<SavedRequestEntity>
 
     @Query("SELECT * FROM saved_requests WHERE collectionId = :collectionId ORDER BY id ASC")
-    public suspend fun getRequestsForCollection(collectionId: String): List<SavedRequestEntity>
+    suspend fun getRequestsForCollection(collectionId: String): List<SavedRequestEntity>
 
     @Query("SELECT * FROM saved_requests WHERE collectionId = :collectionId ORDER BY id ASC")
-    public fun getRequestsForCollectionFlow(collectionId: String): Flow<List<SavedRequestEntity>>
+    fun getRequestsForCollectionFlow(collectionId: String): Flow<List<SavedRequestEntity>>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    public suspend fun insertRequest(request: SavedRequestEntity)
+    suspend fun insertRequest(request: SavedRequestEntity)
 
     @Query("DELETE FROM saved_requests WHERE id = :id")
-    public suspend fun deleteRequest(id: String)
+    suspend fun deleteRequest(id: String)
 
     @Transaction
-    public suspend fun saveUnsavedToNewCollectionTx(
+    suspend fun saveUnsavedToNewCollectionTx(
         collection: CollectionEntity,
         folder: CollectionFolderEntity,
         request: SavedRequestEntity,

@@ -17,7 +17,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * Variables explorer displaying active environment, global, and local variables.
  */
 @Composable
-public fun VariablesExplorer(
+fun VariablesExplorer(
     variables: List<KeyValueEntry>,
     modifier: Modifier = Modifier
 ) {

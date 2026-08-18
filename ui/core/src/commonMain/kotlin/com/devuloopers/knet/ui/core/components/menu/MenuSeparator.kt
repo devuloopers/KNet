@@ -5,7 +5,7 @@ import androidx.compose.ui.Modifier
 import com.devuloopers.knet.ui.core.components.divider.HorizontalDivider
 
 @Composable
-public fun MenuSeparator(
+fun MenuSeparator(
     modifier: Modifier = Modifier
 ) {
     HorizontalDivider(modifier = modifier)

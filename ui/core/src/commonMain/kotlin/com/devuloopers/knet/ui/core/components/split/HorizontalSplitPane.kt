@@ -31,7 +31,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * @param maxSplitRatio Maximum allowable split ratio for the first pane (default: 0.85f).
  */
 @Composable
-public fun HorizontalSplitPane(
+fun HorizontalSplitPane(
     firstPane: @Composable (Modifier) -> Unit,
     secondPane: @Composable (Modifier) -> Unit,
     modifier: Modifier = Modifier,

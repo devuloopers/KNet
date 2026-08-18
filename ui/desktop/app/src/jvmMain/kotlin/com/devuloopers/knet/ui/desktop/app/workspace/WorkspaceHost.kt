@@ -28,8 +28,6 @@ import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.CollectionsViewModel
 import com.devuloopers.knet.ui.desktop.app.navigation.DesktopDestination
 import com.devuloopers.knet.ui.desktop.breakpointmanager.components.AddEditBreakpointRuleDialog
 import com.devuloopers.knet.ui.desktop.breakpointmanager.components.LiveInterceptDrawer
-import com.devuloopers.knet.ui.desktop.breakpointmanager.mapper.toDomainRule
-import com.devuloopers.knet.ui.desktop.breakpointmanager.mapper.toUiModel
 import com.devuloopers.knet.ui.desktop.breakpointmanager.view.BreakpointManagerScreen
 import com.devuloopers.knet.ui.desktop.breakpointmanager.viewmodel.BreakpointManagerViewModel
 import com.devuloopers.knet.ui.desktop.certificate.view.CertificateManagerScreen
@@ -73,11 +71,8 @@ fun KNetWorkspaceHost(
                 )
 
                 if (trafficState.isBreakpointDialogVisible) {
-                    val prefilledUiModel = remember(trafficState.prefilledBreakpointRule) {
-                        trafficState.prefilledBreakpointRule?.toUiModel()
-                    }
                     AddEditBreakpointRuleDialog(
-                        rule = prefilledUiModel,
+                        rule = trafficState.prefilledBreakpointRule,
                         onDismiss = { trafficViewModel.closeBreakpointDialog() },
                         onSave = { urlPattern, method, phase, enabled, protocolCriteria ->
                             trafficViewModel.saveBreakpointRule(urlPattern, method, phase, enabled, protocolCriteria)
@@ -155,10 +150,7 @@ fun KNetWorkspaceHost(
             },
             onDisableRule = {
                 val event = breakpointState.activeEvent ?: return@LiveInterceptDrawer
-                val matchedRule = breakpointState.rules.find { rule ->
-                    rule.toDomainRule().matchesTransaction(event.url, event.method)
-                }
-                breakpointViewModel.disableMatchingRule(matchedRule?.id ?: "")
+                breakpointViewModel.disableMatchingRule(event.ruleId)
             },
             onDismiss = {
                 breakpointViewModel.dismissCurrentEvent()

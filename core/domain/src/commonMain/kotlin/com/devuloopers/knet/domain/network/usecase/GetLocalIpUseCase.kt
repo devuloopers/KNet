@@ -7,13 +7,13 @@ import com.devuloopers.knet.domain.network.repository.NetworkRepository
  *
  * @param repository The network repository interface.
  */
-public class GetLocalIpUseCase(
+class GetLocalIpUseCase(
     private val repository: NetworkRepository
 ) {
     /**
      * Executes single-shot local IPv4 address resolution.
      */
-    public suspend fun execute(): String {
+    suspend fun execute(): String {
         return repository.getLocalIp()
     }
 }

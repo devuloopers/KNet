@@ -40,7 +40,7 @@ import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.apistudio.theme.ApiStudioColors
 
-public data class SidebarRequestItem(
+data class SidebarRequestItem(
     val id: String,
     val name: String,
     val method: String,
@@ -50,7 +50,7 @@ public data class SidebarRequestItem(
     val bodyType: String = "NONE",
     val preRequestScript: String = "",
     val testScript: String = "",
-    val authState: com.devuloopers.knet.ui.desktop.apistudio.model.AuthState = com.devuloopers.knet.ui.desktop.apistudio.model.AuthState(),
+    val authState: com.devuloopers.knet.ui.desktop.httppanel.model.AuthState = com.devuloopers.knet.ui.desktop.httppanel.model.AuthState(),
     /** Non-null when this item belongs to a saved collection. Used for in-place edit routing. */
     val collectionId: String? = null,
     /** Non-null when this item belongs to a saved collection folder. Used for in-place edit routing. */
@@ -58,7 +58,7 @@ public data class SidebarRequestItem(
     val sessionType: com.devuloopers.knet.ui.desktop.apistudio.model.SessionType = com.devuloopers.knet.ui.desktop.apistudio.model.SessionType.UNSAVED_DRAFT
 )
 
-public data class SidebarFolderItem(
+data class SidebarFolderItem(
     val id: String,
     val collectionId: String = id,
     val name: String,
@@ -66,22 +66,16 @@ public data class SidebarFolderItem(
     val isExpanded: Boolean = true
 )
 
-public data class SidebarCollectionItem(
+data class SidebarCollectionItem(
     val id: String,
     val name: String,
     val folders: List<SidebarFolderItem> = emptyList()
 )
 
-public enum class SidebarMode {
-    COLLECTIONS,
-    ENVIRONMENTS,
-    HISTORY
-}
-
 /**
  * Cohesive event callbacks parameter object for [CollectionsSidebar].
  */
-public data class CollectionsSidebarActions(
+data class CollectionsSidebarActions(
     val onRequestSelected: (SidebarRequestItem) -> Unit = {},
     val onSaveUnsavedRequest: (SidebarRequestItem) -> Unit = {},
     val onDeleteUnsavedRequest: (SidebarRequestItem) -> Unit = {},
@@ -98,7 +92,7 @@ public data class CollectionsSidebarActions(
  * Cohesive parameter object overload for [CollectionsSidebar].
  */
 @Composable
-public fun CollectionsSidebar(
+fun CollectionsSidebar(
     state: com.devuloopers.knet.ui.desktop.apistudio.model.CollectionsState,
     actions: CollectionsSidebarActions = CollectionsSidebarActions(),
     selectedRequestId: String?,
@@ -126,7 +120,7 @@ public fun CollectionsSidebar(
  * Leftmost Collections Sidebar component for KNet API Studio.
  */
 @Composable
-public fun CollectionsSidebar(
+fun CollectionsSidebar(
     unsavedRequests: List<SidebarRequestItem> = emptyList(),
     collections: List<SidebarFolderItem> = emptyList(),
     selectedRequestId: String?,

@@ -2,6 +2,7 @@ package com.devuloopers.knet.core.http
 
 import com.devuloopers.knet.core.http.client.KNetApiClient
 import com.devuloopers.knet.core.http.routing.DefaultProxyRoutingStrategy
+import com.devuloopers.knet.traffic.model.http.HttpMethod
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpStatusCode
@@ -11,8 +12,6 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
-
-import com.devuloopers.knet.core.http.execution.HttpExecutor
 
 class ProxyRoutingTest {
 
@@ -36,8 +35,8 @@ class ProxyRoutingTest {
             respond(content = "Direct Response", status = HttpStatusCode.OK, headers = headersOf())
         }
 
-        val client: HttpExecutor = KNetApiClient(proxyPort = null, customEngine = mockEngine)
-        val result = client.execute("https://api.knet.dev/data")
+        val client = KNetApiClient(proxyPort = null, customEngine = mockEngine)
+        val result = client.executeDetailed(url = "https://api.knet.dev/data", method = HttpMethod.GET)
 
         assertEquals(200, result.statusCode)
         assertEquals("Direct Response", result.responseBody)

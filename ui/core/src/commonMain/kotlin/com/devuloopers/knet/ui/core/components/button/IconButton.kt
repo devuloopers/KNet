@@ -18,7 +18,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * High-density square/round icon button.
  */
 @Composable
-public fun KNetIconButton(
+fun KNetIconButton(
     onClick: () -> Unit,
     icon: ImageVector,
     contentDescription: String?,

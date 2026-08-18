@@ -40,6 +40,9 @@ data class AuthState(
  * @return Mapped UI presentation [AuthState].
  */
 fun ApiRequestAuth.toAuthState(): AuthState = when (this) {
+    ApiRequestAuth.None -> AuthState(authType = AuthType.NO_AUTH)
+    ApiRequestAuth.Inherit -> AuthState(authType = AuthType.INHERIT)
+
     is ApiRequestAuth.Bearer -> AuthState(
         authType = AuthType.BEARER_TOKEN,
         bearerToken = token
@@ -62,5 +65,23 @@ fun ApiRequestAuth.toAuthState(): AuthState = when (this) {
         ) ApiKeyLocation.QUERY_PARAMS else ApiKeyLocation.HEADER
     )
 
-    else -> AuthState(authType = AuthType.NO_AUTH)
+    is ApiRequestAuth.OAuth2 -> AuthState(
+        authType = AuthType.BEARER_TOKEN,
+        bearerToken = token,
+    )
+
+    is ApiRequestAuth.AwsSignature -> AuthState(authType = AuthType.NO_AUTH)
+}
+
+/** Converts the shared HTTP authentication editor state to its canonical authored value. */
+fun AuthState.toApiRequestAuth(): ApiRequestAuth = when (authType) {
+    AuthType.NO_AUTH -> ApiRequestAuth.None
+    AuthType.BEARER_TOKEN -> ApiRequestAuth.Bearer(bearerToken)
+    AuthType.BASIC_AUTH -> ApiRequestAuth.Basic(username = basicUsername, password = basicPassword)
+    AuthType.API_KEY -> ApiRequestAuth.ApiKey(
+        name = apiKeyName.ifBlank { "X-API-Key" },
+        value = apiKeyValue,
+        location = apiKeyLocation.label,
+    )
+    AuthType.INHERIT -> ApiRequestAuth.Inherit
 }

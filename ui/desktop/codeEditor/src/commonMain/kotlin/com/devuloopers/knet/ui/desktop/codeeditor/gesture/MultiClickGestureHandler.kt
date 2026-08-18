@@ -3,6 +3,11 @@ package com.devuloopers.knet.ui.desktop.codeeditor.gesture
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.WordBoundaryEngine
 import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorSelection
 import kotlin.math.abs
+import kotlin.time.TimeSource
+
+private val gestureTimeOrigin = TimeSource.Monotonic.markNow()
+
+internal fun currentGestureTimeMillis(): Long = gestureTimeOrigin.elapsedNow().inWholeMilliseconds
 
 /**
  * Specialized gesture handler managing Double-Click word selection, Triple-Click line selection,
@@ -50,7 +55,7 @@ class MultiClickGestureHandler {
         targetLineIndex: Int,
         targetColIndex: Int,
         lineText: String,
-        currentTimeMs: Long = System.currentTimeMillis()
+        currentTimeMs: Long = currentGestureTimeMillis()
     ): EditorSelection? {
         val isSamePosition = (lastClickLineIndex == targetLineIndex && abs(lastClickColIndex - targetColIndex) <= 2)
         clickCount = if (currentTimeMs - lastClickTimeMs <= MULTI_CLICK_INTERVAL_MS && isSamePosition) {

@@ -5,7 +5,6 @@ import com.devuloopers.knet.engine.formatter.model.BodyFormat
 import com.devuloopers.knet.engine.formatter.util.RawProtobufWireDecoder
 import com.google.protobuf.DynamicMessage
 import com.google.protobuf.util.JsonFormat
-import java.nio.charset.StandardCharsets
 
 /**
  * Strategy formatter for Protobuf and binary payload descriptors.
@@ -23,7 +22,7 @@ class ProtobufBinaryFormatter : BodyFormatter {
     }
 
     override fun format(headers: Map<String, String>, bodyText: String): BodyFormat {
-        val bytes = bodyText.toByteArray(StandardCharsets.ISO_8859_1)
+        val bytes = bodyText.toByteArray(Charsets.ISO_8859_1)
 
         val messageType = headers["x-protobuf-schema"] ?: headers["x-protobuf-message"] ?: ""
         if (messageType.isNotEmpty()) {

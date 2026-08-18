@@ -16,7 +16,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * Domain-agnostic compact badge/tag primitive.
  */
 @Composable
-public fun KNetBadge(
+fun KNetBadge(
     text: String,
     modifier: Modifier = Modifier,
     containerColor: Color = KNetTheme.colors.surfaceVariant,

@@ -4,17 +4,11 @@ import com.devuloopers.knet.domain.clientNetwork.model.NetworkFailureReason
 import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.RedirectResponseException
 import kotlinx.coroutines.CancellationException
-import java.net.ConnectException
-import java.net.NoRouteToHostException
-import java.net.SocketException
-import java.net.SocketTimeoutException
-import java.net.UnknownHostException
-import javax.net.ssl.SSLException
 
 /**
  * Utility inspector that maps caught runtime execution exceptions to strongly-typed [NetworkFailureReason] variants.
  */
-public object NetworkExceptionClassifier {
+object NetworkExceptionClassifier {
 
     /**
      * Inspects a caught execution exception and extracts host/url metadata to classify
@@ -25,7 +19,7 @@ public object NetworkExceptionClassifier {
      * @param timeoutMs Configured request timeout in milliseconds.
      * @return Strongly-typed [NetworkFailureReason] variant.
      */
-    public fun classify(
+    fun classify(
         exception: Throwable,
         targetUrl: String = "",
         timeoutMs: Long = 0L
@@ -48,6 +42,7 @@ public object NetworkExceptionClassifier {
         while (current != null) {
             val message = current.message?.lowercase().orEmpty()
             val className = current::class.simpleName?.lowercase().orEmpty()
+            val platformFailure = current.platformNetworkFailure()
 
             when {
                 // 1. Invalid URL / Malformed scheme
@@ -56,7 +51,7 @@ public object NetworkExceptionClassifier {
                 }
 
                 // 2. DNS Host Resolution Failure (including NIO UnresolvedAddressException)
-                current is UnknownHostException || current is java.nio.channels.UnresolvedAddressException ||
+                platformFailure == PlatformNetworkFailure.DNS ||
                         className.contains("unresolved") || className.contains("unknownhost") ||
                         message.contains("no such host") || message.contains("host not found") || message.contains("name or service not known") -> {
                     val hostName = extractedHost.ifBlank { targetUrl }
@@ -67,7 +62,7 @@ public object NetworkExceptionClassifier {
                 }
 
                 // 3. Timeout
-                current is HttpRequestTimeoutException || current is SocketTimeoutException || className.contains("timeout") ||
+                current is HttpRequestTimeoutException || platformFailure == PlatformNetworkFailure.TIMEOUT || className.contains("timeout") ||
                         message.contains("timed out") || message.contains("timeout") -> {
                     return NetworkFailureReason.Timeout(
                         timeoutMs = timeoutMs,
@@ -76,7 +71,7 @@ public object NetworkExceptionClassifier {
                 }
 
                 // 4. SSL / TLS Handshake Failure
-                current is SSLException || className.contains("ssl") || className.contains("cert") ||
+                platformFailure == PlatformNetworkFailure.TLS || className.contains("ssl") || className.contains("cert") ||
                         message.contains("ssl") || message.contains("certificate") -> {
                     return NetworkFailureReason.SslHandshakeFailed(
                         detail = current.message?.takeIf { it.isNotBlank() } ?: "Failed to establish a secure SSL/TLS connection."
@@ -99,8 +94,7 @@ public object NetworkExceptionClassifier {
                 }
 
                 // 7. Network Offline / Connection Refused / Server Unreachable
-                current is ConnectException || current is SocketException || current is NoRouteToHostException ||
-                        current is java.nio.channels.ClosedChannelException || className.contains("connect") || className.contains("socket") ||
+                platformFailure == PlatformNetworkFailure.UNREACHABLE || className.contains("connect") || className.contains("socket") ||
                         message.contains("connection refused") || message.contains("unreachable") || message.contains("connection reset") -> {
                     return NetworkFailureReason.OfflineOrUnreachable(
                         detail = current.message?.takeIf { it.isNotBlank() } ?: "Could not establish connection to target host/port."

@@ -5,9 +5,12 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.text.TextContextMenu
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import com.devuloopers.knet.ui.core.components.menu.ContextMenuItem
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.DocumentBuffer
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.FoldRegion
+import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.PasteEngine
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.SelectionEngine
+import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorCaretState
 import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorSelection
 
 /**
@@ -38,9 +41,11 @@ fun rememberEditorContextMenuItems(
     collapsedFoldStartLines: Set<Int>,
     mode: LazyCodeBodyMode,
     copyAction: (String) -> Unit,
-    pasteAction: () -> String?,
+    pasteAction: ((String) -> Unit) -> Unit,
     onDocumentLinesChanged: ((List<String>) -> Unit)?,
-    onSelectionChange: ((EditorSelection?) -> Unit)?
+    onSelectionChange: ((EditorSelection?) -> Unit)?,
+    caretState: EditorCaretState?,
+    onCaretStateChange: ((EditorCaretState) -> Unit)?,
 ): List<ContextMenuItem> = remember(
     copyAction,
     pasteAction,
@@ -48,7 +53,8 @@ fun rememberEditorContextMenuItems(
     effectiveSelection,
     foldRegions,
     collapsedFoldStartLines,
-    mode
+    mode,
+    caretState,
 ) {
     val selectedText = if (effectiveSelection != null && !effectiveSelection.isEmpty) {
         SelectionEngine.extractSelectedText(
@@ -96,7 +102,29 @@ fun rememberEditorContextMenuItems(
             ContextMenuItem(
                 label = "Paste",
                 shortcut = "Ctrl+V",
-                onClick = { pasteAction() }
+                onClick = {
+                    pasteAction { clipboardText ->
+                        val documentBuffer = DocumentBuffer(rawLines)
+                        var activeCaret = caretState ?: EditorCaretState(0, 0)
+                        if (effectiveSelection != null && !effectiveSelection.isEmpty) {
+                            activeCaret = SelectionEngine.deleteSelectedText(
+                                buffer = documentBuffer,
+                                selection = effectiveSelection,
+                                foldRegions = foldRegions,
+                                collapsedFoldStartLines = collapsedFoldStartLines,
+                            )
+                            onSelectionChange?.invoke(null)
+                        }
+                        val updatedCaret = PasteEngine.applyPaste(
+                            buffer = documentBuffer,
+                            lineIndex = activeCaret.lineIndex,
+                            caretCol = activeCaret.colIndex,
+                            pastedText = clipboardText,
+                        )
+                        onDocumentLinesChanged?.invoke(documentBuffer.getLines())
+                        onCaretStateChange?.invoke(updatedCaret)
+                    }
+                }
             )
         )
     }

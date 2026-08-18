@@ -8,7 +8,7 @@ import androidx.compose.ui.unit.dp
 /**
  * Responsive window size classification for desktop displays.
  */
-public enum class WindowSizeClass {
+enum class WindowSizeClass {
     Compact,   // < 1280dp
     Medium,    // 1280dp - 1919dp
     Expanded   // >= 1920dp
@@ -18,7 +18,7 @@ public enum class WindowSizeClass {
  * Window information holder.
  */
 @Immutable
-public data class WindowInfo(
+data class WindowInfo(
     val widthSizeClass: WindowSizeClass,
     val heightSizeClass: WindowSizeClass,
     val screenWidthDp: Dp,
@@ -28,7 +28,7 @@ public data class WindowInfo(
 /**
  * Calculates current [WindowInfo] given width and height in Dp.
  */
-public fun calculateWindowInfo(widthDp: Dp, heightDp: Dp): WindowInfo {
+fun calculateWindowInfo(widthDp: Dp, heightDp: Dp): WindowInfo {
     val widthClass = when {
         widthDp < 1280.dp -> WindowSizeClass.Compact
         widthDp < 1920.dp -> WindowSizeClass.Medium

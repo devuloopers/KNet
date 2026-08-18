@@ -6,9 +6,9 @@ import androidx.compose.runtime.Immutable
  * Localization configuration holder.
  */
 @Immutable
-public data class LocalizationConfig(
+data class LocalizationConfig(
     val languageCode: String = "en",
     val isRtl: Boolean = false
 )
 
-public val DefaultLocalizationConfig: LocalizationConfig = LocalizationConfig()
+val DefaultLocalizationConfig: LocalizationConfig = LocalizationConfig()

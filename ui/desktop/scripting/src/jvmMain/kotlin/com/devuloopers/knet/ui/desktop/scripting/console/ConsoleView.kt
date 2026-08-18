@@ -24,7 +24,7 @@ import com.devuloopers.knet.ui.desktop.scripting.model.ConsoleLogLevel
  * ConsoleView displays logs with levels INFO, WARN, ERROR, DEBUG.
  */
 @Composable
-public fun ConsoleView(
+fun ConsoleView(
     logs: List<ConsoleLogEntry>,
     filter: String,
     autoScroll: Boolean,

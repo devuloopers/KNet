@@ -1,14 +1,6 @@
 package com.devuloopers.knet.engine.script.api
 
-/**
- * Supported scripting languages for KNet API Studio.
- */
-enum class ScriptLanguage {
-    /** JavaScript language engine powered by GraalJS. */
-    JAVASCRIPT,
-    /** Kotlin Scripting language engine powered by kotlin-scripting-jvm. */
-    KOTLIN
-}
+import com.devuloopers.knet.scripting.model.ScriptAssertion
 
 /**
  * Request model exposed to scripts for inspecting or mutating outgoing HTTP request data.
@@ -47,21 +39,6 @@ data class ScriptResponseModel(
 )
 
 /**
- * Result model capturing individual test assertion outcome.
- *
- * @property name Name or description of the test assertion.
- * @property passed True if assertion succeeded, false if failed.
- * @property errorMessage Optional failure diagnostic message if assertion failed.
- * @property durationMs Execution duration of the test assertion in milliseconds.
- */
-data class ScriptTestResult(
-    val name: String,
-    val passed: Boolean,
-    val errorMessage: String? = null,
-    val durationMs: Long = 0L
-)
-
-/**
  * Sealed hierarchy of unified script execution outcomes.
  */
 sealed class ScriptExecutionResult {
@@ -70,13 +47,13 @@ sealed class ScriptExecutionResult {
      * Successful script execution output model.
      *
      * @property request The final (potentially mutated) request state.
-     * @property testResults List of [ScriptTestResult] instances recorded during execution.
+     * @property testResults List of [ScriptAssertion] instances recorded during execution.
      * @property environmentUpdates Final snapshot of environment variables after script execution.
      * @property logs Captured console log output lines.
      */
     data class Success(
         val request: ScriptRequestModel,
-        val testResults: List<ScriptTestResult>,
+        val testResults: List<ScriptAssertion>,
         val environmentUpdates: Map<String, String>,
         val logs: List<String>
     ) : ScriptExecutionResult()

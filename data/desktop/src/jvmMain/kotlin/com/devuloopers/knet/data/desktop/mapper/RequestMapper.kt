@@ -2,23 +2,19 @@ package com.devuloopers.knet.data.desktop.mapper
 
 import com.devuloopers.knet.domain.collection.model.ApiRequestBody
 import com.devuloopers.knet.domain.collection.model.ApiRequestScripts
-import com.devuloopers.knet.domain.collection.model.HttpMethod
 import com.devuloopers.knet.domain.collection.model.RequestHeader
 import com.devuloopers.knet.domain.collection.model.SavedApiRequest
-import com.devuloopers.knet.domain.scripting.model.ScriptLanguage
+import com.devuloopers.knet.scripting.model.ScriptLanguage
 import com.devuloopers.knet.storage.apistudio.entity.SavedRequestEntity
+import com.devuloopers.knet.traffic.model.http.HttpMethod
 
 /**
  * Maps between SQLite Room saved request entities and Domain saved request models.
  */
-public object RequestMapper {
+object RequestMapper {
 
-    public fun mapEntityToDomain(entity: SavedRequestEntity): SavedApiRequest {
-        val methodEnum = try {
-            HttpMethod.valueOf(entity.method.uppercase())
-        } catch (_: Exception) {
-            HttpMethod.GET
-        }
+    fun mapEntityToDomain(entity: SavedRequestEntity): SavedApiRequest {
+        val method = HttpMethod.fromToken(entity.method)
 
         val scriptLangEnum = try {
             ScriptLanguage.valueOf(entity.scriptLanguage.uppercase())
@@ -37,8 +33,7 @@ public object RequestMapper {
         return SavedApiRequest(
             id = entity.id,
             name = entity.name,
-            method = methodEnum,
-            customMethod = entity.customMethod,
+            method = method,
             url = entity.url,
             headers = headersList,
             body = ApiRequestBody(content = entity.bodyContent, type = entity.bodyType),
@@ -51,7 +46,7 @@ public object RequestMapper {
         )
     }
 
-    public fun mapDomainToEntity(
+    fun mapDomainToEntity(
         request: SavedApiRequest,
         collectionId: String,
         folderId: String = ""
@@ -63,8 +58,7 @@ public object RequestMapper {
             collectionId = collectionId,
             folderId = folderId,
             name = request.name,
-            method = request.method.name,
-            customMethod = request.customMethod,
+            method = request.method.token,
             url = request.url,
             headersJson = headersJsonStr,
             bodyContent = request.body.content,

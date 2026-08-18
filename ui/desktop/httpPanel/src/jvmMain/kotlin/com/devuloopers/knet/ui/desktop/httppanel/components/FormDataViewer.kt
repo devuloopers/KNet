@@ -15,7 +15,7 @@ import com.devuloopers.knet.ui.core.components.keyvalue.KeyValueEntry
  * @param modifier Composable layout modifier.
  */
 @Composable
-public fun FormDataViewer(
+fun FormDataViewer(
     pairs: List<Pair<String, String>>,
     modifier: Modifier = Modifier
 ) {

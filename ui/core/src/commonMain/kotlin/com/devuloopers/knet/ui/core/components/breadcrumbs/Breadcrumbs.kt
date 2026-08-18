@@ -15,7 +15,7 @@ import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 @Composable
-public fun KNetBreadcrumbItem(
+fun KNetBreadcrumbItem(
     label: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
@@ -49,7 +49,7 @@ public fun KNetBreadcrumbItem(
 }
 
 @Composable
-public fun KNetBreadcrumbBar(
+fun KNetBreadcrumbBar(
     items: List<Pair<String, () -> Unit>>,
     modifier: Modifier = Modifier
 ) {

@@ -19,7 +19,7 @@ import com.devuloopers.knet.ui.core.foundation.pointer.resizeVerticalCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 @Composable
-public fun VerticalSplitPane(
+fun VerticalSplitPane(
     topPane: @Composable (Modifier) -> Unit,
     bottomPane: @Composable (Modifier) -> Unit,
     modifier: Modifier = Modifier,

@@ -3,7 +3,7 @@ package com.devuloopers.knet.domain.clientNetwork.decoder
 /**
  * Stage 3 binary detection engine combining [MediaTypeInspector] and byte heuristic sampling via [BinaryDetectionPolicy].
  */
-public object BinaryDetector {
+object BinaryDetector {
 
     /**
      * Determines whether the given byte payload is binary content.
@@ -13,7 +13,7 @@ public object BinaryDetector {
      * @param policy Configurable [BinaryDetectionPolicy] settings.
      * @return [BinaryCategory] if payload is binary, or null if text/printable payload.
      */
-    public fun detectBinaryCategory(
+    fun detectBinaryCategory(
         bytes: ByteArray,
         contentType: String?,
         policy: BinaryDetectionPolicy = BinaryDetectionPolicy.DEFAULT

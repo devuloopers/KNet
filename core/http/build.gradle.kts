@@ -3,6 +3,10 @@ plugins {
 }
 
 kotlin {
+    compilerOptions {
+        freeCompilerArgs.add("-Xexpect-actual-classes")
+    }
+
     jvm()
 
     sourceSets {
@@ -15,6 +19,7 @@ kotlin {
                 implementation(libs.kotlinx.serialization.json)
                 api(project(":core:domain"))
                 api(project(":core:logger"))
+                api(project(":core:traffic"))
             }
         }
         val jvmMain by getting {

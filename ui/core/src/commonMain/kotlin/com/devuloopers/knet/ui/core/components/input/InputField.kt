@@ -79,7 +79,7 @@ private class BelowAnchorPopupPositionProvider(
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-public fun KNetTextField(
+fun KNetTextField(
     value: TextFieldValue,
     onValueChange: (TextFieldValue) -> Unit,
     modifier: Modifier = Modifier,
@@ -241,7 +241,7 @@ public fun KNetTextField(
  * Convenience String overload for KNetTextField.
  */
 @Composable
-public fun KNetTextField(
+fun KNetTextField(
     value: String,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -269,7 +269,7 @@ public fun KNetTextField(
  * Convenience inline overload for simple single-line fields with discrete arguments.
  */
 @Composable
-public fun KNetTextField(
+fun KNetTextField(
     value: String,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -309,7 +309,7 @@ public fun KNetTextField(
  * Convenience inline overload for simple single-line fields with discrete arguments (TextFieldValue).
  */
 @Composable
-public fun KNetTextField(
+fun KNetTextField(
     value: TextFieldValue,
     onValueChange: (TextFieldValue) -> Unit,
     modifier: Modifier = Modifier,
@@ -349,7 +349,7 @@ public fun KNetTextField(
  * High-density input field wrapper alias (TextFieldValue variant).
  */
 @Composable
-public fun KNetInputField(
+fun KNetInputField(
     value: TextFieldValue,
     onValueChange: (TextFieldValue) -> Unit,
     modifier: Modifier = Modifier,
@@ -390,7 +390,7 @@ public fun KNetInputField(
  * High-density input field wrapper alias.
  */
 @Composable
-public fun KNetInputField(
+fun KNetInputField(
     value: String,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -431,7 +431,7 @@ public fun KNetInputField(
  * Password field with toggleable trailing visibility icon.
  */
 @Composable
-public fun KNetPasswordField(
+fun KNetPasswordField(
     value: String,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -455,7 +455,7 @@ public fun KNetPasswordField(
  * Multi-line field container composable.
  */
 @Composable
-public fun KNetMultilineField(
+fun KNetMultilineField(
     value: String,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,

@@ -5,7 +5,7 @@ package com.devuloopers.knet.domain.traffic.model
  *
  * @property label User-facing display label for UI rendering.
  */
-public enum class ProtocolFilter(val label: String) {
+enum class ProtocolFilter(val label: String) {
     ALL("All"),
     HTTP("HTTP"),
     HTTPS("HTTPS"),

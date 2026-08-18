@@ -3,7 +3,7 @@ package com.devuloopers.knet.domain.clientNetwork.decoder
 /**
  * Pure domain Media Type (Content-Type) inspector stage.
  */
-public object MediaTypeInspector {
+object MediaTypeInspector {
 
     private val OHTTP_TYPES = setOf(
         "message/ohttp-req",
@@ -47,7 +47,7 @@ public object MediaTypeInspector {
      * @param contentType Optional Content-Type header value.
      * @return [BinaryCategory] if the Content-Type matches a known binary category, or null if text/unknown.
      */
-    public fun inspectCategory(contentType: String?): BinaryCategory? {
+    fun inspectCategory(contentType: String?): BinaryCategory? {
         if (contentType.isNullOrBlank()) return null
         val lower = contentType.lowercase()
 

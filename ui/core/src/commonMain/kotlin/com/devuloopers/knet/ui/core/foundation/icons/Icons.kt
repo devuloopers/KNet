@@ -2,6 +2,7 @@ package com.devuloopers.knet.ui.core.foundation.icons
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.*
@@ -24,7 +25,7 @@ object KNetIcons {
     val Play: ImageVector = Icons.Default.PlayArrow
     val Settings: ImageVector = Icons.Default.Settings
     val ChevronDown: ImageVector = Icons.Default.KeyboardArrowDown
-    val ChevronRight: ImageVector = Icons.Default.KeyboardArrowRight
+    val ChevronRight: ImageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight
     val Info: ImageVector = Icons.Default.Info
     val Warning: ImageVector = Icons.Default.Warning
     val Back: ImageVector = Icons.AutoMirrored.Filled.ArrowBack

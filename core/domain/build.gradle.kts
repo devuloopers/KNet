@@ -3,6 +3,10 @@ plugins {
 }
 
 kotlin {
+    compilerOptions {
+        freeCompilerArgs.add("-Xexpect-actual-classes")
+    }
+
     jvm()
 
     sourceSets {
@@ -11,6 +15,8 @@ kotlin {
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.kotlinx.serialization.json)
                 api(project(":core:logger"))
+                api(project(":core:traffic"))
+                api(project(":core:scripting"))
             }
         }
         val jvmMain by getting {
@@ -54,15 +60,15 @@ val generateAppMetadata by tasks.registering {
              * Auto-generated Application Metadata driven directly by Gradle properties.
              * Single source of truth across all platforms, CI/CD distributions, and UI badges.
              */
-            public object AppMetadata {
-                public const val APP_NAME: String = "$appName"
-                public const val APP_VERSION: String = "$appVersion"
-                public const val APP_DESCRIPTION: String = "$appDescription"
-                public const val APP_SUITE_NAME: String = "$appSuiteName"
-                public const val APP_PACKAGE_ID: String = "$appPackageId"
+            object AppMetadata {
+                const val APP_NAME: String = "$appName"
+                const val APP_VERSION: String = "$appVersion"
+                const val APP_DESCRIPTION: String = "$appDescription"
+                const val APP_SUITE_NAME: String = "$appSuiteName"
+                const val APP_PACKAGE_ID: String = "$appPackageId"
 
-                public val APP_DISPLAY_TITLE: String get() = "$appName $appDescription"
-                public val APP_VERSION_LABEL: String get() = "$appSuiteName v$appVersion"
+                val APP_DISPLAY_TITLE: String get() = "$appName $appDescription"
+                val APP_VERSION_LABEL: String get() = "$appSuiteName v$appVersion"
             }
             """.trimIndent()
         )
@@ -74,4 +80,3 @@ kotlin.sourceSets.getByName("commonMain").kotlin.srcDir(generateAppMetadata.map 
 tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompilationTask<*>>().configureEach {
     dependsOn(generateAppMetadata)
 }
-

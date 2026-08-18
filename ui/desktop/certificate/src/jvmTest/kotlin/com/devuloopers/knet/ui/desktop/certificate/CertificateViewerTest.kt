@@ -7,7 +7,7 @@ import kotlin.test.assertEquals
 /**
  * Unit tests verifying properties of [CertificateSummary] used by the Certificate Viewer panel.
  */
-public class CertificateViewerTest {
+class CertificateViewerTest {
 
     /**
      * Verifies that the constructor of [CertificateSummary] populates all fields correctly.
@@ -15,7 +15,7 @@ public class CertificateViewerTest {
      * Design Intent: Summaries of certificates are shown in UI grids/tables before expanding details.
      */
     @Test
-    public fun testCertificateSummaryProperties() {
+    fun testCertificateSummaryProperties() {
         val summary = CertificateSummary(
             alias = "dev-cert",
             subject = "CN=dev-cert, O=Devuloopers",

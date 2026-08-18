@@ -10,7 +10,7 @@ import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 @Composable
-public fun OverlayHost(
+fun OverlayHost(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
@@ -20,7 +20,7 @@ public fun OverlayHost(
 }
 
 @Composable
-public fun FloatingPanel(
+fun FloatingPanel(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
@@ -40,7 +40,7 @@ public fun FloatingPanel(
 }
 
 @Composable
-public fun Popover(
+fun Popover(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
@@ -48,7 +48,7 @@ public fun Popover(
 }
 
 @Composable
-public fun ContextOverlay(
+fun ContextOverlay(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {

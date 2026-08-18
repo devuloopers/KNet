@@ -13,6 +13,6 @@ sealed interface RulesUiState {
      * @property rules Active rules list.
      */
     data class Success(
-        val rules: List<RuleModel>
+        val rules: List<BreakpointRule>
     ) : RulesUiState
 }

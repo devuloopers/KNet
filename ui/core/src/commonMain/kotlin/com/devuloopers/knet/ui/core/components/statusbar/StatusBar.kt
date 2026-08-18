@@ -16,7 +16,7 @@ import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 @Composable
-public fun StatusItem(
+fun StatusItem(
     text: String,
     modifier: Modifier = Modifier
 ) {
@@ -31,14 +31,14 @@ public fun StatusItem(
 }
 
 @Composable
-public fun RowScope.FlexibleSpacer(
+fun RowScope.FlexibleSpacer(
     modifier: Modifier = Modifier
 ) {
     Spacer(modifier = modifier.weight(1f))
 }
 
 @Composable
-public fun KNetStatusBar(
+fun KNetStatusBar(
     modifier: Modifier = Modifier,
     content: @Composable RowScope.() -> Unit
 ) {

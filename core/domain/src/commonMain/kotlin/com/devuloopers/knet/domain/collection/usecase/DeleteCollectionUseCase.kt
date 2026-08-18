@@ -7,7 +7,7 @@ import com.devuloopers.knet.domain.collection.repository.CollectionsRepository
  *
  * @param repository The repository managing collection data.
  */
-public class DeleteCollectionUseCase(
+class DeleteCollectionUseCase(
     private val repository: CollectionsRepository
 ) {
     /**
@@ -15,7 +15,7 @@ public class DeleteCollectionUseCase(
      *
      * @param collectionId ID of the collection to delete.
      */
-    public suspend fun execute(collectionId: String) {
+    suspend fun execute(collectionId: String) {
         repository.deleteCollection(collectionId)
     }
 }

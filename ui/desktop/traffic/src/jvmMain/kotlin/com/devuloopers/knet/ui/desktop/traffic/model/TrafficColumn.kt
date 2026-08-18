@@ -7,7 +7,7 @@ package com.devuloopers.knet.ui.desktop.traffic.model
  * @property isMandatory If true, column cannot be hidden by user toggle.
  * @property isDefaultVisible If true, column starts visible on initial launch.
  */
-public enum class TrafficColumn(
+enum class TrafficColumn(
     val displayName: String,
     val isMandatory: Boolean = false,
     val isDefaultVisible: Boolean = true

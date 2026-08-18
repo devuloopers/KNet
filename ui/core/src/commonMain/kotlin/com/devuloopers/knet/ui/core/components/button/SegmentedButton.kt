@@ -14,7 +14,7 @@ import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 @Composable
-public fun KNetSegmentedButton(
+fun KNetSegmentedButton(
     options: List<String>,
     selectedIndex: Int,
     onOptionSelected: (Int) -> Unit,
@@ -51,7 +51,7 @@ public fun KNetSegmentedButton(
 }
 
 @Composable
-public fun SegmentedButton(
+fun SegmentedButton(
     options: List<String>,
     selectedIndex: Int,
     onOptionSelected: (Int) -> Unit,

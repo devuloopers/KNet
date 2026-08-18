@@ -10,7 +10,7 @@ import com.devuloopers.knet.ui.desktop.scripting.model.ScriptDiagnostic
  * DiagnosticsView container combining both compiling errors/problems list and suggestions.
  */
 @Composable
-public fun DiagnosticsView(
+fun DiagnosticsView(
     diagnostics: List<ScriptDiagnostic>,
     onDiagnosticSelect: (ScriptDiagnostic) -> Unit,
     modifier: Modifier = Modifier

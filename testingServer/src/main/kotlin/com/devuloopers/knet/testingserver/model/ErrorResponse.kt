@@ -1,6 +1,6 @@
 package com.devuloopers.knet.testingserver.model
 
-import java.time.Instant
+import kotlin.time.Clock
 
 /**
  * Standardized DTO for testing server error responses.
@@ -10,5 +10,5 @@ data class ErrorResponse(
     val status: Int = 400,
     val error: String = "Bad Request",
     val path: String = "",
-    val timestamp: String = Instant.now().toString()
+    val timestamp: String = Clock.System.now().toString()
 )

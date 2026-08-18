@@ -7,6 +7,6 @@ import androidx.compose.ui.unit.Dp
  * Remember window info composable calculation helper.
  */
 @Composable
-public fun rememberWindowInfo(width: Dp, height: Dp): WindowInfo {
+fun rememberWindowInfo(width: Dp, height: Dp): WindowInfo {
     return calculateWindowInfo(width, height)
 }

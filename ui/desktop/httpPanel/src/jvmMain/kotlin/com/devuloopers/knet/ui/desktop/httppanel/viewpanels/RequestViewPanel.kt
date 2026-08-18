@@ -33,7 +33,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
  * @param modifier Composable layout modifier.
  */
 @Composable
-public fun RequestViewPanel(
+fun RequestViewPanel(
     spec: NetworkRequestSpec,
     payloadSpec: PayloadInspectionSpec? = null,
     isPreparing: Boolean = false,

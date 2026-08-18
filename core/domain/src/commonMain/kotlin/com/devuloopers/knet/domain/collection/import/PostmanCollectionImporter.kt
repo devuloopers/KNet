@@ -3,16 +3,19 @@ package com.devuloopers.knet.domain.collection.import
 import com.devuloopers.knet.domain.collection.model.ApiCollection
 import com.devuloopers.knet.domain.collection.model.ApiRequestBody
 import com.devuloopers.knet.domain.collection.model.CollectionFolder
-import com.devuloopers.knet.domain.collection.model.HttpMethod
 import com.devuloopers.knet.domain.collection.model.SavedApiRequest
+import com.devuloopers.knet.traffic.model.http.HttpMethod
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 /**
  * Parser utility converting Postman v2.1 JSON collection specifications into KNet [ApiCollection] domain models.
  */
+@OptIn(ExperimentalUuidApi::class)
 class PostmanCollectionImporter {
 
     private val json = Json { ignoreUnknownKeys = true }
@@ -25,7 +28,7 @@ class PostmanCollectionImporter {
 
         val infoObj = root["info"]?.jsonObject
         val collectionName = infoObj?.get("name")?.jsonPrimitive?.content ?: "Imported Postman Collection"
-        val collectionId = "c-postman-${System.currentTimeMillis()}"
+        val collectionId = "c-postman-${Uuid.random()}"
 
         val itemArray = root["item"]?.jsonArray ?: emptyList()
 
@@ -76,12 +79,7 @@ class PostmanCollectionImporter {
         val requestObj = itemObj["request"]?.jsonObject ?: return null
         val name = itemObj["name"]?.jsonPrimitive?.content ?: "Request $index"
 
-        val methodStr = requestObj["method"]?.jsonPrimitive?.content?.uppercase() ?: "GET"
-        val methodEnum = try {
-            HttpMethod.valueOf(methodStr)
-        } catch (_: Exception) {
-            HttpMethod.CUSTOM
-        }
+        val method = HttpMethod.fromToken(requestObj["method"]?.jsonPrimitive?.content ?: "GET")
 
         val urlStr = when (val urlElem = requestObj["url"]) {
             is kotlinx.serialization.json.JsonPrimitive -> urlElem.content
@@ -92,10 +90,9 @@ class PostmanCollectionImporter {
         val bodyStr = requestObj["body"]?.jsonObject?.get("raw")?.jsonPrimitive?.content ?: ""
 
         return SavedApiRequest(
-            id = "r-postman-$index-${System.currentTimeMillis()}",
+            id = "r-postman-${Uuid.random()}",
             name = name,
-            method = methodEnum,
-            customMethod = if (methodEnum == HttpMethod.CUSTOM) methodStr else null,
+            method = method,
             url = urlStr,
             body = ApiRequestBody(content = bodyStr)
         )

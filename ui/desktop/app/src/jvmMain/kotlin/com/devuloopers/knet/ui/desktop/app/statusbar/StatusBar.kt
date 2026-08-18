@@ -13,7 +13,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * @param modifier Layout modifier.
  */
 @Composable
-public fun StatusBar(
+fun StatusBar(
     modifier: Modifier = Modifier
 ) {
     val themeColors = KNetTheme.colors

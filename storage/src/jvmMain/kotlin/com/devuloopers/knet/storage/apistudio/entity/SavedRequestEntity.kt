@@ -7,13 +7,12 @@ import androidx.room.PrimaryKey
  * Room SQLite database entity representing a saved API request within a collection folder.
  */
 @Entity(tableName = "saved_requests")
-public data class SavedRequestEntity(
+data class SavedRequestEntity(
     @PrimaryKey val id: String,
     val folderId: String,
     val collectionId: String,
     val name: String,
     val method: String,
-    val customMethod: String? = null,
     val url: String,
     val headersJson: String = "{}",
     val bodyType: String = "NONE",

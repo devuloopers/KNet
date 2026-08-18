@@ -3,56 +3,40 @@ package com.devuloopers.knet.core.http.client
 import com.devuloopers.knet.core.http.config.HttpClientConfiguration
 import com.devuloopers.knet.core.http.cookie.CookieStore
 import com.devuloopers.knet.core.http.cookie.MemoryCookieStore
-import com.devuloopers.knet.core.http.execution.HttpExecutor as CoreHttpExecutor
 import com.devuloopers.knet.core.http.interceptor.HttpInterceptor
-import com.devuloopers.knet.core.http.model.ApiExecutionResult
-import com.devuloopers.knet.core.http.model.AuthType
-import com.devuloopers.knet.core.http.model.HttpMetrics
-import com.devuloopers.knet.core.http.model.RequestBodyType
 import com.devuloopers.knet.core.http.routing.DefaultProxyRoutingStrategy
 import com.devuloopers.knet.core.http.routing.ProxyRoutingStrategy
-import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor as DomainHttpExecutor
-import com.devuloopers.knet.domain.clientNetwork.model.ProxyTrafficListener
-import com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction
-import com.devuloopers.knet.domain.clientNetwork.model.KNetHeaders
-import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
 import com.devuloopers.knet.domain.clientNetwork.decoder.BodyDecoder
 import com.devuloopers.knet.domain.clientNetwork.decoder.DecodedBodyResult
-import com.devuloopers.knet.domain.collection.model.SavedApiRequest
+import com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult
+import com.devuloopers.knet.domain.clientNetwork.model.OutboundRequestBody
+import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor as DomainHttpExecutor
+import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
 import com.devuloopers.knet.domain.network.mapper.NetworkSpecMappers.sanitizeTransportHeaders
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.HttpClientEngine
-import io.ktor.client.plugins.HttpRequestRetry
-import io.ktor.client.plugins.HttpTimeout
-import io.ktor.client.plugins.timeout
-import io.ktor.client.request.forms.formData
-import io.ktor.client.request.forms.submitFormWithBinaryData
-import io.ktor.client.request.header
-import io.ktor.client.request.request
-import io.ktor.client.request.setBody
-import io.ktor.client.statement.HttpResponse
-import io.ktor.client.statement.bodyAsText
-import io.ktor.client.statement.readRawBytes
-import io.ktor.http.ContentType
-import io.ktor.http.HttpMethod
-import io.ktor.http.Parameters
-import io.ktor.http.Url
-import io.ktor.http.contentType
-import io.ktor.http.formUrlEncode
+import com.devuloopers.knet.traffic.model.ExchangeTimings
+import com.devuloopers.knet.traffic.model.http.HttpMethod as KNetHttpMethod
+import io.ktor.client.*
+import io.ktor.client.engine.*
+import io.ktor.client.plugins.*
+import io.ktor.client.request.*
+import io.ktor.client.request.forms.*
+import io.ktor.client.statement.*
+import io.ktor.http.*
+import io.ktor.http.HttpMethod as KtorHttpMethod
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlin.time.TimeSource
 
 /**
  * Reusable Postman-style API Request Dispatcher powered by Ktor 3.5.1 Client.
  *
- * Implements [DomainHttpExecutor] and [AutoCloseable] for 100% pure Kotlin Multiplatform execution.
+ * Implements [DomainHttpExecutor] and [AutoCloseable] for Kotlin Multiplatform execution.
  *
  * @param proxyPort Optional proxy port to route outgoing calls through KNet's proxy engine.
  * @param routingStrategy Strategy dictating proxy routing attempt and fallback criteria.
  * @param configuration Configuration options for timeouts, retries, and redirects.
  * @param cookieStore Cookie storage instance.
  * @param customEngine Optional custom Ktor engine (e.g. MockEngine for testing).
- * @param proxyTrafficListener Optional listener to manually capture proxy traffic failures.
  */
 open class KNetApiClient(
     private val proxyPort: Int? = null,
@@ -61,18 +45,13 @@ open class KNetApiClient(
     private val cookieStore: CookieStore = MemoryCookieStore(),
     private val interceptors: List<HttpInterceptor> = emptyList(),
     private val customEngine: HttpClientEngine? = null,
-    private val proxyTrafficListener: ProxyTrafficListener? = null
-) : CoreHttpExecutor, DomainHttpExecutor {
+) : DomainHttpExecutor {
 
     private var currentConfiguration: HttpClientConfiguration = configuration
-    private val proxyHttpClients = java.util.concurrent.ConcurrentHashMap<Int, HttpClient>()
+    private val proxyHttpClients = PlatformHttpClientCache(::createHttpClient)
 
     private val directHttpClient: HttpClient by lazy {
         createHttpClient(targetProxyPort = null)
-    }
-
-    private val proxyHttpClient: HttpClient? by lazy {
-        proxyPort?.let { getProxyHttpClient(it) }
     }
 
     /**
@@ -113,9 +92,7 @@ open class KNetApiClient(
      * @return Cached or newly created [HttpClient] configured for proxy interception.
      */
     private fun getProxyHttpClient(port: Int): HttpClient {
-        return proxyHttpClients.getOrPut(port) {
-            createHttpClient(targetProxyPort = port)
-        }
+        return proxyHttpClients.get(port)
     }
 
     /**
@@ -126,7 +103,7 @@ open class KNetApiClient(
      * @return Configured [HttpClient] instance.
      */
     private fun createHttpClient(targetProxyPort: Int?): HttpClient {
-        val block: io.ktor.client.HttpClientConfig<*>.() -> Unit = {
+        val block: HttpClientConfig<*>.() -> Unit = {
             install(HttpTimeout) {
                 requestTimeoutMillis = currentConfiguration.timeoutMillis
                 connectTimeoutMillis = currentConfiguration.connectTimeoutMillis
@@ -149,106 +126,30 @@ open class KNetApiClient(
         )
     }
 
-
-    override suspend fun execute(request: SavedApiRequest): ApiExecutionResult {
-        val headersMap = request.headers.filter { it.isEnabled }.associate { it.key to it.value }
-        val (authType, authToken) = mapAuth(request.auth)
-
-        val bodyTypeEnum = when (request.body.type.lowercase()) {
-            "json" -> RequestBodyType.JSON
-            "xml" -> RequestBodyType.XML
-            "form-data", "form" -> RequestBodyType.FORM_URLENCODED
-            "multipart" -> RequestBodyType.MULTIPART
-            "graphql" -> RequestBodyType.GRAPHQL
-            "raw-text", "raw" -> RequestBodyType.RAW_TEXT
-            else -> RequestBodyType.NONE
-        }
-
-        return execute(
-            url = request.url,
-            method = request.methodString,
-            headers = headersMap,
-            body = request.body.content,
-            bodyType = bodyTypeEnum,
-            formParameters = emptyMap(),
-            authType = authType,
-            authToken = authToken
-        )
-    }
-
     override suspend fun execute(
         url: String,
-        method: com.devuloopers.knet.domain.collection.model.HttpMethod,
-        customMethod: String?,
+        method: KNetHttpMethod,
         headers: Map<String, String>,
-        body: String,
-        bodyType: com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType,
-        formParameters: Map<String, String>,
+        body: OutboundRequestBody,
         auth: ApiRequestAuth,
         proxyPort: Int?
-    ): com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult {
-        val methodString = if (method == com.devuloopers.knet.domain.collection.model.HttpMethod.CUSTOM && !customMethod.isNullOrBlank()) {
-            customMethod
-        } else {
-            method.name
-        }
-
-        val requestBodyType = when (bodyType) {
-            com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.JSON -> RequestBodyType.JSON
-            com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.XML -> RequestBodyType.XML
-            com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.FORM_DATA,
-            com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.X_WWW_FORM_URLENCODED -> RequestBodyType.FORM_URLENCODED
-            com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.MULTIPART -> RequestBodyType.MULTIPART
-            com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.GRAPHQL -> RequestBodyType.GRAPHQL
-            com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.RAW_TEXT -> RequestBodyType.RAW_TEXT
-            com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.NONE -> RequestBodyType.NONE
-        }
-
-        val (mappedAuthType, authToken) = when (auth) {
-            is ApiRequestAuth.Bearer -> AuthType.BEARER_TOKEN to auth.token
-            is ApiRequestAuth.Basic -> AuthType.BASIC_AUTH to "${auth.username}:${auth.password}"
-            is ApiRequestAuth.ApiKey -> AuthType.API_KEY to auth.value
-            is ApiRequestAuth.OAuth2 -> AuthType.BEARER_TOKEN to auth.token
-            else -> AuthType.NONE to ""
-        }
-
-        val result = execute(
+    ): ExecutionResult = executeDetailed(
             url = url,
-            method = methodString,
+            method = method,
             headers = headers,
             body = body,
-            bodyType = requestBodyType,
-            formParameters = formParameters,
-            authType = mappedAuthType,
-            authToken = authToken,
+            auth = auth,
             proxyPort = proxyPort
         )
 
-        return com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult(
-            statusCode = result.statusCode,
-            statusText = result.statusText,
-            headers = result.headers,
-            cookies = result.cookies,
-            responseBody = result.responseBody,
-            latencyMs = result.latencyMs,
-            responseSizeBytes = result.responseSizeBytes,
-            isSuccess = result.isSuccess,
-            errorMessage = result.errorMessage,
-            failureReason = result.failureReason
-        )
-    }
-
-    override suspend fun execute(
+    internal suspend fun executeDetailed(
         url: String,
-        method: String,
-        headers: Map<String, String>,
-        body: String,
-        bodyType: RequestBodyType,
-        formParameters: Map<String, String>,
-        authType: AuthType,
-        authToken: String,
-        proxyPort: Int?
-    ): ApiExecutionResult {
+        method: KNetHttpMethod = KNetHttpMethod.GET,
+        headers: Map<String, String> = emptyMap(),
+        body: OutboundRequestBody = OutboundRequestBody.None,
+        auth: ApiRequestAuth = ApiRequestAuth.None,
+        proxyPort: Int? = null,
+    ): ExecutionResult {
         currentCoroutineContext().ensureActive()
 
         var currentUrl = url
@@ -264,27 +165,9 @@ open class KNetApiClient(
 
         val effectiveProxyPort = proxyPort ?: this.proxyPort
         val attemptProxy = routingStrategy.shouldAttemptProxy(effectiveProxyPort)
-        val targetProxyClient = if (attemptProxy && effectiveProxyPort != null) getProxyHttpClient(effectiveProxyPort) else null
+        val targetProxyClient =
+            if (attemptProxy && effectiveProxyPort != null) getProxyHttpClient(effectiveProxyPort) else null
         val initialClient = targetProxyClient ?: directHttpClient
-
-        var currentTransactionId: String? = null
-        if (attemptProxy && targetProxyClient != null && proxyTrafficListener != null) {
-            currentTransactionId = io.ktor.util.generateNonce()
-            val pendingHttpRequest = com.devuloopers.knet.domain.clientNetwork.model.HttpRequest(
-                id = currentTransactionId,
-                method = method,
-                url = currentUrl,
-                protocol = "HTTP/1.1",
-                headers = currentHeaders.map { it.key to it.value },
-                body = if (currentBody.isNotEmpty()) currentBody.encodeToByteArray() else null,
-                timestamp = System.currentTimeMillis()
-            )
-            proxyTrafficListener.onRequestCaptured(pendingHttpRequest)
-
-            val headersWithId = currentHeaders.toMutableMap()
-            headersWithId[KNetHeaders.HEADER_TRANSACTION_ID] = currentTransactionId
-            currentHeaders = headersWithId
-        }
 
         val rawResult = try {
             dispatchWithClient(
@@ -293,15 +176,16 @@ open class KNetApiClient(
                 method = method,
                 headers = currentHeaders,
                 body = currentBody,
-                bodyType = bodyType,
-                formParameters = formParameters,
-                authType = authType,
-                authToken = authToken
+                auth = auth,
             )
         } catch (exception: Exception) {
             currentCoroutineContext().ensureActive()
 
-            if (attemptProxy && initialClient !== directHttpClient && routingStrategy.isProxyConnectionFailure(exception, effectiveProxyPort)) {
+            if (attemptProxy && initialClient !== directHttpClient && routingStrategy.isProxyConnectionFailure(
+                    exception,
+                    effectiveProxyPort
+                )
+            ) {
                 try {
                     dispatchWithClient(
                         client = directHttpClient,
@@ -309,53 +193,42 @@ open class KNetApiClient(
                         method = method,
                         headers = currentHeaders,
                         body = currentBody,
-                        bodyType = bodyType,
-                        formParameters = formParameters,
-                        authType = authType,
-                        authToken = authToken
+                        auth = auth,
                     )
                 } catch (fallbackException: Exception) {
-                    if (attemptProxy && proxyTrafficListener != null && effectiveProxyPort != null) {
-                        recordSyntheticProxyFailure(currentTransactionId, currentUrl, method, currentHeaders, currentBody, fallbackException)
-                    }
                     val reason = com.devuloopers.knet.core.http.util.NetworkExceptionClassifier.classify(
                         exception = fallbackException,
                         targetUrl = currentUrl,
                         timeoutMs = currentConfiguration.timeoutMillis
                     )
-                    ApiExecutionResult(
+                    ExecutionResult(
                         statusCode = 0,
                         statusText = "Execution Error",
                         headers = emptyMap(),
                         responseBody = "",
-                        latencyMs = 0L,
                         responseSizeBytes = 0L,
                         isSuccess = false,
                         errorMessage = fallbackException.message ?: fallbackException.toString(),
                         failureReason = reason,
-                        metrics = HttpMetrics(totalTimeMs = 0L)
+                        timings = ExchangeTimings(totalMillis = 0L),
                     )
                 }
             } else {
-                if (attemptProxy && initialClient !== directHttpClient && proxyTrafficListener != null && effectiveProxyPort != null) {
-                    recordSyntheticProxyFailure(currentTransactionId, currentUrl, method, currentHeaders, currentBody, exception)
-                }
                 val reason = com.devuloopers.knet.core.http.util.NetworkExceptionClassifier.classify(
                     exception = exception,
                     targetUrl = currentUrl,
                     timeoutMs = currentConfiguration.timeoutMillis
                 )
-                ApiExecutionResult(
+                ExecutionResult(
                     statusCode = 0,
                     statusText = "Execution Error",
                     headers = emptyMap(),
                     responseBody = "",
-                    latencyMs = 0L,
                     responseSizeBytes = 0L,
                     isSuccess = false,
                     errorMessage = exception.message ?: exception.toString(),
                     failureReason = reason,
-                    metrics = HttpMetrics(totalTimeMs = 0L)
+                    timings = ExchangeTimings(totalMillis = 0L),
                 )
             }
         }
@@ -371,22 +244,19 @@ open class KNetApiClient(
     private suspend fun dispatchWithClient(
         client: HttpClient,
         url: String,
-        method: String,
+        method: KNetHttpMethod,
         headers: Map<String, String>,
-        body: String,
-        bodyType: RequestBodyType,
-        formParameters: Map<String, String>,
-        authType: AuthType,
-        authToken: String
-    ): ApiExecutionResult {
-        val startTime = System.currentTimeMillis()
-        val targetMethod = HttpMethod.parse(method.uppercase())
+        body: OutboundRequestBody,
+        auth: ApiRequestAuth,
+    ): ExecutionResult {
+        val elapsedTime = TimeSource.Monotonic.markNow()
+        val targetMethod = KtorHttpMethod.parse(method.token)
 
-        val response: HttpResponse = if (bodyType == RequestBodyType.MULTIPART) {
+        val response: HttpResponse = if (body is OutboundRequestBody.Multipart) {
             client.submitFormWithBinaryData(
                 url = url,
                 formData = formData {
-                    formParameters.forEach { (k, v) -> append(k, v) }
+                    body.fields.forEach { field -> append(field.name, field.value) }
                 }
             ) {
                 this.method = targetMethod
@@ -395,7 +265,7 @@ open class KNetApiClient(
                     connectTimeoutMillis = currentConfiguration.connectTimeoutMillis
                     socketTimeoutMillis = currentConfiguration.timeoutMillis
                 }
-                applyHeadersAndAuth(this, headers, authType, authToken)
+                applyHeadersAndAuth(this, headers, auth)
             }
         } else {
             client.request(url) {
@@ -405,20 +275,22 @@ open class KNetApiClient(
                     connectTimeoutMillis = currentConfiguration.connectTimeoutMillis
                     socketTimeoutMillis = currentConfiguration.timeoutMillis
                 }
-                applyHeadersAndAuth(this, headers, authType, authToken)
+                applyHeadersAndAuth(this, headers, auth)
 
-                when (bodyType) {
-                    RequestBodyType.JSON -> {
+                when (body) {
+                    is OutboundRequestBody.Json -> {
                         contentType(ContentType.Application.Json)
-                        setBody(body)
+                        setBody(body.content)
                     }
-                    RequestBodyType.XML -> {
+
+                    is OutboundRequestBody.Xml -> {
                         contentType(ContentType.Application.Xml)
-                        setBody(body)
+                        setBody(body.content)
                     }
-                    RequestBodyType.GRAPHQL -> {
+
+                    is OutboundRequestBody.GraphQl -> {
                         contentType(ContentType.Application.Json)
-                        val trimmed = body.trim()
+                        val trimmed = body.content.trim()
                         val formattedGraphQl = when {
                             trimmed.isBlank() -> "{}"
                             trimmed.startsWith("{") -> trimmed
@@ -426,26 +298,34 @@ open class KNetApiClient(
                         }
                         setBody(formattedGraphQl)
                     }
-                    RequestBodyType.RAW_TEXT -> {
-                        contentType(ContentType.Text.Plain)
-                        setBody(body)
+
+                    is OutboundRequestBody.Text -> {
+                        contentType(ContentType.parse(body.mediaType))
+                        setBody(body.content)
                     }
-                    RequestBodyType.FORM_URLENCODED -> {
+
+                    is OutboundRequestBody.FormUrlEncoded -> {
                         contentType(ContentType.Application.FormUrlEncoded)
                         val formParams = Parameters.build {
-                            formParameters.forEach { (k, v) -> append(k, v) }
+                            body.fields.forEach { field -> append(field.name, field.value) }
                         }
                         setBody(formParams.formUrlEncode())
                     }
-                    RequestBodyType.NONE -> { }
+
+                    OutboundRequestBody.None,
+                    is OutboundRequestBody.Multipart -> Unit
                 }
             }
         }
 
-        val latency = System.currentTimeMillis() - startTime
         val responseBytes = response.readRawBytes()
+        val latency = elapsedTime.elapsedNow().inWholeMilliseconds
 
-        val host = try { Url(url).host } catch (_: Exception) { "" }
+        val host = try {
+            Url(url).host
+        } catch (_: Exception) {
+            ""
+        }
         val responseHeadersMap = mutableMapOf<String, String>()
         val responseHeadersList = mutableListOf<Pair<String, String>>()
         val responseCookiesMap = mutableMapOf<String, String>()
@@ -462,16 +342,20 @@ open class KNetApiClient(
                             cookieStore.storeCookie(host, cookie)
                             responseCookiesMap[cookie.name] = cookie.value
                         }
-                    } catch (_: Exception) { }
+                    } catch (_: Exception) {
+                    }
                 }
             }
         }
 
-        val decodedResult = BodyDecoder.decode(responseBytes, responseHeadersList)
-        val responseText = when (decodedResult) {
+        val responseText = when (val decodedResult = BodyDecoder.decode(responseBytes, responseHeadersList)) {
             is DecodedBodyResult.Success -> decodedResult.bytes.decodeToString()
             is DecodedBodyResult.Identity -> decodedResult.bytes.decodeToString()
-            else -> try { responseBytes.decodeToString() } catch (_: Exception) { "" }
+            else -> try {
+                responseBytes.decodeToString()
+            } catch (_: Exception) {
+                ""
+            }
         }
 
         if (host.isNotBlank()) {
@@ -482,29 +366,22 @@ open class KNetApiClient(
             }
         }
 
-        val metrics = HttpMetrics(
-            totalTimeMs = latency,
-            downloadTimeMs = latency
-        )
-
-        return ApiExecutionResult(
+        return ExecutionResult(
             statusCode = response.status.value,
             statusText = response.status.description,
             headers = responseHeadersMap,
             cookies = responseCookiesMap,
             responseBody = responseText,
-            latencyMs = latency,
             responseSizeBytes = responseBytes.size.toLong(),
             isSuccess = response.status.value in 200..299,
-            metrics = metrics
+            timings = ExchangeTimings(totalMillis = latency, downloadMillis = latency),
         )
     }
 
     private fun applyHeadersAndAuth(
         builder: io.ktor.client.request.HttpRequestBuilder,
         headers: Map<String, String>,
-        authType: AuthType,
-        authToken: String
+        auth: ApiRequestAuth,
     ) {
         val sanitizedHeaders = headers.sanitizeTransportHeaders()
         sanitizedHeaders.forEach { (k, v) ->
@@ -513,7 +390,11 @@ open class KNetApiClient(
             }
         }
 
-        val host = try { Url(builder.url.buildString()).host } catch (_: Exception) { "" }
+        val host = try {
+            Url(builder.url.buildString()).host
+        } catch (_: Exception) {
+            ""
+        }
         if (host.isNotBlank()) {
             val storedCookies = cookieStore.getCookies(host)
             if (storedCookies.isNotEmpty() && !headers.keys.any { it.equals("cookie", ignoreCase = true) }) {
@@ -522,91 +403,52 @@ open class KNetApiClient(
             }
         }
 
-        when (authType) {
-            AuthType.BEARER_TOKEN -> {
-                if (authToken.isNotBlank()) {
-                    val token = if (authToken.startsWith("Bearer ", ignoreCase = true)) authToken else "Bearer $authToken"
+        when (auth) {
+            is ApiRequestAuth.Bearer -> {
+                if (auth.token.isNotBlank()) {
+                    val token = if (auth.token.startsWith("Bearer ", ignoreCase = true)) {
+                        auth.token
+                    } else {
+                        "Bearer ${auth.token}"
+                    }
                     builder.header("Authorization", token)
                 }
             }
-            AuthType.BASIC_AUTH -> {
-                if (authToken.isNotBlank()) {
-                    val encoded = kotlin.io.encoding.Base64.encode(authToken.encodeToByteArray())
+
+            is ApiRequestAuth.Basic -> {
+                val credentials = "${auth.username}:${auth.password}"
+                if (credentials.isNotBlank()) {
+                    val encoded = kotlin.io.encoding.Base64.encode(credentials.encodeToByteArray())
                     builder.header("Authorization", "Basic $encoded")
                 }
             }
-            AuthType.API_KEY -> {
-                if (authToken.isNotBlank()) {
-                    builder.header("X-API-Key", authToken)
+
+            is ApiRequestAuth.ApiKey -> {
+                if (auth.name.isNotBlank() && auth.value.isNotBlank()) {
+                    if (auth.location.contains("query", ignoreCase = true)) {
+                        builder.parameter(auth.name, auth.value)
+                    } else {
+                        builder.header(auth.name, auth.value)
+                    }
                 }
             }
-            AuthType.NONE -> { }
-        }
-    }
 
-    private fun mapAuth(auth: ApiRequestAuth): Pair<AuthType, String> {
-        return when (auth) {
-            is ApiRequestAuth.Bearer -> AuthType.BEARER_TOKEN to auth.token
-            is ApiRequestAuth.Basic -> AuthType.BASIC_AUTH to "${auth.username}:${auth.password}"
-            is ApiRequestAuth.ApiKey -> AuthType.API_KEY to auth.value
-            else -> AuthType.NONE to ""
-        }
-    }
+            is ApiRequestAuth.OAuth2 -> {
+                if (auth.token.isNotBlank()) {
+                    builder.header("Authorization", "${auth.headerPrefix} ${auth.token}".trim())
+                }
+            }
 
-    private fun recordSyntheticProxyFailure(
-        transactionId: String?,
-        url: String,
-        method: String,
-        headers: Map<String, String>,
-        body: String,
-        exception: Exception
-    ) {
-        val finalTransactionId = transactionId ?: io.ktor.util.generateNonce()
-        val timestamp = System.currentTimeMillis()
-        val httpRequest = com.devuloopers.knet.domain.clientNetwork.model.HttpRequest(
-            id = finalTransactionId,
-            method = method,
-            url = url,
-            protocol = "HTTP/1.1",
-            headers = headers.map { it.key to it.value },
-            body = if (body.isNotEmpty()) body.encodeToByteArray() else null,
-            timestamp = timestamp
-        )
-        val httpResponse = com.devuloopers.knet.domain.clientNetwork.model.HttpResponse(
-            statusCode = 502,
-            statusText = "Bad Gateway",
-            headers = listOf(KNetHeaders.HEADER_PROXY_ERROR to (exception.message ?: "Unknown Error")),
-            body = ("Proxy Connection Failed: " + (exception.message ?: "Unknown Error")).encodeToByteArray(),
-            timestamp = timestamp
-        )
-        val transaction = com.devuloopers.knet.domain.clientNetwork.model.HttpTransaction(
-            id = finalTransactionId,
-            request = httpRequest,
-            response = httpResponse,
-            requestBodyPath = null,
-            responseBodyPath = null,
-            requestBodySize = httpRequest.body?.size?.toLong() ?: 0L,
-            responseBodySize = httpResponse.body?.size?.toLong() ?: 0L,
-            durationMs = 0L,
-            timestamp = timestamp,
-            timings = com.devuloopers.knet.domain.clientNetwork.model.HttpTimings(
-                dnsMs = 0L,
-                tcpMs = 0L,
-                tlsMs = 0L,
-                ttfbMs = 0L,
-                downloadMs = 0L,
-                isReusedConnection = false
-            )
-        )
-        proxyTrafficListener?.onTransactionCaptured(transaction)
+            is ApiRequestAuth.AwsSignature,
+            ApiRequestAuth.Inherit,
+            ApiRequestAuth.None -> Unit
+        }
     }
 
     override fun close() {
         if (customEngine == null) {
             directHttpClient.close()
-            proxyHttpClient?.close()
-            proxyHttpClients.values.forEach { it.close() }
-            proxyHttpClients.clear()
+            proxyHttpClients.close()
         }
     }
 }

@@ -30,7 +30,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * Provides smooth, non-blocking visual feedback when switching between large traffic inspect items.
  */
 @Composable
-public fun KNetBodyLoadingPlaceholder(
+fun KNetBodyLoadingPlaceholder(
     modifier: Modifier = Modifier
 ) {
     val themeColors = KNetTheme.colors

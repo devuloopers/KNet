@@ -15,7 +15,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * Provides canonical layout hierarchy: Toolbar -> (Navigation + Main Workspace) -> Status Bar.
  */
 @Composable
-public fun KNetWorkspaceScaffold(
+fun KNetWorkspaceScaffold(
     modifier: Modifier = Modifier,
     toolbar: (@Composable () -> Unit)? = null,
     navigationRail: (@Composable () -> Unit)? = null,

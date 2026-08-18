@@ -15,7 +15,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.devuloopers.knet.domain.proxy.model.ProxyEngineState
+import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
 import com.devuloopers.knet.ui.core.components.divider.VerticalDivider
 import com.devuloopers.knet.ui.core.components.input.KNetSearchField
 import com.devuloopers.knet.ui.core.components.switch.KNetSwitch
@@ -28,9 +28,9 @@ import com.devuloopers.knet.ui.desktop.traffic.model.CaptureState
 /**
  * Immutable State DTO for TrafficToolbar.
  */
-public data class TrafficToolbarState(
+data class TrafficToolbarState(
     val captureState: CaptureState = CaptureState.STOPPED,
-    val engineState: ProxyEngineState = ProxyEngineState.Stopped,
+    val engineState: ProxyRuntimeState = ProxyRuntimeState.Stopped,
     val autoScroll: Boolean = true,
     val searchQuery: String = "",
     val localIpAddress: String = "127.0.0.1"
@@ -39,7 +39,7 @@ public data class TrafficToolbarState(
 /**
  * Action Callbacks DTO for TrafficToolbar.
  */
-public data class TrafficToolbarActions(
+data class TrafficToolbarActions(
     val onStartCapture: () -> Unit = {},
     val onStopCapture: () -> Unit = {},
     val onClearFeed: () -> Unit = {},
@@ -51,7 +51,7 @@ public data class TrafficToolbarActions(
  * 56dp Top Feature Toolbar bound strictly to :ui:core design system tokens and parameter objects.
  */
 @Composable
-public fun TrafficToolbar(
+fun TrafficToolbar(
     state: TrafficToolbarState,
     actions: TrafficToolbarActions,
     modifier: Modifier = Modifier
@@ -62,7 +62,7 @@ public fun TrafficToolbar(
     val spacing = KNetTheme.spacing
     val dimensions = KNetTheme.dimensions
 
-    val isRunning = state.engineState is ProxyEngineState.Running
+    val isRunning = state.engineState is ProxyRuntimeState.Running
 
     KNetToolbar(
         modifier = modifier
@@ -139,11 +139,14 @@ public fun TrafficToolbar(
                     horizontalArrangement = Arrangement.spacedBy(spacing.xs)
                 ) {
                     val (dotColor, statusText) = when (val engine = state.engineState) {
-                        is ProxyEngineState.Running -> themeColors.semantic.success to "Running (${state.localIpAddress}:${engine.port})"
-                        is ProxyEngineState.Starting -> themeColors.accent to "Starting..."
-                        is ProxyEngineState.Stopping -> themeColors.textMuted to "Stopping..."
-                        is ProxyEngineState.Stopped -> themeColors.textMuted to "Stopped"
-                        is ProxyEngineState.Error -> themeColors.semantic.error to "Error: ${engine.message}"
+                        is ProxyRuntimeState.Running -> {
+                            val port = engine.handle.endpoints.endpoints.firstOrNull()?.port ?: "?"
+                            themeColors.semantic.success to "Running (${state.localIpAddress}:$port)"
+                        }
+                        ProxyRuntimeState.Starting -> themeColors.accent to "Starting..."
+                        ProxyRuntimeState.Stopping -> themeColors.textMuted to "Stopping..."
+                        ProxyRuntimeState.Stopped -> themeColors.textMuted to "Stopped"
+                        is ProxyRuntimeState.Failed -> themeColors.semantic.error to "Error: ${engine.code}"
                     }
 
                     Box(

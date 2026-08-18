@@ -5,12 +5,12 @@ import com.devuloopers.knet.domain.collection.model.ApiRequestBody
 import com.devuloopers.knet.domain.collection.model.ApiRequestScripts
 import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
 import com.devuloopers.knet.domain.collection.model.CollectionFolder
-import com.devuloopers.knet.domain.collection.model.HttpMethod
 import com.devuloopers.knet.domain.collection.model.RequestHeader
 import com.devuloopers.knet.domain.collection.model.SavedApiRequest
-import com.devuloopers.knet.domain.collection.model.TestAssertionResult
+import com.devuloopers.knet.scripting.model.ScriptAssertion
 import com.devuloopers.knet.domain.collection.model.defaultHeaders
-import com.devuloopers.knet.domain.scripting.model.ScriptLanguage
+import com.devuloopers.knet.scripting.model.ScriptLanguage
+import com.devuloopers.knet.traffic.model.http.HttpMethod
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -47,20 +47,10 @@ class CollectionModelTest {
         val customReq = SavedApiRequest(
             id = "2",
             name = "Custom Request",
-            method = HttpMethod.CUSTOM,
-            customMethod = "purge",
+            method = HttpMethod.fromToken("purge"),
             url = "https://example.com"
         )
-        assertEquals("PURGE", customReq.methodString)
-
-        val emptyCustomReq = SavedApiRequest(
-            id = "3",
-            name = "Empty Custom Request",
-            method = HttpMethod.CUSTOM,
-            customMethod = null,
-            url = "https://example.com"
-        )
-        assertEquals("CUSTOM", emptyCustomReq.methodString)
+        assertEquals("purge", customReq.methodString)
     }
 
     @Test
@@ -126,8 +116,8 @@ class CollectionModelTest {
 
     @Test
     fun testAssertionResultModel() {
-        val passResult = TestAssertionResult(id = "a1", name = "Status code is 200", passed = true)
-        val failResult = TestAssertionResult(id = "a2", name = "Response body has token", passed = false)
+        val passResult = ScriptAssertion(id = "a1", name = "Status code is 200", passed = true)
+        val failResult = ScriptAssertion(id = "a2", name = "Response body has token", passed = false)
 
         assertTrue(passResult.passed)
         assertFalse(failResult.passed)

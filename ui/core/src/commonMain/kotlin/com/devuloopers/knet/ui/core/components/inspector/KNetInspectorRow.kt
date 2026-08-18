@@ -19,7 +19,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * @param content Slot layout for value text.
  */
 @Composable
-public fun KNetInspectorRow(
+fun KNetInspectorRow(
     label: String,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit

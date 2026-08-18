@@ -1,6 +1,6 @@
 package com.devuloopers.knet.engine.script.internal
 
-import com.devuloopers.knet.engine.script.api.ScriptTestResult
+import com.devuloopers.knet.scripting.model.ScriptAssertion
 import java.util.concurrent.atomic.AtomicReference
 
 /**
@@ -9,7 +9,7 @@ import java.util.concurrent.atomic.AtomicReference
  */
 class ResultCollector {
 
-    private val testResultsRef = AtomicReference<List<ScriptTestResult>>(emptyList())
+    private val testResultsRef = AtomicReference<List<ScriptAssertion>>(emptyList())
     private val logsRef = AtomicReference<List<String>>(emptyList())
 
     /**
@@ -21,7 +21,12 @@ class ResultCollector {
      * @param durationMs Duration of assertion in milliseconds.
      */
     fun addTestResult(name: String, passed: Boolean, errorMessage: String?, durationMs: Long = 0L) {
-        val result = ScriptTestResult(name = name, passed = passed, errorMessage = errorMessage, durationMs = durationMs)
+        val result = ScriptAssertion(
+            name = name,
+            passed = passed,
+            errorMessage = errorMessage,
+            durationMillis = durationMs,
+        )
         while (true) {
             val current = testResultsRef.get()
             val updated = current + result
@@ -45,9 +50,9 @@ class ResultCollector {
     /**
      * Returns an immutable snapshot list of all recorded test assertion results.
      *
-     * @return Immutable list of [ScriptTestResult].
+     * @return Immutable list of [ScriptAssertion].
      */
-    fun getTestResults(): List<ScriptTestResult> = testResultsRef.get()
+    fun getTestResults(): List<ScriptAssertion> = testResultsRef.get()
 
     /**
      * Returns an immutable snapshot list of all captured console logs.

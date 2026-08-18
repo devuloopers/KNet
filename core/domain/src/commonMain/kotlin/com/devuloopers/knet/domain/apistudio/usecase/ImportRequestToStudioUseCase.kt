@@ -8,7 +8,7 @@ import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
  * @property spec Normalized strongly-typed network request specification.
  * @property displayTitle Suggested display title string for the imported request tab.
  */
-public data class ImportedStudioRequest(
+data class ImportedStudioRequest(
     val spec: NetworkRequestSpec,
     val displayTitle: String
 )
@@ -19,7 +19,7 @@ public data class ImportedStudioRequest(
  *
  * SRP: Centralizes URL scheme normalization, header/cookie pair cleaning, and display title derivation.
  */
-public class ImportRequestToStudioUseCase {
+class ImportRequestToStudioUseCase {
 
     /**
      * Normalizes the given [spec] and derives an appropriate tab display title.
@@ -28,7 +28,7 @@ public class ImportRequestToStudioUseCase {
      * @param title Optional custom display title override.
      * @return [ImportedStudioRequest] containing normalized spec and computed display title.
      */
-    public fun execute(
+    fun execute(
         spec: NetworkRequestSpec,
         title: String? = null
     ): ImportedStudioRequest {

@@ -8,7 +8,7 @@ import androidx.compose.ui.unit.dp
  * Immutable dimension tokens defining explicit heights, widths, icon sizes, and responsive layout minimums.
  */
 @Immutable
-public data class Dimensions(
+data class Dimensions(
     val toolbarHeight: Dp = 32.dp,
     val statusBarHeight: Dp = 24.dp,
     val navigationWidth: Dp = 48.dp,
@@ -38,4 +38,4 @@ public data class Dimensions(
 /**
  * Default Dimensions instance.
  */
-public val KNetDimensions: Dimensions = Dimensions()
+val KNetDimensions: Dimensions = Dimensions()

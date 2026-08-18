@@ -20,7 +20,7 @@ import com.devuloopers.knet.ui.core.components.divider.VerticalDivider
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 @Composable
-public fun KNetDetailPane(
+fun KNetDetailPane(
     modifier: Modifier = Modifier,
     width: Dp = 320.dp,
     title: String? = null,

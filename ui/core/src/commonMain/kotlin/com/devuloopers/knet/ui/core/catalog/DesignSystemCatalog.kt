@@ -21,7 +21,7 @@ import com.devuloopers.knet.ui.core.components.tabs.KNetTabRow
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.core.foundation.theme.ThemeMode
 
-public enum class CatalogTab {
+enum class CatalogTab {
     Foundation,
     Components,
     Layout,
@@ -33,7 +33,7 @@ public enum class CatalogTab {
  * Single host entry point for live KNet Design System v2.0 catalog.
  */
 @Composable
-public fun DesignSystemCatalog(
+fun DesignSystemCatalog(
     modifier: Modifier = Modifier
 ) {
     var selectedTab by remember { mutableStateOf(CatalogTab.Foundation) }

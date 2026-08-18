@@ -12,7 +12,7 @@ import com.devuloopers.knet.domain.collection.repository.CollectionsRepository
  *
  * @param repository Interface for accessing collection data storage.
  */
-public class UpdateRequestInCollectionUseCase(
+class UpdateRequestInCollectionUseCase(
     private val repository: CollectionsRepository
 ) {
     /**
@@ -22,7 +22,7 @@ public class UpdateRequestInCollectionUseCase(
      * @param folderId The ID of the parent folder within the collection.
      * @param request The updated [SavedApiRequest] to persist. Must retain its original ID.
      */
-    public suspend fun execute(
+    suspend fun execute(
         collectionId: String,
         folderId: String,
         request: SavedApiRequest

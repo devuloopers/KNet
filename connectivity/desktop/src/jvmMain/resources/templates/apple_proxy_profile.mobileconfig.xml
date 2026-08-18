@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+    <dict>
+        <key>PayloadType</key>
+        <string>Configuration</string>
+        <key>PayloadIdentifier</key>
+        <string>com.devuloopers.knet.setup</string>
+        <key>PayloadUUID</key>
+        <string>7E5C77D2-3A85-4D84-9A61-000000000001</string>
+        <key>PayloadVersion</key>
+        <integer>1</integer>
+        <key>PayloadDisplayName</key>
+        <string>KNet Proxy</string>
+        <key>ProxyServer</key>
+        <string>{{proxyServer}}</string>
+        <key>ProxyServerPort</key>
+        <integer>{{proxyServerPort}}</integer>
+        <key>Certificate</key>
+        <data>{{certificateBase64}}</data>
+    </dict>
+</plist>

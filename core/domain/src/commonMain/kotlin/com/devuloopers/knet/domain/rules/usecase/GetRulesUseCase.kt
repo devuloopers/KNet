@@ -1,6 +1,6 @@
 package com.devuloopers.knet.domain.rules.usecase
 
-import com.devuloopers.knet.domain.rules.model.RuleModel
+import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.rules.model.RulesUiState
 import com.devuloopers.knet.domain.rules.repository.RulesRepository
 import kotlinx.coroutines.Dispatchers
@@ -19,7 +19,7 @@ class GetRulesUseCase(
     /**
      * Streams domain rule models.
      */
-    operator fun invoke(): Flow<List<RuleModel>> {
+    operator fun invoke(): Flow<List<BreakpointRule>> {
         return repository.rulesFlow
     }
 

@@ -10,7 +10,7 @@ import androidx.compose.ui.graphics.Color
  * @property value Value string to display (e.g. "00:12:34", "1 Client").
  * @property color Optional accent text color.
  */
-public data class StatusItem(
+data class StatusItem(
     val id: String,
     val label: String,
     val value: String,

@@ -16,7 +16,7 @@ import com.devuloopers.knet.ui.core.components.divider.VerticalDivider
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 @Composable
-public fun ToolbarGroup(
+fun ToolbarGroup(
     modifier: Modifier = Modifier,
     horizontalArrangement: Arrangement.Horizontal = Arrangement.spacedBy(4.dp),
     content: @Composable RowScope.() -> Unit
@@ -30,14 +30,14 @@ public fun ToolbarGroup(
 }
 
 @Composable
-public fun RowScope.ToolbarSpacer(
+fun RowScope.ToolbarSpacer(
     modifier: Modifier = Modifier
 ) {
     Spacer(modifier = modifier.weight(1f))
 }
 
 @Composable
-public fun ToolbarSeparator(
+fun ToolbarSeparator(
     modifier: Modifier = Modifier
 ) {
     VerticalDivider(modifier = modifier.height(16.dp).padding(horizontal = 4.dp))
@@ -47,7 +47,7 @@ public fun ToolbarSeparator(
  * Slot-driven Toolbar composable.
  */
 @Composable
-public fun KNetToolbar(
+fun KNetToolbar(
     modifier: Modifier = Modifier,
     leading: @Composable (RowScope.() -> Unit)? = null,
     trailing: @Composable (RowScope.() -> Unit)? = null,

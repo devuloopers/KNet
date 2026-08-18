@@ -15,7 +15,7 @@ import com.devuloopers.knet.ui.desktop.app.navigation.DesktopDestination
  * @param modifier Layout modifier.
  */
 @Composable
-public fun Toolbar(
+fun Toolbar(
     currentDestination: DesktopDestination,
     onDestinationSelected: (DesktopDestination) -> Unit,
     modifier: Modifier = Modifier

@@ -1,5 +1,6 @@
 package com.devuloopers.knet.domain.clientNetwork.decoder
 
+import com.devuloopers.knet.traffic.model.body.ContentEncoding
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

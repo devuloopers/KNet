@@ -10,7 +10,7 @@ import androidx.compose.ui.unit.TextUnit
  * @property lineHeight Vertical line height for text rows.
  * @property backgroundColor Background color of the editor container.
  */
-public data class CodeEditorStyle(
+data class CodeEditorStyle(
     val fontSize: TextUnit = CodeEditorTokens.FontSize,
     val lineHeight: TextUnit = CodeEditorTokens.LineHeight,
     val backgroundColor: Color = Color(0xFF0D1117)

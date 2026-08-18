@@ -9,7 +9,7 @@ import androidx.compose.runtime.Immutable
  * Immutable motion duration and easing curve tokens.
  */
 @Immutable
-public data class Motion(
+data class Motion(
     val durationInstant: Int = 0,
     val durationFast: Int = 100,
     val durationNormal: Int = 150,
@@ -21,4 +21,4 @@ public data class Motion(
 /**
  * Default Motion instance.
  */
-public val KNetMotion: Motion = Motion()
+val KNetMotion: Motion = Motion()

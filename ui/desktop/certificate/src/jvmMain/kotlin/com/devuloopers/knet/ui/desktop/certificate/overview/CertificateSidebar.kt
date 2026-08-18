@@ -10,9 +10,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.devuloopers.knet.domain.util.HostPlatform
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.ui.desktop.certificate.model.CaDetails
+import com.devuloopers.knet.application.port.certificate.CertificateAuthoritySummary
+import com.devuloopers.knet.ui.desktop.certificate.model.HostPlatform
 import com.devuloopers.knet.ui.desktop.certificate.model.TrustInstallationState
 
 /**
@@ -20,7 +20,7 @@ import com.devuloopers.knet.ui.desktop.certificate.model.TrustInstallationState
  */
 @Composable
 fun CertificateSidebar(
-    caDetails: CaDetails,
+    caDetails: CertificateAuthoritySummary,
     trustState: TrustInstallationState,
     platform: HostPlatform = HostPlatform.current(),
     onInstallTrustClick: () -> Unit,

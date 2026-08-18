@@ -1,6 +1,6 @@
 package com.devuloopers.knet.domain.rules.repository
 
-import com.devuloopers.knet.domain.rules.model.RuleModel
+import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -11,7 +11,7 @@ interface RulesRepository {
     /**
      * Reactive stream emitting persistent active interceptor rules.
      */
-    val rulesFlow: Flow<List<RuleModel>>
+    val rulesFlow: Flow<List<BreakpointRule>>
 
     /**
      * Reactive stream emitting global proxy interception engine status.
@@ -31,7 +31,7 @@ interface RulesRepository {
     /**
      * Saves or updates a rule entity.
      */
-    suspend fun saveRule(rule: RuleModel)
+    suspend fun saveRule(rule: BreakpointRule)
 
     /**
      * Deletes a rule entity by ID.

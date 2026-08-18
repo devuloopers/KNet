@@ -4,7 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
 @Composable
-public fun SidebarLayout(
+fun SidebarLayout(
     modifier: Modifier = Modifier,
     title: String? = null,
     headerActions: (@Composable () -> Unit)? = null,

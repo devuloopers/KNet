@@ -54,7 +54,7 @@ private val httpMethods = listOf("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"
  * @param modifier Layout modifier.
  */
 @Composable
-public fun RequestUrlBar(
+fun RequestUrlBar(
     method: String,
     url: String,
     onMethodChanged: (String) -> Unit,

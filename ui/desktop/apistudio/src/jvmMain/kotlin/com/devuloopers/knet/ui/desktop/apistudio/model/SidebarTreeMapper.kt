@@ -4,6 +4,7 @@ import com.devuloopers.knet.domain.collection.model.ApiCollection
 import com.devuloopers.knet.domain.collection.model.SavedApiRequest
 import com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarFolderItem
 import com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarRequestItem
+import com.devuloopers.knet.ui.desktop.httppanel.model.toAuthState
 
 /**
  * Presentation mapper transforming domain collection entities into UI sidebar tree models.
@@ -42,7 +43,7 @@ object SidebarTreeMapper {
                                 bodyType = req.body.type,
                                 preRequestScript = req.scripts.preRequest,
                                 testScript = req.scripts.test,
-                                authState = AuthDomainMapper.mapDomainAuthToAuthState(req.auth),
+                                authState = req.auth.toAuthState(),
                                 collectionId = collection.id,
                                 folderId = folder.id,
                                 sessionType = SessionType.SAVED_REQUEST
@@ -82,7 +83,7 @@ object SidebarTreeMapper {
                 bodyType = req.body.type,
                 preRequestScript = req.scripts.preRequest,
                 testScript = req.scripts.test,
-                authState = AuthDomainMapper.mapDomainAuthToAuthState(req.auth),
+                authState = req.auth.toAuthState(),
                 sessionType = SessionType.UNSAVED_DRAFT
             )
         }

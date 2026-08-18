@@ -23,7 +23,7 @@ import com.devuloopers.knet.ui.desktop.certificate.viewmodel.CertificateViewMode
  * CertificateManagerScreen is the main PKI and Root trust management dashboard.
  */
 @Composable
-public fun CertificateManagerScreen(
+fun CertificateManagerScreen(
     viewModel: CertificateViewModel,
     modifier: Modifier = Modifier
 ) {

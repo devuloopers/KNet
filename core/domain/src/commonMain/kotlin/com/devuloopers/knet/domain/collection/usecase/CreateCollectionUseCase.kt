@@ -2,13 +2,15 @@ package com.devuloopers.knet.domain.collection.usecase
 
 import com.devuloopers.knet.domain.collection.model.ApiCollection
 import com.devuloopers.knet.domain.collection.repository.CollectionsRepository
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 /**
  * Use case to create a new API collection suite.
  *
  * @param repository The repository managing collection data.
  */
-public class CreateCollectionUseCase(
+class CreateCollectionUseCase(
     private val repository: CollectionsRepository
 ) {
     /**
@@ -16,9 +18,10 @@ public class CreateCollectionUseCase(
      *
      * @param collectionName The name of the collection to create.
      */
-    public suspend fun execute(collectionName: String) {
+    @OptIn(ExperimentalUuidApi::class)
+    suspend fun execute(collectionName: String) {
         val newCollection = ApiCollection(
-            id = "col_${System.currentTimeMillis()}",
+            id = "col_${Uuid.random()}",
             name = collectionName.ifBlank { "New Collection" }
         )
         repository.saveCollection(newCollection)

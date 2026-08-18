@@ -4,7 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
 @Composable
-public fun KNetDialogHost(
+fun KNetDialogHost(
     modifier: Modifier = Modifier
 ) {
     // Placeholder dialog host container for features to display modals

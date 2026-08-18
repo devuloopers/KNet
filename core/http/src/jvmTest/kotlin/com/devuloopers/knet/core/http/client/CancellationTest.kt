@@ -1,5 +1,6 @@
 package com.devuloopers.knet.core.http.client
 
+import com.devuloopers.knet.traffic.model.http.HttpMethod
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
@@ -14,7 +15,7 @@ class CancellationTest {
 
         val job = launch {
             try {
-                client.execute("https://httpbin.org/delay/10", method = "GET")
+                client.executeDetailed("https://httpbin.org/delay/10", method = HttpMethod.GET)
             } catch (_: CancellationException) {
                 // Expected when coroutine is cancelled
             }

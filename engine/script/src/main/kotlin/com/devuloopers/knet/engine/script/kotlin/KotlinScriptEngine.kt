@@ -3,7 +3,7 @@ package com.devuloopers.knet.engine.script.kotlin
 import com.devuloopers.knet.engine.script.api.EnvironmentStore
 import com.devuloopers.knet.engine.script.api.ScriptEngine
 import com.devuloopers.knet.engine.script.api.ScriptExecutionResult
-import com.devuloopers.knet.engine.script.api.ScriptLanguage
+import com.devuloopers.knet.scripting.model.ScriptLanguage
 import com.devuloopers.knet.engine.script.api.ScriptRequestModel
 import com.devuloopers.knet.engine.script.api.ScriptResponseModel
 import com.devuloopers.knet.engine.script.internal.RuntimeCapabilityDetector

@@ -7,7 +7,7 @@ import kotlin.test.assertEquals
 /**
  * Unit tests verifying trust wizard status strings based on installation state.
  */
-public class TrustWizardTest {
+class TrustWizardTest {
 
     /**
      * Verifies that the correct message text corresponds to each [TrustInstallationState].
@@ -15,7 +15,7 @@ public class TrustWizardTest {
      * Design Intent: Assures status labels are properly associated with the enum values shown in the wizard.
      */
     @Test
-    public fun testTrustWizardStateLabels() {
+    fun testTrustWizardStateLabels() {
         val states = listOf(
             TrustInstallationState.CHECKING,
             TrustInstallationState.IDLE,

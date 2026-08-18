@@ -1,5 +1,7 @@
 package com.devuloopers.knet.domain.clientNetwork.decoder
 
+import com.devuloopers.knet.traffic.model.body.ContentEncoding
+
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.util.zip.InflaterInputStream
@@ -7,7 +9,7 @@ import java.util.zip.InflaterInputStream
 /**
  * JVM strategy implementation for Deflate content decompression.
  */
-public class DeflateContentDecoder : ContentDecoder {
+class DeflateContentDecoder : ContentDecoder {
     override val encoding: ContentEncoding = ContentEncoding.DEFLATE
 
     override fun decompress(bytes: ByteArray): ByteArray {

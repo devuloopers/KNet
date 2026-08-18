@@ -11,7 +11,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
  * Shared sub-tab navigation bar component rendering formatted sub-tabs with entry counts
  * for both Request and Response inspectors.
  *
- * @param tabs List of supported sub-tabs to display (e.g. [InspectorSubTab.RequestTabs] or [InspectorSubTab.ResponseTabs]).
+ * @param tabs List of supported sub-tabs to display.
  * @param activeTab Currently selected sub-tab.
  * @param onTabSelected Event callback when user selects a sub-tab.
  * @param headerCount Header entries count.
@@ -20,7 +20,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
  * @param modifier Composable layout modifier.
  */
 @Composable
-public fun InspectorSubTabRow(
+fun InspectorSubTabRow(
     tabs: List<InspectorSubTab>,
     activeTab: InspectorSubTab,
     onTabSelected: (InspectorSubTab) -> Unit,

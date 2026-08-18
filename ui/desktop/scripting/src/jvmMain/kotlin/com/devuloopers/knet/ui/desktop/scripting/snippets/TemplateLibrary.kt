@@ -20,7 +20,7 @@ import com.devuloopers.knet.ui.desktop.scripting.model.ScriptTemplate
  * TemplateLibrary side panel showing a searchable list of script templates.
  */
 @Composable
-public fun TemplateLibrary(
+fun TemplateLibrary(
     templates: List<ScriptTemplate>,
     onTemplateSelect: (ScriptTemplate) -> Unit,
     modifier: Modifier = Modifier

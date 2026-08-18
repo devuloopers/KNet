@@ -5,7 +5,7 @@ import androidx.compose.ui.text.font.FontFamily
 /**
  * Shared font family declarations for UI and Code typography.
  */
-public object FontFamilies {
-    public val Default: FontFamily = FontFamily.Default
-    public val Monospace: FontFamily = FontFamily.Monospace
+object FontFamilies {
+    val Default: FontFamily = FontFamily.Default
+    val Monospace: FontFamily = FontFamily.Monospace
 }

@@ -100,7 +100,7 @@ enum class GraphQLBodySubTab(val label: String, val codeLanguage: CodeLanguage) 
  * @param modifier Layout modifier applied to the root container.
  */
 @Composable
-public fun GraphQLBodyViewer(
+fun GraphQLBodyViewer(
     format: BodyFormat.GraphQL,
     rawJsonText: String,
     modifier: Modifier = Modifier

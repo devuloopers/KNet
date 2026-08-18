@@ -3,7 +3,7 @@ package com.devuloopers.knet.ui.desktop.certificate.model
 /**
  * Lightweight summary model representing certificate lines in tables and views.
  */
-public data class CertificateSummary(
+data class CertificateSummary(
     val alias: String,
     val subject: String,
     val expiration: String,

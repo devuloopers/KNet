@@ -4,7 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
 @Composable
-public fun KNetTag(
+fun KNetTag(
     text: String,
     modifier: Modifier = Modifier
 ) {

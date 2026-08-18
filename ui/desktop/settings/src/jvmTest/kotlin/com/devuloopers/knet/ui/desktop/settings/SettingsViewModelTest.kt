@@ -3,10 +3,14 @@ package com.devuloopers.knet.ui.desktop.settings
 import com.devuloopers.knet.domain.workspace.model.TimeoutUnit
 import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
 import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
-import com.devuloopers.knet.engine.certificate.CertificateManager
+import com.devuloopers.knet.application.port.certificate.CertificateAuthoritySummary
+import com.devuloopers.knet.application.port.certificate.CertificateManagementPort
+import com.devuloopers.knet.application.port.certificate.ClientCertificateSummary
+import com.devuloopers.knet.application.port.certificate.MtlsRuleSpec
 import com.devuloopers.knet.ui.desktop.settings.model.SettingsIntent
 import com.devuloopers.knet.ui.desktop.settings.model.SettingsState
 import com.devuloopers.knet.ui.desktop.settings.model.SettingsTab
+import com.devuloopers.knet.ui.desktop.settings.platform.SettingsPlatformActions
 import com.devuloopers.knet.ui.desktop.settings.viewmodel.SettingsViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -16,7 +20,6 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
-import java.io.File
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -37,34 +40,39 @@ private class FakeWidgetPreferencesRepository(
 }
 
 /**
- * Fake implementation of [CertificateManager] for unit testing.
+ * Fake implementation of [CertificateManagementPort] for unit testing.
  */
-private class FakeCertificateManager : CertificateManager {
+private class FakeCertificateManager : CertificateManagementPort {
     var isTrusted: Boolean = false
-    override fun isCaTrustedByOs(): Boolean = isTrusted
-    override fun installRootCertificate(): Boolean {
+    override suspend fun isRootCertificateTrusted(): Boolean = isTrusted
+    override suspend fun installRootCertificate(): Boolean {
         isTrusted = true
         return true
     }
-    override fun getCaStatus(): String = "AVAILABLE"
-    override fun getCaSubject(): String = "CN=KNet Root CA"
-    override fun getCaIssuer(): String = "CN=KNet Root CA"
-    override fun getCaSerialNumber(): String = "01:23:45"
-    override fun getCaSignatureAlgorithm(): String = "SHA256withRSA"
-    override fun getCaValidFrom(): String = "2024-01-01"
-    override fun getCaValidUntil(): String = "2034-01-01"
-    override fun getCaSha1Fingerprint(): String = "AA:BB:CC"
-    override fun getCaSha256Fingerprint(): String = "AA:BB:CC:DD"
-    override fun getClientCertificates(): List<com.devuloopers.knet.engine.certificate.EngineClientCertificate> = emptyList()
-    override fun importClientCertificate(path: String, alias: String, passphrase: String) {}
-    override fun exportClientCertificate(alias: String, destinationPath: String) {}
-    override fun deleteClientCertificate(alias: String) {}
-    override fun toggleCertificateEnabled(alias: String, enabled: Boolean) {}
-    override fun getMtlsRules(): List<com.devuloopers.knet.engine.certificate.EngineMtlsRule> = emptyList()
-    override fun addMtlsRule(rule: com.devuloopers.knet.engine.certificate.EngineMtlsRule) {}
-    override fun editMtlsRule(rule: com.devuloopers.knet.engine.certificate.EngineMtlsRule) {}
-    override fun deleteMtlsRule(ruleName: String) {}
-    override fun getKeyManagerFactory(host: String): javax.net.ssl.KeyManagerFactory? = null
+    override suspend fun authoritySummary(): CertificateAuthoritySummary = CertificateAuthoritySummary(
+        "AVAILABLE", "CN=KNet Root CA", "CN=KNet Root CA", "01:23:45", "SHA256withRSA",
+        "2024-01-01", "2034-01-01", "AA:BB:CC", "AA:BB:CC:DD", isTrusted,
+    )
+    override suspend fun clientCertificates(): List<ClientCertificateSummary> = emptyList()
+    override suspend fun importClientCertificate(path: String, alias: String, passphrase: String) = Unit
+    override suspend fun exportClientCertificate(alias: String, destinationPath: String) = Unit
+    override suspend fun deleteClientCertificate(alias: String) = Unit
+    override suspend fun setClientCertificateEnabled(alias: String, enabled: Boolean) = Unit
+    override suspend fun mtlsRules(): List<MtlsRuleSpec> = emptyList()
+    override suspend fun addMtlsRule(rule: MtlsRuleSpec) = Unit
+    override suspend fun editMtlsRule(rule: MtlsRuleSpec) = Unit
+    override suspend fun deleteMtlsRule(ruleName: String) = Unit
+}
+
+/** In-memory desktop action boundary used by settings ViewModel tests. */
+private class FakeSettingsPlatformActions : SettingsPlatformActions {
+    override val dataDirectory: String = "/test/.knet"
+    var openRequested: Boolean = false
+
+    override suspend fun openDataDirectory(): Boolean {
+        openRequested = true
+        return true
+    }
 }
 
 /**
@@ -119,7 +127,7 @@ class SettingsViewModelTest {
     fun `verify UpdateApiStudioTimeout persists minutes converted to total seconds`() = runTest(testDispatcher) {
         val repo = FakeWidgetPreferencesRepository()
         val certManager = FakeCertificateManager()
-        val viewModel = SettingsViewModel(repo, certManager, testDispatcher)
+        val viewModel = SettingsViewModel(repo, certManager, FakeSettingsPlatformActions(), testDispatcher)
 
         advanceUntilIdle()
 
@@ -133,10 +141,10 @@ class SettingsViewModelTest {
     }
 
     @Test
-    fun `verify UpdateLiveInterceptionTimeout persists seconds and synchronizes InterceptCoordinator`() = runTest(testDispatcher) {
+    fun `verify UpdateLiveInterceptionTimeout persists application breakpoint deadline`() = runTest(testDispatcher) {
         val repo = FakeWidgetPreferencesRepository()
         val certManager = FakeCertificateManager()
-        val viewModel = SettingsViewModel(repo, certManager, testDispatcher)
+        val viewModel = SettingsViewModel(repo, certManager, FakeSettingsPlatformActions(), testDispatcher)
 
         advanceUntilIdle()
 
@@ -157,7 +165,7 @@ class SettingsViewModelTest {
         )
         val repo = FakeWidgetPreferencesRepository(customInitial)
         val certManager = FakeCertificateManager()
-        val viewModel = SettingsViewModel(repo, certManager, testDispatcher)
+        val viewModel = SettingsViewModel(repo, certManager, FakeSettingsPlatformActions(), testDispatcher)
 
         advanceUntilIdle()
 
@@ -174,5 +182,23 @@ class SettingsViewModelTest {
         assertEquals(TimeoutUnit.MINUTES, viewModel.uiState.value.liveInterceptionTimeoutUnit)
         assertEquals(60, repo.stateFlow.value.apiStudioTimeoutSeconds)
         assertEquals(60, repo.stateFlow.value.liveInterceptionTimeoutSeconds)
+    }
+
+    @Test
+    fun `OpenDataDirectory delegates to the injected desktop platform action`() = runTest(testDispatcher) {
+        val platformActions = FakeSettingsPlatformActions()
+        val viewModel = SettingsViewModel(
+            FakeWidgetPreferencesRepository(),
+            FakeCertificateManager(),
+            platformActions,
+            testDispatcher,
+        )
+        advanceUntilIdle()
+
+        viewModel.processIntent(SettingsIntent.OpenDataDirectory)
+        advanceUntilIdle()
+
+        assertTrue(platformActions.openRequested)
+        assertEquals(platformActions.dataDirectory, viewModel.uiState.value.dataDirectory)
     }
 }

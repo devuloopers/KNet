@@ -7,36 +7,37 @@ import com.devuloopers.knet.core.logger.LogTags
 import com.devuloopers.knet.domain.workspace.model.TimeoutUnit
 import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
 import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
-import com.devuloopers.knet.engine.certificate.CertificateManager
+import com.devuloopers.knet.application.port.certificate.CertificateManagementPort
 import com.devuloopers.knet.ui.desktop.settings.model.SettingsIntent
 import com.devuloopers.knet.ui.desktop.settings.model.SettingsState
-import kotlinx.coroutines.Dispatchers
+import com.devuloopers.knet.ui.desktop.settings.platform.SettingsPlatformActions
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.awt.Desktop
-import java.io.File
 
 /**
  * ViewModel managing state and direct auto-save persistence for KNet Application Settings.
  *
  * Interacts with [WidgetPreferencesRepository] for DataStore settings persistence
- * and [CertificateManager] for OS Root CA status and trust store installation.
+ * and [CertificateManagementPort] for OS Root CA status and trust store installation.
  *
  * @param widgetPreferencesRepository Repository persisting user preferences to DataStore.
  * @param certificateManager Certificate management service for OS Root CA trust store registration.
+ * @param platformActions Desktop shell actions kept outside presentation state management.
  * @param ioDispatcher Background coroutine dispatcher for asynchronous I/O operations.
  */
 class SettingsViewModel(
     private val widgetPreferencesRepository: WidgetPreferencesRepository,
-    private val certificateManager: CertificateManager,
-    private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO
+    private val certificateManager: CertificateManagementPort,
+    private val platformActions: SettingsPlatformActions,
+    private val ioDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(SettingsState())
     val uiState: StateFlow<SettingsState> = _uiState.asStateFlow()
 
-    private val defaultDataDir: String = File(System.getProperty("user.home"), ".knet").absolutePath
+    private val defaultDataDir: String = platformActions.dataDirectory
 
     init {
         loadData()
@@ -49,7 +50,7 @@ class SettingsViewModel(
             }
             val isCaTrusted = withContext(ioDispatcher) {
                 try {
-                    certificateManager.isCaTrustedByOs()
+                    certificateManager.isRootCertificateTrusted()
                 } catch (_: Exception) {
                     false
                 }
@@ -159,7 +160,7 @@ class SettingsViewModel(
                     }
                     val isTrustedNow = withContext(ioDispatcher) {
                         try {
-                            certificateManager.isCaTrustedByOs()
+                            certificateManager.isRootCertificateTrusted()
                         } catch (_: Exception) {
                             success
                         }
@@ -174,15 +175,9 @@ class SettingsViewModel(
                 }
 
                 SettingsIntent.OpenDataDirectory -> {
-                    withContext(ioDispatcher) {
-                        try {
-                            val dir = File(defaultDataDir).apply { mkdirs() }
-                            if (Desktop.isDesktopSupported() && Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
-                                Desktop.getDesktop().open(dir)
-                            }
-                        } catch (e: Exception) {
-                            KNetLogger.warn(LogTags.KNET) { "Failed to open directory '$defaultDataDir': ${e.message}" }
-                        }
+                    val opened = withContext(ioDispatcher) { platformActions.openDataDirectory() }
+                    if (!opened) {
+                        KNetLogger.warn(LogTags.KNET) { "Failed to open directory '$defaultDataDir'." }
                     }
                 }
 

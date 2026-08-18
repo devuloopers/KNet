@@ -1,95 +1,85 @@
 package com.devuloopers.knet.engine.proxy.mapper
 
-import com.devuloopers.knet.domain.clientNetwork.model.HttpRequest
-import com.devuloopers.knet.domain.clientNetwork.model.HttpResponse
-import com.devuloopers.knet.domain.clientNetwork.model.KNetHeaders
-import io.netty.buffer.ByteBuf
-import io.netty.handler.codec.http.FullHttpRequest
-import io.netty.handler.codec.http.FullHttpResponse
+import com.devuloopers.knet.engine.proxy.http.ProxyRequestContext
+import com.devuloopers.knet.traffic.id.ExchangeId
+import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
+import com.devuloopers.knet.traffic.model.body.MessageBodyRef
 import io.netty.handler.codec.http.HttpHeaders
+import io.netty.handler.codec.http.HttpRequest as NettyHttpRequest
 import io.netty.handler.codec.http.HttpResponse as nHttpResponse
+import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
+import com.devuloopers.knet.traffic.model.http.Authority
+import com.devuloopers.knet.traffic.model.http.HeaderField
+import com.devuloopers.knet.traffic.model.http.HeaderName
+import com.devuloopers.knet.traffic.model.http.HttpMethod as CanonicalHttpMethod
+import com.devuloopers.knet.traffic.model.http.HttpScheme
+import com.devuloopers.knet.traffic.model.http.HttpStatus
+import com.devuloopers.knet.traffic.model.http.RequestHead
+import com.devuloopers.knet.traffic.model.http.RequestTarget
+import com.devuloopers.knet.traffic.model.http.ResponseHead
+import com.devuloopers.knet.traffic.model.body.ContentEncoding
+import kotlin.time.Clock
 
 /**
  * Utility functions to map Netty HTTP objects to KNet domain models.
  */
 object HttpMapper {
 
-    /**
-     * Maps Netty's [FullHttpRequest] to KNet's domain [HttpRequest] model.
-     */
-    fun mapRequest(nettyReq: FullHttpRequest, host: String, isSsl: Boolean): HttpRequest {
-        return mapRequest(nettyReq, isSsl, host, if (isSsl) 443 else 80, nettyReq.uri())
-    }
-
-    /**
-     * Maps Netty's [FullHttpRequest] to KNet's domain [HttpRequest] model with explicit port and relative URI.
-     */
-    fun mapRequest(
-        nettyReq: FullHttpRequest,
+    /** Maps a request head into its canonical snapshot and transport lifecycle envelope. */
+    fun mapRequestContext(
+        nettyReq: NettyHttpRequest,
         isSsl: Boolean,
         host: String,
         port: Int,
-        relativeUri: String
-    ): HttpRequest {
-        val transactionId = nettyReq.headers().get(KNetHeaders.HEADER_TRANSACTION_ID) ?: @OptIn(kotlin.uuid.ExperimentalUuidApi::class) kotlin.uuid.Uuid.random().toString()
-        if (nettyReq.headers().contains(KNetHeaders.HEADER_TRANSACTION_ID)) {
-            nettyReq.headers().remove(KNetHeaders.HEADER_TRANSACTION_ID)
-        }
+        relativeUri: String,
+    ): ProxyRequestContext = ProxyRequestContext(
+        exchangeId = ExchangeId(newExchangeId()),
+        request = HttpRequestSnapshot(
+            head = mapRequestHead(nettyReq, isSsl, host, port, relativeUri),
+            body = MessageBodyRef.Empty,
+        ),
+        startedAtEpochMillis = Clock.System.now().toEpochMilliseconds(),
+    )
 
-        val headers = mapHeaders(nettyReq.headers())
-        val body = extractBody(nettyReq.content())
-        val scheme = if (isSsl) "https" else "http"
-        val portSuffix = if ((isSsl && port == 443) || (!isSsl && port == 80)) "" else ":$port"
-        val fullUrl = if (nettyReq.uri().startsWith("http")) nettyReq.uri() else "$scheme://$host$portSuffix$relativeUri"
-        return HttpRequest(
-            id = transactionId,
-            method = nettyReq.method().name(),
-            url = fullUrl,
-            protocol = nettyReq.protocolVersion().text(),
-            headers = headers,
-            body = body,
-            timestamp = System.currentTimeMillis()
-        )
-    }
+    /** Maps transport request metadata into the shared canonical request head. */
+    fun mapRequestHead(
+        nettyRequest: NettyHttpRequest,
+        isSsl: Boolean,
+        host: String,
+        port: Int,
+        relativeUri: String,
+    ): RequestHead = RequestHead(
+        method = CanonicalHttpMethod.fromToken(nettyRequest.method().name()),
+        target = RequestTarget.Absolute(
+            scheme = HttpScheme.fromToken(if (isSsl) "https" else "http"),
+            authority = Authority(host = host, port = port),
+            pathAndQuery = relativeUri.takeIf { value -> value.startsWith('/') } ?: "/",
+        ),
+        protocol = ApplicationProtocol.fromToken(nettyRequest.protocolVersion().text()),
+        headers = mapCanonicalHeaders(nettyRequest.headers()),
+    )
 
-    /**
-     * Maps Netty's [FullHttpResponse] to KNet's domain [HttpResponse] model.
-     */
-    fun mapResponse(nettyRes: FullHttpResponse): HttpResponse {
-        val headers = mapHeaders(nettyRes.headers())
-        val body = extractBody(nettyRes.content())
-        return HttpResponse(
-            statusCode = nettyRes.status().code(),
-            statusText = nettyRes.status().reasonPhrase(),
-            headers = headers,
-            body = body,
-            timestamp = System.currentTimeMillis()
-        )
-    }
+    /** Maps transport response metadata into the shared canonical response head. */
+    fun mapResponseHead(nettyResponse: nHttpResponse): ResponseHead = ResponseHead(
+        protocol = ApplicationProtocol.fromToken(nettyResponse.protocolVersion().text()),
+        status = HttpStatus(nettyResponse.status().code()),
+        reasonPhrase = nettyResponse.status().reasonPhrase().takeIf(String::isNotBlank),
+        headers = mapCanonicalHeaders(nettyResponse.headers()),
+    )
 
-    /**
-     * Maps Netty's streaming [io.netty.handler.codec.http.HttpResponse] headers to KNet's domain [HttpResponse] model.
-     */
-    fun mapResponseHeaders(nettyRes: nHttpResponse): HttpResponse {
-        val headers = mapHeaders(nettyRes.headers())
-        return HttpResponse(
-            statusCode = nettyRes.status().code(),
-            statusText = nettyRes.status().reasonPhrase(),
-            headers = headers,
-            body = null,
-            timestamp = System.currentTimeMillis()
-        )
-    }
+    /** Returns the observed representation encoding without decoding body bytes. */
+    fun contentEncoding(headers: HttpHeaders): ContentEncoding? = headers
+        .get("Content-Encoding")
+        ?.substringBefore(',')
+        ?.trim()
+        ?.takeIf(String::isNotBlank)
+        ?.let(ContentEncoding::fromToken)
 
-    private fun mapHeaders(headers: HttpHeaders): List<Pair<String, String>> {
-        return headers.map { Pair(it.key, it.value) }
-    }
+    /** Allocates the transport-owned stable exchange ID. */
+    @OptIn(kotlin.uuid.ExperimentalUuidApi::class)
+    private fun newExchangeId(): String = kotlin.uuid.Uuid.random().toString()
 
-    private fun extractBody(content: ByteBuf): ByteArray? {
-        return if (content.readableBytes() > 0) {
-            val bytes = ByteArray(content.readableBytes())
-            content.getBytes(content.readerIndex(), bytes)
-            bytes
-        } else null
+    private fun mapCanonicalHeaders(headers: HttpHeaders): List<HeaderField> = headers.map { header ->
+        HeaderField(HeaderName(header.key), header.value)
     }
 }

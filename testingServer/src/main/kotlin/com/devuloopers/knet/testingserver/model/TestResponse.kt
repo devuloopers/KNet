@@ -1,6 +1,6 @@
 package com.devuloopers.knet.testingserver.model
 
-import java.time.Instant
+import kotlin.time.Clock
 
 /**
  * Standardized DTO for testing server HTTP responses.
@@ -14,5 +14,5 @@ data class TestResponse(
     val query: Map<String, String> = emptyMap(),
     val cookies: Map<String, String> = emptyMap(),
     val body: Any? = null,
-    val timestamp: String = Instant.now().toString()
+    val timestamp: String = Clock.System.now().toString()
 )

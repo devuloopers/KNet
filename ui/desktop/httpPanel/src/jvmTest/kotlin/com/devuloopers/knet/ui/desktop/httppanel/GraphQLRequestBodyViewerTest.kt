@@ -91,10 +91,12 @@ class GraphQLRequestBodyViewerTest {
     @Test
     fun `GraphQlSubTab SSOT accessors, updates, and prettifiers operate correctly`() {
         val initialState = com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlState(
-            queryText = "query MyQuery { user { id } }",
-            variablesText = "{\"id\":\"123\"}",
-            operationName = "MyQuery",
-            extensionsText = "{\"client\":\"apollo\"}"
+            payload = com.devuloopers.knet.domain.payload.StructuredPayloadState.GraphQL(
+                queryText = "query MyQuery { user { id } }",
+                variablesText = "{\"id\":\"123\"}",
+                operationName = "MyQuery",
+                extensionsText = "{\"client\":\"apollo\"}",
+            ),
         )
 
         // 1. Payloads

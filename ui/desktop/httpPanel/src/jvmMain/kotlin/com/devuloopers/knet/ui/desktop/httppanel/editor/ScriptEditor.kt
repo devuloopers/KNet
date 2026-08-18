@@ -10,15 +10,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.devuloopers.knet.engine.script.api.ScriptLanguage
+import com.devuloopers.knet.scripting.model.ScriptLanguage
+import com.devuloopers.knet.scripting.model.ScriptPhase
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
 import com.devuloopers.knet.ui.desktop.codeeditor.api.KNetCodeEditor
 import com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage
-import com.devuloopers.knet.ui.desktop.httppanel.model.ScriptPhase
 import com.devuloopers.knet.ui.desktop.httppanel.model.ScriptSnippetRegistry
 import com.devuloopers.knet.ui.desktop.httppanel.model.ScriptState
+import com.devuloopers.knet.ui.desktop.httppanel.model.editorLabel
 
 /**
  * Modern, interactive Script Editor supporting Pre-request and Test scripts with JS/Kotlin dual language engines.
@@ -60,7 +61,7 @@ fun ScriptEditor(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                ScriptPhase.entries.forEach { phase ->
+                listOf(ScriptPhase.PRE_REQUEST, ScriptPhase.POST_RESPONSE).forEach { phase ->
                     val isSelected = state.activePhase == phase
                     Box(
                         modifier = Modifier
@@ -78,7 +79,7 @@ fun ScriptEditor(
                             .padding(horizontal = 10.dp, vertical = 5.dp)
                     ) {
                         Text(
-                            text = phase.label,
+                            text = phase.editorLabel,
                             style = typography.caption.copy(
                                 color = if (isSelected) themeColors.accent else themeColors.textSecondary,
                                 fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal

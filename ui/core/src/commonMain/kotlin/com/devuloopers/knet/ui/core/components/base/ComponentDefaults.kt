@@ -8,13 +8,13 @@ import androidx.compose.ui.unit.dp
 /**
  * Base marker interface for component defaults.
  */
-public interface ComponentDefaults
+interface ComponentDefaults
 
 /**
  * Base color state container for components.
  */
 @Immutable
-public data class ComponentColors(
+data class ComponentColors(
     val containerColor: Color = Color.Unspecified,
     val contentColor: Color = Color.Unspecified,
     val borderColor: Color = Color.Unspecified,
@@ -26,7 +26,7 @@ public data class ComponentColors(
  * Base metrics container for component sizing.
  */
 @Immutable
-public data class ComponentMetrics(
+data class ComponentMetrics(
     val height: Dp = 28.dp,
     val horizontalPadding: Dp = 8.dp,
     val verticalPadding: Dp = 4.dp,

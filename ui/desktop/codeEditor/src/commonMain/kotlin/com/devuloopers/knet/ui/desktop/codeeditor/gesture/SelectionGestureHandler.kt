@@ -37,7 +37,7 @@ class SelectionGestureHandler(
         isShiftPressed: Boolean = false,
         currentSelection: EditorSelection? = null,
         caretState: EditorCaretState? = null,
-        currentTimeMs: Long = System.currentTimeMillis(),
+        currentTimeMs: Long = currentGestureTimeMillis(),
         onSelectionChange: (EditorSelection?) -> Unit
     ) {
         if (dragAnchor == null) {

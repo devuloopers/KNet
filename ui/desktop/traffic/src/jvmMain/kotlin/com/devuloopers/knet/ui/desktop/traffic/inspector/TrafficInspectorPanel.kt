@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
@@ -14,10 +15,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.devuloopers.knet.domain.collection.model.HttpMethod
 import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
-import com.devuloopers.knet.domain.network.model.NetworkResponseSpec
-import com.devuloopers.knet.domain.traffic.model.TrafficItemUiState
+import com.devuloopers.knet.traffic.model.http.HttpMethod
+import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
+import com.devuloopers.knet.traffic.model.http.HeaderField
+import com.devuloopers.knet.traffic.model.http.HeaderName
+import com.devuloopers.knet.traffic.model.http.HttpStatus
+import com.devuloopers.knet.traffic.model.http.ResponseHead
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.components.tabs.KNetTab
 import com.devuloopers.knet.ui.core.components.tabs.ScrollableTabRow
@@ -25,27 +29,28 @@ import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
 import com.devuloopers.knet.ui.desktop.httppanel.model.NetworkOverviewSpec
-import com.devuloopers.knet.ui.desktop.httppanel.model.NetworkTimingSpec
 import com.devuloopers.knet.ui.desktop.httppanel.viewpanels.OverviewViewPanel
 import com.devuloopers.knet.ui.desktop.httppanel.viewpanels.RequestViewPanel
 import com.devuloopers.knet.ui.desktop.httppanel.viewpanels.ResponseViewPanel
 import com.devuloopers.knet.ui.desktop.httppanel.viewpanels.TimelineViewPanel
 import com.devuloopers.knet.ui.desktop.traffic.model.*
+import com.devuloopers.knet.traffic.inspection.InspectionAnnotation
+import com.devuloopers.knet.traffic.inspection.InspectionAnnotationState
 
 /**
  * 500dp Right-Docked Inspection Panel bound strictly to :ui:core design tokens and primitives.
  */
 @Composable
 fun TrafficInspectorPanel(
-    selectedTransaction: TrafficItemUiState?,
+    selectedTransaction: TrafficRowUiState?,
     activeTab: InspectorTab,
-    activeRequestSubTab: RequestSubTab = RequestSubTab.BODY,
-    activeResponseSubTab: ResponseSubTab = ResponseSubTab.BODY,
+    activeRequestSubTab: InspectorSubTab = InspectorSubTab.BODY,
+    activeResponseSubTab: InspectorSubTab = InspectorSubTab.BODY,
     previewMode: PreviewFormatMode,
     preparedState: InspectorPreparedState = InspectorPreparedState(),
     onTabSelected: (InspectorTab) -> Unit,
-    onRequestSubTabSelected: (RequestSubTab) -> Unit = {},
-    onResponseSubTabSelected: (ResponseSubTab) -> Unit = {},
+    onRequestSubTabSelected: (InspectorSubTab) -> Unit = {},
+    onResponseSubTabSelected: (InspectorSubTab) -> Unit = {},
     onPreviewModeSelected: (PreviewFormatMode) -> Unit,
     onSendToApiStudio: (String) -> Unit = {},
     modifier: Modifier = Modifier
@@ -102,7 +107,7 @@ fun TrafficInspectorPanel(
                     InspectorTab.OVERVIEW -> {
                         val overviewSpec = remember(selectedTransaction) {
                             val targetUrl =
-                                if (selectedTransaction.host.isNotBlank()) "https://${selectedTransaction.host}${selectedTransaction.path}" else selectedTransaction.path
+                                selectedTransaction.fullUrl
                             val contentType =
                                 selectedTransaction.responseHeaders.map { it.key to it.value }
                                     .find { it.first.equals("Content-Type", ignoreCase = true) }?.second ?: ""
@@ -119,29 +124,31 @@ fun TrafficInspectorPanel(
                                 contentType = contentType
                             )
                         }
-                        OverviewViewPanel(
-                            spec = overviewSpec,
-                            modifier = Modifier.fillMaxSize()
-                        )
+                        Column(modifier = Modifier.fillMaxSize()) {
+                            OverviewViewPanel(
+                                spec = overviewSpec,
+                                modifier = Modifier.weight(1f).fillMaxWidth()
+                            )
+                            if (preparedState.annotations.isNotEmpty()) {
+                                SemanticAnnotationsPanel(
+                                    annotations = preparedState.annotations,
+                                    modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp),
+                                )
+                            }
+                        }
                     }
 
                     InspectorTab.REQUEST -> {
                         val requestSpec = remember(selectedTransaction, preparedState) {
                             val reqBody =
-                                preparedState.requestBodyText.ifBlank { selectedTransaction.requestBody }
+                                preparedState.requestBodyText
                             val headerPairs = selectedTransaction.requestHeaders.map { it.key to it.value }
-                            val queryParamsList = selectedTransaction.queryParams.map { it.key to it.value.toString() }
-                            val parsedMethod = try {
-                                HttpMethod.valueOf(selectedTransaction.method.uppercase())
-                            } catch (_: Exception) {
-                                HttpMethod.CUSTOM
-                            }
+                            val queryParamsList = selectedTransaction.queryParams.map { it.key to it.value }
                             val targetUrl =
-                                if (selectedTransaction.host.isNotBlank()) "https://${selectedTransaction.host}${selectedTransaction.path}" else selectedTransaction.path
+                                selectedTransaction.fullUrl
 
                             NetworkRequestSpec(
-                                method = parsedMethod,
-                                customMethod = if (parsedMethod == HttpMethod.CUSTOM) selectedTransaction.method else null,
+                                method = HttpMethod.fromToken(selectedTransaction.method),
                                 url = targetUrl,
                                 headers = headerPairs,
                                 queryParams = queryParamsList,
@@ -149,27 +156,12 @@ fun TrafficInspectorPanel(
                                 timestamp = selectedTransaction.timestamp
                             )
                         }
-                        val mappedReqSubTab = when (activeRequestSubTab) {
-                            RequestSubTab.HEADERS -> InspectorSubTab.HEADERS
-                            RequestSubTab.PARAMS -> InspectorSubTab.PARAMS
-                            RequestSubTab.COOKIES -> InspectorSubTab.COOKIES
-                            RequestSubTab.BODY -> InspectorSubTab.BODY
-                        }
                         RequestViewPanel(
                             spec = requestSpec,
                             payloadSpec = preparedState.requestPayloadSpec.takeIf { !it.isEmpty },
                             isPreparing = preparedState.isPreparing,
-                            activeSubTab = mappedReqSubTab,
-                            onSubTabSelected = { newSubTab ->
-                                val legacyTab = when (newSubTab) {
-                                    InspectorSubTab.HEADERS -> RequestSubTab.HEADERS
-                                    InspectorSubTab.PARAMS -> RequestSubTab.PARAMS
-                                    InspectorSubTab.COOKIES -> RequestSubTab.COOKIES
-                                    InspectorSubTab.BODY -> RequestSubTab.BODY
-                                    else -> RequestSubTab.BODY
-                                }
-                                onRequestSubTabSelected(legacyTab)
-                            },
+                            activeSubTab = activeRequestSubTab,
+                            onSubTabSelected = onRequestSubTabSelected,
                             onOpenInApiStudio = {
                                 onSendToApiStudio(selectedTransaction.id.toString())
                             },
@@ -178,57 +170,40 @@ fun TrafficInspectorPanel(
                     }
 
                     InspectorTab.RESPONSE -> {
-                        val responseSpec = remember(selectedTransaction, preparedState) {
-                            val resBody =
-                                preparedState.responseBodyText.ifBlank { selectedTransaction.responseBody }
-                            val headerPairs = selectedTransaction.responseHeaders.map { it.key to it.value }
-                            NetworkResponseSpec(
-                                statusCode = selectedTransaction.status,
-                                statusText = selectedTransaction.statusText,
-                                durationMs = parseDurationMs(selectedTransaction.formattedTime),
-                                sizeBytes = parseSizeBytes(selectedTransaction.formattedSize),
-                                responseBody = resBody,
-                                headers = headerPairs
-                            )
-                        }
-                        val mappedResSubTab = when (activeResponseSubTab) {
-                            ResponseSubTab.HEADERS -> InspectorSubTab.HEADERS
-                            ResponseSubTab.COOKIES -> InspectorSubTab.COOKIES
-                            ResponseSubTab.BODY -> InspectorSubTab.BODY
+                        val responseHead = remember(selectedTransaction) {
+                            selectedTransaction.status
+                                .takeIf { it in 100..999 }
+                                ?.let { statusCode ->
+                                    ResponseHead(
+                                        protocol = ApplicationProtocol.fromToken(
+                                            selectedTransaction.protocol.ifBlank { "HTTP/1.1" }
+                                        ),
+                                        status = HttpStatus(statusCode),
+                                        reasonPhrase = selectedTransaction.statusText.takeIf(String::isNotBlank),
+                                        headers = selectedTransaction.responseHeaders.mapNotNull { (name, value) ->
+                                            name.takeIf(String::isNotBlank)?.let {
+                                                HeaderField(HeaderName(it), value)
+                                            }
+                                        }
+                                    )
+                                }
                         }
                         ResponseViewPanel(
-                            spec = responseSpec,
-                            payloadSpec = preparedState.responsePayloadSpec.takeIf { !it.isEmpty },
+                            head = responseHead,
+                            timings = selectedTransaction.timings,
+                            responseSizeBytes = selectedTransaction.responseBytes,
+                            payloadSpec = preparedState.responsePayloadSpec.takeIf { !it.isEmpty }
+                                ?: com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec.EMPTY,
                             isPreparing = preparedState.isPreparing,
-                            activeSubTab = mappedResSubTab,
-                            onSubTabSelected = { newSubTab ->
-                                val legacyTab = when (newSubTab) {
-                                    InspectorSubTab.HEADERS -> ResponseSubTab.HEADERS
-                                    InspectorSubTab.COOKIES -> ResponseSubTab.COOKIES
-                                    InspectorSubTab.BODY -> ResponseSubTab.BODY
-                                    else -> ResponseSubTab.BODY
-                                }
-                                onResponseSubTabSelected(legacyTab)
-                            },
+                            activeSubTab = activeResponseSubTab,
+                            onSubTabSelected = onResponseSubTabSelected,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
 
                     InspectorTab.TIMELINE -> {
-                        val timingSpec = remember(selectedTransaction.timings) {
-                            val t = selectedTransaction.timings
-                            NetworkTimingSpec(
-                                dnsMs = t.dnsMs,
-                                tcpMs = t.tcpMs,
-                                tlsMs = t.tlsMs,
-                                ttfbMs = t.ttfbMs,
-                                downloadMs = t.downloadMs,
-                                totalTimeMs = t.totalTimeMs,
-                                isReusedConnection = t.isReusedConnection
-                            )
-                        }
                         TimelineViewPanel(
-                            spec = timingSpec,
+                            timings = selectedTransaction.timings,
                             modifier = Modifier.fillMaxSize()
                         )
                     }
@@ -238,12 +213,50 @@ fun TrafficInspectorPanel(
     }
 }
 
-private fun parseDurationMs(formattedTime: String): Long {
-    val numeric = formattedTime.filter { it.isDigit() }
-    return numeric.toLongOrNull() ?: 0L
-}
-
-private fun parseSizeBytes(formattedSize: String): Long {
-    val numeric = formattedSize.filter { it.isDigit() }
-    return numeric.toLongOrNull() ?: 0L
+/** Protocol-neutral renderer; individual inspectors only contribute versioned generic documents. */
+@Composable
+private fun SemanticAnnotationsPanel(
+    annotations: List<InspectionAnnotation>,
+    modifier: Modifier = Modifier,
+) {
+    val colors = KNetTheme.colors
+    val typography = KNetTheme.typography
+    Column(
+        modifier = modifier
+            .border(1.dp, colors.border)
+            .background(colors.surface)
+            .padding(12.dp)
+            .verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text("Semantic inspection", style = typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
+        annotations.forEach { annotation ->
+            val document = annotation.document
+            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                Text(
+                    text = document?.title ?: annotation.inspectorId.value,
+                    style = typography.bodyMedium.copy(
+                        color = if (annotation.state == InspectionAnnotationState.FAILED) {
+                            colors.semantic.error
+                        } else {
+                            colors.textPrimary
+                        },
+                        fontWeight = FontWeight.SemiBold,
+                    ),
+                )
+                document?.summary?.takeIf(String::isNotBlank)?.let { summary ->
+                    Text(summary, style = typography.codeSmall.copy(color = colors.textSecondary))
+                }
+                document?.fields.orEmpty().forEach { field ->
+                    Text(
+                        "${field.label}: ${field.value}",
+                        style = typography.codeSmall.copy(color = colors.textSecondary),
+                    )
+                }
+                annotation.errorCode?.let { error ->
+                    Text(error, style = typography.codeSmall.copy(color = colors.textMuted))
+                }
+            }
+        }
+    }
 }

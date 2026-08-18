@@ -8,8 +8,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Language
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -33,7 +33,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * Right: Request counter, Byte transfer size, and Duration timer.
  */
 @Composable
-public fun KNetGlobalStatusBar(
+fun KNetGlobalStatusBar(
     modifier: Modifier = Modifier,
     requestCount: Int = 245,
     bytesTransferred: String = "1.2 MB",
@@ -112,7 +112,7 @@ public fun KNetGlobalStatusBar(
             modifier = Modifier.padding(end = 4.dp)
         ) {
             Icon(
-                imageVector = Icons.Default.ArrowForward,
+                imageVector = Icons.AutoMirrored.Filled.ArrowForward,
                 contentDescription = null,
                 tint = themeColors.textMuted,
                 modifier = Modifier.size(12.dp)

@@ -7,7 +7,7 @@ import com.devuloopers.knet.domain.collection.repository.CollectionsRepository
  *
  * @param repository The repository managing collection data.
  */
-public class DeleteSavedSessionUseCase(
+class DeleteSavedSessionUseCase(
     private val repository: CollectionsRepository
 ) {
     /**
@@ -15,7 +15,7 @@ public class DeleteSavedSessionUseCase(
      *
      * @param requestId The ID of the saved request record to delete.
      */
-    public suspend fun execute(requestId: String) {
+    suspend fun execute(requestId: String) {
         repository.deleteRequest(requestId)
     }
 }

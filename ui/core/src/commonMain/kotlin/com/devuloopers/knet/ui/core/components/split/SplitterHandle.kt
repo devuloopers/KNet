@@ -12,7 +12,7 @@ import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 @Composable
-public fun SplitterHandle(
+fun SplitterHandle(
     modifier: Modifier = Modifier,
     isHorizontal: Boolean = true
 ) {

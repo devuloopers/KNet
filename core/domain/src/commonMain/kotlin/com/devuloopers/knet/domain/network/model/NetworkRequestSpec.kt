@@ -2,7 +2,7 @@ package com.devuloopers.knet.domain.network.model
 
 import com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType
 import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
-import com.devuloopers.knet.domain.collection.model.HttpMethod
+import com.devuloopers.knet.traffic.model.http.HttpMethod
 
 /**
  * Strongly-typed domain contract representing an HTTP request specification across KNet.
@@ -10,8 +10,7 @@ import com.devuloopers.knet.domain.collection.model.HttpMethod
  * Owned centrally by `:core:domain` to serve as the unified policy payload between
  * Traffic Capture, Live Interception, API Studio, cURL Importers, and future workspace tabs.
  *
- * @property method Strongly-typed HTTP method enum (GET, POST, PUT, DELETE, etc.).
- * @property customMethod Optional custom HTTP method string if [method] is [HttpMethod.CUSTOM].
+ * @property method Extension-safe HTTP method shared with traffic capture and execution.
  * @property url Complete target request URL string.
  * @property headers Preserved list of HTTP request header key-value pairs.
  * @property queryParams List of parsed request query parameter key-value pairs.
@@ -23,7 +22,6 @@ import com.devuloopers.knet.domain.collection.model.HttpMethod
  */
 data class NetworkRequestSpec(
     val method: HttpMethod = HttpMethod.GET,
-    val customMethod: String? = null,
     val url: String = "",
     val headers: List<Pair<String, String>> = emptyList(),
     val queryParams: List<Pair<String, String>> = emptyList(),
@@ -33,9 +31,7 @@ data class NetworkRequestSpec(
     val auth: ApiRequestAuth = ApiRequestAuth.None,
     val timestamp: Long = 0L
 ) {
-    /**
-     * Display method label string (upper-cased custom method if [HttpMethod.CUSTOM], else enum name).
-     */
+    /** Wire method token used for display, export, and execution. */
     val methodString: String
-        get() = if (method == HttpMethod.CUSTOM && !customMethod.isNullOrBlank()) customMethod.uppercase() else method.name
+        get() = method.token
 }

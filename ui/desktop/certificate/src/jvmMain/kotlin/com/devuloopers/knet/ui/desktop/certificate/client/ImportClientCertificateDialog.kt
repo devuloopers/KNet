@@ -32,7 +32,7 @@ import javax.swing.filechooser.FileNameExtensionFilter
  * @param modifier Layout modifier for custom sizing or positioning.
  */
 @Composable
-public fun ImportClientCertificateDialog(
+fun ImportClientCertificateDialog(
     onDismiss: () -> Unit,
     onImport: (alias: String, path: String, passphrase: String) -> Unit,
     errorMessage: String? = null,

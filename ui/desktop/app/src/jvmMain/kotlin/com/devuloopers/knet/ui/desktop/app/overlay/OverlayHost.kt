@@ -4,7 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
 @Composable
-public fun KNetOverlayHost(
+fun KNetOverlayHost(
     modifier: Modifier = Modifier
 ) {
     // Placeholder overlay host container for popovers and temporary panels

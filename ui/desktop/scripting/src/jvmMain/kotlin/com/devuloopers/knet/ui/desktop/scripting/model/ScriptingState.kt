@@ -1,11 +1,12 @@
 package com.devuloopers.knet.ui.desktop.scripting.model
 
-import com.devuloopers.knet.domain.scripting.model.ScriptLanguage
+import com.devuloopers.knet.scripting.model.ScriptLanguage
+import com.devuloopers.knet.scripting.model.ScriptPhase
 
 /**
  * Top-level UI state DTO for `:ui:desktop:scripting`.
  */
-public data class TrafficScript(
+data class TrafficScript(
     val id: String = "",
     val name: String = "script.js",
     val code: String = "",
@@ -14,7 +15,7 @@ public data class TrafficScript(
     val isDirty: Boolean = false
 )
 
-public data class ScriptingState(
+data class ScriptingState(
     val activeScript: TrafficScript? = null,
     val openScripts: List<TrafficScript> = emptyList(),
     val executionState: ScriptExecutionState = ScriptExecutionState.IDLE,

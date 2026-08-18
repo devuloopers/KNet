@@ -1,6 +1,7 @@
 package com.devuloopers.knet.core.http.performance
 
 import com.devuloopers.knet.core.http.client.KNetApiClient
+import com.devuloopers.knet.traffic.model.http.HttpMethod
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -13,7 +14,7 @@ class PerformanceRegressionTest {
         val start = System.currentTimeMillis()
 
         repeat(3) {
-            client.execute("https://httpbin.org/get", method = "GET")
+            client.executeDetailed("https://httpbin.org/get", method = HttpMethod.GET)
         }
 
         val totalDuration = System.currentTimeMillis() - start

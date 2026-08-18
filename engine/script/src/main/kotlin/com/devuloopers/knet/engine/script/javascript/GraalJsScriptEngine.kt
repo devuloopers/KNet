@@ -3,7 +3,7 @@ package com.devuloopers.knet.engine.script.javascript
 import com.devuloopers.knet.engine.script.api.EnvironmentStore
 import com.devuloopers.knet.engine.script.api.ScriptEngine
 import com.devuloopers.knet.engine.script.api.ScriptExecutionResult
-import com.devuloopers.knet.engine.script.api.ScriptLanguage
+import com.devuloopers.knet.scripting.model.ScriptLanguage
 import com.devuloopers.knet.engine.script.api.ScriptRequestModel
 import com.devuloopers.knet.engine.script.api.ScriptResponseModel
 import com.devuloopers.knet.engine.script.internal.ExceptionFormatter
@@ -12,6 +12,7 @@ import com.devuloopers.knet.engine.script.internal.ScriptHostBridge
 import org.graalvm.polyglot.Context
 import org.graalvm.polyglot.Engine
 import org.graalvm.polyglot.HostAccess
+import org.graalvm.polyglot.io.IOAccess
 
 /**
  * Production-grade JavaScript Execution Engine powering KNet API Studio via GraalJS.
@@ -58,7 +59,7 @@ class GraalJsScriptEngine : ScriptEngine {
             val polyglotContext = Context.newBuilder("js")
                 .engine(sharedEngine)
                 .allowHostAccess(HostAccess.EXPLICIT)
-                .allowIO(false)
+                .allowIO(IOAccess.NONE)
                 .allowNativeAccess(false)
                 .allowCreateThread(false)
                 .allowCreateProcess(false)

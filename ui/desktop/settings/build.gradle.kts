@@ -11,7 +11,7 @@ kotlin {
         val jvmMain by getting {
             dependencies {
                 implementation(project(":ui:core"))
-                implementation(project(":engine:certificate"))
+                implementation(project(":application"))
                 implementation(project(":core:domain"))
                 implementation(project(":core:logger"))
                 implementation(libs.compose.runtime)
@@ -22,9 +22,6 @@ kotlin {
                 implementation(libs.compose.uiToolingPreview)
                 implementation(libs.androidx.lifecycle.viewmodelCompose)
                 implementation(libs.androidx.lifecycle.runtimeCompose)
-                implementation(libs.koin.core)
-                implementation(libs.koin.compose)
-                implementation(libs.koin.compose.viewmodel)
                 implementation(compose.materialIconsExtended)
             }
         }

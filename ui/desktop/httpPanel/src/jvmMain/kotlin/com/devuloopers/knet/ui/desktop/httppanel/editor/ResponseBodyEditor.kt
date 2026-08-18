@@ -40,7 +40,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.ResponseBodyState
  * @param modifier Composable layout modifier.
  */
 @Composable
-public fun ResponseBodyEditor(
+fun ResponseBodyEditor(
     state: ResponseBodyState,
     onStateChange: (ResponseBodyState) -> Unit,
     modifier: Modifier = Modifier

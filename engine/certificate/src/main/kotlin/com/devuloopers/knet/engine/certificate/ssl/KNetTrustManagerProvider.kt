@@ -81,8 +81,11 @@ object KNetTrustManagerProvider {
         if (existing != null) return existing
 
         val factory = getOrCreateCompositeTrustManagerFactory()
-        val trustManager = factory.trustManagers.filterIsInstance<X509TrustManager>().firstOrNull()
-            ?: trustAllTrustManager
+        val trustManager = checkNotNull(
+            factory.trustManagers.filterIsInstance<X509TrustManager>().firstOrNull()
+        ) {
+            "The platform trust manager factory did not provide an X509 trust manager."
+        }
 
         cachedCompositeTrustManager.compareAndSet(null, trustManager)
         return cachedCompositeTrustManager.get() ?: trustManager

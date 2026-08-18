@@ -44,7 +44,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * @property value Associated string value.
  * @property enabled Whether entry is active in request context.
  */
-public data class KeyValueEntry(
+data class KeyValueEntry(
     val id: String,
     val key: String,
     val value: String,
@@ -66,7 +66,7 @@ public data class KeyValueEntry(
  * @param addLabel Label text displayed on add button (default: "Add Row").
  */
 @Composable
-public fun KNetKeyValueEditor(
+fun KNetKeyValueEditor(
     entries: List<KeyValueEntry>,
     onEntryChange: (index: Int, updated: KeyValueEntry) -> Unit,
     onAddEntry: () -> Unit,
@@ -265,7 +265,7 @@ public fun KNetKeyValueEditor(
  * @param allowMultiLine True to allow long values (like User-Agent or tokens) to wrap vertically across multiple lines.
  */
 @Composable
-public fun KNetReadOnlyKeyValueViewer(
+fun KNetReadOnlyKeyValueViewer(
     entries: List<KeyValueEntry>,
     modifier: Modifier = Modifier,
     keyHeader: String = "HEADER NAME",

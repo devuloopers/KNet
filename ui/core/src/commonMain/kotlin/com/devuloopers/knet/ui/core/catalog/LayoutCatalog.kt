@@ -14,7 +14,7 @@ import com.devuloopers.knet.ui.core.components.toolbar.KNetToolbar
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 @Composable
-public fun LayoutCatalog() {
+fun LayoutCatalog() {
     val typography = KNetTheme.typography
     val colors = KNetTheme.colors
 

@@ -3,7 +3,7 @@ package com.devuloopers.knet.domain.rules.model
 /**
  * Represents the execution target phase for a network interception breakpoint rule.
  */
-public enum class BreakpointPhase {
+enum class BreakpointPhase {
     /**
      * Intercepts inbound HTTP client requests before reaching target server.
      */
@@ -19,11 +19,11 @@ public enum class BreakpointPhase {
      */
     BOTH;
 
-    public companion object {
+    companion object {
         /**
          * Safely parses string representation into [BreakpointPhase] with fallback to [BOTH].
          */
-        public fun fromString(value: String?): BreakpointPhase {
+        fun fromString(value: String?): BreakpointPhase {
             return entries.find { it.name.equals(value, ignoreCase = true) } ?: BOTH
         }
     }

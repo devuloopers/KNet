@@ -20,7 +20,7 @@ import androidx.compose.ui.graphics.Color
  * @property interaction Hover, selected, and active state overlay colors.
  */
 @Immutable
-public data class Colors(
+data class Colors(
     val background: Color,
     val surface: Color,
     val surfaceVariant: Color,
@@ -39,7 +39,7 @@ public data class Colors(
  * Semantic status color tokens.
  */
 @Immutable
-public data class SemanticColors(
+data class SemanticColors(
     val success: Color,
     val successContainer: Color,
     val error: Color,
@@ -54,7 +54,7 @@ public data class SemanticColors(
  * Interactive state overlay tokens.
  */
 @Immutable
-public data class InteractionColors(
+data class InteractionColors(
     val hoverOverlay: Color,
     val selectedOverlay: Color,
     val pressedOverlay: Color,
@@ -64,7 +64,7 @@ public data class InteractionColors(
 /**
  * Default Dark Mode Palette — KNet Desktop v3.0 Master Design System.
  */
-public val KNetDarkColors: Colors = Colors(
+val KNetDarkColors: Colors = Colors(
     background = Color(0xFF0B1016),      // Surface 0: Application Base
     surface = Color(0xFF0B1016),         // Surface 1: Navigation & Sidebar
     surfaceVariant = Color(0xFF111827),  // Surface 3: Panels & Inspector
@@ -96,7 +96,7 @@ public val KNetDarkColors: Colors = Colors(
 /**
  * Default Light Mode Palette derived from token hierarchy.
  */
-public val KNetLightColors: Colors = Colors(
+val KNetLightColors: Colors = Colors(
     background = Color(0xFFFFFFFF),
     surface = Color(0xFFF8FAFC),
     surfaceVariant = Color(0xFFF1F5F9),

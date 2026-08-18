@@ -27,7 +27,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.ThemeMode
  * Compact IDE global toolbar composable adhering to refined button density and surface hierarchy rules.
  */
 @Composable
-public fun KNetGlobalToolbar(
+fun KNetGlobalToolbar(
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
     currentThemeMode: ThemeMode,

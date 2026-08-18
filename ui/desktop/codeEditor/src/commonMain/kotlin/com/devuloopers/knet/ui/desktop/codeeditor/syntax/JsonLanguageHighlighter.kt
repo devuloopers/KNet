@@ -1,7 +1,5 @@
 package com.devuloopers.knet.ui.desktop.codeeditor.syntax
 
-import java.util.ArrayDeque
-
 data class ParsedJsonKeyValue(
     val leadingIndent: String,
     val keyPart: String,
@@ -74,12 +72,12 @@ class JsonLanguageHighlighter : CodeLanguageHighlighter {
                     ch == '"' -> inString = !inString
                     !inString -> {
                         if (ch == '{' || ch == '[') {
-                            stack.push(index to ch)
+                            stack.addLast(index to ch)
                         } else if (ch == '}' || ch == ']') {
                             if (stack.isNotEmpty()) {
-                                val (topIndex, topChar) = stack.peek()
+                                val (topIndex, topChar) = stack.last()
                                 if ((topChar == '{' && ch == '}') || (topChar == '[' && ch == ']')) {
-                                    stack.pop()
+                                    stack.removeLast()
                                     if (index > topIndex) {
                                         foldRanges[topIndex] = index
                                     }

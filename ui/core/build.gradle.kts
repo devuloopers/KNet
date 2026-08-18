@@ -17,6 +17,7 @@ kotlin {
                 implementation(libs.compose.components.resources)
                 implementation(libs.compose.uiToolingPreview)
                 implementation(compose.materialIconsExtended)
+                implementation(libs.kotlinx.datetime)
             }
         }
         val commonTest by getting {

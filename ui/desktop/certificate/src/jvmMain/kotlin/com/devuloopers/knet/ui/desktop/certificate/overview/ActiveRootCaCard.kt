@@ -19,13 +19,13 @@ import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.badge.KNetBadge
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.ui.desktop.certificate.model.CaDetails
+import com.devuloopers.knet.application.port.certificate.CertificateAuthoritySummary
 import com.devuloopers.knet.ui.desktop.certificate.model.CaStatus
 import com.devuloopers.knet.ui.desktop.certificate.model.TrustInstallationState
 
 @Composable
 fun ActiveRootCaCard(
-    caDetails: CaDetails,
+    caDetails: CertificateAuthoritySummary,
     caStatus: CaStatus = CaStatus.AVAILABLE,
     trustState: TrustInstallationState = TrustInstallationState.IDLE,
     modifier: Modifier = Modifier
@@ -148,4 +148,3 @@ fun ActiveRootCaCard(
         }
     }
 }
-

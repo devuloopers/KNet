@@ -6,7 +6,7 @@ package com.devuloopers.knet.domain.traffic.model
  * @property label User-facing display label for UI rendering.
  * @property range Status code range matched by this filter, or null if matching all.
  */
-public enum class StatusFilter(val label: String, val range: IntRange? = null) {
+enum class StatusFilter(val label: String, val range: IntRange? = null) {
     ALL("All"),
     STATUS_2XX("2xx", 200..299),
     STATUS_3XX("3xx", 300..399),

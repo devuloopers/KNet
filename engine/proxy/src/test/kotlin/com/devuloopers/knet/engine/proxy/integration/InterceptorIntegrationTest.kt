@@ -15,6 +15,5 @@ class InterceptorIntegrationTest {
         val server = KNetProxyServer(port = 18090, ca = ca, certCache = cache)
 
         assertNotNull(server)
-        assertNotNull(KNetProxyServer.pipelineInitializers)
     }
 }

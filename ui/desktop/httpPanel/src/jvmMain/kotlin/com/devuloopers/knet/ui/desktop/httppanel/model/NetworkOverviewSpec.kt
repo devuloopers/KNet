@@ -14,7 +14,7 @@ package com.devuloopers.knet.ui.desktop.httppanel.model
  * @param sizeBytes Formatted byte size string (e.g. "2.4 KB").
  * @param contentType Response Content-Type header string (e.g. "application/json").
  */
-public data class NetworkOverviewSpec(
+data class NetworkOverviewSpec(
     val method: String,
     val url: String,
     val statusCode: Int,

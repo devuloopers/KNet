@@ -1,6 +1,9 @@
 package com.devuloopers.knet.core.http
 
 import com.devuloopers.knet.core.http.client.KNetApiClient
+import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor
+import com.devuloopers.knet.domain.clientNetwork.model.OutboundRequestBody
+import com.devuloopers.knet.traffic.model.http.HttpMethod
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
@@ -26,7 +29,7 @@ class KNetApiClientTest {
         }
 
         val client = KNetApiClient(customEngine = mockEngine)
-        val result = client.execute(url = "https://api.knet.dev/users", method = "GET")
+        val result = client.executeDetailed(url = "https://api.knet.dev/users", method = HttpMethod.GET)
 
         assertEquals(200, result.statusCode)
         assertEquals("OK", result.statusText)
@@ -46,10 +49,10 @@ class KNetApiClientTest {
         }
 
         val client = KNetApiClient(customEngine = mockEngine)
-        val result = client.execute(
+        val result = client.executeDetailed(
             url = "https://api.knet.dev/items",
-            method = "POST",
-            body = "{\"name\":\"Item 1\"}"
+            method = HttpMethod.POST,
+            body = OutboundRequestBody.Json("{\"name\":\"Item 1\"}"),
         )
 
         assertEquals(201, result.statusCode)
@@ -68,10 +71,28 @@ class KNetApiClientTest {
         }
 
         val client = KNetApiClient(customEngine = mockEngine)
-        val putResult = client.execute(url = "https://api.knet.dev/items/1", method = "PUT")
-        val deleteResult = client.execute(url = "https://api.knet.dev/items/1", method = "DELETE")
+        val putResult = client.executeDetailed(url = "https://api.knet.dev/items/1", method = HttpMethod.PUT)
+        val deleteResult = client.executeDetailed(url = "https://api.knet.dev/items/1", method = HttpMethod.DELETE)
 
         assertEquals(200, putResult.statusCode)
         assertEquals(200, deleteResult.statusCode)
+    }
+
+    @Test
+    fun `custom HTTP method reaches Ktor without case normalization`() = runTest {
+        var receivedMethod = ""
+        val mockEngine = MockEngine { request ->
+            receivedMethod = request.method.value
+            respond(content = "ok", status = HttpStatusCode.OK, headers = headersOf())
+        }
+        val client = KNetApiClient(customEngine = mockEngine)
+        val executor: HttpExecutor = client
+
+        executor.execute(
+            url = "https://api.knet.dev/resource",
+            method = HttpMethod.fromToken("customMethod"),
+        )
+
+        assertEquals("customMethod", receivedMethod)
     }
 }

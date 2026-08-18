@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import com.devuloopers.knet.ui.core.components.menu.MenuItem
 
 /**
  * Generic context popup menu primitive component.
@@ -23,7 +24,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * @param modifier Layout modifier.
  */
 @Composable
-public fun ContextMenu(
+fun ContextMenu(
     items: List<MenuItem>,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier
@@ -55,9 +56,10 @@ public fun ContextMenu(
                         style = typography.bodySmall.copy(color = if (item.isEnabled) themeColors.textPrimary else themeColors.textMuted),
                         modifier = Modifier.weight(1f)
                     )
-                    if (item.shortcut != null) {
+                    val shortcut = item.shortcut
+                    if (shortcut != null) {
                         Text(
-                            text = item.shortcut,
+                            text = shortcut,
                             style = typography.caption.copy(color = themeColors.textMuted)
                         )
                     }

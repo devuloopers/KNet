@@ -8,7 +8,7 @@ import androidx.compose.ui.unit.Dp
  * Common style holder for UI component visual attributes.
  */
 @Immutable
-public data class ComponentStyle(
+data class ComponentStyle(
     val backgroundColor: Color = Color.Unspecified,
     val contentColor: Color = Color.Unspecified,
     val borderColor: Color = Color.Transparent,

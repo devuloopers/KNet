@@ -8,7 +8,7 @@ import androidx.compose.ui.graphics.Color
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 @Composable
-public fun LinearProgress(
+fun LinearProgress(
     modifier: Modifier = Modifier,
     color: Color = KNetTheme.colors.accent,
     trackColor: Color = KNetTheme.colors.surfaceVariant
@@ -21,7 +21,7 @@ public fun LinearProgress(
 }
 
 @Composable
-public fun CircularProgress(
+fun CircularProgress(
     modifier: Modifier = Modifier,
     color: Color = KNetTheme.colors.accent
 ) {

@@ -76,16 +76,7 @@ fun Modifier.editorPointerInput(
 
                 val isScrollbarActive = isScrollbarDragging || isOverScrollbarZone
 
-                try {
-                    val activeWindow = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager().activeWindow
-                    if (activeWindow != null) {
-                        val targetCursorType =
-                            if (isScrollbarActive) java.awt.Cursor.DEFAULT_CURSOR else java.awt.Cursor.TEXT_CURSOR
-                        if (activeWindow.cursor.type != targetCursorType) {
-                            activeWindow.cursor = java.awt.Cursor.getPredefinedCursor(targetCursorType)
-                        }
-                    }
-                } catch (_: Throwable) { }
+                updateEditorPointerCursor(isScrollbarActive)
 
                 // Skip text selection processing & auto-scroll when scrollbar drag is active
                 if (!isScrollbarActive && isPressed) {

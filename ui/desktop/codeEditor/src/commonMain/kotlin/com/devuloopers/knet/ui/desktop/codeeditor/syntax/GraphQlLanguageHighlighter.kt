@@ -4,7 +4,6 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
-import java.util.ArrayDeque
 
 /**
  * Syntax highlighter strategy for GraphQL documents (Query, Mutation, Subscription, Schema).
@@ -31,10 +30,10 @@ class GraphQlLanguageHighlighter : CodeLanguageHighlighter {
         for ((index, line) in lines.withIndex()) {
             val trimmed = line.trim()
             if (trimmed.endsWith("{") || trimmed.endsWith("(")) {
-                stack.push(index)
+                stack.addLast(index)
             } else if (trimmed.startsWith("}") || trimmed.startsWith(")")) {
                 if (stack.isNotEmpty()) {
-                    val start = stack.pop()
+                    val start = stack.removeLast()
                     foldRanges[start] = index
                 }
             }

@@ -24,7 +24,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import androidx.compose.ui.text.style.TextOverflow
 
 @Composable
-public fun KNetTab(
+fun KNetTab(
     title: String,
     selected: Boolean,
     onClick: () -> Unit,
@@ -81,7 +81,7 @@ public fun KNetTab(
 }
 
 @Composable
-public fun ClosableTab(
+fun ClosableTab(
     title: String,
     selected: Boolean,
     onClick: () -> Unit,
@@ -98,7 +98,7 @@ public fun ClosableTab(
 }
 
 @Composable
-public fun KNetTabRow(
+fun KNetTabRow(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
@@ -117,7 +117,7 @@ public fun KNetTabRow(
 }
 
 @Composable
-public fun ScrollableTabRow(
+fun ScrollableTabRow(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {

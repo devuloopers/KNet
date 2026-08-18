@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
  *
  * @param repository Interface for accessing collection data storage.
  */
-public class ObserveCollectionsUseCase(
+class ObserveCollectionsUseCase(
     private val repository: CollectionsRepository
 ) {
     /**
@@ -17,7 +17,7 @@ public class ObserveCollectionsUseCase(
      *
      * @return Flow emitting reactive list of saved API collections.
      */
-    public fun execute(): Flow<List<ApiCollection>> {
+    fun execute(): Flow<List<ApiCollection>> {
         return repository.observeCollections()
     }
 }

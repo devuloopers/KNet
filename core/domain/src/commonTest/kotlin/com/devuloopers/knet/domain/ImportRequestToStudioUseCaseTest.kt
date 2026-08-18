@@ -1,8 +1,8 @@
 package com.devuloopers.knet.domain
 
 import com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCase
-import com.devuloopers.knet.domain.collection.model.HttpMethod
 import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
+import com.devuloopers.knet.traffic.model.http.HttpMethod
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

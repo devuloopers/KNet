@@ -13,7 +13,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 /**
  * DataStore preferences datasource for persisting workspace panel layout settings.
  */
-public class WorkspacePreferencesDataSource(
+class WorkspacePreferencesDataSource(
     private val dataStore: DataStore<Preferences>
 ) {
     private companion object {
@@ -32,7 +32,7 @@ public class WorkspacePreferencesDataSource(
         private val keyScriptLanguage = stringPreferencesKey("script_language")
     }
 
-    public val settingsFlow: Flow<Map<String, Any>> = dataStore.data.map { preferences ->
+    val settingsFlow: Flow<Map<String, Any>> = dataStore.data.map { preferences ->
         mapOf(
             "isTrafficFeedVisible" to (preferences[keyTrafficFeed] ?: true),
             "isInspectorVisible" to (preferences[keyInspector] ?: true),
@@ -50,7 +50,7 @@ public class WorkspacePreferencesDataSource(
         )
     }
 
-    public suspend fun saveSetting(key: String, value: Any) {
+    suspend fun saveSetting(key: String, value: Any) {
         dataStore.edit { preferences ->
             when (key) {
                 "isTrafficFeedVisible" -> preferences[keyTrafficFeed] = value as Boolean

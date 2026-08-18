@@ -1,10 +1,13 @@
 package com.devuloopers.knet.ui.desktop.traffic.model
 
-import com.devuloopers.knet.domain.proxy.model.ProxyEngineState
+import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
 import com.devuloopers.knet.domain.traffic.model.MethodFilter
 import com.devuloopers.knet.domain.traffic.model.ProtocolFilter
 import com.devuloopers.knet.domain.traffic.model.StatusFilter
-import com.devuloopers.knet.domain.traffic.model.TrafficItemUiState
+import com.devuloopers.knet.application.port.traffic.TrafficPageCursor
+import com.devuloopers.knet.traffic.id.CaptureSessionId
+import com.devuloopers.knet.domain.rules.model.BreakpointRule
+import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
 
 /**
  * Capture execution state enum.
@@ -42,7 +45,7 @@ enum class PreviewFormatMode {
  * @property filteredTransactions Filtered subset of transactions based on query & protocol/method/status filters.
  * @property selectedTransactionId Currently selected transaction ID, or null.
  * @property captureState Current proxy capture lifecycle state.
- * @property engineState Current proxy engine state (Stopped, Starting, Running, Stopping, Error).
+ * @property engineState Current application-owned proxy runtime state.
  * @property searchQuery Live search filter query text.
  * @property selectedProtocolFilter Active protocol filter chip (e.g., [ProtocolFilter.ALL], [ProtocolFilter.HTTP], [ProtocolFilter.HTTPS]).
  * @property selectedMethodFilter Active HTTP method dropdown filter (e.g., [MethodFilter.ALL], [MethodFilter.GET], [MethodFilter.POST]).
@@ -54,11 +57,15 @@ enum class PreviewFormatMode {
  * @property previewFormatMode Active response/request body preview format mode.
  */
 data class TrafficState(
-    val transactions: List<TrafficItemUiState> = emptyList(),
-    val filteredTransactions: List<TrafficItemUiState> = emptyList(),
+    val transactions: List<TrafficRowUiState> = emptyList(),
+    val filteredTransactions: List<TrafficRowUiState> = emptyList(),
+    val sessionId: CaptureSessionId? = null,
+    val nextPageCursor: TrafficPageCursor? = null,
+    val pageGeneration: Long = 0L,
+    val isPageLoading: Boolean = false,
     val selectedTransactionId: String? = null,
     val captureState: CaptureState = CaptureState.STOPPED,
-    val engineState: ProxyEngineState = ProxyEngineState.Stopped,
+    val engineState: ProxyRuntimeState = ProxyRuntimeState.Stopped,
     val engineErrorMessage: String? = null,
     val searchQuery: String = "",
     val selectedProtocolFilter: ProtocolFilter = ProtocolFilter.ALL,
@@ -66,20 +73,20 @@ data class TrafficState(
     val selectedStatusFilter: StatusFilter = StatusFilter.ALL,
     val autoScroll: Boolean = true,
     val activeInspectorTab: InspectorTab = InspectorTab.OVERVIEW,
-    val activeRequestSubTab: RequestSubTab = RequestSubTab.BODY,
-    val activeResponseSubTab: ResponseSubTab = ResponseSubTab.BODY,
+    val activeRequestSubTab: InspectorSubTab = InspectorSubTab.BODY,
+    val activeResponseSubTab: InspectorSubTab = InspectorSubTab.BODY,
     val previewFormatMode: PreviewFormatMode = PreviewFormatMode.PRETTY,
     val columnVisibility: ColumnVisibilityState = ColumnVisibilityState(),
     val preparedState: InspectorPreparedState = InspectorPreparedState(),
     val localIpAddress: String = "127.0.0.1",
-    val activeBreakpointRules: List<com.devuloopers.knet.domain.rules.model.RuleModel> = emptyList(),
+    val activeBreakpointRules: List<BreakpointRule> = emptyList(),
     val isBreakpointDialogVisible: Boolean = false,
-    val prefilledBreakpointRule: com.devuloopers.knet.domain.rules.model.RuleModel? = null
+    val prefilledBreakpointRule: BreakpointRule? = null
 ) {
     /**
      * Selected transaction UI model matching [selectedTransactionId].
      */
-    val selectedTransaction: TrafficItemUiState?
+    val selectedTransaction: TrafficRowUiState?
         get() = transactions.find { it.transactionId == selectedTransactionId }
             ?: filteredTransactions.find { it.transactionId == selectedTransactionId }
             ?: transactions.firstOrNull()
@@ -118,15 +125,7 @@ data class TrafficState(
      */
     val formattedTotalSize: String
         get() {
-            val totalBytes = transactions.sumOf { tx ->
-                tx.formattedSize.replace(" KB", "").replace(" B", "").replace(" MB", "").toDoubleOrNull()?.let { size ->
-                    when {
-                        tx.formattedSize.contains("MB") -> (size * 1024 * 1024).toLong()
-                        tx.formattedSize.contains("KB") -> (size * 1024).toLong()
-                        else -> size.toLong()
-                    }
-                } ?: 0L
-            }
+            val totalBytes = transactions.sumOf { tx -> tx.transferredBytes }
             return when {
                 totalBytes >= 1024 * 1024 -> "${(totalBytes / (1024.0 * 1024.0) * 100).toLong() / 100.0} MB"
                 totalBytes >= 1024 -> "${(totalBytes / 1024.0 * 100).toLong() / 100.0} KB"

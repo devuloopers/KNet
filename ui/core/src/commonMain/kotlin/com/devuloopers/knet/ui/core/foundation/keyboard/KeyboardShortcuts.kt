@@ -10,7 +10,7 @@ import androidx.compose.ui.input.key.type
 /**
  * Key event listener helper triggering action on [Key.Escape] or [Key.Enter].
  */
-public fun Modifier.onKeyShortcut(
+fun Modifier.onKeyShortcut(
     targetKey: Key,
     onAction: () -> Unit
 ): Modifier {

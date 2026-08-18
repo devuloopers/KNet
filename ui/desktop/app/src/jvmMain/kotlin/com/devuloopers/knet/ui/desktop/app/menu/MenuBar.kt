@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import com.devuloopers.knet.ui.core.components.menu.MenuItem
 
 /**
  * Top application menu bar composable (File, Edit, View, Tools, Help).
@@ -21,7 +22,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * @param modifier Layout modifier.
  */
 @Composable
-public fun MenuBar(
+fun MenuBar(
     menus: Map<String, List<MenuItem>> = emptyMap(),
     modifier: Modifier = Modifier
 ) {

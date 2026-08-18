@@ -1,20 +1,38 @@
 package com.devuloopers.knet.engine.certificate
 
 import java.security.cert.X509Certificate
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executor
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 /**
  * Thread-safe, in-memory cache to store dynamically signed leaf certificates.
  * Caching certificates prevents signing latencies from slowing down incoming TLS connection handshakes.
  *
- * @property maxEntries Optional configurable cache size limit. If the cache reaches this limit,
- * it is cleared as a temporary safeguard against unbounded memory growth until LRU/TTL eviction is added.
+ * Cache misses are single-flight per normalized hostname, including asynchronous callers. Entries
+ * expire after access and are evicted least-recently-used under both count and estimated byte bounds.
+ *
+ * @property maxEntries Maximum cached leaf count.
+ * @property maximumWeightBytes Maximum estimated encoded certificate/key bytes retained.
+ * @property expireAfterAccessMillis Idle lifetime of one cached leaf.
  */
 class CertificateCache(
-    private val maxEntries: Int = 1000
+    private val maxEntries: Int = 1_000,
+    private val maximumWeightBytes: Long = 16L * 1_024L * 1_024L,
+    private val expireAfterAccessMillis: Long = 60L * 60L * 1_000L,
 ) {
+    private val cacheLock = Any()
+    private val cache = LinkedHashMap<String, CachedLeaf>(16, 0.75f, true)
+    private val inFlight = ConcurrentHashMap<String, CompletableFuture<LeafCertificate>>()
+    private var cachedWeightBytes: Long = 0L
 
-    private val cache = ConcurrentHashMap<String, LeafCertificate>()
+    init {
+        require(maxEntries > 0) { "Certificate cache entry limit must be positive." }
+        require(maximumWeightBytes > 0L) { "Certificate cache weight limit must be positive." }
+        require(expireAfterAccessMillis > 0L) { "Certificate cache expiry must be positive." }
+    }
 
     /**
      * Retrieves a certificate for the target hostname. If the certificate does not exist in
@@ -25,27 +43,60 @@ class CertificateCache(
      * @return A valid [LeafCertificate] bundle.
      */
     fun get(hostname: String, ca: CertificateAuthority): LeafCertificate {
-        val cached = cache[hostname]
-        if (cached != null && isCertificateValid(cached.certificate)) {
-            return cached
+        val key = normalizeHostname(hostname)
+        cachedLeaf(key)?.let { return it }
+        val created = CompletableFuture<LeafCertificate>()
+        val current = inFlight.putIfAbsent(key, created)
+        if (current != null) return current.join()
+        return try {
+            generateAndCache(key, ca).also(created::complete)
+        } catch (failure: Throwable) {
+            created.completeExceptionally(failure)
+            throw failure
+        } finally {
+            inFlight.remove(key, created)
         }
+    }
 
-        // Safeguard against unbounded memory growth
-        if (cache.size >= maxEntries) {
-            cache.clear()
+    /**
+     * Resolves or generates a leaf without running certificate work on the caller's thread.
+     * Concurrent misses for the same host share one future and therefore one key-generation task.
+     */
+    fun getAsync(
+        hostname: String,
+        ca: CertificateAuthority,
+        executor: Executor,
+    ): CompletableFuture<LeafCertificate> {
+        val key = normalizeHostname(hostname)
+        cachedLeaf(key)?.let { cached -> return CompletableFuture.completedFuture(cached) }
+        val created = CompletableFuture<LeafCertificate>()
+        val current = inFlight.putIfAbsent(key, created)
+        if (current != null) return current
+        try {
+            executor.execute {
+                try {
+                    created.complete(generateAndCache(key, ca))
+                } catch (failure: Throwable) {
+                    created.completeExceptionally(failure)
+                } finally {
+                    inFlight.remove(key, created)
+                }
+            }
+        } catch (failure: Throwable) {
+            inFlight.remove(key, created)
+            created.completeExceptionally(failure)
         }
-
-        // Cache miss or expired certificate, generate a new one
-        val fresh = LeafCertificateGenerator.generate(hostname, ca)
-        cache[hostname] = fresh
-        return fresh
+        return created
     }
 
     /**
      * Clears all cached certificates.
      */
     fun clear() {
-        cache.clear()
+        synchronized(cacheLock) {
+            cache.clear()
+            cachedWeightBytes = 0L
+        }
     }
 
     /**
@@ -54,7 +105,59 @@ class CertificateCache(
      * @return Cache size.
      */
     fun size(): Int {
-        return cache.size
+        return synchronized(cacheLock) { cache.size }
+    }
+
+    /** Returns a valid cached leaf and refreshes its access timestamp, or removes a stale entry. */
+    private fun cachedLeaf(hostname: String): LeafCertificate? = synchronized(cacheLock) {
+        val cached = cache[hostname] ?: return@synchronized null
+        val idleMillis = cached.lastAccess.elapsedNow().inWholeMilliseconds
+        if (idleMillis >= expireAfterAccessMillis || !isCertificateValid(cached.leaf.certificate)) {
+            removeCached(hostname, cached)
+            return@synchronized null
+        }
+        cache[hostname] = cached.copy(lastAccess = TimeSource.Monotonic.markNow())
+        cached.leaf
+    }
+
+    /** Generates one leaf and installs it into the weighted LRU cache. */
+    private fun generateAndCache(hostname: String, ca: CertificateAuthority): LeafCertificate {
+        val leaf = LeafCertificateGenerator.generate(hostname, ca)
+        val weight = estimateWeight(leaf)
+        synchronized(cacheLock) {
+            cache.remove(hostname)?.let { replaced -> cachedWeightBytes -= replaced.weightBytes }
+            cache[hostname] = CachedLeaf(leaf, weight, TimeSource.Monotonic.markNow())
+            cachedWeightBytes += weight
+            evictToLimits()
+        }
+        return leaf
+    }
+
+    /** Evicts least-recently-used entries until both configured cache limits hold. */
+    private fun evictToLimits() {
+        val entries = cache.entries.iterator()
+        while ((cache.size > maxEntries || cachedWeightBytes > maximumWeightBytes) && entries.hasNext()) {
+            val entry = entries.next()
+            cachedWeightBytes -= entry.value.weightBytes
+            entries.remove()
+        }
+    }
+
+    private fun removeCached(hostname: String, cached: CachedLeaf) {
+        if (cache.remove(hostname) != null) cachedWeightBytes -= cached.weightBytes
+    }
+
+    /** Uses encoded material sizes as a stable cache-weight approximation. */
+    private fun estimateWeight(leaf: LeafCertificate): Long {
+        val certificateBytes = runCatching { leaf.certificate.encoded.size.toLong() }.getOrDefault(0L)
+        val publicKeyBytes = leaf.keyPair.public.encoded?.size?.toLong() ?: 0L
+        val privateKeyBytes = leaf.keyPair.private.encoded?.size?.toLong() ?: 0L
+        return (certificateBytes + publicKeyBytes + privateKeyBytes).coerceAtLeast(1L)
+    }
+
+    private fun normalizeHostname(hostname: String): String {
+        require(hostname.isNotBlank()) { "Certificate hostname must not be blank." }
+        return hostname.trim().lowercase()
     }
 
     /**
@@ -67,8 +170,14 @@ class CertificateCache(
         return try {
             certificate.checkValidity()
             true
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             false
         }
     }
+
+    private data class CachedLeaf(
+        val leaf: LeafCertificate,
+        val weightBytes: Long,
+        val lastAccess: TimeMark,
+    )
 }

@@ -25,7 +25,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * Label text is purely passive with zero hover highlight or ripple background.
  */
 @Composable
-public fun KNetSwitch(
+fun KNetSwitch(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,

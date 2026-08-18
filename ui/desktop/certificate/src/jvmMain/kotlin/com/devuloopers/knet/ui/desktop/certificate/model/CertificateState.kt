@@ -1,19 +1,20 @@
 package com.devuloopers.knet.ui.desktop.certificate.model
 
-import com.devuloopers.knet.domain.util.HostPlatform
-
+import com.devuloopers.knet.application.port.certificate.CertificateAuthoritySummary
+import com.devuloopers.knet.application.port.certificate.ClientCertificateSummary
+import com.devuloopers.knet.application.port.certificate.MtlsRuleSpec
 
 /**
  * Top-level state DTO for `:ui:desktop:certificate`.
  */
-public data class CertificateState(
+data class CertificateState(
     val caStatus: CaStatus = CaStatus.MISSING,
-    val caDetails: CaDetails = CaDetails(),
+    val caDetails: CertificateAuthoritySummary = CertificateAuthoritySummary(),
     val trustState: TrustInstallationState = TrustInstallationState.CHECKING,
     val platform: HostPlatform = HostPlatform.current(),
-    val clientCertificates: List<ClientCertificate> = emptyList(),
-    val mtlsRules: List<MtlsRule> = emptyList(),
-    val selectedCertificate: ClientCertificate? = null,
+    val clientCertificates: List<ClientCertificateSummary> = emptyList(),
+    val mtlsRules: List<MtlsRuleSpec> = emptyList(),
+    val selectedCertificate: ClientCertificateSummary? = null,
     val isImportDialogVisible: Boolean = false,
     val isExportDialogVisible: Boolean = false,
     val isRuleDialogVisible: Boolean = false,
@@ -25,4 +26,4 @@ public data class CertificateState(
 )
 
 
-public val DialogOffset: Int = 100
+val DialogOffset: Int = 100

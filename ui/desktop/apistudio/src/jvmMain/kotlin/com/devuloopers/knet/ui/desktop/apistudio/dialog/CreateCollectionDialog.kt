@@ -42,7 +42,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * @param onConfirm Callback executed with the new collection name when submitted.
  */
 @Composable
-public fun CreateCollectionDialog(
+fun CreateCollectionDialog(
     onDismiss: () -> Unit,
     onConfirm: (collectionName: String) -> Unit
 ) {

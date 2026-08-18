@@ -26,9 +26,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.devuloopers.knet.domain.collection.model.HttpMethod
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
+import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria
+import com.devuloopers.knet.traffic.model.http.HttpMethod
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
 import com.devuloopers.knet.ui.core.components.dialog.KNetDialog
@@ -37,14 +38,13 @@ import com.devuloopers.knet.ui.core.components.input.KNetTextField
 import com.devuloopers.knet.ui.core.components.switch.KNetSwitch
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.ui.desktop.breakpointmanager.model.BreakpointRuleUiModel
 
 /**
  * Modal form dialog for creating or editing a breakpoint interception rule.
  */
 @Composable
-public fun AddEditBreakpointRuleDialog(
-    rule: BreakpointRuleUiModel?,
+fun AddEditBreakpointRuleDialog(
+    rule: BreakpointRule?,
     onDismiss: () -> Unit,
     onSave: (urlPattern: String, method: HttpMethod?, phase: BreakpointPhase, enabled: Boolean, protocolCriteria: ProtocolMatchCriteria) -> Unit
 ) {
@@ -171,10 +171,11 @@ public fun AddEditBreakpointRuleDialog(
                         .horizontalScroll(methodScrollState),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    val availableMethods: List<HttpMethod?> = listOf(null, HttpMethod.GET, HttpMethod.POST, HttpMethod.PUT, HttpMethod.DELETE, HttpMethod.PATCH)
+                    val availableMethods: List<HttpMethod?> =
+                        listOf(null, HttpMethod.GET, HttpMethod.POST, HttpMethod.PUT, HttpMethod.DELETE, HttpMethod.PATCH)
                     availableMethods.forEach { methodOpt ->
                         val isSelected = selectedMethod == methodOpt
-                        val label = methodOpt?.name ?: "ALL"
+                        val label = methodOpt?.token ?: "ALL"
                         Box(
                             modifier = Modifier
                                 .background(

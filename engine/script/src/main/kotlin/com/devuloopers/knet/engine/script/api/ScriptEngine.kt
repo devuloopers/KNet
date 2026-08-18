@@ -1,5 +1,7 @@
 package com.devuloopers.knet.engine.script.api
 
+import com.devuloopers.knet.scripting.model.ScriptLanguage
+
 /**
  * Unified interface for multi-language script execution engines in KNet API Studio.
  * Every language implementation (GraalJS, Kotlin Scripting, etc.) implements this interface.

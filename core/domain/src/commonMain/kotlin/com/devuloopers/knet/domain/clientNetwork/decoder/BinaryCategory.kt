@@ -3,7 +3,7 @@ package com.devuloopers.knet.domain.clientNetwork.decoder
 /**
  * Domain enum representing known categories of binary HTTP payload content.
  */
-public enum class BinaryCategory {
+enum class BinaryCategory {
     /**
      * Oblivious HTTP Encrypted Request/Response (RFC 9458 / RFC 9180 HPKE).
      */

@@ -12,7 +12,6 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.sp
-import java.util.ArrayDeque
 
 /**
  * Shared utility for tag-based markup highlighters (HTML, XML, SVG).
@@ -50,16 +49,16 @@ object TagMarkupHighlighter {
                 if (tagName.isNotBlank() && !isCommentOrProlog && !isSelfClosing && !hasSameLineClosing) {
                     if (isClosing) {
                         if (tagStack.isNotEmpty()) {
-                            val (startIndex, startTag) = tagStack.peek()
+                            val (startIndex, startTag) = tagStack.last()
                             if (startTag.equals(tagName, ignoreCase = true)) {
-                                tagStack.pop()
+                                tagStack.removeLast()
                                 if (index > startIndex) {
                                     foldRanges[startIndex] = index
                                 }
                             }
                         }
                     } else {
-                        tagStack.push(index to tagName)
+                        tagStack.addLast(index to tagName)
                     }
                 }
             }

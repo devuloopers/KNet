@@ -1,6 +1,6 @@
 package com.devuloopers.knet.ui.core.components.dropdown
 
-import androidx.compose.desktop.ui.tooling.preview.Preview
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -49,11 +49,11 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 /**
  * Shared design tokens and dimensional constants for KNet Dropdown components.
  */
-public object KNetDropdownDefaults {
-    public val FieldHeight: Dp = 40.dp
-    public val ItemHeight: Dp = 40.dp
-    public val HorizontalPadding: Dp = 12.dp
-    public val MaxMenuHeight: Dp = 240.dp
+object KNetDropdownDefaults {
+    val FieldHeight: Dp = 40.dp
+    val ItemHeight: Dp = 40.dp
+    val HorizontalPadding: Dp = 12.dp
+    val MaxMenuHeight: Dp = 240.dp
 }
 
 /**
@@ -83,7 +83,7 @@ public object KNetDropdownDefaults {
  * @param itemContent Optional custom composable rendering for dropdown items.
  */
 @Composable
-public fun <T> KNetSearchableDropdown(
+fun <T> KNetSearchableDropdown(
     selectedItem: T?,
     items: List<T>,
     onItemSelected: (T) -> Unit,
@@ -319,7 +319,7 @@ public fun <T> KNetSearchableDropdown(
  */
 @Preview
 @Composable
-public fun KNetSearchableDropdownPreview() {
+fun KNetSearchableDropdownPreview() {
     val sampleItems = listOf(
         "badssl.com",
         "client.badssl.com",

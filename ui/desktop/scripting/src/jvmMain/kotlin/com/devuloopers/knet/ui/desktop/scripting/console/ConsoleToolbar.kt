@@ -25,7 +25,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * ConsoleToolbar provides controls for console actions.
  */
 @Composable
-public fun ConsoleToolbar(
+fun ConsoleToolbar(
     autoScroll: Boolean,
     onToggleAutoScroll: () -> Unit,
     onClear: () -> Unit,
@@ -81,4 +81,4 @@ public fun ConsoleToolbar(
     }
 }
 
-public val ToolbarHeight: Dp = 32.dp
+val ToolbarHeight: Dp = 32.dp

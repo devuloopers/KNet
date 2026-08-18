@@ -1,7 +1,5 @@
 package com.devuloopers.knet.ui.desktop.codeeditor.syntax
 
-import java.util.ArrayDeque
-
 /**
  * Syntax highlighter strategy for JavaScript code.
  */
@@ -15,10 +13,10 @@ class JsLanguageHighlighter : CodeLanguageHighlighter {
         for ((index, line) in lines.withIndex()) {
             val trimmed = line.trim()
             if (trimmed.endsWith("{") || trimmed.endsWith("[")) {
-                stack.push(index)
+                stack.addLast(index)
             } else if (trimmed.startsWith("}") || trimmed.startsWith("]")) {
                 if (stack.isNotEmpty()) {
-                    val start = stack.pop()
+                    val start = stack.removeLast()
                     foldRanges[start] = index
                 }
             }

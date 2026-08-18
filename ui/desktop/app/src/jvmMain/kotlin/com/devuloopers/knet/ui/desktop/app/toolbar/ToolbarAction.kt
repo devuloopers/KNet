@@ -13,7 +13,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
  * @property color Optional accent color for the button text and icon.
  * @property onClick Callback triggered when clicked.
  */
-public data class ToolbarAction(
+data class ToolbarAction(
     val id: String,
     val label: String,
     val icon: ImageVector? = null,

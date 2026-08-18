@@ -46,7 +46,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * @param content Slot layout for button text and icons.
  */
 @Composable
-public fun KNetButton(
+fun KNetButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     variant: ButtonVariant = ButtonVariant.Primary,
@@ -122,7 +122,7 @@ public fun KNetButton(
  * Text button primitive without surface container styling.
  */
 @Composable
-public fun KNetTextButton(
+fun KNetTextButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
@@ -141,7 +141,7 @@ public fun KNetTextButton(
  * Toggle button primitive supporting boolean checked state.
  */
 @Composable
-public fun KNetToggleButton(
+fun KNetToggleButton(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,

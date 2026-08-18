@@ -1,17 +1,19 @@
 package com.devuloopers.knet.domain.clientNetwork.decoder
 
+import com.devuloopers.knet.traffic.model.body.ContentEncoding
+
 /**
  * Pure domain sealed interface representing the text/binary inspection outcome of an HTTP body payload.
  * Contains zero presentation or UI strings.
  */
-public sealed interface DecodedTextResult {
+sealed interface DecodedTextResult {
     /**
      * Successfully decoded human-readable text.
      *
      * @property text The decoded string content.
      * @property encoding The [ContentEncoding] enum method used to decompress the body.
      */
-    public data class Success(
+    data class Success(
         val text: String,
         val encoding: ContentEncoding = ContentEncoding.IDENTITY
     ) : DecodedTextResult
@@ -23,7 +25,7 @@ public sealed interface DecodedTextResult {
      * @property mediaType HTTP Content-Type header value, or null.
      * @property category The [BinaryCategory] classification.
      */
-    public data class BinaryKnownType(
+    data class BinaryKnownType(
         val size: Long,
         val mediaType: String?,
         val category: BinaryCategory
@@ -35,7 +37,7 @@ public sealed interface DecodedTextResult {
      * @property size Size of the byte payload.
      * @property mediaType HTTP Content-Type header value, or null.
      */
-    public data class BinaryUnknownType(
+    data class BinaryUnknownType(
         val size: Long,
         val mediaType: String?
     ) : DecodedTextResult
@@ -46,7 +48,7 @@ public sealed interface DecodedTextResult {
      * @property encoding The Content-Encoding method attempted.
      * @property errorMessage Descriptive exception message.
      */
-    public data class DecodingError(
+    data class DecodingError(
         val encoding: String,
         val errorMessage: String
     ) : DecodedTextResult
@@ -57,7 +59,7 @@ public sealed interface DecodedTextResult {
      * @property encoding The unsupported encoding string.
      * @property size Size of the raw encoded byte payload.
      */
-    public data class UnsupportedEncoding(
+    data class UnsupportedEncoding(
         val encoding: String,
         val size: Long
     ) : DecodedTextResult

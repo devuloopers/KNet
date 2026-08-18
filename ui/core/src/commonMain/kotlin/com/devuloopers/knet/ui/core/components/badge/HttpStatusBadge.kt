@@ -21,7 +21,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * @property icon Vector icon associated with the status category.
  * @property color Text and icon tint color associated with the status category.
  */
-public enum class HttpStatusCategory(
+enum class HttpStatusCategory(
     val icon: ImageVector,
     val color: Color
 ) {
@@ -32,14 +32,14 @@ public enum class HttpStatusCategory(
     SERVER_ERROR(KNetIcons.Warning, Color(0xFFF38BA8)),
     UNKNOWN(KNetIcons.Info, Color(0xFFA6ADC8));
 
-    public companion object {
+    companion object {
         /**
          * Resolves the strongly-typed [HttpStatusCategory] for a raw HTTP status code integer.
          *
          * @param statusCode Integer status code (e.g. 200, 302, 404, 500).
          * @return Resolved [HttpStatusCategory].
          */
-        public fun fromCode(statusCode: Int): HttpStatusCategory = when (statusCode) {
+        fun fromCode(statusCode: Int): HttpStatusCategory = when (statusCode) {
             in 100..199 -> INFORMATIONAL
             in 200..299 -> SUCCESS
             in 300..399 -> REDIRECTION
@@ -59,7 +59,7 @@ public enum class HttpStatusCategory(
  * @param modifier Layout modifier.
  */
 @Composable
-public fun KNetHttpStatusBadge(
+fun KNetHttpStatusBadge(
     statusCode: Int,
     statusText: String,
     modifier: Modifier = Modifier

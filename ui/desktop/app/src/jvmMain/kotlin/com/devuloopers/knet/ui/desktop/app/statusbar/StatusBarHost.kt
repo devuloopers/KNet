@@ -16,7 +16,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * @param modifier Layout modifier.
  */
 @Composable
-public fun StatusBarHost(
+fun StatusBarHost(
     items: List<StatusItem>,
     modifier: Modifier = Modifier
 ) {

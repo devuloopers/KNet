@@ -3,7 +3,7 @@ package com.devuloopers.knet.ui.desktop.apistudio.model
 /**
  * Strongly-typed enum representing the type classification of an API Studio editing session.
  */
-public enum class SessionType {
+enum class SessionType {
     NONE,
     UNSAVED_DRAFT,
     SAVED_REQUEST
@@ -19,13 +19,13 @@ public enum class SessionType {
  * - [UnsavedDraft]  — An unsaved scratch session is active; edits auto-save to the unsaved table.
  * - [SavedRequest]  — A saved collection request is active; edits auto-save in-place to Room DB.
  */
-public sealed interface SessionContext {
-    public val type: SessionType
+sealed interface SessionContext {
+    val type: SessionType
 
     /**
      * No session is selected. The editor is in a blank / fresh state.
      */
-    public data object None : SessionContext {
+    data object None : SessionContext {
         override val type: SessionType = SessionType.NONE
     }
 
@@ -34,7 +34,7 @@ public sealed interface SessionContext {
      *
      * @property sessionId The unique ID of the unsaved draft (e.g. `"unsaved_1234567890"`).
      */
-    public data class UnsavedDraft(val sessionId: String) : SessionContext {
+    data class UnsavedDraft(val sessionId: String) : SessionContext {
         override val type: SessionType = SessionType.UNSAVED_DRAFT
     }
 
@@ -45,7 +45,7 @@ public sealed interface SessionContext {
      * @property collectionId The ID of the parent API collection.
      * @property folderId The ID of the parent folder inside the collection.
      */
-    public data class SavedRequest(
+    data class SavedRequest(
         val requestId: String,
         val collectionId: String,
         val folderId: String

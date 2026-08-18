@@ -9,6 +9,6 @@ import androidx.compose.runtime.remember
  * Helper creating a remembered interaction source for primitive components.
  */
 @Composable
-public fun rememberComponentInteractionSource(): MutableInteractionSource {
+fun rememberComponentInteractionSource(): MutableInteractionSource {
     return remember { MutableInteractionSource() }
 }

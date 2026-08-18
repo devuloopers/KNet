@@ -14,13 +14,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.ui.desktop.scripting.model.ScriptSnippet
+import com.devuloopers.knet.scripting.model.ScriptSnippet
 
 /**
  * SnippetLibrary side panel showing a searchable list of scripting snippet code templates.
  */
 @Composable
-public fun SnippetLibrary(
+fun SnippetLibrary(
     snippets: List<ScriptSnippet>,
     onSnippetSelect: (ScriptSnippet) -> Unit,
     modifier: Modifier = Modifier
@@ -71,4 +71,3 @@ public fun SnippetLibrary(
         }
     }
 }
-

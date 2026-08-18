@@ -36,7 +36,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * @property color Optional text color tag for the option. Defaults to [Color.Unspecified].
  */
 @Immutable
-public data class KNetDropdownOption(
+data class KNetDropdownOption(
     val label: String,
     val color: Color = Color.Unspecified
 )
@@ -56,7 +56,7 @@ public data class KNetDropdownOption(
  * @param itemColor Optional selector function resolving text [Color] for item [T].
  */
 @Composable
-public fun <T> KNetDropdown(
+fun <T> KNetDropdown(
     selectedItem: T,
     items: List<T>,
     onItemSelected: (T) -> Unit,
@@ -167,7 +167,7 @@ public fun <T> KNetDropdown(
  * Convenient overload for lists of [KNetDropdownOption].
  */
 @Composable
-public fun KNetDropdownOptions(
+fun KNetDropdownOptions(
     selectedOption: KNetDropdownOption,
     options: List<KNetDropdownOption>,
     onOptionSelected: (KNetDropdownOption) -> Unit,

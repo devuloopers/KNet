@@ -32,7 +32,7 @@ import com.devuloopers.knet.ui.desktop.apistudio.model.CollectionsState
 import com.devuloopers.knet.ui.desktop.apistudio.model.ExecutionState
 import com.devuloopers.knet.ui.desktop.apistudio.model.SessionContext
 import com.devuloopers.knet.ui.desktop.apistudio.response.ResponseInspectorActions
-import com.devuloopers.knet.ui.desktop.apistudio.response.ResponseInspectorState
+import com.devuloopers.knet.ui.desktop.apistudio.model.ResponseInspectorState
 import com.devuloopers.knet.ui.desktop.apistudio.response.ResponseInspectorView
 import com.devuloopers.knet.ui.desktop.apistudio.sidebar.CollectionsSidebar
 import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.ApiStudioViewModel
@@ -51,7 +51,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
  * @param modifier Layout modifier.
  */
 @Composable
-public fun ApiStudioScreen(
+fun ApiStudioScreen(
     viewModel: ApiStudioViewModel? = null,
     collectionsViewModel: CollectionsViewModel? = null,
     modifier: Modifier = Modifier
@@ -290,20 +290,12 @@ public fun ApiStudioScreen(
                 },
                 secondPane = { paneModifier ->
                     // Right Pane: Response Inspector
-                    val presentation = uiState.responsePresentation
-                    val inspectorState = ResponseInspectorState(
-                        statusCode = presentation?.statusCode ?: 0,
-                        statusText = presentation?.statusText ?: "",
-                        durationMs = presentation?.durationMs ?: 0L,
-                        sizeBytes = presentation?.sizeBytes ?: 0L,
-                        responseBody = presentation?.body ?: "",
-                        headers = presentation?.headers ?: emptyMap(),
-                        cookies = presentation?.cookies ?: emptyMap(),
-                        testResults = presentation?.testResults ?: emptyList(),
-                        consoleLogs = presentation?.consoleLogs ?: emptyList(),
+                    val inspectorState = uiState.responseInspection?.copy(
                         executionState = uiState.executionState,
-                        failureReason = presentation?.failureReason,
-                        errorMessage = uiState.errorMessage
+                        errorMessage = uiState.errorMessage,
+                    ) ?: ResponseInspectorState(
+                        executionState = uiState.executionState,
+                        errorMessage = uiState.errorMessage,
                     )
                     val activeResponseSubTabEnum = uiState.editorState.activeResponseSubTab
                     ResponseInspectorView(

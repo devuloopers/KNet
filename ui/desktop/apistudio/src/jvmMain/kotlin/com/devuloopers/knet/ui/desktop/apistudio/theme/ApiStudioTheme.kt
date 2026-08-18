@@ -6,7 +6,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.HttpMethodColors
 /**
  * Color tokens for HTTP method badges and syntax highlighting in API Studio.
  */
-public object ApiStudioColors {
+object ApiStudioColors {
     // HTTP Method Colors delegated to :ui:core design system
     val GetText: Color get() = HttpMethodColors.GetText
     val GetBackground: Color get() = HttpMethodColors.GetBackground

@@ -7,7 +7,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
-public enum class ButtonVariant {
+enum class ButtonVariant {
     Primary,
     Secondary,
     Tertiary,
@@ -15,14 +15,14 @@ public enum class ButtonVariant {
     Danger
 }
 
-public enum class ButtonSize {
+enum class ButtonSize {
     Compact,
     Standard,
     Large
 }
 
 @Immutable
-public data class ButtonColors(
+data class ButtonColors(
     val containerColor: Color,
     val contentColor: Color,
     val borderColor: Color = Color.Transparent,
@@ -30,9 +30,9 @@ public data class ButtonColors(
     val disabledContentColor: Color
 )
 
-public object ButtonDefaults {
+object ButtonDefaults {
     @Composable
-    public fun colors(variant: ButtonVariant = ButtonVariant.Primary): ButtonColors {
+    fun colors(variant: ButtonVariant = ButtonVariant.Primary): ButtonColors {
         val themeColors = KNetTheme.colors
         return when (variant) {
             ButtonVariant.Primary -> ButtonColors(
@@ -71,7 +71,7 @@ public object ButtonDefaults {
     }
 
     @Composable
-    public fun height(size: ButtonSize): Dp {
+    fun height(size: ButtonSize): Dp {
         val dims = KNetTheme.dimensions
         return when (size) {
             ButtonSize.Compact -> dims.buttonHeightCompact

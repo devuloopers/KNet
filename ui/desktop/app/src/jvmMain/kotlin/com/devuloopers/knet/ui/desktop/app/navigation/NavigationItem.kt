@@ -42,7 +42,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * @property icon Material vector icon.
  * @property shortcut Optional keyboard shortcut string label (e.g. "Ctrl+1").
  */
-public data class NavigationDestinationInfo(
+data class NavigationDestinationInfo(
     val destination: DesktopDestination,
     val label: String,
     val icon: ImageVector,
@@ -64,7 +64,7 @@ public data class NavigationDestinationInfo(
  * @param modifier Layout modifier.
  */
 @Composable
-public fun NavigationRailRowItem(
+fun NavigationRailRowItem(
     info: NavigationDestinationInfo,
     isSelected: Boolean,
     isExpanded: Boolean,

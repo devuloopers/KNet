@@ -45,7 +45,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * @param onConfirm Callback executed with the new request name when submitted.
  */
 @Composable
-public fun RenameRequestDialog(
+fun RenameRequestDialog(
     currentName: String,
     onDismiss: () -> Unit,
     onConfirm: (newName: String) -> Unit

@@ -16,8 +16,8 @@ class UseCaseTest {
     @Test
     fun testGetRulesUseCaseSuccessPath() = runTest {
         val repository = FakeRulesRepository()
-        val rule1 = TestFixtures.createRuleModel(id = "r-1", name = "Rule One")
-        val rule2 = TestFixtures.createRuleModel(id = "r-2", name = "Rule Two")
+        val rule1 = TestFixtures.createBreakpointRule(id = "r-1", name = "Rule One")
+        val rule2 = TestFixtures.createBreakpointRule(id = "r-2", name = "Rule Two")
         repository.setRules(listOf(rule1, rule2))
 
         val useCase = GetRulesUseCase(repository)
@@ -32,7 +32,7 @@ class UseCaseTest {
     @Test
     fun testToggleRuleUseCaseUpdatesRepository() = runTest {
         val repository = FakeRulesRepository()
-        val rule = TestFixtures.createRuleModel(id = "rule-10", enabled = true)
+        val rule = TestFixtures.createBreakpointRule(id = "rule-10", enabled = true)
         repository.setRules(listOf(rule))
 
         val toggleUseCase = ToggleRuleUseCase(repository)
@@ -48,7 +48,7 @@ class UseCaseTest {
         val repository = FakeRulesRepository()
         val saveUseCase = SaveRuleUseCase(repository)
 
-        val newRule = TestFixtures.createRuleModel(id = "rule-999", name = "New Map Remote")
+        val newRule = TestFixtures.createBreakpointRule(id = "rule-999", name = "New Map Remote")
         saveUseCase.execute(newRule)
 
         val currentRules = repository.rulesFlow.first()

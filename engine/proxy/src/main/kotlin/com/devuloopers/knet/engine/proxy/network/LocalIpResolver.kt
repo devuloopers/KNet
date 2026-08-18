@@ -17,7 +17,7 @@ import kotlinx.coroutines.isActive
  * Provides both instant single-shot IP resolution and a reactive coroutine [Flow] stream
  * that emits updated IP addresses when host network interfaces change.
  */
-public class LocalIpResolver {
+class LocalIpResolver {
 
     /**
      * Resolves the primary active non-loopback IPv4 address for the host machine.
@@ -27,7 +27,7 @@ public class LocalIpResolver {
      *
      * @return Host IPv4 address string (e.g. "192.168.1.15"), or "127.0.0.1" fallback if offline.
      */
-    public fun getLocalIpAddress(): String {
+    fun getLocalIpAddress(): String {
         // 1. Query OS routing table for default route active local IP (UDP connect does not send network traffic)
         try {
             java.net.DatagramSocket().use { socket ->
@@ -65,7 +65,7 @@ public class LocalIpResolver {
      *
      * @param pollIntervalMs Ticker polling interval in milliseconds. Defaults to 3000ms.
      */
-    public fun observeLocalIpAddress(pollIntervalMs: Long = 3000L): Flow<String> = flow {
+    fun observeLocalIpAddress(pollIntervalMs: Long = 3000L): Flow<String> = flow {
         while (currentCoroutineContext().isActive) {
             emit(getLocalIpAddress())
             delay(pollIntervalMs)

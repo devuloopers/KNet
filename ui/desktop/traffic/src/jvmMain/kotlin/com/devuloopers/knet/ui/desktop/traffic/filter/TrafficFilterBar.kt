@@ -45,7 +45,7 @@ import com.devuloopers.knet.ui.desktop.traffic.model.TrafficColumn
 /**
  * Immutable State DTO for TrafficFilterBar.
  */
-public data class TrafficFilterBarState(
+data class TrafficFilterBarState(
     val selectedProtocol: ProtocolFilter = ProtocolFilter.ALL,
     val selectedMethod: MethodFilter = MethodFilter.ALL,
     val selectedStatus: StatusFilter = StatusFilter.ALL,
@@ -60,7 +60,7 @@ public data class TrafficFilterBarState(
 /**
  * Action Callbacks DTO for TrafficFilterBar.
  */
-public data class TrafficFilterBarActions(
+data class TrafficFilterBarActions(
     val onProtocolSelected: (ProtocolFilter) -> Unit = {},
     val onMethodSelected: (MethodFilter) -> Unit = {},
     val onStatusSelected: (StatusFilter) -> Unit = {},
@@ -71,7 +71,7 @@ public data class TrafficFilterBarActions(
  * Quick Statistics & Dropdown Filters bar bound strictly to :ui:core design tokens and parameter DTOs.
  */
 @Composable
-public fun TrafficFilterBar(
+fun TrafficFilterBar(
     state: TrafficFilterBarState,
     actions: TrafficFilterBarActions,
     modifier: Modifier = Modifier

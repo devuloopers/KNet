@@ -45,7 +45,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * @param enabled True if item is interactive.
  * @param onClick Action callback executed when clicked.
  */
-public data class ContextMenuItem(
+data class ContextMenuItem(
     val label: String,
     val icon: ImageVector? = null,
     val shortcut: String? = null,
@@ -65,7 +65,7 @@ public data class ContextMenuItem(
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-public fun KNetContextMenuArea(
+fun KNetContextMenuArea(
     items: List<ContextMenuItem>,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit

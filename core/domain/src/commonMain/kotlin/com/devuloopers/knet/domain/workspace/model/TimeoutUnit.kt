@@ -6,7 +6,7 @@ package com.devuloopers.knet.domain.workspace.model
  * @property label Display label (e.g. "sec", "min") used in segmented pill UI toggles.
  * @property multiplier Seconds multiplier for duration conversion.
  */
-public enum class TimeoutUnit(public val label: String, public val multiplier: Int) {
+enum class TimeoutUnit(val label: String, val multiplier: Int) {
     /**
      * Seconds duration unit.
      */
@@ -23,9 +23,9 @@ public enum class TimeoutUnit(public val label: String, public val multiplier: I
      * @param value Numeric magnitude in this unit.
      * @return Total duration in seconds.
      */
-    public fun toSeconds(value: Int): Int = value * multiplier
+    fun toSeconds(value: Int): Int = value * multiplier
 
-    public companion object {
+    companion object {
         /**
          * Normalizes [totalSeconds] into a cohesive pair of (value, unit).
          * Prefers [MINUTES] if the total duration is an exact multiple of 60 seconds (and >= 60).
@@ -33,7 +33,7 @@ public enum class TimeoutUnit(public val label: String, public val multiplier: I
          * @param totalSeconds Total duration in seconds.
          * @return Pair containing the integer value and chosen [TimeoutUnit].
          */
-        public fun fromSeconds(totalSeconds: Int): Pair<Int, TimeoutUnit> {
+        fun fromSeconds(totalSeconds: Int): Pair<Int, TimeoutUnit> {
             return if (totalSeconds >= 60 && totalSeconds % 60 == 0) {
                 (totalSeconds / 60) to MINUTES
             } else {

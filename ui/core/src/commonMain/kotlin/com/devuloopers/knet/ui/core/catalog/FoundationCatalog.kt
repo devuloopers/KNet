@@ -14,7 +14,7 @@ import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 @Composable
-public fun FoundationCatalog() {
+fun FoundationCatalog() {
     val colors = KNetTheme.colors
     val typography = KNetTheme.typography
 

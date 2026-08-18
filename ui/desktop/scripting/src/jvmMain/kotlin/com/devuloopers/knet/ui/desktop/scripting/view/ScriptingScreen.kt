@@ -33,7 +33,7 @@ import com.devuloopers.knet.ui.desktop.scripting.workspace.VariablesExplorer
  * ScriptingScreen renders KNet's primary Automation Development Environment.
  */
 @Composable
-public fun ScriptingScreen(
+fun ScriptingScreen(
     viewModel: ScriptingViewModel,
     modifier: Modifier = Modifier
 ) {

@@ -22,7 +22,7 @@ import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 @Composable
-public fun NavigationRailItem(
+fun NavigationRailItem(
     selected: Boolean,
     onClick: () -> Unit,
     icon: ImageVector,
@@ -54,7 +54,7 @@ public fun NavigationRailItem(
 }
 
 @Composable
-public fun NavigationSection(
+fun NavigationSection(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
@@ -67,7 +67,7 @@ public fun NavigationSection(
 }
 
 @Composable
-public fun ColumnScope.NavigationFooter(
+fun ColumnScope.NavigationFooter(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {
@@ -81,7 +81,7 @@ public fun ColumnScope.NavigationFooter(
 }
 
 @Composable
-public fun KNetNavigationRail(
+fun KNetNavigationRail(
     modifier: Modifier = Modifier,
     content: @Composable ColumnScope.() -> Unit
 ) {

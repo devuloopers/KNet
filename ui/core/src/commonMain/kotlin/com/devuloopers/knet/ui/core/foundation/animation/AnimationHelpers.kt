@@ -12,7 +12,7 @@ import androidx.compose.ui.Modifier
  * High-density IDE expansion/collapse animation wrapper composable.
  */
 @Composable
-public fun ExpandCollapseAnimation(
+fun ExpandCollapseAnimation(
     visible: Boolean,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit

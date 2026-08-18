@@ -23,16 +23,16 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.ui.desktop.certificate.model.ClientCertificate
-import com.devuloopers.knet.ui.desktop.certificate.model.MtlsRule
+import com.devuloopers.knet.application.port.certificate.ClientCertificateSummary
+import com.devuloopers.knet.application.port.certificate.MtlsRuleSpec
 
 /**
  * 4-card horizontal metrics bar displaying summary PKI statistics matching the design system.
  */
 @Composable
 fun CertificateMetricsBar(
-    certificates: List<ClientCertificate>,
-    mtlsRules: List<MtlsRule>,
+    certificates: List<ClientCertificateSummary>,
+    mtlsRules: List<MtlsRuleSpec>,
     modifier: Modifier = Modifier
 ) {
     val totalCerts = certificates.size

@@ -8,7 +8,7 @@ import androidx.compose.ui.unit.dp
  * Immutable grid spacing tokens matching the frozen scale: 2, 4, 8, 12, 16, 20, 24, 32, 40, 48, 64 dp.
  */
 @Immutable
-public data class Spacing(
+data class Spacing(
     val none: Dp = 0.dp,
     val xxs: Dp = 2.dp,
     val xs: Dp = 4.dp,
@@ -26,4 +26,4 @@ public data class Spacing(
 /**
  * Default Spacing instance.
  */
-public val KNetSpacing: Spacing = Spacing()
+val KNetSpacing: Spacing = Spacing()

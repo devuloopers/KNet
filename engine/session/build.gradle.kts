@@ -4,12 +4,9 @@ plugins {
 }
 
 dependencies {
-    api(project(":core:domain"))
-    implementation(project(":core:logger"))
-    implementation(project(":storage"))
-    implementation(libs.room.runtime)
+    api(project(":application"))
     implementation(libs.kotlinx.coroutines.core)
-    implementation(libs.kotlinx.serialization.json)
     
     testImplementation(kotlin("test"))
+    testImplementation(libs.kotlinx.coroutines.test)
 }

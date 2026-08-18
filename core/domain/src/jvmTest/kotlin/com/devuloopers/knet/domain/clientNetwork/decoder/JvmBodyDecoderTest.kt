@@ -1,5 +1,6 @@
 package com.devuloopers.knet.domain.clientNetwork.decoder
 
+import com.devuloopers.knet.traffic.model.body.ContentEncoding
 import com.github.luben.zstd.Zstd
 import java.io.ByteArrayOutputStream
 import java.util.zip.DeflaterOutputStream

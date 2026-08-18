@@ -32,19 +32,20 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
+import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.ui.core.components.switch.KNetSwitch
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
+import com.devuloopers.knet.ui.core.foundation.theme.HttpMethodColors
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.ui.desktop.breakpointmanager.model.BreakpointRuleUiModel
 
 /**
  * High-density table of all configured breakpoint rules.
  */
 @Composable
-public fun BreakpointRulesTable(
-    rules: List<BreakpointRuleUiModel>,
+fun BreakpointRulesTable(
+    rules: List<BreakpointRule>,
     onToggleStatus: (String) -> Unit,
-    onEditRule: (BreakpointRuleUiModel) -> Unit,
+    onEditRule: (BreakpointRule) -> Unit,
     onDeleteRule: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -162,9 +163,10 @@ public fun BreakpointRulesTable(
 
                             // Method Badge
                             Box(modifier = Modifier.width(90.dp)) {
-                                val methodLabel = rule.method?.name ?: "ALL"
-                                val badgeColor = if (rule.method != null) {
-                                    Color(rule.method.badgeColorHex)
+                                val ruleMethod = rule.method
+                                val methodLabel = ruleMethod?.token ?: "ALL"
+                                val badgeColor = if (ruleMethod != null) {
+                                    HttpMethodColors.getMethodTextColor(ruleMethod.token)
                                 } else {
                                     Color(0xFF4B5563) // Gray for ALL
                                 }

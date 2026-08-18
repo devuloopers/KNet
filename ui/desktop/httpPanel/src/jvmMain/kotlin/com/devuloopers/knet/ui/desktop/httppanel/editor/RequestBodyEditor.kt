@@ -35,6 +35,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlState
 import com.devuloopers.knet.ui.desktop.httppanel.model.RawSubFormat
 import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyMode
 import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyState
+import kotlin.uuid.Uuid
 
 /**
  * Multi-mode Request Body Payload Editor supporting none, JSON, form-data, x-www-form-urlencoded, raw, and GraphQL.
@@ -49,7 +50,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyState
  * @param modifier Composable modifier applied to the root [Column] layout.
  */
 @Composable
-public fun RequestBodyEditor(
+fun RequestBodyEditor(
     state: RequestBodyState,
     onStateChange: (RequestBodyState) -> Unit,
     onGraphQlStateChange: ((GraphQlState) -> Unit)? = null,
@@ -142,7 +143,7 @@ public fun RequestBodyEditor(
                     onAddEntry = {
                         onStateChange(
                             state.copy(
-                                formDataEntries = state.formDataEntries + KeyValueEntry("fd_${System.currentTimeMillis()}", "", "")
+                                formDataEntries = state.formDataEntries + KeyValueEntry("fd_${Uuid.random()}", "", "")
                             )
                         )
                     },
@@ -183,7 +184,7 @@ public fun RequestBodyEditor(
                         onAddEntry = {
                             onStateChange(
                                 state.copy(
-                                    urlEncodedEntries = state.urlEncodedEntries + KeyValueEntry("ue_${System.currentTimeMillis()}", "", "")
+                                    urlEncodedEntries = state.urlEncodedEntries + KeyValueEntry("ue_${Uuid.random()}", "", "")
                                 )
                             )
                         },

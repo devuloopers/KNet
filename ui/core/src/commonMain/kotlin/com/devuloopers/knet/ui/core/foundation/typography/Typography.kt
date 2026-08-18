@@ -10,7 +10,7 @@ import androidx.compose.ui.unit.sp
  * Immutable typography token holder for high-density IDE UI.
  */
 @Immutable
-public data class Typography(
+data class Typography(
     val display: TextStyle = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Bold,
@@ -88,4 +88,4 @@ public data class Typography(
 /**
  * Default Typography Tokens instance.
  */
-public val KNetTypography: Typography = Typography()
+val KNetTypography: Typography = Typography()

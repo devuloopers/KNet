@@ -133,6 +133,8 @@ fun TrafficScreen(
                         onSendToApiStudio = handleExportToStudio,
                         onAddBreakpointRule = viewModel::createBreakpointFromTransaction,
                         activeRules = state.activeBreakpointRules,
+                        canLoadMore = state.nextPageCursor != null && !state.isPageLoading,
+                        onLoadMore = { viewModel.processIntent(TrafficIntent.LoadNextPage) },
                         modifier = paneModifier
                     )
                 },

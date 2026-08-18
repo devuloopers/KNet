@@ -29,6 +29,7 @@ import com.devuloopers.knet.ui.desktop.codeeditor.shortcut.EditorShortcutHandler
 import com.devuloopers.knet.ui.desktop.codeeditor.syntax.CodeHighlighterRegistry
 import com.devuloopers.knet.ui.desktop.codeeditor.theme.CodeEditorTokens
 import com.devuloopers.knet.ui.desktop.codeeditor.theme.EditorColors
+import com.devuloopers.knet.ui.core.components.menu.KNetContextMenuArea
 
 /**
  * Top-level code editor viewport container composable.
@@ -146,7 +147,9 @@ fun LazyCodeBody(
         copyAction = copyAction,
         pasteAction = pasteAction,
         onDocumentLinesChanged = onDocumentLinesChanged,
-        onSelectionChange = updateSelection
+        onSelectionChange = updateSelection,
+        caretState = caretState,
+        onCaretStateChange = onCaretStateChange,
     )
 
     CompositionLocalProvider(LocalTextContextMenu provides EmptyTextContextMenu) {

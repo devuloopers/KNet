@@ -23,12 +23,12 @@ import androidx.compose.ui.unit.dp
  *
  * Owns expansion state, overlay presentation animations, and keyboard shortcut event routing.
  */
-public class NavigationState {
+class NavigationState {
     /**
      * Single source of truth expansion state.
      * True when the mouse pointer is anywhere over the 64dp rail or 240dp overlay surface.
      */
-    public var isExpanded: Boolean by mutableStateOf(false)
+    var isExpanded: Boolean by mutableStateOf(false)
         private set
 
     private var isCollapsedOnClick: Boolean = false
@@ -36,7 +36,7 @@ public class NavigationState {
     /**
      * Triggers pointer entry into the navigation hover region.
      */
-    public fun onPointerEnter() {
+    fun onPointerEnter() {
         if (!isCollapsedOnClick) {
             isExpanded = true
         }
@@ -45,7 +45,7 @@ public class NavigationState {
     /**
      * Triggers pointer exit from the entire navigation hover region.
      */
-    public fun onPointerExit() {
+    fun onPointerExit() {
         isCollapsedOnClick = false
         isExpanded = false
     }
@@ -54,7 +54,7 @@ public class NavigationState {
      * Triggers automatic collapse when a navigation menu item is clicked.
      * Suppresses re-expansion until mouse pointer exits the navigation rail.
      */
-    public fun onItemClick() {
+    fun onItemClick() {
         isCollapsedOnClick = true
         isExpanded = false
     }
@@ -66,7 +66,7 @@ public class NavigationState {
      * @param onDestinationSelected Callback to navigate to a target destination.
      * @return True if key event was consumed.
      */
-    public fun handleKeyEvent(
+    fun handleKeyEvent(
         keyEvent: KeyEvent,
         onDestinationSelected: (DesktopDestination) -> Unit
     ): Boolean {
@@ -86,14 +86,14 @@ public class NavigationState {
  * Creates and remembers a [NavigationState] instance.
  */
 @Composable
-public fun rememberNavigationState(): NavigationState {
+fun rememberNavigationState(): NavigationState {
     return remember { NavigationState() }
 }
 
 /**
  * Helper data holder storing animated presentation values for the navigation overlay.
  */
-public data class NavigationPresentation(
+data class NavigationPresentation(
     val overlayWidth: Dp,
     val labelAlpha: Float,
     val labelOffset: Dp
@@ -103,7 +103,7 @@ public data class NavigationPresentation(
  * Remembers and computes smooth presentation animation values driven by [NavigationState.isExpanded].
  */
 @Composable
-public fun rememberNavigationPresentation(state: NavigationState): NavigationPresentation {
+fun rememberNavigationPresentation(state: NavigationState): NavigationPresentation {
     val animationSpec: AnimationSpec<Dp> = tween(durationMillis = 200, easing = FastOutSlowInEasing)
     val floatSpec: AnimationSpec<Float> = tween(durationMillis = 180, easing = FastOutSlowInEasing)
 

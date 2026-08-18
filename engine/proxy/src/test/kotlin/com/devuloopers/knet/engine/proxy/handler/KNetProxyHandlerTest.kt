@@ -27,6 +27,23 @@ class KNetProxyHandlerTest {
         val response = channel.readOutbound<HttpResponse>()
         assertNotNull(response)
         assertEquals(HttpResponseStatus.OK, response.status())
-        channel.close()
+        channel.finishAndReleaseAll()
+    }
+
+    @Test
+    fun testInvalidConnectAuthorityReturnsBadRequest() {
+        val channel = EmbeddedChannel(KNetProxyHandler(ca, certCache))
+        val connectRequest = DefaultFullHttpRequest(
+            HttpVersion.HTTP_1_1,
+            HttpMethod.CONNECT,
+            "example.com:70000",
+        )
+
+        channel.writeInbound(connectRequest)
+
+        val response = channel.readOutbound<HttpResponse>()
+        assertNotNull(response)
+        assertEquals(HttpResponseStatus.BAD_REQUEST, response.status())
+        channel.finishAndReleaseAll()
     }
 }

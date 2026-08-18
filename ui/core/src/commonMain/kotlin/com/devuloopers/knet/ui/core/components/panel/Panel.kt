@@ -18,7 +18,7 @@ import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 @Composable
-public fun PanelHeader(
+fun PanelHeader(
     title: String,
     modifier: Modifier = Modifier,
     subtitle: String? = null,
@@ -52,7 +52,7 @@ public fun PanelHeader(
 }
 
 @Composable
-public fun PanelFooter(
+fun PanelFooter(
     modifier: Modifier = Modifier,
     content: @Composable RowScope.() -> Unit
 ) {
@@ -66,7 +66,7 @@ public fun PanelFooter(
 }
 
 @Composable
-public fun PanelActions(
+fun PanelActions(
     modifier: Modifier = Modifier,
     content: @Composable RowScope.() -> Unit
 ) {
@@ -78,7 +78,7 @@ public fun PanelActions(
 }
 
 @Composable
-public fun KNetPanel(
+fun KNetPanel(
     modifier: Modifier = Modifier,
     title: String? = null,
     subtitle: String? = null,

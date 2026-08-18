@@ -40,7 +40,7 @@ object EditorShortcutHandler {
         foldRegions: List<FoldRegion> = emptyList(),
         collapsedFoldStartLines: Set<Int> = emptySet(),
         copyAction: (String) -> Unit,
-        pasteAction: () -> String?,
+        pasteAction: ((String) -> Unit) -> Unit,
         onDocumentLinesChanged: ((List<String>) -> Unit)?,
         onSelectionChange: (EditorSelection?) -> Unit,
         onCaretStateChange: ((EditorCaretState) -> Unit)?,
@@ -81,7 +81,7 @@ object EditorShortcutHandler {
         foldRegions: List<FoldRegion> = emptyList(),
         collapsedFoldStartLines: Set<Int> = emptySet(),
         copyAction: (String) -> Unit,
-        pasteAction: () -> String?,
+        pasteAction: ((String) -> Unit) -> Unit,
         onDocumentLinesChanged: ((List<String>) -> Unit)?,
         onSelectionChange: (EditorSelection?) -> Unit,
         onCaretStateChange: ((EditorCaretState) -> Unit)?,
@@ -164,8 +164,7 @@ object EditorShortcutHandler {
                 }
                 Key.V -> {
                     // Ctrl+V / Cmd+V: Paste clipboard text (deleting active selection first)
-                    val clipboardText = pasteAction()
-                    if (!clipboardText.isNullOrEmpty()) {
+                    pasteAction { clipboardText ->
                         val buffer = DocumentBuffer(rawLines)
                         var activeCaret = caretState ?: EditorCaretState(0, 0)
                         if (selection != null && !selection.isEmpty) {

@@ -8,11 +8,11 @@ class ChannelAttributesTest {
 
     @Test
     fun testChannelAttributesKeysExist() {
-        assertNotNull(ChannelAttributes.REQUEST_ATTR)
+        assertNotNull(ChannelAttributes.REQUEST_CONTEXT)
         assertNotNull(ChannelAttributes.HOST_ATTR)
         assertNotNull(ChannelAttributes.SSL_ATTR)
 
-        assertEquals("knet.request", ChannelAttributes.REQUEST_ATTR.name())
+        assertEquals("knet.request", ChannelAttributes.REQUEST_CONTEXT.name())
         assertEquals("knet.host", ChannelAttributes.HOST_ATTR.name())
         assertEquals("knet.ssl", ChannelAttributes.SSL_ATTR.name())
     }

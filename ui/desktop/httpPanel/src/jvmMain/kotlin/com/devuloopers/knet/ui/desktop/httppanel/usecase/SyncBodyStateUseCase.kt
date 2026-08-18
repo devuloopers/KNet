@@ -16,7 +16,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyState
  *
  * @param strategyRegistry Injected [PayloadStrategyRegistry] resolving payload strategies dynamically by [RequestBodyType].
  */
-public class SyncBodyStateUseCase(
+class SyncBodyStateUseCase(
     private val strategyRegistry: PayloadStrategyRegistry
 ) {
 
@@ -24,7 +24,7 @@ public class SyncBodyStateUseCase(
      * Updates [RequestBodyState.mode] and automatically hydrates payload state models (such as [GraphQlState])
      * if switching to a structured payload mode (e.g. [RequestBodyMode.GRAPHQL]).
      */
-    public fun switchMode(currentState: RequestBodyState, targetMode: RequestBodyMode): RequestBodyState {
+    fun switchMode(currentState: RequestBodyState, targetMode: RequestBodyMode): RequestBodyState {
         if (currentState.mode == targetMode) return currentState
 
         val updatedGraphQlState =
@@ -43,14 +43,8 @@ public class SyncBodyStateUseCase(
     /**
      * Updates structured [GraphQlState], automatically serializing it back into transport [RequestBodyState.payloadText].
      */
-    public fun updateGraphQlState(currentState: RequestBodyState, newGraphQlState: GraphQlState): RequestBodyState {
-        val payloadState = StructuredPayloadState.GraphQL(
-            queryText = newGraphQlState.queryText,
-            variablesText = newGraphQlState.variablesText,
-            operationName = newGraphQlState.operationName,
-            extensionsText = newGraphQlState.extensionsText
-        )
-        val serializedPayload = strategyRegistry.serialize(RequestBodyType.GRAPHQL, payloadState)
+    fun updateGraphQlState(currentState: RequestBodyState, newGraphQlState: GraphQlState): RequestBodyState {
+        val serializedPayload = strategyRegistry.serialize(RequestBodyType.GRAPHQL, newGraphQlState.payload)
 
         return currentState.copy(
             graphQlState = newGraphQlState,
@@ -61,7 +55,7 @@ public class SyncBodyStateUseCase(
     /**
      * Ensures [graphQlState] is hydrated from [payloadText] if currently in [RequestBodyMode.GRAPHQL].
      */
-    public fun ensureHydrated(currentState: RequestBodyState): RequestBodyState {
+    fun ensureHydrated(currentState: RequestBodyState): RequestBodyState {
         if (currentState.mode == RequestBodyMode.GRAPHQL && currentState.graphQlState.queryText.isEmpty() && currentState.payloadText.isNotEmpty()) {
             val parsedState = parseGraphQlState(currentState.payloadText)
             return currentState.copy(graphQlState = parsedState)
@@ -71,14 +65,11 @@ public class SyncBodyStateUseCase(
 
     private fun parseGraphQlState(payload: String): GraphQlState {
         return when (val parsed = strategyRegistry.parse(RequestBodyType.GRAPHQL, payload)) {
-            is StructuredPayloadState.GraphQL -> GraphQlState(
-                queryText = parsed.queryText,
-                variablesText = parsed.variablesText,
-                operationName = parsed.operationName,
-                extensionsText = parsed.extensionsText
-            )
+            is StructuredPayloadState.GraphQL -> GraphQlState(payload = parsed)
 
-            is StructuredPayloadState.RawText -> GraphQlState(queryText = parsed.content)
+            is StructuredPayloadState.RawText -> GraphQlState(
+                payload = StructuredPayloadState.GraphQL(queryText = parsed.content)
+            )
         }
     }
 }

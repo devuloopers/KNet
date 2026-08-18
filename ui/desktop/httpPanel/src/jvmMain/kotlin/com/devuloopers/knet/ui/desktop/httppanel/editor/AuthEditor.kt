@@ -31,7 +31,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.AuthType
  * Modern, high-density Authorization Editor supporting No Auth, Bearer Token, Basic Auth, API Key, and Inherit Auth.
  */
 @Composable
-public fun AuthEditor(
+fun AuthEditor(
     state: AuthState,
     onStateChange: (AuthState) -> Unit,
     modifier: Modifier = Modifier

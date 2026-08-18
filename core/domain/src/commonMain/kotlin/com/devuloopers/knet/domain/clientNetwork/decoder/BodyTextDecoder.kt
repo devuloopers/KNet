@@ -1,9 +1,11 @@
 package com.devuloopers.knet.domain.clientNetwork.decoder
 
+import com.devuloopers.knet.traffic.model.body.ContentEncoding
+
 /**
  * Stage 4 decoder that translates [DecodedBodyResult] bytes into pure domain [DecodedTextResult] outcomes.
  */
-public object BodyTextDecoder {
+object BodyTextDecoder {
 
     /**
      * Translates a [DecodedBodyResult] into a domain [DecodedTextResult] using [BinaryDetector].
@@ -13,7 +15,7 @@ public object BodyTextDecoder {
      * @param policy Configurable [BinaryDetectionPolicy].
      * @return [DecodedTextResult] containing pure domain outcome states.
      */
-    public fun decode(
+    fun decode(
         result: DecodedBodyResult,
         headers: List<Pair<String, String>> = emptyList(),
         policy: BinaryDetectionPolicy = BinaryDetectionPolicy.DEFAULT

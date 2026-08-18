@@ -1,11 +1,11 @@
 package com.devuloopers.knet.domain.clientNetwork.decoder
 
-import com.devuloopers.knet.core.logger.KNetLogger
+import com.devuloopers.knet.traffic.model.body.ContentEncoding
 
 /**
  * JVM implementation of [BodyDecoder] using composable SPI [ContentDecoder] strategy implementations.
  */
-public actual object BodyDecoder {
+actual object BodyDecoder {
 
     private val decoders: Map<ContentEncoding, ContentDecoder> = listOf(
         GzipContentDecoder(),
@@ -14,7 +14,7 @@ public actual object BodyDecoder {
         ZstdContentDecoder()
     ).associateBy { it.encoding }
 
-    public actual fun decode(body: ByteArray?, headers: List<Pair<String, String>>): DecodedBodyResult {
+    actual fun decode(body: ByteArray?, headers: List<Pair<String, String>>): DecodedBodyResult {
         if (body == null || body.isEmpty()) {
             return DecodedBodyResult.Identity(ByteArray(0))
         }
@@ -39,8 +39,10 @@ public actual object BodyDecoder {
 
         // Process encoding chain in reverse order (right-to-left) as specified by HTTP RFC 7231
         for (token in encodingChain.reversed()) {
-            val enumEncoding = ContentEncoding.fromHeaderValue(token)
-                ?: return DecodedBodyResult.UnsupportedEncoding(token, body)
+            val enumEncoding = ContentEncoding.fromToken(token)
+            if (enumEncoding is ContentEncoding.Custom) {
+                return DecodedBodyResult.UnsupportedEncoding(token, body)
+            }
 
             val decoder = decoders[enumEncoding]
                 ?: return DecodedBodyResult.UnsupportedEncoding(token, body)

@@ -2,6 +2,9 @@ package com.devuloopers.knet.ui.desktop.codeeditor.algorithm
 
 import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorCaretState
 import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorSelection
+import kotlin.time.TimeSource
+
+private val undoRedoTimeOrigin = TimeSource.Monotonic.markNow()
 
 /**
  * Describes the direction and type of a document edit for coalescing boundary detection.
@@ -43,7 +46,7 @@ enum class EditKind {
  * @property beforeSelection Active selection range BEFORE this edit started (e.g. selection deleted via Backspace).
  * @property afterSelection Active selection range AFTER this edit completed.
  * @property editKind The kind of edit for coalescing boundary detection.
- * @property timestamp System epoch timestamp when edit occurred.
+ * @property timestamp Monotonic elapsed timestamp used only for edit coalescing.
  */
 data class UndoRedoElement(
     val text: String,
@@ -52,16 +55,10 @@ data class UndoRedoElement(
     val beforeSelection: EditorSelection? = null,
     val afterSelection: EditorSelection? = null,
     val editKind: EditKind,
-    val timestamp: Long = currentSystemTimeMillis()
+    val timestamp: Long = currentMonotonicTimeMillis()
 )
 
-internal fun currentSystemTimeMillis(): Long {
-    return try {
-        System.currentTimeMillis()
-    } catch (_: Throwable) {
-        0L
-    }
-}
+internal fun currentMonotonicTimeMillis(): Long = undoRedoTimeOrigin.elapsedNow().inWholeMilliseconds
 
 /**
  * Result object returned by [UndoRedoStack.undo] containing the reverted text, restored cursor position,
@@ -194,7 +191,7 @@ class UndoRedoStack(
             return
         }
 
-        val currentTime = currentSystemTimeMillis()
+        val currentTime = currentMonotonicTimeMillis()
 
         // Attempt coalescing with the most recent history entry
         if (pointer >= 0 && pointer == history.lastIndex) {

@@ -26,7 +26,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * Owned centrally by :ui:desktop:http for multi-module presentation reuse.
  */
 @Composable
-public fun EndpointCard(
+fun EndpointCard(
     method: String,
     endpoint: String,
     modifier: Modifier = Modifier,

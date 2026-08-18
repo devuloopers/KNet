@@ -25,11 +25,11 @@ import com.devuloopers.knet.ui.core.components.inspector.KNetInspectorRow
 import com.devuloopers.knet.ui.core.components.panel.PanelHeader
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.ui.desktop.certificate.model.ClientCertificate
+import com.devuloopers.knet.application.port.certificate.ClientCertificateSummary
 
 @Composable
 fun CertificateViewer(
-    certificate: ClientCertificate?,
+    certificate: ClientCertificateSummary?,
     onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {

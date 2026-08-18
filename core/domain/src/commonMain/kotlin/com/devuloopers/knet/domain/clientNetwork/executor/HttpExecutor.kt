@@ -1,9 +1,9 @@
 package com.devuloopers.knet.domain.clientNetwork.executor
 
 import com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult
-import com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType
+import com.devuloopers.knet.domain.clientNetwork.model.OutboundRequestBody
 import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
-import com.devuloopers.knet.domain.collection.model.HttpMethod
+import com.devuloopers.knet.traffic.model.http.HttpMethod
 
 /**
  * Domain interface contract defining universal outbound HTTP execution.
@@ -15,12 +15,9 @@ interface HttpExecutor : AutoCloseable {
      * Executes an HTTP call with fine-grained strongly-typed parameter specification.
      *
      * @param url Target HTTP/HTTPS URL string.
-     * @param method Strongly-typed HTTP method enum (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS, CUSTOM).
-     * @param customMethod Optional custom method name string when method == HttpMethod.CUSTOM.
+     * @param method Extension-safe HTTP method shared by API Studio, traffic, and breakpoints.
      * @param headers Map of header key-value pairs.
-     * @param body Request body payload string.
-     * @param bodyType Strongly-typed body format enum (NONE, JSON, XML, FORM_DATA, etc.).
-     * @param formParameters Key-value form parameters.
+     * @param body Self-contained strongly typed request body.
      * @param auth Strongly-typed polymorphic authorization configuration (None, Bearer, Basic, ApiKey).
      * @param proxyPort Optional proxy port (routes through proxy when non-null; direct when null).
      * @return [ExecutionResult] containing response details.
@@ -28,11 +25,8 @@ interface HttpExecutor : AutoCloseable {
     suspend fun execute(
         url: String,
         method: HttpMethod = HttpMethod.GET,
-        customMethod: String? = null,
         headers: Map<String, String> = emptyMap(),
-        body: String = "",
-        bodyType: RequestBodyType = RequestBodyType.NONE,
-        formParameters: Map<String, String> = emptyMap(),
+        body: OutboundRequestBody = OutboundRequestBody.None,
         auth: ApiRequestAuth = ApiRequestAuth.None,
         proxyPort: Int? = null
     ): ExecutionResult

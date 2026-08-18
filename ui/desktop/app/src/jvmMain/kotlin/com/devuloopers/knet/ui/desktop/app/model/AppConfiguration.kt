@@ -9,7 +9,7 @@ package com.devuloopers.knet.ui.desktop.app.model
  * @property isResizable Whether the window is user-resizable.
  * @property isAlwaysOnTop Whether the window floats above other application windows.
  */
-public data class AppConfiguration(
+data class AppConfiguration(
     val appTitle: String = "KNet — Desktop Proxy Studio",
     val initialWidth: Int = 1280,
     val initialHeight: Int = 800,

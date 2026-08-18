@@ -9,14 +9,14 @@ class RequestRebuilderTest {
     @Test
     fun testRebuildNettyRequestFromModifiedDto() {
         val original = TestFixtures.createFullHttpRequest("https://api.example.com/v1/users", body = "original")
-        val modifiedDto = TestFixtures.createHttpRequestDto(
+        val edit = TestFixtures.createRequestEdit(
             url = "https://api.example.com/v1/users?edited=true",
             method = "POST",
             headers = listOf("X-Edited" to "true"),
             body = """{"edited":true}"""
         )
 
-        val rebuilt = RequestRebuilder.rebuild(original, modifiedDto)
+        val rebuilt = RequestRebuilder.rebuild(original, edit)
         assertEquals("POST", rebuilt.method().name())
         assertEquals("/v1/users?edited=true", rebuilt.uri())
         assertEquals("true", rebuilt.headers().get("X-Edited"))

@@ -1,11 +1,12 @@
 package com.devuloopers.knet.ui.desktop.apistudio.model
 
-import com.devuloopers.knet.engine.script.api.ScriptLanguage
+import com.devuloopers.knet.scripting.model.ScriptLanguage
+import com.devuloopers.knet.scripting.model.ScriptPhase
 import com.devuloopers.knet.ui.desktop.apistudio.response.ResponseSubTab
 import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyMode
 import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyState
-
-public typealias RequestSubTab = com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
+import com.devuloopers.knet.ui.desktop.httppanel.model.AuthState
+import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
 
 /**
  * Data DTO representing current request editor fields.
@@ -28,8 +29,8 @@ public typealias RequestSubTab = com.devuloopers.knet.ui.desktop.httppanel.model
  * @property activeResponseSubTab Strongly-typed active response inspector sub-tab.
  * @property linkedUnsavedId Linked unsaved draft session ID, or null if saved collection request.
  */
-public object RequestEditorDefaults {
-    public val DEFAULT_HEADERS: List<Pair<String, String>> = listOf(
+object RequestEditorDefaults {
+    val DEFAULT_HEADERS: List<Pair<String, String>> = listOf(
         "Content-Type" to "application/json",
         "Accept" to "*/*",
         "Accept-Encoding" to "gzip, deflate, br",
@@ -38,7 +39,7 @@ public object RequestEditorDefaults {
     )
 }
 
-public data class RequestEditorState(
+data class RequestEditorState(
     val url: String = "",
     val method: String = "GET",
     val queryParams: List<Pair<String, String>> = emptyList(),
@@ -52,7 +53,7 @@ public data class RequestEditorState(
     val preRequestScript: String = "",
     val testScript: String = "",
     val scriptLanguage: ScriptLanguage = ScriptLanguage.JAVASCRIPT,
-    val activeSubTab: RequestSubTab = RequestSubTab.BODY,
+    val activeSubTab: InspectorSubTab = InspectorSubTab.BODY,
     val activeScriptPhase: ScriptPhase = ScriptPhase.PRE_REQUEST,
     val activeResponseSubTab: ResponseSubTab = ResponseSubTab.BODY,
     val linkedUnsavedId: String? = null,

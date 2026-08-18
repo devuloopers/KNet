@@ -18,7 +18,7 @@ import androidx.compose.ui.text.input.VisualTransformation
  * @property keyboardOptions Keyboard input options.
  */
 @Immutable
-public data class InputFieldConfig(
+data class InputFieldConfig(
     val placeholder: String = "",
     val supportingText: String? = null,
     val showHoverPopupOnOverflow: Boolean = true,
@@ -29,8 +29,8 @@ public data class InputFieldConfig(
     val visualTransformation: VisualTransformation = VisualTransformation.None,
     val keyboardOptions: KeyboardOptions = KeyboardOptions.Default
 ) {
-    public companion object {
-        public val Default: InputFieldConfig = InputFieldConfig()
+    companion object {
+        val Default: InputFieldConfig = InputFieldConfig()
     }
 }
 
@@ -42,13 +42,13 @@ public data class InputFieldConfig(
  * @property isError True to highlight the field with error border color.
  */
 @Immutable
-public data class InputFieldState(
+data class InputFieldState(
     val enabled: Boolean = true,
     val readOnly: Boolean = false,
     val isError: Boolean = false
 ) {
-    public companion object {
-        public val Default: InputFieldState = InputFieldState()
+    companion object {
+        val Default: InputFieldState = InputFieldState()
     }
 }
 
@@ -59,11 +59,11 @@ public data class InputFieldState(
  * @property suffix Optional composable rendered on the right side of the input.
  */
 @Immutable
-public data class InputFieldSlots(
+data class InputFieldSlots(
     val prefix: (@Composable () -> Unit)? = null,
     val suffix: (@Composable () -> Unit)? = null
 ) {
-    public companion object {
-        public val Empty: InputFieldSlots = InputFieldSlots()
+    companion object {
+        val Empty: InputFieldSlots = InputFieldSlots()
     }
 }

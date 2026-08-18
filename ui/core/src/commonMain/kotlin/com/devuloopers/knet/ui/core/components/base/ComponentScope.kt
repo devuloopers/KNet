@@ -6,4 +6,4 @@ import androidx.compose.runtime.Stable
  * Stable component scope marker interface.
  */
 @Stable
-public interface ComponentScope
+interface ComponentScope

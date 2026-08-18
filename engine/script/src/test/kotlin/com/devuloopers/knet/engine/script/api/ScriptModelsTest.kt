@@ -1,5 +1,6 @@
 package com.devuloopers.knet.engine.script.api
 
+import com.devuloopers.knet.scripting.model.ScriptAssertion
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -7,8 +8,8 @@ import kotlin.test.assertTrue
 class ScriptModelsTest {
 
     @Test
-    fun testScriptTestResultAndExecutionResult() {
-        val testResult = ScriptTestResult("Status is 200", true, null, 15L)
+    fun testScriptAssertionAndExecutionResult() {
+        val testResult = ScriptAssertion("Status is 200", true, null, 15L)
         assertEquals("Status is 200", testResult.name)
         assertTrue(testResult.passed)
 

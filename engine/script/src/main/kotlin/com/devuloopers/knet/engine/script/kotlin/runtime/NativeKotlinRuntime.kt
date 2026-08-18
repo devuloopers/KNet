@@ -78,14 +78,14 @@ class NativeKotlinRuntime : KotlinRuntime {
                 }
                 fun expect(value: Any?): ExpectValue = ExpectValue(value)
                 fun test(name: String, block: () -> Boolean) {
-                    val start = System.currentTimeMillis()
+                    val timer = kotlin.time.TimeSource.Monotonic.markNow()
                     val collector = com.devuloopers.knet.engine.script.internal.ResultCollectorHolder.get()
                     try {
                         val passed = block()
-                        val duration = System.currentTimeMillis() - start
+                        val duration = timer.elapsedNow().inWholeMilliseconds
                         collector?.addTestResult(name, passed, if (passed) null else "Assertion failed", duration)
                     } catch (e: Throwable) {
-                        val duration = System.currentTimeMillis() - start
+                        val duration = timer.elapsedNow().inWholeMilliseconds
                         collector?.addTestResult(name, false, e.message ?: e.toString(), duration)
                     }
                 }

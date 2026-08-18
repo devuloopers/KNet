@@ -9,13 +9,13 @@ class ResponseRebuilderTest {
     @Test
     fun testRebuildNettyResponseFromModifiedDto() {
         val original = TestFixtures.createFullHttpResponse()
-        val modifiedDto = TestFixtures.createHttpResponseDto(
+        val edit = TestFixtures.createResponseEdit(
             statusCode = 404,
             headers = listOf("Server" to "MockServer"),
             body = """{"error":"not_found"}"""
         )
 
-        val rebuilt = ResponseRebuilder.rebuild(original, modifiedDto)
+        val rebuilt = ResponseRebuilder.rebuild(original, edit)
         assertEquals(404, rebuilt.status().code())
         assertEquals("MockServer", rebuilt.headers().get("Server"))
         assertEquals("""{"error":"not_found"}""", rebuilt.content().toString(Charsets.UTF_8))

@@ -3,10 +3,10 @@ plugins {
 }
 
 dependencies {
+    implementation(project(":application"))
     implementation(project(":core:domain"))
     implementation(project(":core:logger"))
     implementation(project(":engine:proxy"))
-    implementation(project(":engine:traffic"))
     implementation(libs.netty.all)
     implementation(libs.kotlinx.coroutines.core)
     

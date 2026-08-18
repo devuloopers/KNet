@@ -22,7 +22,7 @@ import com.devuloopers.knet.ui.desktop.app.workspace.KNetWorkspaceHost
  * @param modifier Layout modifier.
  */
 @Composable
-public fun MainWindow(
+fun MainWindow(
     appState: MainWindowState = rememberMainWindowState(),
     modifier: Modifier = Modifier
 ) {

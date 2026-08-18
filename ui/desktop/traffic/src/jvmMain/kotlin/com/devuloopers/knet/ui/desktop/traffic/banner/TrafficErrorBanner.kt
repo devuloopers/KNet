@@ -35,7 +35,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * @param modifier Optional modifier to apply to the container layout.
  */
 @Composable
-public fun TrafficErrorBanner(
+fun TrafficErrorBanner(
     errorMessage: String?,
     onDismiss: () -> Unit,
     modifier: Modifier = Modifier

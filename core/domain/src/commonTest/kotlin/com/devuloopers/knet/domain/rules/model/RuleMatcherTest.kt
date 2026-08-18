@@ -9,10 +9,11 @@ class RuleMatcherTest {
 
     @Test
     fun testDefaultHttpRuleMatching() {
-        val rule = RuleModel(
+        val rule = BreakpointRule(
+            id = "http-rule",
             name = "Test HTTP Rule",
-            condition = "https://api.example.com/v1/users",
-            action = "GET",
+            urlPattern = "https://api.example.com/v1/users",
+            method = com.devuloopers.knet.traffic.model.http.HttpMethod.GET,
             enabled = true,
             protocolCriteria = ProtocolMatchCriteria.HttpDefault
         )
@@ -24,10 +25,10 @@ class RuleMatcherTest {
 
     @Test
     fun testWildcardStarRuleMatching() {
-        val rule = RuleModel(
+        val rule = BreakpointRule(
+            id = "wildcard-rule",
             name = "Star Wildcard Rule",
-            condition = "*",
-            action = "ALL",
+            urlPattern = "*",
             enabled = true,
             protocolCriteria = ProtocolMatchCriteria.GraphQL(operationName = "FormattedQuotes")
         )
@@ -50,10 +51,11 @@ class RuleMatcherTest {
 
     @Test
     fun testGraphQLRuleMatchingWithSpecificOperationName() {
-        val rule = RuleModel(
+        val rule = BreakpointRule(
+            id = "graphql-specific-rule",
             name = "FormattedQuotes Rule",
-            condition = "https://stg-04astra.cnbc.com/graphql",
-            action = "POST",
+            urlPattern = "https://stg-04astra.cnbc.com/graphql",
+            method = com.devuloopers.knet.traffic.model.http.HttpMethod.POST,
             enabled = true,
             protocolCriteria = ProtocolMatchCriteria.GraphQL(operationName = "FormattedQuotes")
         )
@@ -89,10 +91,11 @@ class RuleMatcherTest {
 
     @Test
     fun testGraphQLRuleMatchingWithBlankOperationNameMatchesAnyGraphQL() {
-        val rule = RuleModel(
+        val rule = BreakpointRule(
+            id = "graphql-all-rule",
             name = "All GraphQL Rule",
-            condition = "/graphql",
-            action = "POST",
+            urlPattern = "/graphql",
+            method = com.devuloopers.knet.traffic.model.http.HttpMethod.POST,
             enabled = true,
             protocolCriteria = ProtocolMatchCriteria.GraphQL(operationName = null)
         )

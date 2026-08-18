@@ -3,6 +3,7 @@ package com.devuloopers.knet.data.desktop.runtime
 import com.devuloopers.knet.core.logger.KNetLogger
 import com.devuloopers.knet.engine.certificate.CertificateAuthority
 import com.devuloopers.knet.engine.certificate.CertificateCache
+import com.devuloopers.knet.engine.certificate.CertificateFileSecurity
 import com.devuloopers.knet.engine.certificate.InstallationResult
 import com.devuloopers.knet.engine.certificate.TrustStoreInstaller
 import com.devuloopers.knet.engine.certificate.ssl.KNetTrustManagerProvider
@@ -14,11 +15,13 @@ import java.io.File
 class CertificateRuntimeRepository(
     baseDir: File
 ) {
-    private val caDir = File(baseDir, "ca").apply { mkdirs() }
+    private val caDir = File(baseDir, "ca").also(CertificateFileSecurity::secureDirectory)
     private val caCertFile = File(caDir, "ca.crt")
     private val caKeyFile = File(caDir, "ca.key")
 
     val certificateAuthority: CertificateAuthority = if (caCertFile.exists() && caKeyFile.exists()) {
+        CertificateFileSecurity.secureSecretFile(caCertFile)
+        CertificateFileSecurity.secureSecretFile(caKeyFile)
         CertificateAuthority.loadFromPem(caCertFile, caKeyFile)
     } else {
         val generated = CertificateAuthority.generate()

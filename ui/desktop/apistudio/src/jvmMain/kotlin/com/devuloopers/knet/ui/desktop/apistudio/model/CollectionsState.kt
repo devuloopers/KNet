@@ -16,7 +16,7 @@ import com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarRequestItem
  * @property isRenameRequestDialogOpen True if the Rename Request modal dialog is open.
  * @property renamingRequestItem Target request item being renamed in the collection tree.
  */
-public data class CollectionsState(
+data class CollectionsState(
     val collections: List<SidebarFolderItem> = emptyList(),
     val unsavedRequests: List<SidebarRequestItem> = emptyList(),
     val isSaveDialogOpen: Boolean = false,

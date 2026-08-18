@@ -11,10 +11,11 @@ kotlin {
     sourceSets {
         val jvmMain by getting {
             dependencies {
+                implementation(project(":application"))
+                implementation(project(":core:scripting"))
                 implementation(project(":ui:core"))
                 implementation(project(":core:domain"))
                 implementation(project(":engine:formatter"))
-                implementation(project(":engine:script"))
                 api(project(":ui:desktop:codeEditor"))
                 implementation(libs.compose.runtime)
                 implementation(libs.compose.foundation)
@@ -22,7 +23,6 @@ kotlin {
                 implementation(libs.compose.ui)
                 implementation(compose.materialIconsExtended)
                 implementation(libs.kotlinx.serialization.json)
-                implementation(libs.koin.core)
             }
         }
         val jvmTest by getting {

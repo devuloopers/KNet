@@ -1,10 +1,10 @@
 package com.devuloopers.knet.domain.collection.runner
 
 import com.devuloopers.knet.domain.collection.model.SavedApiRequest
-import com.devuloopers.knet.domain.collection.model.TestAssertionResult
 import com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult
-import com.devuloopers.knet.domain.scripting.model.ScriptLanguage
 import com.devuloopers.knet.domain.workspace.model.EnvironmentStore
+import com.devuloopers.knet.scripting.model.ScriptAssertion
+import com.devuloopers.knet.scripting.model.ScriptLanguage
 
 /**
  * Result data class for an individual request test assertion evaluation within a batch runner suite.
@@ -12,7 +12,7 @@ import com.devuloopers.knet.domain.workspace.model.EnvironmentStore
 data class SuiteRequestResult(
     val request: SavedApiRequest,
     val executionResult: ExecutionResult,
-    val assertionResults: List<TestAssertionResult>
+    val assertionResults: List<ScriptAssertion>
 )
 
 /**
@@ -43,12 +43,12 @@ class CollectionTestRunner {
         testScript: String = request.scripts.test,
         scriptLanguage: ScriptLanguage = request.scripts.language,
         environmentStore: EnvironmentStore? = null
-    ): List<TestAssertionResult> {
-        val assertions = mutableListOf<TestAssertionResult>()
+    ): List<ScriptAssertion> {
+        val assertions = mutableListOf<ScriptAssertion>()
 
         // Default Status Code 2xx Assertion
         assertions.add(
-            TestAssertionResult(
+            ScriptAssertion(
                 id = "status_2xx",
                 name = "Status code is 2xx",
                 passed = result.statusCode in 200..299
@@ -57,7 +57,7 @@ class CollectionTestRunner {
 
         // Response Time Threshold Assertion
         assertions.add(
-            TestAssertionResult(
+            ScriptAssertion(
                 id = "latency_under_2000",
                 name = "Response time is less than 2000ms",
                 passed = result.latencyMs < 2000L

@@ -19,7 +19,7 @@ import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 @Composable
-public fun KNetDialog(
+fun KNetDialog(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
     title: String? = null,
@@ -53,7 +53,7 @@ public fun KNetDialog(
 }
 
 @Composable
-public fun ConfirmDialog(
+fun ConfirmDialog(
     title: String,
     message: String,
     onConfirm: () -> Unit,
@@ -103,7 +103,7 @@ public fun ConfirmDialog(
 }
 
 @Composable
-public fun AlertDialog(
+fun AlertDialog(
     title: String,
     message: String,
     onDismissRequest: () -> Unit,
@@ -121,7 +121,7 @@ public fun AlertDialog(
 }
 
 @Composable
-public fun CustomDialog(
+fun CustomDialog(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit

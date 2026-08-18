@@ -1,7 +1,9 @@
 package com.devuloopers.knet.core.http.multipart
 
 import com.devuloopers.knet.core.http.client.KNetApiClient
-import com.devuloopers.knet.core.http.model.RequestBodyType
+import com.devuloopers.knet.domain.clientNetwork.model.OutboundRequestBody
+import com.devuloopers.knet.domain.clientNetwork.model.RequestFormField
+import com.devuloopers.knet.traffic.model.http.HttpMethod
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertNotNull
 import org.junit.Test
@@ -13,11 +15,12 @@ class MultipartUploadTest {
         val client = KNetApiClient()
         val formParams = mapOf("file_name" to "avatar.png", "description" to "User Profile Photo")
 
-        val result = client.execute(
+        val result = client.executeDetailed(
             url = "https://httpbin.org/post",
-            method = "POST",
-            bodyType = RequestBodyType.MULTIPART,
-            formParameters = formParams
+            method = HttpMethod.POST,
+            body = OutboundRequestBody.Multipart(
+                formParams.map { (name, value) -> RequestFormField(name, value) }
+            )
         )
 
         assertNotNull(result)

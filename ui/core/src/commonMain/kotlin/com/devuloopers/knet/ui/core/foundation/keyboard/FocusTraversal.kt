@@ -5,4 +5,4 @@ import androidx.compose.ui.Modifier
 /**
  * Modifier extension helper for focus traversal direction.
  */
-public fun Modifier.focusTraversalGroup(): Modifier = this
+fun Modifier.focusTraversalGroup(): Modifier = this

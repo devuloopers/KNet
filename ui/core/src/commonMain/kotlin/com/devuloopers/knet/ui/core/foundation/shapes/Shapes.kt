@@ -9,7 +9,7 @@ import androidx.compose.ui.unit.dp
  * Immutable corner shape tokens representing sharp, modern IDE container bounds.
  */
 @Immutable
-public data class Shapes(
+data class Shapes(
     val none: Shape = RoundedCornerShape(0.dp),
     val small: Shape = RoundedCornerShape(2.dp),
     val medium: Shape = RoundedCornerShape(4.dp),
@@ -20,4 +20,4 @@ public data class Shapes(
 /**
  * Default Shapes instance.
  */
-public val KNetShapes: Shapes = Shapes()
+val KNetShapes: Shapes = Shapes()

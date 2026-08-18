@@ -9,7 +9,7 @@ import androidx.compose.runtime.remember
  * Encapsulates interactive UI states for hover, focus, pressed, and selected bounds.
  */
 @Immutable
-public data class InteractionState(
+data class InteractionState(
     val isHovered: Boolean = false,
     val isFocused: Boolean = false,
     val isPressed: Boolean = false,
@@ -20,6 +20,6 @@ public data class InteractionState(
  * Remembers a default [MutableInteractionSource] instance.
  */
 @Composable
-public fun rememberKNetInteractionSource(): MutableInteractionSource {
+fun rememberKNetInteractionSource(): MutableInteractionSource {
     return remember { MutableInteractionSource() }
 }

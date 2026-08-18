@@ -21,16 +21,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.devuloopers.knet.domain.protocol.model.InterceptionMetadata
+import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
-import com.devuloopers.knet.domain.rules.model.InterceptedTransaction
+import com.devuloopers.knet.traffic.model.absoluteUrl
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import com.devuloopers.knet.ui.core.foundation.time.KNetDateTime
 
 /**
  * Sidebar component rendered on the left side of the Live Intercept Drawer when multiple transactions are queued.
@@ -45,7 +43,7 @@ import java.util.Locale
  */
 @Composable
 fun InterceptQueueSidebar(
-    events: List<InterceptedTransaction>,
+    events: List<PendingBreakpoint>,
     selectedEventId: String?,
     onSelectEvent: (String) -> Unit,
     onDropItem: (String) -> Unit,
@@ -146,7 +144,7 @@ fun InterceptQueueSidebar(
  */
 @Composable
 private fun InterceptQueueItemCard(
-    item: InterceptedTransaction,
+    item: PendingBreakpoint,
     isSelected: Boolean,
     onSelect: () -> Unit,
     onDrop: () -> Unit,
@@ -155,7 +153,7 @@ private fun InterceptQueueItemCard(
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
 
-    val isRequestPhase = item.phase == BreakpointPhase.REQUEST
+    val isRequestPhase = item.candidate.phase == BreakpointPhase.REQUEST
     val phaseColor = if (isRequestPhase) themeColors.semantic.info else themeColors.semantic.success
     val phaseLabel = if (isRequestPhase) "REQ" else "RESP"
 
@@ -172,19 +170,16 @@ private fun InterceptQueueItemCard(
     }
 
     // Determine specialized protocol/content badge
-    val contentTypeHeader = item.response?.headers?.firstOrNull { it.first.equals("Content-Type", ignoreCase = true) }?.second
-        ?: item.request.headers.firstOrNull { it.first.equals("Content-Type", ignoreCase = true) }?.second
+    val contentTypeHeader = item.candidate.response?.head?.headers
+        ?.firstOrNull { it.name.value.equals("Content-Type", ignoreCase = true) }?.value
+        ?: item.candidate.request.head.headers
+            .firstOrNull { it.name.value.equals("Content-Type", ignoreCase = true) }?.value
 
-    val (protocolBadge, protocolColor) = when (item.metadata) {
-        is InterceptionMetadata.GraphQL -> "GQL" to Color(0xFFCBA6F7)
-        is InterceptionMetadata.Grpc -> "gRPC" to Color(0xFF89DCEB)
-        is InterceptionMetadata.Protobuf -> "Proto" to Color(0xFF89DCEB)
-        else -> when {
-            contentTypeHeader?.contains("json", ignoreCase = true) == true -> "JSON" to themeColors.semantic.info
-            contentTypeHeader?.contains("xml", ignoreCase = true) == true -> "XML" to themeColors.semantic.warning
-            contentTypeHeader?.contains("form", ignoreCase = true) == true -> "FORM" to Color(0xFFFAB387)
-            else -> null to themeColors.textSecondary
-        }
+    val (protocolBadge, protocolColor) = when {
+        contentTypeHeader?.contains("json", ignoreCase = true) == true -> "JSON" to themeColors.semantic.info
+        contentTypeHeader?.contains("xml", ignoreCase = true) == true -> "XML" to themeColors.semantic.warning
+        contentTypeHeader?.contains("form", ignoreCase = true) == true -> "FORM" to Color(0xFFFAB387)
+        else -> null to themeColors.textSecondary
     }
 
     Box(
@@ -231,7 +226,7 @@ private fun InterceptQueueItemCard(
                     }
 
                     Text(
-                        text = item.method,
+                        text = item.candidate.request.head.method.token,
                         style = typography.codeSmall.copy(
                             color = themeColors.textPrimary,
                             fontWeight = FontWeight.Bold,
@@ -290,7 +285,7 @@ private fun InterceptQueueItemCard(
 
             // Row 3: Timestamp
             Text(
-                text = formatTimestamp(item.timestamp),
+                text = formatTimestamp(item.candidate.startedAtEpochMillis),
                 style = typography.caption.copy(
                     color = themeColors.textSecondary.copy(alpha = 0.7f),
                     fontSize = 9.sp
@@ -303,36 +298,12 @@ private fun InterceptQueueItemCard(
 /**
  * Extracts display path/URL: formats GraphQL operation names, and shows full URL for standard HTTP requests.
  */
-private fun extractDisplayPath(item: InterceptedTransaction): String {
-    return when (val metadata = item.metadata) {
-        is InterceptionMetadata.GraphQL -> {
-            val basePath = try {
-                val uri = java.net.URI.create(item.url)
-                val rawPath = uri.rawPath
-                if (rawPath.isNullOrEmpty()) "/" else rawPath
-            } catch (_: Exception) {
-                item.url
-            }
-            val opName = metadata.operationName
-            val opType = metadata.operationType
-            if (!opName.isNullOrBlank()) {
-                "$basePath • $opName ($opType)"
-            } else {
-                "$basePath ($opType)"
-            }
-        }
-        is InterceptionMetadata.Grpc -> "${metadata.serviceName}/${metadata.methodName}"
-        else -> item.url
-    }
-}
+private fun extractDisplayPath(item: PendingBreakpoint): String = item.candidate.request.absoluteUrl()
 
 /**
  * Formats epoch millisecond timestamp to standard human-readable time string.
  */
 private fun formatTimestamp(timestamp: Long): String {
     if (timestamp <= 0L) return "Just now"
-    val date = Date(timestamp)
-    val formatter = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-    return formatter.format(date)
+    return KNetDateTime.time(timestamp)
 }
-

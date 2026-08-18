@@ -1,7 +1,7 @@
 package com.devuloopers.knet.core.http.routing
 
-import java.net.ConnectException
-import java.net.SocketException
+import com.devuloopers.knet.core.http.util.PlatformNetworkFailure
+import com.devuloopers.knet.core.http.util.platformNetworkFailure
 
 /**
  * Strategy interface governing HTTP client routing decisions and proxy failure fallbacks.
@@ -31,8 +31,7 @@ interface ProxyRoutingStrategy {
  * Default implementation of [ProxyRoutingStrategy].
  *
  * Directs traffic through proxy if proxyPort is non-null, and triggers automatic fallback
- * to direct execution when socket connection errors ([ConnectException], [SocketException])
- * occur on the proxy endpoint.
+ * to direct execution when the platform reports a local connection failure at the proxy endpoint.
  */
 class DefaultProxyRoutingStrategy : ProxyRoutingStrategy {
 
@@ -46,8 +45,7 @@ class DefaultProxyRoutingStrategy : ProxyRoutingStrategy {
         var current: Throwable? = exception
         while (current != null) {
             val message = current.message?.lowercase().orEmpty()
-            if (current is ConnectException ||
-                current is SocketException ||
+            if (current.platformNetworkFailure() == PlatformNetworkFailure.UNREACHABLE ||
                 message.contains("connection refused") ||
                 message.contains("failed to connect") ||
                 message.contains("connection reset")

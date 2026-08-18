@@ -18,7 +18,7 @@ import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 @Composable
-public fun KNetDropdownMenu(
+fun KNetDropdownMenu(
     expanded: Boolean,
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier,
@@ -34,7 +34,7 @@ public fun KNetDropdownMenu(
 }
 
 @Composable
-public fun KNetMenuItem(
+fun KNetMenuItem(
     text: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier

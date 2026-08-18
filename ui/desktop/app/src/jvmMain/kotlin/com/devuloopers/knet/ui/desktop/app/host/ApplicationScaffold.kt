@@ -29,7 +29,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * - Notification Layer (z = KNetLayers.Notification)
  */
 @Composable
-public fun KNetApplicationScaffold(
+fun KNetApplicationScaffold(
     modifier: Modifier = Modifier,
     navigationRail: (@Composable () -> Unit)? = null,
     statusBar: (@Composable () -> Unit)? = null,

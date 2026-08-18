@@ -23,6 +23,7 @@ import java.security.SecureRandom
 import java.security.Security
 import java.security.cert.X509Certificate
 import java.util.Date
+import kotlin.time.Clock
 
 /**
  * Container holding a dynamically generated cryptographic [KeyPair] and its matching [X509Certificate].
@@ -99,8 +100,9 @@ object LeafCertificateGenerator {
 
         val serial = BigInteger(64, secureRandom)
         // Set notBefore back by 1 day to offset client-side clock desync problems.
-        val notBefore = Date(System.currentTimeMillis() - 1000L * 60L * 60L * 24L)
-        val notAfter = Date(System.currentTimeMillis() + validityDays * 24L * 60L * 60L * 1000L)
+        val nowEpochMillis = Clock.System.now().toEpochMilliseconds()
+        val notBefore = Date(nowEpochMillis - 1000L * 60L * 60L * 24L)
+        val notAfter = Date(nowEpochMillis + validityDays * 24L * 60L * 60L * 1000L)
 
         val certBuilder = JcaX509v3CertificateBuilder(
             issuerDN,

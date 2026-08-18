@@ -1,8 +1,9 @@
 package com.devuloopers.knet.engine.interceptor
 
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
-import com.devuloopers.knet.domain.rules.model.RuleModel
+import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.rules.model.matchesTransaction
+import com.devuloopers.knet.traffic.model.http.HttpMethod
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
@@ -11,12 +12,12 @@ class BreakpointRuleTest {
 
     @Test
     fun testBreakpointRuleMatching() {
-        val rule = RuleModel(
+        val rule = BreakpointRule(
             id = "b1",
             name = "b1",
-            condition = ".*api\\.example\\.com.*",
-            action = "POST",
-            type = BreakpointPhase.REQUEST
+            urlPattern = ".*api\\.example\\.com.*",
+            method = HttpMethod.POST,
+            phase = BreakpointPhase.REQUEST
         )
 
         assertTrue(rule.matchesTransaction("https://api.example.com/v1/users", "POST", BreakpointPhase.REQUEST))
@@ -26,12 +27,11 @@ class BreakpointRuleTest {
 
     @Test
     fun testBothPhasesMatching() {
-        val rule = RuleModel(
+        val rule = BreakpointRule(
             id = "b2",
             name = "b2",
-            condition = "*",
-            action = "ALL",
-            type = BreakpointPhase.BOTH
+            urlPattern = "*",
+            phase = BreakpointPhase.BOTH
         )
 
         assertTrue(rule.matchesTransaction("https://any.com/test", "GET", BreakpointPhase.REQUEST))
@@ -40,10 +40,10 @@ class BreakpointRuleTest {
 
     @Test
     fun testDisabledRuleRejection() {
-        val rule = RuleModel(
+        val rule = BreakpointRule(
             id = "b3",
             name = "b3",
-            condition = "*",
+            urlPattern = "*",
             enabled = false
         )
 

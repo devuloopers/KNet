@@ -25,16 +25,16 @@ import com.devuloopers.knet.ui.core.components.empty.EmptyState
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.components.switch.KNetSwitch
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.ui.desktop.certificate.model.CertificateFormat
-import com.devuloopers.knet.ui.desktop.certificate.model.ClientCertificate
+import com.devuloopers.knet.application.port.certificate.ClientCertificateFormat
+import com.devuloopers.knet.application.port.certificate.ClientCertificateSummary
 
 @Composable
 fun ClientCertificateList(
-    certificates: List<ClientCertificate>,
-    selectedCertificate: ClientCertificate?,
-    onSelect: (ClientCertificate) -> Unit,
+    certificates: List<ClientCertificateSummary>,
+    selectedCertificate: ClientCertificateSummary?,
+    onSelect: (ClientCertificateSummary) -> Unit,
     onToggleEnabled: (String, Boolean) -> Unit,
-    onDelete: (ClientCertificate) -> Unit,
+    onDelete: (ClientCertificateSummary) -> Unit,
     modifier: Modifier = Modifier
 ) {
     if (certificates.isEmpty()) {
@@ -62,7 +62,7 @@ fun ClientCertificateList(
 
 @Composable
 private fun ClientCertificateCard(
-    cert: ClientCertificate,
+    cert: ClientCertificateSummary,
     isSelected: Boolean,
     onClick: () -> Unit,
     onToggleEnabled: () -> Unit,
@@ -127,8 +127,8 @@ private fun ClientCertificateCard(
                     Spacer(modifier = Modifier.width(8.dp))
                     KNetBadge(
                         text = cert.format.name,
-                        containerColor = if (cert.format == CertificateFormat.PKCS12) Color(0xFFC0C1FF).copy(alpha = 0.2f) else themeColors.surface,
-                        contentColor = if (cert.format == CertificateFormat.PKCS12) Color(0xFFC0C1FF) else themeColors.textSecondary
+                        containerColor = if (cert.format == ClientCertificateFormat.PKCS12) Color(0xFFC0C1FF).copy(alpha = 0.2f) else themeColors.surface,
+                        contentColor = if (cert.format == ClientCertificateFormat.PKCS12) Color(0xFFC0C1FF) else themeColors.textSecondary
                     )
                 }
                 

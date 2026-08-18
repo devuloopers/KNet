@@ -33,7 +33,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * @param modifier Composable layout modifier.
  */
 @Composable
-public fun RequestSummaryHeader(
+fun RequestSummaryHeader(
     spec: NetworkRequestSpec,
     onOpenInApiStudio: (() -> Unit)? = null,
     modifier: Modifier = Modifier

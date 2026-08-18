@@ -4,7 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
 @Composable
-public fun BottomPaneLayout(
+fun BottomPaneLayout(
     modifier: Modifier = Modifier,
     tabs: (@Composable () -> Unit)? = null,
     actions: (@Composable () -> Unit)? = null,

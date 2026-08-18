@@ -26,15 +26,14 @@ import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.ClipEntry
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.devuloopers.knet.ui.core.foundation.clipboard.setPlainText
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.awt.datatransfer.StringSelection
 
 /**
  * Shared Copy Button primitive encapsulating the modern Compose Multiplatform Clipboard API.
@@ -42,7 +41,7 @@ import java.awt.datatransfer.StringSelection
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-public fun KNetCopyButton(
+fun KNetCopyButton(
     textToCopy: String,
     modifier: Modifier = Modifier,
     contentDescription: String = "Copy to clipboard",
@@ -80,8 +79,7 @@ public fun KNetCopyButton(
             KNetIconButton(
                 onClick = {
                     coroutineScope.launch {
-                        val clipEntry = ClipEntry(StringSelection(textToCopy))
-                        clipboard.setClipEntry(clipEntry)
+                        clipboard.setPlainText(textToCopy)
                         isCopied = true
                         onCopied?.invoke()
                         delay(2000)
@@ -103,7 +101,7 @@ public fun KNetCopyButton(
  * @property label User-facing option label.
  * @property getTextToCopy Callback returning the string formatted according to this option.
  */
-public data class KNetCopyOption(
+data class KNetCopyOption(
     val label: String,
     val getTextToCopy: () -> String
 )
@@ -119,7 +117,7 @@ public data class KNetCopyOption(
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-public fun KNetCopyDropdownButton(
+fun KNetCopyDropdownButton(
     primaryTextToCopy: () -> String,
     options: List<KNetCopyOption>,
     modifier: Modifier = Modifier,
@@ -135,8 +133,7 @@ public fun KNetCopyDropdownButton(
 
     fun performCopy(text: String) {
         coroutineScope.launch {
-            val clipEntry = ClipEntry(StringSelection(text))
-            clipboard.setClipEntry(clipEntry)
+            clipboard.setPlainText(text)
             isCopied = true
             delay(2000)
             isCopied = false

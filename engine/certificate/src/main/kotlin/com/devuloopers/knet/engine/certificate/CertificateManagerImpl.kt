@@ -6,12 +6,11 @@ import java.security.KeyStore
 import java.security.MessageDigest
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
-import java.time.Instant
-import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.temporal.ChronoUnit
-import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Clock
+import kotlin.time.Instant
 import com.devuloopers.knet.core.logger.KNetLogger
 
 
@@ -44,7 +43,7 @@ class CertificateManagerImpl(
     private val certificatesDir: File? = null
 ) : CertificateManager {
 
-
+    private val stateLock = Any()
     private val clientCertificates: MutableList<EngineClientCertificate>
     private val mtlsRules: MutableList<EngineMtlsRule>
     private val keyManagerMap = ConcurrentHashMap<String, KeyManagerFactory>()
@@ -57,13 +56,9 @@ class CertificateManagerImpl(
     private val mtlsRuleStore = CertificateStore(rulesFile)
 
     init {
-        certificatesDir?.mkdirs()
-        clientCertificates = Collections.synchronizedList(
-            clientCertStore.loadClientCertificates().toMutableList()
-        )
-        mtlsRules = Collections.synchronizedList(
-            mtlsRuleStore.loadMtlsRules().toMutableList()
-        )
+        certificatesDir?.let(CertificateFileSecurity::secureDirectory)
+        clientCertificates = clientCertStore.loadClientCertificates().toMutableList()
+        mtlsRules = mtlsRuleStore.loadMtlsRules().toMutableList()
 
         // Pre-warm KeyManagerFactory instances for persisted certificates that do not require a passphrase
         clientCertificates.forEach { cert ->
@@ -115,7 +110,9 @@ class CertificateManagerImpl(
         return TrustStoreInstaller.isTrusted(ca.certificate)
     }
 
-    override fun getClientCertificates(): List<EngineClientCertificate> = clientCertificates.toList()
+    override fun getClientCertificates(): List<EngineClientCertificate> = synchronized(stateLock) {
+        clientCertificates.toList()
+    }
 
     override fun importClientCertificate(path: String, alias: String, passphrase: String) {
         val file = File(path)
@@ -125,9 +122,13 @@ class CertificateManagerImpl(
 
         // Copy keypair into certificatesDir/keys/ so it persists permanently across sessions
         val savedFile = if (certificatesDir != null) {
-            val keysDir = File(certificatesDir, "keys").apply { mkdirs() }
-            val copyTarget = File(keysDir, "$alias.${file.extension}")
+            val keysDir = File(certificatesDir, "keys").also(CertificateFileSecurity::secureDirectory)
+            val copyTarget = File(
+                keysDir,
+                CertificateFileSecurity.opaqueIdentityFileName(alias, file.extension),
+            )
             file.copyTo(copyTarget, overwrite = true)
+            CertificateFileSecurity.secureSecretFile(copyTarget)
             copyTarget
         } else {
             file
@@ -142,67 +143,87 @@ class CertificateManagerImpl(
             keyManagerMap[alias] = kmf
         }
 
-        clientCertificates.removeAll { it.alias == alias }
-        clientCertificates.add(parsedCert)
-        persistClientCertificates()
+        synchronized(stateLock) {
+            clientCertificates.removeAll { it.alias == alias }
+            clientCertificates.add(parsedCert)
+            persistClientCertificates()
+        }
     }
 
     override fun exportClientCertificate(alias: String, destinationPath: String) {
-        val cert = clientCertificates.firstOrNull { it.alias == alias }
-            ?: throw IllegalArgumentException("Certificate not found with alias '$alias'")
+        val cert = synchronized(stateLock) {
+            clientCertificates.firstOrNull { it.alias == alias }
+        } ?: throw IllegalArgumentException("Certificate not found with alias '$alias'")
         val sourceFile = File(cert.filePath)
         if (!sourceFile.exists()) {
             throw IllegalStateException("Source certificate file no longer exists at path '${cert.filePath}'")
         }
         val destDir = File(destinationPath).apply { mkdirs() }
-        val destFile = File(destDir, "$alias.${sourceFile.extension}")
+        val destFile = File(
+            destDir,
+            CertificateFileSecurity.exportIdentityFileName(alias, sourceFile.extension),
+        )
         sourceFile.copyTo(destFile, overwrite = true)
+        CertificateFileSecurity.secureSecretFile(destFile)
     }
 
     override fun deleteClientCertificate(alias: String) {
-        clientCertificates.removeAll { it.alias == alias }
+        synchronized(stateLock) {
+            clientCertificates.removeAll { it.alias == alias }
+            persistClientCertificates()
+        }
         keyManagerMap.remove(alias)
-        persistClientCertificates()
     }
 
     override fun toggleCertificateEnabled(alias: String, enabled: Boolean) {
-        val index = clientCertificates.indexOfFirst { it.alias == alias }
-        if (index != -1) {
-            val existing = clientCertificates[index]
-            clientCertificates[index] = existing.copy(enabled = enabled)
-            persistClientCertificates()
+        synchronized(stateLock) {
+            val index = clientCertificates.indexOfFirst { it.alias == alias }
+            if (index != -1) {
+                val existing = clientCertificates[index]
+                clientCertificates[index] = existing.copy(enabled = enabled)
+                persistClientCertificates()
+            }
         }
     }
 
-    override fun getMtlsRules(): List<EngineMtlsRule> = mtlsRules.toList()
-
-    override fun addMtlsRule(rule: EngineMtlsRule) {
-        mtlsRules.add(rule)
-        persistMtlsRules()
+    override fun getMtlsRules(): List<EngineMtlsRule> = synchronized(stateLock) {
+        mtlsRules.toList()
     }
 
-    override fun editMtlsRule(rule: EngineMtlsRule) {
-        val index = mtlsRules.indexOfFirst { it.ruleName == rule.ruleName }
-        if (index != -1) {
-            mtlsRules[index] = rule
+    override fun addMtlsRule(rule: EngineMtlsRule) {
+        synchronized(stateLock) {
+            mtlsRules.add(rule)
             persistMtlsRules()
         }
     }
 
+    override fun editMtlsRule(rule: EngineMtlsRule) {
+        synchronized(stateLock) {
+            val index = mtlsRules.indexOfFirst { it.ruleName == rule.ruleName }
+            if (index != -1) {
+                mtlsRules[index] = rule
+                persistMtlsRules()
+            }
+        }
+    }
+
     override fun deleteMtlsRule(ruleName: String) {
-        mtlsRules.removeAll { it.ruleName == ruleName }
-        persistMtlsRules()
+        synchronized(stateLock) {
+            mtlsRules.removeAll { it.ruleName == ruleName }
+            persistMtlsRules()
+        }
     }
 
     override fun getKeyManagerFactory(host: String): KeyManagerFactory? {
-        val activeRule = mtlsRules.firstOrNull { rule ->
-            rule.enabled && matchesHostPattern(host, rule.hostPattern)
-        }
-        if (activeRule == null) {
-            return null
+        val (activeRule, clientCert) = synchronized(stateLock) {
+            val rule = mtlsRules.firstOrNull { candidate ->
+                candidate.enabled && matchesHostPattern(host, candidate.hostPattern)
+            } ?: return null
+            rule to clientCertificates.firstOrNull { certificate ->
+                certificate.alias == rule.certificateAlias && certificate.enabled
+            }
         }
 
-        val clientCert = clientCertificates.firstOrNull { it.alias == activeRule.certificateAlias && it.enabled }
         if (clientCert == null) {
             KNetLogger.warn(LogTags.CERTIFICATE) {
                 "[mTLS] Host '$host' matched rule '${activeRule.ruleName}' but cert '${activeRule.certificateAlias}' is not enabled or not found"
@@ -238,15 +259,32 @@ class CertificateManagerImpl(
     }
 
     private fun getCandidateKeyFiles(alias: String, format: String = "", filePath: String = ""): List<File> {
+        val keysDirectory = certificatesDir?.resolve("keys")?.canonicalFile
+        fun ownedKeyFile(candidate: File): File? {
+            val canonicalCandidate = runCatching { candidate.canonicalFile }.getOrNull() ?: return null
+            return if (
+                keysDirectory == null ||
+                canonicalCandidate.toPath().startsWith(keysDirectory.toPath())
+            ) {
+                canonicalCandidate
+            } else {
+                null
+            }
+        }
+
         return listOfNotNull(
-            if (filePath.isNotBlank()) File(filePath) else null,
-            if (format.isNotBlank()) certificatesDir?.let { File(it, "keys/$alias.${format.lowercase()}") } else null,
-            certificatesDir?.let { File(it, "keys/$alias.p12") },
-            certificatesDir?.let { File(it, "keys/$alias.pfx") },
-            certificatesDir?.let { File(it, "keys/$alias.pem") },
-            certificatesDir?.let { File(it, "keys/$alias.crt") },
-            certificatesDir?.let { File(it, "keys/$alias.cer") },
-            certificatesDir?.let { File(it, "keys/$alias.jks") }
+            if (filePath.isNotBlank()) ownedKeyFile(File(filePath)) else null,
+            if (format.isNotBlank()) keysDirectory?.let {
+                ownedKeyFile(File(it, "$alias.${format.lowercase()}"))
+            } else {
+                null
+            },
+            keysDirectory?.let { ownedKeyFile(File(it, "$alias.p12")) },
+            keysDirectory?.let { ownedKeyFile(File(it, "$alias.pfx")) },
+            keysDirectory?.let { ownedKeyFile(File(it, "$alias.pem")) },
+            keysDirectory?.let { ownedKeyFile(File(it, "$alias.crt")) },
+            keysDirectory?.let { ownedKeyFile(File(it, "$alias.cer")) },
+            keysDirectory?.let { ownedKeyFile(File(it, "$alias.jks")) },
         )
     }
 
@@ -277,12 +315,9 @@ class CertificateManagerImpl(
             val cert = extractX509Certificate(file, passphrase)
 
             val subject = cert.subjectX500Principal.name
-            val expiryInstant = cert.notAfter.toInstant()
-            val now = Instant.now()
-            val daysUntilExpiry = ChronoUnit.DAYS.between(now, expiryInstant).toInt()
-
-            val formatter = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.systemDefault())
-            val formattedExpiry = formatter.format(expiryInstant)
+            val expiryInstant = Instant.fromEpochMilliseconds(cert.notAfter.time)
+            val daysUntilExpiry = (expiryInstant - Clock.System.now()).inWholeDays.toInt()
+            val formattedExpiry = formatCertificateExpiry(expiryInstant)
 
             val sans = try {
                 cert.subjectAlternativeNames?.mapNotNull { list ->
@@ -463,4 +498,19 @@ class CertificateManagerImpl(
         val digest = md.digest(der)
         return digest.joinToString(":") { "%02X".format(it) }
     }
+
+    private fun formatCertificateExpiry(expiryInstant: Instant): String {
+        val dateTime = expiryInstant.toLocalDateTime(TimeZone.currentSystemDefault())
+        return buildString(capacity = 19) {
+            append(dateTime.date)
+            append(' ')
+            append(dateTime.hour.fixedWidth(2))
+            append(':')
+            append(dateTime.minute.fixedWidth(2))
+            append(':')
+            append(dateTime.second.fixedWidth(2))
+        }
+    }
+
+    private fun Int.fixedWidth(width: Int): String = toString().padStart(width, '0')
 }

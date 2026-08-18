@@ -19,7 +19,7 @@ object ResponseFactory {
         val dto = TestResponse(
             success = status.is2xxSuccessful,
             status = status.value(),
-            method = request.methodName(),
+            method = request.method().name(),
             path = request.path(),
             headers = RequestUtils.extractHeaders(request),
             query = RequestUtils.extractQueryParams(request),

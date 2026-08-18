@@ -7,7 +7,7 @@ import com.devuloopers.knet.ui.core.components.toolbar.KNetToolbar
 import com.devuloopers.knet.ui.core.components.toolbar.ToolbarSpacer
 
 @Composable
-public fun SampleToolbar(
+fun SampleToolbar(
     modifier: Modifier = Modifier
 ) {
     KNetToolbar(

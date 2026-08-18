@@ -17,7 +17,7 @@ import com.devuloopers.knet.ui.core.components.divider.HorizontalDivider
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 @Composable
-public fun KNetBottomPane(
+fun KNetBottomPane(
     modifier: Modifier = Modifier,
     height: Dp = 160.dp,
     tabs: (@Composable () -> Unit)? = null,

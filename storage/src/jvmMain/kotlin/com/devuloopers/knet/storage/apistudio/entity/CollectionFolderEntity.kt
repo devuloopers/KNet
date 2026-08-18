@@ -7,7 +7,7 @@ import androidx.room.PrimaryKey
  * Room SQLite database entity representing a folder inside an API collection.
  */
 @Entity(tableName = "collection_folders")
-public data class CollectionFolderEntity(
+data class CollectionFolderEntity(
     @PrimaryKey val id: String,
     val collectionId: String,
     val parentId: String? = null,

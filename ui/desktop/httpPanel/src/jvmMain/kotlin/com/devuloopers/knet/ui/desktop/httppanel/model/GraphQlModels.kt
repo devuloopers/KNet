@@ -3,6 +3,7 @@ package com.devuloopers.knet.ui.desktop.httppanel.model
 import com.devuloopers.knet.engine.formatter.formatters.GraphQLBodyFormatter
 import com.devuloopers.knet.engine.formatter.formatters.JsonBodyFormatter
 import com.devuloopers.knet.engine.formatter.graphql.GraphQLQuerySynchronizer
+import com.devuloopers.knet.domain.payload.StructuredPayloadState
 import com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage
 
 /**
@@ -59,10 +60,10 @@ enum class GraphQlSubTab(
     fun updatePayload(state: GraphQlState, newText: String): GraphQlState = when (this) {
         QUERY -> {
             val extractedOpName = GraphQLQuerySynchronizer.extractOperationName(newText) ?: ""
-            state.copy(queryText = newText, operationName = extractedOpName)
+            state.copy(payload = state.payload.copy(queryText = newText, operationName = extractedOpName))
         }
-        VARIABLES -> state.copy(variablesText = newText)
-        EXTENSIONS -> state.copy(extensionsText = newText)
+        VARIABLES -> state.copy(payload = state.payload.copy(variablesText = newText))
+        EXTENSIONS -> state.copy(payload = state.payload.copy(extensionsText = newText))
     }
 
     /**
@@ -75,10 +76,10 @@ enum class GraphQlSubTab(
         QUERY -> {
             val formatted = GraphQLBodyFormatter.formatQuery(state.queryText)
             val extractedOpName = GraphQLQuerySynchronizer.extractOperationName(formatted) ?: ""
-            state.copy(queryText = formatted, operationName = extractedOpName)
+            state.copy(payload = state.payload.copy(queryText = formatted, operationName = extractedOpName))
         }
-        VARIABLES -> state.copy(variablesText = formatGraphQlJson(state.variablesText))
-        EXTENSIONS -> state.copy(extensionsText = formatGraphQlJson(state.extensionsText))
+        VARIABLES -> state.copy(payload = state.payload.copy(variablesText = formatGraphQlJson(state.variablesText)))
+        EXTENSIONS -> state.copy(payload = state.payload.copy(extensionsText = formatGraphQlJson(state.extensionsText)))
     }
 
     private fun formatGraphQlJson(raw: String): String {
@@ -101,12 +102,17 @@ enum class GraphQlSubTab(
  * @property activeSubTab Currently selected GraphQL editor sub-tab ([GraphQlSubTab]).
  */
 data class GraphQlState(
-    val queryText: String = "",
-    val variablesText: String = DEFAULT_JSON_OBJECT_PLACEHOLDER,
-    val operationName: String = "",
-    val extensionsText: String = DEFAULT_JSON_OBJECT_PLACEHOLDER,
+    val payload: StructuredPayloadState.GraphQL = StructuredPayloadState.GraphQL(
+        variablesText = DEFAULT_JSON_OBJECT_PLACEHOLDER,
+        extensionsText = DEFAULT_JSON_OBJECT_PLACEHOLDER,
+    ),
     val activeSubTab: GraphQlSubTab = GraphQlSubTab.QUERY
 ) {
+    val queryText: String get() = payload.queryText
+    val variablesText: String get() = payload.variablesText
+    val operationName: String get() = payload.operationName
+    val extensionsText: String get() = payload.extensionsText
+
     companion object {
         const val DEFAULT_JSON_OBJECT_PLACEHOLDER: String = "{\n  \n}"
     }

@@ -10,7 +10,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.ScriptState
  * Script Editor delegating to the central HTTP panel ScriptEditor facade.
  */
 @Composable
-public fun ScriptEditor(
+fun ScriptEditor(
     code: String,
     onCodeChange: (String) -> Unit,
     modifier: Modifier = Modifier

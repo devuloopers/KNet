@@ -19,7 +19,7 @@ import com.devuloopers.knet.ui.desktop.scripting.model.TrafficScript
  * ScriptTabs horizontal layout display for open scripting tab items.
  */
 @Composable
-public fun ScriptTabs(
+fun ScriptTabs(
     openScripts: List<TrafficScript>,
     activeScript: TrafficScript?,
     onScriptSelect: (TrafficScript) -> Unit,

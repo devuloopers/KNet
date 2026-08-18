@@ -31,7 +31,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.toCodeLanguage
  * @param modifier Composable layout modifier.
  */
 @Composable
-public fun SmartBodyViewer(
+fun SmartBodyViewer(
     spec: PayloadInspectionSpec,
     emptyTitle: String = "No Body Payload",
     emptySubtitle: String = "This transaction contained no request or response body payload.",

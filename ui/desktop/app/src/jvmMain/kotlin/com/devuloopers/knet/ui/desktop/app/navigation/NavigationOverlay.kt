@@ -37,13 +37,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import com.devuloopers.knet.domain.config.AppMetadata
 import com.devuloopers.knet.ui.core.foundation.elevation.KNetLayers
+import com.devuloopers.knet.ui.core.foundation.resources.kNetLogoPainter
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 /**
@@ -60,7 +60,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-public fun NavigationOverlay(
+fun NavigationOverlay(
     navigationState: NavigationState,
     presentation: NavigationPresentation,
     currentDestination: DesktopDestination,
@@ -202,9 +202,8 @@ private fun NavigationBrandingFooter(
             modifier = Modifier.size(42.dp),
             contentAlignment = Alignment.Center
         ) {
-            @Suppress("DEPRECATION")
             Image(
-                painter = painterResource("icons/KNet.png"),
+                painter = kNetLogoPainter(),
                 contentDescription = AppMetadata.APP_NAME,
                 modifier = Modifier
                     .size(28.dp)

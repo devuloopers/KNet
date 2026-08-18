@@ -8,7 +8,7 @@ import kotlinx.coroutines.flow.Flow
  *
  * @param repository The network repository interface.
  */
-public class ObserveLocalIpUseCase(
+class ObserveLocalIpUseCase(
     private val repository: NetworkRepository
 ) {
     /**
@@ -16,7 +16,7 @@ public class ObserveLocalIpUseCase(
      *
      * @param pollIntervalMs Ticker polling interval in milliseconds. Defaults to 3000ms.
      */
-    public fun execute(pollIntervalMs: Long = 3000L): Flow<String> {
+    fun execute(pollIntervalMs: Long = 3000L): Flow<String> {
         return repository.observeLocalIp(pollIntervalMs)
     }
 }

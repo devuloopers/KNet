@@ -1,7 +1,6 @@
 package com.devuloopers.knet.engine.proxy.timing
 
-import com.devuloopers.knet.domain.clientNetwork.model.HttpTimings
-import java.util.concurrent.atomic.AtomicBoolean
+import com.devuloopers.knet.traffic.model.ExchangeTimings
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -22,8 +21,6 @@ class NetworkTimingCollector {
     private val requestSentNanos = AtomicLong(0L)
     private val firstByteNanos = AtomicLong(0L)
     private val lastByteNanos = AtomicLong(0L)
-
-    private val isReusedSocketFlag = AtomicBoolean(false)
 
     /** Marks the start of DNS resolution. */
     fun markDnsStart() {
@@ -70,12 +67,7 @@ class NetworkTimingCollector {
         lastByteNanos.set(System.nanoTime())
     }
 
-    /** Marks whether the connection reused an existing socket or TLS session. */
-    fun setReusedSocket(isReused: Boolean) {
-        isReusedSocketFlag.set(isReused)
-    }
-
-    /** Direct millisecond setter fallbacks for compatibility. */
+    /** Direct millisecond setters used by deterministic timing tests and adapters. */
     fun setDnsDuration(durationMs: Long) {
         val start = System.nanoTime()
         dnsStartNanos.set(start)
@@ -107,27 +99,32 @@ class NetworkTimingCollector {
     }
 
     /** Reads the collected timing metrics translated to milliseconds. */
-    fun getTimings(): HttpTimings {
+    fun getTimings(): ExchangeTimings {
         val dnsNanos = (dnsEndNanos.get() - dnsStartNanos.get()).coerceAtLeast(0L)
         val tcpNanos = (tcpEndNanos.get() - tcpStartNanos.get()).coerceAtLeast(0L)
         val tlsNanos = (tlsEndNanos.get() - tlsStartNanos.get()).coerceAtLeast(0L)
         val ttfbNanos = (firstByteNanos.get() - requestSentNanos.get()).coerceAtLeast(0L)
         val downloadNanos = (lastByteNanos.get() - firstByteNanos.get()).coerceAtLeast(0L)
 
-        return HttpTimings(
-            dnsMs = nanosToMillis(dnsNanos),
-            tcpMs = nanosToMillis(tcpNanos),
-            tlsMs = nanosToMillis(tlsNanos),
-            ttfbMs = nanosToMillis(ttfbNanos),
-            downloadMs = nanosToMillis(downloadNanos),
-            isReusedConnection = isReusedSocketFlag.get()
+        val dnsMillis = nanosToMillis(dnsNanos)
+        val connectMillis = nanosToMillis(tcpNanos)
+        val tlsMillis = nanosToMillis(tlsNanos)
+        val firstByteMillis = nanosToMillis(ttfbNanos)
+        val downloadMillis = nanosToMillis(downloadNanos)
+        return ExchangeTimings(
+            dnsMillis = dnsMillis,
+            connectMillis = connectMillis,
+            tlsMillis = tlsMillis,
+            firstByteMillis = firstByteMillis,
+            downloadMillis = downloadMillis,
+            totalMillis = dnsMillis + connectMillis + tlsMillis + firstByteMillis + downloadMillis,
         )
     }
 
     /** Returns total sum of phase durations in milliseconds. */
     fun getTotalDuration(): Long {
         val timings = getTimings()
-        return timings.totalTimeMs
+        return timings.totalMillis ?: 0L
     }
 
     private fun nanosToMillis(nanos: Long): Long {

@@ -40,7 +40,7 @@ import com.devuloopers.knet.ui.core.components.input.KNetInputField
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarFolderItem
 
-public enum class CollectionSaveMode {
+enum class CollectionSaveMode {
     EXISTING_COLLECTION,
     NEW_COLLECTION
 }
@@ -57,7 +57,7 @@ public enum class CollectionSaveMode {
  * @param onConfirm Save callback passing (requestName, saveMode, selectedCollectionId, newCollectionName).
  */
 @Composable
-public fun SaveRequestDialog(
+fun SaveRequestDialog(
     defaultName: String,
     existingCollections: List<SidebarFolderItem>,
     onDismiss: () -> Unit,

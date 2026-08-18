@@ -24,19 +24,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.ui.desktop.httppanel.model.NetworkTimingSpec
 
 /**
  * Reusable HTTP timeline & waterfall inspection composable rendering network timing breakdown rows
  * (DNS, TCP, TLS, TTFB, Content Download), connection reuse badge, and total roundtrip latency summary.
  *
- * @param spec Strongly-typed domain network timing specification.
+ * @param timings Canonical exchange timing observations.
  * @param modifier Composable layout modifier.
  */
 @Composable
-public fun TimelineViewPanel(
-    spec: NetworkTimingSpec,
+fun TimelineViewPanel(
+    timings: ExchangeTimings,
     modifier: Modifier = Modifier
 ) {
     val themeColors = KNetTheme.colors
@@ -44,7 +44,12 @@ public fun TimelineViewPanel(
     val shapes = KNetTheme.shapes
     val scrollState = rememberScrollState()
 
-    val totalMs = spec.totalTimeMs.coerceAtLeast(1L)
+    val dnsMs = timings.dnsMillis ?: 0L
+    val tcpMs = timings.connectMillis ?: 0L
+    val tlsMs = timings.tlsMillis ?: 0L
+    val ttfbMs = timings.firstByteMillis ?: 0L
+    val downloadMs = timings.downloadMillis ?: 0L
+    val totalMs = timings.totalMillis?.coerceAtLeast(1L) ?: 1L
 
     Column(
         modifier = modifier
@@ -68,7 +73,7 @@ public fun TimelineViewPanel(
                 )
             )
 
-            if (spec.isReusedConnection || (spec.dnsMs == 0L && spec.tcpMs == 0L && spec.tlsMs == 0L)) {
+            if (timings.connectionReused || (dnsMs == 0L && tcpMs == 0L && tlsMs == 0L)) {
                 Box(
                     modifier = Modifier
                         .clip(shapes.pill)
@@ -86,31 +91,31 @@ public fun TimelineViewPanel(
         // 2. Waterfall Rows
         TimelineWaterfallRow(
             label = "DNS Resolution",
-            durationMs = spec.dnsMs,
+            durationMs = dnsMs,
             totalMs = totalMs,
             color = Color(0xFF89B4FA)
         )
         TimelineWaterfallRow(
             label = "TCP Connect",
-            durationMs = spec.tcpMs,
+            durationMs = tcpMs,
             totalMs = totalMs,
             color = Color(0xFF89DCEB)
         )
         TimelineWaterfallRow(
             label = "TLS Handshake",
-            durationMs = spec.tlsMs,
+            durationMs = tlsMs,
             totalMs = totalMs,
             color = Color(0xFFA6E3A1)
         )
         TimelineWaterfallRow(
             label = "TTFB (Wait)",
-            durationMs = spec.ttfbMs,
+            durationMs = ttfbMs,
             totalMs = totalMs,
             color = Color(0xFFF9E2AF)
         )
         TimelineWaterfallRow(
             label = "Content Download",
-            durationMs = spec.downloadMs,
+            durationMs = downloadMs,
             totalMs = totalMs,
             color = Color(0xFF74C7EC)
         )

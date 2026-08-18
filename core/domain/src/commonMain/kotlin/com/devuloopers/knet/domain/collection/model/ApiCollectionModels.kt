@@ -1,21 +1,9 @@
 package com.devuloopers.knet.domain.collection.model
 
-import com.devuloopers.knet.domain.scripting.model.ScriptLanguage
+import com.devuloopers.knet.scripting.model.ScriptAssertion
+import com.devuloopers.knet.scripting.model.ScriptLanguage
 import com.devuloopers.knet.domain.validation.UrlValidator
-
-/**
- * Supported HTTP methods for collection requests with exact Postman theme color coding.
- */
-enum class HttpMethod(val badgeColorHex: Long) {
-    GET(0xFF10B981),       // Vivid Emerald Green
-    POST(0xFFF59E0B),      // Bright Amber Yellow
-    PUT(0xFF3B82F6),       // Electric Blue
-    PATCH(0xFFA855F7),     // Rich Lavender Purple
-    DELETE(0xFFF87171),    // Vivid Coral Red
-    HEAD(0xFF34D399),      // Light Mint Green
-    OPTIONS(0xFFEC4899),   // Vivid Magenta Pink
-    CUSTOM(0xFF9CA3AF)     // Sleek Slate Grey
-}
+import com.devuloopers.knet.traffic.model.http.HttpMethod
 
 /**
  * Represents a single HTTP request header row.
@@ -25,15 +13,6 @@ data class RequestHeader(
     val value: String,
     val isEnabled: Boolean = true,
     val isAuto: Boolean = false
-)
-
-/**
- * Data model for a test assertion result.
- */
-data class TestAssertionResult(
-    val id: String,
-    val name: String,
-    val passed: Boolean
 )
 
 /**
@@ -96,17 +75,16 @@ data class SavedApiRequest(
     val id: String,
     val name: String,
     val method: HttpMethod,
-    val customMethod: String? = null,
     val url: String,
     val headers: List<RequestHeader> = defaultHeaders(),
     val body: ApiRequestBody = ApiRequestBody(),
     val auth: ApiRequestAuth = ApiRequestAuth.None,
     val scripts: ApiRequestScripts = ApiRequestScripts(),
     val expectedStatus: Int = 200,
-    val testResults: List<TestAssertionResult> = emptyList()
+    val testResults: List<ScriptAssertion> = emptyList()
 ) {
     val methodString: String
-        get() = if (method == HttpMethod.CUSTOM && !customMethod.isNullOrBlank()) customMethod.uppercase() else method.name
+        get() = method.token
 }
 
 /**

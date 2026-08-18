@@ -10,7 +10,7 @@ import androidx.compose.ui.Modifier
  * Responsive layout container computing window dimensions and passing [WindowInfo] down to children.
  */
 @Composable
-public fun ResponsiveLayout(
+fun ResponsiveLayout(
     modifier: Modifier = Modifier,
     content: @Composable (windowInfo: WindowInfo) -> Unit
 ) {

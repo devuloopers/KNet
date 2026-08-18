@@ -6,7 +6,7 @@ package com.devuloopers.knet.domain.clientNetwork.model
  * Provides granular failure reasons to allow UI components to present tailored diagnostic guidance
  * (such as host resolution tips, timeout settings, or SSL troubleshooting) instead of generic error strings.
  */
-public sealed interface NetworkFailureReason {
+sealed interface NetworkFailureReason {
 
     /**
      * Malformed URL, unsupported scheme, or invalid port string.
@@ -14,7 +14,7 @@ public sealed interface NetworkFailureReason {
      * @property url The raw input URL string that failed parsing.
      * @property detail Detailed description of the URL parsing error.
      */
-    public data class InvalidUrl(val url: String, val detail: String) : NetworkFailureReason
+    data class InvalidUrl(val url: String, val detail: String) : NetworkFailureReason
 
     /**
      * Domain name resolution failure (e.g. UnknownHostException for "api.example.com").
@@ -22,7 +22,7 @@ public sealed interface NetworkFailureReason {
      * @property host The target domain/hostname that failed DNS resolution.
      * @property detail Detailed exception message or system error description.
      */
-    public data class HostNotFound(val host: String, val detail: String) : NetworkFailureReason
+    data class HostNotFound(val host: String, val detail: String) : NetworkFailureReason
 
     /**
      * Socket, connection, or request timeout elapsed before completion.
@@ -30,14 +30,14 @@ public sealed interface NetworkFailureReason {
      * @property timeoutMs Configured or elapsed timeout duration in milliseconds.
      * @property detail Detailed timeout error message.
      */
-    public data class Timeout(val timeoutMs: Long, val detail: String) : NetworkFailureReason
+    data class Timeout(val timeoutMs: Long, val detail: String) : NetworkFailureReason
 
     /**
      * Network interface offline, target server port closed, or connection refused.
      *
      * @property detail Detailed network connection failure message.
      */
-    public data class OfflineOrUnreachable(val detail: String) : NetworkFailureReason
+    data class OfflineOrUnreachable(val detail: String) : NetworkFailureReason
 
     /**
      * Local proxy server connection or proxy handshake failed.
@@ -45,39 +45,39 @@ public sealed interface NetworkFailureReason {
      * @property proxyPort Target local proxy port integer, or null if unspecified.
      * @property detail Detailed proxy failure message.
      */
-    public data class ProxyFailure(val proxyPort: Int?, val detail: String) : NetworkFailureReason
+    data class ProxyFailure(val proxyPort: Int?, val detail: String) : NetworkFailureReason
 
     /**
      * SSL/TLS certificate validation or handshake failure.
      *
      * @property detail Detailed SSL/TLS error message or certificate exception details.
      */
-    public data class SslHandshakeFailed(val detail: String) : NetworkFailureReason
+    data class SslHandshakeFailed(val detail: String) : NetworkFailureReason
 
     /**
      * Exceeded maximum redirect count or encountered infinite HTTP redirect loop.
      *
      * @property detail Detailed redirect failure message.
      */
-    public data class TooManyRedirects(val detail: String) : NetworkFailureReason
+    data class TooManyRedirects(val detail: String) : NetworkFailureReason
 
     /**
      * Request execution was explicitly aborted by user or coroutine scope cancellation.
      */
-    public data object Cancelled : NetworkFailureReason
+    data object Cancelled : NetworkFailureReason
 
     /**
      * Generic fallback for uncategorized execution exceptions.
      *
      * @property message Uncategorized error description.
      */
-    public data class Generic(val message: String) : NetworkFailureReason
+    data class Generic(val message: String) : NetworkFailureReason
 }
 
 /**
  * Returns a human-readable detail message string for any [NetworkFailureReason] variant.
  */
-public val NetworkFailureReason.detailMessage: String
+val NetworkFailureReason.detailMessage: String
     get() = when (this) {
         is NetworkFailureReason.InvalidUrl -> detail
         is NetworkFailureReason.HostNotFound -> detail

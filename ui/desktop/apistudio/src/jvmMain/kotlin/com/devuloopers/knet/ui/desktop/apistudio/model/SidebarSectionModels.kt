@@ -8,7 +8,7 @@ import com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarRequestItem
  *
  * @property label User-facing title string for the section header.
  */
-public enum class SidebarSectionType(val label: String) {
+enum class SidebarSectionType(val label: String) {
     UNSAVED("Unsaved Sessions"),
     SAVED("Saved Collections")
 }
@@ -19,7 +19,7 @@ public enum class SidebarSectionType(val label: String) {
  * @property isUnsavedExpanded True if the Unsaved Sessions dropdown section is expanded.
  * @property isSavedExpanded True if the Saved Collections dropdown section is expanded.
  */
-public data class SidebarSectionState(
+data class SidebarSectionState(
     val isUnsavedExpanded: Boolean = true,
     val isSavedExpanded: Boolean = true
 )

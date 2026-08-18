@@ -52,23 +52,12 @@ class GraphQlPayloadMapper(
     override val bodyType: RequestBodyType = RequestBodyType.GRAPHQL
 
     override fun parse(rawText: String): StructuredPayloadState {
-        val state = parseToUi(rawText)
-        return StructuredPayloadState.GraphQL(
-            queryText = state.queryText,
-            variablesText = state.variablesText,
-            operationName = state.operationName,
-            extensionsText = state.extensionsText
-        )
+        return parseToUi(rawText).payload
     }
 
     override fun serialize(state: StructuredPayloadState): String {
         val graphQl = when (state) {
-            is StructuredPayloadState.GraphQL -> GraphQlState(
-                queryText = state.queryText,
-                variablesText = state.variablesText,
-                operationName = state.operationName,
-                extensionsText = state.extensionsText
-            )
+            is StructuredPayloadState.GraphQL -> GraphQlState(payload = state)
 
             is StructuredPayloadState.RawText -> return state.content
         }
@@ -100,10 +89,12 @@ class GraphQlPayloadMapper(
                         ?: GraphQlState.DEFAULT_JSON_OBJECT_PLACEHOLDER
 
                     return GraphQlState(
-                        queryText = formattedQuery,
-                        variablesText = varsStr,
-                        operationName = dto.operationName ?: "",
-                        extensionsText = extStr,
+                        payload = StructuredPayloadState.GraphQL(
+                            queryText = formattedQuery,
+                            variablesText = varsStr,
+                            operationName = dto.operationName ?: "",
+                            extensionsText = extStr,
+                        ),
                         activeSubTab = GraphQlSubTab.QUERY
                     )
                 }
@@ -114,10 +105,12 @@ class GraphQlPayloadMapper(
 
         // If payload is raw unescaped GraphQL query text
         return GraphQlState(
-            queryText = graphQlFormatter.formatQuery(trimmed),
-            variablesText = GraphQlState.DEFAULT_JSON_OBJECT_PLACEHOLDER,
-            operationName = "",
-            extensionsText = GraphQlState.DEFAULT_JSON_OBJECT_PLACEHOLDER,
+            payload = StructuredPayloadState.GraphQL(
+                queryText = graphQlFormatter.formatQuery(trimmed),
+                variablesText = GraphQlState.DEFAULT_JSON_OBJECT_PLACEHOLDER,
+                operationName = "",
+                extensionsText = GraphQlState.DEFAULT_JSON_OBJECT_PLACEHOLDER,
+            ),
             activeSubTab = GraphQlSubTab.QUERY
         )
     }

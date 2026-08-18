@@ -13,7 +13,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * Extremely thin card container surface.
  */
 @Composable
-public fun KNetCard(
+fun KNetCard(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {

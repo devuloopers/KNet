@@ -6,6 +6,7 @@ import com.devuloopers.knet.domain.collection.model.SavedApiRequest
 import com.devuloopers.knet.domain.collection.repository.CollectionsRepository
 import com.devuloopers.knet.domain.collection.usecase.SaveUnsavedRequestUseCase
 import com.devuloopers.knet.domain.collection.usecase.UpdateRequestInCollectionUseCase
+import com.devuloopers.knet.domain.payload.StructuredPayloadState
 import com.devuloopers.knet.ui.desktop.apistudio.model.RequestEditorState
 import com.devuloopers.knet.ui.desktop.apistudio.model.SessionContext
 import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlState
@@ -59,9 +60,11 @@ class AutoSaveApiSessionUseCaseTest {
         )
 
         val graphQlState = GraphQlState(
-            queryText = "query GetUser { user { id name } }",
-            operationName = "GetUser",
-            variablesText = "{\n  \"id\": \"123\"\n}"
+            payload = StructuredPayloadState.GraphQL(
+                queryText = "query GetUser { user { id name } }",
+                operationName = "GetUser",
+                variablesText = "{\n  \"id\": \"123\"\n}",
+            ),
         )
         val bodyState = RequestBodyState(
             mode = RequestBodyMode.GRAPHQL,

@@ -10,9 +10,10 @@ kotlin {
     sourceSets {
         val jvmMain by getting {
             dependencies {
+                implementation(project(":application"))
+                implementation(project(":core:scripting"))
                 implementation(project(":ui:core"))
                 implementation(project(":ui:desktop:httpPanel"))
-                implementation(project(":engine:script"))
                 implementation(project(":core:domain"))
                 implementation(project(":core:http"))
                 implementation(project(":core:logger"))
@@ -24,9 +25,6 @@ kotlin {
                 implementation(libs.compose.uiToolingPreview)
                 implementation(libs.androidx.lifecycle.viewmodelCompose)
                 implementation(libs.androidx.lifecycle.runtimeCompose)
-                implementation(libs.koin.core)
-                implementation(libs.koin.compose)
-                implementation(libs.koin.compose.viewmodel)
                 implementation(compose.materialIconsExtended)
             }
         }

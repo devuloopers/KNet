@@ -37,7 +37,7 @@ import com.devuloopers.knet.ui.desktop.breakpointmanager.viewmodel.BreakpointMan
  * Main Breakpoint Manager composition screen matching the approved design specification.
  */
 @Composable
-public fun BreakpointManagerScreen(
+fun BreakpointManagerScreen(
     viewModel: BreakpointManagerViewModel,
     modifier: Modifier = Modifier
 ) {

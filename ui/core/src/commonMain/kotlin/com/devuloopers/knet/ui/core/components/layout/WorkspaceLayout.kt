@@ -4,7 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 
 @Composable
-public fun WorkspaceLayout(
+fun WorkspaceLayout(
     modifier: Modifier = Modifier,
     toolbar: (@Composable () -> Unit)? = null,
     navigationRail: (@Composable () -> Unit)? = null,

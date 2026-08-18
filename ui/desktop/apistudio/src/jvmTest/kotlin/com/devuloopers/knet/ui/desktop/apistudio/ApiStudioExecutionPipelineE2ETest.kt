@@ -2,20 +2,19 @@ package com.devuloopers.knet.ui.desktop.apistudio
 
 import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor
 import com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult
-import com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType
+import com.devuloopers.knet.domain.clientNetwork.model.OutboundRequestBody
 import com.devuloopers.knet.domain.clientNetwork.usecase.ExecuteClientApiRequestUseCase
 import com.devuloopers.knet.domain.clientNetwork.usecase.FormatResponseBodyUseCase
 import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
-import com.devuloopers.knet.domain.collection.model.HttpMethod
-import com.devuloopers.knet.domain.proxy.model.ProxyEngineState
-import com.devuloopers.knet.domain.proxy.repository.ProxyEngineRepository
-import com.devuloopers.knet.domain.proxy.usecase.ObserveProxyEngineStateUseCase
+import com.devuloopers.knet.traffic.model.http.HttpMethod
+import com.devuloopers.knet.traffic.model.ExchangeTimings
+import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
+import com.devuloopers.knet.application.usecase.breakpoint.DropMatchingBreakpointsUseCase
+import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUseCase
 import com.devuloopers.knet.ui.desktop.apistudio.model.ExecutionState
 import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.ApiStudioViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -36,11 +35,8 @@ class PipelineSpyHttpExecutor : HttpExecutor {
     override suspend fun execute(
         url: String,
         method: HttpMethod,
-        customMethod: String?,
         headers: Map<String, String>,
-        body: String,
-        bodyType: RequestBodyType,
-        formParameters: Map<String, String>,
+        body: OutboundRequestBody,
         auth: ApiRequestAuth,
         proxyPort: Int?
     ): ExecutionResult {
@@ -53,7 +49,7 @@ class PipelineSpyHttpExecutor : HttpExecutor {
             headers = emptyMap(),
             cookies = emptyMap(),
             responseBody = "Pipeline Success",
-            latencyMs = 50,
+            timings = ExchangeTimings(totalMillis = 50),
             responseSizeBytes = 16,
             isSuccess = true,
             errorMessage = null,
@@ -77,7 +73,7 @@ class PipelineSpyHttpExecutor : HttpExecutor {
 class ApiStudioExecutionPipelineE2ETest {
 
     private val testDispatcher = StandardTestDispatcher()
-    private val proxyStateFlow = MutableStateFlow<ProxyEngineState>(ProxyEngineState.Stopped)
+    private val proxyRuntime = TestProxyRuntime()
 
     @BeforeTest
     fun setUp() {
@@ -90,21 +86,8 @@ class ApiStudioExecutionPipelineE2ETest {
     }
 
     private fun createPipelineViewModel(executor: HttpExecutor): ApiStudioViewModel {
-        val proxyRepo = object : ProxyEngineRepository {
-            override fun engineState(): Flow<ProxyEngineState> = proxyStateFlow
-            override suspend fun start(port: Int) {}
-            override suspend fun stop() {}
-        }
-
         val (getLayoutUseCase, saveLayoutUseCase) = createTestLayoutUseCases()
-        val fakeInterceptionRepo = object : com.devuloopers.knet.domain.rules.repository.InterceptionSessionRepository {
-            override val activeInterceptions = kotlinx.coroutines.flow.emptyFlow<List<com.devuloopers.knet.domain.rules.model.InterceptedTransaction>>()
-            override suspend fun forwardRequest(transactionId: String, modifiedRequest: com.devuloopers.knet.domain.clientNetwork.model.HttpRequest) {}
-            override suspend fun forwardResponse(transactionId: String, modifiedResponse: com.devuloopers.knet.domain.clientNetwork.model.HttpResponse) {}
-            override suspend fun dropTransaction(transactionId: String) {}
-            override suspend fun dropMatching(url: String, method: String) {}
-            override suspend fun clearAll() {}
-        }
+        val breakpointControl = FakeTestBreakpointControl()
 
         return ApiStudioViewModel(
             executeScriptedUseCase = com.devuloopers.knet.ui.desktop.apistudio.usecase.ExecuteScriptedApiRequestUseCase(
@@ -112,11 +95,11 @@ class ApiStudioExecutionPipelineE2ETest {
                 formatResponseBodyUseCase = com.devuloopers.knet.domain.clientNetwork.usecase.FormatResponseBodyUseCase(),
                 ioDispatcher = testDispatcher
             ),
-            observeProxyEngineStateUseCase = ObserveProxyEngineStateUseCase(proxyRepo),
+            observeProxyRuntimeStateUseCase = ObserveProxyRuntimeStateUseCase(proxyRuntime),
             getWorkspaceLayoutUseCase = getLayoutUseCase,
             saveWorkspaceLayoutUseCase = saveLayoutUseCase,
             importRequestToStudioUseCase = com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCase(),
-            dropInterceptedTransactionUseCase = com.devuloopers.knet.domain.rules.usecase.DropInterceptedTransactionUseCase(fakeInterceptionRepo),
+            dropMatchingBreakpointsUseCase = DropMatchingBreakpointsUseCase(breakpointControl),
             ioDispatcher = testDispatcher
         )
     }
@@ -127,7 +110,7 @@ class ApiStudioExecutionPipelineE2ETest {
         val viewModel = createPipelineViewModel(spyExecutor)
 
         // 1. Ensure proxy is OFF
-        proxyStateFlow.value = ProxyEngineState.Stopped
+        proxyRuntime.publish(ProxyRuntimeState.Stopped)
 
         // 2. Configure request
         viewModel.updateUrl("https://api.example.com/test")
@@ -150,7 +133,7 @@ class ApiStudioExecutionPipelineE2ETest {
         val viewModel = createPipelineViewModel(spyExecutor)
 
         // 1. Ensure proxy is ON and running on port 8080
-        proxyStateFlow.value = ProxyEngineState.Running(port = 8080)
+        proxyRuntime.publish(runningProxyRuntimeState(port = 8080))
 
         // 2. Configure request
         viewModel.updateUrl("https://api.example.com/secure")

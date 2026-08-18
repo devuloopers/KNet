@@ -23,11 +23,11 @@ import com.devuloopers.knet.ui.core.components.empty.EmptyState
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.components.switch.KNetSwitch
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.ui.desktop.certificate.model.MtlsRule
+import com.devuloopers.knet.application.port.certificate.MtlsRuleSpec
 
 @Composable
 fun MtlsRuleList(
-    rules: List<MtlsRule>,
+    rules: List<MtlsRuleSpec>,
     onRemoveRule: (String) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -53,7 +53,7 @@ fun MtlsRuleList(
 
 @Composable
 private fun MtlsRuleCard(
-    rule: MtlsRule,
+    rule: MtlsRuleSpec,
     onDelete: () -> Unit
 ) {
     val themeColors = KNetTheme.colors

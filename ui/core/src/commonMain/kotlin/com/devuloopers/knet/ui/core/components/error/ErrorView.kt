@@ -15,7 +15,7 @@ import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 @Composable
-public fun ErrorView(
+fun ErrorView(
     message: String,
     modifier: Modifier = Modifier,
     retryAction: (@Composable () -> Unit)? = null
@@ -50,7 +50,7 @@ public fun ErrorView(
  * Domain-agnostic generic error state alias.
  */
 @Composable
-public fun ErrorState(
+fun ErrorState(
     message: String,
     modifier: Modifier = Modifier,
     retryAction: (@Composable () -> Unit)? = null

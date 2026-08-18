@@ -19,35 +19,20 @@ internal class CertificateStore(
 
     /**
      * Reads persisted [EngineClientCertificate] entries.
-     * Tries JSON decoding first; falls back to legacy pipe migration if needed.
      */
     fun loadClientCertificates(): List<EngineClientCertificate> {
         if (file == null || !file.exists()) return emptyList()
         val content = readContentSafe() ?: return emptyList()
         if (content.isBlank()) return emptyList()
 
-        // 1. Try standard JSON decoding
         try {
             return CertificateSerializer.decodeClientCertificates(content)
         } catch (_: Exception) {
-            // Intentionally fall through to legacy migration
-        }
-
-        // 2. Try legacy migration
-        val migrated = CertificateMigration.parseLegacyClientCertificates(content)
-        if (migrated != null && migrated.isNotEmpty()) {
-            KNetLogger.info(LogTags.CERTIFICATE) {
-                "[CertStore] Migrated ${migrated.size} legacy client certificates to JSON"
+            KNetLogger.warn(LogTags.CERTIFICATE) {
+                "[CertStore] Failed to parse client certificates from '${file.absolutePath}'. File remains untouched."
             }
-            persistClientCertificates(migrated)
-            return migrated
+            return emptyList()
         }
-
-        // 3. Both failed - log warning and return empty list WITHOUT overwriting the original file
-        KNetLogger.warn(LogTags.CERTIFICATE) {
-            "[CertStore] Failed to parse client certificates from '${file.absolutePath}'. File remains untouched."
-        }
-        return emptyList()
     }
 
     /**
@@ -67,35 +52,20 @@ internal class CertificateStore(
 
     /**
      * Reads persisted [EngineMtlsRule] entries.
-     * Tries JSON decoding first; falls back to legacy pipe migration if needed.
      */
     fun loadMtlsRules(): List<EngineMtlsRule> {
         if (file == null || !file.exists()) return emptyList()
         val content = readContentSafe() ?: return emptyList()
         if (content.isBlank()) return emptyList()
 
-        // 1. Try standard JSON decoding
         try {
             return CertificateSerializer.decodeMtlsRules(content)
         } catch (_: Exception) {
-            // Intentionally fall through to legacy migration
-        }
-
-        // 2. Try legacy migration
-        val migrated = CertificateMigration.parseLegacyMtlsRules(content)
-        if (migrated != null && migrated.isNotEmpty()) {
-            KNetLogger.info(LogTags.CERTIFICATE) {
-                "[CertStore] Migrated ${migrated.size} legacy mTLS rules to JSON"
+            KNetLogger.warn(LogTags.CERTIFICATE) {
+                "[CertStore] Failed to parse mTLS rules from '${file.absolutePath}'. File remains untouched."
             }
-            persistMtlsRules(migrated)
-            return migrated
+            return emptyList()
         }
-
-        // 3. Both failed - log warning and return empty list WITHOUT overwriting the original file
-        KNetLogger.warn(LogTags.CERTIFICATE) {
-            "[CertStore] Failed to parse mTLS rules from '${file.absolutePath}'. File remains untouched."
-        }
-        return emptyList()
     }
 
     /**
@@ -128,10 +98,11 @@ internal class CertificateStore(
         if (file == null) return
         synchronized(writeLock) {
             try {
-                file.parentFile?.mkdirs()
+                file.parentFile?.let(CertificateFileSecurity::secureDirectory)
                 val tempFile = File.createTempFile("cert_store_", ".tmp", file.parentFile)
                 try {
                     tempFile.writeText(content)
+                    CertificateFileSecurity.secureSecretFile(tempFile)
                     try {
                         Files.move(
                             tempFile.toPath(),
@@ -147,6 +118,7 @@ internal class CertificateStore(
                             StandardCopyOption.REPLACE_EXISTING
                         )
                     }
+                    CertificateFileSecurity.secureSecretFile(file)
                 } finally {
                     if (tempFile.exists()) {
                         tempFile.delete()

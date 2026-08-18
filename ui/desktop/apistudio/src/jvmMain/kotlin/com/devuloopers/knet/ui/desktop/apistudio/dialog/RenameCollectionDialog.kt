@@ -45,7 +45,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * @param onConfirm Callback executed with the new collection name when submitted.
  */
 @Composable
-public fun RenameCollectionDialog(
+fun RenameCollectionDialog(
     currentName: String,
     onDismiss: () -> Unit,
     onConfirm: (newName: String) -> Unit
