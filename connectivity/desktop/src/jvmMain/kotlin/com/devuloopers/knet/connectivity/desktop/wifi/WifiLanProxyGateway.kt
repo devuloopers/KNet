@@ -1,6 +1,5 @@
 package com.devuloopers.knet.connectivity.desktop.wifi
 
-import com.devuloopers.knet.connectivity.model.WifiClientId
 import com.devuloopers.knet.connectivity.model.WifiSharingMetrics
 import com.devuloopers.knet.traffic.model.ClientIdentity
 import com.devuloopers.knet.traffic.model.IngressAttributionRegistration
@@ -24,27 +23,26 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 
 /**
- * Exact-interface standard HTTP proxy gateway for approved stock phones.
+ * Exact-interface standard HTTP proxy gateway for any reachable local-network client.
  *
- * It performs admission and stream bridging only. HTTP parsing, TLS interception, capture, breakpoints,
- * persistence, and protocol inspection remain owned by the loopback proxy and its existing boundaries.
+ * The adapter enforces only bounded total and per-source connection admission. HTTP parsing, TLS
+ * interception, capture, breakpoints, persistence, and protocol inspection remain owned by the unchanged
+ * loopback proxy.
  */
 internal class WifiLanProxyGateway(
     private val bindHost: String,
     private val bindPort: Int,
     private val targetProxy: () -> InetSocketAddress?,
-    private val approvals: WifiClientApprovalRegistry,
     private val attributions: IngressAttributionRegistration,
     private val maximumConnections: Int = DEFAULT_MAXIMUM_CONNECTIONS,
-    private val maximumConnectionsPerClient: Int = DEFAULT_MAXIMUM_CONNECTIONS_PER_CLIENT,
+    private val maximumConnectionsPerSource: Int = DEFAULT_MAXIMUM_CONNECTIONS_PER_SOURCE,
     private val nowMillis: () -> Long,
     private val onMetricsChanged: (WifiSharingMetrics) -> Unit = {},
 ) : AutoCloseable {
     private val running = AtomicBoolean(false)
     private val closed = AtomicBoolean(false)
     private val globalAdmission = Semaphore(maximumConnections)
-    private val clientAdmission = ConcurrentHashMap<WifiClientId, Semaphore>()
-    private val activeByClient = ConcurrentHashMap<WifiClientId, MutableSet<Socket>>()
+    private val sourceAdmission = ConcurrentHashMap<String, Semaphore>()
     private val activeSockets: MutableSet<Socket> = ConcurrentHashMap.newKeySet()
     private val activeConnections = AtomicLong(0L)
     private val acceptedConnections = AtomicLong(0L)
@@ -59,7 +57,7 @@ internal class WifiLanProxyGateway(
         require(!address.isLoopbackAddress) { "Wi-Fi gateway requires a non-loopback address." }
         require(bindPort in 1..65_535)
         require(maximumConnections in 1..MAXIMUM_CONFIGURABLE_CONNECTIONS)
-        require(maximumConnectionsPerClient in 1..maximumConnections)
+        require(maximumConnectionsPerSource in 1..maximumConnections)
     }
 
     fun start() {
@@ -84,10 +82,6 @@ internal class WifiLanProxyGateway(
         rejectedConnections = rejectedConnections.get(),
     )
 
-    fun revoke(clientId: WifiClientId) {
-        activeByClient.remove(clientId)?.toList()?.forEach { socket -> runCatching(socket::close) }
-    }
-
     private fun acceptLoop(server: ServerSocket) {
         while (running.get()) {
             val downstream = try {
@@ -104,17 +98,11 @@ internal class WifiLanProxyGateway(
     }
 
     private suspend fun admitAndBridge(downstream: Socket) {
-        val sourceAddress = downstream.inetAddress.hostAddress
-        val approved = approvals.approvedFor(sourceAddress)
-        if (approved == null) {
-            globalAdmission.release()
-            reject(downstream, APPROVAL_REQUIRED)
-            return
+        val sourceAddress = downstream.inetAddress.hostAddress.substringBefore('%')
+        val perSource = sourceAdmission.computeIfAbsent(sourceAddress) {
+            Semaphore(maximumConnectionsPerSource)
         }
-        val perClient = clientAdmission.computeIfAbsent(approved.id) {
-            Semaphore(maximumConnectionsPerClient)
-        }
-        if (!perClient.tryAcquire()) {
+        if (!perSource.tryAcquire()) {
             globalAdmission.release()
             reject(downstream, TOO_MANY_CONNECTIONS)
             return
@@ -122,29 +110,28 @@ internal class WifiLanProxyGateway(
 
         activeConnections.incrementAndGet()
         acceptedConnections.incrementAndGet()
-        track(approved.id, downstream)
+        activeSockets.add(downstream)
         publishMetrics()
         try {
-            bridge(downstream, approved.id)
+            bridge(downstream, sourceAddress)
         } finally {
-            untrack(approved.id, downstream)
+            activeSockets.remove(downstream)
             runCatching(downstream::close)
             activeConnections.updateAndGet { current -> (current - 1L).coerceAtLeast(0L) }
-            perClient.release()
-            if (perClient.availablePermits() == maximumConnectionsPerClient) {
-                clientAdmission.remove(approved.id, perClient)
+            perSource.release()
+            if (perSource.availablePermits() == maximumConnectionsPerSource) {
+                sourceAdmission.remove(sourceAddress, perSource)
             }
             globalAdmission.release()
             publishMetrics()
         }
     }
 
-    private suspend fun bridge(downstream: Socket, clientId: WifiClientId) {
+    private suspend fun bridge(downstream: Socket, sourceAddress: String) {
         val target = targetProxy()?.takeIf { it.address?.isLoopbackAddress == true }
             ?: return reject(downstream, INTERNAL_PROXY_UNAVAILABLE)
         Socket().use { upstream ->
             activeSockets.add(upstream)
-            track(clientId, upstream)
             try {
                 upstream.reuseAddress = false
                 upstream.bind(InetSocketAddress(LOOPBACK_HOST, 0))
@@ -152,21 +139,18 @@ internal class WifiLanProxyGateway(
                 val registered = attributions.register(
                     downstream = TrafficEndpoint(local.address.hostAddress, local.port),
                     context = IngressContext(
-                        kind = IngressKind.WifiApprovedDevice,
-                        clientIdentity = ClientIdentity(clientId.value),
+                        kind = IngressKind.WifiLanClient,
+                        clientIdentity = ClientIdentity(sourceAddress),
                     ),
                     expiresAtEpochMillis = nowMillis() + ATTRIBUTION_LIFETIME_MILLIS,
                 )
                 if (!registered) return reject(downstream, INTERNAL_PROXY_UNAVAILABLE)
                 upstream.connect(target, CONNECT_TIMEOUT_MILLIS)
-                val stillApproved = approvals.approvedFor(downstream.inetAddress.hostAddress)
-                if (stillApproved?.id != clientId) return reject(downstream, APPROVAL_REQUIRED)
                 coroutineScope {
                     launch { copy(downstream, upstream) }
                     launch { copy(upstream, downstream) }
                 }
             } finally {
-                untrack(clientId, upstream)
                 activeSockets.remove(upstream)
             }
         }
@@ -178,21 +162,6 @@ internal class WifiLanProxyGateway(
             runCatching(destination::shutdownOutput)
         } catch (_: Exception) {
             runCatching(destination::close)
-        }
-    }
-
-    private fun track(clientId: WifiClientId, socket: Socket) {
-        activeSockets.add(socket)
-        activeByClient.compute(clientId) { _, current ->
-            (current ?: ConcurrentHashMap.newKeySet()).also { it.add(socket) }
-        }
-    }
-
-    private fun untrack(clientId: WifiClientId, socket: Socket) {
-        activeSockets.remove(socket)
-        activeByClient.computeIfPresent(clientId) { _, current ->
-            current.remove(socket)
-            current.takeIf { it.isNotEmpty() }
         }
     }
 
@@ -208,7 +177,7 @@ internal class WifiLanProxyGateway(
         runCatching(socket::close)
     }
 
-    /** Drains only the bounded initial proxy header so a normal denial is not converted into TCP reset. */
+    /** Drains only the bounded initial proxy header so normal capacity rejection is not converted to TCP reset. */
     private fun drainInitialHeader(socket: Socket) {
         runCatching {
             socket.soTimeout = REJECTION_DRAIN_TIMEOUT_MILLIS
@@ -237,8 +206,7 @@ internal class WifiLanProxyGateway(
         listener = null
         activeSockets.toList().forEach { socket -> runCatching(socket::close) }
         activeSockets.clear()
-        activeByClient.clear()
-        clientAdmission.clear()
+        sourceAdmission.clear()
         scope.cancel()
     }
 
@@ -252,10 +220,8 @@ internal class WifiLanProxyGateway(
         const val CONNECT_TIMEOUT_MILLIS: Int = 5_000
         const val ATTRIBUTION_LIFETIME_MILLIS: Long = 10_000L
         const val DEFAULT_MAXIMUM_CONNECTIONS: Int = 256
-        const val DEFAULT_MAXIMUM_CONNECTIONS_PER_CLIENT: Int = 64
+        const val DEFAULT_MAXIMUM_CONNECTIONS_PER_SOURCE: Int = 64
         const val MAXIMUM_CONFIGURABLE_CONNECTIONS: Int = 1_024
-        const val APPROVAL_REQUIRED: String =
-            "HTTP/1.1 403 Forbidden\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"
         const val TOO_MANY_CONNECTIONS: String =
             "HTTP/1.1 429 Too Many Requests\r\nConnection: close\r\nContent-Length: 0\r\n\r\n"
         const val SERVICE_UNAVAILABLE: String =

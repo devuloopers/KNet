@@ -13,9 +13,16 @@ import com.devuloopers.knet.application.usecase.traffic.PrepareTrafficRequestUse
 import com.devuloopers.knet.application.usecase.traffic.PreparedTrafficRequest
 import com.devuloopers.knet.application.usecase.traffic.QueryTrafficPageUseCase
 import com.devuloopers.knet.application.usecase.traffic.TrafficBodyPreview
+import com.devuloopers.knet.application.usecase.traffic.PauseTrafficCaptureUseCase
+import com.devuloopers.knet.application.usecase.traffic.ResumeTrafficCaptureUseCase
+import com.devuloopers.knet.application.usecase.traffic.ObserveTrafficCaptureStateUseCase
+import com.devuloopers.knet.application.usecase.breakpoint.ObservePendingBreakpointsUseCase
+import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
 import com.devuloopers.knet.application.port.inspection.ObserveInspectionAnnotationsUseCase
 import com.devuloopers.knet.application.port.traffic.TrafficPageQuery
 import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
+import com.devuloopers.knet.application.port.proxy.ProxyStopReason
+import com.devuloopers.knet.application.port.traffic.CaptureSessionState
 import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUseCase
 import com.devuloopers.knet.application.usecase.proxy.StartLoopbackProxyUseCase
 import com.devuloopers.knet.application.usecase.proxy.StopProxyRuntimeUseCase
@@ -35,7 +42,6 @@ import kotlinx.coroutines.flow.*
 import kotlin.time.Duration.Companion.milliseconds
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.rules.usecase.ObserveRulesUseCase
-import com.devuloopers.knet.domain.rules.usecase.SaveRuleUseCase
 import kotlin.uuid.Uuid
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.http.HttpMethod as CanonicalHttpMethod
@@ -56,17 +62,22 @@ class TrafficViewModel(
     private val startLoopbackProxyUseCase: StartLoopbackProxyUseCase,
     private val stopProxyRuntimeUseCase: StopProxyRuntimeUseCase,
     observeProxyRuntimeStateUseCase: ObserveProxyRuntimeStateUseCase,
+    private val pauseTrafficCaptureUseCase: PauseTrafficCaptureUseCase,
+    private val resumeTrafficCaptureUseCase: ResumeTrafficCaptureUseCase,
+    observeTrafficCaptureStateUseCase: ObserveTrafficCaptureStateUseCase,
     private val loadTrafficExchangeDetailsUseCase: LoadTrafficExchangeDetailsUseCase,
     observeLocalIpUseCase: ObserveLocalIpUseCase,
     private val getWorkspaceLayoutUseCase: GetWorkspaceLayoutUseCase,
     private val prepareTrafficRequestUseCase: PrepareTrafficRequestUseCase,
     private val observeInspectionAnnotationsUseCase: ObserveInspectionAnnotationsUseCase,
     observeRulesUseCase: ObserveRulesUseCase,
-    private val saveRuleUseCase: SaveRuleUseCase
+    observePendingBreakpointsUseCase: ObservePendingBreakpointsUseCase,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(createInitialState())
     val uiState: StateFlow<TrafficState> = _uiState.asStateFlow()
+    private val proxyRuntimeStates = observeProxyRuntimeStateUseCase.execute()
+    private val trafficCaptureStates = observeTrafficCaptureStateUseCase.execute()
 
     private val preparedStateCache = object : LinkedHashMap<String, InspectorPreparedState>(64, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, InspectorPreparedState>?): Boolean {
@@ -74,9 +85,22 @@ class TrafficViewModel(
         }
     }
 
-    private val _isCapturing = MutableStateFlow(false)
+    private val captureControlIntent = MutableStateFlow(
+        CaptureControlIntent(
+            shouldCapture = trafficCaptureStates.value is CaptureSessionState.Capturing,
+            revision = 0L,
+        ),
+    )
     private val pageLoadMutex = Mutex()
     private var filterRefreshJob: Job? = null
+    private var durableTransactions: List<TrafficRowUiState> = emptyList()
+    private var pendingBreakpoints: List<PendingBreakpoint> = emptyList()
+    private val interceptionHistory = object :
+        LinkedHashMap<String, TrafficInterceptionUiState.Matched>(64, 0.75f, true) {
+        override fun removeEldestEntry(
+            eldest: MutableMap.MutableEntry<String, TrafficInterceptionUiState.Matched>?,
+        ): Boolean = size > MAX_TRAFFIC_ROWS
+    }
 
     /**
      * Asynchronously prepares a canonical captured request under a bounded whole-body budget and
@@ -127,33 +151,45 @@ class TrafficViewModel(
             }
             .launchIn(viewModelScope)
 
-        // Reactive Dynamic Proxy Port Re-binding via flatMapLatest
-        viewModelScope.launch {
-            _isCapturing.flatMapLatest { isCapturing ->
-                if (isCapturing) {
-                    val portFlow = getWorkspaceLayoutUseCase.execute()
-                        .map { it.proxyPort }
-                        .distinctUntilChanged()
-
-                    flow {
-                        var isFirst = true
-                        portFlow.collect { port ->
-                            if (!isFirst) {
-                                delay(500.milliseconds)
-                            }
-                            isFirst = false
-                            emit(port)
-                        }
-                    }
-                } else {
-                    emptyFlow()
-                }
-            }.collect { port ->
-                if (_uiState.value.engineState !is ProxyRuntimeState.Stopped) {
-                    stopProxyRuntimeUseCase.execute()
-                }
-                startLoopbackProxyUseCase.execute(port)
+        // Pending breakpoint candidates are a bounded live projection, not a second traffic
+        // repository. They decorate or temporarily supply the canonical exchange row by the same
+        // ExchangeId while the network is suspended, and remain independent from body storage.
+        observePendingBreakpointsUseCase.execute()
+            .onEach { events ->
+                pendingBreakpoints = events
+                events.forEach(::rememberInterception)
+                publishTrafficProjection()
             }
+            .launchIn(viewModelScope)
+
+        // Serialize desired capture state and dynamic port changes without cancelling lifecycle work.
+        viewModelScope.launch {
+            val proxyPorts = flow {
+                var isFirst = true
+                getWorkspaceLayoutUseCase.execute()
+                    .map { settings -> settings.proxyPort }
+                    .distinctUntilChanged()
+                    .collect { port ->
+                        if (!isFirst) delay(500.milliseconds)
+                        isFirst = false
+                        emit(port)
+                    }
+            }
+            combine(captureControlIntent, proxyPorts) { intent, port ->
+                CaptureCommand(
+                    shouldCapture = intent.shouldCapture,
+                    port = port,
+                    revision = intent.revision,
+                )
+            }
+                .distinctUntilChanged()
+                .collect { command ->
+                    if (command.shouldCapture) {
+                        startOrResumeCapture(command.port)
+                    } else {
+                        pauseTrafficCaptureUseCase.execute()
+                    }
+                }
         }
 
         // Reactive Transaction Payload Preparation via flatMapLatest
@@ -241,13 +277,8 @@ class TrafficViewModel(
 
         // 1. Observe Proxy Engine State
         viewModelScope.launch {
-            observeProxyRuntimeStateUseCase.execute().collect { runtimeState ->
+            proxyRuntimeStates.collect { runtimeState ->
                 _uiState.update { current ->
-                    val capState = if (runtimeState is ProxyRuntimeState.Running) {
-                        CaptureState.CAPTURING
-                    } else {
-                        CaptureState.STOPPED
-                    }
                     val errorMessage = when (runtimeState) {
                         is ProxyRuntimeState.Failed -> runtimeState.code
                         is ProxyRuntimeState.Running,
@@ -256,14 +287,30 @@ class TrafficViewModel(
                     }
                     current.copy(
                         engineState = runtimeState,
-                        captureState = capState,
                         engineErrorMessage = errorMessage
                     )
                 }
             }
         }
 
-        // 2. Observe Reactive Host Local IP Address
+        // 2. Observe capture attachment independently from the persistent forwarding listener.
+        viewModelScope.launch {
+            trafficCaptureStates.collect { captureState ->
+                _uiState.update { current ->
+                    current.copy(
+                        captureState = when (captureState) {
+                            CaptureSessionState.Inactive -> CaptureState.STOPPED
+                            CaptureSessionState.Starting -> CaptureState.STARTING
+                            is CaptureSessionState.Capturing -> CaptureState.CAPTURING
+                            CaptureSessionState.Paused -> CaptureState.PAUSED
+                            is CaptureSessionState.Failed -> CaptureState.STOPPED
+                        }
+                    )
+                }
+            }
+        }
+
+        // 3. Observe Reactive Host Local IP Address
         viewModelScope.launch {
             observeLocalIpUseCase.execute().collect { ip ->
                 _uiState.update { current ->
@@ -272,7 +319,7 @@ class TrafficViewModel(
             }
         }
 
-        // 3. Observe only a compact session ID and store generations; rows are fetched as bounded keyset pages.
+        // 4. Observe only a compact session ID and store generations; rows are fetched as bounded keyset pages.
         viewModelScope.launch {
             observeLatestTrafficSessionUseCase.execute()
                 .distinctUntilChanged()
@@ -301,13 +348,14 @@ class TrafficViewModel(
     fun processIntent(intent: TrafficIntent) {
         when (intent) {
             is TrafficIntent.StartCapture -> {
-                _isCapturing.value = true
+                captureControlIntent.update { current ->
+                    CaptureControlIntent(shouldCapture = true, revision = current.revision + 1L)
+                }
             }
 
             is TrafficIntent.StopCapture -> {
-                _isCapturing.value = false
-                viewModelScope.launch {
-                    stopProxyRuntimeUseCase.execute()
+                captureControlIntent.update { current ->
+                    CaptureControlIntent(shouldCapture = false, revision = current.revision + 1L)
                 }
             }
 
@@ -317,6 +365,8 @@ class TrafficViewModel(
                     synchronized(preparedStateCache) {
                         preparedStateCache.clear()
                     }
+                    durableTransactions = emptyList()
+                    interceptionHistory.clear()
                     _uiState.update {
                         it.copy(
                             transactions = emptyList(),
@@ -325,6 +375,7 @@ class TrafficViewModel(
                             preparedState = InspectorPreparedState(),
                         )
                     }
+                    publishTrafficProjection()
                 }
             }
 
@@ -341,70 +392,26 @@ class TrafficViewModel(
             }
 
             is TrafficIntent.Search -> {
-                _uiState.update { current ->
-                    val filtered = applyFilters(
-                        transactions = current.transactions,
-                        query = intent.query,
-                        protocol = current.selectedProtocolFilter,
-                        method = current.selectedMethodFilter,
-                        status = current.selectedStatusFilter
-                    )
-                    current.copy(
-                        searchQuery = intent.query,
-                        filteredTransactions = filtered
-                    )
-                }
+                _uiState.update { current -> current.copy(searchQuery = intent.query) }
+                publishTrafficProjection()
                 scheduleFilteredPageRefresh()
             }
 
             is TrafficIntent.FilterByProtocol -> {
-                _uiState.update { current ->
-                    val filtered = applyFilters(
-                        transactions = current.transactions,
-                        query = current.searchQuery,
-                        protocol = intent.protocol,
-                        method = current.selectedMethodFilter,
-                        status = current.selectedStatusFilter
-                    )
-                    current.copy(
-                        selectedProtocolFilter = intent.protocol,
-                        filteredTransactions = filtered
-                    )
-                }
+                _uiState.update { current -> current.copy(selectedProtocolFilter = intent.protocol) }
+                publishTrafficProjection()
                 scheduleFilteredPageRefresh()
             }
 
             is TrafficIntent.FilterByMethod -> {
-                _uiState.update { current ->
-                    val filtered = applyFilters(
-                        transactions = current.transactions,
-                        query = current.searchQuery,
-                        protocol = current.selectedProtocolFilter,
-                        method = intent.method,
-                        status = current.selectedStatusFilter
-                    )
-                    current.copy(
-                        selectedMethodFilter = intent.method,
-                        filteredTransactions = filtered
-                    )
-                }
+                _uiState.update { current -> current.copy(selectedMethodFilter = intent.method) }
+                publishTrafficProjection()
                 scheduleFilteredPageRefresh()
             }
 
             is TrafficIntent.FilterByStatus -> {
-                _uiState.update { current ->
-                    val filtered = applyFilters(
-                        transactions = current.transactions,
-                        query = current.searchQuery,
-                        protocol = current.selectedProtocolFilter,
-                        method = current.selectedMethodFilter,
-                        status = intent.status
-                    )
-                    current.copy(
-                        selectedStatusFilter = intent.status,
-                        filteredTransactions = filtered
-                    )
-                }
+                _uiState.update { current -> current.copy(selectedStatusFilter = intent.status) }
+                publishTrafficProjection()
                 scheduleFilteredPageRefresh()
             }
 
@@ -436,11 +443,99 @@ class TrafficViewModel(
         }
     }
 
+    /** Reconciles capture intent while preserving the listener unless its configured port changed. */
+    private suspend fun startOrResumeCapture(port: Int) {
+        val runtimeState = proxyRuntimeStates.value
+        if (runtimeState is ProxyRuntimeState.Running) {
+            val activePort = runtimeState.handle.endpoints.endpoints.singleOrNull()?.port
+            if (activePort == port) {
+                resumeTrafficCaptureUseCase.execute()
+                return
+            }
+            stopProxyRuntimeUseCase.execute(ProxyStopReason.CONFIGURATION_CHANGED)
+        }
+        startLoopbackProxyUseCase.execute(port)
+    }
+
     private fun scheduleFilteredPageRefresh() {
         filterRefreshJob?.cancel()
         filterRefreshJob = viewModelScope.launch {
             delay(150.milliseconds)
             loadTrafficPage(reset = true)
+        }
+    }
+
+    /** Retains a bounded process-session marker after an active pause has been resolved. */
+    private fun rememberInterception(event: PendingBreakpoint) {
+        val exchangeId = event.candidate.exchangeId.value
+        val previous = interceptionHistory[exchangeId]
+        interceptionHistory[exchangeId] = TrafficInterceptionUiState.Matched(
+            ruleIds = previous?.ruleIds.orEmpty() + event.ruleId,
+            phases = previous?.phases.orEmpty() + event.candidate.phase,
+        )
+    }
+
+    /**
+     * Joins durable page metadata with the bounded pending-breakpoint projection by ExchangeId.
+     *
+     * Pending rows win only while suspended, are always visible despite ordinary traffic filters,
+     * and never own body bytes. Once the canonical row arrives it replaces the provisional row
+     * without changing identity, ordering, or sequence numbering.
+     */
+    private fun publishTrafficProjection() {
+        val pendingByExchange = pendingBreakpoints.associateBy { event -> event.candidate.exchangeId.value }
+        val durableByExchange = durableTransactions.associateBy(TrafficRowUiState::transactionId)
+        val projectedDurable = durableTransactions.map { row ->
+            val historical = interceptionHistory[row.transactionId]
+            if (historical == null) row else row.copy(interception = historical)
+        }
+        val pendingRows = pendingByExchange.map { (exchangeId, event) ->
+            val paused = TrafficInterceptionUiState.Paused(
+                pendingId = event.id,
+                ruleId = event.ruleId,
+                phase = event.candidate.phase,
+            )
+            durableByExchange[exchangeId]?.copy(
+                status = 0,
+                statusText = "In Progress",
+                formattedTime = "-",
+                interception = paused,
+            ) ?: event.toTrafficRowUiState()
+        }
+        val pendingIds = pendingByExchange.keys
+        val sortedRows = (pendingRows + projectedDurable.filterNot { row -> row.transactionId in pendingIds })
+            .sortedWith(
+                compareByDescending<TrafficRowUiState> { row -> row.timestamp }
+                    .thenByDescending(TrafficRowUiState::transactionId),
+            )
+            .take(MAX_TRAFFIC_ROWS)
+        val rows = sortedRows.mapIndexed { index, row ->
+            row.copy(sequenceNumber = sortedRows.size - index)
+        }
+        val current = _uiState.value
+        val ordinarilyFiltered = applyFilters(
+            transactions = rows,
+            query = current.searchQuery,
+            protocol = current.selectedProtocolFilter,
+            method = current.selectedMethodFilter,
+            status = current.selectedStatusFilter,
+        )
+        val activeRows = rows.filter { row -> row.interception is TrafficInterceptionUiState.Paused }
+        val visibleRows = (activeRows + ordinarilyFiltered)
+            .distinctBy(TrafficRowUiState::transactionId)
+            .sortedWith(
+                compareByDescending<TrafficRowUiState> { row -> row.timestamp }
+                    .thenByDescending(TrafficRowUiState::transactionId),
+            )
+        val selectedId = current.selectedTransactionId
+            ?.takeIf { id -> rows.any { row -> row.transactionId == id } }
+            ?: rows.firstOrNull()?.transactionId
+        _uiState.update { state ->
+            state.copy(
+                transactions = rows,
+                filteredTransactions = visibleRows,
+                selectedTransactionId = selectedId,
+            )
         }
     }
 
@@ -464,11 +559,9 @@ class TrafficViewModel(
                 )
                 val latestState = _uiState.value
                 if (latestState.sessionId != sessionId) return
-                val refreshedRows = page.items.mapIndexed { index, snapshot ->
-                    snapshot.toTrafficRowUiState(index + 1)
-                }
+                val refreshedRows = page.items.map { snapshot -> snapshot.toTrafficRowUiState() }
                 val refreshedIds = refreshedRows.asSequence().map { it.transactionId }.toHashSet()
-                val rows = (refreshedRows + latestState.transactions.filterNot {
+                val sortedRows = (refreshedRows + durableTransactions.filterNot {
                     it.transactionId in refreshedIds
                 })
                     .sortedWith(
@@ -476,30 +569,19 @@ class TrafficViewModel(
                             .thenByDescending { it.transactionId },
                     )
                     .take(MAX_TRAFFIC_ROWS)
-                    .mapIndexed { index, row -> row.copy(id = index + 1) }
                 val filtersStillMatch = latestState.searchQuery == before.searchQuery &&
                     latestState.selectedProtocolFilter == before.selectedProtocolFilter &&
                     latestState.selectedMethodFilter == before.selectedMethodFilter &&
                     latestState.selectedStatusFilter == before.selectedStatusFilter
                 if (!filtersStillMatch) return
-                val selectedId = latestState.selectedTransactionId
-                    ?.takeIf { id -> rows.any { row -> row.transactionId == id } }
-                    ?: rows.firstOrNull()?.transactionId
+                durableTransactions = sortedRows
                 _uiState.update { current ->
                     current.copy(
-                        transactions = rows,
-                        filteredTransactions = applyFilters(
-                            rows,
-                            current.searchQuery,
-                            current.selectedProtocolFilter,
-                            current.selectedMethodFilter,
-                            current.selectedStatusFilter,
-                        ),
-                        nextPageCursor = page.nextCursor.takeIf { rows.size < MAX_TRAFFIC_ROWS },
+                        nextPageCursor = page.nextCursor.takeIf { sortedRows.size < MAX_TRAFFIC_ROWS },
                         pageGeneration = maxOf(current.pageGeneration, page.generation),
-                        selectedTransactionId = selectedId,
                     )
                 }
+                publishTrafficProjection()
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -595,32 +677,6 @@ class TrafficViewModel(
         _uiState.update { it.copy(isBreakpointDialogVisible = false, prefilledBreakpointRule = null) }
     }
 
-    /**
-     * Saves a breakpoint rule configured via the Traffic Inspector pre-populated dialog.
-     */
-    fun saveBreakpointRule(
-        urlPattern: String,
-        method: CanonicalHttpMethod?,
-        phaseType: com.devuloopers.knet.domain.rules.model.BreakpointPhase,
-        enabled: Boolean,
-        protocolCriteria: com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria
-    ) {
-        val editingId = _uiState.value.prefilledBreakpointRule?.id ?: Uuid.random().toString()
-        val rule = BreakpointRule(
-            id = editingId,
-            name = urlPattern,
-            phase = phaseType,
-            urlPattern = urlPattern,
-            method = method,
-            enabled = enabled,
-            protocolCriteria = protocolCriteria
-        )
-        viewModelScope.launch {
-            saveRuleUseCase.execute(rule)
-            closeBreakpointDialog()
-        }
-    }
-
     private fun createInitialState(): TrafficState {
         return TrafficState(
             transactions = emptyList(),
@@ -642,6 +698,19 @@ class TrafficViewModel(
         private const val TRAFFIC_PAGE_SIZE = 200
         private const val MAX_TRAFFIC_ROWS = 1_000
     }
+
+    /** Conflatable desired capture command derived from settings and toolbar state. */
+    private data class CaptureCommand(
+        val shouldCapture: Boolean,
+        val port: Int,
+        val revision: Long,
+    )
+
+    /** User capture intent with a revision so retries remain observable without transient states. */
+    private data class CaptureControlIntent(
+        val shouldCapture: Boolean,
+        val revision: Long,
+    )
 }
 
 private fun MethodFilter.toCanonicalMethods(): Set<CanonicalHttpMethod> = when (this) {

@@ -24,10 +24,11 @@ As of 2026-08-18:
 - HTTP/1 requests/responses stream bidirectionally with bounded capture and application-owned breakpoint pauses;
 - GraphQL and SSE run asynchronously after capture and persist generic versioned annotations;
 - manual/PAC/Apple/ADB provider foundations, versioned network state, a loopback setup listener, pairing,
-  encrypted device storage, and loopback authenticated ingress are implemented outside the proxy core;
-  the stock-phone Wi-Fi backend now adds opt-in exact-interface reachability, source approval, setup
-  delivery, and canonical ingress attribution without changing the proxy; its desktop UI, Apple profile
-  conformance, and real-device gates remain tracked in `docs/wifi_connectivity_implementation_plan.md`;
+  Room-backed companion identity, and loopback authenticated ingress are implemented outside the proxy core;
+  the stock-phone Wi-Fi path now adds automatically managed exact-interface reachability, open local-client
+  admission, stable setup delivery, canonical ingress attribution, and an application-boundary-only desktop
+  Connect Device UI without changing the proxy; real-device gates remain tracked in
+  `docs/wifi_connectivity_implementation_plan.md`;
 - the standard Phase 18 architecture/test/package gate is implemented; extended-duration soak is a parameterized release operation;
 - Mobile Companion apps, relay, VPN, HTTP/2, HTTP/3, WebSocket transport, and gRPC remain additive and explicitly `UNAVAILABLE` until their own implementations pass conformance gates.
 
@@ -63,9 +64,8 @@ This makes PAC, manual configuration, Apple profiles, ADB reverse, a mobile comp
 
 ### Near-term module decision
 
-Do not rename or split the entire repository. The foundation migration added four architectural
-modules, then one additional leaf module only after the concrete duplicate-model audit proved it was
-needed:
+Do not rename or split the entire repository. The foundation migration adds focused architectural
+modules only when concrete ownership requires them:
 
 1. `:core:traffic` — stable, portable traffic values and capture contracts.
 2. `:core:connectivity` — portable setup/lifecycle/capability values and small mechanism contracts.
@@ -73,6 +73,8 @@ needed:
 4. `:connectivity:desktop` — current desktop PAC/manual/profile/ADB implementations, isolated by package.
 5. `:core:scripting` — the small portable scripting vocabulary shared by collections, application
    ports, editors, and script engines.
+6. `:core:identity` — dependency-free registered-device identity shared by connectivity and pairing
+   without coupling those sibling modules.
 
 Future modules such as `:connectivity:companion`, `:connectivity:relay`, or an HTTP/3 transport are added only when implementation work begins and their dependencies justify isolation. Current modules keep their names during the behavioral migration; directory/module renames are optional cleanup after dependency rules are green.
 
@@ -118,6 +120,8 @@ Future modules such as `:connectivity:companion`, `:connectivity:relay`, or an H
                     |                          |
              :core:domain              :core:traffic
              :core:connectivity         :core:pairing
+                       \                 /
+                        :core:identity
              :core:serialization        :core:scripting
                              small pure values/policy
 
@@ -149,7 +153,8 @@ There are no reverse arrows from core/application to Netty, Room, Ktor, Graal, C
 | `:application` | JVM desktop session/proxy/connectivity orchestration, command/query use cases, lifecycle state machines, application ports, typed failures | Netty, Room, files, Compose, Ktor, Graal, OS commands, mobile-companion workflows |
 | `:core:traffic` | connection/exchange/message IDs, header/head/timing/TLS/body-reference models, capture events/admission contract | UI state, Room entities, filesystem paths, Netty buffers |
 | `:core:connectivity` | endpoint/setup descriptors, capabilities, availability/lifecycle/health, setup and managed-mechanism contracts | proxy handlers, UI, network-interface discovery, OS commands |
-| `:core:pairing` | pairing invitation/challenge/session/device identity values and cryptographic protocol rules | portal routes, keychain implementation, tunnel implementation, UI |
+| `:core:identity` | stable registered-device ID, display identity, enrollment kind, last-seen and revocation state | pairing credentials, network addresses, persistence, UI |
+| `:core:pairing` | pairing invitation/challenge/session values, trusted-device projection, and cryptographic protocol rules | portal routes, keychain implementation, tunnel implementation, UI |
 | `:core:scripting` | script language/phase, reusable snippets, and immutable assertion results | runtime engines, mutable host objects, persistence, UI state |
 | `:core:domain` | remaining product policies and stable repository/use-case values for collections, rules, settings, exports | UI models/colors, Java URI, logging side effects, engine types |
 | `:engine:proxy` | authenticated listeners, HTTP transport negotiation, MITM, downstream/upstream state, streaming forwarding, timeouts/watermarks, capture/breakpoint ports | persistence, portal, connectivity, semantic parsers, UI, scripts, Room/files |
@@ -220,6 +225,7 @@ These evidence-backed modules are now included:
 include(":application")
 include(":core:traffic")
 include(":core:connectivity")
+include(":core:identity")
 include(":connectivity:desktop")
 include(":core:scripting")
 ```
@@ -997,6 +1003,16 @@ compiled immutable rule snapshot
 
 `BreakpointGate` is not a UI callback. The application service exposes pending breakpoint records to any authorized presentation and resolves decisions. The proxy owns the Netty message while paused with exactly one documented reference, a timeout, disconnect cancellation, and a maximum paused-byte/connection budget.
 
+Canonical exchange admission precedes the optional forwarding gate. The connection capture side output publishes request metadata and returns a one-shot exchange handle; a matching breakpoint then suspends forwarding, and the proxy handler consumes that same handle after resume. It never starts a second capture. Desktop Traffic joins the bounded pending record to the capture row by `ExchangeId`, temporarily forces `In Progress`, and applies a typed pause marker without changing `HttpRequestSnapshot` or `HttpResponseSnapshot`. The shell reveals the drawer only after that paused row projection exists, preserving deterministic row-first/drawer-second presentation even while Room publication converges through its asynchronous writer.
+
+HTTP/1 streaming versus bounded full-message aggregation is a per-connection pipeline decision. Desktop
+runtime composition observes the reduced request/response requirements exposed by `BreakpointGate`. When
+that pipeline shape changes because rules are added, restored, enabled, disabled, or globally toggled, it
+closes existing child connections while leaving the proxy listener and canonical capture session running.
+Clients reconnect through one internally consistent pipeline; ordinary traffic returns to streaming when no
+enabled breakpoint requires aggregation. The proxy engine exposes only the neutral child-connection refresh
+operation and does not import rule persistence, application coordination, or UI state.
+
 Mutation supports explicit modes:
 
 - headers-only streaming mutation;
@@ -1004,7 +1020,14 @@ Mutation supports explicit modes:
 - streaming transformation only through a separately approved bounded transformer API;
 - reject edit when encoding/framing/body size cannot be handled safely.
 
-Semantic GraphQL/gRPC/etc. inspection does not belong in breakpoint matching unless a rule explicitly consumes a persisted annotation asynchronously. The transport never imports inspector implementations.
+Post-capture semantic annotation never participates in forwarding. A rule that explicitly targets a
+protocol instead uses the separate application `BreakpointProtocolExtension` seam: the coordinator performs
+transport filtering first, invokes only the selected registered extension against its bounded candidate,
+and evaluates a compiled extension-owned predicate. Request facts needed at response phase are retained as
+small typed `ProtocolObservation` values keyed by `ExchangeId`; raw bodies are not retained. Criteria are
+persisted as a normalized protocol ID plus an opaque versioned payload. Unknown extensions, invalid payloads,
+and extension failures fail closed. The transport never imports inspector or breakpoint-protocol
+implementations.
 
 ### 6.9 Access policy and ingress identity
 
@@ -1131,7 +1154,11 @@ Built-in inspectors may expose strongly typed internal results and map them to t
 
 #### GraphQL
 
-Reuse `GraphQLProtocolInspector`, but adapt it to `TrafficInspector`, move Jackson parsing off the capture callback, use bounded request/response previews, and emit versioned typed annotations. Registration and a richer UI renderer are the only additions. The proxy remains unchanged.
+Use one bounded Kotlin serialization GraphQL document parser from two independent adapters. The
+`SemanticInspector` adapter runs after capture and emits versioned typed annotations. The
+`BreakpointProtocolExtension` adapter compiles operation criteria, detects the request before forwarding,
+and retains only bounded operation facts for response matching. Both are registered at product composition;
+the proxy and canonical HTTP models remain unchanged.
 
 #### Server-Sent Events
 
@@ -1435,7 +1462,8 @@ Desktop-side modules added only when implementation begins:
 Shared/mobile modules, either in this repository when real targets exist or in a companion repository consuming versioned artifacts:
 
 ```text
-:core:pairing                    shared invitation/handshake/device values
+:core:identity                   shared durable registered-device values
+:core:pairing                    shared invitation/handshake/credential values
 :core:connectivity               shared capability/setup/lifecycle values
 :companion:core                  tunnel/control protocol and mobile application logic
 :products:companion-android      Android UI/composition
@@ -2113,7 +2141,7 @@ Keep PRs narrow:
 | Mobile Companion | desktop companion gateway/direct transport plus mobile apps/VPN adapters | registration, pairing/device UI | core pairing/connectivity, internal binding, ingress identity, all traffic/storage/UI | **None** | Phase 8 pairing/authenticated ingress |
 | Remote relay | E2E relay `TunnelTransport` | companion transport selection/health registration | paired identity, companion gateway, proxy/internal binding | **None** | companion direct path, relay service/security review |
 | Remote traffic viewer | remote control/query API adapter | scope policy and optional companion UI | application paged queries/body preview, redaction/audit | **None** | paired scopes, rate limits, privacy design |
-| GraphQL | adapt/add `TrafficInspector`, optional rich renderer | inspector registration | HTTP heads, bounded BodyAccess, generic annotations | **None** | async inspector host |
+| GraphQL | add shared parser, `SemanticInspector`, `BreakpointProtocolExtension`, optional rich renderer | inspector/extension registration and schema-driven rule fields | HTTP heads, bounded bodies, generic annotations, protocol rule registry | **None** | async inspector host and bounded breakpoint gate |
 | SSE | streaming SSE inspector and event renderer | inspector registration | streaming capture, duplex/event record, body budgets | **None** | streaming HTTP/1 capture |
 | WebSocket | proxy upgrade/frame transport package, optional message inspectors/renderers | transport and inspector registration | connection/duplex message/body model, breakpoint/capture bounds | **None** | streaming proxy and paired-channel lifecycle |
 | HTTP/2 | H2 transport provider | ALPN/provider registration and capability catalog | connection/exchange/StreamId, body/capture/store/query | **None** | streaming proxy, TLS/ALPN, multiplex tests |

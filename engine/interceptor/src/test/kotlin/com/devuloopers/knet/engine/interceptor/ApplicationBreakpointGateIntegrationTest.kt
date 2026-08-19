@@ -2,15 +2,31 @@ package com.devuloopers.knet.engine.interceptor
 
 import com.devuloopers.knet.application.port.breakpoint.BreakpointCoordinator
 import com.devuloopers.knet.application.port.breakpoint.BreakpointDecision
+import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolRegistry
+import com.devuloopers.knet.application.port.breakpoint.ProtocolCriteriaValue
 import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
+import com.devuloopers.knet.engine.protocol.inspector.graphql.GraphQLBreakpointExtension
+import com.devuloopers.knet.engine.protocol.inspector.graphql.GraphQLBreakpointProtocol
+import com.devuloopers.knet.engine.proxy.capture.ProxyBodyReservation
+import com.devuloopers.knet.engine.proxy.capture.ProxyConnectionCapture
+import com.devuloopers.knet.engine.proxy.capture.ProxyExchangeCapture
+import com.devuloopers.knet.engine.proxy.pipeline.ProxyChannelAttributes
+import com.devuloopers.knet.traffic.id.ExchangeId
+import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTimings
+import com.devuloopers.knet.traffic.model.TrafficDirection
+import com.devuloopers.knet.traffic.model.body.ContentEncoding
+import com.devuloopers.knet.traffic.model.http.RequestHead
+import com.devuloopers.knet.traffic.model.http.ResponseHead
 import io.netty.channel.embedded.EmbeddedChannel
 import io.netty.handler.codec.http.DefaultFullHttpResponse
 import io.netty.handler.codec.http.FullHttpRequest
 import io.netty.handler.codec.http.FullHttpResponse
 import io.netty.handler.codec.http.HttpResponseStatus
 import io.netty.handler.codec.http.HttpVersion
+import io.netty.handler.codec.http.HttpHeaderNames
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlin.test.Test
@@ -21,6 +37,28 @@ import kotlin.test.assertTrue
 
 /** Netty ownership and lifecycle coverage for the application-owned breakpoint gate. */
 class ApplicationBreakpointGateIntegrationTest {
+    @Test
+    fun `request capture is admitted before the matching breakpoint is published`() {
+        val coordinator = coordinator(BreakpointPhase.REQUEST)
+        val capture = RecordingConnectionCapture()
+        val channel = EmbeddedChannel(KNetInterceptorHandler(coordinator))
+        channel.attr(ProxyChannelAttributes.CONNECTION_CAPTURE).set(capture)
+        val request = TestFixtures.createFullHttpRequest("https://api.example.com/v1/data")
+
+        channel.writeInbound(request)
+        val pending = awaitPending(coordinator, channel)
+        val prepared = channel.attr(ProxyChannelAttributes.PREPARED_EXCHANGE).get()
+
+        assertEquals(listOf(pending.candidate.exchangeId), capture.startedExchangeIds)
+        assertEquals(pending.candidate.exchangeId, prepared.exchangeId)
+        assertSame(capture.exchange, prepared.capture)
+
+        runBlocking { coordinator.resolve(pending.id, BreakpointDecision.ContinueUnchanged) }
+        awaitCondition(channel) { channel.config().isAutoRead }
+        channel.readInbound<FullHttpRequest>().release()
+        channel.finishAndReleaseAll()
+    }
+
     @Test
     fun `request pause resumes unchanged with exact reference ownership`() {
         val coordinator = coordinator(BreakpointPhase.REQUEST)
@@ -44,23 +82,29 @@ class ApplicationBreakpointGateIntegrationTest {
     @Test
     fun `request drop and disconnect release paused frames once`() {
         val dropCoordinator = coordinator(BreakpointPhase.REQUEST)
+        val dropCapture = RecordingConnectionCapture()
         val dropChannel = EmbeddedChannel(KNetInterceptorHandler(dropCoordinator))
+        dropChannel.attr(ProxyChannelAttributes.CONNECTION_CAPTURE).set(dropCapture)
         val dropped = TestFixtures.createFullHttpRequest("https://api.example.com/drop")
         dropChannel.writeInbound(dropped)
         val pending = awaitPending(dropCoordinator, dropChannel)
         runBlocking { dropCoordinator.resolve(pending.id, BreakpointDecision.Drop) }
         awaitCondition(dropChannel) { !dropChannel.isOpen }
         assertEquals(0, dropped.refCnt())
+        assertEquals(listOf(ExchangeState.CANCELLED), dropCapture.exchange.terminalStates)
         dropChannel.finishAndReleaseAll()
 
         val disconnectCoordinator = coordinator(BreakpointPhase.REQUEST)
+        val disconnectCapture = RecordingConnectionCapture()
         val disconnectChannel = EmbeddedChannel(KNetInterceptorHandler(disconnectCoordinator))
+        disconnectChannel.attr(ProxyChannelAttributes.CONNECTION_CAPTURE).set(disconnectCapture)
         val disconnected = TestFixtures.createFullHttpRequest("https://api.example.com/disconnect")
         disconnectChannel.writeInbound(disconnected)
         awaitPending(disconnectCoordinator, disconnectChannel)
         disconnectChannel.close()
         awaitCondition(disconnectChannel) { disconnectCoordinator.pendingBreakpoints.value.isEmpty() }
         assertEquals(0, disconnected.refCnt())
+        assertEquals(listOf(ExchangeState.CANCELLED), disconnectCapture.exchange.terminalStates)
         disconnectChannel.finishAndReleaseAll()
     }
 
@@ -104,12 +148,68 @@ class ApplicationBreakpointGateIntegrationTest {
         channel.finishAndReleaseAll()
     }
 
+    @Test
+    fun `live handler pauses only the configured GraphQL operation`() {
+        val extension = GraphQLBreakpointExtension()
+        val criteria = requireNotNull(
+            extension.createCriteria(
+                listOf(
+                    ProtocolCriteriaValue(
+                        GraphQLBreakpointProtocol.operationNameFieldId,
+                        "GetProfile",
+                    ),
+                ),
+            ),
+        )
+        val coordinator = BreakpointCoordinator(
+            protocolRegistry = BreakpointProtocolRegistry(listOf(extension)),
+        ).also { value ->
+            value.replaceRules(
+                listOf(
+                    BreakpointRule(
+                        id = "graphql-operation",
+                        phase = BreakpointPhase.REQUEST,
+                        urlPattern = "*graphql*",
+                        method = com.devuloopers.knet.traffic.model.http.HttpMethod.POST,
+                        protocolCriteria = criteria,
+                    ),
+                ),
+            )
+        }
+
+        val otherChannel = EmbeddedChannel(KNetInterceptorHandler(coordinator))
+        val other = graphQLRequest("UpdateProfile")
+        otherChannel.writeInbound(other)
+        awaitCondition(otherChannel) { otherChannel.config().isAutoRead }
+        assertTrue(coordinator.pendingBreakpoints.value.isEmpty())
+        otherChannel.readInbound<FullHttpRequest>().release()
+        otherChannel.finishAndReleaseAll()
+
+        val matchingChannel = EmbeddedChannel(KNetInterceptorHandler(coordinator))
+        val matching = graphQLRequest("GetProfile")
+        matchingChannel.writeInbound(matching)
+        val pending = awaitPending(coordinator, matchingChannel)
+        assertEquals("graphql-operation", pending.ruleId)
+        runBlocking { coordinator.resolve(pending.id, BreakpointDecision.ContinueUnchanged) }
+        awaitCondition(matchingChannel) { matchingChannel.config().isAutoRead }
+        matchingChannel.readInbound<FullHttpRequest>().release()
+        matchingChannel.finishAndReleaseAll()
+    }
+
     private fun coordinator(phase: BreakpointPhase): BreakpointCoordinator =
         BreakpointCoordinator().also { coordinator ->
             coordinator.replaceRules(
                 listOf(BreakpointRule(id = "rule-1", phase = phase, urlPattern = "*api.example.com*")),
             )
         }
+
+    private fun graphQLRequest(operationName: String): FullHttpRequest = TestFixtures.createFullHttpRequest(
+        uri = "https://api.example.com/graphql",
+        method = io.netty.handler.codec.http.HttpMethod.POST,
+        body = """{"operationName":"$operationName","query":"query $operationName { viewer { id } }"}""",
+    ).apply {
+        headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json")
+    }
 
     private fun awaitPending(
         coordinator: BreakpointCoordinator,
@@ -127,6 +227,58 @@ class ApplicationBreakpointGateIntegrationTest {
                 delay(5)
             }
             error("Timed out waiting for embedded breakpoint pipeline.")
+        }
+    }
+
+    private class RecordingConnectionCapture : ProxyConnectionCapture {
+        val startedExchangeIds = mutableListOf<ExchangeId>()
+        val exchange = NoOpExchangeCapture()
+
+        override fun startExchange(
+            exchangeId: ExchangeId,
+            request: RequestHead,
+            occurredAtEpochMillis: Long,
+        ): ProxyExchangeCapture {
+            startedExchangeIds += exchangeId
+            exchange.exchangeId = exchangeId
+            return exchange
+        }
+
+        override fun close(errorCode: String?) = Unit
+    }
+
+    private class NoOpExchangeCapture : ProxyExchangeCapture {
+        override var exchangeId: ExchangeId = ExchangeId("unassigned")
+        val terminalStates = mutableListOf<ExchangeState>()
+
+        override fun tryReserveBody(
+            direction: TrafficDirection,
+            contentEncoding: ContentEncoding?,
+            requestedBytes: Int,
+        ): ProxyBodyReservation? = null
+
+        override fun completeBody(
+            direction: TrafficDirection,
+            observedBytes: Long,
+            occurredAtEpochMillis: Long,
+        ) = Unit
+
+        override fun cancelBody(
+            direction: TrafficDirection,
+            observedBytes: Long,
+            occurredAtEpochMillis: Long,
+            errorCode: String,
+        ) = Unit
+
+        override fun observeResponse(response: ResponseHead, occurredAtEpochMillis: Long) = Unit
+
+        override fun terminate(
+            state: ExchangeState,
+            timings: ExchangeTimings,
+            occurredAtEpochMillis: Long,
+            errorCode: String?,
+        ) {
+            terminalStates += state
         }
     }
 }

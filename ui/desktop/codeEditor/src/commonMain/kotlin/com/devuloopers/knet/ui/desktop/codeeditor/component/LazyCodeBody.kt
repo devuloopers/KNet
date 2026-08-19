@@ -1,250 +1,322 @@
 package com.devuloopers.knet.ui.desktop.codeeditor.component
 
-import androidx.compose.foundation.*
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.HorizontalScrollbar
+import androidx.compose.foundation.ScrollbarStyle
+import androidx.compose.foundation.VerticalScrollbar
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.rememberScrollbarAdapter
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.LocalTextContextMenu
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.TextUnit
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.*
+import com.devuloopers.knet.ui.core.components.menu.KNetContextMenuArea
+import com.devuloopers.knet.ui.desktop.codeeditor.api.CodeEditorStrings
+import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.FoldRegion
+import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.rememberAutoScrollController
 import com.devuloopers.knet.ui.desktop.codeeditor.component.viewport.LazyCodeBodyContent
+import com.devuloopers.knet.ui.desktop.codeeditor.document.EditorDocumentSnapshot
+import com.devuloopers.knet.ui.desktop.codeeditor.document.EditorPosition
+import com.devuloopers.knet.ui.desktop.codeeditor.document.EditorRange
+import com.devuloopers.knet.ui.desktop.codeeditor.document.EditorSelection
 import com.devuloopers.knet.ui.desktop.codeeditor.gesture.rememberSelectionGestureHandler
-import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorCaretState
-import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorSelection
+import com.devuloopers.knet.ui.desktop.codeeditor.language.EditorTokenizedDocument
 import com.devuloopers.knet.ui.desktop.codeeditor.modifier.editorPointerInput
-import com.devuloopers.knet.ui.desktop.codeeditor.shortcut.EditorShortcutHandler
-import com.devuloopers.knet.ui.desktop.codeeditor.syntax.CodeHighlighterRegistry
+import com.devuloopers.knet.ui.desktop.codeeditor.search.EditorSearchResult
+import com.devuloopers.knet.ui.desktop.codeeditor.theme.CodeEditorSemanticColors
 import com.devuloopers.knet.ui.desktop.codeeditor.theme.CodeEditorTokens
 import com.devuloopers.knet.ui.desktop.codeeditor.theme.EditorColors
-import com.devuloopers.knet.ui.core.components.menu.KNetContextMenuArea
+import com.devuloopers.knet.ui.desktop.codeeditor.viewport.EditorVisualLineMap
 
 /**
- * Top-level code editor viewport container composable.
- *
- * Coordinates 60 FPS auto-scrolling, pointer input gestures, custom context menus, vertical scrollbar integration,
- * and delegates virtualized line list rendering to [LazyCodeBodyContent].
+ * Virtualized editor viewport over immutable document, language, fold, and search projections.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun LazyCodeBody(
-    rawLines: List<String>,
-    mode: LazyCodeBodyMode = LazyCodeBodyMode.ReadOnly,
-    foldRegions: List<FoldRegion> = emptyList(),
-    collapsedFoldStartLines: Set<Int> = emptySet(),
-    onToggleFold: (originalLineIndex: Int) -> Unit = {},
-    isFoldingEnabled: Boolean = true,
-    isWordWrapEnabled: Boolean = true,
-    languageHint: String? = null,
-    fontSize: TextUnit = CodeEditorTokens.FontSize,
-    lineHeight: TextUnit = CodeEditorTokens.LineHeight,
-    onDocumentLinesChanged: ((List<String>) -> Unit)? = null,
-    onLineChanged: ((lineIndex: Int, newText: String) -> Unit)? = null,
-    onLineSplit: ((lineIndex: Int, colIndex: Int) -> Unit)? = null,
-    onLineMerge: ((lineIndex: Int) -> Unit)? = null,
-    onMultiLinePaste: ((lineIndex: Int, caretCol: Int, pastedText: String) -> Unit)? = null,
-    onUndo: (() -> Unit)? = null,
-    onRedo: (() -> Unit)? = null,
-    caretState: EditorCaretState? = null,
-    onCaretStateChange: ((EditorCaretState) -> Unit)? = null,
-    selection: EditorSelection? = null,
-    onSelectionChange: ((EditorSelection?) -> Unit)? = null,
+internal fun LazyCodeBody(
+    snapshot: EditorDocumentSnapshot,
+    mode: LazyCodeBodyMode,
+    tokenizedDocument: EditorTokenizedDocument?,
+    searchResult: EditorSearchResult?,
+    activeSearchMatch: EditorRange?,
+    semanticColors: CodeEditorSemanticColors,
+    strings: CodeEditorStrings,
+    foldRegions: List<FoldRegion>,
+    collapsedFoldStartLines: Set<Int>,
+    onToggleFold: (originalLineIndex: Int) -> Unit,
+    isFoldingEnabled: Boolean,
+    isWordWrapEnabled: Boolean,
+    fontSize: TextUnit,
+    lineHeight: TextUnit,
+    caret: EditorPosition,
+    onCaretChange: (EditorPosition) -> Unit,
+    selection: EditorSelection?,
+    onSelectionChange: (EditorSelection?) -> Unit,
+    onDeleteSelection: () -> Unit,
+    onDeleteCurrentLine: () -> Unit,
+    onPaste: (String) -> Unit,
+    onSelectAll: () -> Unit,
+    onLineChanged: (lineIndex: Int, newText: String) -> Unit,
+    onLineSplit: (lineIndex: Int, colIndex: Int) -> Unit,
+    onLineMerge: (lineIndex: Int) -> Unit,
+    onMultiLinePaste: (lineIndex: Int, caretCol: Int, pastedText: String) -> Unit,
+    onUndo: () -> Unit,
+    onRedo: () -> Unit,
+    onToggleComment: (() -> Unit)?,
+    shouldRequestEditorFocus: Boolean,
+    onOpenSearch: (() -> Unit)?,
+    onCloseSearch: (() -> Unit)?,
     modifier: Modifier = Modifier
 ) {
     val lazyListState = rememberLazyListState()
-
-    // Auto-scroll when caret moves to an out-of-viewport line
-    LaunchedEffect(caretState?.lineIndex) {
-        caretState?.lineIndex?.let { targetLine ->
-            if (targetLine in rawLines.indices) {
-                val visibleItems = lazyListState.layoutInfo.visibleItemsInfo
-                val isVisible = visibleItems.any { it.key == targetLine }
-                if (!isVisible) {
-                    lazyListState.animateScrollToItem(targetLine)
-                }
-            }
-        }
+    val horizontalScrollState = rememberScrollState()
+    val visualLineMap = remember(snapshot.lineCount, foldRegions, collapsedFoldStartLines, isFoldingEnabled) {
+        EditorVisualLineMap.build(
+            documentLineCount = snapshot.lineCount,
+            foldRegions = if (isFoldingEnabled) foldRegions else emptyList(),
+            collapsedStarts = if (isFoldingEnabled) collapsedFoldStartLines else emptySet()
+        )
     }
 
-    val visibleLines: List<LazyLine> = remember(rawLines, foldRegions, collapsedFoldStartLines, isFoldingEnabled) {
-        if (isFoldingEnabled && foldRegions.isNotEmpty()) {
-            LazyLineVisibilityEngine.buildVisibleLines(rawLines, foldRegions, collapsedFoldStartLines)
-        } else {
-            rawLines.mapIndexed { index, text -> LazyLine(index, text, LineFoldState.None) }
-        }
+    LaunchedEffect(caret.line, visualLineMap) {
+        val targetVisualLine = visualLineMap.toVisibleLine(caret.line) ?: return@LaunchedEffect
+        val isVisible = lazyListState.layoutInfo.visibleItemsInfo.any { it.index == targetVisualLine }
+        if (!isVisible) lazyListState.animateScrollToItem(targetVisualLine)
     }
 
-    val maxDigits = remember(rawLines.size) {
-        rawLines.size.toString().length.coerceAtLeast(3)
+    val maximumDigits = remember(snapshot.lineCount) { snapshot.lineCount.toString().length.coerceAtLeast(3) }
+    val gutterWidth = remember(maximumDigits) {
+        CodeEditorTokens.GutterDigitWidth * maximumDigits + CodeEditorTokens.GutterWidthPadding
     }
-    val gutterWidthDp = remember(maxDigits) {
-        (maxDigits * 8 + 12).dp
-    }
-
-    val highlighter = remember(languageHint) {
-        languageHint?.let { CodeHighlighterRegistry.resolveByLanguage(it) }
-    }
-
     val scrollbarStyle = remember {
         ScrollbarStyle(
-            minimalHeight = 24.dp,
-            thickness = 8.dp,
-            shape = RoundedCornerShape(4.dp),
+            minimalHeight = CodeEditorTokens.ScrollbarMinimumHeight,
+            thickness = CodeEditorTokens.ScrollbarThickness,
+            shape = RoundedCornerShape(CodeEditorTokens.ScrollbarCornerRadius),
             hoverDurationMillis = 150,
             unhoverColor = EditorColors.BorderDark.copy(alpha = 0.5f),
             hoverColor = EditorColors.ActiveBlue
         )
     }
-
     val copyAction = rememberClipboardCopyAction()
     val pasteAction = rememberClipboardPasteAction()
     val density = LocalDensity.current
-    val lineHeightPx = remember(density, lineHeight) { with(density) { CodeEditorTokens.GutterLineHeightDp.toPx() } }
-    val charWidthPx = remember(density, fontSize) { with(density) { (fontSize.value * 0.6f).sp.toPx() } }
-    val totalGutterWidthDp = remember(gutterWidthDp, isFoldingEnabled) {
+    val lineHeightPixels = remember(density, lineHeight) { with(density) { lineHeight.toPx() } }
+    val characterWidthPixels = remember(density, fontSize) { with(density) { (fontSize.value * 0.6f).sp.toPx() } }
+    val totalGutterWidth = remember(gutterWidth, isFoldingEnabled) {
         if (isFoldingEnabled) {
-            16.dp + 4.dp + gutterWidthDp + CodeEditorTokens.GutterPaddingEnd
-        } else {
-            gutterWidthDp + CodeEditorTokens.GutterPaddingEnd
+            CodeEditorTokens.FoldArrowBoxSize + CodeEditorTokens.FoldArrowPaddingEnd +
+                gutterWidth + CodeEditorTokens.GutterPaddingEnd
         }
+        else gutterWidth + CodeEditorTokens.GutterPaddingEnd
     }
-    val gutterWidthPx = remember(density, totalGutterWidthDp) { with(density) { totalGutterWidthDp.toPx() } }
-    val autoScrollThresholdPx = remember(density) { with(density) { CodeEditorTokens.AutoScrollActivationZone.toPx() } }
+    val gutterWidthPixels = remember(density, totalGutterWidth) { with(density) { totalGutterWidth.toPx() } }
+    val autoScrollThresholdPixels = remember(density) {
+        with(density) { CodeEditorTokens.AutoScrollActivationZone.toPx() }
+    }
     val autoScrollController = rememberAutoScrollController()
     val selectionGestureHandler = rememberSelectionGestureHandler()
-    var containerHeightPx by remember { mutableStateOf(0f) }
-    var containerWidthPx by remember { mutableStateOf(0f) }
-
-    val internalSelectionState = remember(rawLines) { mutableStateOf<EditorSelection?>(null) }
-    val effectiveSelection = selection ?: internalSelectionState.value
-    val currentSelectionState by rememberUpdatedState(effectiveSelection)
-    val currentCaretState by rememberUpdatedState(caretState)
-    val lineTextLayoutMap = remember { mutableMapOf<Int, TextLayoutResult>() }
-
-    val updateSelection: (EditorSelection?) -> Unit = { newSel ->
-        internalSelectionState.value = newSel
-        onSelectionChange?.invoke(newSel)
+    val focusRequester = remember { FocusRequester() }
+    var containerHeightPixels by remember { mutableStateOf(0f) }
+    var containerWidthPixels by remember { mutableStateOf(0f) }
+    val currentSelection by rememberUpdatedState(selection)
+    val currentCaret by rememberUpdatedState(caret)
+    val lineTextLayouts = remember { mutableMapOf<Int, TextLayoutResult>() }
+    val searchMatchesByLine: Map<Int, List<EditorRange>> = remember(searchResult) {
+        searchResult?.matches.orEmpty().groupBy({ it.range.start.line }, { it.range })
     }
-
+    val selectedText = remember(snapshot, selection) {
+        selection?.takeUnless { it.isEmpty }?.let { snapshot.text(it.range) }.orEmpty()
+    }
     val contextMenuItems = rememberEditorContextMenuItems(
-        rawLines = rawLines,
-        effectiveSelection = effectiveSelection,
-        foldRegions = foldRegions,
-        collapsedFoldStartLines = collapsedFoldStartLines,
+        snapshot = snapshot,
+        selection = selection,
         mode = mode,
+        strings = strings,
         copyAction = copyAction,
         pasteAction = pasteAction,
-        onDocumentLinesChanged = onDocumentLinesChanged,
-        onSelectionChange = updateSelection,
-        caretState = caretState,
-        onCaretStateChange = onCaretStateChange,
+        onDeleteSelection = onDeleteSelection,
+        onPaste = onPaste,
+        onSelectAll = onSelectAll
     )
 
     CompositionLocalProvider(LocalTextContextMenu provides EmptyTextContextMenu) {
-        KNetContextMenuArea(
-            items = contextMenuItems,
-            modifier = modifier.fillMaxSize()
-        ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(EditorColors.BackgroundDark)
-                .onSizeChanged { size ->
-                    containerWidthPx = size.width.toFloat()
-                    containerHeightPx = size.height.toFloat()
-                }
-                .editorPointerInput(
-                    rawLines = rawLines,
-                    visibleLines = visibleLines,
-                    foldRegions = foldRegions,
-                    collapsedFoldStartLines = collapsedFoldStartLines,
-                    mode = mode,
-                    containerHeightPx = containerHeightPx,
-                    containerWidthPx = containerWidthPx,
-                    gutterWidthPx = gutterWidthPx,
-                    lineHeightPx = lineHeightPx,
-                    charWidthPx = charWidthPx,
-                    autoScrollThresholdPx = autoScrollThresholdPx,
-                    lazyListState = lazyListState,
-                    lineTextLayoutMap = lineTextLayoutMap,
-                    selectionGestureHandler = selectionGestureHandler,
-                    autoScrollController = autoScrollController,
-                    currentSelectionState = currentSelectionState,
-                    currentCaretState = currentCaretState,
-                    updateSelection = updateSelection
-                )
-                .pointerHoverIcon(PointerIcon.Text)
-                .onPreviewKeyEvent { keyEvent ->
-                    EditorShortcutHandler.processKeyEvent(
-                        keyEvent = keyEvent,
-                        rawLines = rawLines,
-                        selection = effectiveSelection,
-                        caretState = caretState,
-                        foldRegions = foldRegions,
-                        collapsedFoldStartLines = collapsedFoldStartLines,
-                        copyAction = copyAction,
-                        pasteAction = pasteAction,
-                        onDocumentLinesChanged = { updatedLines: List<String> ->
-                            if (onDocumentLinesChanged != null) {
-                                onDocumentLinesChanged(updatedLines)
-                            } else if (updatedLines.isNotEmpty()) {
-                                onLineChanged?.invoke(0, updatedLines[0])
-                            }
+        KNetContextMenuArea(items = contextMenuItems, modifier = modifier.fillMaxSize()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .focusRequester(focusRequester)
+                    .focusable()
+                    .onSizeChanged { size ->
+                        containerWidthPixels = size.width.toFloat()
+                        containerHeightPixels = size.height.toFloat()
+                    }
+                    .editorPointerInput(
+                        snapshot = snapshot,
+                        visualLineMap = visualLineMap,
+                        containerHeightPx = containerHeightPixels,
+                        containerWidthPx = containerWidthPixels,
+                        gutterWidthPx = gutterWidthPixels,
+                        lineHeightPx = lineHeightPixels,
+                        charWidthPx = characterWidthPixels,
+                        autoScrollThresholdPx = autoScrollThresholdPixels,
+                        lazyListState = lazyListState,
+                        lineTextLayoutMap = lineTextLayouts,
+                        selectionGestureHandler = selectionGestureHandler,
+                        autoScrollController = autoScrollController,
+                        currentSelectionState = currentSelection,
+                        currentCaret = currentCaret,
+                        updateCaret = { position ->
+                            onCaretChange(position)
+                            runCatching { focusRequester.requestFocus() }
                         },
-                        onSelectionChange = updateSelection,
-                        onCaretStateChange = { newCaret: EditorCaretState -> onCaretStateChange?.invoke(newCaret) },
-                        onUndo = onUndo,
-                        onRedo = onRedo
+                        updateSelection = onSelectionChange
+                    )
+                    .pointerHoverIcon(PointerIcon.Text)
+                    .onPreviewKeyEvent { event ->
+                        if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        val commandModifier = event.isMetaPressed || event.isCtrlPressed
+                        if (commandModifier) {
+                            when (event.key) {
+                                Key.A -> {
+                                    onSelectAll()
+                                    true
+                                }
+                                Key.C -> {
+                                    if (selectedText.isNotEmpty()) copyAction(selectedText)
+                                    else copyAction(snapshot.line(caret.line) + "\n")
+                                    true
+                                }
+                                Key.X -> {
+                                    if (mode == LazyCodeBodyMode.ReadOnly) return@onPreviewKeyEvent false
+                                    if (selectedText.isNotEmpty()) {
+                                        copyAction(selectedText)
+                                        onDeleteSelection()
+                                    } else {
+                                        copyAction(snapshot.line(caret.line) + "\n")
+                                        onDeleteCurrentLine()
+                                    }
+                                    true
+                                }
+                                Key.V -> {
+                                    if (mode == LazyCodeBodyMode.ReadOnly) return@onPreviewKeyEvent false
+                                    pasteAction(onPaste)
+                                    true
+                                }
+                                Key.Z -> {
+                                    if (event.isShiftPressed) onRedo() else onUndo()
+                                    true
+                                }
+                                Key.Y -> {
+                                    onRedo()
+                                    true
+                                }
+                                Key.F -> {
+                                    onOpenSearch?.invoke()
+                                    onOpenSearch != null
+                                }
+                                Key.Slash -> {
+                                    onToggleComment?.invoke()
+                                    onToggleComment != null
+                                }
+                                else -> false
+                            }
+                        } else if (
+                            mode == LazyCodeBodyMode.Editable &&
+                            selectedText.isNotEmpty() &&
+                            (event.key == Key.Backspace || event.key == Key.Delete)
+                        ) {
+                            onDeleteSelection()
+                            true
+                        } else if (event.key == Key.Escape && onCloseSearch != null) {
+                            onCloseSearch()
+                            true
+                        } else {
+                            false
+                        }
+                    }
+            ) {
+                LazyCodeBodyContent(
+                    snapshot = snapshot,
+                    visualLineMap = visualLineMap,
+                    mode = mode,
+                    tokenizedDocument = tokenizedDocument,
+                    searchMatchesByLine = searchMatchesByLine,
+                    activeSearchMatch = activeSearchMatch,
+                    semanticColors = semanticColors,
+                    strings = strings,
+                    isFoldingEnabled = isFoldingEnabled,
+                    isWordWrapEnabled = isWordWrapEnabled,
+                    gutterWidthDp = gutterWidth,
+                    fontSize = fontSize,
+                    lineHeight = lineHeight,
+                    lazyListState = lazyListState,
+                    horizontalScrollState = horizontalScrollState,
+                    caret = caret,
+                    onCaretChange = onCaretChange,
+                    selection = selection,
+                    shouldRequestEditorFocus = shouldRequestEditorFocus,
+                    onToggleFold = onToggleFold,
+                    onLineChanged = onLineChanged,
+                    onLineSplit = onLineSplit,
+                    onLineMerge = onLineMerge,
+                    onMultiLinePaste = onMultiLinePaste,
+                    onUndo = onUndo,
+                    onRedo = onRedo,
+                    onTextLayout = { lineIndex, layout ->
+                        if (layout == null) lineTextLayouts.remove(lineIndex) else lineTextLayouts[lineIndex] = layout
+                    }
+                )
+
+                VerticalScrollbar(
+                    adapter = rememberScrollbarAdapter(lazyListState),
+                    modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().pointerHoverIcon(PointerIcon.Default),
+                    style = scrollbarStyle
+                )
+                if (!isWordWrapEnabled) {
+                    HorizontalScrollbar(
+                        adapter = rememberScrollbarAdapter(horizontalScrollState),
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth()
+                            .height(CodeEditorTokens.ScrollbarThickness)
+                            .pointerHoverIcon(PointerIcon.Default),
+                        style = scrollbarStyle
                     )
                 }
-        ) {
-            LazyCodeBodyContent(
-                visibleLines = visibleLines,
-                rawLines = rawLines,
-                mode = mode,
-                highlighter = highlighter,
-                isFoldingEnabled = isFoldingEnabled,
-                isWordWrapEnabled = isWordWrapEnabled,
-                gutterWidthDp = gutterWidthDp,
-                fontSize = fontSize,
-                lineHeight = lineHeight,
-                lazyListState = lazyListState,
-                caretState = caretState,
-                onCaretStateChange = onCaretStateChange,
-                selection = effectiveSelection,
-                onToggleFold = onToggleFold,
-                onLineChanged = onLineChanged,
-                onLineSplit = onLineSplit,
-                onLineMerge = onLineMerge,
-                onMultiLinePaste = onMultiLinePaste,
-                onUndo = onUndo,
-                onRedo = onRedo,
-                onTextLayout = { lineIdx, layoutResult ->
-                    lineTextLayoutMap[lineIdx] = layoutResult
-                }
-            )
-
-            VerticalScrollbar(
-                adapter = rememberScrollbarAdapter(lazyListState),
-                modifier = Modifier
-                    .align(Alignment.CenterEnd)
-                    .fillMaxHeight()
-                    .pointerHoverIcon(PointerIcon.Default),
-                style = scrollbarStyle
-            )
+            }
         }
     }
-}
 }

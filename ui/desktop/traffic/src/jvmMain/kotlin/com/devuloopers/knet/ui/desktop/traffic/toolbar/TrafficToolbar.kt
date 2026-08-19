@@ -62,7 +62,9 @@ fun TrafficToolbar(
     val spacing = KNetTheme.spacing
     val dimensions = KNetTheme.dimensions
 
-    val isRunning = state.engineState is ProxyRuntimeState.Running
+    val isCapturing = state.captureState == CaptureState.CAPTURING
+    val captureTransitioning = state.captureState == CaptureState.STARTING
+    val canStartCapture = !isCapturing && !captureTransitioning
 
     KNetToolbar(
         modifier = modifier
@@ -74,8 +76,8 @@ fun TrafficToolbar(
                 Row(
                     modifier = Modifier
                         .clip(shapes.small)
-                        .background(if (!isRunning) themeColors.accent else themeColors.border)
-                        .clickable(enabled = !isRunning) { actions.onStartCapture() }
+                        .background(if (canStartCapture) themeColors.accent else themeColors.border)
+                        .clickable(enabled = canStartCapture) { actions.onStartCapture() }
                         .padding(horizontal = spacing.md, vertical = spacing.xs)
                         .handCursor(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -84,13 +86,13 @@ fun TrafficToolbar(
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
                         contentDescription = "Start",
-                        tint = if (!isRunning) themeColors.textPrimary else themeColors.textMuted,
+                        tint = if (canStartCapture) themeColors.textPrimary else themeColors.textMuted,
                         modifier = Modifier.size(dimensions.iconSizeSmall)
                     )
                     Text(
                         text = "Start",
                         style = typography.titleSmall.copy(
-                            color = if (!isRunning) themeColors.textPrimary else themeColors.textMuted,
+                            color = if (canStartCapture) themeColors.textPrimary else themeColors.textMuted,
                             fontWeight = FontWeight.Medium
                         ),
                         maxLines = 1,
@@ -102,8 +104,8 @@ fun TrafficToolbar(
                 Row(
                     modifier = Modifier
                         .clip(shapes.small)
-                        .background(if (isRunning) themeColors.semantic.errorContainer else themeColors.border)
-                        .clickable(enabled = isRunning) { actions.onStopCapture() }
+                        .background(if (isCapturing) themeColors.semantic.errorContainer else themeColors.border)
+                        .clickable(enabled = isCapturing) { actions.onStopCapture() }
                         .padding(horizontal = spacing.md, vertical = spacing.xs)
                         .handCursor(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -113,14 +115,14 @@ fun TrafficToolbar(
                         modifier = Modifier
                             .size(10.dp)
                             .background(
-                                color = if (isRunning) themeColors.semantic.error else themeColors.textMuted,
+                                color = if (isCapturing) themeColors.semantic.error else themeColors.textMuted,
                                 shape = shapes.small
                             )
                     )
                     Text(
                         text = "Stop",
                         style = typography.titleSmall.copy(
-                            color = if (isRunning) themeColors.semantic.error else themeColors.textMuted,
+                            color = if (isCapturing) themeColors.semantic.error else themeColors.textMuted,
                             fontWeight = FontWeight.Medium
                         ),
                         maxLines = 1,
@@ -141,7 +143,8 @@ fun TrafficToolbar(
                     val (dotColor, statusText) = when (val engine = state.engineState) {
                         is ProxyRuntimeState.Running -> {
                             val port = engine.handle.endpoints.endpoints.firstOrNull()?.port ?: "?"
-                            themeColors.semantic.success to "Running (${state.localIpAddress}:$port)"
+                            val activity = if (isCapturing) "Capturing" else "Forwarding · Capture paused"
+                            themeColors.semantic.success to "$activity (${state.localIpAddress}:$port)"
                         }
                         ProxyRuntimeState.Starting -> themeColors.accent to "Starting..."
                         ProxyRuntimeState.Stopping -> themeColors.textMuted to "Stopping..."

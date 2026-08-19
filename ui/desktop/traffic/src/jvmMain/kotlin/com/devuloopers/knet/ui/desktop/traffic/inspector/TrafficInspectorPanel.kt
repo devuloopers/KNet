@@ -163,7 +163,7 @@ fun TrafficInspectorPanel(
                             activeSubTab = activeRequestSubTab,
                             onSubTabSelected = onRequestSubTabSelected,
                             onOpenInApiStudio = {
-                                onSendToApiStudio(selectedTransaction.id.toString())
+                                onSendToApiStudio(selectedTransaction.transactionId)
                             },
                             modifier = Modifier.fillMaxSize()
                         )

@@ -6,7 +6,7 @@ package com.devuloopers.knet.ui.desktop.codeeditor.component
  * Controls whether the virtualized viewport renders interactive [ReadOnly] text selection
  * or [Editable] single-line text field rows per document line.
  */
-sealed interface LazyCodeBodyMode {
+internal sealed interface LazyCodeBodyMode {
 
     /**
      * Renders each line as a non-editable [androidx.compose.material3.Text] composable
@@ -18,8 +18,8 @@ sealed interface LazyCodeBodyMode {
     data object ReadOnly : LazyCodeBodyMode
 
     /**
-     * Renders each line as an editable single-line
-     * [androidx.compose.foundation.text.BasicTextField] composable.
+     * Renders the active line as an editable single-line
+     * [androidx.compose.foundation.text.BasicTextField] and other visible lines as text.
      *
      * Supports real-time keyboard typing, caret navigation via arrow keys, Enter to split
      * lines, and Backspace at column 0 to merge lines. Suitable for API Studio request

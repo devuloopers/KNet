@@ -7,6 +7,8 @@ Provides the shared Compose design system, foundations, themes, layouts, and reu
 ## Owns
 
 - Design tokens, palettes, typography, responsive layout primitives, and generic UI components.
+- The non-modal, right-edge `KNetSideDrawer` shell, including responsive size classes, animation,
+  surface, and border. Feature modules own drawer state and content.
 - Portable clipboard and pointer APIs whose desktop-only AWT adaptation is confined to `jvmMain`.
 
 ## Does not own

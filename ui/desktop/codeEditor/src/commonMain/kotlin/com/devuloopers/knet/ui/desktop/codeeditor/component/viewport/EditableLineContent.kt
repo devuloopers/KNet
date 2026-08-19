@@ -1,11 +1,20 @@
 package com.devuloopers.knet.ui.desktop.codeeditor.component.viewport
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.TextSelectionColors
-import androidx.compose.runtime.*
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -21,7 +30,6 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.TextUnit
-import com.devuloopers.knet.ui.desktop.codeeditor.model.LineSelectionBounds
 import com.devuloopers.knet.ui.desktop.codeeditor.modifier.selectionHighlight
 import com.devuloopers.knet.ui.desktop.codeeditor.shortcut.LineKeyNavigationHandler
 import com.devuloopers.knet.ui.desktop.codeeditor.theme.CodeEditorTokens
@@ -35,7 +43,7 @@ import com.devuloopers.knet.ui.desktop.codeeditor.theme.EditorColors
  * keyboard navigation (Up, Down, Left at start, Right at end, Backspace at start, Enter).
  */
 @Composable
-fun EditableLineContent(
+internal fun EditableLineContent(
     lineIndex: Int,
     lineText: String,
     highlightedText: AnnotatedString? = null,
@@ -46,6 +54,7 @@ fun EditableLineContent(
     isViewportSelecting: Boolean = false,
     focusRequester: FocusRequester = remember { FocusRequester() },
     isActive: Boolean = false,
+    shouldRequestFocus: Boolean,
     targetColIndex: Int? = null,
     onTextChanged: (newText: String) -> Unit,
     onLineSplit: (colIndex: Int) -> Unit,
@@ -79,13 +88,15 @@ fun EditableLineContent(
 
     // Explicit navigation or undo/redo caret restoration: set cursor to targetColIndex exactly.
     // Runs only when the parent explicitly sets a targetColIndex (arrow keys, undo, redo, backspace delete).
-    LaunchedEffect(isActive, targetColIndex) {
+    LaunchedEffect(isActive, targetColIndex, shouldRequestFocus, isViewportSelecting) {
         if (isActive && targetColIndex != null) {
             val safeCol = targetColIndex.coerceIn(0, lineText.length)
             fieldValue = TextFieldValue(text = lineText, selection = TextRange(safeCol))
-            try {
-                focusRequester.requestFocus()
-            } catch (_: Throwable) {
+            if (shouldRequestLineInputFocus(isActive, targetColIndex, shouldRequestFocus, isViewportSelecting)) {
+                try {
+                    focusRequester.requestFocus()
+                } catch (_: Throwable) {
+                }
             }
         }
     }
@@ -122,69 +133,107 @@ fun EditableLineContent(
     }
 
     CompositionLocalProvider(LocalTextSelectionColors provides transparentSelectionColors) {
-        BasicTextField(
-            value = fieldValue,
-            onValueChange = { updated ->
-                val pasteCheck = updated.text.length - fieldValue.text.length
-                val isPasteOperation = pasteCheck > 1 && updated.text.contains("\n")
-
-                if (isPasteOperation) {
-                    val caretCol = fieldValue.selection.start
-                    onMultiLinePaste(caretCol, updated.text)
-                } else {
-                    val textChanged = updated.text != fieldValue.text
-                    val selectionChanged = updated.selection != fieldValue.selection
-                    fieldValue = updated
-                    if (textChanged) {
-                        onTextChanged(updated.text)
-                    }
-                    if (selectionChanged || textChanged) {
-                        onFocused(updated.selection.start)
-                    }
-                }
-            },
-
-            onTextLayout = {
-                textLayoutResult = it
-                onTextLayout?.invoke(it)
-            },
-            singleLine = !isWordWrapEnabled,
-            visualTransformation = visualTransformation,
-            cursorBrush = activeCursorBrush,
-
-            textStyle = CodeEditorTokens.editorTextStyle(
-                fontSize = fontSize,
-                lineHeight = lineHeight
-            ).copy(
-                color = Color.White,
-                fontFamily = FontFamily.Monospace
-            ),
+        Box(
             modifier = modifier
                 .fillMaxWidth()
-                .selectionHighlight(lineSelectionBounds, textLayoutResult, fontSize)
-                .focusRequester(focusRequester)
-                .onFocusChanged { state ->
-                    if (state.isFocused) {
-                        onFocused(fieldValue.selection.start)
+                .then(if (!isWordWrapEnabled) Modifier.fillMaxHeight() else Modifier)
+                .selectionHighlight(lineSelectionBounds, textLayoutResult, fontSize),
+            contentAlignment = if (isWordWrapEnabled) Alignment.TopStart else Alignment.CenterStart
+        ) {
+            BasicTextField(
+                value = fieldValue,
+                onValueChange = { updated ->
+                    val pasteCheck = updated.text.length - fieldValue.text.length
+                    val isPasteOperation = pasteCheck > 1 && updated.text.contains("\n")
+
+                    if (isPasteOperation) {
+                        var commonPrefix = 0
+                        val commonLimit = minOf(fieldValue.text.length, updated.text.length)
+                        while (
+                            commonPrefix < commonLimit &&
+                            fieldValue.text[commonPrefix] == updated.text[commonPrefix]
+                        ) {
+                            commonPrefix++
+                        }
+                        var commonSuffix = 0
+                        while (
+                            commonSuffix < fieldValue.text.length - commonPrefix &&
+                            commonSuffix < updated.text.length - commonPrefix &&
+                            fieldValue.text[fieldValue.text.lastIndex - commonSuffix] ==
+                            updated.text[updated.text.lastIndex - commonSuffix]
+                        ) {
+                            commonSuffix++
+                        }
+                        val insertedEnd = updated.text.length - commonSuffix
+                        onMultiLinePaste(commonPrefix, updated.text.substring(commonPrefix, insertedEnd))
+                    } else {
+                        val textChanged = updated.text != fieldValue.text
+                        val selectionChanged = updated.selection != fieldValue.selection
+                        fieldValue = updated
+                        if (textChanged) {
+                            onTextChanged(updated.text)
+                        }
+                        if ((selectionChanged || textChanged) && !isViewportSelecting) {
+                            onFocused(updated.selection.start)
+                        }
                     }
-                }
-                .onPreviewKeyEvent { keyEvent ->
-                    LineKeyNavigationHandler.handleLineKeyEvent(
-                        keyEvent = keyEvent,
-                        caretCol = fieldValue.selection.start,
-                        isCollapsed = fieldValue.selection.collapsed,
-                        textLength = fieldValue.text.length,
-                        onNavigateUp = onNavigateUp,
-                        onNavigateDown = onNavigateDown,
-                        onNavigateLeftAtStart = onNavigateLeftAtStart,
-                        onNavigateRightAtEnd = onNavigateRightAtEnd,
-                        onLineMerge = onLineMerge,
-                        onLineSplit = onLineSplit,
-                        onUndo = onUndo,
-                        onRedo = onRedo
-                    )
-                }
-        )
+                },
+
+                onTextLayout = {
+                    textLayoutResult = it
+                    onTextLayout?.invoke(it)
+                },
+                singleLine = !isWordWrapEnabled,
+                visualTransformation = visualTransformation,
+                cursorBrush = activeCursorBrush,
+
+                textStyle = CodeEditorTokens.editorTextStyle(
+                    fontSize = fontSize,
+                    lineHeight = lineHeight
+                ).copy(
+                    color = Color.White,
+                    fontFamily = FontFamily.Monospace
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester)
+                    .onFocusChanged { state ->
+                        if (shouldPublishLineInputCaret(state.isFocused, isViewportSelecting)) {
+                            onFocused(fieldValue.selection.start)
+                        }
+                    }
+                    .onPreviewKeyEvent { keyEvent ->
+                        LineKeyNavigationHandler.handleLineKeyEvent(
+                            keyEvent = keyEvent,
+                            caretCol = fieldValue.selection.start,
+                            isCollapsed = fieldValue.selection.collapsed,
+                            textLength = fieldValue.text.length,
+                            onNavigateUp = onNavigateUp,
+                            onNavigateDown = onNavigateDown,
+                            onNavigateLeftAtStart = onNavigateLeftAtStart,
+                            onNavigateRightAtEnd = onNavigateRightAtEnd,
+                            onLineMerge = onLineMerge,
+                            onLineSplit = onLineSplit,
+                            onUndo = onUndo,
+                            onRedo = onRedo
+                        )
+                    }
+            )
+        }
     }
 }
 
+/** Returns whether a newly active line input may request focus without disturbing viewport selection. */
+internal fun shouldRequestLineInputFocus(
+    isActive: Boolean,
+    targetColumn: Int?,
+    shouldRequestFocus: Boolean,
+    isViewportSelecting: Boolean
+): Boolean {
+    return isActive && targetColumn != null && shouldRequestFocus && !isViewportSelecting
+}
+
+/** Returns whether a focus event may publish a caret update to the editor session. */
+internal fun shouldPublishLineInputCaret(isFocused: Boolean, isViewportSelecting: Boolean): Boolean {
+    return isFocused && !isViewportSelecting
+}

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+    <dict>
+        <key>PayloadContent</key>
+        <array>
+            <dict>
+                <key>PayloadCertificateFileName</key>
+                <string>knet-ca.crt</string>
+                <key>PayloadContent</key>
+                <data>{{certificateBase64}}</data>
+                <key>PayloadDisplayName</key>
+                <string>KNet Root CA</string>
+                <key>PayloadIdentifier</key>
+                <string>com.devuloopers.knet.ca.certificate</string>
+                <key>PayloadType</key>
+                <string>com.apple.security.root</string>
+                <key>PayloadUUID</key>
+                <string>A4D9E7F8-9A2C-4E8B-B1D5-7C3E9F2A4B6C</string>
+                <key>PayloadVersion</key>
+                <integer>1</integer>
+            </dict>
+        </array>
+        <key>PayloadDisplayName</key>
+        <string>KNet Root CA</string>
+        <key>PayloadIdentifier</key>
+        <string>com.devuloopers.knet.ca.profile</string>
+        <key>PayloadOrganization</key>
+        <string>Devuloopers</string>
+        <key>PayloadRemovalDisallowed</key>
+        <false/>
+        <key>PayloadType</key>
+        <string>Configuration</string>
+        <key>PayloadUUID</key>
+        <string>C7E2B1F4-3D5A-4F89-9E12-8B6A3C4D5E6F</string>
+        <key>PayloadVersion</key>
+        <integer>1</integer>
+    </dict>
+</plist>

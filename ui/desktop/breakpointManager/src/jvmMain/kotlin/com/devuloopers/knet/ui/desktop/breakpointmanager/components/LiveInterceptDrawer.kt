@@ -1,10 +1,5 @@
 package com.devuloopers.knet.ui.desktop.breakpointmanager.components
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -36,6 +31,8 @@ import com.devuloopers.knet.ui.desktop.breakpointmanager.model.ResolvedIntercept
 import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
+import com.devuloopers.knet.ui.core.components.drawer.KNetSideDrawer
+import com.devuloopers.knet.ui.core.components.drawer.KNetSideDrawerSize
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.httppanel.components.EndpointCard
 import com.devuloopers.knet.ui.desktop.httppanel.editor.RequestEditorPanel
@@ -83,8 +80,6 @@ fun LiveInterceptDrawer(
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
 
-    val drawerWidth = 880.dp
-
     // Retain the last active event and non-empty queue snapshot so that during the slide-out
     // exit animation, Compose continues to render the full drawer UI smoothly without an abrupt 0x0 collapse.
     var lastActiveEvent by remember { mutableStateOf(activeEvent) }
@@ -100,19 +95,12 @@ fun LiveInterceptDrawer(
     val currentActiveEvent = activeEvent ?: lastActiveEvent
     val currentEvents = events.ifEmpty { lastEvents }
 
-    AnimatedVisibility(
+    KNetSideDrawer(
         visible = isVisible && activeEvent != null,
-        enter = slideInHorizontally(
-            initialOffsetX = { fullWidth -> fullWidth },
-            animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing)
-        ),
-        exit = slideOutHorizontally(
-            targetOffsetX = { fullWidth -> fullWidth },
-            animationSpec = tween(durationMillis = 250, easing = FastOutSlowInEasing)
-        ),
-        modifier = modifier
+        size = KNetSideDrawerSize.EXPANDED,
+        modifier = modifier,
     ) {
-        val eventToRender = currentActiveEvent ?: return@AnimatedVisibility
+        val eventToRender = currentActiveEvent ?: return@KNetSideDrawer
         val preResolved = resolvedPayloads[eventToRender.id]
         val candidate = eventToRender.candidate
         val request = candidate.request
@@ -154,14 +142,7 @@ fun LiveInterceptDrawer(
             mutableStateOf(InspectorSubTab.BODY)
         }
 
-        Box(
-            modifier = Modifier
-                .fillMaxHeight()
-                .width(drawerWidth)
-                .background(themeColors.surface)
-                .border(width = 1.dp, color = themeColors.border)
-        ) {
-            Row(modifier = Modifier.fillMaxSize()) {
+        Row(modifier = Modifier.fillMaxSize()) {
                 // Left Queue Sidebar (always visible in Master-Detail layout)
                 InterceptQueueSidebar(
                     events = currentEvents,
@@ -441,7 +422,6 @@ fun LiveInterceptDrawer(
                         }
                     }
                 }
-            }
         }
     }
 }

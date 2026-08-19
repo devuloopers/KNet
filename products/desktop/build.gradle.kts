@@ -23,6 +23,7 @@ dependencies {
     implementation(project(":application"))
     implementation(project(":ui:desktop:app"))
     implementation(project(":ui:desktop:traffic"))
+    implementation(project(":ui:desktop:connectivity"))
     implementation(project(":ui:desktop:apistudio"))
     implementation(project(":ui:desktop:certificate"))
     implementation(project(":ui:desktop:breakpointManager"))

@@ -5,8 +5,16 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
 import kotlin.math.pow
+import kotlin.time.Duration.Companion.milliseconds
+
+private val AUTO_SCROLL_FRAME_DURATION = 16.milliseconds
 
 /**
  * Independent interaction controller owning auto-scroll boundary detection,
@@ -14,7 +22,7 @@ import kotlin.math.pow
  *
  * Adheres to KNet UI Specification: Selection Auto-Scroll Controller v1.0.
  */
-class AutoScrollController(
+internal class AutoScrollController(
     private val scope: CoroutineScope,
     private val maxVelocityPxPerFrame: Float = 45f
 ) {
@@ -75,7 +83,7 @@ class AutoScrollController(
             try {
                 while (isActive && currentVelocity != 0f) {
                     lazyListState.scrollBy(currentVelocity)
-                    delay(16) // ~60 FPS smooth scrolling
+                    delay(AUTO_SCROLL_FRAME_DURATION)
                 }
             } finally {
                 scrollJob = null
@@ -98,7 +106,7 @@ class AutoScrollController(
  * Creates and remembers a reusable [AutoScrollController] instance tied to the composable's scope.
  */
 @Composable
-fun rememberAutoScrollController(): AutoScrollController {
+internal fun rememberAutoScrollController(): AutoScrollController {
     val scope = rememberCoroutineScope()
     return remember(scope) { AutoScrollController(scope) }
 }

@@ -4,7 +4,6 @@ import com.devuloopers.knet.engine.certificate.CertificateAuthority
 import com.devuloopers.knet.engine.certificate.CertificateCache
 import kotlin.test.Test
 import kotlin.test.assertFalse
-import kotlin.test.assertNotNull
 
 /**
  * Unit tests verifying [ProxyRuntimeRepository] lifecycle controls.
@@ -18,6 +17,7 @@ class ProxyRuntimeRepositoryTest {
         val repo = ProxyRuntimeRepository(ca, certCache)
 
         assertFalse(repo.isRunning(), "Proxy server must not be running initially")
+        repo.close()
     }
 
     @Test
@@ -28,5 +28,6 @@ class ProxyRuntimeRepositoryTest {
 
         repo.stopProxy()
         assertFalse(repo.isRunning())
+        repo.close()
     }
 }

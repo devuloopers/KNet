@@ -5,6 +5,7 @@ import com.devuloopers.knet.engine.formatter.model.BodyFormat
 import com.fasterxml.jackson.core.JsonGenerator
 import com.fasterxml.jackson.core.util.DefaultIndenter
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter
+import com.fasterxml.jackson.databind.DeserializationFeature
 import com.fasterxml.jackson.databind.ObjectMapper
 
 private class CustomPrettyPrinter : DefaultPrettyPrinter() {
@@ -23,7 +24,16 @@ private class CustomPrettyPrinter : DefaultPrettyPrinter() {
 }
 
 private val printer = CustomPrettyPrinter()
-private val mapper = ObjectMapper().setDefaultPrettyPrinter(printer)
+private val mapper = ObjectMapper()
+    .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+    .setDefaultPrettyPrinter(printer)
+
+private val ndJsonMediaTypes = setOf(
+    "application/x-ndjson",
+    "application/ndjson",
+    "application/jsonl",
+    "application/x-jsonlines"
+)
 
 /**
  * Strategy formatter for JSON objects, arrays, and Google XSSI security prefixed payloads.
@@ -44,7 +54,9 @@ class JsonBodyFormatter : BodyFormatter {
             }
         }
 
-        if (mime.contains("json")) return true
+        if (mime in ndJsonMediaTypes || mime.contains("json")) return true
+        if (isValidJsonDocument(inspectBody)) return true
+        if (parseImplicitNdJsonFrames(inspectBody) != null) return true
         if (inspectBody.startsWith("{") || (inspectBody.startsWith("[") && !inspectBody.contains("[["))) return true
 
         val formatted = prettyPrintJson(trimmed)
@@ -53,8 +65,21 @@ class JsonBodyFormatter : BodyFormatter {
 
     override fun format(headers: Map<String, String>, bodyText: String): BodyFormat {
         val trimmed = bodyText.trim()
-        if (trimmed.lines().size > 1 && trimmed.lines().filter { it.trim().startsWith("{") }.size > 1) {
-            val frames = trimmed.lines().filter { it.trim().isNotEmpty() }.map { prettyPrintJson(it) }
+        val contentType = headers.entries.find { it.key.equals("content-type", ignoreCase = true) }?.value.orEmpty()
+        val mime = contentType.substringBefore(';').trim().lowercase()
+        val isExplicitNdJson = mime in ndJsonMediaTypes
+
+        if (!isExplicitNdJson && isValidJsonDocument(trimmed)) {
+            return BodyFormat.Json(prettyPrintJson(trimmed))
+        }
+
+        val rawFrames = if (isExplicitNdJson) {
+            trimmed.lineSequence().map(String::trim).filter(String::isNotEmpty).toList()
+        } else {
+            parseImplicitNdJsonFrames(trimmed)
+        }
+        if (!rawFrames.isNullOrEmpty()) {
+            val frames = rawFrames.map(::prettyPrintJson)
             return BodyFormat.JsonStream(frames)
         }
         val formattedText = prettyPrintJson(trimmed)
@@ -68,6 +93,19 @@ class JsonBodyFormatter : BodyFormatter {
      * @return Indented, formatted JSON string or the original input if parsing fails.
      */
     fun prettyPrintJson(raw: String): String = Companion.prettyPrintJson(raw)
+
+    private fun parseImplicitNdJsonFrames(bodyText: String): List<String>? {
+        val records = bodyText.lineSequence()
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .toList()
+        return records.takeIf { it.size > 1 && it.all(::isValidJsonDocument) }
+    }
+
+    private fun isValidJsonDocument(candidate: String): Boolean {
+        if (candidate.isEmpty()) return false
+        return runCatching { mapper.readTree(candidate) }.isSuccess
+    }
 
     companion object {
         /**

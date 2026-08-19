@@ -2,11 +2,15 @@ package com.devuloopers.knet.products.desktop.di.breakpoint
 
 import com.devuloopers.knet.application.port.breakpoint.BreakpointControlPort
 import com.devuloopers.knet.application.port.breakpoint.BreakpointCoordinator
+import com.devuloopers.knet.application.port.breakpoint.BreakpointCaptureAvailabilityPort
 import com.devuloopers.knet.application.port.breakpoint.BreakpointGate
+import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolExtension
+import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolRegistry
 import com.devuloopers.knet.application.usecase.breakpoint.ClearPendingBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.DropMatchingBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.ObservePendingBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.ResolveBreakpointUseCase
+import com.devuloopers.knet.application.usecase.breakpoint.BreakpointProtocolRuleUseCase
 import com.devuloopers.knet.data.desktop.rules.repository.RulesRepositoryImpl
 import com.devuloopers.knet.domain.rules.repository.RulesRepository
 import com.devuloopers.knet.domain.rules.usecase.DeleteRuleUseCase
@@ -24,9 +28,11 @@ import org.koin.dsl.module
 
 /** Breakpoint gate, rule persistence, active sessions, workflows, and presentation. */
 internal val breakpointBindings: Module = module {
-    single { BreakpointCoordinator() }
+    single { BreakpointProtocolRegistry(getAll<BreakpointProtocolExtension>()) }
+    single { BreakpointCoordinator(protocolRegistry = get()) }
     single<BreakpointGate> { get<BreakpointCoordinator>() }
     single<BreakpointControlPort> { get<BreakpointCoordinator>() }
+    single<BreakpointCaptureAvailabilityPort> { get<BreakpointCoordinator>() }
 
     single<RulesRepository> {
         RulesRepositoryImpl(get<KNetDatabase>().breakpointRuleDao(), get())
@@ -42,6 +48,7 @@ internal val breakpointBindings: Module = module {
     factory { ResolveBreakpointUseCase(get()) }
     factory { DropMatchingBreakpointsUseCase(get()) }
     factory { ClearPendingBreakpointsUseCase(get()) }
+    factory { BreakpointProtocolRuleUseCase(get()) }
 
     viewModel {
         BreakpointManagerViewModel(
@@ -54,6 +61,7 @@ internal val breakpointBindings: Module = module {
             toggleGlobalInterceptionUseCase = get(),
             resolveBreakpointUseCase = get(),
             clearPendingBreakpointsUseCase = get(),
+            breakpointProtocolRuleUseCase = get(),
         )
     }
 }

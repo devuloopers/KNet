@@ -139,7 +139,7 @@ Started on 2026-08-18. Implemented additively with production registration delay
 * Added storage-key backfill plus bounded finalized-object inventory so a body file that survives a crash before metadata attachment is deleted without exposing paths or loading the entire object store.
 * Added a migration-period query adapter that keeps legacy schema-v10 rows readable while routing arbitrary schema-v11 sessions, canonical-first exchange lookup, body identifiers, and change generations through the canonical store.
 * Migrated the compatibility live repository to a bounded 1,000-row metadata merge of legacy traffic and the newest canonical session. Direct lookup and lazy body loading prefer canonical records, export inherits those repository paths, and clear converges legacy data plus closed canonical sessions.
-* Added application-owned traffic clear orchestration. A running proxy swaps to a fresh canonical session first, closes active channels, terminalizes unfinished old exchanges, and only then deletes closed history; an integration test proves capture continues in the replacement session.
+* Added application-owned traffic clear orchestration. A running proxy swaps a stable capture sink to a fresh canonical session, terminalizes unfinished old capture state without closing client transport channels, and only then deletes closed traffic metadata and body files; focused tests prove an existing connection captures its next exchange in the replacement session.
 * Added `TrafficRecordPort`/`RecordHttpExchangeUseCase` with shared `RequestHead`/`ResponseHead` metadata and defensive-copy body ownership. Direct API Studio executions now use this boundary and reuse the active proxy session or one lifecycle-owned direct session without duplicate proxied records.
 * Added direct-to-proxy session handoff tests proving exactly one canonical session remains active, and a reopened-database restart-boundary integration proving interrupted session/connection/exchange ownership is recovered before a new writer admits capture.
 * Removed `CaptureWriterSelection`, the proxy repository's pending/replace legacy persistence queue, its payload writer, and the dormant `recordTransaction(HttpTransaction)` feature path. Legacy schema rows remain read-only migration input for query/export/clear compatibility.
@@ -222,7 +222,7 @@ Exit criteria: mechanisms register additively; arbitrary upstream setup-like pat
 * Add loopback-only internal gateway binding, typed ingress identity, device-scoped access policy, and QR/deep-link onboarding descriptors.
 * Prove an authenticated standard proxy byte bridge under backpressure and network reconnection without restarting the proxy or capture session.
 
-Completed on 2026-08-18: one-shot expiring invitations, Ed25519 device proof, scoped credentials, replay defense, revocation, and AES-256-GCM owner-only trusted-device storage are implemented. A bounded loopback standard-proxy gateway authenticates and strips local credentials, bridges under stream backpressure, attributes canonical traffic through neutral ingress identity, rejects admission overflow, and terminates active sockets on revocation. QR/deep-link onboarding contains the one-time invitation material without changing proxy, traffic, PAC, or manual-proxy contracts.
+Completed on 2026-08-18: one-shot expiring invitations, Ed25519 device proof, scoped credentials, replay defense, revocation, and durable trusted-device storage are implemented. The initial standalone encrypted-file adapter was consolidated into the schema-v15 Room registered-device source of truth during Phase 22; only public keys and one-way credential/invitation digests are persisted. A bounded loopback standard-proxy gateway authenticates and strips local credentials, bridges under stream backpressure, attributes canonical traffic through neutral ingress identity, rejects admission overflow, and terminates active sockets on revocation. QR/deep-link onboarding contains the one-time invitation material without changing proxy, traffic, PAC, or manual-proxy contracts.
 
 Exit criteria: a test device can pair, bridge a scoped proxy stream, appear with the correct ingress identity, and be revoked without changing ordinary PAC/manual/proxy/traffic behavior.
 
@@ -386,35 +386,345 @@ Final verification on 2026-08-18 passed `git diff --check`, the residual duplica
 targeted migrated-module tests, `verifyArchitectureFoundation`, and `phase18ReleaseGate` (261
 actionable tasks). Every included module check passed and the desktop distributable was produced.
 
-## Phase 22: Primary Wi-Fi Device Connectivity [IN PROGRESS — BACKEND FOUNDATION COMPLETE]
+## Phase 22: Primary Wi-Fi Device Connectivity [IN PROGRESS — OPEN WI-FI SETUP IMPLEMENTED, DEVICE GATES PENDING]
 
 Wi-Fi sharing will become the primary stock-phone connection path while the production proxy remains
-loopback-only. The approved direction is an explicitly activated, exact-interface LAN gateway in
-`:connectivity:desktop` that admits only desktop-approved client addresses and forwards attributed byte
-streams to the unchanged internal proxy. It will not introduce LAN behavior into `:engine:proxy`, traffic
-storage, body handling, PAC generation, ADB, breakpoints, or inspectors.
+loopback-only. The approved direction is an automatically managed, exact-interface LAN gateway in
+`:connectivity:desktop` that accepts any reachable local-network client and forwards attributed byte streams
+to the unchanged internal proxy. It will not introduce LAN behavior into `:engine:proxy`, traffic storage,
+body handling, PAC generation, ADB, breakpoints, or inspectors.
 
-The delivery includes truthful endpoint availability, session-bound QR onboarding, a token-protected LAN
-setup endpoint, CA/manual/PAC/Apple setup behavior, source approval and immediate revocation, network-change
-invalidation, first-class `Connect Device` UI, real Android/iPhone conformance, and bounded security/resource
-gates. Wi-Fi sharing remains off after process start and requires explicit activation for each network
-session. Stock-phone approval is explicitly network-bound rather than represented as per-connection
-cryptographic authentication; future companion/VPN connectivity remains the strong-authentication option
-for untrusted networks and apps that ignore system proxy settings.
+The revised delivery includes truthful endpoint availability, a stable QR setup URL, an open LAN setup page,
+Android CA and Apple profile downloads, CA/manual/PAC setup behavior, automatic proxy-lifecycle activation,
+network-change recovery, a single-card `Connect Device` UI, real Android/iPhone conformance, and bounded
+resource gates. No invitation, confirmation, or source approval is required for manual Wi-Fi proxy clients.
+Future companion/VPN connectivity remains the authenticated option for remote networks and apps that ignore
+system proxy settings.
 
 Detailed architecture, phases, security limitations, module changes, and exit criteria are defined in
 `docs/wifi_connectivity_implementation_plan.md`.
 
-Backend checkpoint completed on 2026-08-18:
+Superseded approval prototype checkpoint completed on 2026-08-18 and removed on 2026-08-19:
 
 * Added canonical Wi-Fi sharing models, the application port/use cases, and feature-grouped desktop DI.
-* Added the opt-in exact-interface LAN gateway, approved-source registry, expiring source-bound invitations,
-  tokenized setup portal, CA/PAC delivery, ingress attribution, quotas, revocation, and metrics.
+* The prototype proved exact-interface LAN bridging, source attribution, quotas, and listener rollback. Its
+  approved-source registry, invitations, token routes, and revocation controls were later removed when the
+  product requirement changed to open local-client admission.
 * Added network/proxy invalidation and atomic listener-start rollback without restarting the loopback proxy
   or clearing captured traffic.
 * Corrected setup-provider availability so a loopback address is never advertised as phone-reachable.
+* The isolated `:ui:desktop:connectivity` module and `Connect Device` navigation were retained; the prototype
+  device-management presentation was replaced by the focused single-card setup flow.
+* Added feature-grouped desktop composition bindings and focused UI state/QR tests.
 * Passed the Kotlin-first/architecture foundation gate and focused application, connectivity, traffic, and
   persistence tests.
 
-The `Connect Device` UI, Apple profile conformance, real Android/iPhone testing, IPv6 validation, and the
-final packaged capacity/security gate remain pending. No Compose code was changed in this backend checkpoint.
+Companion identity persistence checkpoint completed on 2026-08-19. Room schema 15 stores registered companion
+identities, trusted-device public keys and credential digests, and one-time pairing invitation digests; its
+explicit 14-to-15 auto-migration preserves existing traffic and API Studio records. The temporary association
+between those identities and manual Wi-Fi sources was removed. Room identity now remains exclusively behind
+the authenticated pairing/companion boundary and is not consulted by the open Wi-Fi gateway.
+
+Open Wi-Fi setup UX checkpoint completed on 2026-08-19. The Connect Device screen was reduced to one
+`Wi-Fi Proxy Setup` card whose setup drawer owns the QR code and manual Android/iPhone instructions.
+The exact-interface setup listener now uses one stable setup URL and a
+resource-backed responsive HTML page with Android DER certificate and Apple configuration-profile downloads.
+The obsolete manual Wi-Fi invitation, approval, registration, and known-device presentation were removed;
+Room pairing identity remains reserved for the future authenticated companion path. Starting/stopping the
+proxy now automatically starts/stops the LAN gateway, and any reachable local source is admitted under global
+and per-source connection quotas.
+
+Automated verification on 2026-08-19 passed the focused core-connectivity, application, desktop-connectivity,
+desktop-connectivity UI, desktop product, desktop-app, and architecture-foundation test/build gates. The
+resource-backed setup page, Android certificate route, Apple profile route, open-client forwarding, automatic
+proxy stop/restart recovery, and stale approval-symbol scan were verified without launching the desktop app.
+
+Real Apple profile installation, Android/iPhone testing, IPv6 validation, and the final packaged
+capacity/security gate remain pending. These checks intentionally do not change the stable proxy, traffic,
+or connectivity application boundaries.
+
+## Phase 23: Traffic Capture Sequence Presentation [COMPLETED]
+
+Completed on 2026-08-19: Traffic remains sorted newest-first, while its visible sequence column now numbers
+the oldest retained interception as `1` and the newest interception with the highest number. Each newly
+observed interception appears at the top with the next number. The presentation property was renamed from
+the ambiguous `id` to `sequenceNumber`, and Traffic-to-API-Studio forwarding now uses the canonical exchange
+identifier rather than the visible sequence number.
+
+Verification passed `:ui:desktop:traffic:jvmTest`, `verifyArchitectureFoundation`, and `git diff --check`
+without launching the desktop app.
+
+## Phase 24: Shared Desktop Side Drawer [COMPLETED]
+
+Started on 2026-08-19: extract the right-edge animated drawer shell from the breakpoint feature into
+`:ui:core`, migrate Live Intercept and Wi-Fi Proxy Setup to that shared primitive, and place connectivity
+method cards in a top-left wrapping grid. Feature state and content remain owned by their feature modules;
+no global drawer ViewModel or business-state coordinator is introduced.
+
+Completed on 2026-08-19: `KNetSideDrawer` now owns non-modal right-edge placement, responsive standard and
+expanded widths, slide animation, surface, and border. Live Intercept retains its breakpoint-specific queue
+and editor behavior in `:ui:desktop:breakpointManager`; Wi-Fi retains its QR, endpoint, instructions, and
+proxy actions in `:ui:desktop:connectivity`. The former Wi-Fi `Dialog` was removed, and the Wi-Fi card is the
+first top-left item in a wrapping connectivity-method grid ready for additive cards.
+
+Verification passed the `:ui:core`, breakpoint-manager, connectivity, desktop-app, and desktop-product test
+suites plus `verifyArchitectureFoundation` (158 actionable tasks) and `git diff --check`, without launching
+the desktop app.
+
+## Phase 25: Dynamic Breakpoint Pipeline Activation [COMPLETED]
+
+Started on 2026-08-19 after identifying that request aggregation and the streaming/full proxy-handler choice
+were frozen when a downstream TCP connection was accepted. Rules added, enabled, disabled, or restored after
+that point could update the application coordinator while existing streaming connections continued bypassing
+the full-message breakpoint adapter. This phase will add a bounded runtime refresh boundary for breakpoint
+requirement changes, preserve streaming when no breakpoint requires aggregation, and add regression coverage
+for rule activation after a client connection already exists. The desktop application will not be launched
+during implementation verification.
+
+Completed on 2026-08-19: `ProxyRuntimeRepository` now reduces application breakpoint state to distinct
+request/response aggregation requirements and observes that state for its process lifetime. A requirement
+change closes only active downstream child connections through the neutral engine boundary; it does not stop
+the listener, rotate or clear traffic, replace the canonical capture session, or introduce rule knowledge
+into `:engine:proxy`. Reconnected clients select the current streaming or bounded full-message pipeline.
+Repository shutdown cancels the observer before stopping Netty, and repeated start/stop remains supported
+until terminal close.
+
+Two real loopback regression tests start with an already-connected streaming client, enable either a request
+or response breakpoint, verify the stale connection is refreshed, reconnect, and prove the corresponding
+phase is published as a pending application breakpoint before forwarding resumes. Focused and wider
+verification passed `:application:test`, `:engine:proxy:test`, `:engine:interceptor:test`,
+`:data:desktop:jvmTest`, `:products:desktop:test`, `verifyArchitectureFoundation`, and `git diff --check`
+(149 actionable tasks in the wider gate). The desktop application was not launched.
+
+## Phase 26: Extensible Protocol Breakpoint Matching [COMPLETED]
+
+Started on 2026-08-19 after the live breakpoint path was found to evaluate only phase, method, and URL while
+the domain, Room mapper, and desktop editor each contained separate hardcoded GraphQL/gRPC/WebSocket branches.
+This phase replaces those closed branches with an application-owned protocol breakpoint extension registry.
+Each extension will own its typed criteria, bounded inspection, compiled matching, and persistence codec;
+the coordinator, proxy engine, canonical HTTP request/response models, and Room schema will remain
+protocol-neutral. GraphQL will become the first real extension, with its compact request observation retained
+by exchange identity for response-phase matching. Missing, invalid, or unavailable extensions will fail
+closed instead of matching unrelated traffic. Verification will cover operation-specific request and response
+breakpoints, generic HTTP behavior, persistence round trips, unavailable extensions, bounded ownership, and
+architecture dependency direction without launching the desktop application.
+
+Completed on 2026-08-19: Breakpoint matching is now split into a stable transport matcher and an
+application-owned `BreakpointProtocolExtension` registry. The coordinator, canonical HTTP exchange models,
+proxy engine, persistence mapper, and desktop editor no longer branch on GraphQL, gRPC, WebSocket, or other
+protocol names. An extension owns its protocol identifier, UI-neutral criteria schema, versioned persistence
+payload, bounded inspection, compiled criteria, and semantic matcher. Unknown, unavailable, malformed, and
+duplicate extensions fail closed.
+
+GraphQL is the first installed extension. A shared Kotlin-serialization parser serves both traffic semantic
+inspection and live breakpoint matching, including bounded single and batch requests. Request observations
+contain only compact operation metadata and are retained by canonical exchange identity only when a response
+rule needs them; raw bodies are not cached and observations are removed after response evaluation. Both the
+Breakpoint Manager and Traffic quick-add flow use the same schema-driven application use case, so adding a
+new protocol does not require protocol-specific UI branches or proxy-engine changes. Existing generic HTTP
+rules continue through the built-in HTTP extension, while the unchanged Room columns store the open protocol
+identifier and opaque versioned payload.
+
+Verification passed focused domain, application, protocol, interceptor, breakpoint-manager, traffic,
+persistence, and desktop-composition tests, including a synthetic third-party protocol, GraphQL operation and
+batch matching, response correlation and cleanup, missing-extension behavior, Room round trips, and a live
+Netty interception test. The final `check verifyArchitectureFoundation` gate passed with 272 actionable tasks,
+and `git diff --check` passed. The desktop application was not launched.
+
+## Phase 27: Row-First Live Breakpoint Presentation [COMPLETED]
+
+Started on 2026-08-19 after request-phase breakpoint suspension was confirmed to occur before the canonical
+proxy handler admitted the exchange to capture. The live drawer therefore received a pending breakpoint while
+Traffic had no row, and the migrated `isIntercepted` presentation fields had no canonical producer. This phase
+moved protocol-neutral exchange admission ahead of the forwarding gate, reuses one exchange identity and
+capture owner through resume, projects active breakpoint state onto Traffic, and reveals the drawer only after
+the corresponding highlighted `In Progress` row is present. Active paused rows remain visible despite ordinary
+Traffic filters, and resolution restores the durable response state while retaining a bounded, process-session
+matched marker. The provisional request row carries metadata only; breakpoint body ownership remains bounded
+and no body copy was added to the Traffic projection.
+
+Request/response models, protocol extensions, Room ownership, and the UI-independent breakpoint coordinator
+remain unchanged. Focused proxy, interceptor, data, Traffic, application-shell, and product-composition tests
+passed with 157 actionable tasks, including live request/response pauses, exactly-once capture admission, and
+pre-forward cancellation on breakpoint drop or disconnect.
+The final `check verifyArchitectureFoundation` gate passed with 272 actionable tasks, and `git diff --check`
+passed. The desktop application was not launched.
+
+## Phase 28: Highlight-Only Breakpoint Rows [COMPLETED]
+
+Completed on 2026-08-19. Removed the breakpoint warning icon from the Traffic method cell while retaining the
+paused and matched row background highlights as the single interception indicator. No capture, breakpoint,
+drawer, or traffic-state behavior changed. The desktop application was not launched.
+
+## Phase 29: Timeline HTTP Panel Alignment Restoration [COMPLETED]
+
+Started on 2026-08-19 after comparing the reusable Timeline panel with repository history. The original
+waterfall used one 130dp label column, but per-label intrinsic `widthIn` sizing later allowed every timing
+track to begin at a different horizontal position. This phase restores one shared responsive column:
+130dp at normal inspector widths and one bounded width shared by every row when the inspector is narrow.
+Canonical `ExchangeTimings`, Traffic ownership, and the reusable HTTP-panel boundary remain unchanged.
+
+Focused HTTP-panel and Traffic tests passed with 74 actionable tasks, including normal and narrow inspector
+width coverage. The final `check verifyArchitectureFoundation` gate passed with 272 actionable tasks, and
+`git diff --check` passed. The desktop application was not launched.
+
+## Phase 30: Reusable Kotlin Code Editor Foundation [COMPLETED]
+
+Started on 2026-08-19 after auditing `:ui:desktop:codeEditor` as the shared payload and script editing
+surface for Traffic, API Studio, GraphQL, and scripting. This phase will retain the independent editor module
+and its KNet-facing facade while replacing closed language selection, full-document edit snapshots, parallel
+syntax/folding paths, filtered-line search, and fragmented editor state with a reusable versioned document
+and session foundation.
+
+The target provides additive language registration with independent optional tokenization, folding,
+indentation, bracket, and comment capabilities; stateful cross-line tokenization; language-aware folding;
+operation-based undo/redo; a command dispatcher; real find/replace state; shared viewport behavior; and a
+cohesive Compose API. Autocomplete and completion providers are explicitly outside the requested scope.
+Language services remain independent from Compose rendering and KNet HTTP semantics so the editor can later
+be extracted into a standalone Kotlin code-editor repository without migrating its consumers or core model.
+
+Completed on 2026-08-19. The editor now has one versioned, chunk-sharing document model; one UI-neutral
+session for document, directional selection, caret, history, and exact synchronous change events; bounded
+delta undo/redo; real find/replace; strongly typed commands; and a cohesive Compose
+State/Actions/Configuration API. The viewport composes visible lines only, gives one active line ownership of
+text input, shares horizontal scrolling, and avoids document-sized mapping arrays on the normal unfolded path.
+Full-string serialization is explicit and optional.
+
+The closed language/highlighter implementation was replaced by an immutable contribution registry with
+independent stateful tokenization, folding, indentation, bracket, and comment capabilities. Built-in JSON,
+GraphQL, XML, HTML, JavaScript, CSS, and plain-text support use the same public extension boundary as future
+languages. Incremental syntax processing retains immutable token chunks, observes multiline lexical state,
+and falls back to a correct full pass whenever delta versions are not contiguous. Syntax, folding, and search
+run against immutable snapshots with cooperative coroutine cancellation and stale-version rejection.
+
+The built-in Compose surface now provides highlighted literal/regex/case/whole-word search, editable
+replace/replace-all, language-driven indentation, bracket closing, comment toggling, folds, modern clipboard
+actions, and configurable labels and semantic colors. Autocomplete/completion remains intentionally absent.
+All six HTTP-panel consumers were migrated to the new API, unknown valid language identifiers are preserved
+as custom contributions, obsolete duplicate buffers/history/highlighters/facades were removed, and the editor
+module no longer depends on KNet domain models or Java/AWT APIs. Module responsibility and standalone
+extraction guidance are documented in `:ui:desktop:codeEditor/MODULE.md` and
+`docs/code_editor_architecture.md`.
+
+Focused code-editor and HTTP-panel suites passed with 47 and 32 tests respectively. The final
+`check verifyArchitectureFoundation` gate passed with 269 actionable tasks; Kotlin-first, module boundary,
+module documentation, UI runtime-isolation, and composition-ownership checks all passed. `git diff --check`
+passed. The desktop application was not launched.
+
+## Phase 31: Symmetric Drag-Selection Auto-Scroll [COMPLETED]
+
+Started on 2026-08-19 after downward drag selection stopped when the pointer entered the horizontal
+scrollbar hit zone, while upward drag selection continued normally. This phase will make pointer drag
+ownership stable for the complete gesture: a drag that begins in the editor remains a text-selection drag
+when it crosses a scrollbar boundary, while a drag that begins on a scrollbar remains scrollbar-owned.
+Regression coverage will verify downward and upward ownership behavior. The desktop application will not be
+launched.
+
+Completed on 2026-08-19. Pointer ownership is now selected once at primary-button press and retained until
+release. Text drags continue selection and auto-scroll after crossing the bottom or side scrollbar hit zone,
+while gestures beginning on a scrollbar remain scrollbar-owned. Three ownership regression tests cover
+downward boundary crossing, scrollbar departure, and release/reacquisition; the complete code-editor suite
+passed with 50 tests. The affected HTTP-panel consumer compiled, `verifyArchitectureFoundation` passed, and
+`git diff --check` passed. The desktop application was not launched.
+
+## Phase 32: Stable Drag-Selection Rendering [COMPLETED]
+
+Started on 2026-08-19 after full-width blue selection rows flashed while virtualized lines were composed
+during downward drag auto-scroll. This phase will make selection painting identical before and after text
+layout becomes available, represent a selected newline with one character cell instead of the viewport
+width, suppress zero-width end-line paint, and prevent active-line focus synchronization from clearing an
+ongoing viewport drag selection. The desktop application will not be launched.
+
+Completed on 2026-08-19. Empty intermediate lines now represent their selected newline with one character
+cell rather than painting the viewport width; zero-column exclusive end lines produce no selection paint;
+and fallback geometry matches the native-layout geometry used after a virtualized row is composed. Active
+line inputs no longer request focus or publish selection/caret changes while viewport drag selection is
+active, preventing the canonical selection from being cleared between pointer frames. Five focused
+regression tests were added, the complete code-editor suite passed with 55 tests, the affected HTTP-panel
+consumer compiled, `verifyArchitectureFoundation` passed, and `git diff --check` passed. The desktop
+application was not launched.
+
+## Phase 33: NDJSON Inspection Presentation [COMPLETED]
+
+Started on 2026-08-19 after Traffic correctly classified a Datadog newline-delimited JSON payload as
+`BodyFormat.JsonStream` but discarded its formatted frames before rendering. This phase will retain one JSON
+language/editor implementation while distinguishing the multi-record transport shape in the formatter.
+Detection will prefer a valid complete JSON value, recognize explicit NDJSON/JSONL media types, and otherwise
+require every non-empty line to be an independently valid JSON value. The HTTP-panel presentation bridge will
+render formatted frames with visible record separation through the existing read-only JSON editor. The desktop
+application will not be launched.
+
+Completed on 2026-08-19. JSON format resolution now validates a complete JSON value before considering
+multi-record framing, so pretty-printed objects and arrays remain single documents. Explicit NDJSON/JSONL
+media types and implicit payloads whose every non-empty line is independently valid JSON resolve to the
+existing `BodyFormat.JsonStream`; each record is formatted by the same JSON formatter. Invalid mixed text
+does not become an implicit stream.
+
+The HTTP-panel presentation bridge now joins formatted stream records with a visible blank-line boundary and
+passes the result to the existing read-only `CodeLanguage.JSON` editor. No NDJSON language, tokenizer, folding,
+search, editor, request model, or response model was added. Module documentation records this syntax-versus-
+framing rule so future JSON stream conventions extend formatter detection instead of duplicating JSON support.
+
+The formatter, HTTP-panel, and Traffic suites passed with 46, 33, and 11 tests respectively. The final
+`check verifyArchitectureFoundation` gate passed with 269 actionable tasks, and `git diff --check` passed. The
+desktop application was not launched.
+
+## Phase 34: Continuous Multi-Line Selection Paint [COMPLETED]
+
+Started on 2026-08-19 after multi-line selection exposed the unpainted leading between the text-sized
+selection surface and the taller virtualized row. This phase will retain the existing row height, text line
+height, and baseline spacing while making selection paint own the complete visual-line slot. Adjacent selected
+lines will therefore meet without dark seams. Horizontal selection bounds, trailing-newline width, wrapping,
+fallback geometry, document content, and selection semantics remain unchanged. Regression coverage will
+exercise the geometry independently, and the desktop application will not be launched.
+
+Completed on 2026-08-19. Both read-only and editable line content now place selection paint on a full-height
+visual-line surface while keeping the text content centred with its existing line height and baseline. Native
+text layout still supplies horizontal character bounds. The vertical paint projection assigns outer leading
+to the first and final visual slots and splits internal leading at one shared boundary, so ordinary and wrapped
+selected lines meet without dark seams. The fallback path, trailing-newline cell width, row height, typography,
+document text, and selection coordinates were not changed.
+
+Three focused geometry regressions cover complete single-row paint, shared wrapped-line boundaries, and outer
+leading ownership. The code-editor and HTTP-panel suites passed with 58 and 33 tests respectively. The final
+`check verifyArchitectureFoundation` gate passed with 269 actionable tasks, and `git diff --check` passed. The
+desktop application was not launched.
+
+## Phase 35: Persistent Forwarding with Instant Capture Pause/Resume [COMPLETED]
+
+Started on 2026-08-19 after comparing the migrated proxy lifecycle with commit `6b9fe3c`. The legacy Traffic
+buttons appeared fast because one wildcard listener served LAN clients directly and stop returned before
+active channels and Netty event loops finished closing. The migrated implementation correctly awaits complete
+resource ownership but currently couples frequent capture controls to full loopback proxy, Wi-Fi gateway,
+setup portal, connection, and canonical-writer teardown.
+
+This phase will separate the stable forwarding plane from the capture plane. Traffic Start/Stop will attach or
+detach versioned canonical capture targets through the existing switchable sink while Netty and Wi-Fi remain
+available. A detached session will drain through one bounded retirement owner, allowing a new session to begin
+without waiting for old persistence cleanup. Exchanges remain bound to exactly one capture generation; traffic
+is never split between sessions. Rapid commands are serialized, Stop Capture never deletes stored traffic,
+and breakpoints will not suspend traffic while capture is paused because their required Traffic row would not
+exist. Full proxy shutdown remains synchronous and is reserved for application shutdown, explicit connectivity
+shutdown, or configuration rebinding. The desktop application will not be launched.
+
+Completed on 2026-08-19. `ProxyRuntimeState` and the new typed `CaptureSessionState` now represent
+independent lifecycles. Traffic Stop disables breakpoint admission, atomically replaces the switchable
+capture target with a paused generation, and queues the detached canonical writer on one bounded IO
+retirement owner. The Netty listener, Wi-Fi gateway, setup portal, downstream connections, and forwarding
+path remain active. Traffic Start on the same configured port opens a strictly ordered fresh canonical
+session and swaps only the capture target; a port change still performs the required full configuration
+shutdown/rebind.
+
+The switchable connection wrapper now survives a paused target, begins capturing its next exchange after
+resume, and keeps an already-created exchange attached to its original generation. Breakpoint capture
+availability is separate from the user's breakpoint enablement and aggregation requirements: pause continues
+pending decisions unchanged and future uncaptured exchanges bypass interception without triggering pipeline
+refresh or client disconnects. Repeated UI commands are serialized as revisioned desired state, stored rows
+survive pause/resume, and the toolbar reports `Forwarding · Capture paused` while Start/Stop enablement follows
+capture state rather than listener state. Full proxy cleanup remains process/configuration owned and drains
+both active and asynchronously retired writers before Room closes.
+
+Focused application, data, Traffic, and product composition suites passed, including listener-identity,
+generation ownership, paused-connection resume, breakpoint release, and toolbar lifecycle regressions. The
+final `check verifyArchitectureFoundation` gate passed with 269 actionable tasks, `git diff --check` passed,
+and the desktop application was not launched.

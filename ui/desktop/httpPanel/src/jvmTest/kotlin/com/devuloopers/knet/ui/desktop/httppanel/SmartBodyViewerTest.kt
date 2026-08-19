@@ -41,7 +41,8 @@ class SmartBodyViewerTest {
         assertEquals(CodeLanguage.JAVASCRIPT, CodeLanguage.fromId("js"))
         assertEquals(CodeLanguage.CSS, CodeLanguage.fromId("css"))
         assertEquals(CodeLanguage.PLAIN, CodeLanguage.fromId("plain"))
-        assertEquals(CodeLanguage.PLAIN, CodeLanguage.fromId("unknown_custom_mode"))
+        val customLanguage = assertIs<CodeLanguage.Custom>(CodeLanguage.fromId("unknown_custom_mode"))
+        assertEquals("unknown_custom_mode", customLanguage.id)
         assertEquals(CodeLanguage.PLAIN, CodeLanguage.fromId(null))
     }
 

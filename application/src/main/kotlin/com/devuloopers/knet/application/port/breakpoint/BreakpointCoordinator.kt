@@ -1,7 +1,9 @@
 package com.devuloopers.knet.application.port.breakpoint
 
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
+import com.devuloopers.knet.domain.rules.model.BreakpointProtocolId
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
+import com.devuloopers.knet.domain.rules.model.BreakpointTransportMatcher
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.HttpResponseSnapshot
@@ -10,6 +12,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
@@ -111,12 +114,16 @@ public data class BreakpointLimits(
     public val maxPendingConnections: Int = 32,
     public val maxPendingBytes: Long = 32L * 1024L * 1024L,
     public val maxEditableBodyBytes: Int = 10 * 1024 * 1024,
+    public val maxTrackedProtocolExchanges: Int = 1_024,
     public val decisionTimeoutMillis: Long = 120_000L,
 ) {
     init {
         require(maxPendingConnections in 1..10_000) { "Pending breakpoint limit is invalid." }
         require(maxPendingBytes in 1L..(1024L * 1024L * 1024L)) { "Pending byte limit is invalid." }
         require(maxEditableBodyBytes in 1..(64 * 1024 * 1024)) { "Editable body limit is invalid." }
+        require(maxTrackedProtocolExchanges in 1..100_000) {
+            "Tracked protocol exchange limit is invalid."
+        }
         require(decisionTimeoutMillis in 100L..3_600_000L) { "Breakpoint timeout is invalid." }
     }
 }
@@ -146,17 +153,32 @@ public interface BreakpointControlPort {
     public suspend fun clear(): Int
 }
 
+/** Runtime-facing switch that prevents breakpoint suspension while capture is detached. */
+public interface BreakpointCaptureAvailabilityPort {
+    /**
+     * Updates whether captured exchanges may enter breakpoint suspension.
+     *
+     * Disabling availability continues every pending decision unchanged. It deliberately does not
+     * alter [BreakpointGate.requirements], so transport pipelines and client connections stay stable.
+     */
+    public suspend fun setCaptureAvailable(available: Boolean)
+}
+
 /**
  * Application-owned breakpoint state machine with compiled immutable rules and bounded pause state.
  */
 public class BreakpointCoordinator(
     private val limits: BreakpointLimits = BreakpointLimits(),
-) : BreakpointGate, BreakpointControlPort {
+    private val protocolRegistry: BreakpointProtocolRegistry = BreakpointProtocolRegistry(),
+) : BreakpointGate, BreakpointControlPort, BreakpointCaptureAvailabilityPort {
     private val stateMutex = Mutex()
     private val compiledRules = MutableStateFlow<List<CompiledRule>>(emptyList())
     private val _pending = MutableStateFlow<List<PendingEntry>>(emptyList())
     private val pendingProjection = MutableStateFlow<List<PendingBreakpoint>>(emptyList())
     private val _enabled = MutableStateFlow(true)
+    private val captureAvailable = MutableStateFlow(true)
+    private val protocolObservations =
+        MutableStateFlow<Map<ExchangeId, Map<BreakpointProtocolId, ProtocolObservation>>>(emptyMap())
     private val decisionTimeoutMillis = MutableStateFlow(limits.decisionTimeoutMillis)
     private val _requirements = MutableStateFlow(requirementsFor(emptyList(), enabled = true))
 
@@ -168,7 +190,11 @@ public class BreakpointCoordinator(
     override fun replaceRules(rules: List<BreakpointRule>) {
         val compiled = rules.asSequence()
             .filter(BreakpointRule::enabled)
-            .map(::CompiledRule)
+            .mapNotNull { rule ->
+                protocolRegistry.compile(rule.protocolCriteria)?.let { protocolCriteria ->
+                    CompiledRule(rule, protocolCriteria)
+                }
+            }
             .toList()
         compiledRules.value = compiled
         _requirements.value = requirementsFor(compiled, _enabled.value)
@@ -176,6 +202,7 @@ public class BreakpointCoordinator(
 
     override fun setEnabled(enabled: Boolean) {
         _enabled.value = enabled
+        if (!enabled) protocolObservations.value = emptyMap()
         _requirements.value = requirementsFor(compiledRules.value, enabled)
     }
 
@@ -184,10 +211,35 @@ public class BreakpointCoordinator(
         decisionTimeoutMillis.value = timeoutMillis
     }
 
+    override suspend fun setCaptureAvailable(available: Boolean) {
+        stateMutex.withLock {
+            captureAvailable.value = available
+            if (!available) {
+                protocolObservations.value = emptyMap()
+                val pending = _pending.value
+                pending.forEach { entry ->
+                    entry.decision.complete(BreakpointDecision.ContinueUnchanged)
+                }
+                publishEntries(emptyList())
+            }
+        }
+    }
+
     @OptIn(ExperimentalUuidApi::class)
     override suspend fun intercept(candidate: BreakpointCandidate): BreakpointDecision {
-        if (!_enabled.value) return BreakpointDecision.ContinueUnchanged
-        val rule = compiledRules.value.firstOrNull { it.matches(candidate) }
+        if (!_enabled.value || !captureAvailable.value) {
+            if (candidate.phase == BreakpointPhase.RESPONSE) removeProtocolObservations(candidate.exchangeId)
+            return BreakpointDecision.ContinueUnchanged
+        }
+        val rules = compiledRules.value
+        val observations = observeProtocols(candidate, rules)
+        val rule = rules.firstOrNull { compiled ->
+            compiled.matchesTransport(candidate, candidate.phase) &&
+                protocolRegistry.matches(
+                    compiled.protocolCriteria,
+                    observations[compiled.protocolCriteria.protocolId],
+                )
+        }
             ?: return BreakpointDecision.ContinueUnchanged
         if (candidate.requestObservedBodyBytes > limits.maxEditableBodyBytes ||
             candidate.responseObservedBodyBytes > limits.maxEditableBodyBytes
@@ -201,7 +253,7 @@ public class BreakpointCoordinator(
         val admitted = stateMutex.withLock {
             val current = _pending.value
             val retained = current.sumOf { it.public.candidate.retainedBytes }
-            if (current.size >= limits.maxPendingConnections ||
+            if (!captureAvailable.value || current.size >= limits.maxPendingConnections ||
                 retained + candidate.retainedBytes > limits.maxPendingBytes
             ) {
                 false
@@ -232,6 +284,7 @@ public class BreakpointCoordinator(
         }
 
     override fun cancelExchange(exchangeId: ExchangeId) {
+        removeProtocolObservations(exchangeId)
         _pending.value
             .filter { it.public.candidate.exchangeId == exchangeId }
             .forEach { it.decision.complete(BreakpointDecision.Drop) }
@@ -257,6 +310,79 @@ public class BreakpointCoordinator(
         pendingProjection.value = entries.map(PendingEntry::public)
     }
 
+    /**
+     * Inspects each relevant protocol once and retains only compact request facts needed by a
+     * response rule. Raw bodies remain candidate-owned and are never stored in this cache.
+     */
+    private fun observeProtocols(
+        candidate: BreakpointCandidate,
+        rules: List<CompiledRule>,
+    ): Map<BreakpointProtocolId, ProtocolObservation> {
+        val phaseRules = rules.filter { it.matchesTransport(candidate, candidate.phase) }
+        val responseRules = if (candidate.phase == BreakpointPhase.REQUEST) {
+            rules.filter { it.matchesTransport(candidate, BreakpointPhase.RESPONSE) }
+        } else {
+            emptyList()
+        }
+        val cached = if (candidate.phase == BreakpointPhase.RESPONSE) {
+            removeProtocolObservations(candidate.exchangeId)
+        } else {
+            emptyMap()
+        }
+        val relevantProtocolIds = (phaseRules + responseRules)
+            .asSequence()
+            .map { it.protocolCriteria.protocolId }
+            .filterNot { it == BreakpointProtocolId.HTTP }
+            .distinct()
+            .toList()
+        if (relevantProtocolIds.isEmpty()) return cached
+
+        val observed = relevantProtocolIds.mapNotNull { protocolId ->
+            val requestObservation = cached[protocolId]
+            val observation = protocolRegistry.inspect(
+                protocolId = protocolId,
+                input = ProtocolInspectionInput(candidate, requestObservation),
+            ) ?: requestObservation
+            observation?.let { protocolId to it }
+        }.toMap()
+
+        if (candidate.phase == BreakpointPhase.REQUEST && responseRules.isNotEmpty()) {
+            val responseProtocolIds = responseRules.mapTo(mutableSetOf()) {
+                it.protocolCriteria.protocolId
+            }
+            val responseObservations = observed.filterKeys { it in responseProtocolIds }
+            retainProtocolObservations(candidate.exchangeId, responseObservations)
+        }
+        return observed
+    }
+
+    /** Retains bounded immutable observation maps without a JVM concurrent collection. */
+    private fun retainProtocolObservations(
+        exchangeId: ExchangeId,
+        observations: Map<BreakpointProtocolId, ProtocolObservation>,
+    ) {
+        if (observations.isEmpty()) return
+        protocolObservations.update { current ->
+            when {
+                exchangeId in current -> current + (exchangeId to observations)
+                current.size >= limits.maxTrackedProtocolExchanges -> current
+                else -> current + (exchangeId to observations)
+            }
+        }
+    }
+
+    /** Atomically removes and returns compact observations for one completed exchange. */
+    private fun removeProtocolObservations(
+        exchangeId: ExchangeId,
+    ): Map<BreakpointProtocolId, ProtocolObservation> {
+        var removed: Map<BreakpointProtocolId, ProtocolObservation> = emptyMap()
+        protocolObservations.update { current ->
+            removed = current[exchangeId].orEmpty()
+            current - exchangeId
+        }
+        return removed
+    }
+
     private fun requirementsFor(rules: List<CompiledRule>, enabled: Boolean): BreakpointRequirements =
         BreakpointRequirements(
             hasRequestRules = enabled && rules.any { it.includes(BreakpointPhase.REQUEST) },
@@ -269,30 +395,20 @@ public class BreakpointCoordinator(
         val decision: CompletableDeferred<BreakpointDecision>,
     )
 
-    private class CompiledRule(val definition: BreakpointRule) {
-        private val method = definition.method?.token
-        private val urlRegex: Regex = compileWildcard(definition.urlPattern)
+    private class CompiledRule(
+        val definition: BreakpointRule,
+        val protocolCriteria: CompiledProtocolCriteria,
+    ) {
+        private val transportMatcher = BreakpointTransportMatcher(definition)
 
-        fun includes(phase: BreakpointPhase): Boolean =
-            definition.phase == BreakpointPhase.BOTH || definition.phase == phase
+        fun includes(phase: BreakpointPhase): Boolean = transportMatcher.includes(phase)
 
-        fun matches(candidate: BreakpointCandidate): Boolean =
-            includes(candidate.phase) &&
-                (method == null || candidate.request.head.method.token.equals(method, ignoreCase = true)) &&
-                urlRegex.containsMatchIn(candidate.request.absoluteUrl())
-
-        companion object {
-            private fun compileWildcard(pattern: String): Regex {
-                if (pattern == "*" || pattern == ".*") return Regex(".*", RegexOption.IGNORE_CASE)
-                val expression = if ('*' in pattern && ".*" !in pattern) {
-                    pattern.split('*').joinToString(".*") { Regex.escape(it) }
-                } else {
-                    pattern
-                }
-                return runCatching { Regex(expression, RegexOption.IGNORE_CASE) }
-                    .getOrElse { Regex(Regex.escape(pattern), RegexOption.IGNORE_CASE) }
-            }
-        }
+        fun matchesTransport(candidate: BreakpointCandidate, phase: BreakpointPhase): Boolean =
+            transportMatcher.matches(
+                url = candidate.request.absoluteUrl(),
+                method = candidate.request.head.method.token,
+                phase = phase,
+            )
     }
 }
 

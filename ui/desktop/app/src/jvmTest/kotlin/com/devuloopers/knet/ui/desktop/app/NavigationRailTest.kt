@@ -17,13 +17,15 @@ class NavigationRailTest {
     fun `verify destination list contains expected v2 destinations`() {
         val destinations = listOf(
             DesktopDestination.Traffic,
+            DesktopDestination.ConnectDevice,
             DesktopDestination.ApiStudio,
             DesktopDestination.Certificate,
             DesktopDestination.Settings
         )
 
-        assertEquals(4, destinations.size)
+        assertEquals(5, destinations.size)
         assertTrue(destinations.contains(DesktopDestination.Traffic))
+        assertTrue(destinations.contains(DesktopDestination.ConnectDevice))
         assertTrue(destinations.contains(DesktopDestination.ApiStudio))
         assertTrue(destinations.contains(DesktopDestination.Certificate))
         assertTrue(destinations.contains(DesktopDestination.Settings))

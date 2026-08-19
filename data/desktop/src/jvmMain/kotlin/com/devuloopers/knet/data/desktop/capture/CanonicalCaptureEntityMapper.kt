@@ -281,7 +281,7 @@ internal object CanonicalCaptureEntityMapper {
     private fun ingressToken(kind: IngressKind): String = when (kind) {
         IngressKind.Local -> "LOCAL"
         IngressKind.LanPairedDevice -> "LAN_PAIRED_DEVICE"
-        IngressKind.WifiApprovedDevice -> "WIFI_APPROVED_DEVICE"
+        IngressKind.WifiLanClient -> "WIFI_LAN_CLIENT"
         IngressKind.AdbDevice -> "ADB_DEVICE"
         IngressKind.CompanionDirect -> "COMPANION_DIRECT"
         IngressKind.CompanionRelay -> "COMPANION_RELAY"

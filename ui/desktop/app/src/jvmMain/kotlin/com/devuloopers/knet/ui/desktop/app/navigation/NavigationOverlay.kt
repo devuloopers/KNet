@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.PauseCircle
@@ -71,6 +72,7 @@ fun NavigationOverlay(
 
     val topSection = listOf(
         NavigationDestinationInfo(DesktopDestination.Traffic, "Traffic", Icons.Default.WifiTethering),
+        NavigationDestinationInfo(DesktopDestination.ConnectDevice, "Connect Device", Icons.Default.Devices),
         NavigationDestinationInfo(DesktopDestination.ApiStudio, "API Studio", Icons.Default.Navigation),
         NavigationDestinationInfo(DesktopDestination.Breakpoints, "Intercepts", Icons.Default.PauseCircle)
     )

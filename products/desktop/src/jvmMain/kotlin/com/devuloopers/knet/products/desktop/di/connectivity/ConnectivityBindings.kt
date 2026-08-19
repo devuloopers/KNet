@@ -4,24 +4,18 @@ import com.devuloopers.knet.application.port.connectivity.ConnectivityCoordinato
 import com.devuloopers.knet.application.port.connectivity.wifi.WifiSharingPort
 import com.devuloopers.knet.application.port.pairing.PairingCoordinator
 import com.devuloopers.knet.application.port.pairing.PairingCryptoPort
+import com.devuloopers.knet.application.port.pairing.RegisteredDeviceStorePort
 import com.devuloopers.knet.application.port.pairing.TrustedDeviceStorePort
 import com.devuloopers.knet.application.port.proxy.ProxyRuntimePort
 import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
 import com.devuloopers.knet.application.usecase.pairing.CreatePairingOnboardingUseCase
-import com.devuloopers.knet.application.usecase.connectivity.wifi.ApproveWifiClientUseCase
-import com.devuloopers.knet.application.usecase.connectivity.wifi.CreateWifiInvitationUseCase
-import com.devuloopers.knet.application.usecase.connectivity.wifi.DisableWifiSharingUseCase
-import com.devuloopers.knet.application.usecase.connectivity.wifi.EnableWifiSharingUseCase
 import com.devuloopers.knet.application.usecase.connectivity.wifi.ObserveWifiSharingUseCase
-import com.devuloopers.knet.application.usecase.connectivity.wifi.RejectWifiClientUseCase
-import com.devuloopers.knet.application.usecase.connectivity.wifi.RevokeWifiClientUseCase
 import com.devuloopers.knet.connectivity.desktop.DesktopConnectivityRuntime
 import com.devuloopers.knet.connectivity.desktop.adb.AdbReverseMechanism
 import com.devuloopers.knet.connectivity.desktop.artifact.SetupArtifactStore
 import com.devuloopers.knet.connectivity.desktop.gateway.AuthenticatedProxyGateway
 import com.devuloopers.knet.connectivity.desktop.gateway.IngressAttributionRegistry
 import com.devuloopers.knet.connectivity.desktop.network.DesktopNetworkSnapshotMonitor
-import com.devuloopers.knet.connectivity.desktop.pairing.EncryptedFileTrustedDeviceStore
 import com.devuloopers.knet.connectivity.desktop.pairing.JvmPairingCrypto
 import com.devuloopers.knet.connectivity.desktop.portal.DedicatedSetupPortal
 import com.devuloopers.knet.connectivity.desktop.portal.SetupPortalContent
@@ -33,17 +27,20 @@ import com.devuloopers.knet.connectivity.desktop.wifi.DesktopWifiSharingRuntime
 import com.devuloopers.knet.connectivity.spi.ManagedConnectivityMechanism
 import com.devuloopers.knet.connectivity.spi.SetupDescriptorProvider
 import com.devuloopers.knet.data.desktop.network.repository.NetworkRepositoryImpl
+import com.devuloopers.knet.data.desktop.pairing.RoomRegisteredDeviceStore
 import com.devuloopers.knet.data.desktop.runtime.CertificateRuntimeRepository
 import com.devuloopers.knet.domain.network.repository.NetworkRepository
 import com.devuloopers.knet.domain.network.usecase.GetLocalIpUseCase
 import com.devuloopers.knet.domain.network.usecase.ObserveLocalIpUseCase
 import com.devuloopers.knet.engine.proxy.network.LocalIpResolver
+import com.devuloopers.knet.storage.database.KNetDatabase
 import com.devuloopers.knet.traffic.model.IngressAttributionLookup
 import com.devuloopers.knet.traffic.model.IngressAttributionRegistration
+import com.devuloopers.knet.ui.desktop.connectivity.viewmodel.ConnectDeviceViewModel
 import org.koin.core.module.Module
+import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.bind
 import org.koin.dsl.module
-import java.io.File
 import java.net.InetSocketAddress
 
 /** Pairing, network discovery, setup delivery, and desktop connectivity mechanisms. */
@@ -53,11 +50,9 @@ internal val connectivityBindings: Module = module {
     single<IngressAttributionRegistration> { get<IngressAttributionRegistry>() }
 
     single<PairingCryptoPort> { JvmPairingCrypto() }
-    single<TrustedDeviceStorePort> {
-        EncryptedFileTrustedDeviceStore(
-            File(System.getProperty("user.home"), ".knet/pairing").toPath(),
-        )
-    }
+    single { RoomRegisteredDeviceStore(get<KNetDatabase>().registeredDeviceDao()) }
+    single<RegisteredDeviceStorePort> { get<RoomRegisteredDeviceStore>() }
+    single<TrustedDeviceStorePort> { get<RoomRegisteredDeviceStore>() }
     single { PairingCoordinator(get(), get(), System::currentTimeMillis) }
     factory { CreatePairingOnboardingUseCase(get()) }
 
@@ -93,13 +88,15 @@ internal val connectivityBindings: Module = module {
         )
     }
     single<WifiSharingPort> { get<DesktopWifiSharingRuntime>() }
-    factory { EnableWifiSharingUseCase(get()) }
-    factory { DisableWifiSharingUseCase(get()) }
     factory { ObserveWifiSharingUseCase(get()) }
-    factory { CreateWifiInvitationUseCase(get()) }
-    factory { ApproveWifiClientUseCase(get()) }
-    factory { RejectWifiClientUseCase(get()) }
-    factory { RevokeWifiClientUseCase(get()) }
+    viewModel {
+        ConnectDeviceViewModel(
+            startLoopbackProxy = get(),
+            observeProxyRuntimeState = get(),
+            observeWifiSharing = get(),
+            getWorkspaceLayout = get(),
+        )
+    }
 
     single { LocalIpResolver() }
     single<NetworkRepository> { NetworkRepositoryImpl(get()) }

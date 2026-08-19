@@ -1,41 +1,42 @@
 package com.devuloopers.knet.domain.rules.model
 
 /**
- * Extensible protocol-specific interception matching criteria strategy.
+ * Stable identifier owned by one breakpoint protocol extension.
+ *
+ * The value is deliberately open so adding a protocol does not require modifying a central enum or
+ * sealed hierarchy. Standard identifiers are exposed as typed constants.
  */
-sealed interface ProtocolMatchCriteria {
+@JvmInline
+value class BreakpointProtocolId(val value: String) {
+    init {
+        require(value.isNotBlank()) { "Breakpoint protocol ID must not be blank." }
+        require(value == value.trim().lowercase()) {
+            "Breakpoint protocol ID must be a normalized lowercase token."
+        }
+        require(value.first().isLetter() && value.all { it.isLetterOrDigit() || it == '-' || it == '.' }) {
+            "Breakpoint protocol ID contains unsupported characters."
+        }
+    }
 
-    /**
-     * Standard HTTP/REST matching criteria (URL regex / HTTP method).
-     */
-    object HttpDefault : ProtocolMatchCriteria
+    companion object {
+        /** Protocol-neutral HTTP rule matching. */
+        val HTTP = BreakpointProtocolId("http")
+    }
+}
 
-    /**
-     * GraphQL specific matching criteria.
-     *
-     * @property operationName Optional target GraphQL operationName filter (e.g. "GetUserProfile").
-     */
-    data class GraphQL(
-        val operationName: String? = null
-    ) : ProtocolMatchCriteria
-
-    /**
-     * gRPC specific matching criteria for future protocol extensions.
-     *
-     * @property serviceName Target gRPC package/service name filter.
-     * @property methodName Target gRPC RPC method name filter.
-     */
-    data class Grpc(
-        val serviceName: String? = null,
-        val methodName: String? = null
-    ) : ProtocolMatchCriteria
-
-    /**
-     * WebSocket frame specific criteria for future protocol extensions.
-     *
-     * @property frameType Target frame type filter.
-     */
-    data class WebSocket(
-        val frameType: String? = null
-    ) : ProtocolMatchCriteria
+/**
+ * Persistable reference to extension-owned breakpoint criteria.
+ *
+ * [encodedPayload] is opaque outside the extension identified by [protocolId]. The owning
+ * extension validates and compiles it into a strongly typed matcher. This envelope lets storage,
+ * application coordination, and UI selection remain stable as protocols are added.
+ */
+data class ProtocolMatchCriteria(
+    val protocolId: BreakpointProtocolId = BreakpointProtocolId.HTTP,
+    val encodedPayload: String = "",
+) {
+    companion object {
+        /** Default criteria that applies only phase, HTTP method, and URL matching. */
+        val HttpDefault = ProtocolMatchCriteria()
+    }
 }

@@ -1,20 +1,22 @@
 package com.devuloopers.knet.connectivity.desktop
 
 import com.devuloopers.knet.application.port.pairing.PairingCoordinator
+import com.devuloopers.knet.application.port.pairing.TrustedDeviceStorePort
 import com.devuloopers.knet.connectivity.desktop.gateway.AuthenticatedProxyGateway
 import com.devuloopers.knet.connectivity.desktop.gateway.IngressAttributionRegistry
-import com.devuloopers.knet.connectivity.desktop.pairing.EncryptedFileTrustedDeviceStore
 import com.devuloopers.knet.connectivity.desktop.pairing.JvmPairingCrypto
 import com.devuloopers.knet.pairing.DeviceScope
-import com.devuloopers.knet.pairing.PairedDeviceId
 import com.devuloopers.knet.pairing.PairingCompletionRequest
 import com.devuloopers.knet.pairing.PairingCompletionResult
+import com.devuloopers.knet.pairing.PairingInvitationId
+import com.devuloopers.knet.pairing.PendingPairingInvitation
+import com.devuloopers.knet.identity.RegisteredDeviceId
+import com.devuloopers.knet.pairing.TrustedDevice
 import com.devuloopers.knet.traffic.model.IngressKind
 import com.devuloopers.knet.traffic.model.TrafficEndpoint
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
-import java.nio.file.Files
 import java.security.KeyPairGenerator
 import java.security.Signature
 import java.util.Base64
@@ -22,6 +24,8 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -31,10 +35,9 @@ import kotlin.test.assertTrue
 class PairingGatewayEndToEndTest {
     @Test
     fun `paired standard proxy stream is attributed and revocation denies reconnect`() = runBlocking {
-        val root = Files.createTempDirectory("knet-pairing-e2e-")
         var now = 1_000L
         val crypto = JvmPairingCrypto()
-        val store = EncryptedFileTrustedDeviceStore(root, nowMillis = { now })
+        val store = InMemoryTrustedDeviceStore()
         val pairing = PairingCoordinator(store, crypto, { now })
         val issued = pair(pairing)
         val internalProxy = ServerSocket(0)
@@ -74,28 +77,12 @@ class PairingGatewayEndToEndTest {
             gateway.close()
             internalProxy.close()
             upstreamWorker.join(5_000L)
-            root.toFile().deleteRecursively()
         }
     }
 
     @Test
-    fun `trusted device file is encrypted and reloadable`() = runBlocking {
-        val root = Files.createTempDirectory("knet-pairing-store-")
-        val crypto = JvmPairingCrypto()
-        val pairing = PairingCoordinator(EncryptedFileTrustedDeviceStore(root), crypto, { 1_000L })
-        val issued = pair(pairing)
-        val encryptedBytes = Files.readAllBytes(root.resolve("trusted-devices.enc"))
-        assertFalse(encryptedBytes.decodeToString().contains(issued.device.displayName))
-        val reloaded = EncryptedFileTrustedDeviceStore(root).getDevice(issued.device.id)
-        assertEquals(issued.device, reloaded)
-        root.toFile().deleteRecursively()
-        Unit
-    }
-
-    @Test
     fun `revocation terminates an already active paired stream`() = runBlocking {
-        val root = Files.createTempDirectory("knet-pairing-active-revoke-")
-        val pairing = PairingCoordinator(EncryptedFileTrustedDeviceStore(root), JvmPairingCrypto(), System::currentTimeMillis)
+        val pairing = PairingCoordinator(InMemoryTrustedDeviceStore(), JvmPairingCrypto(), System::currentTimeMillis)
         val issued = pair(pairing)
         val internalProxy = ServerSocket(0)
         val gatewayPort = freePort()
@@ -133,14 +120,12 @@ class PairingGatewayEndToEndTest {
             gateway.close()
             internalProxy.close()
             upstreamWorker.join(5_000L)
-            root.toFile().deleteRecursively()
         }
     }
 
     @Test
     fun `gateway rejects duplicate credentials and enforces connection admission`() = runBlocking {
-        val root = Files.createTempDirectory("knet-pairing-admission-")
-        val pairing = PairingCoordinator(EncryptedFileTrustedDeviceStore(root), JvmPairingCrypto(), System::currentTimeMillis)
+        val pairing = PairingCoordinator(InMemoryTrustedDeviceStore(), JvmPairingCrypto(), System::currentTimeMillis)
         val issued = pair(pairing)
         val internalProxy = ServerSocket(0)
         val gatewayPort = freePort()
@@ -182,7 +167,6 @@ class PairingGatewayEndToEndTest {
             gateway.close()
             internalProxy.close()
             upstreamWorker.join(5_000L)
-            root.toFile().deleteRecursively()
         }
     }
 
@@ -192,7 +176,7 @@ class PairingGatewayEndToEndTest {
         val unsigned = PairingCompletionRequest(
             invitation.id,
             invitation.secret,
-            PairedDeviceId("device-e2e"),
+            RegisteredDeviceId("device-e2e"),
             "E2E device",
             Base64.getUrlEncoder().withoutPadding().encodeToString(keyPair.public.encoded),
             "pending",
@@ -244,6 +228,50 @@ class PairingGatewayEndToEndTest {
             tail = (tail + value.toChar()).takeLast(4)
         }
         return bytes.toByteArray().decodeToString()
+    }
+
+    private class InMemoryTrustedDeviceStore : TrustedDeviceStorePort {
+        private val invitations = mutableMapOf<PairingInvitationId, PendingPairingInvitation>()
+        private val devices = mutableMapOf<RegisteredDeviceId, TrustedDevice>()
+        private val devicesFlow = MutableStateFlow<List<TrustedDevice>>(emptyList())
+
+        override suspend fun putInvitation(invitation: PendingPairingInvitation) {
+            invitations[invitation.id] = invitation
+        }
+
+        override suspend fun claimInvitation(
+            id: PairingInvitationId,
+            secretDigest: String,
+            nowEpochMillis: Long,
+        ): PendingPairingInvitation? {
+            val invitation = invitations[id] ?: return null
+            if (invitation.secretDigest != secretDigest || invitation.expiresAtEpochMillis <= nowEpochMillis) return null
+            invitations.remove(id)
+            return invitation
+        }
+
+        override suspend fun putDevice(device: TrustedDevice) {
+            devices[device.id] = device
+            publish()
+        }
+
+        override suspend fun getDevice(id: RegisteredDeviceId): TrustedDevice? = devices[id]
+
+        override suspend fun revoke(id: RegisteredDeviceId, revokedAtEpochMillis: Long): Boolean {
+            val current = devices[id] ?: return false
+            if (current.isRevoked) return true
+            devices[id] = current.copy(
+                registeredDevice = current.registeredDevice.copy(revokedAtEpochMillis = revokedAtEpochMillis),
+            )
+            publish()
+            return true
+        }
+
+        override fun observeDevices(): Flow<List<TrustedDevice>> = devicesFlow
+
+        private fun publish() {
+            devicesFlow.value = devices.values.toList()
+        }
     }
 
     private fun freePort(): Int = ServerSocket(0).use { it.localPort }

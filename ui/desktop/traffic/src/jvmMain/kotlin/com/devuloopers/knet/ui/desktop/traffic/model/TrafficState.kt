@@ -13,7 +13,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
  * Capture execution state enum.
  */
 enum class CaptureState {
-    IDLE,
+    STARTING,
     CAPTURING,
     PAUSED,
     STOPPED

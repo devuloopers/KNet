@@ -3,18 +3,20 @@ package com.devuloopers.knet.ui.desktop.codeeditor.algorithm
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.TextLayoutResult
+import com.devuloopers.knet.ui.desktop.codeeditor.document.EditorDocumentSnapshot
+import com.devuloopers.knet.ui.desktop.codeeditor.viewport.EditorVisualLineMap
 import kotlin.math.roundToInt
 
 /**
  * Encapsulates the resolved 0-indexed document line index, column index, and display line text for a pointer position.
  *
- * @property rawLineIndex 0-indexed line position in [DocumentBuffer].
- * @property colIndex Character column offset on the target line.
+ * @property documentLineIndex Zero-based logical document line.
+ * @property columnIndex Character column offset on the target line.
  * @property displayLineText Visible text rendered on the line (includes `... }` for collapsed fold rows).
  */
-data class PointerHitResult(
-    val rawLineIndex: Int,
-    val colIndex: Int,
+internal data class PointerHitResult(
+    val documentLineIndex: Int,
+    val columnIndex: Int,
     val displayLineText: String
 )
 
@@ -25,7 +27,7 @@ data class PointerHitResult(
  * [LazyLine.displayText] bounds so that drag selection across collapsed fold rows highlights the full visible
  * line stub (including `... }`).
  */
-object PointerHitTestEngine {
+internal object PointerHitTestEngine {
 
     /**
      * Calculates 0-indexed raw document line, column index, and display text corresponding to viewport pointer coordinate [pos].
@@ -34,8 +36,8 @@ object PointerHitTestEngine {
      *
      * @param pos Viewport pointer coordinate offset.
      * @param lazyListState Active [LazyListState] managing visible item offsets.
-     * @param visibleLines List of currently visible [LazyLine] rows rendered in the viewport.
-     * @param rawLines Complete list of document text lines.
+     * @param visualLineMap Mapping between LazyColumn rows and logical document lines.
+     * @param snapshot Immutable source document.
      * @param lineHeightPx Line height in pixels.
      * @param charWidthPx Character font width in pixels.
      * @param gutterWidthPx Total line number gutter width in pixels.
@@ -46,8 +48,8 @@ object PointerHitTestEngine {
     fun calculatePointerHit(
         pos: Offset,
         lazyListState: LazyListState,
-        visibleLines: List<LazyLine>,
-        rawLines: List<String>,
+        visualLineMap: EditorVisualLineMap,
+        snapshot: EditorDocumentSnapshot,
         lineHeightPx: Float,
         charWidthPx: Float,
         gutterWidthPx: Float,
@@ -59,33 +61,33 @@ object PointerHitTestEngine {
             pos.y >= item.offset && pos.y < item.offset + item.size
         }
 
-        val rawLineIndex: Int
-        val colIndex: Int
+        val documentLineIndex: Int
+        val columnIndex: Int
         val lineText: String
 
         if (targetItem != null) {
-            val hasVisibleLines = visibleLines.isNotEmpty() && targetItem.index in visibleLines.indices
+            val hasVisibleLines = targetItem.index in 0 until visualLineMap.visibleLineCount
 
             // Map visual LazyColumn item index to actual raw document line index in O(1)
-            rawLineIndex = if (hasVisibleLines) {
-                visibleLines[targetItem.index].originalLineIndex
+            documentLineIndex = if (hasVisibleLines) {
+                visualLineMap.toDocumentLine(targetItem.index)
             } else {
-                targetItem.index.coerceIn(0, rawLines.lastIndex)
+                targetItem.index.coerceIn(0, snapshot.lineCount - 1)
             }
 
             // Use display text (which includes " ... }" stub for collapsed fold rows) for length bounds
             lineText = if (hasVisibleLines) {
-                visibleLines[targetItem.index].displayText
+                visualLineMap.lazyLine(snapshot, targetItem.index).displayText
             } else {
-                rawLines.getOrElse(rawLineIndex) { "" }
+                snapshot.line(documentLineIndex)
             }
 
             val localY = (pos.y - targetItem.offset).coerceAtLeast(0f)
             val localX = (pos.x - gutterWidthPx).coerceAtLeast(0f)
 
-            val layoutResult = lineTextLayoutMap[rawLineIndex]
+            val layoutResult = lineTextLayoutMap[documentLineIndex]
             if (layoutResult != null) {
-                colIndex = layoutResult.getOffsetForPosition(Offset(localX, localY)).coerceIn(0, lineText.length)
+                columnIndex = layoutResult.getOffsetForPosition(Offset(localX, localY)).coerceIn(0, lineText.length)
             } else {
                 val visualRowIndex = (localY / lineHeightPx).toInt()
                 val availableTextWidth = (containerWidthPx - gutterWidthPx).coerceAtLeast(100f)
@@ -93,41 +95,41 @@ object PointerHitTestEngine {
                     (availableTextWidth / charWidthPx).toInt().coerceAtLeast(10)
                 } else 80
 
-                val colInRow = (localX / charWidthPx).roundToInt()
-                colIndex = (visualRowIndex * charsPerVisualRow + colInRow).coerceIn(0, lineText.length)
+                val colInRow = if (charWidthPx > 0f) (localX / charWidthPx).roundToInt() else 0
+                columnIndex = (visualRowIndex * charsPerVisualRow + colInRow).coerceIn(0, lineText.length)
             }
         } else {
             val firstVisible = lazyListState.firstVisibleItemIndex
             val firstOffset = lazyListState.firstVisibleItemScrollOffset.toFloat()
             val relativeY = (pos.y + firstOffset).coerceAtLeast(0f)
 
-            val visualItemIdx = if (visibleLines.isNotEmpty()) {
-                (firstVisible + (relativeY / lineHeightPx).toInt()).coerceIn(0, visibleLines.lastIndex)
+            val visualItemIdx = if (visualLineMap.visibleLineCount > 0) {
+                (firstVisible + (relativeY / lineHeightPx).toInt()).coerceIn(0, visualLineMap.visibleLineCount - 1)
             } else 0
 
-            val hasVisibleLines = visibleLines.isNotEmpty() && visualItemIdx in visibleLines.indices
+            val hasVisibleLines = visualItemIdx in 0 until visualLineMap.visibleLineCount
 
-            rawLineIndex = if (hasVisibleLines) {
-                visibleLines[visualItemIdx].originalLineIndex
+            documentLineIndex = if (hasVisibleLines) {
+                visualLineMap.toDocumentLine(visualItemIdx)
             } else {
-                visualItemIdx.coerceIn(0, rawLines.lastIndex)
+                visualItemIdx.coerceIn(0, snapshot.lineCount - 1)
             }
 
             lineText = if (hasVisibleLines) {
-                visibleLines[visualItemIdx].displayText
+                visualLineMap.lazyLine(snapshot, visualItemIdx).displayText
             } else {
-                rawLines.getOrElse(rawLineIndex) { "" }
+                snapshot.line(documentLineIndex)
             }
 
             val localX = (pos.x - gutterWidthPx).coerceAtLeast(0f)
-            val layoutResult = lineTextLayoutMap[rawLineIndex]
-            colIndex = layoutResult?.getOffsetForPosition(Offset(localX, 0f))?.coerceIn(0, lineText.length)
-                ?: (localX / charWidthPx).roundToInt().coerceIn(0, lineText.length)
+            val layoutResult = lineTextLayoutMap[documentLineIndex]
+            columnIndex = layoutResult?.getOffsetForPosition(Offset(localX, 0f))?.coerceIn(0, lineText.length)
+                ?: (if (charWidthPx > 0f) (localX / charWidthPx).roundToInt() else 0).coerceIn(0, lineText.length)
         }
 
         return PointerHitResult(
-            rawLineIndex = rawLineIndex,
-            colIndex = colIndex,
+            documentLineIndex = documentLineIndex,
+            columnIndex = columnIndex,
             displayLineText = lineText
         )
     }

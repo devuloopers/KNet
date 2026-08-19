@@ -5,14 +5,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorCaretState
-import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorSelection
+import com.devuloopers.knet.ui.desktop.codeeditor.document.EditorPosition
+import com.devuloopers.knet.ui.desktop.codeeditor.document.EditorSelection
 
 /**
  * Stateful viewport gesture controller managing pointer drag anchors, Shift + Click selection expansion,
  * single-click dismissal, and delegating multi-click gestures to [MultiClickGestureHandler].
  */
-class SelectionGestureHandler(
+internal class SelectionGestureHandler(
     private val multiClickGestureHandler: MultiClickGestureHandler = MultiClickGestureHandler()
 ) {
     private var dragAnchor by mutableStateOf<Pair<Int, Int>?>(null)
@@ -25,8 +25,8 @@ class SelectionGestureHandler(
      * @param targetColIndex 0-indexed target column position.
      * @param lineText Text string of the target line.
      * @param isShiftPressed True if Shift key is currently held down.
-     * @param currentSelection Active viewport [EditorSelection], if any.
-     * @param caretState Current caret position state [EditorCaretState], if any.
+     * @param currentSelection Active directional [EditorSelection], if any.
+     * @param caret Current caret position.
      * @param currentTimeMs Current timestamp in milliseconds.
      * @param onSelectionChange Callback fired with the calculated updated selection range.
      */
@@ -36,7 +36,7 @@ class SelectionGestureHandler(
         lineText: String = "",
         isShiftPressed: Boolean = false,
         currentSelection: EditorSelection? = null,
-        caretState: EditorCaretState? = null,
+        caret: EditorPosition,
         currentTimeMs: Long = currentGestureTimeMillis(),
         onSelectionChange: (EditorSelection?) -> Unit
     ) {
@@ -60,10 +60,10 @@ class SelectionGestureHandler(
 
             dragAnchor = if (isShiftPressed && currentSelection != null && !currentSelection.isEmpty) {
                 // Shift + Click: Preserve origin start anchor of existing selection
-                currentSelection.startLine to currentSelection.startCol
-            } else if (isShiftPressed && caretState != null) {
+                currentSelection.anchor.line to currentSelection.anchor.column
+            } else if (isShiftPressed) {
                 // Shift + Click: Preserve current caret position as start anchor
-                caretState.lineIndex to caretState.colIndex
+                caret.line to caret.column
             } else {
                 // Standard press: Start new selection anchor at clicked coordinate
                 targetLineIndex to targetColIndex
@@ -91,10 +91,8 @@ class SelectionGestureHandler(
             hasDragged = true
             onSelectionChange(
                 EditorSelection(
-                    startLine = anchorLine,
-                    startCol = anchorCol,
-                    endLine = targetLineIndex,
-                    endCol = targetColIndex
+                    anchor = EditorPosition(anchorLine, anchorCol),
+                    active = EditorPosition(targetLineIndex, targetColIndex)
                 )
             )
         }
@@ -134,6 +132,6 @@ class SelectionGestureHandler(
  * Creates and remembers a reusable [SelectionGestureHandler] instance across recompositions.
  */
 @Composable
-fun rememberSelectionGestureHandler(): SelectionGestureHandler {
+internal fun rememberSelectionGestureHandler(): SelectionGestureHandler {
     return remember { SelectionGestureHandler() }
 }

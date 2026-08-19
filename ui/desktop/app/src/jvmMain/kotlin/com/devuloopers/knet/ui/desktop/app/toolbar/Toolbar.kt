@@ -32,6 +32,7 @@ fun Toolbar(
 
         val destinationLabel = when (currentDestination) {
             DesktopDestination.Traffic -> "Live Traffic"
+            DesktopDestination.ConnectDevice -> "Connect Device"
             DesktopDestination.Inspector -> "Inspector"
             DesktopDestination.ApiStudio -> "API Studio"
             DesktopDestination.Certificate -> "Certificates Manager"

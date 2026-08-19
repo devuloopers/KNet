@@ -8,8 +8,11 @@ import com.devuloopers.knet.application.usecase.traffic.LoadTrafficExchangeDetai
 import com.devuloopers.knet.application.usecase.traffic.ObserveLatestTrafficSessionUseCase
 import com.devuloopers.knet.application.usecase.traffic.ObserveTrafficGenerationsUseCase
 import com.devuloopers.knet.application.usecase.traffic.PrepareTrafficRequestUseCase
+import com.devuloopers.knet.application.usecase.traffic.PauseTrafficCaptureUseCase
 import com.devuloopers.knet.application.usecase.traffic.QueryTrafficPageUseCase
 import com.devuloopers.knet.application.usecase.traffic.RecordHttpExchangeUseCase
+import com.devuloopers.knet.application.usecase.traffic.ResumeTrafficCaptureUseCase
+import com.devuloopers.knet.application.usecase.traffic.ObserveTrafficCaptureStateUseCase
 import com.devuloopers.knet.data.desktop.traffic.repository.DesktopTrafficMaintenanceAdapter
 import com.devuloopers.knet.data.desktop.traffic.repository.DesktopTrafficQueryAdapter
 import com.devuloopers.knet.storage.database.KNetDatabase
@@ -43,6 +46,9 @@ internal val trafficBindings: Module = module {
     factory { ObserveTrafficGenerationsUseCase(get()) }
     factory { PrepareTrafficRequestUseCase(get()) }
     factory { RecordHttpExchangeUseCase(get()) }
+    factory { PauseTrafficCaptureUseCase(get()) }
+    factory { ResumeTrafficCaptureUseCase(get()) }
+    factory { ObserveTrafficCaptureStateUseCase(get()) }
 
     viewModel {
         TrafficViewModel(
@@ -53,13 +59,16 @@ internal val trafficBindings: Module = module {
             startLoopbackProxyUseCase = get(),
             stopProxyRuntimeUseCase = get(),
             observeProxyRuntimeStateUseCase = get(),
+            pauseTrafficCaptureUseCase = get(),
+            resumeTrafficCaptureUseCase = get(),
+            observeTrafficCaptureStateUseCase = get(),
             loadTrafficExchangeDetailsUseCase = get(),
             observeLocalIpUseCase = get(),
             getWorkspaceLayoutUseCase = get(),
             prepareTrafficRequestUseCase = get(),
             observeInspectionAnnotationsUseCase = get(),
             observeRulesUseCase = get(),
-            saveRuleUseCase = get(),
+            observePendingBreakpointsUseCase = get(),
         )
     }
 }

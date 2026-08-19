@@ -162,9 +162,18 @@ fun BreakpointManagerScreen(
         if (state.isAddEditDialogVisible) {
             AddEditBreakpointRuleDialog(
                 rule = state.editingRule,
+                protocolDefinitions = state.protocolDefinitions,
+                initialProtocolValues = state.editingProtocolValues,
                 onDismiss = { viewModel.closeDialog() },
-                onSave = { urlPattern, method, phase, enabled, protocolCriteria ->
-                    viewModel.saveRule(urlPattern, method, phase, enabled, protocolCriteria)
+                onSave = { urlPattern, method, phase, enabled, protocolId, protocolValues ->
+                    viewModel.saveRule(
+                        urlPattern,
+                        method,
+                        phase,
+                        enabled,
+                        protocolId,
+                        protocolValues,
+                    )
                 }
             )
         }

@@ -62,7 +62,7 @@ public enum class ProxyEndpointScope {
  */
 public enum class ProxyAccessRequirement {
     LOCAL_PROCESS,
-    APPROVED_LAN_CLIENT,
+    OPEN_LAN_CLIENT,
     PAIRED_CLIENT_CREDENTIAL,
     INTERNAL_GATEWAY_CREDENTIAL,
 }

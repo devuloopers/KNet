@@ -11,6 +11,8 @@ import com.devuloopers.knet.traffic.model.http.RequestHead
 import com.devuloopers.knet.traffic.model.http.RequestTarget
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
+import com.devuloopers.knet.domain.rules.model.BreakpointProtocolId
+import com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria
 import kotlinx.coroutines.async
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runCurrent
@@ -71,6 +73,53 @@ class BreakpointCoordinatorTest {
         coordinator.clear()
         assertSame(BreakpointDecision.Drop, first.await())
         assertTrue(coordinator.pendingBreakpoints.value.isEmpty())
+    }
+
+    @Test
+    fun `missing protocol extension fails closed instead of becoming an HTTP rule`() = runTest {
+        val coordinator = BreakpointCoordinator()
+        coordinator.replaceRules(
+            listOf(
+                BreakpointRule(
+                    id = "unavailable-protocol",
+                    urlPattern = "*",
+                    protocolCriteria = ProtocolMatchCriteria(
+                        protocolId = BreakpointProtocolId("future-format"),
+                        encodedPayload = "{\"version\":1}",
+                    ),
+                ),
+            ),
+        )
+
+        assertFalse(coordinator.requirements.value.hasRequestRules)
+        assertFalse(coordinator.requirements.value.hasResponseRules)
+        assertSame(
+            BreakpointDecision.ContinueUnchanged,
+            coordinator.intercept(candidate("unavailable", byteArrayOf(1))),
+        )
+        assertTrue(coordinator.pendingBreakpoints.value.isEmpty())
+    }
+
+    @Test
+    fun `capture pause continues pending decisions without changing pipeline requirements`() = runTest {
+        val coordinator = BreakpointCoordinator()
+        coordinator.replaceRules(
+            listOf(BreakpointRule(id = "pause-rule", phase = BreakpointPhase.REQUEST, urlPattern = "*")),
+        )
+        val requirementsBeforePause = coordinator.requirements.value
+        val decision = async { coordinator.intercept(candidate("pause-candidate", byteArrayOf(1))) }
+        runCurrent()
+        assertEquals(1, coordinator.pendingBreakpoints.value.size)
+
+        coordinator.setCaptureAvailable(false)
+
+        assertSame(BreakpointDecision.ContinueUnchanged, decision.await())
+        assertTrue(coordinator.pendingBreakpoints.value.isEmpty())
+        assertEquals(requirementsBeforePause, coordinator.requirements.value)
+        assertSame(
+            BreakpointDecision.ContinueUnchanged,
+            coordinator.intercept(candidate("paused-candidate", byteArrayOf(1))),
+        )
     }
 
     private fun candidate(id: String, body: ByteArray) = BreakpointCandidate(

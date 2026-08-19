@@ -6,7 +6,8 @@ Defines platform-neutral connectivity contracts for making a running proxy reach
 
 ## Owns
 
-- Proxy endpoint, network snapshot, setup artifact, capability, mechanism, and Wi-Fi sharing descriptors.
+- Proxy endpoint, network snapshot, setup artifact, capability, mechanism, and automatically managed open
+  Wi-Fi sharing descriptors.
 - Independent availability, lifecycle, and health state models.
 - Contracts for managed and instruction-only connectivity mechanisms.
 
@@ -16,7 +17,7 @@ Defines platform-neutral connectivity contracts for making a running proxy reach
 
 ## Dependency rule
 
-This is a leaf contract module and has no production project dependencies.
+Remain independent of identity, pairing, engine, UI, data, and platform implementations.
 
 ## Migration direction
 

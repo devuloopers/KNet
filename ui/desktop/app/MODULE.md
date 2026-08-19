@@ -6,7 +6,8 @@ Provides the desktop application shell, navigation host, window scaffold, notifi
 
 ## Owns
 
-- Top-level routes, navigation state, shell layout, and global UI surfaces.
+- Top-level routes, including Connect Device hosting, navigation state, shell layout, and global UI surfaces.
+- Workspace-level placement of the Live Intercept drawer above destination-owned drawers, gated until its canonical Traffic row is projected.
 
 ## Does not own
 

@@ -52,19 +52,23 @@ class ConnectivityModelsTest {
     }
 
     @Test
-    fun `Wi-Fi sharing configuration requires an exact non-loopback address`() {
+    fun `Wi-Fi sharing session requires an open LAN endpoint`() {
+        val address = NetworkAddress("en0", "192.0.2.10", NetworkAddressFamily.IPV4, loopback = false)
         assertFailsWith<IllegalArgumentException> {
-            WifiSharingConfiguration(
-                networkAddress = NetworkAddress("lo0", "127.0.0.1", NetworkAddressFamily.IPV4, loopback = true),
-                proxyPort = 8_080,
+            WifiSharingSession(
+                id = WifiSharingSessionId("session-1"),
+                networkAddress = address,
+                proxyEndpoint = ProxyEndpoint(
+                    host = address.address,
+                    port = 8_080,
+                    scope = ProxyEndpointScope.LAN,
+                    accessRequirement = ProxyAccessRequirement.PAIRED_CLIENT_CREDENTIAL,
+                ),
+                setupUrl = "http://192.0.2.10:8181/setup",
+                certificateSha256 = "a".repeat(64),
+                networkVersion = 1L,
+                startedAtEpochMillis = 1L,
             )
         }
-
-        val configuration = WifiSharingConfiguration(
-            networkAddress = NetworkAddress("en0", "192.0.2.10", NetworkAddressFamily.IPV4, loopback = false),
-            proxyPort = 8_080,
-        )
-
-        assertEquals(8_181, configuration.setupPort)
     }
 }

@@ -10,8 +10,8 @@ public sealed interface IngressKind {
     /** Authenticated client connected through an explicitly enabled LAN binding. */
     public data object LanPairedDevice : IngressKind
 
-    /** Stock phone approved for the current, trusted-local-network Wi-Fi sharing session. */
-    public data object WifiApprovedDevice : IngressKind
+    /** Stock client connected through KNet's open, exact-interface Wi-Fi proxy gateway. */
+    public data object WifiLanClient : IngressKind
 
     /** Client reached the proxy through an application-owned ADB mapping. */
     public data object AdbDevice : IngressKind

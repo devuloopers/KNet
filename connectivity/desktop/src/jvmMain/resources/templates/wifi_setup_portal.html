@@ -1,0 +1,188 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="dark">
+    <title>KNet Wi-Fi Proxy Setup</title>
+    <style>
+        :root {
+            --background: #07101f;
+            --surface: rgba(15, 26, 46, .88);
+            --surface-strong: #13223a;
+            --line: rgba(148, 163, 184, .18);
+            --text: #f5f8ff;
+            --muted: #9aa8bd;
+            --blue: #4e8cff;
+            --blue-strong: #2d6de9;
+            --green: #42d58a;
+            --warning: #f6c766;
+            --shadow: 0 28px 80px rgba(0, 0, 0, .42);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            min-height: 100vh;
+            margin: 0;
+            padding: 28px 16px 48px;
+            color: var(--text);
+            background:
+                radial-gradient(circle at 12% 8%, rgba(78, 140, 255, .24), transparent 34%),
+                radial-gradient(circle at 88% 18%, rgba(70, 215, 209, .13), transparent 29%),
+                var(--background);
+            font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+
+        main { width: min(760px, 100%); margin: 0 auto; }
+        .hero { text-align: center; padding: 28px 10px 22px; }
+
+        .logo {
+            display: inline-grid;
+            place-items: center;
+            width: 62px;
+            height: 62px;
+            margin-bottom: 17px;
+            border: 1px solid rgba(111, 164, 255, .45);
+            border-radius: 18px;
+            color: white;
+            background: linear-gradient(145deg, var(--blue), #6a5cff);
+            box-shadow: 0 16px 42px rgba(78, 140, 255, .34);
+            font-size: 30px;
+            font-weight: 800;
+            letter-spacing: -.05em;
+        }
+
+        h1 { margin: 0; font-size: clamp(27px, 7vw, 42px); letter-spacing: -.04em; }
+        .subtitle { max-width: 560px; margin: 11px auto 0; color: var(--muted); line-height: 1.55; }
+
+        .proxy-card, .platform-card, .notice {
+            border: 1px solid var(--line);
+            background: var(--surface);
+            box-shadow: var(--shadow);
+            backdrop-filter: blur(18px);
+        }
+
+        .proxy-card { border-radius: 22px; padding: 20px; margin-bottom: 16px; }
+        .eyebrow { color: #a9c6ff; font-size: 12px; font-weight: 750; letter-spacing: .12em; text-transform: uppercase; }
+
+        .endpoint {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 12px;
+            align-items: center;
+            margin-top: 12px;
+            padding: 16px;
+            border: 1px solid rgba(78, 140, 255, .28);
+            border-radius: 15px;
+            background: rgba(78, 140, 255, .09);
+        }
+
+        .endpoint strong { font-size: clamp(20px, 5vw, 28px); letter-spacing: -.025em; word-break: break-all; }
+        .status { color: var(--green); font-size: 13px; font-weight: 700; }
+
+        .platforms { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+        .platform-card { border-radius: 22px; padding: 20px; }
+        .platform-title { display: flex; align-items: center; gap: 11px; margin-bottom: 16px; }
+
+        .platform-mark {
+            display: grid;
+            place-items: center;
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
+            background: var(--surface-strong);
+            color: #dce8ff;
+            font-weight: 800;
+        }
+
+        h2 { margin: 0; font-size: 18px; }
+        .platform-card p { min-height: 42px; margin: 0 0 17px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+
+        .button {
+            display: block;
+            width: 100%;
+            padding: 14px 15px;
+            border: 1px solid rgba(255, 255, 255, .1);
+            border-radius: 12px;
+            color: white;
+            background: linear-gradient(135deg, var(--blue), var(--blue-strong));
+            box-shadow: 0 12px 24px rgba(45, 109, 233, .25);
+            text-align: center;
+            text-decoration: none;
+            font-weight: 750;
+        }
+
+        .button:active { transform: translateY(1px); }
+        .apple .button { background: linear-gradient(135deg, #5c6f91, #34445f); box-shadow: 0 12px 24px rgba(18, 29, 48, .3); }
+
+        ol { margin: 18px 0 0; padding-left: 22px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+        li { margin-top: 8px; padding-left: 3px; }
+        li::marker { color: #87afff; font-weight: 750; }
+
+        .notice { margin-top: 16px; padding: 17px 18px; border-radius: 16px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+        .notice strong { color: var(--warning); }
+        .fingerprint { margin-top: 8px; color: #7f90a9; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 10px; word-break: break-all; }
+        footer { padding: 24px 0 0; color: #66758b; text-align: center; font-size: 12px; }
+
+        @media (max-width: 650px) {
+            body { padding-top: 12px; }
+            .hero { padding-top: 20px; }
+            .platforms { grid-template-columns: 1fr; }
+            .platform-card p { min-height: auto; }
+            .endpoint { grid-template-columns: 1fr; }
+            .status { justify-self: start; }
+        }
+    </style>
+</head>
+<body>
+<main>
+    <section class="hero">
+        <div class="logo">K</div>
+        <h1>Wi-Fi Proxy Setup</h1>
+        <p class="subtitle">Install the KNet root certificate, then point this Wi-Fi network to the proxy shown below.</p>
+    </section>
+
+    <section class="proxy-card">
+        <div class="eyebrow">Proxy server</div>
+        <div class="endpoint">
+            <strong>{{proxyHost}}:{{proxyPort}}</strong>
+            <span class="status">Ready on this network</span>
+        </div>
+    </section>
+
+    <section class="platforms">
+        <article class="platform-card">
+            <div class="platform-title"><span class="platform-mark">A</span><h2>Android</h2></div>
+            <p>Download the CA certificate and install it as a user certificate for Wi-Fi traffic inspection.</p>
+            <a class="button" href="/knet-ca.crt">Download Android certificate</a>
+            <ol>
+                <li>Open Security or Credential settings.</li>
+                <li>Choose Install certificate, then CA certificate.</li>
+                <li>Select the downloaded knet-ca.crt file.</li>
+                <li>Set this Wi-Fi network proxy to Manual using the server above.</li>
+            </ol>
+        </article>
+
+        <article class="platform-card apple">
+            <div class="platform-title"><span class="platform-mark">i</span><h2>iPhone and iPad</h2></div>
+            <p>Download the Apple profile containing the KNet root certificate and finish trust setup.</p>
+            <a class="button" href="/knet-ca.mobileconfig">Download Apple profile</a>
+            <ol>
+                <li>Allow the profile download, then open Settings.</li>
+                <li>Open Profile Downloaded and install KNet Root CA.</li>
+                <li>Enable full trust under About, Certificate Trust Settings.</li>
+                <li>Set this Wi-Fi network proxy to Manual using the server above.</li>
+            </ol>
+        </article>
+    </section>
+
+    <aside class="notice">
+        <strong>Development devices only.</strong> Some apps ignore user-installed certificates or use certificate pinning. Remove the KNet certificate when inspection is complete.
+        <div class="fingerprint">SHA-256 {{certificateSha256}}</div>
+    </aside>
+
+    <footer>KNet Network Inspector</footer>
+</main>
+</body>
+</html>

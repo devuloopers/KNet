@@ -6,10 +6,12 @@ import com.devuloopers.knet.application.port.breakpoint.BreakpointControlPort
 import com.devuloopers.knet.application.port.breakpoint.BreakpointDecision
 import com.devuloopers.knet.application.port.breakpoint.BreakpointRequestEdit
 import com.devuloopers.knet.application.port.breakpoint.BreakpointResponseEdit
+import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolRegistry
 import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
 import com.devuloopers.knet.application.usecase.breakpoint.ClearPendingBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.ObservePendingBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.ResolveBreakpointUseCase
+import com.devuloopers.knet.application.usecase.breakpoint.BreakpointProtocolRuleUseCase
 import com.devuloopers.knet.traffic.model.http.HttpMethod
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
@@ -125,6 +127,7 @@ class BreakpointManagerViewModelTest {
         toggleGlobalInterceptionUseCase = ToggleGlobalInterceptionUseCase(rules),
         resolveBreakpointUseCase = ResolveBreakpointUseCase(breakpoints),
         clearPendingBreakpointsUseCase = ClearPendingBreakpointsUseCase(breakpoints),
+        breakpointProtocolRuleUseCase = BreakpointProtocolRuleUseCase(BreakpointProtocolRegistry()),
         ioDispatcher = UnconfinedTestDispatcher(),
     )
 

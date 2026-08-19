@@ -112,4 +112,20 @@ class PayloadInspectionSpecTest {
         assertEquals(CodeLanguage.PLAIN, spec.codeLanguage)
         assertEquals(text, spec.formattedText)
     }
+
+    @Test
+    fun testNdJsonPayloadFormatsRecordsThroughTheExistingJsonLanguage() {
+        val ndJson = "{\"id\":1,\"active\":true}\n{\"id\":2,\"active\":false}"
+
+        val spec = PayloadInspectionSpec.fromPayload(
+            mapOf("content-type" to "application/x-ndjson"),
+            ndJson
+        )
+
+        val format = assertIs<BodyFormat.JsonStream>(spec.resolvedFormat)
+        assertEquals(2, format.frames.size)
+        assertEquals(CodeLanguage.JSON, spec.codeLanguage)
+        assertTrue(spec.formattedText.contains("\n\n"))
+        assertTrue(spec.formattedText.lines().size > 4)
+    }
 }

@@ -36,7 +36,7 @@ sealed interface BodyFormat {
     /**
      * Multi-frame JSON stream (e.g. NDJSON or JSON lines).
      *
-     * @property frames List of individual raw JSON frame strings.
+     * @property frames List of individual display-ready JSON frame strings.
      */
     data class JsonStream(val frames: List<String>) : BodyFormat {
         override val badgeLabel: String = "JSON Stream"

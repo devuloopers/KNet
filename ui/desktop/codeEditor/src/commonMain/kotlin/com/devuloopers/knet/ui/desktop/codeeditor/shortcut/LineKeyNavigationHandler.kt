@@ -14,7 +14,7 @@ import androidx.compose.ui.input.key.type
  *
  * Handles arrow key navigation, line splitting, line merging, and Undo/Redo key events.
  */
-object LineKeyNavigationHandler {
+internal object LineKeyNavigationHandler {
 
     /**
      * Evaluates a Compose key event for line-level navigation and actions.

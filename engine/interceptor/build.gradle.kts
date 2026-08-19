@@ -11,5 +11,6 @@ dependencies {
     implementation(libs.kotlinx.coroutines.core)
     
     testImplementation(project(":engine:certificate"))
+    testImplementation(project(":engine:protocol"))
     testImplementation(kotlin("test"))
 }

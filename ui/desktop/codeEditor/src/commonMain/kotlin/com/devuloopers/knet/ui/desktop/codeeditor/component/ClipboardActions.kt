@@ -12,7 +12,7 @@ import kotlinx.coroutines.launch
 /** Returns an asynchronous clipboard copy action for the code editor. */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun rememberClipboardCopyAction(): (String) -> Unit {
+internal fun rememberClipboardCopyAction(): (String) -> Unit {
     val clipboard = LocalClipboard.current
     val coroutineScope = rememberCoroutineScope()
     return remember(clipboard, coroutineScope) {
@@ -27,7 +27,7 @@ fun rememberClipboardCopyAction(): (String) -> Unit {
 /** Returns an asynchronous clipboard paste action for the code editor. */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
-fun rememberClipboardPasteAction(): ((String) -> Unit) -> Unit {
+internal fun rememberClipboardPasteAction(): ((String) -> Unit) -> Unit {
     val clipboard = LocalClipboard.current
     val coroutineScope = rememberCoroutineScope()
     return remember(clipboard, coroutineScope) {

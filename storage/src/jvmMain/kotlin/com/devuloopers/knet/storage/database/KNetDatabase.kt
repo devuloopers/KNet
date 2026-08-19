@@ -1,5 +1,6 @@
 package com.devuloopers.knet.storage.database
 
+import androidx.room.AutoMigration
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import com.devuloopers.knet.storage.apistudio.dao.CollectionDao
@@ -15,6 +16,10 @@ import com.devuloopers.knet.storage.capture.entity.DeletionOutboxEntity
 import com.devuloopers.knet.storage.capture.entity.DuplexMessageEntity
 import com.devuloopers.knet.storage.capture.entity.InspectionAnnotationEntity
 import com.devuloopers.knet.storage.capture.entity.TrafficConnectionEntity
+import com.devuloopers.knet.storage.device.dao.RegisteredDeviceDao
+import com.devuloopers.knet.storage.device.entity.PairingInvitationEntity
+import com.devuloopers.knet.storage.device.entity.RegisteredDeviceEntity
+import com.devuloopers.knet.storage.device.entity.TrustedDeviceCredentialEntity
 import com.devuloopers.knet.storage.rules.dao.BreakpointRuleDao
 import com.devuloopers.knet.storage.rules.entity.BreakpointRuleEntity
 
@@ -35,8 +40,12 @@ import com.devuloopers.knet.storage.rules.entity.BreakpointRuleEntity
         InspectionAnnotationEntity::class,
         CaptureGapEntity::class,
         DeletionOutboxEntity::class,
+        RegisteredDeviceEntity::class,
+        TrustedDeviceCredentialEntity::class,
+        PairingInvitationEntity::class,
     ],
-    version = 14
+    version = 15,
+    autoMigrations = [AutoMigration(from = 14, to = 15)],
 )
 abstract class KNetDatabase : RoomDatabase() {
 
@@ -46,4 +55,7 @@ abstract class KNetDatabase : RoomDatabase() {
 
     /** Canonical session, connection, exchange, body, gap, and deletion-outbox persistence. */
     abstract fun canonicalCaptureDao(): CanonicalCaptureDao
+
+    /** Durable registered identity, trusted credentials, and pending pairing invitations. */
+    abstract fun registeredDeviceDao(): RegisteredDeviceDao
 }

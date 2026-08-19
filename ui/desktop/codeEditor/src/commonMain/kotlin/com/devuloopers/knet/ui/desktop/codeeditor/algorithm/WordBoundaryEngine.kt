@@ -7,7 +7,7 @@ package com.devuloopers.knet.ui.desktop.codeeditor.algorithm
  *
  * Implements VS Code standard character classification rules (`characterClassifier.ts`).
  */
-object WordBoundaryEngine {
+internal object WordBoundaryEngine {
 
     private enum class CharacterClass {
         WORD,
@@ -59,4 +59,3 @@ object WordBoundaryEngine {
         }
     }
 }
-

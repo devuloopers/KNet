@@ -19,4 +19,9 @@ PAC, manual configuration, ADB, profiles, VPN, companion, and relay can be deliv
 
 ## Implemented boundary
 
-Manual, PAC, Apple profile, ADB reverse, the dedicated setup listener, desktop network monitor, portable pairing, encrypted trusted-device storage, and the authenticated loopback standard-proxy gateway now implement this decision. Mobile apps, VPN, direct tunnels, and relay remain unavailable product increments.
+Manual, PAC, Apple profile, ADB reverse, the dedicated setup listeners, desktop network monitor, portable
+pairing, Room-backed registered/trusted-device storage, and the authenticated loopback standard-proxy gateway
+now implement this decision. The stock-phone Wi-Fi adapter is a separate automatically managed exact-interface
+gateway with intentionally open local-client admission and bounded per-source quotas; its stable setup page
+serves Android and Apple certificate formats without entering the proxy pipeline. Mobile apps, VPN, direct
+tunnels, and relay remain unavailable product increments.

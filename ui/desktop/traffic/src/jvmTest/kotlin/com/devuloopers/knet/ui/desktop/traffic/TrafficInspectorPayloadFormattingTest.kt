@@ -1,10 +1,12 @@
 package com.devuloopers.knet.ui.desktop.traffic
 
 import com.devuloopers.knet.engine.formatter.formatters.JsonBodyFormatter
+import com.devuloopers.knet.engine.formatter.model.BodyFormat
 import com.devuloopers.knet.engine.formatter.registry.BodyFormatterRegistry
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 /**
@@ -44,5 +46,21 @@ class TrafficInspectorPayloadFormattingTest {
         val headers = mapOf("content-type" to "text/plain")
         val formatted = BodyFormatterRegistry.prettyPrintBody(headers, plainText)
         assertEquals(plainText, formatted)
+    }
+
+    @Test
+    fun testDatadogNdJsonEventsResolveAsJsonStream() {
+        val payload = """
+            {"date":1787131074895,"type":"error"}
+            {"date":1787131074871,"type":"error"}
+            {"date":1787130969237,"type":"view"}
+        """.trimIndent()
+
+        val format = BodyFormatterRegistry.resolveFormat(
+            mapOf("content-type" to "application/json"),
+            payload
+        )
+
+        assertEquals(3, assertIs<BodyFormat.JsonStream>(format).frames.size)
     }
 }

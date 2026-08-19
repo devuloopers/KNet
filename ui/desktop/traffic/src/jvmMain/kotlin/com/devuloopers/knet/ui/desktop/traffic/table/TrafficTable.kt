@@ -10,11 +10,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import androidx.compose.runtime.Composable
@@ -30,9 +28,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.domain.clientNetwork.decoder.BinaryCategory
-import com.devuloopers.knet.domain.rules.model.matchesTransaction
 import com.devuloopers.knet.domain.clientNetwork.decoder.MediaTypeInspector
 import com.devuloopers.knet.ui.desktop.traffic.model.TrafficRowUiState
+import com.devuloopers.knet.ui.desktop.traffic.model.TrafficInterceptionUiState
 import com.devuloopers.knet.ui.core.components.table.KNetCell
 import com.devuloopers.knet.ui.core.components.table.KNetRow
 import com.devuloopers.knet.ui.core.components.table.KNetTableHeader
@@ -270,8 +268,8 @@ private fun TableRowItem(
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
 
-    // Highlight is strictly driven by Netty interception SSOT
-    val isMatchedByBreakpoint = item.isIntercepted
+    val isPausedByBreakpoint = item.interception is TrafficInterceptionUiState.Paused
+    val isMatchedByBreakpoint = item.interception !is TrafficInterceptionUiState.None
 
     val displayMethod = item.method
 
@@ -327,10 +325,10 @@ private fun TableRowItem(
 
     val displayPath = item.path
 
-    val rowBackgroundModifier = if (isMatchedByBreakpoint) {
-        Modifier.background(themeColors.semantic.warning.copy(alpha = 0.18f))
-    } else {
-        Modifier
+    val rowBackgroundModifier = when {
+        isPausedByBreakpoint -> Modifier.background(themeColors.semantic.warning.copy(alpha = 0.18f))
+        isMatchedByBreakpoint -> Modifier.background(themeColors.semantic.warning.copy(alpha = 0.10f))
+        else -> Modifier
     }
 
     KNetRow(
@@ -346,7 +344,7 @@ private fun TableRowItem(
         // # (Serial Number)
         if (columnVisibility.isVisible(TrafficColumn.SERIAL_NUMBER)) {
             KNetCell(
-                text = "${item.id}",
+                text = "${item.sequenceNumber}",
                 modifier = Modifier.width(48.dp),
                 color = themeColors.textMuted
             )
@@ -364,22 +362,12 @@ private fun TableRowItem(
 
         // Method (Mandatory)
         Box(modifier = Modifier.width(76.dp), contentAlignment = Alignment.CenterStart) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                if (isMatchedByBreakpoint) {
-                    Icon(
-                        imageVector = KNetIcons.Pause,
-                        contentDescription = "Breakpoint Active",
-                        tint = themeColors.semantic.warning,
-                        modifier = Modifier.size(12.dp).padding(end = 2.dp)
-                    )
-                }
-                Text(
-                    text = displayMethod,
-                    style = typography.codeSmall.copy(color = methodColor, fontWeight = FontWeight.Bold),
-                    maxLines = 1,
-                    softWrap = false
-                )
-            }
+            Text(
+                text = displayMethod,
+                style = typography.codeSmall.copy(color = methodColor, fontWeight = FontWeight.Bold),
+                maxLines = 1,
+                softWrap = false
+            )
         }
 
         // Host (Mandatory)

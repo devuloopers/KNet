@@ -27,6 +27,7 @@ import com.devuloopers.knet.ui.core.components.divider.HorizontalDivider
 import com.devuloopers.knet.ui.core.components.placeholder.KNetEmptyStatePlaceholder
 import com.devuloopers.knet.ui.core.components.tabs.KNetTab
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import com.devuloopers.knet.ui.desktop.codeeditor.api.CodeEditorConfiguration
 import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
 import com.devuloopers.knet.ui.desktop.codeeditor.api.KNetCodeEditor
 import com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage
@@ -195,8 +196,10 @@ fun GraphQLBodyViewer(
             } else {
                 KNetCodeEditor(
                     code = activeSubTab.getPayload(format, rawJsonText),
-                    language = activeSubTab.codeLanguage,
-                    mode = EditorMode.ReadOnly,
+                    configuration = CodeEditorConfiguration(
+                        mode = EditorMode.ReadOnly,
+                        language = activeSubTab.codeLanguage
+                    ),
                     modifier = Modifier.fillMaxSize()
                 )
             }

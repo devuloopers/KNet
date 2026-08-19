@@ -10,7 +10,9 @@ import com.devuloopers.knet.engine.proxy.capture.ProxyConnectionCapture
 import com.devuloopers.knet.engine.proxy.capture.ProxyExchangeCapture
 import com.devuloopers.knet.engine.proxy.http.AuthorityParseResult
 import com.devuloopers.knet.engine.proxy.http.AuthorityParser
+import com.devuloopers.knet.engine.proxy.http.ProxyRequestContext
 import com.devuloopers.knet.engine.proxy.mapper.HttpMapper
+import com.devuloopers.knet.engine.proxy.pipeline.PreparedProxyExchange
 import com.devuloopers.knet.engine.proxy.pipeline.ProxyChannelAttributes
 import com.devuloopers.knet.engine.proxy.ssl.ProxyTrustManager
 import com.devuloopers.knet.engine.proxy.timing.NetworkTimingCollector
@@ -60,8 +62,8 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.Executor
 import java.util.concurrent.ForkJoinPool
 import java.util.concurrent.atomic.AtomicBoolean
-import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.absoluteUrl
 import com.devuloopers.knet.traffic.model.TrafficDirection
 import com.devuloopers.knet.traffic.model.body.ContentEncoding
@@ -87,7 +89,7 @@ class KNetProxyHandler(
     private val requiresFullResponseAggregation: () -> Boolean = { false },
 ) : SimpleChannelInboundHandler<FullHttpRequest>() {
 
-    private val pendingRequests = ArrayDeque<FullHttpRequest>()
+    private val pendingRequests = ArrayDeque<PreparedFullRequest>()
     private var requestInFlight: Boolean = false
 
     companion object {
@@ -99,6 +101,8 @@ class KNetProxyHandler(
         private const val UPSTREAM_LIMIT_ERROR: String = "upstream_connection_limit"
         private const val TLS_HANDSHAKE_ERROR: String = "upstream_tls_handshake_failed"
         private const val UPSTREAM_CONNECT_ERROR: String = "upstream_connect_failed"
+        private const val DOWNSTREAM_PIPELINE_LIMIT_ERROR: String = "downstream_pipeline_limit"
+        private const val DOWNSTREAM_CANCELLED_ERROR: String = "downstream_cancelled_before_forwarding"
     }
 
     override fun channelActive(context: ChannelHandlerContext) {
@@ -108,9 +112,18 @@ class KNetProxyHandler(
     override fun channelRead0(context: ChannelHandlerContext, request: FullHttpRequest) {
         if (request.method() == HttpMethod.CONNECT) {
             handleConnect(context, request)
-        } else if (requestInFlight) {
+            return
+        }
+
+        // Consume the one-shot context and capture admitted before the optional forwarding gate.
+        // Queueing them with the retained message prevents a later pipelined request from replacing
+        // the correlation state while this connection still has an exchange in flight.
+        val requestContext = context.channel().attr(ProxyChannelAttributes.REQUEST_CONTEXT).getAndSet(null)
+        val preparedExchange = context.channel().attr(ProxyChannelAttributes.PREPARED_EXCHANGE).getAndSet(null)
+        if (requestInFlight) {
             if (pendingRequests.size >= MAX_PIPELINED_REQUESTS) {
                 KNetLogger.warn(TAG) { "Closing client that exceeded the bounded HTTP/1 request queue." }
+                cancelPreparedExchange(preparedExchange, DOWNSTREAM_PIPELINE_LIMIT_ERROR)
                 val response = DefaultFullHttpResponse(
                     HttpVersion.HTTP_1_1,
                     HttpResponseStatus.TOO_MANY_REQUESTS,
@@ -119,11 +132,17 @@ class KNetProxyHandler(
                 context.writeAndFlush(response).addListener { context.close() }
             } else {
                 // SimpleChannelInboundHandler releases the callback reference; the queue owns this retained reference.
-                pendingRequests.addLast(request.retain())
+                pendingRequests.addLast(
+                    PreparedFullRequest(
+                        request = request.retain(),
+                        requestContext = requestContext,
+                        preparedExchange = preparedExchange,
+                    ),
+                )
             }
         } else {
             requestInFlight = true
-            handleRequest(context, request)
+            handleRequest(context, request, requestContext, preparedExchange)
         }
     }
 
@@ -194,7 +213,12 @@ class KNetProxyHandler(
         }
     }
 
-    private fun handleRequest(context: ChannelHandlerContext, request: FullHttpRequest) {
+    private fun handleRequest(
+        context: ChannelHandlerContext,
+        request: FullHttpRequest,
+        preparedRequestContext: ProxyRequestContext?,
+        preparedExchange: PreparedProxyExchange?,
+    ) {
         val exchangeCompleted = AtomicBoolean(false)
         val finishExchange = {
             if (exchangeCompleted.compareAndSet(false, true)) {
@@ -266,17 +290,23 @@ class KNetProxyHandler(
             request.uri()
         }
 
-        val taggedReq = context.channel().attr(ProxyChannelAttributes.REQUEST_CONTEXT).get()
         // The interceptor maps every aggregated request freshly and may consume KNet's internal
         // correlation header. Reuse that request regardless of breakpoint state so the stable ID
         // cannot be replaced between adjacent pipeline handlers.
-        val mappedRequest = taggedReq
+        val mappedRequest = preparedRequestContext
             ?: HttpMapper.mapRequestContext(request, isSsl, targetHost, targetPort, relativeUri)
-        val exchangeCapture = connectionCapture?.startExchange(
-            exchangeId = mappedRequest.exchangeId,
-            request = mappedRequest.request.head,
-            occurredAtEpochMillis = mappedRequest.startedAtEpochMillis,
-        )
+        check(preparedExchange == null || preparedExchange.exchangeId == mappedRequest.exchangeId) {
+            "Prepared capture identity does not match the forwarded request."
+        }
+        val exchangeCapture = if (preparedExchange != null) {
+            preparedExchange.capture
+        } else {
+            connectionCapture?.startExchange(
+                exchangeId = mappedRequest.exchangeId,
+                request = mappedRequest.request.head,
+                occurredAtEpochMillis = mappedRequest.startedAtEpochMillis,
+            )
+        }
         captureBodyChunk(
             exchange = exchangeCapture,
             direction = TrafficDirection.CLIENT_TO_SERVER,
@@ -494,21 +524,52 @@ class KNetProxyHandler(
         }
 
         try {
-            handleRequest(context, nextRequest)
+            handleRequest(
+                context = context,
+                request = nextRequest.request,
+                preparedRequestContext = nextRequest.requestContext,
+                preparedExchange = nextRequest.preparedExchange,
+            )
         } finally {
-            ReferenceCountUtil.release(nextRequest)
+            ReferenceCountUtil.release(nextRequest.request)
         }
     }
 
     /** Releases every queued request when the downstream connection terminates. */
     private fun releasePendingRequests() {
         while (pendingRequests.isNotEmpty()) {
-            ReferenceCountUtil.release(pendingRequests.removeFirst())
+            val pending = pendingRequests.removeFirst()
+            cancelPreparedExchange(pending.preparedExchange, DOWNSTREAM_CANCELLED_ERROR)
+            ReferenceCountUtil.release(pending.request)
         }
     }
 
+    /** Terminates metadata admission that cannot reach the forwarding transport. */
+    private fun cancelPreparedExchange(prepared: PreparedProxyExchange?, errorCode: String) {
+        runCatching {
+            prepared?.capture?.terminate(
+                state = ExchangeState.CANCELLED,
+                timings = ExchangeTimings(),
+                occurredAtEpochMillis = Clock.System.now().toEpochMilliseconds(),
+                errorCode = errorCode,
+            )
+        }
+    }
+
+    /** One retained pipelined request plus its canonical request and capture handoff. */
+    private data class PreparedFullRequest(
+        val request: FullHttpRequest,
+        val requestContext: ProxyRequestContext?,
+        val preparedExchange: PreparedProxyExchange?,
+    )
+
     override fun channelInactive(context: ChannelHandlerContext) {
         requestInFlight = false
+        cancelPreparedExchange(
+            context.channel().attr(ProxyChannelAttributes.PREPARED_EXCHANGE).getAndSet(null),
+            DOWNSTREAM_CANCELLED_ERROR,
+        )
+        context.channel().attr(ProxyChannelAttributes.REQUEST_CONTEXT).set(null)
         releasePendingRequests()
         super.channelInactive(context)
     }

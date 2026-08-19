@@ -3,6 +3,7 @@ package com.devuloopers.knet.ui.desktop.httppanel.viewpanels
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -22,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.devuloopers.knet.traffic.model.ExchangeTimings
@@ -88,37 +90,48 @@ fun TimelineViewPanel(
             }
         }
 
-        // 2. Waterfall Rows
-        TimelineWaterfallRow(
-            label = "DNS Resolution",
-            durationMs = dnsMs,
-            totalMs = totalMs,
-            color = Color(0xFF89B4FA)
-        )
-        TimelineWaterfallRow(
-            label = "TCP Connect",
-            durationMs = tcpMs,
-            totalMs = totalMs,
-            color = Color(0xFF89DCEB)
-        )
-        TimelineWaterfallRow(
-            label = "TLS Handshake",
-            durationMs = tlsMs,
-            totalMs = totalMs,
-            color = Color(0xFFA6E3A1)
-        )
-        TimelineWaterfallRow(
-            label = "TTFB (Wait)",
-            durationMs = ttfbMs,
-            totalMs = totalMs,
-            color = Color(0xFFF9E2AF)
-        )
-        TimelineWaterfallRow(
-            label = "Content Download",
-            durationMs = downloadMs,
-            totalMs = totalMs,
-            color = Color(0xFF74C7EC)
-        )
+        // 2. Waterfall Rows. Every row receives the same responsive label width so all tracks
+        // remain aligned; per-label intrinsic sizing makes the timeline visually drift.
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val labelWidth = timelineLabelColumnWidth(maxWidth)
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                TimelineWaterfallRow(
+                    label = "DNS Resolution",
+                    durationMs = dnsMs,
+                    totalMs = totalMs,
+                    color = Color(0xFF89B4FA),
+                    labelWidth = labelWidth,
+                )
+                TimelineWaterfallRow(
+                    label = "TCP Connect",
+                    durationMs = tcpMs,
+                    totalMs = totalMs,
+                    color = Color(0xFF89DCEB),
+                    labelWidth = labelWidth,
+                )
+                TimelineWaterfallRow(
+                    label = "TLS Handshake",
+                    durationMs = tlsMs,
+                    totalMs = totalMs,
+                    color = Color(0xFFA6E3A1),
+                    labelWidth = labelWidth,
+                )
+                TimelineWaterfallRow(
+                    label = "TTFB (Wait)",
+                    durationMs = ttfbMs,
+                    totalMs = totalMs,
+                    color = Color(0xFFF9E2AF),
+                    labelWidth = labelWidth,
+                )
+                TimelineWaterfallRow(
+                    label = "Content Download",
+                    durationMs = downloadMs,
+                    totalMs = totalMs,
+                    color = Color(0xFF74C7EC),
+                    labelWidth = labelWidth,
+                )
+            }
+        }
 
         // 3. Total Latency Summary Footer
         Row(
@@ -154,7 +167,8 @@ private fun TimelineWaterfallRow(
     label: String,
     durationMs: Long,
     totalMs: Long,
-    color: Color
+    color: Color,
+    labelWidth: Dp,
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -168,7 +182,7 @@ private fun TimelineWaterfallRow(
         Text(
             text = label,
             style = typography.bodySmall.copy(color = themeColors.textSecondary),
-            modifier = Modifier.widthIn(min = 60.dp, max = 130.dp),
+            modifier = Modifier.width(labelWidth),
             maxLines = 1,
             softWrap = false,
             overflow = TextOverflow.Ellipsis
@@ -203,3 +217,14 @@ private fun TimelineWaterfallRow(
         )
     }
 }
+
+/** Returns one shared label-column width that preserves the original 130dp layout when possible. */
+internal fun timelineLabelColumnWidth(availableWidth: Dp): Dp =
+    (availableWidth - TIMELINE_FIXED_CONTENT_WIDTH).coerceIn(
+        minimumValue = TIMELINE_MIN_LABEL_WIDTH,
+        maximumValue = TIMELINE_DEFAULT_LABEL_WIDTH,
+    )
+
+private val TIMELINE_DEFAULT_LABEL_WIDTH = 130.dp
+private val TIMELINE_MIN_LABEL_WIDTH = 60.dp
+private val TIMELINE_FIXED_CONTENT_WIDTH = 96.dp

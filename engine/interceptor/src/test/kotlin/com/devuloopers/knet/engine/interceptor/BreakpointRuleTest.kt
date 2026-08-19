@@ -2,7 +2,7 @@ package com.devuloopers.knet.engine.interceptor
 
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
-import com.devuloopers.knet.domain.rules.model.matchesTransaction
+import com.devuloopers.knet.domain.rules.model.BreakpointTransportMatcher
 import com.devuloopers.knet.traffic.model.http.HttpMethod
 import kotlin.test.Test
 import kotlin.test.assertFalse
@@ -20,9 +20,10 @@ class BreakpointRuleTest {
             phase = BreakpointPhase.REQUEST
         )
 
-        assertTrue(rule.matchesTransaction("https://api.example.com/v1/users", "POST", BreakpointPhase.REQUEST))
-        assertFalse(rule.matchesTransaction("https://api.example.com/v1/users", "GET", BreakpointPhase.REQUEST), "Method mismatch must fail")
-        assertFalse(rule.matchesTransaction("https://api.example.com/v1/users", "POST", BreakpointPhase.RESPONSE), "Phase mismatch must fail")
+        val matcher = BreakpointTransportMatcher(rule)
+        assertTrue(matcher.matches("https://api.example.com/v1/users", "POST", BreakpointPhase.REQUEST))
+        assertFalse(matcher.matches("https://api.example.com/v1/users", "GET", BreakpointPhase.REQUEST), "Method mismatch must fail")
+        assertFalse(matcher.matches("https://api.example.com/v1/users", "POST", BreakpointPhase.RESPONSE), "Phase mismatch must fail")
     }
 
     @Test
@@ -34,8 +35,9 @@ class BreakpointRuleTest {
             phase = BreakpointPhase.BOTH
         )
 
-        assertTrue(rule.matchesTransaction("https://any.com/test", "GET", BreakpointPhase.REQUEST))
-        assertTrue(rule.matchesTransaction("https://any.com/test", "POST", BreakpointPhase.RESPONSE))
+        val matcher = BreakpointTransportMatcher(rule)
+        assertTrue(matcher.matches("https://any.com/test", "GET", BreakpointPhase.REQUEST))
+        assertTrue(matcher.matches("https://any.com/test", "POST", BreakpointPhase.RESPONSE))
     }
 
     @Test
@@ -47,6 +49,12 @@ class BreakpointRuleTest {
             enabled = false
         )
 
-        assertFalse(rule.matchesTransaction("https://test.com", "GET", BreakpointPhase.REQUEST))
+        assertFalse(
+            BreakpointTransportMatcher(rule).matches(
+                "https://test.com",
+                "GET",
+                BreakpointPhase.REQUEST,
+            ),
+        )
     }
 }

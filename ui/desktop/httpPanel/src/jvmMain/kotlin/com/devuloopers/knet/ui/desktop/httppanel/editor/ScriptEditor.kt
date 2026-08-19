@@ -14,6 +14,8 @@ import com.devuloopers.knet.scripting.model.ScriptLanguage
 import com.devuloopers.knet.scripting.model.ScriptPhase
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import com.devuloopers.knet.ui.desktop.codeeditor.api.CodeEditorActions
+import com.devuloopers.knet.ui.desktop.codeeditor.api.CodeEditorConfiguration
 import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
 import com.devuloopers.knet.ui.desktop.codeeditor.api.KNetCodeEditor
 import com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage
@@ -190,11 +192,12 @@ fun ScriptEditor(
                 if (state.scriptLanguage == ScriptLanguage.JAVASCRIPT) CodeLanguage.JAVASCRIPT else CodeLanguage.PLAIN
             KNetCodeEditor(
                 code = currentScript,
-                mode = EditorMode.Editable(
-                    onCodeChange = onCurrentScriptChange,
+                configuration = CodeEditorConfiguration(
+                    mode = EditorMode.Editable,
+                    language = codeLang,
                     placeholder = "// Write request script..."
                 ),
-                language = codeLang,
+                actions = CodeEditorActions(onTextChange = onCurrentScriptChange),
                 modifier = Modifier.fillMaxSize()
             )
         }

@@ -26,9 +26,12 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolDefinition
+import com.devuloopers.knet.application.port.breakpoint.ProtocolCriteriaFieldDefinition
+import com.devuloopers.knet.application.port.breakpoint.ProtocolCriteriaValue
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
+import com.devuloopers.knet.domain.rules.model.BreakpointProtocolId
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
-import com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria
 import com.devuloopers.knet.traffic.model.http.HttpMethod
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
@@ -45,8 +48,17 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 @Composable
 fun AddEditBreakpointRuleDialog(
     rule: BreakpointRule?,
+    protocolDefinitions: List<BreakpointProtocolDefinition>,
+    initialProtocolValues: List<ProtocolCriteriaValue>,
     onDismiss: () -> Unit,
-    onSave: (urlPattern: String, method: HttpMethod?, phase: BreakpointPhase, enabled: Boolean, protocolCriteria: ProtocolMatchCriteria) -> Unit
+    onSave: (
+        urlPattern: String,
+        method: HttpMethod?,
+        phase: BreakpointPhase,
+        enabled: Boolean,
+        protocolId: BreakpointProtocolId,
+        protocolValues: List<ProtocolCriteriaValue>,
+    ) -> Unit,
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -56,9 +68,20 @@ fun AddEditBreakpointRuleDialog(
     var selectedPhase by remember(rule) { mutableStateOf(rule?.phase ?: BreakpointPhase.BOTH) }
     var enabled by remember(rule) { mutableStateOf(rule?.enabled ?: true) }
 
-    val initialGraphqlOp = (rule?.protocolCriteria as? ProtocolMatchCriteria.GraphQL)?.operationName ?: ""
-    var isGraphqlProtocol by remember(rule) { mutableStateOf(rule?.protocolCriteria is ProtocolMatchCriteria.GraphQL) }
-    var graphqlOperationName by remember(rule) { mutableStateOf(initialGraphqlOp) }
+    val defaultProtocolId = protocolDefinitions.firstOrNull {
+        it.protocolId == BreakpointProtocolId.HTTP
+    }?.protocolId ?: protocolDefinitions.firstOrNull()?.protocolId ?: BreakpointProtocolId.HTTP
+    var selectedProtocolId by remember(rule, protocolDefinitions) {
+        mutableStateOf(
+            rule?.protocolCriteria?.protocolId
+                ?.takeIf { selected -> protocolDefinitions.any { it.protocolId == selected } }
+                ?: defaultProtocolId,
+        )
+    }
+    var protocolValues by remember(rule, initialProtocolValues) {
+        mutableStateOf(initialProtocolValues)
+    }
+    val selectedProtocol = protocolDefinitions.firstOrNull { it.protocolId == selectedProtocolId }
 
     val dialogTitle = if (rule != null) "Edit Breakpoint Rule" else "Add Breakpoint Rule"
 
@@ -89,7 +112,7 @@ fun AddEditBreakpointRuleDialog(
                 )
             }
 
-            // Protocol Selector (HTTP vs GraphQL)
+            // Protocol options are supplied by registered extensions rather than hardcoded here.
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     text = "Protocol Matching Criteria",
@@ -99,9 +122,8 @@ fun AddEditBreakpointRuleDialog(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    val protocolOptions = listOf(false to "HTTP / REST", true to "GraphQL")
-                    protocolOptions.forEach { (isGql, label) ->
-                        val isSelected = isGraphqlProtocol == isGql
+                    protocolDefinitions.forEach { definition ->
+                        val isSelected = selectedProtocolId == definition.protocolId
                         Box(
                             modifier = Modifier
                                 .weight(1f)
@@ -115,13 +137,16 @@ fun AddEditBreakpointRuleDialog(
                                     RoundedCornerShape(4.dp)
                                 )
                                 .clip(RoundedCornerShape(4.dp))
-                                .clickable { isGraphqlProtocol = isGql }
+                                .clickable {
+                                    selectedProtocolId = definition.protocolId
+                                    protocolValues = definition.defaultValues()
+                                }
                                 .handCursor()
                                 .padding(vertical = 8.dp),
                             contentAlignment = Alignment.Center
                         ) {
                             Text(
-                                text = label,
+                                text = definition.displayName,
                                 color = if (isSelected) themeColors.accent else themeColors.textSecondary,
                                 fontSize = 11.sp,
                                 fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
@@ -134,28 +159,14 @@ fun AddEditBreakpointRuleDialog(
                 }
             }
 
-            // Optional GraphQL Operation Name Input
-            if (isGraphqlProtocol) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(
-                        text = "GraphQL Operation Name (Optional)",
-                        style = typography.caption.copy(color = themeColors.textMuted, fontWeight = FontWeight.SemiBold)
-                    )
-                    KNetTextField(
-                        value = graphqlOperationName,
-                        onValueChange = { graphqlOperationName = it },
-                        modifier = Modifier.fillMaxWidth(),
-                        config = InputFieldConfig(
-                            placeholder = "e.g. GetUserProfile or UpdateCart",
-                            backgroundColor = themeColors.surfaceVariant,
-                            borderColor = themeColors.border
-                        )
-                    )
-                    Text(
-                        text = "Only requests matching this operationName in JSON payload will pause.",
-                        style = typography.caption.copy(color = themeColors.textMuted, fontSize = 10.sp)
-                    )
-                }
+            selectedProtocol?.fields.orEmpty().forEach { field ->
+                ProtocolCriteriaField(
+                    field = field,
+                    value = protocolValues.valueFor(field),
+                    onValueChange = { value ->
+                        protocolValues = protocolValues.withValue(field, value)
+                    },
+                )
             }
 
             // HTTP Method Selector (ALL + Enum Values)
@@ -288,17 +299,19 @@ fun AddEditBreakpointRuleDialog(
                 }
                 KNetButton(
                     onClick = {
-                        if (urlPattern.isNotBlank()) {
-                            val criteria: ProtocolMatchCriteria = if (isGraphqlProtocol) {
-                                ProtocolMatchCriteria.GraphQL(operationName = graphqlOperationName.trim().ifEmpty { null })
-                            } else {
-                                ProtocolMatchCriteria.HttpDefault
-                            }
-                            onSave(urlPattern.trim(), selectedMethod, selectedPhase, enabled, criteria)
+                        if (urlPattern.isNotBlank() && selectedProtocol != null) {
+                            onSave(
+                                urlPattern.trim(),
+                                selectedMethod,
+                                selectedPhase,
+                                enabled,
+                                selectedProtocolId,
+                                protocolValues,
+                            )
                         }
                     },
                     variant = ButtonVariant.Primary,
-                    enabled = urlPattern.isNotBlank()
+                    enabled = urlPattern.isNotBlank() && selectedProtocol != null
                 ) {
                     Text("Save Rule")
                 }
@@ -306,3 +319,106 @@ fun AddEditBreakpointRuleDialog(
         }
     }
 }
+
+@Composable
+private fun ProtocolCriteriaField(
+    field: ProtocolCriteriaFieldDefinition,
+    value: String,
+    onValueChange: (String) -> Unit,
+) {
+    val themeColors = KNetTheme.colors
+    val typography = KNetTheme.typography
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = field.label,
+            style = typography.caption.copy(
+                color = themeColors.textMuted,
+                fontWeight = FontWeight.SemiBold,
+            ),
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+        )
+        when (field) {
+            is ProtocolCriteriaFieldDefinition.Text -> KNetTextField(
+                value = value,
+                onValueChange = onValueChange,
+                modifier = Modifier.fillMaxWidth(),
+                config = InputFieldConfig(
+                    placeholder = field.placeholder,
+                    backgroundColor = themeColors.surfaceVariant,
+                    borderColor = themeColors.border,
+                ),
+            )
+
+            is ProtocolCriteriaFieldDefinition.Choice -> Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                field.options.forEach { option ->
+                    val isSelected = value == option.value
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .background(
+                                if (isSelected) themeColors.accent.copy(alpha = 0.2f)
+                                else themeColors.surfaceVariant,
+                                RoundedCornerShape(4.dp),
+                            )
+                            .border(
+                                1.dp,
+                                if (isSelected) themeColors.accent else themeColors.border,
+                                RoundedCornerShape(4.dp),
+                            )
+                            .clip(RoundedCornerShape(4.dp))
+                            .clickable { onValueChange(option.value) }
+                            .handCursor()
+                            .padding(vertical = 8.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Text(
+                            text = option.label,
+                            color = if (isSelected) themeColors.accent else themeColors.textSecondary,
+                            fontSize = 11.sp,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
+        field.description?.let { description ->
+            Text(
+                text = description,
+                style = typography.caption.copy(color = themeColors.textMuted, fontSize = 10.sp),
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+    }
+}
+
+private fun BreakpointProtocolDefinition.defaultValues(): List<ProtocolCriteriaValue> = fields.map { field ->
+    ProtocolCriteriaValue(
+        fieldId = field.id,
+        value = when (field) {
+            is ProtocolCriteriaFieldDefinition.Text -> ""
+            is ProtocolCriteriaFieldDefinition.Choice -> field.defaultValue
+        },
+    )
+}
+
+private fun List<ProtocolCriteriaValue>.valueFor(field: ProtocolCriteriaFieldDefinition): String =
+    firstOrNull { it.fieldId == field.id }?.value ?: when (field) {
+        is ProtocolCriteriaFieldDefinition.Text -> ""
+        is ProtocolCriteriaFieldDefinition.Choice -> field.defaultValue
+    }
+
+private fun List<ProtocolCriteriaValue>.withValue(
+    field: ProtocolCriteriaFieldDefinition,
+    value: String,
+): List<ProtocolCriteriaValue> =
+    filterNot { it.fieldId == field.id } + ProtocolCriteriaValue(field.id, value)

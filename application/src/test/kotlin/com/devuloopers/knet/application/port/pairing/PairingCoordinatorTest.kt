@@ -2,11 +2,11 @@ package com.devuloopers.knet.application.port.pairing
 
 import com.devuloopers.knet.pairing.DeviceAuthenticationResult
 import com.devuloopers.knet.pairing.DeviceScope
-import com.devuloopers.knet.pairing.PairedDeviceId
 import com.devuloopers.knet.pairing.PairingCompletionRequest
 import com.devuloopers.knet.pairing.PairingCompletionResult
 import com.devuloopers.knet.pairing.PairingInvitationId
 import com.devuloopers.knet.pairing.PendingPairingInvitation
+import com.devuloopers.knet.identity.RegisteredDeviceId
 import com.devuloopers.knet.pairing.TrustedDevice
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,7 +25,7 @@ class PairingCoordinatorTest {
         val request = PairingCompletionRequest(
             invitation.id,
             invitation.secret,
-            PairedDeviceId("device-1"),
+            RegisteredDeviceId("device-1"),
             "Test device",
             "public-key",
             "valid-proof",
@@ -62,7 +62,7 @@ class PairingCoordinatorTest {
 
     private class FakeStore : TrustedDeviceStorePort {
         private val invitations = mutableMapOf<PairingInvitationId, PendingPairingInvitation>()
-        private val devices = mutableMapOf<PairedDeviceId, TrustedDevice>()
+        private val devices = mutableMapOf<RegisteredDeviceId, TrustedDevice>()
         private val flow = MutableStateFlow<List<TrustedDevice>>(emptyList())
         override suspend fun putInvitation(invitation: PendingPairingInvitation) { invitations[invitation.id] = invitation }
         override suspend fun claimInvitation(
@@ -76,10 +76,12 @@ class PairingCoordinatorTest {
             return invitation
         }
         override suspend fun putDevice(device: TrustedDevice) { devices[device.id] = device; flow.value = devices.values.toList() }
-        override suspend fun getDevice(id: PairedDeviceId): TrustedDevice? = devices[id]
-        override suspend fun revoke(id: PairedDeviceId, revokedAtEpochMillis: Long): Boolean {
+        override suspend fun getDevice(id: RegisteredDeviceId): TrustedDevice? = devices[id]
+        override suspend fun revoke(id: RegisteredDeviceId, revokedAtEpochMillis: Long): Boolean {
             val device = devices[id] ?: return false
-            devices[id] = device.copy(revokedAtEpochMillis = revokedAtEpochMillis)
+            devices[id] = device.copy(
+                registeredDevice = device.registeredDevice.copy(revokedAtEpochMillis = revokedAtEpochMillis),
+            )
             flow.value = devices.values.toList()
             return true
         }

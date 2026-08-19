@@ -25,6 +25,7 @@ spring-boot = "3.4.1"
 spring-dependency-management = "1.1.5"
 graphql-java = "22.1"
 graalvm = "25.2.4"
+zxing = "3.5.3"
 
 
 [libraries]
@@ -73,6 +74,7 @@ protobuf-java = { module = "com.google.protobuf:protobuf-java", version.ref = "p
 protobuf-java-util = { module = "com.google.protobuf:protobuf-java-util", version.ref = "protobuf" }
 graalvm-js = { module = "org.graalvm.js:js", version.ref = "graalvm" }
 graalvm-js-scriptengine = { module = "org.graalvm.js:js-scriptengine", version.ref = "graalvm" }
+zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 
 
 [plugins]

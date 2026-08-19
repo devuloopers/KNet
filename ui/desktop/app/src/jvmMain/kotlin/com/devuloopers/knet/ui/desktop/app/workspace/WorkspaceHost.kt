@@ -18,7 +18,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.devuloopers.knet.domain.rules.model.matchesTransaction
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
@@ -32,7 +31,10 @@ import com.devuloopers.knet.ui.desktop.breakpointmanager.view.BreakpointManagerS
 import com.devuloopers.knet.ui.desktop.breakpointmanager.viewmodel.BreakpointManagerViewModel
 import com.devuloopers.knet.ui.desktop.certificate.view.CertificateManagerScreen
 import com.devuloopers.knet.ui.desktop.certificate.viewmodel.CertificateViewModel
+import com.devuloopers.knet.ui.desktop.connectivity.view.ConnectDeviceScreen
+import com.devuloopers.knet.ui.desktop.connectivity.viewmodel.ConnectDeviceViewModel
 import com.devuloopers.knet.ui.desktop.traffic.view.TrafficScreen
+import com.devuloopers.knet.ui.desktop.traffic.model.TrafficInterceptionUiState
 import com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficViewModel
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -49,13 +51,18 @@ fun KNetWorkspaceHost(
     val collectionsViewModel: CollectionsViewModel = koinViewModel()
     val breakpointViewModel: BreakpointManagerViewModel = koinViewModel()
     val breakpointState by breakpointViewModel.uiState.collectAsState()
+    val trafficViewModel: TrafficViewModel = koinViewModel()
+    val trafficState by trafficViewModel.uiState.collectAsState()
+    val drawerEvent = breakpointState.activeEvent?.takeIf { event ->
+        trafficState.transactions.any { row ->
+            val interception = row.interception as? TrafficInterceptionUiState.Paused
+            row.transactionId == event.candidate.exchangeId.value && interception?.pendingId == event.id
+        }
+    }
 
     Box(modifier = modifier.fillMaxSize()) {
         when (destination) {
             DesktopDestination.Traffic -> {
-                val trafficViewModel: TrafficViewModel = koinViewModel()
-                val trafficState by trafficViewModel.uiState.collectAsState()
-
                 TrafficScreen(
                     viewModel = trafficViewModel,
                     onSendToApiStudio = { spec ->
@@ -73,12 +80,30 @@ fun KNetWorkspaceHost(
                 if (trafficState.isBreakpointDialogVisible) {
                     AddEditBreakpointRuleDialog(
                         rule = trafficState.prefilledBreakpointRule,
+                        protocolDefinitions = breakpointState.protocolDefinitions,
+                        initialProtocolValues = emptyList(),
                         onDismiss = { trafficViewModel.closeBreakpointDialog() },
-                        onSave = { urlPattern, method, phase, enabled, protocolCriteria ->
-                            trafficViewModel.saveBreakpointRule(urlPattern, method, phase, enabled, protocolCriteria)
+                        onSave = { urlPattern, method, phase, enabled, protocolId, protocolValues ->
+                            breakpointViewModel.saveRule(
+                                urlPattern,
+                                method,
+                                phase,
+                                enabled,
+                                protocolId,
+                                protocolValues,
+                            )
+                            trafficViewModel.closeBreakpointDialog()
                         }
                     )
                 }
+            }
+
+            DesktopDestination.ConnectDevice -> {
+                val connectDeviceViewModel: ConnectDeviceViewModel = koinViewModel()
+                ConnectDeviceScreen(
+                    viewModel = connectDeviceViewModel,
+                    modifier = Modifier.fillMaxSize(),
+                )
             }
 
             DesktopDestination.ApiStudio -> {
@@ -124,8 +149,8 @@ fun KNetWorkspaceHost(
         // Live Intercept Side Drawer Overlay
         LiveInterceptDrawer(
             events = breakpointState.activeEvents,
-            activeEvent = breakpointState.activeEvent,
-            isVisible = breakpointState.activeEvent != null,
+            activeEvent = drawerEvent,
+            isVisible = drawerEvent != null,
             resolvedPayloads = breakpointState.resolvedPayloads,
             onSelectEvent = { eventId ->
                 breakpointViewModel.selectActiveEvent(eventId)
@@ -155,7 +180,7 @@ fun KNetWorkspaceHost(
             onDismiss = {
                 breakpointViewModel.dismissCurrentEvent()
             },
-            modifier = Modifier.align(Alignment.CenterEnd)
+            modifier = Modifier.fillMaxSize()
         )
     }
 }

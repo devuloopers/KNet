@@ -1,19 +1,49 @@
 package com.devuloopers.knet.ui.desktop.traffic.model
 
+import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
+import com.devuloopers.knet.domain.rules.model.BreakpointPhase
+import com.devuloopers.knet.traffic.model.ExchangeState
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.HttpExchangeSnapshot
 import com.devuloopers.knet.traffic.model.body.MessageBodyRef
 import com.devuloopers.knet.traffic.model.http.RequestTarget
 import com.devuloopers.knet.ui.core.foundation.time.KNetDateTime
 
+/** Strongly typed breakpoint presentation attached separately from canonical HTTP values. */
+sealed interface TrafficInterceptionUiState {
+    /** The exchange has no breakpoint presentation marker. */
+    data object None : TrafficInterceptionUiState
+
+    /** The exchange is actively suspended and awaiting a user decision. */
+    data class Paused(
+        val pendingId: String,
+        val ruleId: String,
+        val phase: BreakpointPhase,
+    ) : TrafficInterceptionUiState
+
+    /** The exchange matched at least one breakpoint earlier in this process session. */
+    data class Matched(
+        val ruleIds: Set<String>,
+        val phases: Set<BreakpointPhase>,
+    ) : TrafficInterceptionUiState {
+        init {
+            require(ruleIds.isNotEmpty()) { "A matched interception requires at least one rule ID." }
+            require(phases.isNotEmpty()) { "A matched interception requires at least one phase." }
+        }
+    }
+}
+
 /**
  * Bounded row metadata owned by the desktop Traffic presentation.
  *
  * Payload bytes and storage paths are intentionally absent. Selection loads canonical details
  * through the application layer under a separate preview budget.
+ *
+ * @property sequenceNumber One-based visible capture sequence, where the oldest retained row is
+ * `1` and the newest retained row has the highest number.
  */
 data class TrafficRowUiState(
-    val id: Int,
+    val sequenceNumber: Int,
     val transactionId: String,
     val method: String,
     val scheme: String,
@@ -33,8 +63,7 @@ data class TrafficRowUiState(
     val requestHeaders: Map<String, String>,
     val responseHeaders: Map<String, String>,
     val timings: ExchangeTimings,
-    val isIntercepted: Boolean = false,
-    val matchedRuleId: String? = null,
+    val interception: TrafficInterceptionUiState = TrafficInterceptionUiState.None,
 ) {
     val fullUrl: String
         get() = when {
@@ -44,8 +73,33 @@ data class TrafficRowUiState(
         }
 }
 
+/** Builds an immediate body-free Traffic projection for a suspended canonical exchange. */
+internal fun PendingBreakpoint.toTrafficRowUiState(): TrafficRowUiState {
+    val exchange = HttpExchangeSnapshot(
+        id = candidate.exchangeId,
+        request = candidate.request,
+        response = candidate.response,
+        state = when (candidate.phase) {
+            BreakpointPhase.REQUEST -> ExchangeState.REQUEST_COMPLETE
+            BreakpointPhase.RESPONSE -> ExchangeState.RESPONSE_COMPLETE
+            BreakpointPhase.BOTH -> error("A pending breakpoint cannot use the BOTH phase.")
+        },
+        startedAtEpochMillis = candidate.startedAtEpochMillis,
+    )
+    return exchange.toTrafficRowUiState().copy(
+        status = 0,
+        statusText = "In Progress",
+        formattedTime = "-",
+        interception = TrafficInterceptionUiState.Paused(
+            pendingId = id,
+            ruleId = ruleId,
+            phase = candidate.phase,
+        ),
+    )
+}
+
 /** Maps one canonical exchange metadata snapshot into a body-free Traffic row. */
-internal fun HttpExchangeSnapshot.toTrafficRowUiState(displayIndex: Int): TrafficRowUiState {
+internal fun HttpExchangeSnapshot.toTrafficRowUiState(): TrafficRowUiState {
     val targetParts = request.head.target.toDisplayTarget(request.head.headers.firstValue("Host"))
     val requestBytes = request.body.observedBytes()
     val responseBytes = response?.body?.observedBytes() ?: 0L
@@ -53,7 +107,7 @@ internal fun HttpExchangeSnapshot.toTrafficRowUiState(displayIndex: Int): Traffi
     val totalMillis = timings.totalMillis
     val responseHead = response?.head
     return TrafficRowUiState(
-        id = displayIndex,
+        sequenceNumber = 0,
         transactionId = id.value,
         method = request.head.method.token,
         scheme = targetParts.scheme,

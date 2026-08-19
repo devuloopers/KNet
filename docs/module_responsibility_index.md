@@ -21,42 +21,47 @@ Gradle enforces four rules through `verifyArchitectureFoundation`:
 
 ## Stable contracts and application boundary
 
-- [`:application`](../application/MODULE.md) — JVM desktop use cases and UI-neutral runtime ports.
+- [`:application`](../application/MODULE.md) — JVM desktop use cases and UI-neutral proxy/capture runtime ports.
 - [`:core:traffic`](../core/traffic/MODULE.md) — canonical shared HTTP request, response, exchange, body-reference, and ingress models.
 - [`:core:connectivity`](../core/connectivity/MODULE.md) — connectivity mechanism and setup contracts.
 - [`:core:domain`](../core/domain/MODULE.md) — non-traffic feature domain contracts and use cases.
 - [`:core:http`](../core/http/MODULE.md) — outbound HTTP-client capability.
+- [`:core:identity`](../core/identity/MODULE.md) — stable registered-device identity shared across transports.
 - [`:core:logger`](../core/logger/MODULE.md) — shared logging facade.
-- [`:core:pairing`](../core/pairing/MODULE.md) — pairing, device identity, credential, scope, and revocation contracts.
+- [`:core:pairing`](../core/pairing/MODULE.md) — pairing, credential, scope, and trusted-device contracts.
 - [`:core:serialization`](../core/serialization/MODULE.md) — shared serialization configuration.
 
 ## Runtime implementations and adapters
 
 - [`:connectivity:desktop`](../connectivity/desktop/MODULE.md) — desktop connectivity mechanism implementations.
-- [`:data:desktop`](../data/desktop/MODULE.md) — desktop repository and mapping adapters.
-- [`:storage`](../storage/MODULE.md) — durable desktop persistence and schema.
+- [`:data:desktop`](../data/desktop/MODULE.md) — desktop repository, capture-generation, registered-device, and mapping adapters.
+- [`:storage`](../storage/MODULE.md) — durable desktop persistence, schema, and registered/trusted-device rows.
 - [`:engine:certificate`](../engine/certificate/MODULE.md) — CA, certificate, key, and trust implementation.
 - [`:engine:formatter`](../engine/formatter/MODULE.md) — bounded body formatting and derived views.
-- [`:engine:interceptor`](../engine/interceptor/MODULE.md) — breakpoint interception and typed mutation behavior.
-- [`:engine:protocol`](../engine/protocol/MODULE.md) — protocol-specific parsers and inspectors.
-- [`:engine:proxy`](../engine/proxy/MODULE.md) — proxy transport and channel lifecycle.
+- [`:engine:interceptor`](../engine/interceptor/MODULE.md) — breakpoint interception, pre-pause capture admission, and typed mutation behavior.
+- [`:engine:protocol`](../engine/protocol/MODULE.md) — protocol-specific parsers, asynchronous inspectors,
+  and additive live-breakpoint extensions.
+- [`:engine:proxy`](../engine/proxy/MODULE.md) — proxy transport, channel lifecycle, and one-shot exchange capture handoff.
 - [`:engine:script`](../engine/script/MODULE.md) — sandboxed script runtimes.
 - [`:engine:session`](../engine/session/MODULE.md) — canonical body-object file storage.
 - [`:engine:simulator`](../engine/simulator/MODULE.md) — network condition simulation.
 
 ## Desktop presentation
 
-- [`:ui:core`](../ui/core/MODULE.md) — reusable Compose design system.
-- [`:ui:desktop:app`](../ui/desktop/app/MODULE.md) — desktop shell and navigation.
+- [`:ui:core`](../ui/core/MODULE.md) — reusable Compose design system and responsive side-drawer shell.
+- [`:ui:desktop:app`](../ui/desktop/app/MODULE.md) — desktop shell, navigation, and row-gated global overlay placement.
 - [`:ui:desktop:workspace`](../ui/desktop/workspace/MODULE.md) — workspace presentation.
 - [`:ui:desktop:apistudio`](../ui/desktop/apistudio/MODULE.md) — API Studio editing and execution presentation.
-- [`:ui:desktop:traffic`](../ui/desktop/traffic/MODULE.md) — traffic list and inspector coordination.
+- [`:ui:desktop:traffic`](../ui/desktop/traffic/MODULE.md) — traffic list, capture controls, live breakpoint projection, and inspector coordination.
+- [`:ui:desktop:connectivity`](../ui/desktop/connectivity/MODULE.md) — connectivity card grid, QR, and Wi-Fi setup drawer content.
 - [`:ui:desktop:httpPanel`](../ui/desktop/httpPanel/MODULE.md) — reusable HTTP inspection/editing panels.
 - [`:ui:desktop:scripting`](../ui/desktop/scripting/MODULE.md) — scripting UI.
 - [`:ui:desktop:certificate`](../ui/desktop/certificate/MODULE.md) — certificate-management UI.
 - [`:ui:desktop:settings`](../ui/desktop/settings/MODULE.md) — settings UI.
-- [`:ui:desktop:breakpointManager`](../ui/desktop/breakpointManager/MODULE.md) — breakpoint-management UI.
-- [`:ui:desktop:codeEditor`](../ui/desktop/codeEditor/MODULE.md) — reusable code editor.
+- [`:ui:desktop:breakpointManager`](../ui/desktop/breakpointManager/MODULE.md) — breakpoint management and Live Intercept drawer content.
+- [`:ui:desktop:codeEditor`](../ui/desktop/codeEditor/MODULE.md) — reusable versioned document,
+  extensible language services, search/history, and virtualized Compose code editor; independent
+  from HTTP and feature models.
 
 ## Composition and test support
 
@@ -72,8 +77,8 @@ Gradle enforces four rules through `verifyArchitectureFoundation`:
 - Traffic UI stores selection/filter/presentation state, not a duplicate exchange.
 - Body bytes are obtained through a body store using `BodyRef`, not embedded in every model copy.
 
-Production consumers include paged Traffic list/detail, API Studio direct recording and replay preparation, breakpoints, semantic inspectors, storage, and paired ingress. `:data:desktop` maps schema-v13 Room records to canonical exchanges, returns bounded previews through `:application`, and adapts concrete runtimes to application ports. The canonical writer/body/query stack is the sole traffic authority. Ordinary proxy responses stream; only an enabled response breakpoint requests bounded full-response aggregation.
+Production consumers include paged Traffic list/detail, API Studio direct recording and replay preparation, breakpoints, semantic inspectors, storage, and paired ingress. `:data:desktop` maps current-schema Room records to canonical exchanges and registered identities, returns bounded previews through `:application`, and adapts concrete runtimes to application ports. Breakpoint persistence stores a generic protocol ID/payload envelope and never branches on GraphQL or future formats. The canonical writer/body/query stack is the sole traffic authority. Ordinary proxy traffic streams; Traffic Start/Stop attaches or detaches a versioned capture target while the listener and Wi-Fi forwarding remain stable. Detached writers drain through one bounded owner. Enabled request or response breakpoints request bounded aggregation, but capture pause bypasses and releases breakpoint decisions without changing that pipeline shape.
 
 ## Current target ownership
 
-The proxy defaults to loopback and strict upstream TLS, enforces timeout/connection policy, orders HTTP/1 exchanges, streams both directions, and owns deterministic startup/shutdown. Application services own breakpoints, connectivity, pairing, certificates, inspection, script execution, traffic paging, clear, and recording. The dedicated setup listeners, authenticated companion-ready gateway, and explicitly activated approved-client Wi-Fi gateway live in `:connectivity:desktop`; none is inserted into the proxy pipeline. HTTP/2, HTTP/3, WebSocket transport, gRPC, VPN, relay, and mobile applications remain explicitly unavailable rather than represented by dormant stubs.
+The proxy defaults to loopback and strict upstream TLS, enforces timeout/connection policy, orders HTTP/1 exchanges, streams both directions, and owns deterministic startup/shutdown. Application services independently own proxy lifecycle, capture attachment, breakpoints, connectivity, pairing, certificates, inspection, script execution, traffic paging, clear, and recording. The dedicated setup listeners, authenticated companion-ready gateway, and automatically managed open-client Wi-Fi gateway live in `:connectivity:desktop`; none is inserted into the proxy pipeline. HTTP/2, HTTP/3, WebSocket transport, gRPC, VPN, relay, and mobile applications remain explicitly unavailable rather than represented by dormant stubs.

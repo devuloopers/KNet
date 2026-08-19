@@ -12,6 +12,7 @@ kotlin {
             dependencies {
                 implementation(project(":application"))
                 implementation(project(":core:connectivity"))
+                implementation(project(":core:identity"))
                 implementation(project(":core:traffic"))
                 implementation(project(":core:pairing"))
                 implementation(libs.kotlinx.coroutines.core)

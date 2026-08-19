@@ -6,27 +6,23 @@ import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.isPrimaryPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.AutoScrollController
-import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.FoldRegion
-import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.LazyLine
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.PointerHitTestEngine
-import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorCaretState
-import com.devuloopers.knet.ui.desktop.codeeditor.component.LazyCodeBodyMode
+import com.devuloopers.knet.ui.desktop.codeeditor.document.EditorDocumentSnapshot
+import com.devuloopers.knet.ui.desktop.codeeditor.document.EditorPosition
+import com.devuloopers.knet.ui.desktop.codeeditor.document.EditorSelection
 import com.devuloopers.knet.ui.desktop.codeeditor.gesture.SelectionGestureHandler
-import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorSelection
+import com.devuloopers.knet.ui.desktop.codeeditor.theme.CodeEditorTokens
+import com.devuloopers.knet.ui.desktop.codeeditor.viewport.EditorVisualLineMap
 
 /**
  * Custom pointer input modifier for [com.devuloopers.knet.ui.desktop.codeeditor.component.LazyCodeBody].
  *
  * Handles pointer drag selection, scrollbar drag ownership locking, cursor switching, and auto-scrolling.
  */
-fun Modifier.editorPointerInput(
-    rawLines: List<String>,
-    visibleLines: List<LazyLine>,
-    foldRegions: List<FoldRegion>,
-    collapsedFoldStartLines: Set<Int>,
-    mode: LazyCodeBodyMode,
+internal fun Modifier.editorPointerInput(
+    snapshot: EditorDocumentSnapshot,
+    visualLineMap: EditorVisualLineMap,
     containerHeightPx: Float,
     containerWidthPx: Float,
     gutterWidthPx: Float,
@@ -38,21 +34,18 @@ fun Modifier.editorPointerInput(
     selectionGestureHandler: SelectionGestureHandler,
     autoScrollController: AutoScrollController,
     currentSelectionState: EditorSelection?,
-    currentCaretState: EditorCaretState?,
+    currentCaret: EditorPosition,
+    updateCaret: (EditorPosition) -> Unit,
     updateSelection: (EditorSelection?) -> Unit
 ): Modifier = this.pointerInput(
-    rawLines,
-    visibleLines,
-    foldRegions,
-    collapsedFoldStartLines,
-    mode,
+    snapshot,
+    visualLineMap,
     containerHeightPx,
     containerWidthPx,
     gutterWidthPx
 ) {
-    val scrollbarWidthPx = 16.dp.toPx()
-    var isScrollbarDragging = false
-    var wasPressed = false
+    val scrollbarWidthPx = CodeEditorTokens.ScrollbarHitZoneWidth.toPx()
+    val dragOwnership = EditorPointerDragOwnership()
 
     awaitPointerEventScope {
         while (true) {
@@ -62,24 +55,19 @@ fun Modifier.editorPointerInput(
 
             if (event.changes.isNotEmpty()) {
                 val position = event.changes.first().position
-                val isOverScrollbarZone = containerWidthPx > 0f && position.x >= (containerWidthPx - scrollbarWidthPx)
+                val isOverVerticalScrollbar = containerWidthPx > 0f &&
+                    position.x >= (containerWidthPx - scrollbarWidthPx)
+                val isOverHorizontalScrollbar = containerHeightPx > 0f &&
+                    position.y >= (containerHeightPx - scrollbarWidthPx)
+                val isOverScrollbarZone = isOverVerticalScrollbar || isOverHorizontalScrollbar
+                val previousOwner = dragOwnership.owner
+                val dragOwner = dragOwnership.update(isPressed, isOverScrollbarZone)
+                val isInitialTextPress = dragOwner == EditorPointerDragOwner.Text &&
+                    previousOwner == EditorPointerDragOwner.None
 
-                if (isPressed) {
-                    if (!wasPressed) {
-                        // Lock scrollbar drag ownership if initial click started inside scrollbar zone
-                        isScrollbarDragging = isOverScrollbarZone
-                    }
-                } else {
-                    isScrollbarDragging = false
-                }
-                wasPressed = isPressed
-
-                val isScrollbarActive = isScrollbarDragging || isOverScrollbarZone
-
-                updateEditorPointerCursor(isScrollbarActive)
-
-                // Skip text selection processing & auto-scroll when scrollbar drag is active
-                if (!isScrollbarActive && isPressed) {
+                // The initial press owns the complete gesture. Crossing the bottom scrollbar while
+                // selecting must not cancel downward selection or its auto-scroll loop.
+                if (dragOwner == EditorPointerDragOwner.Text) {
                     autoScrollController.handleDragPointerLazy(
                         mouseY = position.y,
                         containerHeightPx = containerHeightPx,
@@ -90,8 +78,8 @@ fun Modifier.editorPointerInput(
                     val hitResult = PointerHitTestEngine.calculatePointerHit(
                         pos = position,
                         lazyListState = lazyListState,
-                        visibleLines = visibleLines,
-                        rawLines = rawLines,
+                        visualLineMap = visualLineMap,
+                        snapshot = snapshot,
                         lineHeightPx = lineHeightPx,
                         charWidthPx = charWidthPx,
                         gutterWidthPx = gutterWidthPx,
@@ -99,13 +87,17 @@ fun Modifier.editorPointerInput(
                         lineTextLayoutMap = lineTextLayoutMap
                     )
 
+                    if (isInitialTextPress) {
+                        updateCaret(EditorPosition(hitResult.documentLineIndex, hitResult.columnIndex))
+                    }
+
                     selectionGestureHandler.processPointerEvent(
-                        targetLineIndex = hitResult.rawLineIndex,
-                        targetColIndex = hitResult.colIndex,
+                        targetLineIndex = hitResult.documentLineIndex,
+                        targetColIndex = hitResult.columnIndex,
                         lineText = hitResult.displayLineText,
                         isShiftPressed = isShiftPressed,
                         currentSelection = currentSelectionState,
-                        caretState = currentCaretState,
+                        caret = currentCaret,
                         onSelectionChange = updateSelection
                     )
                 } else {

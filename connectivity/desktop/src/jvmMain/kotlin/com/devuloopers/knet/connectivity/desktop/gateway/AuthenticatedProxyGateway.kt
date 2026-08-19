@@ -3,7 +3,7 @@ package com.devuloopers.knet.connectivity.desktop.gateway
 import com.devuloopers.knet.application.port.pairing.PairingCoordinator
 import com.devuloopers.knet.pairing.DeviceAuthenticationResult
 import com.devuloopers.knet.pairing.DeviceScope
-import com.devuloopers.knet.pairing.PairedDeviceId
+import com.devuloopers.knet.identity.RegisteredDeviceId
 import com.devuloopers.knet.traffic.model.ClientIdentity
 import com.devuloopers.knet.traffic.model.IngressAttributionRegistration
 import com.devuloopers.knet.traffic.model.IngressContext
@@ -158,7 +158,7 @@ public class AuthenticatedProxyGateway(
     }
 
     private data class AuthorizedHeader(
-        val deviceId: PairedDeviceId,
+        val deviceId: RegisteredDeviceId,
         val credential: String,
         val sanitizedHeader: ByteArray,
     )
@@ -177,7 +177,7 @@ public class AuthenticatedProxyGateway(
         val sanitized = (listOf(lines.first()) + lines.drop(1).filterNot {
             it.substringBefore(':').equals("Proxy-Authorization", true)
         }).joinToString("\r\n", postfix = "\r\n\r\n").encodeToByteArray()
-        return AuthorizedHeader(PairedDeviceId(device), credential, sanitized)
+        return AuthorizedHeader(RegisteredDeviceId(device), credential, sanitized)
     }
 
     private fun readHeader(socket: Socket): ByteArray? {
@@ -197,13 +197,13 @@ public class AuthenticatedProxyGateway(
         return null
     }
 
-    private fun track(id: PairedDeviceId, vararg sockets: Socket) {
+    private fun track(id: RegisteredDeviceId, vararg sockets: Socket) {
         activeByDevice.compute(id.value) { _, current ->
             (current ?: ConcurrentHashMap.newKeySet()).also { it.addAll(sockets) }
         }
     }
 
-    private fun untrack(id: PairedDeviceId, vararg sockets: Socket) {
+    private fun untrack(id: RegisteredDeviceId, vararg sockets: Socket) {
         activeByDevice.computeIfPresent(id.value) { _, current ->
             current.removeAll(sockets.toSet()); current.takeIf { it.isNotEmpty() }
         }

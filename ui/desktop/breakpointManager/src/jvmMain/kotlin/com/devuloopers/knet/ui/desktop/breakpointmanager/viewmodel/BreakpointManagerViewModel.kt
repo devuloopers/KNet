@@ -4,9 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.application.port.breakpoint.BreakpointRequestEdit
 import com.devuloopers.knet.application.port.breakpoint.BreakpointResponseEdit
+import com.devuloopers.knet.application.port.breakpoint.ProtocolCriteriaValue
 import com.devuloopers.knet.application.usecase.breakpoint.ClearPendingBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.ObservePendingBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.ResolveBreakpointUseCase
+import com.devuloopers.knet.application.usecase.breakpoint.BreakpointProtocolRuleUseCase
+import com.devuloopers.knet.domain.rules.model.BreakpointProtocolId
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.rules.usecase.*
@@ -35,10 +38,15 @@ class BreakpointManagerViewModel(
     private val toggleGlobalInterceptionUseCase: ToggleGlobalInterceptionUseCase,
     private val resolveBreakpointUseCase: ResolveBreakpointUseCase,
     private val clearPendingBreakpointsUseCase: ClearPendingBreakpointsUseCase,
+    private val breakpointProtocolRuleUseCase: BreakpointProtocolRuleUseCase,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.Default
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(BreakpointManagerState())
+    private val _uiState = MutableStateFlow(
+        BreakpointManagerState(
+            protocolDefinitions = breakpointProtocolRuleUseCase.definitions(),
+        ),
+    )
     val uiState: StateFlow<BreakpointManagerState> = _uiState.asStateFlow()
 
     init {
@@ -187,15 +195,33 @@ class BreakpointManagerViewModel(
     }
 
     fun openAddDialog() {
-        _uiState.update { it.copy(isAddEditDialogVisible = true, editingRule = null) }
+        _uiState.update {
+            it.copy(
+                isAddEditDialogVisible = true,
+                editingRule = null,
+                editingProtocolValues = emptyList(),
+            )
+        }
     }
 
     fun openEditDialog(rule: BreakpointRule) {
-        _uiState.update { it.copy(isAddEditDialogVisible = true, editingRule = rule) }
+        _uiState.update {
+            it.copy(
+                isAddEditDialogVisible = true,
+                editingRule = rule,
+                editingProtocolValues = breakpointProtocolRuleUseCase.editorValues(rule.protocolCriteria),
+            )
+        }
     }
 
     fun closeDialog() {
-        _uiState.update { it.copy(isAddEditDialogVisible = false, editingRule = null) }
+        _uiState.update {
+            it.copy(
+                isAddEditDialogVisible = false,
+                editingRule = null,
+                editingProtocolValues = emptyList(),
+            )
+        }
     }
 
     fun saveRule(
@@ -203,8 +229,11 @@ class BreakpointManagerViewModel(
         method: HttpMethod?,
         phase: BreakpointPhase,
         enabled: Boolean,
-        protocolCriteria: com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria = com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria.HttpDefault
+        protocolId: BreakpointProtocolId = BreakpointProtocolId.HTTP,
+        protocolValues: List<ProtocolCriteriaValue> = emptyList(),
     ) {
+        val protocolCriteria = breakpointProtocolRuleUseCase.createCriteria(protocolId, protocolValues)
+            ?: return
         val currentEditing = _uiState.value.editingRule
         val targetId = currentEditing?.id ?: @OptIn(kotlin.uuid.ExperimentalUuidApi::class) kotlin.uuid.Uuid.random().toString()
 
@@ -227,7 +256,12 @@ class BreakpointManagerViewModel(
                 } else {
                     state.rules + rule
                 }
-                state.copy(rules = newRules, isAddEditDialogVisible = false, editingRule = null)
+                state.copy(
+                    rules = newRules,
+                    isAddEditDialogVisible = false,
+                    editingRule = null,
+                    editingProtocolValues = emptyList(),
+                )
             }
         }
     }

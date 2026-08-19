@@ -1,5 +1,6 @@
 package com.devuloopers.knet.products.desktop
 
+import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolRegistry
 import com.devuloopers.knet.products.desktop.config.DesktopConfiguration
 import com.devuloopers.knet.products.desktop.di.DesktopModules
 import org.koin.core.context.startKoin
@@ -58,5 +59,7 @@ class DesktopModulesTest {
             modules(listOf(configModule) + DesktopModules.all)
         }
         assertNotNull(koinApp.koin)
+        val breakpointProtocols = koinApp.koin.get<BreakpointProtocolRegistry>().definitions
+        assertEquals(listOf("http", "graphql"), breakpointProtocols.map { it.protocolId.value })
     }
 }

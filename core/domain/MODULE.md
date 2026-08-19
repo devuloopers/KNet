@@ -12,6 +12,9 @@ Holds non-traffic feature business models, repository contracts, and use cases u
 - Collection and outbound-execution contracts consume the canonical `:core:traffic` `HttpMethod`; they do not define another method enum.
 - Breakpoint rules consume that same `HttpMethod` plus one `BreakpointPhase`; application,
   persistence adapters, interceptor, and UI do not define translated rule models.
+- Breakpoint rules carry an open typed protocol ID plus an opaque extension-owned criteria payload.
+  `BreakpointTransportMatcher` compiles only phase, method, and URL; no protocol-specific hierarchy
+  or matcher branch belongs in this module.
 
 ## Does not own
 
@@ -30,3 +33,5 @@ Platform detection is not a domain concern; desktop-only host-platform behavior 
 Outbound execution uses `OutboundRequestBody` and `ExecutionResult`; transport timing is the canonical
 `:core:traffic` `ExchangeTimings`, and GraphQL UI state composes `StructuredPayloadState.GraphQL`
 instead of copying its fields.
+The former closed GraphQL/gRPC/WebSocket breakpoint criteria and interception-metadata hierarchies
+were removed. Adding a breakpoint protocol no longer changes `:core:domain`.

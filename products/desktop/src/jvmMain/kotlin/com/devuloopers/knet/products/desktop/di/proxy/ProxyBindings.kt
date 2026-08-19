@@ -39,6 +39,7 @@ internal val proxyBindings: Module = module {
         DesktopProxyRuntimeAdapter(
             proxyRuntimeRepository = get(),
             canonicalCaptureSessionFactory = get(),
+            breakpointCaptureAvailability = get(),
         )
     }
     single<ProxyRuntimePort> { get<DesktopProxyRuntimeAdapter>() }

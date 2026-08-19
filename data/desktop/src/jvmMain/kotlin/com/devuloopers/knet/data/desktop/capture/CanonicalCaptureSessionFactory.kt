@@ -32,7 +32,9 @@ class CanonicalCaptureSessionFactory(
     private val limits: CaptureIngressLimits = DEFAULT_LIMITS,
 ) {
     private val startupRecoveryMutex = Mutex()
+    private val sessionTimestampMutex = Mutex()
     private var startupRecoveryComplete = false
+    private var latestSessionStartedAtEpochMillis = -1L
 
     /**
      * Opens a canonical session whose real connection/exchange identities are supplied by the
@@ -45,8 +47,9 @@ class CanonicalCaptureSessionFactory(
         require(localListenerPort in 1..65_535) { "Canonical capture listener port must be valid." }
         require(startedAtEpochMillis >= 0L) { "Canonical capture session timestamp must not be negative." }
         recoverStartupStateOnce(startedAtEpochMillis)
+        val orderedStartedAtEpochMillis = reserveSessionTimestamp(startedAtEpochMillis)
         val sessionId = CaptureSessionId("desktop-${Uuid.random()}")
-        val writer = openWriter(sessionId, startedAtEpochMillis)
+        val writer = openWriter(sessionId, orderedStartedAtEpochMillis)
         return StreamingProxyCaptureSession(
             sessionId = sessionId,
             ingress = writer,
@@ -68,10 +71,11 @@ class CanonicalCaptureSessionFactory(
     ): StreamingProxyCaptureSession {
         require(startedAtEpochMillis >= 0L) { "Canonical capture session timestamp must not be negative." }
         recoverStartupStateOnce(startedAtEpochMillis)
+        val orderedStartedAtEpochMillis = reserveSessionTimestamp(startedAtEpochMillis)
         val sessionId = CaptureSessionId("api-studio-${Uuid.random()}")
         return StreamingProxyCaptureSession(
             sessionId = sessionId,
-            ingress = openWriter(sessionId, startedAtEpochMillis),
+            ingress = openWriter(sessionId, orderedStartedAtEpochMillis),
             limits = limits,
         )
     }
@@ -103,6 +107,14 @@ class CanonicalCaptureSessionFactory(
             startupRecoveryComplete = true
         }
     }
+
+    /** Reserves a strictly increasing session timestamp so rapid generations have deterministic order. */
+    private suspend fun reserveSessionTimestamp(requestedAtEpochMillis: Long): Long =
+        sessionTimestampMutex.withLock {
+            val reserved = maxOf(requestedAtEpochMillis, latestSessionStartedAtEpochMillis + 1L)
+            latestSessionStartedAtEpochMillis = reserved
+            reserved
+        }
 
     companion object {
         /** Conservative production bounds for streaming proxy and direct capture. */

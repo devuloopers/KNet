@@ -8,7 +8,11 @@ import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.engine.proxy.http.ProxyRequestContext
 import com.devuloopers.knet.engine.proxy.mapper.HttpMapper
 import com.devuloopers.knet.engine.proxy.pipeline.PipelineHandlerNames
+import com.devuloopers.knet.engine.proxy.pipeline.PreparedProxyExchange
+import com.devuloopers.knet.engine.proxy.pipeline.ProxyChannelAttributes
 import com.devuloopers.knet.traffic.id.ExchangeId
+import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.HttpResponseSnapshot
 import com.devuloopers.knet.traffic.model.body.MessageBodyRef
@@ -29,6 +33,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.net.URI
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlin.time.Clock
 
 /**
  * Netty adapter for the application-owned [BreakpointGate].
@@ -50,6 +55,20 @@ class KNetInterceptorHandler(
         }
         val requestContext = mapRequest(context, msg)
         context.channel().attr(ChannelAttributes.REQUEST_CONTEXT).set(requestContext)
+        // Capture metadata is admitted before the application forwarding gate can suspend. The
+        // forwarding handler consumes this exact handle after resume, so the table can publish one
+        // in-progress row without starting a duplicate exchange or coupling capture to UI state.
+        val connectionCapture = context.channel().attr(ProxyChannelAttributes.CONNECTION_CAPTURE).get()
+        val exchangeCapture = runCatching {
+            connectionCapture?.startExchange(
+                exchangeId = requestContext.exchangeId,
+                request = requestContext.request.head,
+                occurredAtEpochMillis = requestContext.startedAtEpochMillis,
+            )
+        }.getOrNull()
+        context.channel().attr(ProxyChannelAttributes.PREPARED_EXCHANGE).set(
+            PreparedProxyExchange(requestContext.exchangeId, exchangeCapture),
+        )
         val candidate = BreakpointCandidate(
             exchangeId = requestContext.exchangeId,
             phase = BreakpointPhase.REQUEST,
@@ -67,6 +86,7 @@ class KNetInterceptorHandler(
         ) { decision ->
             when (decision) {
                 BreakpointDecision.Drop -> {
+                    cancelPreparedCapture(context, REQUEST_REJECTED_ERROR)
                     ReferenceCountUtil.release(msg)
                     context.close()
                 }
@@ -154,11 +174,13 @@ class KNetInterceptorHandler(
     }
 
     override fun channelInactive(context: ChannelHandlerContext) {
+        cancelPreparedCapture(context, DOWNSTREAM_CANCELLED_ERROR)
         cancelActiveWork()
         super.channelInactive(context)
     }
 
     override fun handlerRemoved(context: ChannelHandlerContext) {
+        cancelPreparedCapture(context, HANDLER_REMOVED_ERROR)
         cancelActiveWork()
         super.handlerRemoved(context)
     }
@@ -261,6 +283,19 @@ class KNetInterceptorHandler(
         context.read()
     }
 
+    /** Cancels a capture that has not yet transferred to the forwarding handler. */
+    private fun cancelPreparedCapture(context: ChannelHandlerContext, errorCode: String) {
+        val prepared = context.channel().attr(ProxyChannelAttributes.PREPARED_EXCHANGE).getAndSet(null) ?: return
+        runCatching {
+            prepared.capture?.terminate(
+                state = ExchangeState.CANCELLED,
+                timings = ExchangeTimings(),
+                occurredAtEpochMillis = Clock.System.now().toEpochMilliseconds(),
+                errorCode = errorCode,
+            )
+        }
+    }
+
     private fun cancelActiveWork() {
         val exchanges = activeJobs.keys.toList()
         exchanges.forEach(breakpointGate::cancelExchange)
@@ -268,6 +303,12 @@ class KNetInterceptorHandler(
         activeJobs.clear()
         orderedRequests.clear()
         scope.cancel()
+    }
+
+    private companion object {
+        const val REQUEST_REJECTED_ERROR: String = "breakpoint_request_dropped"
+        const val DOWNSTREAM_CANCELLED_ERROR: String = "downstream_cancelled_before_forwarding"
+        const val HANDLER_REMOVED_ERROR: String = "interceptor_removed_before_forwarding"
     }
 
 }

@@ -7,6 +7,7 @@ import com.devuloopers.knet.engine.proxy.handler.KNetStreamingProxyHandler
 import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureConnectionMetadata
 import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureSink
 import com.devuloopers.knet.engine.proxy.pipeline.PipelineHandlerNames
+import com.devuloopers.knet.engine.proxy.pipeline.ProxyChannelAttributes
 import com.devuloopers.knet.traffic.model.IngressContext
 import com.devuloopers.knet.traffic.model.IngressKind
 import com.devuloopers.knet.traffic.model.TrafficEndpoint
@@ -157,6 +158,7 @@ class KNetProxyServer(
                                 )
                             }.getOrNull()
                         }
+                        channel.attr(ProxyChannelAttributes.CONNECTION_CAPTURE).set(connectionCapture)
                         channel.closeFuture().addListener { connectionCapture?.close() }
                         activeChannels.add(channel)
                         val pipeline = channel.pipeline()
@@ -220,10 +222,12 @@ class KNetProxyServer(
     }
 
     /**
-     * Flushes and closes all active client channels connected to the proxy.
-     * Called when host network interface switches occur to prevent stale socket connections.
+     * Closes all active client channels while keeping the listener available for immediate reconnects.
+     *
+     * Connectivity adapters use this boundary after a network transition, and runtime composition
+     * uses it when a per-connection capability such as breakpoint aggregation changes.
      */
-    fun flushActiveChannels() {
+    fun closeActiveConnections() {
         activeChannels.close().syncUninterruptibly()
     }
 
@@ -246,7 +250,7 @@ class KNetProxyServer(
         eventLoopLagTask = null
 
 
-        flushActiveChannels()
+        closeActiveConnections()
         serverChannel?.close()?.syncUninterruptibly()
         serverChannel = null
 

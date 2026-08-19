@@ -27,10 +27,10 @@ class MultiClickGestureHandlerTest {
         val selection = handler.processClick(1, 6, lineText, currentTimeMs = 1100L)
         assertNotNull(selection)
         assertEquals(2, handler.clickCount)
-        assertEquals(1, selection.startLine)
-        assertEquals(5, selection.startCol)
-        assertEquals(1, selection.endLine)
-        assertEquals(9, selection.endCol)
+        assertEquals(1, selection.anchor.line)
+        assertEquals(5, selection.anchor.column)
+        assertEquals(1, selection.active.line)
+        assertEquals(9, selection.active.column)
     }
 
     @Test
@@ -44,10 +44,10 @@ class MultiClickGestureHandlerTest {
 
         assertNotNull(selection)
         assertEquals(3, handler.clickCount)
-        assertEquals(1, selection.startLine)
-        assertEquals(0, selection.startCol)
-        assertEquals(1, selection.endLine)
-        assertEquals(lineText.length, selection.endCol)
+        assertEquals(1, selection.anchor.line)
+        assertEquals(0, selection.anchor.column)
+        assertEquals(1, selection.active.line)
+        assertEquals(lineText.length, selection.active.column)
     }
 
 }

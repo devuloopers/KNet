@@ -1,10 +1,7 @@
 package com.devuloopers.knet.pairing
 
-/** Stable non-secret device identity used across pairing, ingress, traffic, and revocation. */
-@JvmInline
-value class PairedDeviceId(val value: String) {
-    init { require(value.isNotBlank()) }
-}
+import com.devuloopers.knet.identity.RegisteredDevice
+import com.devuloopers.knet.identity.RegisteredDeviceId
 
 @JvmInline
 value class PairingInvitationId(val value: String) {
@@ -45,7 +42,7 @@ data class PendingPairingInvitation(
 data class PairingCompletionRequest(
     val invitationId: PairingInvitationId,
     val invitationSecret: String,
-    val deviceId: PairedDeviceId,
+    val deviceId: RegisteredDeviceId,
     val displayName: String,
     val publicKeyEncoded: String,
     val proofSignatureEncoded: String,
@@ -59,18 +56,35 @@ data class PairingCompletionRequest(
         "${invitationId.value}|$invitationSecret|${deviceId.value}|$displayName"
 }
 
-/** Persisted trusted device; only the credential digest is retained. */
+/**
+ * Persisted cryptographic trust attached to one durable registered identity.
+ *
+ * @property registeredDevice Canonical durable identity; its name and revocation state are authoritative.
+ * @property publicKeyEncoded Encoded public key used to verify device proof.
+ * @property credentialDigest One-way digest of the issued high-entropy credential.
+ * @property scopes Capabilities granted to the credential.
+ * @property pairedAtEpochMillis Time at which pairing completed.
+ * @property credentialExpiresAtEpochMillis Time after which authentication must be rejected.
+ */
 data class TrustedDevice(
-    val id: PairedDeviceId,
-    val displayName: String,
+    val registeredDevice: RegisteredDevice,
     val publicKeyEncoded: String,
     val credentialDigest: String,
     val scopes: Set<DeviceScope>,
     val pairedAtEpochMillis: Long,
     val credentialExpiresAtEpochMillis: Long,
-    val revokedAtEpochMillis: Long? = null,
 ) {
-    val isRevoked: Boolean get() = revokedAtEpochMillis != null
+    /** Stable registered identity used by ingress and revocation. */
+    val id: RegisteredDeviceId get() = registeredDevice.id
+
+    /** Current user-visible name from the registered-device source of truth. */
+    val displayName: String get() = registeredDevice.displayName
+
+    /** Revocation time shared with the registered identity. */
+    val revokedAtEpochMillis: Long? get() = registeredDevice.revokedAtEpochMillis
+
+    /** Whether the underlying registered identity has been revoked. */
+    val isRevoked: Boolean get() = registeredDevice.isRevoked
 }
 
 /** Credential is returned once and is deliberately absent from [TrustedDevice]. */
@@ -81,7 +95,7 @@ data class IssuedDeviceCredential(
 
 /** Authenticated, scope-checked non-secret principal used by ingress adapters. */
 data class PairedDevicePrincipal(
-    val deviceId: PairedDeviceId,
+    val deviceId: RegisteredDeviceId,
     val displayName: String,
     val scopes: Set<DeviceScope>,
 )

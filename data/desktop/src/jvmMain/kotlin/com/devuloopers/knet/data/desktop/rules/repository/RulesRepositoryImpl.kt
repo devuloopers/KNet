@@ -1,7 +1,9 @@
 package com.devuloopers.knet.data.desktop.rules.repository
 
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
+import com.devuloopers.knet.domain.rules.model.BreakpointProtocolId
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
+import com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria
 import com.devuloopers.knet.domain.rules.repository.RulesRepository
 import com.devuloopers.knet.application.port.breakpoint.BreakpointControlPort
 import com.devuloopers.knet.traffic.model.http.HttpMethod
@@ -59,12 +61,13 @@ class RulesRepositoryImpl(
     }
 
     private fun BreakpointRuleEntity.toDomainRule(): BreakpointRule {
-        val criteria = when (protocolCriteriaType.uppercase()) {
-            "GRAPHQL" -> com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria.GraphQL(operationName = protocolCriteriaData)
-            "GRPC" -> com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria.Grpc()
-            "WEBSOCKET" -> com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria.WebSocket()
-            else -> com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria.HttpDefault
-        }
+        val protocolId = runCatching {
+            BreakpointProtocolId(protocolCriteriaType.trim().lowercase())
+        }.getOrElse { BreakpointProtocolId("invalid") }
+        val criteria = ProtocolMatchCriteria(
+            protocolId = protocolId,
+            encodedPayload = protocolCriteriaData.orEmpty(),
+        )
 
         return BreakpointRule(
             id = id,
@@ -78,20 +81,14 @@ class RulesRepositoryImpl(
     }
 
     private fun BreakpointRule.toStorageEntity(): BreakpointRuleEntity {
-        val (criteriaType, criteriaData) = when (val c = protocolCriteria) {
-            is com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria.GraphQL -> "GRAPHQL" to (c.operationName ?: "")
-            is com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria.Grpc -> "GRPC" to ""
-            is com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria.WebSocket -> "WEBSOCKET" to ""
-            com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria.HttpDefault -> "HTTP" to ""
-        }
         return BreakpointRuleEntity(
             id = id,
             urlPattern = urlPattern,
             method = method?.token,
             phase = phase.name,
             enabled = enabled,
-            protocolCriteriaType = criteriaType,
-            protocolCriteriaData = criteriaData
+            protocolCriteriaType = protocolCriteria.protocolId.value,
+            protocolCriteriaData = protocolCriteria.encodedPayload,
         )
     }
 

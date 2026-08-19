@@ -1,7 +1,8 @@
 package com.devuloopers.knet.ui.desktop.codeeditor.gesture
 
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.WordBoundaryEngine
-import com.devuloopers.knet.ui.desktop.codeeditor.model.EditorSelection
+import com.devuloopers.knet.ui.desktop.codeeditor.document.EditorPosition
+import com.devuloopers.knet.ui.desktop.codeeditor.document.EditorSelection
 import kotlin.math.abs
 import kotlin.time.TimeSource
 
@@ -15,7 +16,7 @@ internal fun currentGestureTimeMillis(): Long = gestureTimeOrigin.elapsedNow().i
  *
  * Implements VS Code multi-click selection rules (`cursorWordOperations.ts`).
  */
-class MultiClickGestureHandler {
+internal class MultiClickGestureHandler {
     private var lastClickTimeMs: Long = 0L
     private var lastClickLineIndex: Int = -1
     private var lastClickColIndex: Int = -1
@@ -72,11 +73,17 @@ class MultiClickGestureHandler {
                 val (wordStart, wordEnd) = WordBoundaryEngine.findWordBounds(lineText, targetColIndex)
                 wordAnchorStart = wordStart
                 wordAnchorEnd = wordEnd
-                EditorSelection(targetLineIndex, wordStart, targetLineIndex, wordEnd)
+                EditorSelection(
+                    EditorPosition(targetLineIndex, wordStart),
+                    EditorPosition(targetLineIndex, wordEnd)
+                )
             }
 
             3 -> {
-                EditorSelection(targetLineIndex, 0, targetLineIndex, lineText.length)
+                EditorSelection(
+                    EditorPosition(targetLineIndex, 0),
+                    EditorPosition(targetLineIndex, lineText.length)
+                )
             }
 
             else -> null
@@ -107,14 +114,20 @@ class MultiClickGestureHandler {
                     (targetLineIndex > anchorLine || (targetLineIndex == anchorLine && targetColIndex >= anchorCol))
                 val startCol = if (isForward) wordAnchorStart else wordAnchorEnd
                 val endCol = if (isForward) targetWordEnd else targetWordStart
-                EditorSelection(anchorLine, startCol, targetLineIndex, endCol)
+                EditorSelection(
+                    EditorPosition(anchorLine, startCol),
+                    EditorPosition(targetLineIndex, endCol)
+                )
             }
 
             3 -> {
                 val isForward = targetLineIndex >= anchorLine
                 val startCol = if (isForward) 0 else lineText.length
                 val endCol = if (isForward) lineText.length else 0
-                EditorSelection(anchorLine, startCol, targetLineIndex, endCol)
+                EditorSelection(
+                    EditorPosition(anchorLine, startCol),
+                    EditorPosition(targetLineIndex, endCol)
+                )
             }
 
             else -> null

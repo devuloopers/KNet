@@ -11,6 +11,11 @@ sealed interface DesktopDestination {
     data object Traffic : DesktopDestination
 
     /**
+     * Stock-phone onboarding, approval, and active Wi-Fi access management.
+     */
+    data object ConnectDevice : DesktopDestination
+
+    /**
      * HTTP Transaction Inspector panel for header and payload details.
      */
     data object Inspector : DesktopDestination

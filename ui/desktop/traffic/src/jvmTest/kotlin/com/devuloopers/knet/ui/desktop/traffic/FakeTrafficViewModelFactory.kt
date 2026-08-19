@@ -14,16 +14,26 @@ import com.devuloopers.knet.application.port.traffic.TrafficPageQuery
 import com.devuloopers.knet.application.port.traffic.TrafficQueryPort
 import com.devuloopers.knet.application.port.traffic.TrafficSessionCatalogPort
 import com.devuloopers.knet.application.port.traffic.CaptureClearPreparation
+import com.devuloopers.knet.application.port.traffic.CapturePauseResult
+import com.devuloopers.knet.application.port.traffic.CaptureResumeResult
 import com.devuloopers.knet.application.port.traffic.CaptureSessionControlPort
+import com.devuloopers.knet.application.port.traffic.CaptureSessionState
 import com.devuloopers.knet.application.port.traffic.TrafficMaintenancePort
 import com.devuloopers.knet.application.port.inspection.InspectionAnnotationPort
 import com.devuloopers.knet.application.port.inspection.ObserveInspectionAnnotationsUseCase
+import com.devuloopers.knet.application.port.breakpoint.BreakpointControlPort
+import com.devuloopers.knet.application.port.breakpoint.BreakpointDecision
+import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
+import com.devuloopers.knet.application.usecase.breakpoint.ObservePendingBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.traffic.ClearTrafficHistoryUseCase
 import com.devuloopers.knet.application.usecase.traffic.LoadTrafficExchangeDetailsUseCase
 import com.devuloopers.knet.application.usecase.traffic.ObserveLatestTrafficSessionUseCase
 import com.devuloopers.knet.application.usecase.traffic.ObserveTrafficGenerationsUseCase
 import com.devuloopers.knet.application.usecase.traffic.PrepareTrafficRequestUseCase
 import com.devuloopers.knet.application.usecase.traffic.QueryTrafficPageUseCase
+import com.devuloopers.knet.application.usecase.traffic.PauseTrafficCaptureUseCase
+import com.devuloopers.knet.application.usecase.traffic.ResumeTrafficCaptureUseCase
+import com.devuloopers.knet.application.usecase.traffic.ObserveTrafficCaptureStateUseCase
 import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUseCase
 import com.devuloopers.knet.application.usecase.proxy.StartLoopbackProxyUseCase
 import com.devuloopers.knet.application.usecase.proxy.StopProxyRuntimeUseCase
@@ -32,7 +42,6 @@ import com.devuloopers.knet.domain.network.usecase.ObserveLocalIpUseCase
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.rules.repository.RulesRepository
 import com.devuloopers.knet.domain.rules.usecase.ObserveRulesUseCase
-import com.devuloopers.knet.domain.rules.usecase.SaveRuleUseCase
 import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
 import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
 import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
@@ -54,8 +63,11 @@ object FakeTrafficViewModelFactory {
         customObserveLocalIpUseCase: ObserveLocalIpUseCase? = null,
         customTrafficQueryPort: TrafficQueryPort? = null,
         customSessionCatalogPort: TrafficSessionCatalogPort? = null,
+        customProxyRuntime: ProxyRuntimePort? = null,
+        customCaptureSessionControl: CaptureSessionControlPort? = null,
+        pendingBreakpointFlow: StateFlow<List<PendingBreakpoint>> = MutableStateFlow(emptyList()),
     ): TrafficViewModel {
-        val fakeProxyRuntime = object : ProxyRuntimePort {
+        val fakeProxyRuntime = customProxyRuntime ?: object : ProxyRuntimePort {
             private val mutableState = MutableStateFlow<ProxyRuntimeState>(ProxyRuntimeState.Stopped)
             override val state: StateFlow<ProxyRuntimeState> = mutableState
 
@@ -83,6 +95,20 @@ object FakeTrafficViewModelFactory {
             override suspend fun readBody(bodyId: BodyId, range: BodyRange): BodyChunk {
                 error("Fake traffic query port has no bodies.")
             }
+        }
+        val fakeCaptureState = MutableStateFlow<CaptureSessionState>(CaptureSessionState.Inactive)
+        val fakeCaptureControl = customCaptureSessionControl ?: object : CaptureSessionControlPort {
+            override val captureState: StateFlow<CaptureSessionState> = fakeCaptureState
+
+            override suspend fun pause(): CapturePauseResult {
+                fakeCaptureState.value = CaptureSessionState.Inactive
+                return CapturePauseResult.PROXY_INACTIVE
+            }
+
+            override suspend fun resume(): CaptureResumeResult = CaptureResumeResult.ProxyInactive
+
+            override suspend fun rotateForTrafficClear(): CaptureClearPreparation =
+                CaptureClearPreparation.CANONICAL_SESSION_INACTIVE
         }
 
         val fakeNetworkRepo = object : NetworkRepository {
@@ -114,10 +140,7 @@ object FakeTrafficViewModelFactory {
             queryTrafficPageUseCase = QueryTrafficPageUseCase(fakeTrafficQueryPort),
             observeTrafficGenerationsUseCase = ObserveTrafficGenerationsUseCase(fakeTrafficQueryPort),
             clearTrafficHistoryUseCase = ClearTrafficHistoryUseCase(
-                captureSessionControl = object : CaptureSessionControlPort {
-                    override suspend fun rotateForTrafficClear(): CaptureClearPreparation =
-                        CaptureClearPreparation.CANONICAL_SESSION_INACTIVE
-                },
+                captureSessionControl = fakeCaptureControl,
                 trafficMaintenance = object : TrafficMaintenancePort {
                     override suspend fun clearTerminalTraffic() = Unit
                 },
@@ -125,6 +148,9 @@ object FakeTrafficViewModelFactory {
             startLoopbackProxyUseCase = StartLoopbackProxyUseCase(fakeProxyRuntime),
             stopProxyRuntimeUseCase = StopProxyRuntimeUseCase(fakeProxyRuntime),
             observeProxyRuntimeStateUseCase = ObserveProxyRuntimeStateUseCase(fakeProxyRuntime),
+            pauseTrafficCaptureUseCase = PauseTrafficCaptureUseCase(fakeCaptureControl),
+            resumeTrafficCaptureUseCase = ResumeTrafficCaptureUseCase(fakeCaptureControl),
+            observeTrafficCaptureStateUseCase = ObserveTrafficCaptureStateUseCase(fakeCaptureControl),
             loadTrafficExchangeDetailsUseCase = LoadTrafficExchangeDetailsUseCase(fakeTrafficQueryPort),
             observeLocalIpUseCase = customObserveLocalIpUseCase ?: ObserveLocalIpUseCase(fakeNetworkRepo),
             getWorkspaceLayoutUseCase = GetWorkspaceLayoutUseCase(fakeWidgetRepo),
@@ -137,7 +163,18 @@ object FakeTrafficViewModelFactory {
                 },
             ),
             observeRulesUseCase = ObserveRulesUseCase(fakeRulesRepo),
-            saveRuleUseCase = SaveRuleUseCase(fakeRulesRepo)
+            observePendingBreakpointsUseCase = ObservePendingBreakpointsUseCase(
+                object : BreakpointControlPort {
+                    override val pendingBreakpoints: StateFlow<List<PendingBreakpoint>> = pendingBreakpointFlow
+                    override val isEnabled: StateFlow<Boolean> = MutableStateFlow(true)
+                    override fun replaceRules(rules: List<BreakpointRule>) = Unit
+                    override fun setEnabled(enabled: Boolean) = Unit
+                    override fun setDecisionTimeoutMillis(timeoutMillis: Long) = Unit
+                    override suspend fun resolve(pendingId: String, decision: BreakpointDecision): Boolean = false
+                    override suspend fun dropMatching(url: String, method: String): Int = 0
+                    override suspend fun clear(): Int = 0
+                },
+            ),
         )
     }
 }

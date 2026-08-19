@@ -147,7 +147,7 @@ class DesktopConnectivityArchitectureTest {
                     "192.0.2.10",
                     8080,
                     ProxyEndpointScope.LAN,
-                    ProxyAccessRequirement.APPROVED_LAN_CLIENT,
+                    ProxyAccessRequirement.OPEN_LAN_CLIENT,
                 ),
             ),
         ),

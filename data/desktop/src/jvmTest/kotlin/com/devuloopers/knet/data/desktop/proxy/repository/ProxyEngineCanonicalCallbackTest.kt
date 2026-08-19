@@ -1,14 +1,17 @@
 package com.devuloopers.knet.data.desktop.proxy.repository
 
+import com.devuloopers.knet.application.port.breakpoint.BreakpointCoordinator
 import com.devuloopers.knet.application.port.proxy.ProxyBindingConfiguration
 import com.devuloopers.knet.application.port.proxy.ProxyConnectionLimits
 import com.devuloopers.knet.application.port.proxy.ProxyRuntimeConfiguration
 import com.devuloopers.knet.application.port.proxy.ProxyStartResult
 import com.devuloopers.knet.application.port.proxy.ProxyStopReason
 import com.devuloopers.knet.application.port.proxy.ProxyTimeoutPolicy
+import com.devuloopers.knet.application.usecase.traffic.ClearTrafficHistoryUseCase
 import com.devuloopers.knet.connectivity.model.ProxyEndpointScope
 import com.devuloopers.knet.data.desktop.capture.CanonicalCaptureSessionFactory
 import com.devuloopers.knet.data.desktop.runtime.ProxyRuntimeRepository
+import com.devuloopers.knet.data.desktop.traffic.repository.DesktopTrafficMaintenanceAdapter
 import com.devuloopers.knet.engine.certificate.CertificateAuthority
 import com.devuloopers.knet.engine.certificate.CertificateCache
 import com.devuloopers.knet.engine.proxy.KNetProxyServer
@@ -93,6 +96,69 @@ class ProxyEngineStreamingCaptureTest {
         }
     }
 
+    /** Verifies storage clear does not close an already-connected downstream proxy socket. */
+    @Test
+    fun `traffic clear preserves client socket and captures its next exchange`() = runTest {
+        val fixture = createFixture()
+        val origin = ServerSocket().apply {
+            bind(InetSocketAddress(KNetProxyServer.DEFAULT_BIND_HOST, 0))
+        }
+        val originThread = thread(name = "knet-clear-keepalive-origin", isDaemon = true) {
+            repeat(2) {
+                origin.accept().use { connection ->
+                    val reader = connection.getInputStream().bufferedReader()
+                    while (reader.readLine().isNotEmpty()) {
+                        // Drain one request head; the proxy opens one upstream channel per exchange.
+                    }
+                    connection.getOutputStream().apply {
+                        write("HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: keep-alive\r\n\r\nok".toByteArray())
+                        flush()
+                    }
+                }
+            }
+        }
+        try {
+            val proxyPort = availableLoopbackPort()
+            assertIs<ProxyStartResult.Running>(fixture.repository.start(loopbackConfiguration(proxyPort)))
+            Socket().use { client ->
+                client.connect(InetSocketAddress(KNetProxyServer.DEFAULT_BIND_HOST, proxyPort))
+                client.soTimeout = 5_000
+                val responses = client.getInputStream().bufferedReader()
+                val authority = "${KNetProxyServer.DEFAULT_BIND_HOST}:${origin.localPort}"
+
+                writeProxyRequest(client, authority, "/before-clear", close = false)
+                assertEquals("HTTP/1.1 200 OK", readResponse(responses))
+
+                ClearTrafficHistoryUseCase(
+                    captureSessionControl = fixture.repository,
+                    trafficMaintenance = DesktopTrafficMaintenanceAdapter(fixture.database, fixture.bodyStore),
+                ).execute()
+
+                writeProxyRequest(client, authority, "/after-clear", close = true)
+                assertEquals("HTTP/1.1 200 OK", readResponse(responses))
+            }
+            fixture.repository.stop(ProxyStopReason.USER_REQUEST)
+
+            val sessionId = assertNotNull(fixture.database.canonicalCaptureDao().observeLatestSessionId().first())
+            val stored = fixture.database.canonicalCaptureDao().getNewestExchangePage(
+                sessionId = sessionId,
+                cursorTimestamp = null,
+                cursorId = null,
+                hostPattern = null,
+                filterMethods = 0,
+                methods = emptyList(),
+                filterStatuses = 0,
+                statuses = emptyList(),
+                limit = 10,
+            )
+            assertEquals(listOf("/after-clear"), stored.map { it.pathAndQuery })
+        } finally {
+            origin.close()
+            originThread.join(1_000L)
+            fixture.close()
+        }
+    }
+
     /** Verifies LAN exposure is rejected before a listener or capture session is created. */
     @Test
     fun `unauthenticated lan binding is rejected before listener startup`() = runTest {
@@ -133,8 +199,38 @@ class ProxyEngineStreamingCaptureTest {
         val repository = DesktopProxyRuntimeAdapter(
             proxyRuntimeRepository = runtime,
             canonicalCaptureSessionFactory = CanonicalCaptureSessionFactory(database, bodyStore, bodyStore),
+            breakpointCaptureAvailability = BreakpointCoordinator(),
         )
-        return Fixture(root, database, runtime, repository)
+        return Fixture(root, database, bodyStore, runtime, repository)
+    }
+
+    /** Writes one absolute-form HTTP request through an already-open proxy connection. */
+    private fun writeProxyRequest(client: Socket, authority: String, path: String, close: Boolean) {
+        client.getOutputStream().apply {
+            write(
+                (
+                    "GET http://$authority$path HTTP/1.1\r\n" +
+                        "Host: $authority\r\n" +
+                        "Connection: ${if (close) "close" else "keep-alive"}\r\n\r\n"
+                ).toByteArray()
+            )
+            flush()
+        }
+    }
+
+    /** Reads one fixed-length response while retaining reader buffering for the next response. */
+    private fun readResponse(reader: java.io.BufferedReader): String {
+        val status = reader.readLine()
+        var contentLength = 0
+        while (true) {
+            val line = reader.readLine()
+            if (line.isEmpty()) break
+            if (line.startsWith("Content-Length:", ignoreCase = true)) {
+                contentLength = line.substringAfter(':').trim().toInt()
+            }
+        }
+        repeat(contentLength) { check(reader.read() >= 0) }
+        return status
     }
 
     /** Creates a safe loopback runtime configuration. */
@@ -161,6 +257,7 @@ class ProxyEngineStreamingCaptureTest {
     private data class Fixture(
         val root: java.io.File,
         val database: com.devuloopers.knet.storage.database.KNetDatabase,
+        val bodyStore: FileBodyStore,
         val runtime: ProxyRuntimeRepository,
         val repository: DesktopProxyRuntimeAdapter,
     ) {

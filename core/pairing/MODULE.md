@@ -2,11 +2,11 @@
 
 ## Responsibility
 
-Defines platform-neutral device identity, pairing, authorization, credential, scope, and revocation contracts for authenticated ingress and future companions/relay carriers.
+Defines platform-neutral pairing, authorization, credential, scope, and trusted-device contracts for authenticated ingress and future companions/relay carriers.
 
 ## Owns
 
-- Pairing invitations, device identities, public-key proof requests/results, issued credentials, scopes, principals, expiry, and revocation state.
+- Pairing invitations, public-key proof requests/results, issued credentials, scopes, trusted-device projections, principals, expiry, and revocation behavior.
 
 ## Does not own
 
@@ -14,8 +14,8 @@ Defines platform-neutral device identity, pairing, authorization, credential, sc
 
 ## Dependency rule
 
-Remain independent of desktop, engine, UI, and persistence implementations.
+May depend only on the neutral identity types in `:core:identity`; remain independent of desktop, connectivity, engine, UI, and persistence implementations.
 
 ## Current state
 
-The desktop pairing coordinator and encrypted store implement these contracts. Direct mobile tunnels and relay carriers are intentionally absent until real product targets exist; they can be added without changing this module's credential and principal types.
+The desktop pairing coordinator and Room-backed registered-device adapter implement these contracts. A registered identity is durable while source-address authorization remains session-only. Direct mobile tunnels and relay carriers are intentionally absent until real product targets exist; they can be added without changing this module's identity, credential, and principal types.

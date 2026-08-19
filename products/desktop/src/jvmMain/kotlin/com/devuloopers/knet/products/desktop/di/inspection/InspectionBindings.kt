@@ -1,8 +1,11 @@
 package com.devuloopers.knet.products.desktop.di.inspection
 
 import com.devuloopers.knet.application.port.inspection.*
+import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolExtension
 import com.devuloopers.knet.data.desktop.inspection.DesktopSemanticInspectionRuntime
 import com.devuloopers.knet.data.desktop.inspection.RoomInspectionAnnotationAdapter
+import com.devuloopers.knet.engine.protocol.inspector.graphql.GraphQLBreakpointExtension
+import com.devuloopers.knet.engine.protocol.inspector.graphql.GraphQLDocumentParser
 import com.devuloopers.knet.engine.protocol.inspector.graphql.GraphQLSemanticInspector
 import com.devuloopers.knet.engine.protocol.inspector.sse.SseSemanticInspector
 import com.devuloopers.knet.storage.database.KNetDatabase
@@ -12,7 +15,9 @@ import org.koin.dsl.module
 
 /** Semantic inspectors, persisted annotations, capability truth, and bounded scheduling. */
 internal val inspectionBindings: Module = module {
-    single { GraphQLSemanticInspector() } bind SemanticInspector::class
+    single { GraphQLDocumentParser() }
+    single { GraphQLBreakpointExtension(get()) } bind BreakpointProtocolExtension::class
+    single { GraphQLSemanticInspector(get()) } bind SemanticInspector::class
     single { SseSemanticInspector() } bind SemanticInspector::class
     single<InspectionAnnotationPort> {
         RoomInspectionAnnotationAdapter(get<KNetDatabase>().canonicalCaptureDao())

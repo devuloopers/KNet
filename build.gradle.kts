@@ -345,13 +345,22 @@ val allowedArchitectureDependencies = mapOf(
         ":core:scripting",
         ":core:domain",
         ":core:connectivity",
+        ":core:identity",
         ":core:pairing",
     ),
     ":core:domain" to setOf(":core:logger", ":core:traffic", ":core:scripting"),
     ":core:scripting" to emptySet(),
     ":core:traffic" to emptySet(),
+    ":core:identity" to emptySet(),
+    ":core:pairing" to setOf(":core:identity"),
     ":core:connectivity" to emptySet(),
-    ":connectivity:desktop" to setOf(":application", ":core:traffic", ":core:connectivity", ":core:pairing"),
+    ":connectivity:desktop" to setOf(
+        ":application",
+        ":core:traffic",
+        ":core:connectivity",
+        ":core:identity",
+        ":core:pairing",
+    ),
 ).mapValues { (_, paths) -> paths.sorted().joinToString(",") }
 
 val moduleDocumentationPaths = subprojects.associate { module ->

@@ -1,5 +1,6 @@
 package com.devuloopers.knet.data.desktop.capture
 
+import com.devuloopers.knet.application.port.breakpoint.BreakpointCoordinator
 import com.devuloopers.knet.application.port.proxy.ProxyBindingConfiguration
 import com.devuloopers.knet.application.port.proxy.ProxyConnectionLimits
 import com.devuloopers.knet.application.port.proxy.ProxyRuntimeConfiguration
@@ -10,6 +11,9 @@ import com.devuloopers.knet.application.port.traffic.BodyRange
 import com.devuloopers.knet.application.port.traffic.RecordHttpExchangeCommand
 import com.devuloopers.knet.application.port.traffic.TrafficBodyPayload
 import com.devuloopers.knet.application.port.traffic.CaptureClearPreparation
+import com.devuloopers.knet.application.port.traffic.CapturePauseResult
+import com.devuloopers.knet.application.port.traffic.CaptureResumeResult
+import com.devuloopers.knet.application.port.traffic.CaptureSessionState
 import com.devuloopers.knet.application.usecase.traffic.ClearTrafficHistoryUseCase
 import com.devuloopers.knet.connectivity.model.ProxyEndpointScope
 import com.devuloopers.knet.data.desktop.proxy.repository.DesktopProxyRuntimeAdapter
@@ -35,6 +39,10 @@ import com.devuloopers.knet.traffic.model.http.RequestHead
 import com.devuloopers.knet.traffic.model.http.RequestTarget
 import com.devuloopers.knet.traffic.model.http.ResponseHead
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.flow.first
 import java.net.InetSocketAddress
 import java.net.ServerSocket
@@ -61,6 +69,7 @@ class CanonicalCaptureCutoverTest {
                 certificateCache = CertificateCache(),
             ),
             canonicalCaptureSessionFactory = CanonicalCaptureSessionFactory(database, bodyStore, bodyStore),
+            breakpointCaptureAvailability = BreakpointCoordinator(),
         )
         try {
             val receipt = repository.record(directCommand(DIRECT_EXCHANGE_ID))
@@ -97,6 +106,7 @@ class CanonicalCaptureCutoverTest {
                 certificateCache = CertificateCache(),
             ),
             canonicalCaptureSessionFactory = CanonicalCaptureSessionFactory(database, bodyStore, bodyStore),
+            breakpointCaptureAvailability = BreakpointCoordinator(),
         )
         try {
             val directReceipt = repository.record(directCommand(DIRECT_HANDOFF_EXCHANGE_ID))
@@ -130,6 +140,7 @@ class CanonicalCaptureCutoverTest {
                 certificateCache = CertificateCache(),
             ),
             canonicalCaptureSessionFactory = CanonicalCaptureSessionFactory(database, bodyStore, bodyStore),
+            breakpointCaptureAvailability = BreakpointCoordinator(),
         )
         val trafficRepository = DesktopTrafficMaintenanceAdapter(
             database = database,
@@ -161,6 +172,51 @@ class CanonicalCaptureCutoverTest {
         }
     }
 
+    /** Verifies capture pause/resume leaves the bound runtime unchanged and rotates only writers. */
+    @Test
+    fun `capture pause and resume preserve proxy runtime`() = runTest {
+        val root = Files.createTempDirectory("knet-canonical-pause-resume-").toFile()
+        val database = DatabaseFactory.create(root.resolve("traffic.db"))
+        val bodyStore = FileBodyStore(root.resolve("bodies"))
+        val repository = DesktopProxyRuntimeAdapter(
+            proxyRuntimeRepository = ProxyRuntimeRepository(
+                certificateAuthority = CertificateAuthority.generate(),
+                certificateCache = CertificateCache(),
+            ),
+            canonicalCaptureSessionFactory = CanonicalCaptureSessionFactory(database, bodyStore, bodyStore),
+            breakpointCaptureAvailability = BreakpointCoordinator(),
+        )
+        try {
+            val started = assertIs<ProxyStartResult.Running>(repository.start(configuration(availableLoopbackPort())))
+            val firstSession = assertIs<CaptureSessionState.Capturing>(repository.captureState.value).sessionId
+
+            assertEquals(CapturePauseResult.PAUSED, repository.pause())
+            assertIs<CaptureSessionState.Paused>(repository.captureState.value)
+            val stillRunning = assertIs<com.devuloopers.knet.application.port.proxy.ProxyRuntimeState.Running>(
+                repository.state.value,
+            )
+            assertEquals(started.handle.runtimeId, stillRunning.handle.runtimeId)
+            withContext(Dispatchers.IO) {
+                withTimeout(5_000L) {
+                    while (database.canonicalCaptureDao().countActiveSessions() != 0) delay(10L)
+                }
+            }
+
+            val resumed = assertIs<CaptureResumeResult.Capturing>(repository.resume())
+            assertTrue(resumed.sessionId != firstSession)
+            assertEquals(1, database.canonicalCaptureDao().countActiveSessions())
+            val afterResume = assertIs<com.devuloopers.knet.application.port.proxy.ProxyRuntimeState.Running>(
+                repository.state.value,
+            )
+            assertEquals(started.handle.runtimeId, afterResume.handle.runtimeId)
+        } finally {
+            repository.stop(ProxyStopReason.APPLICATION_SHUTDOWN)
+            repository.close()
+            database.close()
+            root.deleteRecursively()
+        }
+    }
+
     /** Verifies canonical selection writes indexed metadata and opaque bounded bodies. */
     @Test
     fun `canonical selection writes queryable metadata and bounded bodies`() = runTest {
@@ -174,6 +230,7 @@ class CanonicalCaptureCutoverTest {
         val repository = DesktopProxyRuntimeAdapter(
             proxyRuntimeRepository = runtime,
             canonicalCaptureSessionFactory = CanonicalCaptureSessionFactory(database, bodyStore, bodyStore),
+            breakpointCaptureAvailability = BreakpointCoordinator(),
         )
         val port = availableLoopbackPort()
 

@@ -11,6 +11,8 @@ kotlin {
                 implementation(project(":application"))
                 implementation(project(":core:domain"))
                 implementation(project(":core:logger"))
+                implementation(project(":core:identity"))
+                implementation(project(":core:pairing"))
                 implementation(project(":core:serialization"))
                 implementation(project(":core:traffic"))
                 api(project(":core:http"))

@@ -1,8 +1,5 @@
 package com.devuloopers.knet.connectivity.desktop.wifi
 
-import com.devuloopers.knet.application.port.connectivity.wifi.WifiClientApprovalResult
-import com.devuloopers.knet.application.port.connectivity.wifi.WifiInvitationResult
-import com.devuloopers.knet.application.port.connectivity.wifi.WifiSharingOperationResult
 import com.devuloopers.knet.application.port.proxy.ProxyRuntimeConfiguration
 import com.devuloopers.knet.application.port.proxy.ProxyRuntimeHandle
 import com.devuloopers.knet.application.port.proxy.ProxyRuntimePort
@@ -22,8 +19,6 @@ import com.devuloopers.knet.connectivity.model.ProxyEndpoint
 import com.devuloopers.knet.connectivity.model.ProxyEndpointScope
 import com.devuloopers.knet.connectivity.model.ProxyEndpointSnapshot
 import com.devuloopers.knet.connectivity.model.ProxyEndpointVersion
-import com.devuloopers.knet.connectivity.model.WifiSharingActionReason
-import com.devuloopers.knet.connectivity.model.WifiSharingConfiguration
 import com.devuloopers.knet.connectivity.model.WifiSharingState
 import com.devuloopers.knet.traffic.model.IngressKind
 import com.devuloopers.knet.traffic.model.TrafficEndpoint
@@ -34,7 +29,6 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -45,97 +39,65 @@ import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
-import kotlin.test.assertNotNull
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class WifiSharingBackendTest {
     @Test
-    fun `invitation is bounded to its first source and expires`() {
-        var now = 1_000L
-        val invitations = WifiInvitationService(
-            setupBaseUrl = "http://192.0.2.10:8181",
-            nowMillis = { now },
-            invitationLifetimeMillis = 2_000L,
+    fun `resource-backed setup page offers Android and Apple certificate downloads`() {
+        val page = WifiSetupPageRenderer.render(
+            WifiSetupPageModel("192.0.2.10", 8_080, "a".repeat(64)),
         )
-        val invitation = invitations.create()
-        val token = invitation.setupUrl.substringAfterLast('/')
 
-        assertNotNull(invitations.claim(token, "192.0.2.20"))
-        assertNotNull(invitations.claim(token, "192.0.2.20"))
-        assertNull(invitations.claim(token, "192.0.2.21"))
+        assertContains(page, "192.0.2.10:8080")
+        assertContains(page, "/knet-ca.crt")
+        assertContains(page, "/knet-ca.mobileconfig")
+        assertContains(page, "Android")
+        assertContains(page, "iPhone and iPad")
 
-        now = invitation.expiresAtEpochMillis
-        assertNull(invitations.claim(token, "192.0.2.20"))
+        val profile = AppleRootCertificateProfileRenderer.render(byteArrayOf(1, 2, 3))
+        assertContains(profile, "com.apple.security.root")
+        assertContains(profile, "AQID")
     }
 
     @Test
-    fun `approval registry expires candidates and revokes session clients`() {
-        var now = 1_000L
-        val registry = WifiClientApprovalRegistry(
-            nowMillis = { now },
-            pendingLifetimeMillis = 2_000L,
-        )
-        val candidate = assertNotNull(registry.observe("192.0.2.20"))
-        assertEquals(6, candidate.confirmationCode.length)
-        val approved = assertNotNull(registry.approve(candidate.id, "Test phone"))
-        assertEquals(approved, registry.approvedFor("192.0.2.20"))
-        assertEquals(approved, registry.revoke(approved.id))
-        assertNull(registry.approvedFor("192.0.2.20"))
-
-        val expiring = assertNotNull(registry.observe("192.0.2.21"))
-        now = expiring.expiresAtEpochMillis
-        assertTrue(registry.snapshot().pendingClients.isEmpty())
-    }
-
-    @Test
-    fun `tokenized setup portal requires desktop approval before serving artifacts`() {
+    fun `open setup portal serves page and both certificate formats without invitation`() {
         val address = localLanAddress()
         val setupPort = freePort(address.address)
         val endpoint = ProxyEndpoint(
             address.address,
             freePort(address.address),
             ProxyEndpointScope.LAN,
-            ProxyAccessRequirement.APPROVED_LAN_CLIENT,
+            ProxyAccessRequirement.OPEN_LAN_CLIENT,
         )
-        val invitations = WifiInvitationService("http://${address.address}:$setupPort", System::currentTimeMillis)
-        val approvals = WifiClientApprovalRegistry(System::currentTimeMillis)
         val portal = WifiSetupPortal(
             bindHost = address.address,
             bindPort = setupPort,
             proxyEndpoint = endpoint,
             certificateDer = { byteArrayOf(1, 2, 3) },
-            invitations = invitations,
-            approvals = approvals,
+            certificateSha256 = "a".repeat(64),
         )
         try {
             portal.start()
-            val invitation = invitations.create()
-            val path = java.net.URI.create(invitation.setupUrl).path
-            val token = path.substringAfterLast('/')
 
-            val pendingPage = rawGet(address.address, setupPort, path, address.address)
-            assertContains(pendingPage, "approve this phone")
-            assertContains(rawGet(address.address, setupPort, "$path/knet-ca.crt", address.address), "403")
-            assertContains(rawGet(address.address, setupPort, path, "untrusted.example"), "421")
-
-            val candidate = approvals.snapshot().pendingClients.single()
-            assertNotNull(approvals.approve(candidate.id, "Portal phone"))
-            assertContains(rawGet(address.address, setupPort, path, address.address), "Approved")
-            assertContains(rawGet(address.address, setupPort, "$path/proxy.pac", address.address), "PROXY")
-            assertContains(rawGet(address.address, setupPort, "/invite/$token/missing", address.address), "404")
+            val page = rawGet(address.address, setupPort, "/setup", address.address)
+            assertContains(page, "200 OK")
+            assertContains(page, "Wi-Fi Proxy Setup")
+            assertContains(rawGet(address.address, setupPort, "/knet-ca.crt", address.address), "knet-ca.crt")
+            assertContains(
+                rawGet(address.address, setupPort, "/knet-ca.mobileconfig", address.address),
+                "application/x-apple-aspen-config",
+            )
+            assertContains(rawGet(address.address, setupPort, "/proxy.pac", address.address), "PROXY")
+            assertContains(rawGet(address.address, setupPort, "/setup", "untrusted.example"), "421")
         } finally {
             portal.close()
         }
     }
 
     @Test
-    fun `approved LAN stream is attributed and revocation denies reconnect`() = runBlocking {
+    fun `open LAN stream is attributed by source address`() = runBlocking {
         val address = localLanAddress()
         val sourceAddress = address.address
-        val approvals = WifiClientApprovalRegistry(System::currentTimeMillis)
-        val candidate = assertNotNull(approvals.observe(sourceAddress))
-        val client = assertNotNull(approvals.approve(candidate.id, "Gateway phone"))
         val internalProxy = ServerSocket(0, 16, java.net.InetAddress.getLoopbackAddress())
         val gatewayPort = freePort(sourceAddress)
         val attributions = IngressAttributionRegistry()
@@ -154,21 +116,15 @@ class WifiSharingBackendTest {
             bindHost = sourceAddress,
             bindPort = gatewayPort,
             targetProxy = { InetSocketAddress("127.0.0.1", internalProxy.localPort) },
-            approvals = approvals,
             attributions = attributions,
             nowMillis = System::currentTimeMillis,
         )
         try {
             gateway.start()
-            val response = rawProxyRequest(sourceAddress, gatewayPort)
-            assertContains(response, "200 OK")
+            assertContains(rawProxyRequest(sourceAddress, gatewayPort), "200 OK")
             val ingress = observed.get(5L, TimeUnit.SECONDS)
-            assertIs<IngressKind.WifiApprovedDevice>(ingress?.kind)
-            assertEquals(client.id.value, ingress?.clientIdentity?.value)
-
-            assertNotNull(approvals.revoke(client.id))
-            gateway.revoke(client.id)
-            assertContains(rawProxyRequest(sourceAddress, gatewayPort), "403 Forbidden")
+            assertIs<IngressKind.WifiLanClient>(ingress?.kind)
+            assertEquals(sourceAddress, ingress?.clientIdentity?.value)
         } finally {
             gateway.close()
             internalProxy.close()
@@ -177,17 +133,17 @@ class WifiSharingBackendTest {
     }
 
     @Test
-    fun `desktop runtime publishes LAN endpoint then invalidates it on network change`() = runBlocking {
+    fun `desktop runtime automatically follows proxy lifecycle`() = runBlocking {
         val address = localLanAddress()
-        val observation = AtomicReference(
-            DesktopNetworkObservation(listOf(address), defaultRouteAvailable = true, vpnActive = false),
-        )
+        val proxyPort = freePort(address.address)
         val monitor = DesktopNetworkSnapshotMonitor(
-            scanner = DesktopNetworkScanner { observation.get() },
+            scanner = DesktopNetworkScanner {
+                DesktopNetworkObservation(listOf(address), defaultRouteAvailable = true, vpnActive = false)
+            },
             pollIntervalMillis = 60_000L,
             dispatcher = Dispatchers.Unconfined,
         )
-        val proxy = RunningProxyRuntime()
+        val proxy = RunningProxyRuntime(proxyPort)
         val connectivity = DesktopConnectivityRuntime(proxy, monitor, Dispatchers.Unconfined)
         val runtime = DesktopWifiSharingRuntime(
             proxyRuntime = proxy,
@@ -197,51 +153,27 @@ class WifiSharingBackendTest {
             dispatcher = Dispatchers.Unconfined,
         )
         try {
-            withTimeout(5_000L) {
-                connectivity.context.first { it.proxyEndpoints.endpoints.any { endpoint -> endpoint.scope == ProxyEndpointScope.LOOPBACK } }
-            }
-            val proxyPort = freePort(address.address)
-            var setupPort = freePort(address.address)
-            while (setupPort == proxyPort) setupPort = freePort(address.address)
-            val result = runtime.enable(
-                WifiSharingConfiguration(
-                    networkAddress = address,
-                    proxyPort = proxyPort,
-                    setupPort = setupPort,
-                ),
-            )
-            assertIs<WifiSharingOperationResult.Succeeded>(result)
-            assertIs<WifiSharingState.Active>(runtime.state.value)
-            withTimeout(5_000L) {
-                connectivity.context.first { context ->
-                    context.proxyEndpoints.endpoints.any { endpoint -> endpoint.scope == ProxyEndpointScope.LAN }
-                }
-            }
-
-            val invitation = assertIs<WifiInvitationResult.Created>(runtime.createInvitation()).invitation
-            val invitationPath = java.net.URI.create(invitation.setupUrl).path
-            rawGet(address.address, java.net.URI.create(invitation.setupUrl).port, invitationPath, address.address)
-            val pending = withTimeout(5_000L) {
-                runtime.state.first { state -> state is WifiSharingState.Active && state.pendingClients.isNotEmpty() }
-            } as WifiSharingState.Active
-            assertIs<WifiClientApprovalResult.Approved>(
-                runtime.approve(pending.pendingClients.single().id, "Runtime phone"),
+            val active = withTimeout(5_000L) { runtime.state.first { it is WifiSharingState.Active } }
+            assertEquals(proxyPort, (active as WifiSharingState.Active).session.proxyEndpoint.port)
+            assertTrue(active.session.setupUrl.endsWith("/setup"))
+            assertTrue(
+                connectivity.context.value.proxyEndpoints.endpoints.any { endpoint ->
+                    endpoint.scope == ProxyEndpointScope.LAN &&
+                        endpoint.accessRequirement == ProxyAccessRequirement.OPEN_LAN_CLIENT
+                },
             )
 
-            observation.set(DesktopNetworkObservation(emptyList(), defaultRouteAvailable = false, vpnActive = false))
-            monitor.refresh()
-            val invalidated = withTimeout(5_000L) {
-                runtime.state.first { it is WifiSharingState.NeedsUserAction }
-            }
-            assertEquals(
-                WifiSharingActionReason.ADDRESS_REMOVED,
-                (invalidated as WifiSharingState.NeedsUserAction).reason,
-            )
+            proxy.stop(ProxyStopReason.USER_REQUEST)
+            withTimeout(5_000L) { runtime.state.first { it is WifiSharingState.Disabled } }
             withTimeout(5_000L) {
                 connectivity.context.first { context ->
                     context.proxyEndpoints.endpoints.none { endpoint -> endpoint.scope == ProxyEndpointScope.LAN }
                 }
             }
+
+            proxy.restart()
+            val restarted = withTimeout(5_000L) { runtime.state.first { it is WifiSharingState.Active } }
+            assertEquals(proxyPort, (restarted as WifiSharingState.Active).session.proxyEndpoint.port)
         } finally {
             runtime.close()
             connectivity.close()
@@ -249,83 +181,8 @@ class WifiSharingBackendTest {
         Unit
     }
 
-    @Test
-    fun `setup bind failure rolls back gateway and publishes no LAN endpoint`() = runBlocking {
-        val address = localLanAddress()
-        val observation = AtomicReference(
-            DesktopNetworkObservation(listOf(address), defaultRouteAvailable = true, vpnActive = false),
-        )
-        val monitor = DesktopNetworkSnapshotMonitor(
-            scanner = DesktopNetworkScanner { observation.get() },
-            pollIntervalMillis = 60_000L,
-            dispatcher = Dispatchers.Unconfined,
-        )
-        val proxy = RunningProxyRuntime()
-        val connectivity = DesktopConnectivityRuntime(proxy, monitor, Dispatchers.Unconfined)
-        val runtime = DesktopWifiSharingRuntime(
-            proxyRuntime = proxy,
-            connectivityRuntime = connectivity,
-            attributions = IngressAttributionRegistry(),
-            certificateDer = { byteArrayOf(1, 2, 3) },
-            dispatcher = Dispatchers.Unconfined,
-        )
-        val occupiedSetup = ServerSocket()
-        try {
-            withTimeout(5_000L) {
-                connectivity.context.first { context ->
-                    context.proxyEndpoints.endpoints.any { endpoint -> endpoint.scope == ProxyEndpointScope.LOOPBACK }
-                }
-            }
-            occupiedSetup.bind(InetSocketAddress(address.address, 0))
-            val setupPort = occupiedSetup.localPort
-            var gatewayPort = freePort(address.address)
-            while (gatewayPort == setupPort) gatewayPort = freePort(address.address)
-
-            val result = runtime.enable(
-                WifiSharingConfiguration(
-                    networkAddress = address,
-                    proxyPort = gatewayPort,
-                    setupPort = setupPort,
-                ),
-            )
-
-            assertEquals("wifi_bind_failed", assertIs<WifiSharingOperationResult.Rejected>(result).code)
-            assertIs<WifiSharingState.Failed>(runtime.state.value)
-            assertTrue(
-                connectivity.context.value.proxyEndpoints.endpoints.none { endpoint ->
-                    endpoint.scope == ProxyEndpointScope.LAN
-                },
-            )
-            ServerSocket().use { releasedGateway ->
-                releasedGateway.bind(InetSocketAddress(address.address, gatewayPort))
-            }
-        } finally {
-            occupiedSetup.close()
-            runtime.close()
-            connectivity.close()
-        }
-        Unit
-    }
-
-    private class RunningProxyRuntime : ProxyRuntimePort {
-        private val mutableState = MutableStateFlow<ProxyRuntimeState>(
-            ProxyRuntimeState.Running(
-                ProxyRuntimeHandle(
-                    runtimeId = "wifi-test-runtime",
-                    endpoints = ProxyEndpointSnapshot(
-                        ProxyEndpointVersion(1L),
-                        listOf(
-                            ProxyEndpoint(
-                                "127.0.0.1",
-                                8_080,
-                                ProxyEndpointScope.LOOPBACK,
-                                ProxyAccessRequirement.LOCAL_PROCESS,
-                            ),
-                        ),
-                    ),
-                ),
-            ),
-        )
+    private class RunningProxyRuntime(port: Int) : ProxyRuntimePort {
+        private val mutableState = MutableStateFlow<ProxyRuntimeState>(runningState(port))
         override val state: StateFlow<ProxyRuntimeState> = mutableState
 
         override suspend fun start(configuration: ProxyRuntimeConfiguration): ProxyStartResult =
@@ -335,6 +192,30 @@ class WifiSharingBackendTest {
             mutableState.value = ProxyRuntimeState.Stopped
             return ProxyStopResult.Stopped
         }
+
+        fun restart() {
+            val endpoint = (initialState as ProxyRuntimeState.Running).handle
+            mutableState.value = ProxyRuntimeState.Running(endpoint)
+        }
+
+        private val initialState: ProxyRuntimeState = mutableState.value
+
+        private fun runningState(port: Int): ProxyRuntimeState.Running = ProxyRuntimeState.Running(
+            ProxyRuntimeHandle(
+                runtimeId = "wifi-test-runtime",
+                endpoints = ProxyEndpointSnapshot(
+                    ProxyEndpointVersion(1L),
+                    listOf(
+                        ProxyEndpoint(
+                            "127.0.0.1",
+                            port,
+                            ProxyEndpointScope.LOOPBACK,
+                            ProxyAccessRequirement.LOCAL_PROCESS,
+                        ),
+                    ),
+                ),
+            ),
+        )
     }
 
     private fun localLanAddress(): NetworkAddress {
@@ -353,12 +234,9 @@ class WifiSharingBackendTest {
         )
     }
 
-    private fun freePort(host: String): Int {
-        val socket = ServerSocket()
-        return socket.use {
-            it.bind(InetSocketAddress(host, 0))
-            it.localPort
-        }
+    private fun freePort(host: String): Int = ServerSocket().use { socket ->
+        socket.bind(InetSocketAddress(host, 0))
+        socket.localPort
     }
 
     private fun rawGet(host: String, port: Int, path: String, authority: String): String =

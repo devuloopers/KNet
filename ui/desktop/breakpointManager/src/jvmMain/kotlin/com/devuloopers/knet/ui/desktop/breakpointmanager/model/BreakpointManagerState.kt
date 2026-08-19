@@ -1,6 +1,8 @@
 package com.devuloopers.knet.ui.desktop.breakpointmanager.model
 
 import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
+import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolDefinition
+import com.devuloopers.knet.application.port.breakpoint.ProtocolCriteriaValue
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 
 /**
@@ -11,6 +13,8 @@ import com.devuloopers.knet.domain.rules.model.BreakpointRule
  * @param rules Full list of configured breakpoint rules.
  * @param isAddEditDialogVisible True if the Add/Edit rule modal dialog is open.
  * @param editingRule Non-null if editing an existing rule; null if creating a new rule.
+ * @param protocolDefinitions Installed protocol rule schemas supplied by application composition.
+ * @param editingProtocolValues Decoded values for the rule currently being edited.
  * @param activeEvents List of all in-flight suspended HTTP connection events.
  * @param activeEvent The currently selected or top in-flight suspended HTTP connection event.
  * @param resolvedPayloads Map from transaction ID to its pre-resolved request/response payloads.
@@ -23,6 +27,8 @@ data class BreakpointManagerState(
     val rules: List<BreakpointRule> = emptyList(),
     val isAddEditDialogVisible: Boolean = false,
     val editingRule: BreakpointRule? = null,
+    val protocolDefinitions: List<BreakpointProtocolDefinition> = emptyList(),
+    val editingProtocolValues: List<ProtocolCriteriaValue> = emptyList(),
     val activeEvents: List<PendingBreakpoint> = emptyList(),
     val activeEvent: PendingBreakpoint? = null,
     val resolvedPayloads: Map<String, ResolvedInterceptPayload> = emptyMap()

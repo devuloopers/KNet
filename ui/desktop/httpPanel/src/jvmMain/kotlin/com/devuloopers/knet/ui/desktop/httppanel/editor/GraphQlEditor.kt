@@ -20,6 +20,8 @@ import com.devuloopers.knet.ui.core.components.input.KNetTextField
 import com.devuloopers.knet.ui.core.components.tabs.KNetTab
 import com.devuloopers.knet.ui.core.components.tabs.KNetTabRow
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import com.devuloopers.knet.ui.desktop.codeeditor.api.CodeEditorActions
+import com.devuloopers.knet.ui.desktop.codeeditor.api.CodeEditorConfiguration
 import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
 import com.devuloopers.knet.ui.desktop.codeeditor.api.KNetCodeEditor
 import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlState
@@ -110,12 +112,15 @@ fun GraphQlEditor(
         ) {
             KNetCodeEditor(
                 code = activeSubTab.getPayload(state),
-                mode = EditorMode.Editable(
-                    onCodeChange = { onStateChange(activeSubTab.updatePayload(state, it)) },
-                    onPrettify = { onStateChange(activeSubTab.prettify(state)) },
+                configuration = CodeEditorConfiguration(
+                    mode = EditorMode.Editable,
+                    language = activeSubTab.codeLanguage,
                     placeholder = activeSubTab.placeholder
                 ),
-                language = activeSubTab.codeLanguage,
+                actions = CodeEditorActions(
+                    onTextChange = { onStateChange(activeSubTab.updatePayload(state, it)) },
+                    onPrettify = { onStateChange(activeSubTab.prettify(state)) }
+                ),
                 modifier = Modifier.fillMaxSize()
             )
         }

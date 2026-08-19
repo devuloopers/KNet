@@ -7,12 +7,10 @@ import com.devuloopers.knet.traffic.inspection.InspectionField
 import com.devuloopers.knet.traffic.inspection.InspectorId
 import com.devuloopers.knet.traffic.model.HttpExchangeSnapshot
 import com.devuloopers.knet.traffic.model.http.RequestTarget
-import com.fasterxml.jackson.databind.ObjectMapper
-import java.io.ByteArrayOutputStream
 
 /** Asynchronous bounded GraphQL semantic inspector for captured HTTP exchanges. */
 class GraphQLSemanticInspector(
-    private val objectMapper: ObjectMapper = ObjectMapper(),
+    private val parser: GraphQLDocumentParser = GraphQLDocumentParser(),
 ) : SemanticInspector {
     override val id: InspectorId = InspectorId("graphql")
     override val schemaVersion: Long = 1L
@@ -41,10 +39,14 @@ class GraphQLSemanticInspector(
             it.name.value.equals("Content-Type", ignoreCase = true)
         }?.value.orEmpty()
         val bodyBytes = input.requestBody?.chunks.orEmpty().let { chunks ->
-            ByteArrayOutputStream(chunks.sumOf { it.size }).use { output ->
-                chunks.forEach { output.write(it.copyBytes()) }
-                output.toByteArray()
+            val bytes = ByteArray(chunks.sumOf { it.size })
+            var destinationOffset = 0
+            chunks.forEach { chunk ->
+                val source = chunk.copyBytes()
+                source.copyInto(bytes, destinationOffset)
+                destinationOffset += source.size
             }
+            bytes
         }
         if (bodyBytes.isEmpty()) {
             return if (target.contains("graphql", ignoreCase = true) ||
@@ -55,46 +57,36 @@ class GraphQLSemanticInspector(
                 null
             }
         }
-        val bodyText = runCatching { bodyBytes.decodeToString().trim() }.getOrNull() ?: return null
-        if (!bodyText.startsWith('{') || !bodyText.endsWith('}')) return null
-        val root = runCatching { objectMapper.readTree(bodyText) }.getOrNull() ?: return null
-        val queryNode = root.get("query")?.takeIf { it.isTextual } ?: return null
-        val rawQuery = queryNode.asText().trim().takeIf(String::isNotBlank) ?: return null
-        val operationName = root.get("operationName")
-            ?.takeIf { it.isTextual }
-            ?.asText()
-            ?.takeIf(String::isNotBlank)
-            ?: extractOperationName(rawQuery)
-        val operationType = when {
-            rawQuery.startsWith("mutation", ignoreCase = true) -> "Mutation"
-            rawQuery.startsWith("subscription", ignoreCase = true) -> "Subscription"
-            else -> "Query"
+        val document = parser.parse(bodyBytes) ?: return null
+        val primary = document.operations.first()
+        val operationType = primary.type.displayName()
+        val operationName = primary.name
+        val title = if (document.operations.size > 1) {
+            "GraphQL batch: ${document.operations.size} operations"
+        } else {
+            operationName?.let { "GraphQL $operationType: $it" } ?: "GraphQL $operationType"
         }
-        val summary = rawQuery.replace("\n", " ").replace("\\s+".toRegex(), " ").take(256)
         return InspectionDocument(
             kind = "graphql",
-            title = operationName?.let { "GraphQL $operationType: $it" } ?: "GraphQL $operationType",
-            summary = summary,
+            title = title,
+            summary = primary.summary,
             fields = listOfNotNull(
                 InspectionField("Operation type", operationType),
                 operationName?.let { InspectionField("Operation name", it) },
+                document.operations.size.takeIf { it > 1 }?.let {
+                    InspectionField("Batch size", it.toString())
+                },
                 InspectionField("Request target", target),
                 input.requestBody?.truncated?.takeIf { it }?.let { InspectionField("Body", "Preview truncated") },
             ),
         )
     }
+}
 
-    private fun extractOperationName(query: String): String? {
-        val trimmed = query.trimStart()
-        for (keyword in listOf("query", "mutation", "subscription")) {
-            if (trimmed.startsWith(keyword, ignoreCase = true)) {
-                val remainder = trimmed.substring(keyword.length).trimStart()
-                val end = remainder.indexOfAny(charArrayOf('(', '{', ' ', '\n'))
-                return remainder.substring(0, if (end > 0) end else remainder.length).trim().takeIf(String::isNotBlank)
-            }
-        }
-        return null
-    }
+private fun GraphQLOperationType.displayName(): String = when (this) {
+    GraphQLOperationType.QUERY -> "Query"
+    GraphQLOperationType.MUTATION -> "Mutation"
+    GraphQLOperationType.SUBSCRIPTION -> "Subscription"
 }
 
 private fun RequestTarget.displayValue(): String = when (this) {

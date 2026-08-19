@@ -12,8 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.selection.DisableSelection
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -29,8 +27,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
-import androidx.compose.ui.unit.dp
+import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.LineFoldState
+import com.devuloopers.knet.ui.desktop.codeeditor.api.CodeEditorStrings
 import com.devuloopers.knet.ui.desktop.codeeditor.theme.CodeEditorTokens
 import com.devuloopers.knet.ui.desktop.codeeditor.theme.EditorColors
 
@@ -47,16 +46,18 @@ import com.devuloopers.knet.ui.desktop.codeeditor.theme.EditorColors
  * @param gutterWidthDp Calculated pixel width allocated to the line number text column.
  * @param fontSize Monospace font size for the line number text.
  * @param lineHeight Line height spacing for the gutter row.
+ * @param strings Localizable accessibility labels.
  * @param onToggleFold Callback fired when the fold arrow icon is clicked.
  */
 @Composable
-fun LazyCodeGutterSlot(
+internal fun LazyCodeGutterSlot(
     displayLineNumber: Int,
     foldState: LineFoldState,
     isFoldingEnabled: Boolean,
     gutterWidthDp: Dp,
     fontSize: TextUnit,
     lineHeight: TextUnit,
+    strings: CodeEditorStrings,
     onToggleFold: () -> Unit
 ) {
     DisableSelection {
@@ -85,7 +86,7 @@ fun LazyCodeGutterSlot(
                 // Full box is clickable to enlarge touch target without visual ripple flash.
                 Box(
                     modifier = Modifier
-                        .width(16.dp)
+                        .width(CodeEditorTokens.FoldArrowHitTargetWidth)
                         .height(CodeEditorTokens.GutterLineHeightDp)
                         .then(
                             if (hasFold) {
@@ -102,17 +103,17 @@ fun LazyCodeGutterSlot(
                 ) {
                     if (hasFold) {
                         Icon(
-                            imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                            contentDescription = if (isExpanded) "Collapse block" else "Expand block",
+                            imageVector = KNetIcons.ChevronRight,
+                            contentDescription = if (isExpanded) strings.collapseBlock else strings.expandBlock,
                             tint = tintColor,
                             modifier = Modifier
-                                .size(12.dp)
+                                .size(CodeEditorTokens.FoldArrowIconSize)
                                 .graphicsLayer { rotationZ = rotation }
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.width(4.dp))
+                Spacer(modifier = Modifier.width(CodeEditorTokens.FoldArrowPaddingEnd))
             }
 
             // Line number text — right-aligned inside the calculated gutter width.

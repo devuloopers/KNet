@@ -38,7 +38,7 @@ data class PayloadInspectionSpec(
      * Formatted, pretty-printed representation of the payload (or raw string if formatting is unavailable).
      */
     val formattedText: String
-        get() = (resolvedFormat as? BodyFormat.HasTextContent)?.textContent?.ifEmpty { rawBody } ?: rawBody
+        get() = resolvedFormat.toInspectionText(rawBody)
 
     companion object {
         /**
