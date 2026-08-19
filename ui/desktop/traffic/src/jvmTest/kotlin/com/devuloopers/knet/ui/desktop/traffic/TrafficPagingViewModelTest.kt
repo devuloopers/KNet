@@ -44,6 +44,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -68,9 +69,20 @@ class TrafficPagingViewModelTest {
             advanceUntilIdle()
         }
 
+        val firstWindow = viewModel.uiState.value
+        assertEquals(1_000, firstWindow.transactions.size)
+        assertNotNull(firstWindow.nextPageCursor)
+
+        viewModel.processIntent(TrafficIntent.LoadNextPage)
+        advanceUntilIdle()
+        viewModel.processIntent(TrafficIntent.LoadNextPage)
+        advanceUntilIdle()
+
         val state = viewModel.uiState.value
         assertEquals(1_000, state.transactions.size)
         assertNull(state.nextPageCursor)
+        assertEquals("exchange-250", state.transactions.first().transactionId)
+        assertEquals("exchange-1249", state.transactions.last().transactionId)
         assertTrue(port.requestedLimits.all { it == 200 })
         assertEquals(1_000, state.transactions.map { it.transactionId }.distinct().size)
     }
@@ -106,7 +118,23 @@ class TrafficPagingViewModelTest {
     }
 
     @Test
-    fun `opening a new capture session preserves rows from the previous session`() = runTest(dispatcher) {
+    fun `continuous generations still refresh to the latest captured exchange`() = runTest(dispatcher) {
+        val sessionId = CaptureSessionId("fake-session")
+        val port = LiveTrafficPort(sessionId, listOf(snapshot("initial", 1_000L)))
+        val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = port)
+        advanceUntilIdle()
+
+        repeat(50) { index ->
+            port.record(snapshot("live-$index", 2_000L + index))
+        }
+        advanceUntilIdle()
+
+        assertEquals("live-49", viewModel.uiState.value.transactions.first().transactionId)
+        assertTrue(port.queryCalls >= 2)
+    }
+
+    @Test
+    fun `retained history is visible across sessions before and after the latest session changes`() = runTest(dispatcher) {
         val firstSession = CaptureSessionId("session-1")
         val secondSession = CaptureSessionId("session-2")
         val activeSession = MutableStateFlow<CaptureSessionId?>(firstSession)
@@ -123,7 +151,10 @@ class TrafficPagingViewModelTest {
             },
         )
         advanceUntilIdle()
-        assertEquals(listOf("old-exchange"), viewModel.uiState.value.transactions.map { it.transactionId })
+        assertEquals(
+            listOf("new-exchange", "old-exchange"),
+            viewModel.uiState.value.transactions.map { it.transactionId },
+        )
 
         activeSession.value = secondSession
         advanceUntilIdle()
@@ -166,7 +197,7 @@ class TrafficPagingViewModelTest {
         assertEquals("In Progress", paused.statusText)
         assertTrue(paused.interception is TrafficInterceptionUiState.Paused)
 
-        viewModel.processIntent(TrafficIntent.FilterByStatus(com.devuloopers.knet.domain.traffic.model.StatusFilter.STATUS_2XX))
+        viewModel.processIntent(TrafficIntent.FilterByStatus(com.devuloopers.knet.ui.desktop.traffic.model.StatusFilter.STATUS_2XX))
         advanceUntilIdle()
         assertEquals(
             listOf("intercepted-exchange"),
@@ -256,17 +287,21 @@ class TrafficPagingViewModelTest {
         private val sessionId: CaptureSessionId,
         initialSnapshots: List<HttpExchangeSnapshot>,
     ) : TrafficQueryPort {
-        private val mutableGenerations = MutableSharedFlow<TrafficGeneration>(extraBufferCapacity = 1)
+        private val mutableGenerations = MutableSharedFlow<TrafficGeneration>(extraBufferCapacity = 64)
         private val snapshots = initialSnapshots.toMutableList()
         private var generation = 1L
+        var queryCalls: Int = 0
 
         override val generations: Flow<TrafficGeneration> = mutableGenerations
 
-        override suspend fun query(query: TrafficPageQuery): TrafficPage = TrafficPage(
-            items = snapshots.sortedByDescending { it.startedAtEpochMillis },
-            nextCursor = null,
-            generation = generation,
-        )
+        override suspend fun query(query: TrafficPageQuery): TrafficPage {
+            queryCalls += 1
+            return TrafficPage(
+                items = snapshots.sortedByDescending { it.startedAtEpochMillis },
+                nextCursor = null,
+                generation = generation,
+            )
+        }
 
         override suspend fun getExchange(exchangeId: ExchangeId): HttpExchangeSnapshot? =
             snapshots.firstOrNull { it.id == exchangeId }
@@ -287,7 +322,9 @@ class TrafficPagingViewModelTest {
         override val generations: Flow<TrafficGeneration> = emptyFlow()
 
         override suspend fun query(query: TrafficPageQuery): TrafficPage = TrafficPage(
-            items = snapshotsBySession[query.sessionId].orEmpty(),
+            items = query.sessionId
+                ?.let { sessionId -> snapshotsBySession[sessionId].orEmpty() }
+                ?: snapshotsBySession.values.flatten().sortedByDescending { it.startedAtEpochMillis },
             nextCursor = null,
             generation = 1L,
         )

@@ -5,6 +5,7 @@ import com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult
 import com.devuloopers.knet.domain.clientNetwork.model.OutboundRequestBody
 import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
 import com.devuloopers.knet.traffic.model.http.HttpMethod
+import com.devuloopers.knet.domain.util.UrlQueryStringParser
 import kotlinx.coroutines.CancellationException
 
 /**
@@ -24,7 +25,7 @@ class ExecuteClientApiRequestUseCase(
      * @param url Request URL.
      * @param method Extension-safe HTTP method shared by all request-producing features.
      * @param headers Map of header key-values.
-     * @param queryParams Map of query parameter key-values to append to URL.
+     * @param queryParams Ordered query parameter pairs used to rebuild the URL query exactly once.
      * @param cookies Map of request cookies to send.
      * @param body Self-contained strongly typed request body.
      * @param auth Strongly-typed polymorphic authorization configuration (None, Bearer, Basic, ApiKey).
@@ -35,7 +36,7 @@ class ExecuteClientApiRequestUseCase(
         url: String,
         method: HttpMethod = HttpMethod.GET,
         headers: Map<String, String> = emptyMap(),
-        queryParams: Map<String, String> = emptyMap(),
+        queryParams: List<Pair<String, String>> = emptyList(),
         cookies: Map<String, String> = emptyMap(),
         body: OutboundRequestBody = OutboundRequestBody.None,
         auth: ApiRequestAuth = ApiRequestAuth.None,
@@ -51,10 +52,9 @@ class ExecuteClientApiRequestUseCase(
             )
         }
 
-        // Build target URL with query parameters appended
+        // Rebuild instead of append because editor and capture contracts also retain a complete URL.
         val finalUrl = if (queryParams.isNotEmpty()) {
-            val queryString = queryParams.entries.joinToString("&") { "${it.key}=${it.value}" }
-            if (sanitizedUrl.contains("?")) "$sanitizedUrl&$queryString" else "$sanitizedUrl?$queryString"
+            UrlQueryStringParser.rebuildUrlWithQueryParams(sanitizedUrl, queryParams)
         } else {
             sanitizedUrl
         }

@@ -105,17 +105,16 @@ fun TrafficStorageTab(
                     )
                 }
 
-                Box(modifier = Modifier.width(160.dp)) {
-                    KNetSearchableDropdown(
-                        items = listOf("2 MB", "10 MB", "50 MB", "100 MB"),
-                        selectedItem = "${state.maxPayloadMb} MB",
-                        onItemSelected = { selected ->
-                            val mb = selected.replace(" MB", "").toIntOrNull() ?: 10
-                            onIntent(SettingsIntent.SetMaxPayloadMb(mb))
-                        },
-                        itemText = { it }
-                    )
-                }
+                KNetSearchableDropdown(
+                    items = listOf("2 MB", "10 MB", "50 MB", "100 MB"),
+                    selectedItem = "${state.maxPayloadMb} MB",
+                    onItemSelected = { selected ->
+                        val mb = selected.replace(" MB", "").toIntOrNull() ?: 10
+                        onIntent(SettingsIntent.SetMaxPayloadMb(mb))
+                    },
+                    modifier = Modifier.width(160.dp),
+                    itemText = { it }
+                )
             }
         }
     }

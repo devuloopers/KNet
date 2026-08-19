@@ -64,7 +64,7 @@ class ExecuteClientApiRequestUseCaseTest {
             url = "https://api.example.com/v1/users",
             method = HttpMethod.POST,
             headers = mapOf("Accept" to "application/json"),
-            queryParams = mapOf("page" to "1", "sort" to "desc"),
+            queryParams = listOf("page" to "1", "sort" to "desc"),
             cookies = mapOf("theme" to "dark"),
             body = OutboundRequestBody.Json("{\"name\": \"KNet\"}"),
             auth = ApiRequestAuth.None,
@@ -79,6 +79,22 @@ class ExecuteClientApiRequestUseCaseTest {
         assertEquals("theme=dark", fakeExecutor.lastHeaders["Cookie"])
         assertEquals("abc123xyz", result.cookies["session"])
         assertEquals(8080, fakeExecutor.lastProxyPort)
+    }
+
+    @Test
+    fun `complete URL query is rebuilt once and repeated keys are preserved`() = runTest {
+        val fakeExecutor = FakeHttpExecutor()
+        val useCase = ExecuteClientApiRequestUseCase(fakeExecutor)
+
+        useCase(
+            url = "https://api.example.com/items?tag=stale",
+            queryParams = listOf("tag" to "one", "tag" to "two"),
+        )
+
+        assertEquals(
+            "https://api.example.com/items?tag=one&tag=two",
+            fakeExecutor.lastExecutedUrl,
+        )
     }
 
     @Test

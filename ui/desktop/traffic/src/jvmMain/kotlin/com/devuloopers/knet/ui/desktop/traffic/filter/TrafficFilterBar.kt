@@ -6,38 +6,28 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.devuloopers.knet.domain.traffic.model.MethodFilter
-import com.devuloopers.knet.domain.traffic.model.ProtocolFilter
-import com.devuloopers.knet.domain.traffic.model.StatusFilter
+import com.devuloopers.knet.ui.desktop.traffic.model.MethodFilter
+import com.devuloopers.knet.ui.desktop.traffic.model.ProtocolFilter
+import com.devuloopers.knet.ui.desktop.traffic.model.StatusFilter
 import com.devuloopers.knet.ui.core.components.divider.VerticalDivider
 import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdown
+import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdownDefaults
+import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdownSize
+import com.devuloopers.knet.ui.core.components.dropdown.KNetMultiSelectDropdown
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
-import com.devuloopers.knet.ui.core.foundation.theme.HttpMethodColors
+import com.devuloopers.knet.ui.desktop.httppanel.theme.HttpMethodColors
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.traffic.model.ColumnVisibilityState
 import com.devuloopers.knet.ui.desktop.traffic.model.TrafficColumn
@@ -52,8 +42,7 @@ data class TrafficFilterBarState(
     val totalCount: Int = 0,
     val httpCount: Int = 0,
     val httpsCount: Int = 0,
-    val wsCount: Int = 0,
-    val otherCount: Int = 0,
+    val http2Count: Int = 0,
     val columnVisibility: ColumnVisibilityState = ColumnVisibilityState()
 )
 
@@ -80,7 +69,6 @@ fun TrafficFilterBar(
     val typography = KNetTheme.typography
     val shapes = KNetTheme.shapes
     val spacing = KNetTheme.spacing
-    val dimensions = KNetTheme.dimensions
 
     Row(
         modifier = modifier
@@ -100,19 +88,16 @@ fun TrafficFilterBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(spacing.sm)
         ) {
-            // "All" Chip
-            Text(
-                text = "All ${state.totalCount}",
-                style = typography.labelMedium.copy(
-                    color = if (state.selectedProtocol == ProtocolFilter.ALL) themeColors.accent else themeColors.textSecondary,
-                    fontWeight = FontWeight.Medium
-                ),
-                maxLines = 1,
-                softWrap = false,
-                modifier = Modifier
-                    .clickable { actions.onProtocolSelected(ProtocolFilter.ALL) }
-                    .handCursor()
-                    .padding(horizontal = spacing.xs, vertical = spacing.xs)
+            FilterCountChip(
+                label = "All",
+                count = state.totalCount,
+                countColor = if (state.selectedProtocol == ProtocolFilter.ALL) {
+                    themeColors.accent
+                } else {
+                    themeColors.textSecondary
+                },
+                isSelected = state.selectedProtocol == ProtocolFilter.ALL,
+                onClick = { actions.onProtocolSelected(ProtocolFilter.ALL) }
             )
 
             // "HTTP" Chip
@@ -133,22 +118,13 @@ fun TrafficFilterBar(
                 onClick = { actions.onProtocolSelected(ProtocolFilter.HTTPS) }
             )
 
-            // "WS" Chip
+            // HTTP/2 is an application-protocol filter and intentionally separate from HTTPS.
             FilterCountChip(
-                label = "WS",
-                count = state.wsCount,
+                label = "HTTP/2",
+                count = state.http2Count,
                 countColor = themeColors.semantic.warning,
-                isSelected = state.selectedProtocol == ProtocolFilter.WEBSOCKET,
-                onClick = { actions.onProtocolSelected(ProtocolFilter.WEBSOCKET) }
-            )
-
-            // "Other" Chip
-            FilterCountChip(
-                label = "Other",
-                count = state.otherCount,
-                countColor = themeColors.semantic.error,
-                isSelected = state.selectedProtocol == ProtocolFilter.OTHER,
-                onClick = { actions.onProtocolSelected(ProtocolFilter.OTHER) }
+                isSelected = state.selectedProtocol == ProtocolFilter.HTTP_2,
+                onClick = { actions.onProtocolSelected(ProtocolFilter.HTTP_2) }
             )
 
             // Vertical Divider
@@ -162,124 +138,40 @@ fun TrafficFilterBar(
             // Dropdowns — KNetDropdown from :ui:core with category placeholder headers
             KNetDropdown(
                 placeholder = "Method",
-                selectedItem = state.selectedMethod.label,
-                items = methodOptions,
-                onItemSelected = { selectedLabel ->
-                    MethodFilter.entries.find { it.label == selectedLabel }?.let { actions.onMethodSelected(it) }
-                },
-                itemColor = { label -> HttpMethodColors.getMethodTextColor(label) }
+                selectedItem = state.selectedMethod,
+                items = MethodFilter.entries,
+                onItemSelected = actions.onMethodSelected,
+                size = KNetDropdownSize.Compact,
+                itemText = MethodFilter::label,
+                itemColor = { method -> HttpMethodColors.getMethodTextColor(method.label) }
             )
             KNetDropdown(
                 placeholder = "Status",
-                selectedItem = state.selectedStatus.label,
-                items = statusOptions,
-                onItemSelected = { selectedLabel ->
-                    StatusFilter.entries.find { it.label == selectedLabel }?.let { actions.onStatusSelected(it) }
-                }
+                selectedItem = state.selectedStatus,
+                items = StatusFilter.entries,
+                onItemSelected = actions.onStatusSelected,
+                size = KNetDropdownSize.Compact,
+                itemText = StatusFilter::label
             )
             KNetDropdown(
                 placeholder = "Protocol",
-                selectedItem = state.selectedProtocol.label,
-                items = protocolOptions,
-                onItemSelected = { selectedLabel ->
-                    ProtocolFilter.entries.find { it.label == selectedLabel }?.let { actions.onProtocolSelected(it) }
-                }
+                selectedItem = state.selectedProtocol,
+                items = ProtocolFilter.entries,
+                onItemSelected = actions.onProtocolSelected,
+                size = KNetDropdownSize.Compact,
+                itemText = ProtocolFilter::label
             )
         }
 
-        // Right Group: Column Toggle Dropdown (Replaces Hamburger Menu)
-        ColumnsToggleDropdown(
-            columnVisibility = state.columnVisibility,
-            onToggleColumn = actions.onToggleColumn
+        KNetMultiSelectDropdown(
+            label = "Columns",
+            items = toggleableTrafficColumns,
+            isItemSelected = state.columnVisibility::isVisible,
+            onItemToggle = actions.onToggleColumn,
+            size = KNetDropdownSize.Compact,
+            itemText = TrafficColumn::displayName
         )
     }
-}
-
-@Composable
-private fun ColumnsToggleDropdown(
-    columnVisibility: ColumnVisibilityState,
-    onToggleColumn: (TrafficColumn) -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val themeColors = KNetTheme.colors
-    val typography = KNetTheme.typography
-    val shapes = KNetTheme.shapes
-    val spacing = KNetTheme.spacing
-
-    Box {
-        Row(
-            modifier = Modifier
-                .clip(shapes.small)
-                .background(themeColors.surfaceVariant)
-                .clickable { expanded = !expanded }
-                .padding(horizontal = spacing.sm, vertical = spacing.xs)
-                .handCursor(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(spacing.xs)
-        ) {
-            Text(
-                text = "Columns",
-                style = typography.labelMedium.copy(color = themeColors.textSecondary),
-                maxLines = 1,
-                softWrap = false
-            )
-            Icon(
-                imageVector = Icons.Default.ArrowDropDown,
-                contentDescription = "Columns Dropdown",
-                tint = themeColors.textSecondary,
-                modifier = Modifier.size(16.dp)
-            )
-        }
-
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false },
-            modifier = Modifier.background(themeColors.surface)
-        ) {
-            TrafficColumn.entries.filter { !it.isMandatory }.forEach { col ->
-                ColumnCheckboxItem(
-                    label = col.displayName,
-                    isChecked = columnVisibility.isVisible(col),
-                    onToggle = { onToggleColumn(col) }
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ColumnCheckboxItem(
-    label: String,
-    isChecked: Boolean,
-    onToggle: () -> Unit
-) {
-    val themeColors = KNetTheme.colors
-    val typography = KNetTheme.typography
-
-    DropdownMenuItem(
-        text = {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Checkbox(
-                    checked = isChecked,
-                    onCheckedChange = { onToggle() },
-                    colors = CheckboxDefaults.colors(
-                        checkedColor = themeColors.accent,
-                        uncheckedColor = themeColors.textMuted
-                    )
-                )
-                Text(
-                    text = label,
-                    style = typography.labelMedium.copy(color = themeColors.textPrimary),
-                    maxLines = 1,
-                    softWrap = false
-                )
-            }
-        },
-        onClick = { onToggle() }
-    )
 }
 
 @Composable
@@ -297,10 +189,11 @@ private fun FilterCountChip(
 
     Row(
         modifier = Modifier
+            .height(KNetDropdownDefaults.CompactFieldHeight)
             .clip(shapes.small)
             .background(if (isSelected) themeColors.border else themeColors.surfaceVariant)
             .clickable { onClick() }
-            .padding(horizontal = spacing.sm, vertical = spacing.xs)
+            .padding(horizontal = spacing.sm)
             .handCursor(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(spacing.xs)
@@ -325,8 +218,5 @@ private fun FilterCountChip(
     }
 }
 
-/** Filter option datasets for TrafficFilterBar dropdowns. */
-private val methodOptions = MethodFilter.entries.map { it.label }
-private val statusOptions = StatusFilter.entries.map { it.label }
-private val protocolOptions = ProtocolFilter.entries.map { it.label }
-
+/** Optional Traffic columns presented by the shared multi-select dropdown. */
+private val toggleableTrafficColumns = TrafficColumn.entries.filterNot(TrafficColumn::isMandatory)

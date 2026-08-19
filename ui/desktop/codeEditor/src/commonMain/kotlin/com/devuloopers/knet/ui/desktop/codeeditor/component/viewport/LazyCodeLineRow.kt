@@ -3,11 +3,17 @@ package com.devuloopers.knet.ui.desktop.codeeditor.component.viewport
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -44,6 +50,7 @@ internal fun LazyCodeLineRow(
     horizontalScrollState: ScrollState,
     isActiveLine: Boolean = false,
     selection: EditorSelection? = null,
+    isSelectionGestureActive: Boolean = false,
     shouldRequestEditorFocus: Boolean,
     targetColIndex: Int? = null,
     focusRequester: FocusRequester = remember { FocusRequester() },
@@ -79,17 +86,27 @@ internal fun LazyCodeLineRow(
     val lineSelectionBounds = remember(selection, line.originalLineIndex, line.displayText) {
         selection.boundsForLine(line.originalLineIndex, line.displayText.length)
     }
-    val isViewportSelecting = remember(selection) { selection != null && !selection.isEmpty }
+    val hasViewportSelection = remember(selection) { selection != null && !selection.isEmpty }
+    val isViewportSelecting = isSelectionGestureActive || hasViewportSelection
+    var measuredTextLayout by remember(line.originalLineIndex) {
+        mutableStateOf<TextLayoutResult?>(null)
+    }
+    val compatibleTextLayout = measuredTextLayout?.takeIf {
+        it.layoutInput.text.text == line.displayText
+    }
+    val currentOnTextLayout by rememberUpdatedState(onTextLayout)
 
-    DisposableEffect(line.originalLineIndex, onTextLayout) {
-        onDispose { onTextLayout?.invoke(line.originalLineIndex, null) }
+    DisposableEffect(line.originalLineIndex) {
+        onDispose { currentOnTextLayout?.invoke(line.originalLineIndex, null) }
     }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .then(
-                if (isActiveLine && !isViewportSelecting) Modifier.background(EditorColors.ActiveLineBackground)
+                if (isActiveLine) {
+                    Modifier.background(EditorColors.ActiveLineBackground)
+                }
                 else Modifier
             )
             .then(if (!isWordWrapEnabled) Modifier.height(CodeEditorTokens.GutterLineHeightDp) else Modifier),
@@ -120,7 +137,11 @@ internal fun LazyCodeLineRow(
                 isActive = true,
                 shouldRequestFocus = shouldRequestEditorFocus,
                 targetColIndex = targetColIndex,
-                onTextLayout = { onTextLayout?.invoke(line.originalLineIndex, it) },
+                textLayoutResult = compatibleTextLayout,
+                onTextLayout = {
+                    measuredTextLayout = it
+                    currentOnTextLayout?.invoke(line.originalLineIndex, it)
+                },
                 onTextChanged = { onLineChanged?.invoke(line.originalLineIndex, it) },
                 onLineSplit = { onLineSplit?.invoke(line.originalLineIndex, it) },
                 onLineMerge = { onLineMerge?.invoke(line.originalLineIndex) },
@@ -144,9 +165,19 @@ internal fun LazyCodeLineRow(
                 lineHeight = lineHeight,
                 horizontalScrollState = horizontalScrollState,
                 lineSelectionBounds = lineSelectionBounds,
-                onTextLayout = { onTextLayout?.invoke(line.originalLineIndex, it) },
+                textLayoutResult = compatibleTextLayout,
+                onTextLayout = {
+                    measuredTextLayout = it
+                    currentOnTextLayout?.invoke(line.originalLineIndex, it)
+                },
                 modifier = Modifier.weight(1f)
             )
         }
     }
+}
+
+/** Keeps editable and read-only content aligned with the gutter while allowing wrapped rows to grow. */
+internal fun Modifier.editorLineContentHeight(isWordWrapEnabled: Boolean): Modifier {
+    return heightIn(min = CodeEditorTokens.GutterLineHeightDp)
+        .then(if (!isWordWrapEnabled) Modifier.fillMaxHeight() else Modifier)
 }

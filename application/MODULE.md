@@ -9,7 +9,9 @@ Owns JVM desktop application use cases and UI-neutral ports that coordinate KNet
 - Proxy runtime and traffic query ports.
 - Safe loopback proxy start/stop/state use cases, independent capture pause/resume/state use cases,
   and technology-neutral runtime policy values.
-- Bounded body-access/write, finalized-object maintenance, pre-allocation capture ingress, explicit streaming-body completion, canonical traffic query, direct HTTP recording, and traffic-detail ports/use cases.
+- Bounded body-access/write, finalized-object maintenance, pre-allocation capture ingress, explicit
+  streaming-body completion, cross-session canonical traffic query, direct HTTP recording, and traffic-detail
+  ports/use cases.
 - Traffic-clear orchestration that rotates capture ownership before terminal metadata/body deletion without disconnecting proxy clients.
 - A capture-availability boundary that bypasses and releases breakpoints while no Traffic row can
   be created, without changing engine aggregation requirements or closing connections.
@@ -23,6 +25,8 @@ Owns JVM desktop application use cases and UI-neutral ports that coordinate KNet
   sandboxed script-execution ports.
 - Cross-capability orchestration contracts.
 - Application-level commands, results, and lifecycle policies.
+- One captured-request conversion use case that produces the shared API Studio/replay
+  `NetworkRequestSpec` without duplicating URL, ordered-header, repeated-query, or body-decoding behavior in UI.
 
 ## Does not own
 
@@ -49,3 +53,5 @@ never imports GraphQL, gRPC, WebSocket, SSE, or custom-format implementations an
 request bodies between phases.
 Proxy runtime and capture state are intentionally separate: a running listener can be `Capturing` or
 `Paused`, and only full product/configuration lifecycle commands stop the listener.
+Traffic page queries use optional session scope, typed method/status/scheme/application-protocol criteria,
+and an opaque keyset cursor. A null session deliberately means all retained history rather than "latest."

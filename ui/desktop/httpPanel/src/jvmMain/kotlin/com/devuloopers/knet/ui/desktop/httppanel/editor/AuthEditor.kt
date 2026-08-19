@@ -19,7 +19,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdown
-import com.devuloopers.knet.ui.core.components.input.KNetInputField
+import com.devuloopers.knet.ui.core.components.input.InputFieldConfig
+import com.devuloopers.knet.ui.core.components.input.KNetTextField
 import com.devuloopers.knet.ui.core.components.input.KNetPasswordField
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
@@ -104,10 +105,10 @@ fun AuthEditor(
                             text = "Token",
                             style = typography.caption.copy(color = themeColors.textMuted)
                         )
-                        KNetInputField(
+                        KNetTextField(
                             value = state.bearerToken,
                             onValueChange = { onStateChange(state.copy(bearerToken = it)) },
-                            placeholder = "Enter Bearer Token...",
+                            config = InputFieldConfig(placeholder = "Enter Bearer Token…"),
                             modifier = Modifier.fillMaxWidth()
                         )
                         Text(
@@ -126,10 +127,10 @@ fun AuthEditor(
                             text = "Username",
                             style = typography.caption.copy(color = themeColors.textMuted)
                         )
-                        KNetInputField(
+                        KNetTextField(
                             value = state.basicUsername,
                             onValueChange = { onStateChange(state.copy(basicUsername = it)) },
-                            placeholder = "Enter username...",
+                            config = InputFieldConfig(placeholder = "Enter username…"),
                             modifier = Modifier.fillMaxWidth()
                         )
 
@@ -168,10 +169,10 @@ fun AuthEditor(
                                     text = "Key",
                                     style = typography.caption.copy(color = themeColors.textMuted)
                                 )
-                                KNetInputField(
+                                KNetTextField(
                                     value = state.apiKeyName,
                                     onValueChange = { onStateChange(state.copy(apiKeyName = it)) },
-                                    placeholder = "e.g. X-API-Key",
+                                    config = InputFieldConfig(placeholder = "e.g. X-API-Key"),
                                     modifier = Modifier.fillMaxWidth()
                                 )
                             }
@@ -184,10 +185,10 @@ fun AuthEditor(
                                     text = "Value",
                                     style = typography.caption.copy(color = themeColors.textMuted)
                                 )
-                                KNetInputField(
+                                KNetTextField(
                                     value = state.apiKeyValue,
                                     onValueChange = { onStateChange(state.copy(apiKeyValue = it)) },
-                                    placeholder = "Enter API Key value...",
+                                    config = InputFieldConfig(placeholder = "Enter API Key value…"),
                                     modifier = Modifier.fillMaxWidth()
                                 )
                             }

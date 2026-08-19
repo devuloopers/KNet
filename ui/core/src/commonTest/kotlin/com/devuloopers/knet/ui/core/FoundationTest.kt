@@ -14,9 +14,10 @@ import com.devuloopers.knet.ui.core.foundation.typography.KNetTypography
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
 
 /**
- * Unit tests verifying KNet Design System v2.0 foundation design tokens and responsive matrix calculations.
+ * Verifies KNet Design System v3 foundation tokens and responsive matrix calculations.
  */
 class FoundationTest {
 
@@ -64,6 +65,7 @@ class FoundationTest {
         assertEquals(48.dp, KNetDimensions.navigationWidth)
         assertEquals(240.dp, KNetDimensions.sidebarWidth)
         assertEquals(26.dp, KNetDimensions.tableRowHeight)
+        assertEquals(520.dp, KNetDimensions.dialogWidthMedium)
     }
 
     @Test
@@ -75,6 +77,8 @@ class FoundationTest {
         assertEquals(4.dp, KNetElevation.level2)
         assertEquals(8.dp, KNetElevation.level3)
         assertNotNull(KNetMotion.easingStandard)
+        assertTrue(KNetMotion.animationsEnabled)
+        assertTrue(KNetMotion.durationFeedback > KNetMotion.durationSlow)
     }
 
     @Test

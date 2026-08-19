@@ -29,4 +29,16 @@ May depend on application/core contracts and concrete desktop engines/storage. I
 
 ## Current state
 
-Traffic paging/detail, proxy control, direct recording, traffic clear, certificates, scripts, inspection, and device registration use application boundaries. Proxy connections and API Studio publish bounded canonical events directly into the current Room schema. A stable switchable capture sink lets traffic clear or Traffic Stop detach stored capture state without closing client transport channels. Detached writers drain through one bounded process-owned retirement queue; resume attaches a fresh generation immediately and each exchange remains owned by the generation where it began. Breakpoint request/response aggregation requirements are observed by the desktop runtime adapter; a shape change closes only active child connections so reconnects use the current streaming or full-message pipeline without restarting the proxy listener or capture session. Registered identity and pairing state share the same Room source of truth; open Wi-Fi clients do not persist identity or authorization. No old traffic reader or writer remains. All adapter selection and connectivity assembly live in `:products:desktop`.
+Traffic paging/detail, proxy control, direct recording, traffic clear, certificates, scripts, inspection, and
+device registration use application boundaries. The canonical query adapter supports one-session and
+all-retained-session keyset pages, carries the process generation into every result, and delegates search plus
+typed method/status/scheme/protocol filtering to Room. Proxy connections and API Studio publish bounded
+canonical events directly into the current Room schema. A stable switchable capture sink lets traffic clear
+or Traffic Stop detach stored capture state without closing client transport channels. Detached writers drain
+through one bounded process-owned retirement queue; resume attaches a fresh generation immediately and each
+exchange remains owned by the generation where it began. Breakpoint request/response aggregation requirements
+are observed by the desktop runtime adapter; a shape change closes only active child connections so reconnects
+use the current streaming or full-message pipeline without restarting the proxy listener or capture session.
+Registered identity and pairing state share the same Room source of truth; open Wi-Fi clients do not persist
+identity or authorization. No old traffic reader or writer remains. All adapter selection and connectivity
+assembly live in `:products:desktop`.

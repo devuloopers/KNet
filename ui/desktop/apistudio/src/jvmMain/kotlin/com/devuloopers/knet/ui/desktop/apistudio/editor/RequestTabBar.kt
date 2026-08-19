@@ -22,7 +22,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.badge.KNetBadge
 import com.devuloopers.knet.ui.core.components.button.KNetIconButton
-import com.devuloopers.knet.ui.core.components.tabs.ScrollableTabRow
+import com.devuloopers.knet.ui.core.components.tabs.KNetTabRow
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
@@ -52,7 +52,7 @@ fun RequestTabBar(
             .border(width = 1.dp, color = themeColors.border),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        ScrollableTabRow(
+        KNetTabRow(
             modifier = Modifier.weight(1f)
         ) {
             tabs.forEach { tab ->

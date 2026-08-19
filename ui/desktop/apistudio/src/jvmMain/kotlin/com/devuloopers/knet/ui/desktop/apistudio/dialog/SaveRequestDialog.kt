@@ -36,7 +36,8 @@ import androidx.compose.ui.input.key.type
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
 import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdown
-import com.devuloopers.knet.ui.core.components.input.KNetInputField
+import com.devuloopers.knet.ui.core.components.input.InputFieldConfig
+import com.devuloopers.knet.ui.core.components.input.KNetTextField
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarFolderItem
 
@@ -111,10 +112,10 @@ fun SaveRequestDialog(
                         text = "Request Name",
                         style = typography.caption.copy(color = themeColors.textSecondary, fontWeight = FontWeight.Medium)
                     )
-                    KNetInputField(
+                    KNetTextField(
                         value = requestName,
                         onValueChange = { requestName = it },
-                        placeholder = "Request Name...",
+                        config = InputFieldConfig(placeholder = "Request Name…"),
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(focusRequester)
@@ -196,10 +197,10 @@ fun SaveRequestDialog(
 
                     if (saveMode == CollectionSaveMode.NEW_COLLECTION) {
                         Box(modifier = Modifier.fillMaxWidth().padding(start = 32.dp)) {
-                            KNetInputField(
+                            KNetTextField(
                                 value = newCollectionName,
                                 onValueChange = { newCollectionName = it },
-                                placeholder = "Collection Name...",
+                                config = InputFieldConfig(placeholder = "Collection Name…"),
                                 modifier = Modifier.fillMaxWidth()
                             )
                         }

@@ -40,11 +40,22 @@ data class PayloadInspectionSpec(
     val formattedText: String
         get() = resolvedFormat.toInspectionText(rawBody)
 
+    /** Conservative byte estimate used by bounded presentation caches. */
+    val estimatedRetainedBytes: Long
+        get() {
+            val headerCharacters = headers.sumOf { (name, value) -> name.length.toLong() + value.length }
+            val rawCharacters = rawBody.length.toLong()
+            val formatCharacters = resolvedFormat.estimatedRetainedCharacters(rawBody)
+            return (headerCharacters + rawCharacters + formatCharacters) * BYTES_PER_UTF16_CHARACTER
+        }
+
     companion object {
         /**
          * Sentinel empty instance representing an absent body payload.
          */
         val EMPTY: PayloadInspectionSpec = PayloadInspectionSpec()
+
+        private const val BYTES_PER_UTF16_CHARACTER: Long = 2L
 
         /**
          * Creates a fully-resolved [PayloadInspectionSpec] from raw wire body bytes and headers in a single pass.
@@ -122,4 +133,27 @@ data class PayloadInspectionSpec(
             )
         }
     }
+}
+
+private fun BodyFormat?.estimatedRetainedCharacters(rawBody: String): Long = when (this) {
+    null -> 0L
+    is BodyFormat.GraphQL -> {
+        operationType.length.toLong() +
+            operationName.orEmpty().length +
+            queryText.length +
+            variablesJson.length +
+            extensionsJson.length
+    }
+    is BodyFormat.JsonStream -> frames.sumOf { frame -> frame.length.toLong() }
+    is BodyFormat.FormData -> pairs.sumOf { (name, value) -> name.length.toLong() + value.length }
+    is BodyFormat.SseStream -> events.sumOf { event -> event.length.toLong() }
+    is BodyFormat.Image -> label.length.toLong()
+    is BodyFormat.GrpcWeb -> frames.sumOf { frame ->
+        frame.payloadHex.length.toLong() + frame.decodedJsonOrText.length
+    }
+    is BodyFormat.HasTextContent -> textContent
+        .takeUnless { text -> text === rawBody }
+        ?.length
+        ?.toLong()
+        ?: 0L
 }

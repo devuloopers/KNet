@@ -33,5 +33,8 @@ Platform detection is not a domain concern; desktop-only host-platform behavior 
 Outbound execution uses `OutboundRequestBody` and `ExecutionResult`; transport timing is the canonical
 `:core:traffic` `ExchangeTimings`, and GraphQL UI state composes `StructuredPayloadState.GraphQL`
 instead of copying its fields.
+Shared body decoding enforces an explicit decoded-output ceiling for identity, gzip, deflate, Brotli, and
+Zstandard content. Callers receive a typed output-limit result rather than allowing compressed payloads to
+expand without a memory bound.
 The former closed GraphQL/gRPC/WebSocket breakpoint criteria and interception-metadata hierarchies
 were removed. Adding a breakpoint protocol no longer changes `:core:domain`.

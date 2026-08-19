@@ -24,7 +24,7 @@ import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdown
 import com.devuloopers.knet.ui.core.components.keyvalue.KNetKeyValueEditor
 import com.devuloopers.knet.ui.core.components.keyvalue.KeyValueEntry
 import com.devuloopers.knet.ui.core.components.tabs.KNetTab
-import com.devuloopers.knet.ui.core.components.tabs.ScrollableTabRow
+import com.devuloopers.knet.ui.core.components.tabs.KNetTabRow
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.codeeditor.api.CodeEditorActions
@@ -70,7 +70,7 @@ fun RequestBodyEditor(
         verticalArrangement = Arrangement.spacedBy(spacing.sm)
     ) {
         // Mode Selector Tab Row using reusable design system components
-        ScrollableTabRow(
+        KNetTabRow(
             modifier = Modifier.fillMaxWidth()
         ) {
             RequestBodyMode.entries.forEach { mode ->

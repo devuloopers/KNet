@@ -117,16 +117,15 @@ fun AppearanceTab(
                     )
                 }
 
-                Box(modifier = Modifier.width(160.dp)) {
-                    KNetSearchableDropdown(
-                        items = listOf("JavaScript", "Kotlin"),
-                        selectedItem = if (state.scriptLanguage == "KOTLIN") "Kotlin" else "JavaScript",
-                        onItemSelected = { selected ->
-                            onIntent(SettingsIntent.SetScriptLanguage(selected.uppercase()))
-                        },
-                        itemText = { it }
-                    )
-                }
+                KNetSearchableDropdown(
+                    items = listOf("JavaScript", "Kotlin"),
+                    selectedItem = if (state.scriptLanguage == "KOTLIN") "Kotlin" else "JavaScript",
+                    onItemSelected = { selected ->
+                        onIntent(SettingsIntent.SetScriptLanguage(selected.uppercase()))
+                    },
+                    modifier = Modifier.width(160.dp),
+                    itemText = { it }
+                )
             }
         }
     }

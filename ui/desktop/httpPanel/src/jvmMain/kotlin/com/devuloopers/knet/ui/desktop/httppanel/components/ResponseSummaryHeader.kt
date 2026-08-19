@@ -17,7 +17,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.http.ResponseHead
-import com.devuloopers.knet.ui.core.components.badge.KNetHttpStatusBadge
 import com.devuloopers.knet.ui.core.components.button.KNetCopyDropdownButton
 import com.devuloopers.knet.ui.core.components.button.KNetCopyOption
 import com.devuloopers.knet.ui.core.components.button.KNetIconButton

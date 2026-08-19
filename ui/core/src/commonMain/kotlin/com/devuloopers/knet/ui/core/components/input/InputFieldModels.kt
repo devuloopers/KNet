@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.Dp
 
 /**
  * Behavior, formatting, and overflow popup configuration for KNet input fields.
@@ -16,6 +17,7 @@ import androidx.compose.ui.text.input.VisualTransformation
  * @property autoSelectAllOnFocus True to automatically select all text when the field receives focus.
  * @property visualTransformation Visual transformation for text formatting (e.g. PasswordVisualTransformation).
  * @property keyboardOptions Keyboard input options.
+ * @property fieldHeight Optional visual field height override without constraining supporting text.
  */
 @Immutable
 data class InputFieldConfig(
@@ -27,7 +29,8 @@ data class InputFieldConfig(
     val backgroundColor: Color? = null,
     val borderColor: Color? = null,
     val visualTransformation: VisualTransformation = VisualTransformation.None,
-    val keyboardOptions: KeyboardOptions = KeyboardOptions.Default
+    val keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
+    val fieldHeight: Dp? = null
 ) {
     companion object {
         val Default: InputFieldConfig = InputFieldConfig()

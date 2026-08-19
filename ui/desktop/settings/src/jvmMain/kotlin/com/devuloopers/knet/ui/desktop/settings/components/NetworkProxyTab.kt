@@ -21,6 +21,7 @@ import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
 import com.devuloopers.knet.ui.core.components.button.KNetSegmentedButton
 import com.devuloopers.knet.ui.core.components.input.KNetTextField
+import com.devuloopers.knet.ui.core.components.input.InputFieldConfig
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.settings.model.SettingsIntent
 import com.devuloopers.knet.ui.desktop.settings.model.SettingsState
@@ -92,7 +93,7 @@ fun NetworkProxyTab(
                     KNetTextField(
                         value = state.proxyPort,
                         onValueChange = { onIntent(SettingsIntent.UpdateProxyPort(it)) },
-                        placeholder = "8080",
+                        config = InputFieldConfig(placeholder = "8080"),
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -133,7 +134,7 @@ fun NetworkProxyTab(
                             onValueChange = {
                                 onIntent(SettingsIntent.UpdateLiveInterceptionTimeout(it, state.liveInterceptionTimeoutUnit))
                             },
-                            placeholder = "60",
+                            config = InputFieldConfig(placeholder = "60"),
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -184,7 +185,7 @@ fun NetworkProxyTab(
                             onValueChange = {
                                 onIntent(SettingsIntent.UpdateApiStudioTimeout(it, state.apiStudioTimeoutUnit))
                             },
-                            placeholder = "60",
+                            config = InputFieldConfig(placeholder = "60"),
                             modifier = Modifier.fillMaxWidth()
                         )
                     }

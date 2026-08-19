@@ -4,9 +4,32 @@ import com.devuloopers.knet.ui.desktop.codeeditor.document.EditorPosition
 import com.devuloopers.knet.ui.desktop.codeeditor.document.EditorSelection
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class SelectionGestureHandlerTest {
+    @Test
+    fun gestureOwnershipStartsOnPressBeforeSelectionHasLength() {
+        val handler = SelectionGestureHandler()
+
+        assertFalse(handler.isGestureActive)
+
+        handler.processPointerEvent(
+            targetLineIndex = 1,
+            targetColIndex = 5,
+            caret = EditorPosition(1, 5),
+            currentTimeMs = 1_000L,
+            onSelectionChange = {}
+        )
+
+        assertTrue(handler.isGestureActive)
+
+        handler.processPointerRelease(onSelectionChange = {})
+
+        assertFalse(handler.isGestureActive)
+    }
+
     @Test
     fun dragPreservesDirectionalAnchorAndActiveEndpoint() {
         val handler = SelectionGestureHandler()

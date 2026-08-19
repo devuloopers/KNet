@@ -32,10 +32,12 @@ object KNetIcons {
     val List: ImageVector = Icons.AutoMirrored.Filled.List
     val Folder: ImageVector = Icons.Default.Folder
     val FolderOpen: ImageVector = Icons.Default.FolderOpen
-    val Download: ImageVector = Icons.AutoMirrored.Filled.List
-    val History: ImageVector = Icons.AutoMirrored.Filled.List
-    val Save: ImageVector = Icons.Default.Check
-    val Code: ImageVector = Icons.Default.Edit
+    val Download: ImageVector = Icons.Default.FileDownload
+    val History: ImageVector = Icons.Default.History
+    val Save: ImageVector = Icons.Default.Save
+    val Code: ImageVector = Icons.Default.Code
     val Send: ImageVector = Icons.AutoMirrored.Filled.Send
-    val Pause: ImageVector = Icons.Default.Warning
+    val Pause: ImageVector = Icons.Default.Pause
+    val Visibility: ImageVector = Icons.Default.Visibility
+    val VisibilityOff: ImageVector = Icons.Default.VisibilityOff
 }

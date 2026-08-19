@@ -7,6 +7,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
+/** Visual emphasis variants supported by [KNetButton]. */
 enum class ButtonVariant {
     Primary,
     Secondary,
@@ -15,12 +16,22 @@ enum class ButtonVariant {
     Danger
 }
 
+/** Density presets supported by [KNetButton]. */
 enum class ButtonSize {
     Compact,
     Standard,
     Large
 }
 
+/**
+ * Resolved colors for every enabled and disabled button surface state.
+ *
+ * @property containerColor Background used while the button is enabled.
+ * @property contentColor Foreground used while the button is enabled.
+ * @property borderColor Optional enabled border color.
+ * @property disabledContainerColor Background used while the button is disabled.
+ * @property disabledContentColor Foreground used while the button is disabled.
+ */
 @Immutable
 data class ButtonColors(
     val containerColor: Color,
@@ -30,7 +41,9 @@ data class ButtonColors(
     val disabledContentColor: Color
 )
 
+/** Theme-aware sizing and color defaults for [KNetButton]. */
 object ButtonDefaults {
+    /** Resolves a complete color set for [variant]. */
     @Composable
     fun colors(variant: ButtonVariant = ButtonVariant.Primary): ButtonColors {
         val themeColors = KNetTheme.colors
@@ -70,6 +83,7 @@ object ButtonDefaults {
         }
     }
 
+    /** Resolves the current theme height for [size]. */
     @Composable
     fun height(size: ButtonSize): Dp {
         val dims = KNetTheme.dimensions

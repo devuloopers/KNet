@@ -25,25 +25,31 @@ import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 /**
- * Lightweight shimmer placeholder rendered while HTTP response body payloads are processed off-thread.
+ * Lightweight shimmer placeholder rendered while arbitrary content is processed off-thread.
  *
  * Provides smooth, non-blocking visual feedback when switching between large traffic inspect items.
  */
 @Composable
-fun KNetBodyLoadingPlaceholder(
+fun KNetContentLoadingPlaceholder(
     modifier: Modifier = Modifier
 ) {
     val themeColors = KNetTheme.colors
+    val motion = KNetTheme.motion
 
-    val infiniteTransition = rememberInfiniteTransition()
-    val alpha by infiniteTransition.animateFloat(
-        initialValue = 0.2f,
-        targetValue = 0.6f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 800, easing = LinearEasing),
-            repeatMode = RepeatMode.Reverse
+    val alpha = if (motion.animationsEnabled) {
+        val infiniteTransition = rememberInfiniteTransition()
+        val animatedAlpha by infiniteTransition.animateFloat(
+            initialValue = 0.2f,
+            targetValue = 0.6f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = motion.durationSlow * 3, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse
+            )
         )
-    )
+        animatedAlpha
+    } else {
+        0.35f
+    }
 
     val baseColor = themeColors.surfaceVariant
     val shimmerColor = themeColors.border.copy(alpha = alpha)

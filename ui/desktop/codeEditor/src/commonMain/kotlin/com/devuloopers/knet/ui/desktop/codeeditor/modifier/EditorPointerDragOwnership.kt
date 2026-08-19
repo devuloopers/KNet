@@ -40,3 +40,34 @@ internal class EditorPointerDragOwnership {
         return owner
     }
 }
+
+/**
+ * Returns whether a pointer starts inside a scrollbar-owned viewport edge.
+ *
+ * The vertical scrollbar always exists. The bottom edge is scrollbar-owned only when the editor is
+ * configured for non-wrapped horizontal scrolling; wrapped editors must leave that edge available
+ * to text selection and downward drag auto-scroll.
+ *
+ * @param pointerX Horizontal pointer coordinate inside the viewport.
+ * @param pointerY Vertical pointer coordinate inside the viewport.
+ * @param containerWidth Current viewport width.
+ * @param containerHeight Current viewport height.
+ * @param scrollbarHitZoneWidth Width reserved for easy scrollbar targeting.
+ * @param hasHorizontalScrollbar Whether a horizontal scrollbar is rendered.
+ * @return `true` when the pointer is inside a rendered scrollbar's hit zone.
+ */
+internal fun isPointerOverEditorScrollbar(
+    pointerX: Float,
+    pointerY: Float,
+    containerWidth: Float,
+    containerHeight: Float,
+    scrollbarHitZoneWidth: Float,
+    hasHorizontalScrollbar: Boolean
+): Boolean {
+    val isOverVerticalScrollbar = containerWidth > 0f &&
+        pointerX >= containerWidth - scrollbarHitZoneWidth
+    val isOverHorizontalScrollbar = hasHorizontalScrollbar &&
+        containerHeight > 0f &&
+        pointerY >= containerHeight - scrollbarHitZoneWidth
+    return isOverVerticalScrollbar || isOverHorizontalScrollbar
+}

@@ -148,6 +148,7 @@ internal fun LazyCodeBody(
     }
     val autoScrollController = rememberAutoScrollController()
     val selectionGestureHandler = rememberSelectionGestureHandler()
+    val isSelectionGestureActive = selectionGestureHandler.isGestureActive
     val focusRequester = remember { FocusRequester() }
     var containerHeightPixels by remember { mutableStateOf(0f) }
     var containerWidthPixels by remember { mutableStateOf(0f) }
@@ -192,6 +193,7 @@ internal fun LazyCodeBody(
                         lineHeightPx = lineHeightPixels,
                         charWidthPx = characterWidthPixels,
                         autoScrollThresholdPx = autoScrollThresholdPixels,
+                        hasHorizontalScrollbar = !isWordWrapEnabled,
                         lazyListState = lazyListState,
                         lineTextLayoutMap = lineTextLayouts,
                         selectionGestureHandler = selectionGestureHandler,
@@ -287,6 +289,7 @@ internal fun LazyCodeBody(
                     caret = caret,
                     onCaretChange = onCaretChange,
                     selection = selection,
+                    isSelectionGestureActive = isSelectionGestureActive,
                     shouldRequestEditorFocus = shouldRequestEditorFocus,
                     onToggleFold = onToggleFold,
                     onLineChanged = onLineChanged,

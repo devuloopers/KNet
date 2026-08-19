@@ -6,6 +6,8 @@ import com.devuloopers.knet.ui.desktop.codeeditor.concurrency.EditorCancellation
 import com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage
 
 private const val TOKEN_LINE_CHUNK_SIZE = 256
+private const val MAX_IMMEDIATE_PRESENTATION_LINES = 32
+private const val MAX_IMMEDIATE_PRESENTATION_CHARACTERS = 32 * 1024
 
 internal data class EditorTokenLineChunk(val lines: List<EditorTokenizedLine>)
 
@@ -119,6 +121,71 @@ private fun List<EditorTokenizedLine>.toTokenChunks(): List<EditorTokenLineChunk
  * Stateless full and incremental document tokenization engine.
  */
 object EditorSyntaxEngine {
+    /**
+     * Produces a current-version token model for the immediate frame after a small edit.
+     *
+     * Background tokenization remains authoritative. This projection retokenizes only the directly
+     * changed lines and temporarily retains the previous suffix, preventing the viewport from
+     * dropping semantic colors while asynchronous lexical-state convergence is still running.
+     * Oversized changed lines remain temporarily unstyled instead of being tokenized on the UI
+     * thread. Large structural, batched, or non-consecutive changes return `null`.
+     *
+     * @param snapshot Current immutable document snapshot.
+     * @param support Active language capabilities.
+     * @param previous Previous complete or presentation token model.
+     * @param changes Changes that produced [snapshot].
+     * @return A structurally aligned presentation model, or `null` when immediate projection is unsafe.
+     */
+    internal fun projectForPresentation(
+        snapshot: EditorDocumentSnapshot,
+        support: EditorLanguageSupport,
+        previous: EditorTokenizedDocument?,
+        changes: List<EditorDocumentChange>
+    ): EditorTokenizedDocument? {
+        val change = changes.singleOrNull() ?: return null
+        if (
+            previous == null ||
+            previous.language.id != support.language.id ||
+            previous.snapshot.version != change.beforeVersion ||
+            snapshot.version != change.afterVersion
+        ) {
+            return null
+        }
+
+        val firstChangedLine = change.afterRange.start.line.coerceAtMost(snapshot.lineCount - 1)
+        val lastChangedLine = change.afterRange.end.line.coerceAtLeast(firstChangedLine)
+        val changedLineCount = lastChangedLine - firstChangedLine + 1
+        if (changedLineCount > MAX_IMMEDIATE_PRESENTATION_LINES) return null
+        var changedCharacterCount = 0
+        for (lineIndex in firstChangedLine..lastChangedLine) {
+            val lineLength = snapshot.line(lineIndex).length
+            if (changedCharacterCount > MAX_IMMEDIATE_PRESENTATION_CHARACTERS - lineLength) {
+                changedCharacterCount = MAX_IMMEDIATE_PRESENTATION_CHARACTERS + 1
+                break
+            }
+            changedCharacterCount += lineLength
+        }
+        val canRetokenizeImmediately = changedCharacterCount <= MAX_IMMEDIATE_PRESENTATION_CHARACTERS
+
+        val tokenizer = support.tokenizer
+        var state = when {
+            tokenizer == null -> InitialEditorLexicalState
+            firstChangedLine == 0 -> tokenizer.initialState
+            else -> previous.tokenizedLine(firstChangedLine - 1).endState
+        }
+        val changedLines = ArrayList<EditorTokenizedLine>(changedLineCount)
+        for (lineIndex in firstChangedLine..lastChangedLine) {
+            val tokenizedLine = tokenizer?.takeIf { canRetokenizeImmediately }
+                ?.tokenizeLine(snapshot.line(lineIndex), state)
+                ?: EditorTokenizedLine(state, state, emptyList())
+            changedLines += tokenizedLine
+            state = tokenizedLine.endState
+        }
+
+        val previousSuffixStart = change.beforeRange.end.line + 1
+        return previous.splice(snapshot, firstChangedLine, changedLines, previousSuffixStart)
+    }
+
     /**
      * Tokenizes a snapshot, reusing an unchanged prefix and converged suffix when possible.
      *

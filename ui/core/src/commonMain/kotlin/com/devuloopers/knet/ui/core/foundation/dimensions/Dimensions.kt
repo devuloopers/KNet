@@ -31,6 +31,7 @@ data class Dimensions(
     val searchFieldMinWidth: Dp = 160.dp,
     val inspectorMinWidth: Dp = 320.dp,
     val inspectorMaxWidth: Dp = 500.dp,
+    val dialogWidthMedium: Dp = 520.dp,
     val sideDrawerWidth: Dp = 720.dp,
     val expandedSideDrawerWidth: Dp = 880.dp,
     val minimumWindowWidth: Dp = 1024.dp,

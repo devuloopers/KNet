@@ -77,11 +77,15 @@ class ProxyEngineStreamingCaptureTest {
                 sessionId = requireNotNull(sessionId),
                 cursorTimestamp = null,
                 cursorId = null,
-                hostPattern = null,
+                searchPattern = null,
                 filterMethods = 0,
                 methods = emptyList(),
                 filterStatuses = 0,
                 statuses = emptyList(),
+                filterSchemes = 0,
+                schemes = emptyList(),
+                filterProtocols = 0,
+                protocols = emptyList(),
                 limit = 1,
             ).singleOrNull())
             assertFalse(stored.id.isBlank())
@@ -144,11 +148,15 @@ class ProxyEngineStreamingCaptureTest {
                 sessionId = sessionId,
                 cursorTimestamp = null,
                 cursorId = null,
-                hostPattern = null,
+                searchPattern = null,
                 filterMethods = 0,
                 methods = emptyList(),
                 filterStatuses = 0,
                 statuses = emptyList(),
+                filterSchemes = 0,
+                schemes = emptyList(),
+                filterProtocols = 0,
+                protocols = emptyList(),
                 limit = 10,
             )
             assertEquals(listOf("/after-clear"), stored.map { it.pathAndQuery })

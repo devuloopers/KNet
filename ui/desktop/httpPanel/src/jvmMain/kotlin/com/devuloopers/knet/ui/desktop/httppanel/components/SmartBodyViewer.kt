@@ -7,7 +7,7 @@ import androidx.compose.ui.Modifier
 import com.devuloopers.knet.engine.formatter.formatters.JsonBodyFormatter
 import com.devuloopers.knet.engine.formatter.model.BodyFormat
 import com.devuloopers.knet.engine.formatter.registry.BodyFormatterRegistry
-import com.devuloopers.knet.ui.core.components.placeholder.KNetBodyLoadingPlaceholder
+import com.devuloopers.knet.ui.core.components.placeholder.KNetContentLoadingPlaceholder
 import com.devuloopers.knet.ui.core.components.placeholder.KNetEmptyStatePlaceholder
 import com.devuloopers.knet.ui.desktop.codeeditor.api.CodeEditorConfiguration
 import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
@@ -40,7 +40,7 @@ fun SmartBodyViewer(
     modifier: Modifier = Modifier
 ) {
     if (spec.isPreparing) {
-        KNetBodyLoadingPlaceholder(modifier = modifier.fillMaxSize())
+        KNetContentLoadingPlaceholder(modifier = modifier.fillMaxSize())
         return
     }
 

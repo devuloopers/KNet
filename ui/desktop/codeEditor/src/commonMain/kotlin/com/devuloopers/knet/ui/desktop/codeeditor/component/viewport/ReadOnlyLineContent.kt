@@ -3,12 +3,9 @@ package com.devuloopers.knet.ui.desktop.codeeditor.component.viewport
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
@@ -28,25 +25,21 @@ internal fun ReadOnlyLineContent(
     lineHeight: TextUnit,
     horizontalScrollState: ScrollState,
     lineSelectionBounds: LineSelectionBounds? = null,
+    textLayoutResult: TextLayoutResult? = null,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val textLayoutResult = remember { mutableStateOf<TextLayoutResult?>(null) }
-
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .then(if (!isWordWrapEnabled) Modifier.fillMaxHeight() else Modifier)
+            .editorLineContentHeight(isWordWrapEnabled)
             .then(if (!isWordWrapEnabled) Modifier.horizontalScroll(horizontalScrollState) else Modifier)
-            .selectionHighlight(lineSelectionBounds, textLayoutResult.value, fontSize),
+            .selectionHighlight(lineSelectionBounds, textLayoutResult, fontSize),
         contentAlignment = if (isWordWrapEnabled) Alignment.TopStart else Alignment.CenterStart
     ) {
         Text(
             text = highlightedText,
-            onTextLayout = {
-                textLayoutResult.value = it
-                onTextLayout?.invoke(it)
-            },
+            onTextLayout = { onTextLayout?.invoke(it) },
             style = CodeEditorTokens.editorTextStyle(fontSize = fontSize, lineHeight = lineHeight).copy(
                 color = Color.White,
                 fontFamily = FontFamily.Monospace

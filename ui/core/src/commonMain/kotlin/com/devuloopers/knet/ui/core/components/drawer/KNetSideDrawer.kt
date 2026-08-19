@@ -1,7 +1,6 @@
 package com.devuloopers.knet.ui.core.components.drawer
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
@@ -50,6 +49,8 @@ fun KNetSideDrawer(
 ) {
     val colors = KNetTheme.colors
     val dimensions = KNetTheme.dimensions
+    val motion = KNetTheme.motion
+    val animationDuration = if (motion.animationsEnabled) motion.durationSlow else motion.durationInstant
     BoxWithConstraints(modifier = modifier.fillMaxSize()) {
         val drawerWidth = resolveSideDrawerWidth(size, dimensions, maxWidth)
         AnimatedVisibility(
@@ -57,15 +58,15 @@ fun KNetSideDrawer(
             enter = slideInHorizontally(
                 initialOffsetX = { fullWidth -> fullWidth },
                 animationSpec = tween(
-                    durationMillis = DRAWER_ANIMATION_DURATION_MILLIS,
-                    easing = FastOutSlowInEasing,
+                    durationMillis = animationDuration,
+                    easing = motion.easingStandard,
                 ),
             ),
             exit = slideOutHorizontally(
                 targetOffsetX = { fullWidth -> fullWidth },
                 animationSpec = tween(
-                    durationMillis = DRAWER_ANIMATION_DURATION_MILLIS,
-                    easing = FastOutSlowInEasing,
+                    durationMillis = animationDuration,
+                    easing = motion.easingStandard,
                 ),
             ),
             modifier = Modifier
@@ -96,5 +97,3 @@ internal fun resolveSideDrawerWidth(
     }
     return minOf(preferredWidth, availableWidth)
 }
-
-private const val DRAWER_ANIMATION_DURATION_MILLIS = 250

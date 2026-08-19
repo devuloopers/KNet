@@ -73,6 +73,25 @@ class JvmBodyDecoderTest {
         assertEquals(originalText, textResult.text)
     }
 
+    @Test
+    fun `gzip expansion stops at the explicit decoded output limit`() {
+        val compressedBytes = compressGzip(ByteArray(32 * 1024) { 'a'.code.toByte() })
+
+        val result = BodyDecoder.decode(
+            body = compressedBytes,
+            headers = listOf("Content-Encoding" to "gzip"),
+            maximumOutputBytes = 1_024,
+        )
+
+        assertEquals(
+            DecodedBodyResult.OutputLimitExceeded(
+                encoding = "gzip",
+                maximumOutputBytes = 1_024,
+            ),
+            result,
+        )
+    }
+
     private fun compressGzip(input: ByteArray): ByteArray {
         val baos = ByteArrayOutputStream()
         GZIPOutputStream(baos).use { gzos ->

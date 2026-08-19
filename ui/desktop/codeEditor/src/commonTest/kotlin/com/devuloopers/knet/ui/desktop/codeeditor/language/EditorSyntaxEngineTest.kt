@@ -68,6 +68,136 @@ class EditorSyntaxEngineTest {
     }
 
     @Test
+    fun immediatePresentationRetokenizesEditedLineWithoutDroppingUnchangedTokens() {
+        val support = BuiltInEditorLanguages.registry.resolve(CodeLanguage.JAVASCRIPT)
+        val document = ChunkedEditorDocument("const first = 1;\nconst second = 2;\nconst third = 3;")
+        val before = EditorSyntaxEngine.tokenize(document.snapshot, support)
+        val change = document.apply(
+            EditorTextEdit(
+                EditorRange(EditorPosition(1, 15), EditorPosition(1, 16)),
+                "\"two\"",
+                EditorEditKind.Replacement
+            )
+        )
+
+        val presentation = requireNotNull(
+            EditorSyntaxEngine.projectForPresentation(
+                snapshot = document.snapshot,
+                support = support,
+                previous = before,
+                changes = listOf(change)
+            )
+        )
+
+        assertSame(document.snapshot, presentation.snapshot)
+        assertSame(before.tokenizedLine(0), presentation.tokenizedLine(0))
+        assertSame(before.tokenizedLine(2), presentation.tokenizedLine(2))
+        assertTrue(
+            presentation.tokensForLine(1).any { token ->
+                token.category == EditorTokenCategory.Standard.String
+            }
+        )
+    }
+
+    @Test
+    fun immediatePresentationKeepsSuffixAlignedAfterLineSplit() {
+        val support = BuiltInEditorLanguages.registry.resolve(CodeLanguage.JAVASCRIPT)
+        val document = ChunkedEditorDocument("const first = 1;\nconst second = 2;\nconst third = 3;")
+        val before = EditorSyntaxEngine.tokenize(document.snapshot, support)
+        val change = document.apply(
+            EditorTextEdit(
+                EditorRange.caret(EditorPosition(1, 6)),
+                "\n",
+                EditorEditKind.Structural
+            )
+        )
+
+        val presentation = requireNotNull(
+            EditorSyntaxEngine.projectForPresentation(
+                snapshot = document.snapshot,
+                support = support,
+                previous = before,
+                changes = listOf(change)
+            )
+        )
+
+        assertEquals(document.snapshot.lineCount, presentation.lineCount)
+        assertSame(before.tokenizedLine(2), presentation.tokenizedLine(3))
+    }
+
+    @Test
+    fun immediatePresentationDoesNotTokenizeAnOversizedChangedLineOnTheUiPath() {
+        val support = BuiltInEditorLanguages.registry.resolve(CodeLanguage.JAVASCRIPT)
+        val oversizedLine = "const value = \"${"x".repeat(40_000)}\";"
+        val document = ChunkedEditorDocument("$oversizedLine\nconst retained = true;")
+        val before = EditorSyntaxEngine.tokenize(document.snapshot, support)
+        val change = document.apply(
+            EditorTextEdit(
+                EditorRange(EditorPosition(0, 0), EditorPosition(0, 1)),
+                "l",
+                EditorEditKind.Replacement
+            )
+        )
+
+        val presentation = requireNotNull(
+            EditorSyntaxEngine.projectForPresentation(
+                snapshot = document.snapshot,
+                support = support,
+                previous = before,
+                changes = listOf(change)
+            )
+        )
+
+        assertTrue(presentation.tokensForLine(0).isEmpty())
+        assertSame(before.tokenizedLine(1), presentation.tokenizedLine(1))
+    }
+
+    @Test
+    fun immediatePresentationChainsAcrossRapidEditsBeforeBackgroundConvergence() {
+        val support = BuiltInEditorLanguages.registry.resolve(CodeLanguage.JAVASCRIPT)
+        val document = ChunkedEditorDocument("const value = 1;")
+        val completed = EditorSyntaxEngine.tokenize(document.snapshot, support)
+        val firstChange = document.apply(
+            EditorTextEdit(
+                EditorRange(EditorPosition(0, 14), EditorPosition(0, 15)),
+                "2",
+                EditorEditKind.Replacement
+            )
+        )
+        val firstPresentation = requireNotNull(
+            EditorSyntaxEngine.projectForPresentation(
+                snapshot = document.snapshot,
+                support = support,
+                previous = completed,
+                changes = listOf(firstChange)
+            )
+        )
+        val secondChange = document.apply(
+            EditorTextEdit(
+                EditorRange(EditorPosition(0, 14), EditorPosition(0, 15)),
+                "3",
+                EditorEditKind.Replacement
+            )
+        )
+
+        val secondPresentation = requireNotNull(
+            EditorSyntaxEngine.projectForPresentation(
+                snapshot = document.snapshot,
+                support = support,
+                previous = firstPresentation,
+                changes = listOf(secondChange)
+            )
+        )
+
+        assertSame(document.snapshot, secondPresentation.snapshot)
+        assertTrue(
+            secondPresentation.tokensForLine(0).any { token ->
+                token.category == EditorTokenCategory.Standard.Number
+            }
+        )
+    }
+
+    @Test
     fun jsonFoldingIgnoresBracesInsideStrings() {
         val support = BuiltInEditorLanguages.registry.resolve(CodeLanguage.JSON)
         val snapshot = ChunkedEditorDocument(

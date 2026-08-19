@@ -42,6 +42,19 @@ import com.devuloopers.knet.ui.desktop.traffic.model.TrafficColumn
 import com.devuloopers.knet.ui.core.components.menu.ContextMenuItem
 import com.devuloopers.knet.ui.core.components.menu.KNetContextMenuArea
 
+private object TrafficTableMetrics {
+    val rowHeight = 34.dp
+    val serialWidth = 48.dp
+    val timestampWidth = 130.dp
+    val methodWidth = 76.dp
+    val hostWidth = 180.dp
+    val statusWidth = 84.dp
+    val sizeWidth = 76.dp
+    val durationWidth = 76.dp
+    val typeWidth = 64.dp
+    val footerHeight = 48.dp
+}
+
 /**
  * High-density virtualized traffic feed table using standardized :ui:core table primitives and tokens.
  */
@@ -51,7 +64,7 @@ fun TrafficTable(
     selectedId: String?,
     autoScroll: Boolean,
     onSelectTransaction: (String) -> Unit,
-    formattedTotalSize: String,
+    formattedVisibleSize: String,
     modifier: Modifier = Modifier,
     columnVisibility: ColumnVisibilityState = ColumnVisibilityState(),
     onSendToApiStudio: (String) -> Unit = {},
@@ -165,7 +178,7 @@ fun TrafficTable(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp)
+                .height(TrafficTableMetrics.footerHeight)
                 .background(themeColors.background)
                 .border(width = 1.dp, color = themeColors.border)
                 .padding(horizontal = 16.dp),
@@ -184,7 +197,7 @@ fun TrafficTable(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = formattedTotalSize,
+                    text = formattedVisibleSize,
                     style = typography.caption.copy(color = themeColors.textSecondary),
                     maxLines = 1,
                     softWrap = false
@@ -201,16 +214,16 @@ private fun TableHeaderRow(columnVisibility: ColumnVisibilityState) {
 
     KNetTableHeader(
         modifier = Modifier
-            .height(34.dp)
+            .height(TrafficTableMetrics.rowHeight)
             .border(width = 1.dp, color = themeColors.border)
     ) {
         if (columnVisibility.isVisible(TrafficColumn.SERIAL_NUMBER)) {
-            KNetCell(text = "#", modifier = Modifier.width(48.dp), color = themeColors.textMuted)
+            KNetCell(text = "#", modifier = Modifier.width(TrafficTableMetrics.serialWidth), color = themeColors.textMuted)
         }
         if (columnVisibility.isVisible(TrafficColumn.TIMESTAMP)) {
-            KNetCell(text = "Timestamp", modifier = Modifier.width(130.dp), color = themeColors.textMuted)
+            KNetCell(text = "Timestamp", modifier = Modifier.width(TrafficTableMetrics.timestampWidth), color = themeColors.textMuted)
         }
-        Box(modifier = Modifier.width(76.dp), contentAlignment = Alignment.CenterStart) {
+        Box(modifier = Modifier.width(TrafficTableMetrics.methodWidth), contentAlignment = Alignment.CenterStart) {
             Text(
                 text = "Method",
                 style = typography.codeSmall.copy(color = themeColors.textMuted, fontWeight = FontWeight.Bold),
@@ -218,7 +231,7 @@ private fun TableHeaderRow(columnVisibility: ColumnVisibilityState) {
                 softWrap = false
             )
         }
-        Box(modifier = Modifier.width(180.dp), contentAlignment = Alignment.CenterStart) {
+        Box(modifier = Modifier.width(TrafficTableMetrics.hostWidth), contentAlignment = Alignment.CenterStart) {
             Text(
                 text = "Host",
                 style = typography.codeSmall.copy(color = themeColors.textMuted, fontWeight = FontWeight.Bold),
@@ -235,7 +248,7 @@ private fun TableHeaderRow(columnVisibility: ColumnVisibilityState) {
             )
         }
         if (columnVisibility.isVisible(TrafficColumn.STATUS)) {
-            Box(modifier = Modifier.width(64.dp), contentAlignment = Alignment.CenterStart) {
+            Box(modifier = Modifier.width(TrafficTableMetrics.statusWidth), contentAlignment = Alignment.CenterStart) {
                 Text(
                     text = "Status",
                     style = typography.codeSmall.copy(color = themeColors.textMuted, fontWeight = FontWeight.Bold),
@@ -245,13 +258,13 @@ private fun TableHeaderRow(columnVisibility: ColumnVisibilityState) {
             }
         }
         if (columnVisibility.isVisible(TrafficColumn.SIZE)) {
-            KNetCell(text = "Size", modifier = Modifier.width(76.dp), color = themeColors.textMuted)
+            KNetCell(text = "Size", modifier = Modifier.width(TrafficTableMetrics.sizeWidth), color = themeColors.textMuted)
         }
         if (columnVisibility.isVisible(TrafficColumn.DURATION)) {
-            KNetCell(text = "Duration", modifier = Modifier.width(76.dp), color = themeColors.textMuted)
+            KNetCell(text = "Duration", modifier = Modifier.width(TrafficTableMetrics.durationWidth), color = themeColors.textMuted)
         }
         if (columnVisibility.isVisible(TrafficColumn.TYPE)) {
-            KNetCell(text = "Type", modifier = Modifier.width(64.dp), color = themeColors.textMuted)
+            KNetCell(text = "Type", modifier = Modifier.width(TrafficTableMetrics.typeWidth), color = themeColors.textMuted)
         }
     }
 }
@@ -296,12 +309,7 @@ private fun TableRowItem(
         else -> themeColors.textSecondary
     }
 
-    val contentTypeHeader = item.responseHeaders["Content-Type"]
-        ?: item.requestHeaders["Content-Type"]
-        ?: item.responseHeaders.entries.firstOrNull { it.key.equals("Content-Type", ignoreCase = true) }?.value
-        ?: item.requestHeaders.entries.firstOrNull { it.key.equals("Content-Type", ignoreCase = true) }?.value
-
-    val inferredType = when (val category = MediaTypeInspector.inspectCategory(contentTypeHeader)) {
+    val inferredType = when (val category = MediaTypeInspector.inspectCategory(item.contentType)) {
             BinaryCategory.OHTTP -> "OHTTP"
             BinaryCategory.PROTOBUF -> "Proto"
             BinaryCategory.CBOR -> "CBOR"
@@ -313,12 +321,12 @@ private fun TableRowItem(
             BinaryCategory.VIDEO -> "Video"
             BinaryCategory.FONT -> "Font"
             else -> when {
-                contentTypeHeader?.contains("json", ignoreCase = true) == true -> "JSON"
-                contentTypeHeader?.contains("html", ignoreCase = true) == true -> "HTML"
-                contentTypeHeader?.contains("xml", ignoreCase = true) == true -> "XML"
-                contentTypeHeader?.contains("css", ignoreCase = true) == true -> "CSS"
-                contentTypeHeader?.contains("javascript", ignoreCase = true) == true || contentTypeHeader?.contains("js", ignoreCase = true) == true -> "JS"
-                item.method == "WS" || item.protocol == "WS" -> "WS"
+                item.contentType?.contains("json", ignoreCase = true) == true -> "JSON"
+                item.contentType?.contains("html", ignoreCase = true) == true -> "HTML"
+                item.contentType?.contains("xml", ignoreCase = true) == true -> "XML"
+                item.contentType?.contains("css", ignoreCase = true) == true -> "CSS"
+                item.contentType?.contains("javascript", ignoreCase = true) == true ||
+                    item.contentType?.contains("js", ignoreCase = true) == true -> "JS"
                 else -> "Other"
             }
     }
@@ -335,7 +343,7 @@ private fun TableRowItem(
         onClick = onClick,
         selected = isSelected,
         modifier = Modifier
-            .height(34.dp)
+            .height(TrafficTableMetrics.rowHeight)
             .then(rowBackgroundModifier)
             .then(
                 if (isSelected) Modifier.border(width = 2.dp, color = themeColors.accent) else Modifier
@@ -345,7 +353,7 @@ private fun TableRowItem(
         if (columnVisibility.isVisible(TrafficColumn.SERIAL_NUMBER)) {
             KNetCell(
                 text = "${item.sequenceNumber}",
-                modifier = Modifier.width(48.dp),
+                modifier = Modifier.width(TrafficTableMetrics.serialWidth),
                 color = themeColors.textMuted
             )
         }
@@ -355,13 +363,13 @@ private fun TableRowItem(
             val formatted = formatTimestamp(item.timestamp, item.formattedTimestamp, item.dateGroup, todayDate)
             KNetCell(
                 text = formatted,
-                modifier = Modifier.width(130.dp),
+                modifier = Modifier.width(TrafficTableMetrics.timestampWidth),
                 color = themeColors.textSecondary
             )
         }
 
         // Method (Mandatory)
-        Box(modifier = Modifier.width(76.dp), contentAlignment = Alignment.CenterStart) {
+        Box(modifier = Modifier.width(TrafficTableMetrics.methodWidth), contentAlignment = Alignment.CenterStart) {
             Text(
                 text = displayMethod,
                 style = typography.codeSmall.copy(color = methodColor, fontWeight = FontWeight.Bold),
@@ -371,7 +379,7 @@ private fun TableRowItem(
         }
 
         // Host (Mandatory)
-        Box(modifier = Modifier.width(180.dp), contentAlignment = Alignment.CenterStart) {
+        Box(modifier = Modifier.width(TrafficTableMetrics.hostWidth), contentAlignment = Alignment.CenterStart) {
             Text(
                 text = item.host,
                 style = typography.codeSmall.copy(color = themeColors.textPrimary),
@@ -394,7 +402,7 @@ private fun TableRowItem(
 
         // Status
         if (columnVisibility.isVisible(TrafficColumn.STATUS)) {
-            Box(modifier = Modifier.width(84.dp), contentAlignment = Alignment.CenterStart) {
+            Box(modifier = Modifier.width(TrafficTableMetrics.statusWidth), contentAlignment = Alignment.CenterStart) {
                 Text(
                     text = when {
                         item.status > 0 -> "${item.status}"
@@ -415,7 +423,7 @@ private fun TableRowItem(
         if (columnVisibility.isVisible(TrafficColumn.SIZE)) {
             KNetCell(
                 text = item.formattedSize,
-                modifier = Modifier.width(76.dp),
+                modifier = Modifier.width(TrafficTableMetrics.sizeWidth),
                 color = themeColors.textPrimary
             )
         }
@@ -424,7 +432,7 @@ private fun TableRowItem(
         if (columnVisibility.isVisible(TrafficColumn.DURATION)) {
             KNetCell(
                 text = item.formattedTime,
-                modifier = Modifier.width(76.dp),
+                modifier = Modifier.width(TrafficTableMetrics.durationWidth),
                 color = themeColors.textPrimary
             )
         }
@@ -433,7 +441,7 @@ private fun TableRowItem(
         if (columnVisibility.isVisible(TrafficColumn.TYPE)) {
             KNetCell(
                 text = inferredType,
-                modifier = Modifier.width(64.dp),
+                modifier = Modifier.width(TrafficTableMetrics.typeWidth),
                 color = themeColors.textMuted
             )
         }
@@ -453,7 +461,7 @@ private fun formatTimestamp(
         } else {
             KNetDateTime.timeAndDayMonth(epochMillis)
         }
-    } catch (_: Throwable) {
+    } catch (_: Exception) {
         fallbackFormatted.ifEmpty { fallbackGroup }
     }
 }

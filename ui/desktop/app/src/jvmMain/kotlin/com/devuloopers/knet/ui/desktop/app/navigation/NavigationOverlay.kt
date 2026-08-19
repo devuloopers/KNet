@@ -17,12 +17,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Devices
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.PauseCircle
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.WifiTethering
 import androidx.compose.material3.HorizontalDivider
@@ -47,11 +45,29 @@ import com.devuloopers.knet.ui.core.foundation.elevation.KNetLayers
 import com.devuloopers.knet.ui.core.foundation.resources.kNetLogoPainter
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
+/** Primary traffic inspection and request-authoring destinations shown above the first divider. */
+internal val primaryNavigationItems = listOf(
+    NavigationDestinationInfo(DesktopDestination.Traffic, "Traffic", Icons.Default.WifiTethering),
+    NavigationDestinationInfo(DesktopDestination.ApiStudio, "API Studio", Icons.Default.Navigation),
+    NavigationDestinationInfo(DesktopDestination.Breakpoints, "Intercepts", Icons.Default.PauseCircle)
+)
+
+/** Connection and trust destinations shown directly below the first divider. */
+internal val setupNavigationItems = listOf(
+    NavigationDestinationInfo(DesktopDestination.ConnectDevice, "Connect Device", Icons.Default.Devices),
+    NavigationDestinationInfo(DesktopDestination.Certificate, "Certificates", Icons.Default.Lock)
+)
+
+/** Utility destinations anchored above the passive branding footer. */
+internal val utilityNavigationItems = listOf(
+    NavigationDestinationInfo(DesktopDestination.Settings, "Settings", Icons.Default.Settings)
+)
+
 /**
  * Independent Floating Overlay Panel composable rendered in [KNetLayers.Navigation] layer (z = 100).
  *
- * Primary navigation starts immediately at the top (Traffic, API Studio, Inspector),
- * while KNet branding is relocated to a passive footer at the bottom below Settings.
+ * Primary navigation starts immediately at the top. Connection setup and certificate management are grouped
+ * after the first divider, while KNet branding remains in a passive footer below Settings.
  *
  * @param navigationState Single source of truth navigation interaction state.
  * @param presentation Animated presentation values (width, alpha, offset).
@@ -69,21 +85,6 @@ fun NavigationOverlay(
     modifier: Modifier = Modifier
 ) {
     val themeColors = KNetTheme.colors
-
-    val topSection = listOf(
-        NavigationDestinationInfo(DesktopDestination.Traffic, "Traffic", Icons.Default.WifiTethering),
-        NavigationDestinationInfo(DesktopDestination.ConnectDevice, "Connect Device", Icons.Default.Devices),
-        NavigationDestinationInfo(DesktopDestination.ApiStudio, "API Studio", Icons.Default.Navigation),
-        NavigationDestinationInfo(DesktopDestination.Breakpoints, "Intercepts", Icons.Default.PauseCircle)
-    )
-
-    val middleSection = listOf(
-        NavigationDestinationInfo(DesktopDestination.Certificate, "Certificates", Icons.Default.Lock)
-    )
-
-    val bottomSection = listOf(
-        NavigationDestinationInfo(DesktopDestination.Settings, "Settings", Icons.Default.Settings)
-    )
 
     Column(
         modifier = modifier
@@ -108,8 +109,8 @@ fun NavigationOverlay(
             .padding(vertical = 8.dp),
         horizontalAlignment = Alignment.Start
     ) {
-        // Top Section (Traffic, API Studio)
-        topSection.forEach { info ->
+        // Primary inspection and authoring destinations.
+        primaryNavigationItems.forEach { info ->
             NavigationRailRowItem(
                 info = info,
                 isSelected = currentDestination == info.destination,
@@ -129,8 +130,8 @@ fun NavigationOverlay(
             color = themeColors.border
         )
 
-        // Middle Section (Certificates, Scripting)
-        middleSection.forEach { info ->
+        // Connection setup precedes certificate management in the setup/security group.
+        setupNavigationItems.forEach { info ->
             NavigationRailRowItem(
                 info = info,
                 isSelected = currentDestination == info.destination,
@@ -147,7 +148,7 @@ fun NavigationOverlay(
         Spacer(modifier = Modifier.weight(1f))
 
         // Bottom Section (Settings)
-        bottomSection.forEach { info ->
+        utilityNavigationItems.forEach { info ->
             NavigationRailRowItem(
                 info = info,
                 isSelected = currentDestination == info.destination,

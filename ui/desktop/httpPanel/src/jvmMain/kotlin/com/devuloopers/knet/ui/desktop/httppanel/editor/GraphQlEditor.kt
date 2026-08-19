@@ -62,7 +62,11 @@ fun GraphQlEditor(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             // Sub-Tab Chips using reusable KNetTabRow & KNetTab
-            KNetTabRow {
+            KNetTabRow(
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(end = spacing.sm)
+            ) {
                 GraphQlSubTab.entries.forEach { subTab ->
                     KNetTab(
                         title = subTab.label,

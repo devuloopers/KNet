@@ -130,47 +130,65 @@ interface CanonicalCaptureDao {
     @Query("SELECT COUNT(*) + COALESCE(MAX(version), 0) FROM traffic_exchanges WHERE sessionId = :sessionId")
     fun observeExchangeChangeScalar(sessionId: String): Flow<Long>
 
-    /** Loads one database-filtered newest-first keyset page. */
+    /** Loads one database-filtered newest-first keyset page across one or every retained session. */
     @Query(
-        "SELECT * FROM traffic_exchanges WHERE sessionId = :sessionId " +
+        "SELECT * FROM traffic_exchanges WHERE (:sessionId IS NULL OR sessionId = :sessionId) " +
             "AND (:cursorTimestamp IS NULL OR startedAtEpochMillis < :cursorTimestamp " +
             "OR (startedAtEpochMillis = :cursorTimestamp AND id < :cursorId)) " +
-            "AND (:hostPattern IS NULL OR host LIKE :hostPattern ESCAPE '\\') " +
+            "AND (:searchPattern IS NULL OR host LIKE :searchPattern ESCAPE '\\' " +
+            "OR pathAndQuery LIKE :searchPattern ESCAPE '\\' " +
+            "OR method LIKE :searchPattern ESCAPE '\\' " +
+            "OR CAST(responseStatusCode AS TEXT) LIKE :searchPattern ESCAPE '\\') " +
             "AND (:filterMethods = 0 OR method IN (:methods)) " +
             "AND (:filterStatuses = 0 OR responseStatusCode IN (:statuses)) " +
+            "AND (:filterSchemes = 0 OR scheme IN (:schemes)) " +
+            "AND (:filterProtocols = 0 OR COALESCE(responseProtocol, protocol) IN (:protocols)) " +
             "ORDER BY startedAtEpochMillis DESC, id DESC LIMIT :limit",
     )
     suspend fun getNewestExchangePage(
-        sessionId: String,
+        sessionId: String?,
         cursorTimestamp: Long?,
         cursorId: String?,
-        hostPattern: String?,
+        searchPattern: String?,
         filterMethods: Int,
         methods: List<String>,
         filterStatuses: Int,
         statuses: List<Int>,
+        filterSchemes: Int,
+        schemes: List<String>,
+        filterProtocols: Int,
+        protocols: List<String>,
         limit: Int,
     ): List<CanonicalExchangeEntity>
 
-    /** Loads one database-filtered oldest-first keyset page. */
+    /** Loads one database-filtered oldest-first keyset page across one or every retained session. */
     @Query(
-        "SELECT * FROM traffic_exchanges WHERE sessionId = :sessionId " +
+        "SELECT * FROM traffic_exchanges WHERE (:sessionId IS NULL OR sessionId = :sessionId) " +
             "AND (:cursorTimestamp IS NULL OR startedAtEpochMillis > :cursorTimestamp " +
             "OR (startedAtEpochMillis = :cursorTimestamp AND id > :cursorId)) " +
-            "AND (:hostPattern IS NULL OR host LIKE :hostPattern ESCAPE '\\') " +
+            "AND (:searchPattern IS NULL OR host LIKE :searchPattern ESCAPE '\\' " +
+            "OR pathAndQuery LIKE :searchPattern ESCAPE '\\' " +
+            "OR method LIKE :searchPattern ESCAPE '\\' " +
+            "OR CAST(responseStatusCode AS TEXT) LIKE :searchPattern ESCAPE '\\') " +
             "AND (:filterMethods = 0 OR method IN (:methods)) " +
             "AND (:filterStatuses = 0 OR responseStatusCode IN (:statuses)) " +
+            "AND (:filterSchemes = 0 OR scheme IN (:schemes)) " +
+            "AND (:filterProtocols = 0 OR COALESCE(responseProtocol, protocol) IN (:protocols)) " +
             "ORDER BY startedAtEpochMillis ASC, id ASC LIMIT :limit",
     )
     suspend fun getOldestExchangePage(
-        sessionId: String,
+        sessionId: String?,
         cursorTimestamp: Long?,
         cursorId: String?,
-        hostPattern: String?,
+        searchPattern: String?,
         filterMethods: Int,
         methods: List<String>,
         filterStatuses: Int,
         statuses: List<Int>,
+        filterSchemes: Int,
+        schemes: List<String>,
+        filterProtocols: Int,
+        protocols: List<String>,
         limit: Int,
     ): List<CanonicalExchangeEntity>
 

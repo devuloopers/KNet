@@ -18,6 +18,10 @@ internal class SelectionGestureHandler(
     private var dragAnchor by mutableStateOf<Pair<Int, Int>?>(null)
     private var hasDragged by mutableStateOf(false)
 
+    /** Whether a primary-pointer text selection gesture currently owns an anchor. */
+    val isGestureActive: Boolean
+        get() = dragAnchor != null
+
     /**
      * Processes a pointer press or drag update event at target coordinate [targetLineIndex], [targetColIndex].
      *

@@ -149,7 +149,7 @@ class CanonicalTrafficScaleBaselineTest {
         sessionId = sessionId,
         limit = PAGE_SIZE,
         direction = TrafficSortDirection.NEWEST_FIRST,
-        hostContains = "target.example",
+        searchContains = "target.example",
         methods = setOf(HttpMethod.fromToken("POST")),
         statuses = setOf(HttpStatus(201)),
     )

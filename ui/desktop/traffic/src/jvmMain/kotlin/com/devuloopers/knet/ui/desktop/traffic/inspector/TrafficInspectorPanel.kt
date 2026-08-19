@@ -16,15 +16,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
-import com.devuloopers.knet.traffic.model.http.HttpMethod
-import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
-import com.devuloopers.knet.traffic.model.http.HeaderField
-import com.devuloopers.knet.traffic.model.http.HeaderName
-import com.devuloopers.knet.traffic.model.http.HttpStatus
-import com.devuloopers.knet.traffic.model.http.ResponseHead
+import com.devuloopers.knet.domain.util.UrlQueryStringParser
+import com.devuloopers.knet.traffic.model.absoluteUrl
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.components.tabs.KNetTab
-import com.devuloopers.knet.ui.core.components.tabs.ScrollableTabRow
+import com.devuloopers.knet.ui.core.components.tabs.KNetTabRow
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
@@ -46,12 +42,10 @@ fun TrafficInspectorPanel(
     activeTab: InspectorTab,
     activeRequestSubTab: InspectorSubTab = InspectorSubTab.BODY,
     activeResponseSubTab: InspectorSubTab = InspectorSubTab.BODY,
-    previewMode: PreviewFormatMode,
     preparedState: InspectorPreparedState = InspectorPreparedState(),
     onTabSelected: (InspectorTab) -> Unit,
     onRequestSubTabSelected: (InspectorSubTab) -> Unit = {},
     onResponseSubTabSelected: (InspectorSubTab) -> Unit = {},
-    onPreviewModeSelected: (PreviewFormatMode) -> Unit,
     onSendToApiStudio: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -64,7 +58,7 @@ fun TrafficInspectorPanel(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             // Top Inspector Navigation Header
-            ScrollableTabRow(
+            KNetTabRow(
                 modifier = Modifier
                     .fillMaxWidth()
                     .border(width = 1.dp, color = themeColors.border)
@@ -103,22 +97,29 @@ fun TrafficInspectorPanel(
                     )
                 }
             } else {
+                val selectedPreparedState = preparedState.forSelection(selectedTransaction.transactionId)
+                    ?: InspectorPreparedState.loading(selectedTransaction.transactionId)
+                val exchange = selectedPreparedState.exchange
                 when (activeTab) {
                     InspectorTab.OVERVIEW -> {
-                        val overviewSpec = remember(selectedTransaction) {
-                            val targetUrl =
-                                selectedTransaction.fullUrl
-                            val contentType =
-                                selectedTransaction.responseHeaders.map { it.key to it.value }
-                                    .find { it.first.equals("Content-Type", ignoreCase = true) }?.second ?: ""
+                        val overviewSpec = remember(selectedTransaction, exchange) {
+                            val targetUrl = exchange?.request?.absoluteUrl()
+                                ?.takeIf { url -> "://" in url }
+                                ?: selectedTransaction.fullUrl
+                            val contentType = exchange?.response?.head?.headers
+                                ?.firstOrNull { header ->
+                                    header.name.value.equals("Content-Type", ignoreCase = true)
+                                }
+                                ?.value
+                                .orEmpty()
                             NetworkOverviewSpec(
                                 method = selectedTransaction.method,
                                 url = targetUrl,
                                 statusCode = selectedTransaction.status,
                                 statusText = selectedTransaction.statusText,
-                                protocol = selectedTransaction.protocol,
-                                remoteIp = if (selectedTransaction.host.isNotBlank()) "${selectedTransaction.host}:443" else "",
-                                timestamp = selectedTransaction.dateGroup.ifEmpty { selectedTransaction.timestamp.toString() },
+                                protocol = selectedTransaction.protocol.token,
+                                remoteIp = "",
+                                timestamp = selectedTransaction.formattedTimestamp,
                                 durationMs = selectedTransaction.formattedTime,
                                 sizeBytes = selectedTransaction.formattedSize,
                                 contentType = contentType
@@ -129,9 +130,9 @@ fun TrafficInspectorPanel(
                                 spec = overviewSpec,
                                 modifier = Modifier.weight(1f).fillMaxWidth()
                             )
-                            if (preparedState.annotations.isNotEmpty()) {
+                            if (selectedPreparedState.annotations.isNotEmpty()) {
                                 SemanticAnnotationsPanel(
-                                    annotations = preparedState.annotations,
+                                    annotations = selectedPreparedState.annotations,
                                     modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp),
                                 )
                             }
@@ -139,27 +140,29 @@ fun TrafficInspectorPanel(
                     }
 
                     InspectorTab.REQUEST -> {
-                        val requestSpec = remember(selectedTransaction, preparedState) {
-                            val reqBody =
-                                preparedState.requestBodyText
-                            val headerPairs = selectedTransaction.requestHeaders.map { it.key to it.value }
-                            val queryParamsList = selectedTransaction.queryParams.map { it.key to it.value }
-                            val targetUrl =
-                                selectedTransaction.fullUrl
+                        val requestSpec = remember(selectedTransaction, selectedPreparedState) {
+                            val canonicalRequest = selectedPreparedState.exchange?.request
+                            val targetUrl = canonicalRequest?.absoluteUrl()
+                                ?.takeIf { url -> "://" in url }
+                                ?: selectedTransaction.fullUrl
+                            val headerPairs = canonicalRequest?.head?.headers.orEmpty().map { header ->
+                                header.name.value to header.value
+                            }
 
                             NetworkRequestSpec(
-                                method = HttpMethod.fromToken(selectedTransaction.method),
+                                method = canonicalRequest?.head?.method
+                                    ?: com.devuloopers.knet.traffic.model.http.HttpMethod.fromToken(selectedTransaction.method),
                                 url = targetUrl,
                                 headers = headerPairs,
-                                queryParams = queryParamsList,
-                                bodyPayload = reqBody,
+                                queryParams = UrlQueryStringParser.parseQueryParams(targetUrl),
+                                bodyPayload = selectedPreparedState.requestBodyText,
                                 timestamp = selectedTransaction.timestamp
                             )
                         }
                         RequestViewPanel(
                             spec = requestSpec,
-                            payloadSpec = preparedState.requestPayloadSpec.takeIf { !it.isEmpty },
-                            isPreparing = preparedState.isPreparing,
+                            payloadSpec = selectedPreparedState.requestPayloadSpec.takeIf { !it.isEmpty },
+                            isPreparing = selectedPreparedState.isPreparing,
                             activeSubTab = activeRequestSubTab,
                             onSubTabSelected = onRequestSubTabSelected,
                             onOpenInApiStudio = {
@@ -170,31 +173,14 @@ fun TrafficInspectorPanel(
                     }
 
                     InspectorTab.RESPONSE -> {
-                        val responseHead = remember(selectedTransaction) {
-                            selectedTransaction.status
-                                .takeIf { it in 100..999 }
-                                ?.let { statusCode ->
-                                    ResponseHead(
-                                        protocol = ApplicationProtocol.fromToken(
-                                            selectedTransaction.protocol.ifBlank { "HTTP/1.1" }
-                                        ),
-                                        status = HttpStatus(statusCode),
-                                        reasonPhrase = selectedTransaction.statusText.takeIf(String::isNotBlank),
-                                        headers = selectedTransaction.responseHeaders.mapNotNull { (name, value) ->
-                                            name.takeIf(String::isNotBlank)?.let {
-                                                HeaderField(HeaderName(it), value)
-                                            }
-                                        }
-                                    )
-                                }
-                        }
+                        val responseHead = selectedPreparedState.exchange?.response?.head
                         ResponseViewPanel(
                             head = responseHead,
                             timings = selectedTransaction.timings,
                             responseSizeBytes = selectedTransaction.responseBytes,
-                            payloadSpec = preparedState.responsePayloadSpec.takeIf { !it.isEmpty }
+                            payloadSpec = selectedPreparedState.responsePayloadSpec.takeIf { !it.isEmpty }
                                 ?: com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec.EMPTY,
-                            isPreparing = preparedState.isPreparing,
+                            isPreparing = selectedPreparedState.isPreparing,
                             activeSubTab = activeResponseSubTab,
                             onSubTabSelected = onResponseSubTabSelected,
                             modifier = Modifier.fillMaxSize()

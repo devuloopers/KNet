@@ -11,10 +11,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,8 +26,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.pointer.PointerButton
 import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.platform.ClipEntry
-import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -35,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 
 /**
  * Data class representing a single action item inside a [KNetContextMenuArea].
@@ -45,6 +45,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * @param enabled True if item is interactive.
  * @param onClick Action callback executed when clicked.
  */
+@Immutable
 data class ContextMenuItem(
     val label: String,
     val icon: ImageVector? = null,
@@ -75,6 +76,8 @@ fun KNetContextMenuArea(
     
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
+    val shapes = KNetTheme.shapes
+    val elevation = KNetTheme.elevation
 
     Box(
         modifier = modifier.pointerInput(items) {
@@ -103,9 +106,9 @@ fun KNetContextMenuArea(
             ) {
                 Box(
                     modifier = Modifier
-                        .shadow(8.dp, RoundedCornerShape(8.dp))
-                        .background(themeColors.surfaceVariant, RoundedCornerShape(8.dp))
-                        .border(1.dp, themeColors.border, RoundedCornerShape(8.dp))
+                        .shadow(elevation.level3, shapes.medium)
+                        .background(themeColors.surfaceVariant, shapes.medium)
+                        .border(1.dp, themeColors.border, shapes.medium)
                         .widthIn(min = 120.dp, max = 220.dp)
                         .padding(vertical = 4.dp)
                 ) {
@@ -114,10 +117,11 @@ fun KNetContextMenuArea(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable(enabled = item.enabled) {
+                                    .clickable(enabled = item.enabled, role = Role.Button) {
                                         expanded = false
                                         item.onClick()
                                     }
+                                    .handCursor(item.enabled)
                                     .padding(horizontal = 12.dp, vertical = 7.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.SpaceBetween
@@ -129,7 +133,7 @@ fun KNetContextMenuArea(
                                     if (item.icon != null) {
                                         Icon(
                                             imageVector = item.icon,
-                                            contentDescription = item.label,
+                                            contentDescription = null,
                                             tint = if (item.enabled) themeColors.accent else themeColors.textMuted,
                                             modifier = Modifier.size(14.dp)
                                         )
@@ -157,5 +161,3 @@ fun KNetContextMenuArea(
         }
     }
 }
-
-

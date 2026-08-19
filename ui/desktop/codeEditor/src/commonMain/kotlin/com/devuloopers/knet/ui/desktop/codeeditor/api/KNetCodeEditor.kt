@@ -76,7 +76,10 @@ fun KNetCodeEditor(
     val languageSupport = remember(registry, configuration.language) {
         registry.resolve(configuration.language)
     }
-    var tokenizedDocument by remember(state, languageSupport.language.id) {
+    var completedTokenizedDocument by remember(state, languageSupport.language.id) {
+        mutableStateOf<EditorTokenizedDocument?>(null)
+    }
+    var presentedTokenizedDocument by remember(state, languageSupport.language.id) {
         mutableStateOf<EditorTokenizedDocument?>(null)
     }
     var foldRegions by remember(state, languageSupport.language.id) { mutableStateOf<List<FoldRegion>>(emptyList()) }
@@ -84,12 +87,12 @@ fun KNetCodeEditor(
     val currentActions by rememberUpdatedState(actions)
 
     LaunchedEffect(snapshot.version, languageSupport) {
-        val previous = tokenizedDocument
+        val previous = completedTokenizedDocument
         val changes = state.latestEvent
             ?.takeIf { it.snapshot.version == snapshot.version }
             ?.documentChanges
             .orEmpty()
-        tokenizedDocument = withContext(Dispatchers.Default) {
+        val completed = withContext(Dispatchers.Default) {
             val workerContext = currentCoroutineContext()
             EditorSyntaxEngine.tokenize(
                 snapshot = snapshot,
@@ -98,6 +101,10 @@ fun KNetCodeEditor(
                 changes = changes,
                 checkpoint = EditorCancellationCheckpoint { workerContext.ensureActive() }
             )
+        }
+        if (state.snapshot.version == completed.snapshot.version) {
+            completedTokenizedDocument = completed
+            presentedTokenizedDocument = completed
         }
     }
 
@@ -142,11 +149,19 @@ fun KNetCodeEditor(
         )
     }
 
-    DisposableEffect(state.session) {
+    DisposableEffect(state.session, languageSupport) {
         val subscription = state.session.subscribe { event ->
             val changesDocument = event.documentChanges.isNotEmpty() ||
                 event.origin == EditorChangeOrigin.Undo ||
                 event.origin == EditorChangeOrigin.Redo
+            if (event.documentChanges.isNotEmpty()) {
+                presentedTokenizedDocument = EditorSyntaxEngine.projectForPresentation(
+                    snapshot = event.snapshot,
+                    support = languageSupport,
+                    previous = presentedTokenizedDocument ?: completedTokenizedDocument,
+                    changes = event.documentChanges
+                )
+            }
             if (event.origin != EditorChangeOrigin.External && changesDocument) {
                 currentActions.onDocumentChange(event)
                 currentActions.onTextChange?.invoke(event.snapshot.text())
@@ -187,7 +202,7 @@ fun KNetCodeEditor(
                 } else {
                     LazyCodeBodyMode.ReadOnly
                 },
-                tokenizedDocument = tokenizedDocument,
+                tokenizedDocument = presentedTokenizedDocument,
                 searchResult = state.searchResult,
                 activeSearchMatch = state.activeSearchMatch?.range,
                 semanticColors = style.semanticColors,

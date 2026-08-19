@@ -29,6 +29,7 @@ internal fun Modifier.editorPointerInput(
     lineHeightPx: Float,
     charWidthPx: Float,
     autoScrollThresholdPx: Float,
+    hasHorizontalScrollbar: Boolean,
     lazyListState: LazyListState,
     lineTextLayoutMap: Map<Int, androidx.compose.ui.text.TextLayoutResult>,
     selectionGestureHandler: SelectionGestureHandler,
@@ -42,7 +43,8 @@ internal fun Modifier.editorPointerInput(
     visualLineMap,
     containerHeightPx,
     containerWidthPx,
-    gutterWidthPx
+    gutterWidthPx,
+    hasHorizontalScrollbar
 ) {
     val scrollbarWidthPx = CodeEditorTokens.ScrollbarHitZoneWidth.toPx()
     val dragOwnership = EditorPointerDragOwnership()
@@ -55,11 +57,14 @@ internal fun Modifier.editorPointerInput(
 
             if (event.changes.isNotEmpty()) {
                 val position = event.changes.first().position
-                val isOverVerticalScrollbar = containerWidthPx > 0f &&
-                    position.x >= (containerWidthPx - scrollbarWidthPx)
-                val isOverHorizontalScrollbar = containerHeightPx > 0f &&
-                    position.y >= (containerHeightPx - scrollbarWidthPx)
-                val isOverScrollbarZone = isOverVerticalScrollbar || isOverHorizontalScrollbar
+                val isOverScrollbarZone = isPointerOverEditorScrollbar(
+                    pointerX = position.x,
+                    pointerY = position.y,
+                    containerWidth = containerWidthPx,
+                    containerHeight = containerHeightPx,
+                    scrollbarHitZoneWidth = scrollbarWidthPx,
+                    hasHorizontalScrollbar = hasHorizontalScrollbar
+                )
                 val previousOwner = dragOwnership.owner
                 val dragOwner = dragOwnership.update(isPressed, isOverScrollbarZone)
                 val isInitialTextPress = dragOwner == EditorPointerDragOwner.Text &&

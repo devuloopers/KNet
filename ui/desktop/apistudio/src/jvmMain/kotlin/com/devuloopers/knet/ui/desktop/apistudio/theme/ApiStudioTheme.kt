@@ -1,7 +1,7 @@
 package com.devuloopers.knet.ui.desktop.apistudio.theme
 
 import androidx.compose.ui.graphics.Color
-import com.devuloopers.knet.ui.core.foundation.theme.HttpMethodColors
+import com.devuloopers.knet.ui.desktop.httppanel.theme.HttpMethodColors
 
 /**
  * Color tokens for HTTP method badges and syntax highlighting in API Studio.

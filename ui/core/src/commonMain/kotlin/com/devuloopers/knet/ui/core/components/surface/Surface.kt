@@ -12,11 +12,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
-import com.devuloopers.knet.ui.core.foundation.extensions.thenIf
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 /**
- * Lightweight surface container composable.
+ * Lightweight surface container with explicit content alignment.
  */
 @Composable
 fun KNetSurface(
@@ -25,15 +24,17 @@ fun KNetSurface(
     contentColor: Color = KNetTheme.colors.textPrimary,
     shape: Shape = KNetTheme.shapes.none,
     border: BorderStroke? = null,
+    contentAlignment: Alignment = Alignment.Center,
     content: @Composable () -> Unit
 ) {
+    val borderModifier = border?.let { Modifier.border(it, shape) } ?: Modifier
     CompositionLocalProvider(LocalContentColor provides contentColor) {
         Box(
             modifier = modifier
                 .clip(shape)
                 .background(color)
-                .thenIf(border != null) { border(border!!) },
-            contentAlignment = Alignment.Center
+                .then(borderModifier),
+            contentAlignment = contentAlignment
         ) {
             content()
         }

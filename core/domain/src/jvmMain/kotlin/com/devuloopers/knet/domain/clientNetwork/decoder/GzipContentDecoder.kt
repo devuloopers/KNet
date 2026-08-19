@@ -3,7 +3,6 @@ package com.devuloopers.knet.domain.clientNetwork.decoder
 import com.devuloopers.knet.traffic.model.body.ContentEncoding
 
 import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
 import java.util.zip.GZIPInputStream
 
 /**
@@ -12,12 +11,10 @@ import java.util.zip.GZIPInputStream
 class GzipContentDecoder : ContentDecoder {
     override val encoding: ContentEncoding = ContentEncoding.GZIP
 
-    override fun decompress(bytes: ByteArray): ByteArray {
-        ByteArrayInputStream(bytes).use { bais ->
-            GZIPInputStream(bais).use { gzis ->
-                val baos = ByteArrayOutputStream()
-                gzis.copyTo(baos)
-                return baos.toByteArray()
+    override fun decompress(bytes: ByteArray, maximumOutputBytes: Int): ByteArray {
+        ByteArrayInputStream(bytes).use { input ->
+            GZIPInputStream(input).use { decoded ->
+                return decoded.readBoundedBytes(maximumOutputBytes)
             }
         }
     }

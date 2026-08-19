@@ -4,8 +4,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 
-/** Uses Compose's portable hand cursor for clickable content. */
-fun Modifier.handCursor(): Modifier = pointerHoverIcon(PointerIcon.Hand)
+/** Uses Compose's portable hand cursor only while the target is [enabled]. */
+fun Modifier.handCursor(enabled: Boolean = true): Modifier =
+    if (enabled) pointerHoverIcon(PointerIcon.Hand) else this
 
 /** Uses Compose's portable text cursor for editable content. */
 fun Modifier.textCursor(): Modifier = pointerHoverIcon(PointerIcon.Text)

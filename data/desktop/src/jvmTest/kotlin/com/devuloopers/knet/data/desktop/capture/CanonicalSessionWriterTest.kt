@@ -124,7 +124,7 @@ class CanonicalSessionWriterTest {
                 TrafficPageQuery(
                     sessionId = SESSION_ID,
                     limit = 10,
-                    hostContains = "example.test",
+                    searchContains = "example.test",
                     methods = setOf(HttpMethod.fromToken("GET")),
                     statuses = setOf(HttpStatus(201)),
                 )

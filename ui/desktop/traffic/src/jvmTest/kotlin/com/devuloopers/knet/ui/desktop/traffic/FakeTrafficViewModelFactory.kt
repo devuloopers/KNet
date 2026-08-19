@@ -30,6 +30,7 @@ import com.devuloopers.knet.application.usecase.traffic.LoadTrafficExchangeDetai
 import com.devuloopers.knet.application.usecase.traffic.ObserveLatestTrafficSessionUseCase
 import com.devuloopers.knet.application.usecase.traffic.ObserveTrafficGenerationsUseCase
 import com.devuloopers.knet.application.usecase.traffic.PrepareTrafficRequestUseCase
+import com.devuloopers.knet.application.usecase.traffic.PrepareCapturedNetworkRequestUseCase
 import com.devuloopers.knet.application.usecase.traffic.QueryTrafficPageUseCase
 import com.devuloopers.knet.application.usecase.traffic.PauseTrafficCaptureUseCase
 import com.devuloopers.knet.application.usecase.traffic.ResumeTrafficCaptureUseCase
@@ -50,6 +51,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.Dispatchers
 import com.devuloopers.knet.traffic.id.BodyId
 import com.devuloopers.knet.traffic.id.CaptureSessionId
 import com.devuloopers.knet.traffic.id.ExchangeId
@@ -154,7 +156,9 @@ object FakeTrafficViewModelFactory {
             loadTrafficExchangeDetailsUseCase = LoadTrafficExchangeDetailsUseCase(fakeTrafficQueryPort),
             observeLocalIpUseCase = customObserveLocalIpUseCase ?: ObserveLocalIpUseCase(fakeNetworkRepo),
             getWorkspaceLayoutUseCase = GetWorkspaceLayoutUseCase(fakeWidgetRepo),
-            prepareTrafficRequestUseCase = PrepareTrafficRequestUseCase(fakeTrafficQueryPort),
+            prepareCapturedNetworkRequestUseCase = PrepareCapturedNetworkRequestUseCase(
+                PrepareTrafficRequestUseCase(fakeTrafficQueryPort),
+            ),
             observeInspectionAnnotationsUseCase = ObserveInspectionAnnotationsUseCase(
                 object : InspectionAnnotationPort {
                     override suspend fun put(sessionId: CaptureSessionId, annotation: InspectionAnnotation) = Unit
@@ -175,6 +179,7 @@ object FakeTrafficViewModelFactory {
                     override suspend fun clear(): Int = 0
                 },
             ),
+            backgroundDispatcher = Dispatchers.Main,
         )
     }
 }

@@ -57,6 +57,7 @@ fun ApiStudioScreen(
     modifier: Modifier = Modifier
 ) {
     val themeColors = KNetTheme.colors
+    var responseSplitRatio by remember { mutableStateOf(0.5f) }
 
     val uiState by (viewModel?.uiState ?: MutableStateFlow(ApiStudioState())).collectAsState()
     val collectionsState by (collectionsViewModel?.uiState ?: MutableStateFlow(CollectionsState())).collectAsState()
@@ -211,6 +212,8 @@ fun ApiStudioScreen(
             VerticalDivider(color = themeColors.border)
 
             HorizontalSplitPane(
+                splitRatio = responseSplitRatio,
+                onSplitRatioChange = { responseSplitRatio = it },
                 firstPane = { paneModifier ->
                     Column(
                         modifier = paneModifier
@@ -308,7 +311,7 @@ fun ApiStudioScreen(
                         modifier = paneModifier
                     )
                 },
-                initialSplitRatio = 0.5f
+                modifier = Modifier.fillMaxSize()
             )
         }
 

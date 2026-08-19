@@ -18,12 +18,15 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
@@ -32,7 +35,6 @@ import com.devuloopers.knet.ui.core.components.button.KNetIconButton
 import com.devuloopers.knet.ui.core.components.checkbox.KNetCheckbox
 import com.devuloopers.knet.ui.core.components.divider.HorizontalDivider
 import com.devuloopers.knet.ui.core.components.divider.VerticalDivider
-import com.devuloopers.knet.ui.core.components.input.KNetInputField
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
@@ -44,6 +46,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * @property value Associated string value.
  * @property enabled Whether entry is active in request context.
  */
+@Immutable
 data class KeyValueEntry(
     val id: String,
     val key: String,
@@ -141,7 +144,7 @@ fun KNetKeyValueEditor(
             LazyColumn(
                 modifier = Modifier.fillMaxWidth().weight(1f, fill = false)
             ) {
-                itemsIndexed(entries) { index, entry ->
+                itemsIndexed(entries, key = { _, entry -> entry.id }) { index, entry ->
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Row(
                             modifier = Modifier
@@ -184,7 +187,9 @@ fun KNetKeyValueEditor(
                                     ),
                                     cursorBrush = SolidColor(themeColors.textPrimary),
                                     singleLine = true,
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .semantics { contentDescription = "$keyHeader row ${index + 1}" }
                                 )
                             }
                             VerticalDivider(color = themeColors.border.copy(alpha = 0.3f), modifier = Modifier.height(28.dp))
@@ -210,7 +215,9 @@ fun KNetKeyValueEditor(
                                     ),
                                     cursorBrush = SolidColor(themeColors.textPrimary),
                                     singleLine = true,
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .semantics { contentDescription = "$valueHeader row ${index + 1}" }
                                 )
                             }
                             VerticalDivider(color = themeColors.border.copy(alpha = 0.3f), modifier = Modifier.height(28.dp))
@@ -244,7 +251,7 @@ fun KNetKeyValueEditor(
             ) {
                 Icon(
                     imageVector = KNetIcons.Add,
-                    contentDescription = addLabel,
+                    contentDescription = null,
                     modifier = Modifier.size(14.dp),
                     tint = themeColors.textPrimary
                 )
@@ -262,6 +269,7 @@ fun KNetKeyValueEditor(
  * @param modifier Composable layout modifier.
  * @param keyHeader Column header label for the key column (default: "HEADER NAME").
  * @param valueHeader Column header label for the value column (default: "VALUE").
+ * @param emptyMessage Message shown when no entries exist.
  * @param allowMultiLine True to allow long values (like User-Agent or tokens) to wrap vertically across multiple lines.
  */
 @Composable
@@ -271,7 +279,7 @@ fun KNetReadOnlyKeyValueViewer(
     keyHeader: String = "HEADER NAME",
     valueHeader: String = "VALUE",
     emptyMessage: String = "No data available.",
-    allowMultiLine: Boolean = true
+    allowMultiLine: Boolean = false
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -316,7 +324,7 @@ fun KNetReadOnlyKeyValueViewer(
             LazyColumn(
                 modifier = Modifier.fillMaxWidth()
             ) {
-                itemsIndexed(entries) { index, entry ->
+                itemsIndexed(entries, key = { _, entry -> entry.id }) { index, entry ->
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()

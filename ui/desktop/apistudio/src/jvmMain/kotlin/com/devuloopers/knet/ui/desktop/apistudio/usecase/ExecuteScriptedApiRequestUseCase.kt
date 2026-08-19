@@ -75,7 +75,7 @@ class ExecuteScriptedApiRequestUseCase(
     ): ScriptedExecutionResult = withContext(ioDispatcher) {
         var effectiveUrl = editorState.url
         var headerMap = editorState.headers.sanitizeTransportHeaders().toMap()
-        var queryParamMap = editorState.queryParams.toMap()
+        var queryParameters = editorState.queryParams
         var effectiveBody = editorState.bodyPayload
 
         var environment = emptyMap<String, String>()
@@ -89,7 +89,7 @@ class ExecuteScriptedApiRequestUseCase(
                 url = effectiveUrl,
                 method = editorState.method,
                 headers = headerMap,
-                queryParameters = queryParamMap,
+                queryParameters = queryParameters.toMap(),
                 body = effectiveBody
             )
             val preScriptResult = scriptExecutionPort.execute(ScriptExecutionCommand(
@@ -104,7 +104,7 @@ class ExecuteScriptedApiRequestUseCase(
                     uiConsoleLogs.addAll(preScriptResult.logs)
                     effectiveUrl = preScriptResult.request.url
                     headerMap = preScriptResult.request.headers.toMap()
-                    queryParamMap = preScriptResult.request.queryParameters.toMap()
+                    queryParameters = preScriptResult.request.queryParameters.toList()
                     effectiveBody = preScriptResult.request.body
                     environment = preScriptResult.environment
                 }
@@ -142,7 +142,7 @@ class ExecuteScriptedApiRequestUseCase(
             url = effectiveUrl,
             method = httpMethod,
             headers = headerMap,
-            queryParams = queryParamMap,
+            queryParams = queryParameters,
             cookies = cookieMap,
             body = outboundBody,
             auth = authConfig,
@@ -153,7 +153,7 @@ class ExecuteScriptedApiRequestUseCase(
         if (proxyPort == null) {
             recordDirectExecution(
                 effectiveUrl = appendAuthQuery(
-                    appendQueryParameters(effectiveUrl, queryParamMap),
+                    appendQueryParameters(effectiveUrl, queryParameters),
                     authConfig,
                 ),
                 method = httpMethod,
@@ -179,7 +179,7 @@ class ExecuteScriptedApiRequestUseCase(
                 url = editorState.url,
                 method = editorState.method,
                 headers = headerMap,
-                queryParameters = queryParamMap,
+                queryParameters = queryParameters.toMap(),
                 body = editorState.bodyPayload
             )
             val scriptResp = ScriptResponse(
@@ -258,10 +258,12 @@ class ExecuteScriptedApiRequestUseCase(
     }
 
     /** Mirrors the current execution use case's query assembly so recorded target metadata is exact. */
-    private fun appendQueryParameters(url: String, queryParameters: Map<String, String>): String {
+    private fun appendQueryParameters(url: String, queryParameters: List<Pair<String, String>>): String {
         if (queryParameters.isEmpty()) return url
-        val query = queryParameters.entries.joinToString("&") { (name, value) -> "$name=$value" }
-        return if ('?' in url) "$url&$query" else "$url?$query"
+        return com.devuloopers.knet.domain.util.UrlQueryStringParser.rebuildUrlWithQueryParams(
+            baseUrl = url,
+            queryParams = queryParameters,
+        )
     }
 
     /** Mirrors request headers produced by the domain/client execution path. */

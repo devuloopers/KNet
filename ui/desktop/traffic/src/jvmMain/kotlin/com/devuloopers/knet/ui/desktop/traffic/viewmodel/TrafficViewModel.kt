@@ -1,5 +1,4 @@
-@file:OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
-
+@file:OptIn(ExperimentalCoroutinesApi::class)
 
 package com.devuloopers.knet.ui.desktop.traffic.viewmodel
 
@@ -8,9 +7,8 @@ import com.devuloopers.knet.application.usecase.traffic.LoadTrafficExchangeDetai
 import com.devuloopers.knet.application.usecase.traffic.ClearTrafficHistoryUseCase
 import com.devuloopers.knet.application.usecase.traffic.ObserveLatestTrafficSessionUseCase
 import com.devuloopers.knet.application.usecase.traffic.ObserveTrafficGenerationsUseCase
-import com.devuloopers.knet.application.usecase.traffic.PrepareTrafficRequestResult
-import com.devuloopers.knet.application.usecase.traffic.PrepareTrafficRequestUseCase
-import com.devuloopers.knet.application.usecase.traffic.PreparedTrafficRequest
+import com.devuloopers.knet.application.usecase.traffic.PrepareCapturedNetworkRequestResult
+import com.devuloopers.knet.application.usecase.traffic.PrepareCapturedNetworkRequestUseCase
 import com.devuloopers.knet.application.usecase.traffic.QueryTrafficPageUseCase
 import com.devuloopers.knet.application.usecase.traffic.TrafficBodyPreview
 import com.devuloopers.knet.application.usecase.traffic.PauseTrafficCaptureUseCase
@@ -30,9 +28,6 @@ import com.devuloopers.knet.core.logger.KNetLogger
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.domain.network.usecase.ObserveLocalIpUseCase
-import com.devuloopers.knet.domain.traffic.model.*
-import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
-import com.devuloopers.knet.domain.util.decodeBodyToText
 import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
 import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
 
@@ -46,10 +41,12 @@ import kotlin.uuid.Uuid
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.http.HttpMethod as CanonicalHttpMethod
 import com.devuloopers.knet.traffic.model.http.HttpStatus as CanonicalHttpStatus
-import com.devuloopers.knet.traffic.model.http.RequestTarget
+import com.devuloopers.knet.traffic.model.http.HttpScheme
+import com.devuloopers.knet.traffic.model.http.StandardHttpScheme
+import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
+import com.devuloopers.knet.traffic.model.http.StandardApplicationProtocol
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import java.io.ByteArrayOutputStream
 
 /**
  * ViewModel managing live traffic feed state, proxy engine lifecycle observation, filtering, and inspection selection.
@@ -68,10 +65,11 @@ class TrafficViewModel(
     private val loadTrafficExchangeDetailsUseCase: LoadTrafficExchangeDetailsUseCase,
     observeLocalIpUseCase: ObserveLocalIpUseCase,
     private val getWorkspaceLayoutUseCase: GetWorkspaceLayoutUseCase,
-    private val prepareTrafficRequestUseCase: PrepareTrafficRequestUseCase,
+    private val prepareCapturedNetworkRequestUseCase: PrepareCapturedNetworkRequestUseCase,
     private val observeInspectionAnnotationsUseCase: ObserveInspectionAnnotationsUseCase,
     observeRulesUseCase: ObserveRulesUseCase,
     observePendingBreakpointsUseCase: ObservePendingBreakpointsUseCase,
+    private val backgroundDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(createInitialState())
@@ -79,11 +77,10 @@ class TrafficViewModel(
     private val proxyRuntimeStates = observeProxyRuntimeStateUseCase.execute()
     private val trafficCaptureStates = observeTrafficCaptureStateUseCase.execute()
 
-    private val preparedStateCache = object : LinkedHashMap<String, InspectorPreparedState>(64, 0.75f, true) {
-        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, InspectorPreparedState>?): Boolean {
-            return size > 64
-        }
-    }
+    private val preparedStateCache = InspectorPreparedCache(
+        maximumEntries = MAX_PREPARED_INSPECTOR_ENTRIES,
+        maximumRetainedBytes = MAX_PREPARED_INSPECTOR_BYTES,
+    )
 
     private val captureControlIntent = MutableStateFlow(
         CaptureControlIntent(
@@ -92,6 +89,7 @@ class TrafficViewModel(
         ),
     )
     private val pageLoadMutex = Mutex()
+    private val clearPresentationMutex = Mutex()
     private var filterRefreshJob: Job? = null
     private var durableTransactions: List<TrafficRowUiState> = emptyList()
     private var pendingBreakpoints: List<PendingBreakpoint> = emptyList()
@@ -107,22 +105,23 @@ class TrafficViewModel(
      * maps it into the current API Studio contract.
      *
      * @param transactionId Unique UUID of the target transaction.
-     * @param onSpecReady Callback executed on main thread with the constructed [NetworkRequestSpec].
+     * @param onSpecReady Callback executed on main thread with the constructed request specification.
      */
     fun exportToStudioSpec(
         transactionId: String,
         onSpecReady: (com.devuloopers.knet.domain.network.model.NetworkRequestSpec) -> Unit
     ) {
-        viewModelScope.launch(Dispatchers.Default) {
-            val spec = when (val result = prepareTrafficRequestUseCase.execute(ExchangeId(transactionId))) {
-                is PrepareTrafficRequestResult.Found -> result.value.toNetworkRequestSpec()
-                PrepareTrafficRequestResult.Missing,
-                PrepareTrafficRequestResult.BodyUnavailable,
-                is PrepareTrafficRequestResult.BodyTooLarge -> null
+        viewModelScope.launch(backgroundDispatcher) {
+            val spec = when (val result = prepareCapturedNetworkRequestUseCase.execute(ExchangeId(transactionId))) {
+                is PrepareCapturedNetworkRequestResult.Found -> result.spec
+                PrepareCapturedNetworkRequestResult.Missing,
+                PrepareCapturedNetworkRequestResult.BodyUnavailable,
+                PrepareCapturedNetworkRequestResult.IncompleteTarget,
+                is PrepareCapturedNetworkRequestResult.BodyTooLarge -> null
             }
             if (spec != null) {
                 KNetLogger.info("TrafficViewModel") {
-                    "[EXPORT TO STUDIO] Successfully built spec for transactionId=$transactionId method=${spec.method} url=${spec.url}"
+                    "[EXPORT TO STUDIO] Successfully built spec for transactionId=$transactionId method=${spec.method}"
                 }
                 withContext(Dispatchers.Main) {
                     onSpecReady(spec)
@@ -136,14 +135,6 @@ class TrafficViewModel(
     }
 
     init {
-        // Auto-clear traffic feed on startup if configured in settings
-        viewModelScope.launch {
-            val settings = getWorkspaceLayoutUseCase.execute().firstOrNull()
-            if (settings?.autoClearTrafficOnStartup == true) {
-                clearTrafficHistoryUseCase.execute()
-            }
-        }
-
         // Reactively observe active breakpoint rules from domain UseCase
         observeRulesUseCase()
             .onEach { rules ->
@@ -202,33 +193,38 @@ class TrafficViewModel(
                         return@flatMapLatest flowOf(InspectorPreparedState())
                     }
                     val preparation = flow {
-                        val isPending = tx.status <= 0
-                        val cached = synchronized(preparedStateCache) { preparedStateCache[tx.transactionId] }
-                        if (cached != null && (isPending || cached.responseBodyText.isNotBlank())) {
+                        val cached = preparedStateCache[tx.transactionId]
+                        if (cached != null) {
                             emit(cached)
                             return@flow
                         }
 
-                        emit(
-                            InspectorPreparedState(
-                                transactionId = tx.transactionId,
-                                isPreparing = true
-                            )
-                        )
+                        emit(InspectorPreparedState.loading(tx.transactionId))
 
-                        val prepared = kotlinx.coroutines.withContext(Dispatchers.Default) {
+                        val pendingExchange = pendingBreakpoints
+                            .firstOrNull { event -> event.candidate.exchangeId.value == tx.transactionId }
+                            ?.toTrafficExchangeSnapshot()
+
+                        val prepared = withContext(backgroundDispatcher) {
                             val detailResult = loadTrafficExchangeDetailsUseCase.execute(
                                 ExchangeId(tx.transactionId),
                             )
                             val details = (detailResult as? LoadTrafficExchangeDetailsResult.Found)?.details
+                            val exchange = details?.exchange ?: pendingExchange
+                            if (exchange == null) {
+                                return@withContext InspectorPreparedState(
+                                    transactionId = tx.transactionId,
+                                    loadState = InspectorLoadState.MISSING,
+                                )
+                            }
                             val requestBody = (details?.requestBody as? TrafficBodyPreview.Available)
                                 ?.chunk
                             val responseBody = (details?.responseBody as? TrafficBodyPreview.Available)
                                 ?.chunk
-                            val requestHeaders = details?.exchange?.request?.head?.headers.orEmpty().map { header ->
+                            val requestHeaders = exchange.request.head.headers.map { header ->
                                 header.name.value to header.value
                             }
-                            val responseHeaders = details?.exchange?.response?.head?.headers.orEmpty().map { header ->
+                            val responseHeaders = exchange.response?.head?.headers.orEmpty().map { header ->
                                 header.name.value to header.value
                             }
 
@@ -242,22 +238,19 @@ class TrafficViewModel(
                                 responseHeaders,
                             )
 
-                            val state = InspectorPreparedState(
+                            InspectorPreparedState(
                                 transactionId = tx.transactionId,
+                                exchange = exchange,
                                 requestPayloadSpec = requestBodySpec,
                                 responsePayloadSpec = responseBodySpec,
                                 requestBodyTruncated = requestBody?.endOfBody == false,
                                 responseBodyTruncated = responseBody?.endOfBody == false,
-                                isPreparing = false
+                                loadState = InspectorLoadState.READY,
                             )
+                        }
 
-                            if (!isPending) {
-                                synchronized(preparedStateCache) {
-                                    preparedStateCache[tx.transactionId] = state
-                                }
-                            }
-
-                            state
+                        if (pendingExchange == null && tx.status > 0 && prepared.loadState == InspectorLoadState.READY) {
+                            preparedStateCache.put(prepared)
                         }
 
                         emit(prepared)
@@ -304,7 +297,14 @@ class TrafficViewModel(
                             is CaptureSessionState.Capturing -> CaptureState.CAPTURING
                             CaptureSessionState.Paused -> CaptureState.PAUSED
                             is CaptureSessionState.Failed -> CaptureState.STOPPED
-                        }
+                        },
+                        trafficErrorMessage = when (captureState) {
+                            is CaptureSessionState.Failed -> "Capture unavailable (${captureState.code})"
+                            CaptureSessionState.Starting,
+                            is CaptureSessionState.Capturing,
+                            CaptureSessionState.Paused -> null
+                            CaptureSessionState.Inactive -> current.trafficErrorMessage
+                        },
                     )
                 }
             }
@@ -332,13 +332,14 @@ class TrafficViewModel(
                         )
                     }
                     if (sessionId == null) return@collectLatest
-                    loadTrafficPage(reset = true)
+                    loadTrafficPage(TrafficPageLoadMode.REPLACE)
                     observeTrafficGenerationsUseCase.execute()
                         .filter { generation -> generation.sessionId == sessionId }
-                        .debounce(75.milliseconds)
+                        .conflate()
+                        .onEach { delay(75.milliseconds) }
                         .collect { generation ->
                             if (generation.generation > _uiState.value.pageGeneration) {
-                                loadTrafficPage(reset = true)
+                                loadTrafficPage(TrafficPageLoadMode.REFRESH_NEWEST)
                             }
                         }
                 }
@@ -361,21 +362,39 @@ class TrafficViewModel(
 
             is TrafficIntent.ClearFeed -> {
                 viewModelScope.launch {
-                    clearTrafficHistoryUseCase.execute()
-                    synchronized(preparedStateCache) {
-                        preparedStateCache.clear()
+                    clearPresentationMutex.withLock {
+                        if (_uiState.value.isClearingHistory) return@withLock
+                        _uiState.update { state -> state.copy(isClearingHistory = true, trafficErrorMessage = null) }
+                        try {
+                            clearTrafficHistoryUseCase.execute()
+                            pageLoadMutex.withLock {
+                                preparedStateCache.clear()
+                                durableTransactions = emptyList()
+                                interceptionHistory.clear()
+                                _uiState.update { state ->
+                                    state.copy(
+                                        transactions = emptyList(),
+                                        filteredTransactions = emptyList(),
+                                        selectedTransactionId = null,
+                                        preparedState = InspectorPreparedState(),
+                                        nextPageCursor = null,
+                                        pageGeneration = 0L,
+                                    )
+                                }
+                            }
+                            publishTrafficProjection()
+                            loadTrafficPage(TrafficPageLoadMode.REPLACE)
+                        } catch (error: CancellationException) {
+                            throw error
+                        } catch (error: Exception) {
+                            KNetLogger.error("TrafficViewModel", error) { "Traffic history clear failed." }
+                            _uiState.update { state ->
+                                state.copy(trafficErrorMessage = "Traffic history could not be cleared.")
+                            }
+                        } finally {
+                            _uiState.update { state -> state.copy(isClearingHistory = false) }
+                        }
                     }
-                    durableTransactions = emptyList()
-                    interceptionHistory.clear()
-                    _uiState.update {
-                        it.copy(
-                            transactions = emptyList(),
-                            filteredTransactions = emptyList(),
-                            selectedTransactionId = null,
-                            preparedState = InspectorPreparedState(),
-                        )
-                    }
-                    publishTrafficProjection()
                 }
             }
 
@@ -384,11 +403,11 @@ class TrafficViewModel(
             }
 
             is TrafficIntent.DismissEngineError -> {
-                _uiState.update { it.copy(engineErrorMessage = null) }
+                _uiState.update { it.copy(engineErrorMessage = null, trafficErrorMessage = null) }
             }
 
             is TrafficIntent.LoadNextPage -> {
-                viewModelScope.launch { loadTrafficPage(reset = false) }
+                viewModelScope.launch { loadTrafficPage(TrafficPageLoadMode.LOAD_OLDER) }
             }
 
             is TrafficIntent.Search -> {
@@ -416,7 +435,15 @@ class TrafficViewModel(
             }
 
             is TrafficIntent.SelectTransaction -> {
-                _uiState.update { it.copy(selectedTransactionId = intent.id) }
+                _uiState.update { current ->
+                    val preparedState = intent.id
+                        ?.let { id -> current.preparedState.forSelection(id) ?: InspectorPreparedState.loading(id) }
+                        ?: InspectorPreparedState()
+                    current.copy(
+                        selectedTransactionId = intent.id,
+                        preparedState = preparedState,
+                    )
+                }
             }
 
             is TrafficIntent.SelectInspectorTab -> {
@@ -429,10 +456,6 @@ class TrafficViewModel(
 
             is TrafficIntent.SelectResponseSubTab -> {
                 _uiState.update { it.copy(activeResponseSubTab = intent.subTab) }
-            }
-
-            is TrafficIntent.SetPreviewFormatMode -> {
-                _uiState.update { it.copy(previewFormatMode = intent.mode) }
             }
 
             is TrafficIntent.ToggleColumn -> {
@@ -461,7 +484,7 @@ class TrafficViewModel(
         filterRefreshJob?.cancel()
         filterRefreshJob = viewModelScope.launch {
             delay(150.milliseconds)
-            loadTrafficPage(reset = true)
+            loadTrafficPage(TrafficPageLoadMode.REPLACE)
         }
     }
 
@@ -528,47 +551,49 @@ class TrafficViewModel(
                     .thenByDescending(TrafficRowUiState::transactionId),
             )
         val selectedId = current.selectedTransactionId
-            ?.takeIf { id -> rows.any { row -> row.transactionId == id } }
-            ?: rows.firstOrNull()?.transactionId
+            ?.takeIf { id -> visibleRows.any { row -> row.transactionId == id } }
+            ?: visibleRows.firstOrNull()?.transactionId
         _uiState.update { state ->
+            val preparedState = selectedId
+                ?.let { id -> state.preparedState.forSelection(id) ?: InspectorPreparedState.loading(id) }
+                ?: InspectorPreparedState()
             state.copy(
                 transactions = rows,
                 filteredTransactions = visibleRows,
                 selectedTransactionId = selectedId,
+                preparedState = preparedState,
             )
         }
     }
 
     /** Loads one keyset page and never retains more than [MAX_TRAFFIC_ROWS] body-free rows. */
-    private suspend fun loadTrafficPage(reset: Boolean) {
+    private suspend fun loadTrafficPage(mode: TrafficPageLoadMode) {
         pageLoadMutex.withLock {
             val before = _uiState.value
             val sessionId = before.sessionId ?: return
-            val cursor = if (reset) null else before.nextPageCursor ?: return
+            val cursor = when (mode) {
+                TrafficPageLoadMode.REPLACE,
+                TrafficPageLoadMode.REFRESH_NEWEST -> null
+                TrafficPageLoadMode.LOAD_OLDER -> before.nextPageCursor ?: return
+            }
             _uiState.update { it.copy(isPageLoading = true) }
             try {
                 val page = queryTrafficPageUseCase.execute(
                     TrafficPageQuery(
-                        sessionId = sessionId,
+                        sessionId = null,
                         cursor = cursor,
                         limit = TRAFFIC_PAGE_SIZE,
-                        hostContains = before.searchQuery.trim().takeIf { it.isNotBlank() },
+                        searchContains = before.searchQuery.trim().takeIf { it.isNotBlank() },
                         methods = before.selectedMethodFilter.toCanonicalMethods(),
                         statuses = before.selectedStatusFilter.toCanonicalStatuses(),
+                        schemes = before.selectedProtocolFilter.toCanonicalSchemes(),
+                        protocols = before.selectedProtocolFilter.toCanonicalProtocols(),
                     ),
                 )
                 val latestState = _uiState.value
                 if (latestState.sessionId != sessionId) return
                 val refreshedRows = page.items.map { snapshot -> snapshot.toTrafficRowUiState() }
-                val refreshedIds = refreshedRows.asSequence().map { it.transactionId }.toHashSet()
-                val sortedRows = (refreshedRows + durableTransactions.filterNot {
-                    it.transactionId in refreshedIds
-                })
-                    .sortedWith(
-                        compareByDescending<TrafficRowUiState> { it.timestamp }
-                            .thenByDescending { it.transactionId },
-                    )
-                    .take(MAX_TRAFFIC_ROWS)
+                val sortedRows = mergePageRows(mode, refreshedRows)
                 val filtersStillMatch = latestState.searchQuery == before.searchQuery &&
                     latestState.selectedProtocolFilter == before.selectedProtocolFilter &&
                     latestState.selectedMethodFilter == before.selectedMethodFilter &&
@@ -577,7 +602,11 @@ class TrafficViewModel(
                 durableTransactions = sortedRows
                 _uiState.update { current ->
                     current.copy(
-                        nextPageCursor = page.nextCursor.takeIf { sortedRows.size < MAX_TRAFFIC_ROWS },
+                        nextPageCursor = when (mode) {
+                            TrafficPageLoadMode.REFRESH_NEWEST -> current.nextPageCursor ?: page.nextCursor
+                            TrafficPageLoadMode.REPLACE,
+                            TrafficPageLoadMode.LOAD_OLDER -> page.nextCursor
+                        },
                         pageGeneration = maxOf(current.pageGeneration, page.generation),
                     )
                 }
@@ -586,11 +615,30 @@ class TrafficViewModel(
                 throw error
             } catch (error: Exception) {
                 KNetLogger.error("TrafficViewModel", error) {
-                    "Traffic page query failed for session=${sessionId.value} reset=$reset"
+                    "Traffic page query failed for session=${sessionId.value} mode=$mode"
                 }
             } finally {
                 _uiState.update { it.copy(isPageLoading = false) }
             }
+        }
+    }
+
+    /** Merges a page according to its navigation purpose while retaining a bounded rolling window. */
+    private fun mergePageRows(
+        mode: TrafficPageLoadMode,
+        pageRows: List<TrafficRowUiState>,
+    ): List<TrafficRowUiState> {
+        if (mode == TrafficPageLoadMode.REPLACE) return pageRows.take(MAX_TRAFFIC_ROWS)
+        val pageIds = pageRows.asSequence().map(TrafficRowUiState::transactionId).toHashSet()
+        val sorted = (pageRows + durableTransactions.filterNot { row -> row.transactionId in pageIds })
+            .sortedWith(
+                compareByDescending<TrafficRowUiState> { row -> row.timestamp }
+                    .thenByDescending(TrafficRowUiState::transactionId),
+            )
+        return when (mode) {
+            TrafficPageLoadMode.REPLACE -> error("Replace pages are handled before merging.")
+            TrafficPageLoadMode.REFRESH_NEWEST -> sorted.take(MAX_TRAFFIC_ROWS)
+            TrafficPageLoadMode.LOAD_OLDER -> sorted.takeLast(MAX_TRAFFIC_ROWS)
         }
     }
 
@@ -608,26 +656,7 @@ class TrafficViewModel(
                     item.method.contains(query, ignoreCase = true) ||
                     item.status.toString().contains(query)
 
-            val matchesProtocol = when (protocol) {
-                ProtocolFilter.ALL -> true
-                ProtocolFilter.HTTP -> item.protocol.startsWith("HTTP/1")
-                ProtocolFilter.HTTPS -> item.protocol.startsWith("HTTP/2") || item.protocol.equals(
-                    "HTTPS",
-                    ignoreCase = true
-                )
-
-                ProtocolFilter.WEBSOCKET -> item.method.equals("WS", ignoreCase = true) || item.protocol.equals(
-                    "WS",
-                    ignoreCase = true
-                )
-
-                ProtocolFilter.HTTP_2 -> item.protocol.contains("2")
-                ProtocolFilter.GRPC -> item.path.contains("grpc", ignoreCase = true)
-                ProtocolFilter.OTHER -> !item.protocol.startsWith("HTTP/1") && !item.protocol.startsWith("HTTP/2") && !item.protocol.equals(
-                    "HTTPS",
-                    ignoreCase = true
-                ) && !item.method.equals("WS", ignoreCase = true) && !item.protocol.equals("WS", ignoreCase = true)
-            }
+            val matchesProtocol = protocol.matches(item)
 
             val matchesMethod = when (method) {
                 MethodFilter.ALL -> true
@@ -690,13 +719,21 @@ class TrafficViewModel(
             selectedStatusFilter = StatusFilter.ALL,
             autoScroll = true,
             activeInspectorTab = InspectorTab.OVERVIEW,
-            previewFormatMode = PreviewFormatMode.PRETTY
         )
     }
 
     private companion object {
         private const val TRAFFIC_PAGE_SIZE = 200
         private const val MAX_TRAFFIC_ROWS = 1_000
+        private const val MAX_PREPARED_INSPECTOR_ENTRIES = 8
+        private const val MAX_PREPARED_INSPECTOR_BYTES = 16L * 1_024L * 1_024L
+    }
+
+    /** Purpose of a persisted page query and its bounded-window merge policy. */
+    private enum class TrafficPageLoadMode {
+        REPLACE,
+        REFRESH_NEWEST,
+        LOAD_OLDER,
     }
 
     /** Conflatable desired capture command derived from settings and toolbar state. */
@@ -721,46 +758,26 @@ private fun MethodFilter.toCanonicalMethods(): Set<CanonicalHttpMethod> = when (
 private fun StatusFilter.toCanonicalStatuses(): Set<CanonicalHttpStatus> =
     range?.map(::CanonicalHttpStatus)?.toSet().orEmpty()
 
-private fun PreparedTrafficRequest.toNetworkRequestSpec(): NetworkRequestSpec {
-    val headers = request.head.headers.map { header -> header.name.value to header.value }
-    val url = request.head.target.toAbsoluteUrl(headers)
-    val bodyBytes = ByteArrayOutputStream(bodyChunks.sumOf { it.size }).use { output ->
-        bodyChunks.forEach { chunk -> output.write(chunk.copyBytes()) }
-        output.toByteArray()
-    }
-    return NetworkRequestSpec(
-        method = request.head.method,
-        url = url,
-        headers = headers,
-        queryParams = parseQueryPairs(url),
-        bodyPayload = decodeBodyToText(bodyBytes.takeIf { it.isNotEmpty() }, headers),
-        timestamp = startedAtEpochMillis,
-    )
+private fun ProtocolFilter.toCanonicalSchemes(): Set<HttpScheme> = when (this) {
+    ProtocolFilter.HTTP -> setOf(HttpScheme.Standard(StandardHttpScheme.HTTP))
+    ProtocolFilter.HTTPS -> setOf(HttpScheme.Standard(StandardHttpScheme.HTTPS))
+    ProtocolFilter.ALL,
+    ProtocolFilter.HTTP_2,
+    ProtocolFilter.HTTP_3 -> emptySet()
 }
 
-private fun RequestTarget.toAbsoluteUrl(headers: List<Pair<String, String>>): String = when (this) {
-    is RequestTarget.Absolute -> {
-        val portText = authority.port?.let { ":$it" }.orEmpty()
-        "${scheme.token}://${authority.host}$portText$pathAndQuery"
-    }
-    is RequestTarget.Origin -> {
-        val host = headers.firstOrNull { it.first.equals("Host", ignoreCase = true) }?.second.orEmpty()
-        val scheme = if (host.substringAfterLast(':', "") == "443") "https" else "http"
-        "$scheme://$host$pathAndQuery"
-    }
-    is RequestTarget.AuthorityForm -> {
-        val portText = authority.port?.let { ":$it" }.orEmpty()
-        "https://${authority.host}$portText/"
-    }
-    RequestTarget.Asterisk -> "*"
-    is RequestTarget.Custom -> value
+private fun ProtocolFilter.toCanonicalProtocols(): Set<ApplicationProtocol> = when (this) {
+    ProtocolFilter.HTTP_2 -> setOf(ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_2))
+    ProtocolFilter.HTTP_3 -> setOf(ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_3))
+    ProtocolFilter.ALL,
+    ProtocolFilter.HTTP,
+    ProtocolFilter.HTTPS -> emptySet()
 }
 
-private fun parseQueryPairs(url: String): List<Pair<String, String>> {
-    val query = url.substringAfter('?', "").substringBefore('#')
-    if (query.isBlank()) return emptyList()
-    return query.split('&').mapNotNull { pair ->
-        val name = pair.substringBefore('=', "").takeIf { it.isNotBlank() } ?: return@mapNotNull null
-        name to pair.substringAfter('=', "")
-    }
+private fun ProtocolFilter.matches(row: TrafficRowUiState): Boolean = when (this) {
+    ProtocolFilter.ALL -> true
+    ProtocolFilter.HTTP -> row.scheme == HttpScheme.Standard(StandardHttpScheme.HTTP)
+    ProtocolFilter.HTTPS -> row.scheme == HttpScheme.Standard(StandardHttpScheme.HTTPS)
+    ProtocolFilter.HTTP_2 -> row.protocol == ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_2)
+    ProtocolFilter.HTTP_3 -> row.protocol == ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_3)
 }

@@ -80,6 +80,7 @@ data class TrafficConnectionEntity(
 @Entity(
     tableName = "traffic_exchanges",
     indices = [
+        Index(value = ["startedAtEpochMillis", "id"], name = "index_exchange_started_id"),
         Index(value = ["sessionId", "startedAtEpochMillis", "id"], name = "index_exchange_session_started_id"),
         Index(value = ["sessionId", "host", "startedAtEpochMillis"], name = "index_exchange_session_host_started"),
         Index(value = ["sessionId", "method", "startedAtEpochMillis"], name = "index_exchange_session_method_started"),

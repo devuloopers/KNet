@@ -31,8 +31,8 @@ import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
-import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertEquals
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class TrafficCaptureLifecycleTest {
@@ -74,6 +74,21 @@ class TrafficCaptureLifecycleTest {
         assertEquals(0, runtime.stopCalls)
         assertIs<ProxyRuntimeState.Running>(runtime.state.value)
         assertIs<CaptureSessionState.Capturing>(runtime.captureState.value)
+    }
+
+    @Test
+    fun `capture failure is surfaced independently from the forwarding runtime`() = runTest(dispatcher) {
+        val runtime = StatefulCaptureRuntime()
+        val viewModel = FakeTrafficViewModelFactory.create(
+            customProxyRuntime = runtime,
+            customCaptureSessionControl = runtime,
+        )
+        advanceUntilIdle()
+
+        runtime.failCapture("writer-unavailable")
+        advanceUntilIdle()
+
+        assertEquals("Capture unavailable (writer-unavailable)", viewModel.uiState.value.trafficErrorMessage)
     }
 
     private class StatefulCaptureRuntime : ProxyRuntimePort, CaptureSessionControlPort {
@@ -131,5 +146,9 @@ class TrafficCaptureLifecycleTest {
 
         override suspend fun rotateForTrafficClear(): CaptureClearPreparation =
             CaptureClearPreparation.CANONICAL_SESSION_ROTATED
+
+        fun failCapture(code: String) {
+            mutableCaptureState.value = CaptureSessionState.Failed(code)
+        }
     }
 }

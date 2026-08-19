@@ -14,16 +14,23 @@ actual object BodyDecoder {
         ZstdContentDecoder()
     ).associateBy { it.encoding }
 
-    actual fun decode(body: ByteArray?, headers: List<Pair<String, String>>): DecodedBodyResult {
+    actual fun decode(
+        body: ByteArray?,
+        headers: List<Pair<String, String>>,
+        maximumOutputBytes: Int,
+    ): DecodedBodyResult {
+        require(maximumOutputBytes in 1..MAXIMUM_DECODED_BYTES) {
+            "Decoded output limit must be between 1 and $MAXIMUM_DECODED_BYTES bytes."
+        }
         if (body == null || body.isEmpty()) {
             return DecodedBodyResult.Identity(ByteArray(0))
         }
 
         val encodingHeader = headers.firstOrNull { it.first.equals("Content-Encoding", ignoreCase = true) }?.second?.trim()?.lowercase()
-            ?: return DecodedBodyResult.Identity(body)
+            ?: return identity(body, maximumOutputBytes)
 
         if (encodingHeader.isBlank() || encodingHeader == "identity") {
-            return DecodedBodyResult.Identity(body)
+            return identity(body, maximumOutputBytes)
         }
 
         val encodingChain = encodingHeader.split(",")
@@ -31,7 +38,7 @@ actual object BodyDecoder {
             .filter { it.isNotEmpty() && !it.equals("identity", ignoreCase = true) }
 
         if (encodingChain.isEmpty()) {
-            return DecodedBodyResult.Identity(body)
+            return identity(body, maximumOutputBytes)
         }
 
         var currentBytes: ByteArray = body
@@ -48,9 +55,15 @@ actual object BodyDecoder {
                 ?: return DecodedBodyResult.UnsupportedEncoding(token, body)
 
             currentBytes = try {
-                decoder.decompress(currentBytes)
-            } catch (ex: Throwable) {
-                return DecodedBodyResult.CorruptedEncoding(token, ex.message ?: "Decompression failed for $token", body)
+                decoder.decompress(currentBytes, maximumOutputBytes)
+            } catch (_: DecodedOutputLimitException) {
+                return DecodedBodyResult.OutputLimitExceeded(token, maximumOutputBytes)
+            } catch (exception: Exception) {
+                return DecodedBodyResult.CorruptedEncoding(
+                    token,
+                    exception.message ?: "Decompression failed for $token",
+                    body,
+                )
             }
 
             lastResolvedEncoding = enumEncoding
@@ -58,4 +71,13 @@ actual object BodyDecoder {
 
         return DecodedBodyResult.Success(currentBytes, lastResolvedEncoding)
     }
+
+    private fun identity(body: ByteArray, maximumOutputBytes: Int): DecodedBodyResult =
+        if (body.size <= maximumOutputBytes) {
+            DecodedBodyResult.Identity(body)
+        } else {
+            DecodedBodyResult.OutputLimitExceeded(ContentEncoding.IDENTITY.token, maximumOutputBytes)
+        }
+
+    private const val MAXIMUM_DECODED_BYTES: Int = 64 * 1024 * 1024
 }

@@ -1,7 +1,6 @@
 package com.devuloopers.knet.ui.desktop.codeeditor.component.viewport
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
@@ -67,6 +66,7 @@ internal fun EditableLineContent(
     onFocused: (caretCol: Int) -> Unit = {},
     onUndo: (() -> Unit)? = null,
     onRedo: (() -> Unit)? = null,
+    textLayoutResult: TextLayoutResult? = null,
     onTextLayout: ((TextLayoutResult) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
@@ -101,8 +101,6 @@ internal fun EditableLineContent(
         }
     }
 
-
-    var textLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
     val visualTransformation = remember(highlightedText) {
         VisualTransformation { input ->
             // Guard against stale highlightedText: if its length differs from the current input,
@@ -136,7 +134,7 @@ internal fun EditableLineContent(
         Box(
             modifier = modifier
                 .fillMaxWidth()
-                .then(if (!isWordWrapEnabled) Modifier.fillMaxHeight() else Modifier)
+                .editorLineContentHeight(isWordWrapEnabled)
                 .selectionHighlight(lineSelectionBounds, textLayoutResult, fontSize),
             contentAlignment = if (isWordWrapEnabled) Alignment.TopStart else Alignment.CenterStart
         ) {
@@ -179,10 +177,7 @@ internal fun EditableLineContent(
                     }
                 },
 
-                onTextLayout = {
-                    textLayoutResult = it
-                    onTextLayout?.invoke(it)
-                },
+                onTextLayout = { onTextLayout?.invoke(it) },
                 singleLine = !isWordWrapEnabled,
                 visualTransformation = visualTransformation,
                 cursorBrush = activeCursorBrush,
@@ -208,6 +203,11 @@ internal fun EditableLineContent(
                             caretCol = fieldValue.selection.start,
                             isCollapsed = fieldValue.selection.collapsed,
                             textLength = fieldValue.text.length,
+                            isWordWrapEnabled = isWordWrapEnabled,
+                            currentVisualLineIndex = textLayoutResult?.getLineForOffset(
+                                fieldValue.selection.start.coerceIn(0, fieldValue.text.length)
+                            ),
+                            visualLineCount = textLayoutResult?.lineCount ?: 1,
                             onNavigateUp = onNavigateUp,
                             onNavigateDown = onNavigateDown,
                             onNavigateLeftAtStart = onNavigateLeftAtStart,

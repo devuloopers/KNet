@@ -1,8 +1,11 @@
 package com.devuloopers.knet.ui.core.foundation.accessibility
 
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+
 /**
  * Accessibility default constants.
  */
 object AccessibilityDefaults {
-    const val DefaultMinTouchTargetSize: Int = 24
+    val MinimumInteractiveSize: Dp = 24.dp
 }

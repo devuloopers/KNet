@@ -9,11 +9,13 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -23,10 +25,16 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ProvideTextStyle
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
@@ -43,6 +51,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * @param enabled Interactivity toggle.
  * @param loading Asynchronous loading toggle (disables click interaction and shows spinner).
  * @param colors Custom button colors override.
+ * @param role Accessibility role exposed by the click target.
  * @param content Slot layout for button text and icons.
  */
 @Composable
@@ -54,32 +63,52 @@ fun KNetButton(
     enabled: Boolean = true,
     loading: Boolean = false,
     colors: ButtonColors = ButtonDefaults.colors(variant),
+    role: Role = Role.Button,
     content: @Composable () -> Unit
 ) {
     val buttonHeight = ButtonDefaults.height(size)
     val shapes = KNetTheme.shapes
     val typography = KNetTheme.typography
+    val motion = KNetTheme.motion
+    val duration = if (motion.animationsEnabled) motion.durationNormal else motion.durationInstant
+    val interactionSource = remember { MutableInteractionSource() }
+    val focused by interactionSource.collectIsFocusedAsState()
+    val hovered by interactionSource.collectIsHoveredAsState()
 
     val isClickable = enabled && !loading
     val animatedContainer by animateColorAsState(
-        targetValue = if (enabled) colors.containerColor else colors.disabledContainerColor,
-        animationSpec = tween(durationMillis = 150),
+        targetValue = when {
+            !enabled -> colors.disabledContainerColor
+            hovered -> KNetTheme.colors.interaction.hoverOverlay.compositeOver(colors.containerColor)
+            else -> colors.containerColor
+        },
+        animationSpec = tween(durationMillis = duration),
         label = "KNetButtonContainerColor"
     )
     val animatedContent by animateColorAsState(
         targetValue = if (enabled) colors.contentColor else colors.disabledContentColor,
-        animationSpec = tween(durationMillis = 150),
+        animationSpec = tween(durationMillis = duration),
         label = "KNetButtonContentColor"
     )
-    val borderStroke = if (colors.borderColor != Color.Transparent) BorderStroke(1.dp, colors.borderColor) else null
+    val borderStroke = when {
+        focused -> BorderStroke(1.dp, KNetTheme.colors.interaction.focusRing)
+        colors.borderColor != Color.Transparent -> BorderStroke(1.dp, colors.borderColor)
+        else -> null
+    }
 
     KNetSurface(
         modifier = modifier
             .height(buttonHeight)
             .clip(shapes.small)
-            .animateContentSize(animationSpec = tween(durationMillis = 150))
-            .clickable(enabled = isClickable, onClick = onClick)
-            .handCursor(),
+            .animateContentSize(animationSpec = tween(durationMillis = duration))
+            .clickable(
+                interactionSource = interactionSource,
+                indication = null,
+                enabled = isClickable,
+                role = role,
+                onClick = onClick
+            )
+            .handCursor(isClickable),
         color = animatedContainer,
         contentColor = animatedContent,
         border = borderStroke,
@@ -88,7 +117,7 @@ fun KNetButton(
         AnimatedContent(
             targetState = loading,
             transitionSpec = {
-                fadeIn(animationSpec = tween(150)) togetherWith fadeOut(animationSpec = tween(150))
+                fadeIn(animationSpec = tween(duration)) togetherWith fadeOut(animationSpec = tween(duration))
             },
             label = "KNetButtonLoadingContent",
             modifier = Modifier.fillMaxHeight(),
@@ -151,9 +180,12 @@ fun KNetToggleButton(
     val variant = if (checked) ButtonVariant.Primary else ButtonVariant.Secondary
     KNetButton(
         onClick = { onCheckedChange(!checked) },
-        modifier = modifier,
+        modifier = modifier.semantics {
+            toggleableState = ToggleableState(checked)
+        },
         variant = variant,
         enabled = enabled,
+        role = Role.Switch,
         content = content
     )
 }

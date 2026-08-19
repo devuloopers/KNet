@@ -10,10 +10,12 @@ import androidx.compose.runtime.Immutable
  */
 @Immutable
 data class Motion(
+    val animationsEnabled: Boolean = true,
     val durationInstant: Int = 0,
     val durationFast: Int = 100,
     val durationNormal: Int = 150,
     val durationSlow: Int = 250,
+    val durationFeedback: Int = 2_000,
     val easingStandard: Easing = FastOutSlowInEasing,
     val easingLinear: Easing = LinearEasing
 )

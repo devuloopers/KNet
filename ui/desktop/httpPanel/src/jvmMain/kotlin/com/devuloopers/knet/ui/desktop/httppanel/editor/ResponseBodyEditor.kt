@@ -17,7 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.tabs.KNetTab
-import com.devuloopers.knet.ui.core.components.tabs.ScrollableTabRow
+import com.devuloopers.knet.ui.core.components.tabs.KNetTabRow
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.codeeditor.api.CodeEditorActions
@@ -58,7 +58,7 @@ fun ResponseBodyEditor(
         verticalArrangement = Arrangement.spacedBy(spacing.sm)
     ) {
         // Mode Selector Tab Row using reusable design system components
-        ScrollableTabRow(
+        KNetTabRow(
             modifier = Modifier.fillMaxWidth()
         ) {
             ResponseBodyMode.entries.forEach { mode ->

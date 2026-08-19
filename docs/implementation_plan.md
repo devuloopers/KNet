@@ -728,3 +728,347 @@ Focused application, data, Traffic, and product composition suites passed, inclu
 generation ownership, paused-connection resume, breakpoint release, and toolbar lifecycle regressions. The
 final `check verifyArchitectureFoundation` gate passed with 269 actionable tasks, `git diff --check` passed,
 and the desktop application was not launched.
+
+## Phase 36: Traffic Correctness, History, and Scale Remediation [COMPLETED]
+
+Started on 2026-08-19 from the repository-backed Traffic module audit. This phase keeps the canonical
+`:core:traffic` snapshots, application ports, Room storage, proxy/capture ownership, typed breakpoint
+projection, and product DI boundaries. It incrementally corrects selected-detail identity, repeated
+header/query preservation, captured-request URL ownership, decoded-body memory limits, persisted-session
+visibility, bounded viewport paging, non-starving live refresh, transport/protocol classification, clear
+lifecycle serialization, capture failure presentation, and remaining dead or inconsistent presentation
+state. The 1,000-row bound remains a UI memory bound rather than becoming a stored-history limit.
+
+Verification will add focused regressions for rapid selection, empty-body caching, repeated HTTP fields,
+captured-query replay, compressed-body expansion limits, cross-session history, continuous generations,
+filtered paging, typed HTTPS/HTTP-version classification, clear races, and filtered footer statistics. The
+desktop application will not be launched.
+
+Completed on 2026-08-19. Inspector preparation and its bounded cache are now keyed by canonical exchange ID,
+so rapid selection cannot publish stale details and empty bodies are cached without sentinel ambiguity. One
+application-owned captured-request converter now preserves ordered repeated headers and query parameters for
+API Studio replay. Traffic rows retain only table data while the inspector reads the canonical exchange,
+removing duplicate header, query, and response projections.
+
+Decoded payloads now have an enforced output-byte ceiling across gzip, deflate, Brotli, and Zstandard paths,
+and the inspector cache is bounded by both entry count and estimated retained bytes. Room history queries can
+span all retained sessions, use typed scheme and application-protocol criteria, and search host, path, method,
+and status. Schema 16 adds the global newest-first timestamp/ID index. The Traffic viewport remains capped at
+1,000 rows while older pages continue to be reachable through a rolling window, and conflated generation
+refresh prevents a continuous capture stream from starving the UI.
+
+Traffic-specific filters now live in the Traffic presentation module and expose only classifications backed
+by canonical data: HTTP/HTTPS scheme and HTTP/1.x, HTTP/2, or HTTP/3 protocol. Unsupported WebSocket, gRPC,
+GraphQL, and path-name guesses were removed. Clear History is serialized, clears only persisted traffic,
+resets the active viewport/cache, and reloads any surviving history. Automatic startup retention cleanup is
+owned once by the desktop process rather than by a screen ViewModel, while capture failures are surfaced
+independently from proxy-listener state.
+
+Focused domain, application, data, Traffic, HTTP-panel, and product composition regressions passed. The final
+`check verifyArchitectureFoundation` gate passed with 269 actionable tasks, `git diff --check` passed, and the
+desktop application was not launched. Module responsibility documents were updated alongside the code and
+Room schema migration.
+
+## Phase 37: Traffic Status Column Alignment [COMPLETED]
+
+Started on 2026-08-19 after the Traffic table showed its Status header offset from every status value. The
+header reserves 64 dp while data rows reserve 84 dp; because the preceding Path column is weighted, this
+causes its allocation to differ between the header and rows and moves row status cells 20 dp to the left.
+This phase will give both surfaces one shared status-column width without changing table density, status
+content, highlighting, colors, or column visibility behavior. The desktop application will not be launched.
+
+Completed on 2026-08-19. The Status header and row cells now consume the same shared 84 dp width, giving the
+weighted Path column identical remaining space in both table surfaces. The header, numeric statuses, and
+in-progress/error labels therefore share one left edge, and later width adjustments have a single owner. The
+Traffic JVM suite and `verifyArchitectureFoundation` passed with 66 actionable tasks, `git diff --check`
+passed, and the desktop application was not launched.
+
+## Phase 38: UI Core Design-System Remediation [COMPLETED]
+
+Started on 2026-08-19 from a repository-wide audit of `:ui:core` and its active desktop consumers. This
+phase keeps the existing KMP design-system boundary and reusable primitives, while correcting theme-system
+resolution, token adoption, interaction semantics, dialog and split-pane correctness, input behavior,
+dropdown presentation, and accessibility. The KNet dropdown family will receive one consistent anchored
+field/menu design with selected, hover, disabled, searchable, and keyboard-accessible states rather than
+maintaining two visually divergent implementations.
+
+The phase will also remove only repository-proven dead aliases, no-op helpers, sample/catalog production
+sources, and abandoned component-framework scaffolding; active consumers will be migrated before an API is
+removed. Feature-specific table sizing will gain one Traffic-owned column specification, while protocol-
+specific presentation will be kept out of generic UI foundations. Focused common/JVM tests, module
+responsibility documentation, architecture verification, and whitespace validation will be run. The desktop
+application will not be launched.
+
+Completed on 2026-08-19. `:ui:core` now provides a system-aware Material-backed theme, reduced-motion-aware
+animation tokens, native selection/toggle/button semantics, controlled split panes, selection-preserving text
+inputs, responsive dialogs, and one visually consistent dropdown family. Both regular and searchable dropdowns
+now share compact sizing, matched anchor/menu widths, clear hover/focus/disabled/selected states, truncation,
+selected checkmarks, scrolling bounds, and keyboard navigation. Traffic owns its complete table metrics, while
+HTTP method colors and status badges moved to `:ui:desktop:httpPanel` instead of leaking protocol concepts into
+the generic design system.
+
+Repository-proven dead aliases, duplicate wrappers, no-op helpers, production catalogs/samples, and abandoned
+component-framework scaffolding were removed after migrating active consumers. `:ui:core` and HTTP-panel module
+responsibility documents now describe the resulting ownership rules. `:ui:core:jvmTest`, the desktop product
+compile, the full `check verifyArchitectureFoundation` gate (269 actionable tasks), and `git diff --check`
+passed. The desktop application was not launched.
+
+## Phase 39: Intrinsic-Safe Anchored Dropdown Popup [COMPLETED]
+
+Started on 2026-08-19 after opening the searchable scripting-language dropdown raised Compose's
+`SubcomposeLayout` intrinsic-measurement exception. The redesigned searchable dropdown placed a lazy list
+inside Material `DropdownMenu`; Material measures menu content intrinsically, while lazy layouts deliberately
+do not support intrinsic measurement. This phase replaces that incompatible nesting with a KNet-owned anchored
+popup that gives both regular and searchable dropdown content explicit bounded constraints, preserves lazy
+search results, handles below/above viewport placement, and keeps anchor focus for keyboard input. The desktop
+application will not be launched.
+
+Completed on 2026-08-19. Regular and searchable dropdowns now share a KNet-owned popup with an explicit anchor
+width, bounded height, viewport-clamped left/right placement, and automatic below/above placement. The regular
+menu retains bounded scrolling, while searchable results remain lazy without being measured intrinsically.
+The input retains focus so filtering and arrow/Enter/Escape handling continue through the anchor. UI-core tests,
+Settings compilation, desktop product compilation, and the full `check verifyArchitectureFoundation` gate
+passed with 269 actionable tasks. `git diff --check` passed, and the desktop application was not launched.
+
+## Phase 40: Constraint-Stable Dropdown Anchors [COMPLETED]
+
+Started on 2026-08-19 after the shared dropdown anchor was observed in both constraint extremes. Inside the
+horizontally scrollable Traffic filter bar, infinite horizontal constraints collapsed the weighted label and
+left only the chevron visible. Inside API Studio's bounded request row, `fillMaxWidth` allowed the unweighted
+dropdown to consume the URL field's available width. This phase gives regular and searchable dropdowns a finite
+design-system default width while preserving normal caller overrides through `Modifier.width`, `widthIn`,
+`weight`, and `fillMaxWidth`. Every active consumer will be checked so full-width dialog fields remain explicit
+and compact toolbar/filter fields remain self-contained. The desktop application will not be launched.
+
+Completed on 2026-08-19. Both dropdown variants now start from a finite 120 dp anchor width, making their inner
+weighted label measurement deterministic in bounded and unbounded parent layouts. Because the caller modifier
+precedes the default sizing modifier, explicit widths, minimum widths, weights, and full-width fields continue
+to override the compact default normally. Settings' 160 dp searchable fields now express that width directly,
+and all active regular/searchable dropdown consumers were reviewed. UI-core tests, all dropdown-consuming UI
+module compilations, desktop product compilation, and the full `check verifyArchitectureFoundation` gate
+passed with 269 actionable tasks. `git diff --check` passed, and the desktop application was not launched.
+
+## Phase 41: API Studio UI Regression Remediation [COMPLETED]
+
+Started on 2026-08-19 after fixing the request method dropdown exposed additional empty blocks across API
+Studio's request, body-format, and GraphQL tab strips. This phase audits every API Studio surface that consumes
+the changed design-system primitives, compares it with the pre-remediation implementation, and corrects shared
+component behavior at its owner rather than adding screen-specific visual patches. The scope includes the URL
+bar, request tabs, parameter/header/body/auth/script editors, GraphQL controls, collection sidebar, dialogs,
+response pane, split layout, empty/loading states, and keyboard/resize behavior. The desktop application will
+not be launched.
+
+Completed on 2026-08-19. The empty rectangles across API Studio were one design-system regression rather than
+separate screen failures: `KNetTab` gave its label `weight` inside `KNetTabRow`, whose horizontal scrolling
+measures content with unbounded width, so Compose reduced every weighted label to zero. Tab labels now retain
+their natural width up to a finite design-system maximum and remain single-line/ellipsized. This restores the
+request inspector, request/response body-mode, GraphQL authoring/viewing, Traffic inspector, certificate, and
+response-inspector tab labels from the shared owner. GraphQL authoring also gives its tab strip the toolbar
+space remaining beside the operation-name field, so narrow split positions scroll instead of overlapping.
+
+The API Studio URL bar, open-request tabs, collection sidebar, key/value editors, auth and script editors,
+dialogs, response facade, loading/empty/error states, and controlled split pane were reviewed against their
+pre-remediation implementations and current design-system constraints. Stale imports from the response facade
+were removed, and the UI-core/HTTP-panel module responsibility documents now record the constraint contract.
+Focused UI-core, HTTP-panel, and API Studio suites plus desktop product compilation passed with 138 actionable
+tasks. The full `check verifyArchitectureFoundation` gate passed with 269 actionable tasks, `git diff --check`
+passed, and the desktop application was not launched.
+
+## Phase 42: Constraint-Stable Button Modifier Ordering [COMPLETED]
+
+Started on 2026-08-19 after API Studio's empty parameter editor showed the shared `Add Param` button reduced
+to a thin clipped strip. `KNetButton` applied its fixed height before the caller modifier, which placed caller
+padding inside the fixed-height measurement and left insufficient height for button content. This phase restores
+standard Compose modifier ownership: caller layout modifiers remain outermost while the design-system height
+acts as the overridable inner default. The desktop application was not launched.
+
+Completed on 2026-08-19. `KNetButton` now applies the caller modifier before its design-system height. Outer
+padding therefore contributes to the component's total layout size instead of consuming the button's content
+height, restoring the complete `Add Param`, `Add Header`, and `Add Cookie` buttons. Explicit caller heights,
+including API Studio's 40 dp request-bar actions, continue to override the compact default normally. All active
+API Studio, HTTP-panel, and UI-core button consumers were reviewed, and no second fixed-height-before-caller
+pattern was found.
+
+Focused UI-core, HTTP-panel, and API Studio suites plus desktop product compilation passed with 138 actionable
+tasks. The full `check verifyArchitectureFoundation` gate passed with 269 actionable tasks, `git diff --check`
+passed, and the desktop application was not launched.
+
+## Phase 43: Flash-Free Incremental Syntax Presentation [COMPLETED]
+
+Started on 2026-08-19 after editable code-editor content visibly flashed on every character mutation. The
+document snapshot advances synchronously, while syntax tokenization correctly runs on a background dispatcher;
+the viewport currently rejects the complete previous token model during that interval and briefly renders all
+visible lines without semantic colors. This phase adds a current-version presentation projection that
+synchronously retokenizes only the directly changed lines and structurally reuses the previous prefix and
+suffix until authoritative background tokenization converges. Background cancellation and stale-result guards
+remain intact, and the desktop application will not be launched.
+
+Completed on 2026-08-19. The editor now keeps separate completed and presentation token models. A normal
+session edit synchronously projects the changed line onto the new document version and structurally reuses
+unchanged token chunks, so visible content never falls back wholesale to plain text while the worker tokenizer
+is running. Consecutive keystrokes chain from the latest presentation model even when earlier background jobs
+are cancelled. The completed worker result remains authoritative and replaces the presentation only when its
+snapshot version is still current.
+
+Immediate work is bounded to 32 directly changed lines and 32 KiB of changed text. Oversized edited lines are
+temporarily unstyled instead of blocking the UI thread, while unaffected lines remain stable. Regression tests
+cover ordinary character replacement, structural line splitting, oversized single-line payloads, and rapid
+edits before background convergence. The focused editor/HTTP-panel/API-Studio/product verification passed with
+139 actionable tasks; the full `check verifyArchitectureFoundation` gate passed with 269 actionable tasks.
+`git diff --check` passed, and the desktop application was not launched.
+
+## Phase 44: Wrapped Code-Editor Viewport [COMPLETED]
+
+Started on 2026-08-19 after confirming that every active KNet editor inherits the reusable editor's disabled
+word-wrap default. This phase makes visual wrapping the default so long request bodies, responses, GraphQL
+documents, and scripts remain inside the viewport without a visible horizontal scrollbar. Wrapping remains a
+presentation concern and never inserts document newlines. Wrapped-row keyboard navigation, pointer hit testing,
+selection painting, variable-height virtualization, gutter behavior, and vertical scrolling will be verified.
+The optional non-wrapped capability remains available for a future standalone editor consumer, and the desktop
+application will not be launched.
+
+Completed on 2026-08-19. `CodeEditorConfiguration` now enables word wrapping by default, so all current KNet
+request, response, GraphQL, script, and Traffic-inspection editors stay inside their viewport and omit the
+horizontal scrollbar without per-feature overrides. Wrapping changes only Compose layout: stored text, logical
+line coordinates, gutter numbering, copy operations, and request serialization remain unchanged. Consumers of
+a future standalone editor may still explicitly disable wrapping when horizontal navigation is desired.
+
+Up/Down navigation now remains inside an active logical line while another wrapped visual row exists and crosses
+logical lines only at the first or final visual row. Pointer ownership now reserves the bottom hit zone only
+when a horizontal scrollbar is actually rendered, preserving bottom-edge selection and downward auto-scroll in
+wrapped viewports. Regression coverage verifies the wrap default, wrapped-row navigation boundaries, and
+conditional scrollbar hit zones. The focused editor/HTTP-panel/API-Studio/product verification passed with
+139 actionable tasks; the full `check verifyArchitectureFoundation` gate passed with 269 actionable tasks.
+`git diff --check` passed, and the desktop application was not launched.
+
+## Phase 45: Stable Drag-Selection Rendering [COMPLETED]
+
+Started on 2026-08-19 after pointer selection across trailing or empty line space briefly painted the complete
+active row before converging to the exact selected characters. Two viewport ownership transitions cause the
+flash: pointer-down moves the caret before a non-empty selection exists, so the active-line background is
+temporarily eligible; and activating a row swaps its lightweight text renderer for the editable renderer,
+discarding measured text geometry until the replacement layout completes. This phase makes pointer gesture
+ownership observable from the initial press, retains compatible measured geometry at the keyed logical-row
+boundary, and verifies that real whitespace remains selectable while unused viewport space never paints as
+selection. The desktop application will not be launched.
+
+Completed on 2026-08-19. `SelectionGestureHandler` now exposes Compose-observable gesture ownership as soon as
+the initial text press establishes its anchor. The viewport uses that state together with the canonical
+selection to suppress active-line background and native caret/focus behavior throughout the gesture, including
+the zero-length interval before the pointer first moves. A normal click restores active-line paint on release.
+
+Each keyed logical row now owns its latest compatible `TextLayoutResult`; the read-only `Text` and active
+`BasicTextField` are stateless layout producers. Moving the caret to a row therefore retains exact measured
+selection geometry across the renderer swap instead of briefly falling back to estimated character cells.
+Compatibility is guarded by the current logical text, so an actual edit never applies geometry from stale
+content. Regression coverage verifies press/release ownership, active-row paint policy, and exact document
+columns through trailing whitespace. The focused editor/HTTP-panel/API-Studio/product verification passed with
+139 actionable tasks; the full `check verifyArchitectureFoundation` gate passed with 269 actionable tasks.
+`git diff --check` passed, and the desktop application was not launched.
+
+## Phase 46: Continuous Selection Across Wrapped Logical Rows [COMPLETED]
+
+Started on 2026-08-19 after the wrapped editor exposed vertical gaps between selection rectangles on adjacent
+logical lines. Phase 44 correctly removed the fixed row height to permit wrapping, but the wrapped text-content
+surface then became shorter than the gutter-owned minimum row height on single-visual-line content. Phase 45's
+exact selection painter fills its content surface, not the taller sibling-owned row, so the remaining pixels
+appeared as gaps. This phase gives both read-only and editable content the shared logical-line minimum while
+preserving natural multi-line expansion, typography, baselines, and document semantics. The desktop application
+will not be launched.
+
+Completed on 2026-08-19. Editable and read-only line content now use one shared viewport sizing contract. The
+content surface has the same minimum logical-line height as the gutter in both wrapped and unwrapped modes;
+unwrapped content still fills its fixed parent, while wrapped content remains unconstrained above the minimum.
+The selection painter therefore covers the sibling-owned remainder that previously appeared as a seam, without
+changing `TextStyle`, line height, baseline placement, wrapping, or serialized content.
+
+The focused editor/HTTP-panel/API-Studio/product verification passed with 139 actionable tasks; the full
+`check verifyArchitectureFoundation` gate passed with 269 actionable tasks. `git diff --check` passed, and the
+desktop application was not launched.
+
+## Phase 47: Selection-Independent Active-Line Paint [COMPLETED]
+
+Started on 2026-08-19 after clearing a selection by clicking its existing caret line caused the active-line
+background to disappear on press and reappear on release. The caret never left the line; the visual transition
+was created solely because active-line paint incorrectly depended on selection and gesture state. This phase
+separates the layers: caret ownership alone controls active-line paint, while selection gesture state continues
+to control only selection geometry, native caret visibility, and focus publication. The desktop application
+will not be launched.
+
+Completed on 2026-08-19. `LazyCodeLineRow` now applies the ambient background directly from `isActiveLine` and
+does not consult selection length or pointer-gesture ownership. Selecting text, clicking to collapse it, or
+releasing the pointer on the same caret line therefore leaves the background continuously mounted. Moving the
+caret to a different logical line remains the only operation that transfers active-line paint.
+
+Selection gesture ownership remains intact for the concerns it actually owns: deterministic range painting,
+transparent native selection/caret presentation, and protection from focus-driven caret publication. The
+obsolete combined active-line/selection paint policy and its regression assertions were removed, and the module
+contract now documents the independent layers. The focused editor/HTTP-panel/API-Studio/product verification
+passed with 139 actionable tasks; the full `check verifyArchitectureFoundation` gate passed with 269 actionable
+tasks. `git diff --check` passed, and the desktop application was not launched.
+
+## Phase 48: Stable Compact Dropdown Interaction [COMPLETED]
+
+Started on 2026-08-19 after reviewing the Traffic filter toolbar's oversized dropdown anchors, click-through
+close behavior, and selection-dependent width concern. The shared popup is non-focusable, so clicking its open
+anchor first dismisses the popup as an outside click and then lets the same pointer event toggle the anchor open
+again. The shared anchor already has a finite width, but the contract needs to make density and width stability
+explicit across selected values. This phase adds a compact density used consistently by Traffic chips and
+filters, consumes outside dismissal at the popup boundary, and retains the popup through a short reduced-motion-
+aware exit transition. The desktop application will not be launched.
+
+Completed on 2026-08-19. Traffic's count chips and Method, Status, and Protocol anchors now use the same 26 dp
+compact-control height. The shared dropdown keeps its finite anchor width outside content measurement, so a
+placeholder or newly selected value can truncate but cannot resize the field or popup. Traffic also passes its
+typed filter values directly rather than maintaining duplicate label lists and reverse string lookup.
+
+The shared popup now remains composed through a short fade/98%-scale exit and uses the design system's fast
+duration and reduced-motion policy. Ordinary selection popups are focusable, so an open-anchor click is consumed
+as one outside dismissal instead of reaching the anchor and reopening it. Searchable dropdowns explicitly retain
+their non-focusable popup policy so the results window does not steal keyboard focus from the search field.
+Regression coverage verifies both density presets, the fixed-width default, popup exit composition, and the two
+focus policies. Focused UI-core, Traffic, Settings, Certificate, API Studio, and desktop composition verification
+passed with 148 actionable tasks. The full `check verifyArchitectureFoundation` gate passed with 269 actionable
+tasks, and the desktop application was not launched.
+
+## Phase 49: Connect Device Navigation Placement [COMPLETED]
+
+Started on 2026-08-20 to move the existing Connect Device destination from the primary navigation group into
+the setup/security group. The route, destination identity, icon, and workspace behavior remain unchanged; only
+its sidebar placement changes so it appears immediately after the primary-group divider and immediately before
+Certificates. Navigation configuration coverage will assert the real section order, and the desktop application
+will not be launched.
+
+Completed on 2026-08-20. The navigation overlay now renders Traffic, API Studio, and Intercepts in the primary
+group, followed by the divider, Connect Device, and Certificates. Settings and branding retain their existing
+bottom placement. The destination route, icon, selection handling, and workspace host were not changed.
+
+Navigation section metadata now has one shared owner used by both composition and regression coverage, so the
+test asserts the actual Connect Device-to-Certificates ordering instead of recreating a separate expected list.
+The focused app test, desktop product compilation, and `verifyArchitectureFoundation` passed with 133 actionable
+tasks. `git diff --check` passed, and the desktop application was not launched.
+
+## Phase 50: Unified Traffic Column Dropdown [COMPLETED]
+
+Started on 2026-08-20 after confirming that Traffic's Columns control still bypasses the KNet dropdown family
+and directly composes a Material menu. This produces different anchor height, surface styling, motion, width,
+and dismissal behavior beside the Method, Status, and Protocol controls. This phase adds one reusable generic
+multi-select dropdown to `:ui:core`, backed by the existing KNet anchor and popup mechanics, and migrates the
+active Traffic column selector to it. Multi-selection remains explicit: toggling an item does not close the
+menu, and each row owns exactly one toggle action. The desktop application will not be launched.
+
+Completed on 2026-08-20. `KNetDropdown` and the new generic `KNetMultiSelectDropdown` now share one internal
+anchor owner for compact/standard height, hover/focus borders, keyboard toggling, stable label measurement, and
+chevron motion. Multi-select uses the same bounded animated popup and outside-click ownership as single-select,
+but intentionally remains open after a value is toggled. Its 148 dp design-system default accommodates a compact
+checkbox indicator and Traffic's longer column labels without allowing content to resize the control.
+
+Traffic's feature-local Material menu, duplicate anchor styling, nested checkbox click handler, and supporting
+imports were removed. Traffic now supplies only typed optional `TrafficColumn` values, visibility lookup, toggle
+callback, and display labels. The option row owns checkbox semantics and exactly one toggleable interaction while
+reusing the shared KNet checkbox indicator, selected surface, hover transition, typography, and ellipsis policy.
+
+UI-core and Traffic module contracts document the new ownership, and component coverage locks both dropdown
+width presets. Focused UI-core, Traffic, and desktop product verification passed with 133 actionable tasks. The
+full `check verifyArchitectureFoundation` gate passed with 269 actionable tasks, and the desktop application was
+not launched.

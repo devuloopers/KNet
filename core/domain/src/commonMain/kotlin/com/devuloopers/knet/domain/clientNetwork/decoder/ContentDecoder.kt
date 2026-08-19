@@ -15,8 +15,9 @@ interface ContentDecoder {
      * Decompresses the provided byte array payload.
      *
      * @param bytes Compressed input bytes.
+     * @param maximumOutputBytes Maximum decompressed bytes that may be retained.
      * @return Decompressed output bytes.
      * @throws Exception if decompression fails due to stream corruption.
      */
-    fun decompress(bytes: ByteArray): ByteArray
+    fun decompress(bytes: ByteArray, maximumOutputBytes: Int): ByteArray
 }

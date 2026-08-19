@@ -351,6 +351,8 @@ open class KNetApiClient(
         val responseText = when (val decodedResult = BodyDecoder.decode(responseBytes, responseHeadersList)) {
             is DecodedBodyResult.Success -> decodedResult.bytes.decodeToString()
             is DecodedBodyResult.Identity -> decodedResult.bytes.decodeToString()
+            is DecodedBodyResult.OutputLimitExceeded ->
+                "[Decoded payload exceeds ${decodedResult.maximumOutputBytes} bytes]"
             else -> try {
                 responseBytes.decodeToString()
             } catch (_: Exception) {

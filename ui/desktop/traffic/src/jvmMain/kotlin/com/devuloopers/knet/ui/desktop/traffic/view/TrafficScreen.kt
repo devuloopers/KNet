@@ -5,7 +5,9 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
 import com.devuloopers.knet.ui.core.components.split.HorizontalSplitPane
@@ -34,15 +36,24 @@ fun TrafficScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val themeColors = KNetTheme.colors
+    var inspectorSplitRatio by remember { mutableFloatStateOf(0.65f) }
 
     val toolbarState =
-        remember(state.captureState, state.engineState, state.autoScroll, state.searchQuery, state.localIpAddress) {
+        remember(
+            state.captureState,
+            state.engineState,
+            state.autoScroll,
+            state.searchQuery,
+            state.localIpAddress,
+            state.isClearingHistory,
+        ) {
             TrafficToolbarState(
                 captureState = state.captureState,
                 engineState = state.engineState,
                 autoScroll = state.autoScroll,
                 searchQuery = state.searchQuery,
-                localIpAddress = state.localIpAddress
+                localIpAddress = state.localIpAddress,
+                isClearingHistory = state.isClearingHistory,
             )
         }
 
@@ -63,8 +74,7 @@ fun TrafficScreen(
         state.transactions.size,
         state.httpCount,
         state.httpsCount,
-        state.wsCount,
-        state.otherCount,
+        state.http2Count,
         state.columnVisibility
     ) {
         TrafficFilterBarState(
@@ -74,8 +84,7 @@ fun TrafficScreen(
             totalCount = state.transactions.size,
             httpCount = state.httpCount,
             httpsCount = state.httpsCount,
-            wsCount = state.wsCount,
-            otherCount = state.otherCount,
+            http2Count = state.http2Count,
             columnVisibility = state.columnVisibility
         )
     }
@@ -110,7 +119,7 @@ fun TrafficScreen(
 
             // 1.1 Error Banner (Visible when engine error occurs)
             TrafficErrorBanner(
-                errorMessage = state.engineErrorMessage,
+                errorMessage = state.engineErrorMessage ?: state.trafficErrorMessage,
                 onDismiss = { viewModel.processIntent(TrafficIntent.DismissEngineError) }
             )
 
@@ -122,6 +131,8 @@ fun TrafficScreen(
 
             // 3. Central Workspace (Table + Right Docked Resizable Inspector Split)
             HorizontalSplitPane(
+                splitRatio = inspectorSplitRatio,
+                onSplitRatioChange = { inspectorSplitRatio = it },
                 firstPane = { paneModifier ->
                     TrafficTable(
                         transactions = state.filteredTransactions,
@@ -129,7 +140,7 @@ fun TrafficScreen(
                         autoScroll = state.autoScroll,
                         columnVisibility = state.columnVisibility,
                         onSelectTransaction = { viewModel.processIntent(TrafficIntent.SelectTransaction(it)) },
-                        formattedTotalSize = state.formattedTotalSize,
+                        formattedVisibleSize = state.formattedVisibleSize,
                         onSendToApiStudio = handleExportToStudio,
                         onAddBreakpointRule = viewModel::createBreakpointFromTransaction,
                         activeRules = state.activeBreakpointRules,
@@ -144,17 +155,14 @@ fun TrafficScreen(
                         activeTab = state.activeInspectorTab,
                         activeRequestSubTab = state.activeRequestSubTab,
                         activeResponseSubTab = state.activeResponseSubTab,
-                        previewMode = state.previewFormatMode,
                         preparedState = state.preparedState,
                         onTabSelected = { viewModel.processIntent(TrafficIntent.SelectInspectorTab(it)) },
                         onRequestSubTabSelected = { viewModel.processIntent(TrafficIntent.SelectRequestSubTab(it)) },
                         onResponseSubTabSelected = { viewModel.processIntent(TrafficIntent.SelectResponseSubTab(it)) },
-                        onPreviewModeSelected = { viewModel.processIntent(TrafficIntent.SetPreviewFormatMode(it)) },
                         onSendToApiStudio = handleExportToStudio,
                         modifier = paneModifier
                     )
                 },
-                initialSplitRatio = 0.65f,
                 minSplitRatio = 0.2f,
                 maxSplitRatio = 0.85f,
                 modifier = Modifier

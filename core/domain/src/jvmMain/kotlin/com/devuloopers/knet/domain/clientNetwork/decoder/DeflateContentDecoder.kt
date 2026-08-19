@@ -3,7 +3,6 @@ package com.devuloopers.knet.domain.clientNetwork.decoder
 import com.devuloopers.knet.traffic.model.body.ContentEncoding
 
 import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
 import java.util.zip.InflaterInputStream
 
 /**
@@ -12,12 +11,10 @@ import java.util.zip.InflaterInputStream
 class DeflateContentDecoder : ContentDecoder {
     override val encoding: ContentEncoding = ContentEncoding.DEFLATE
 
-    override fun decompress(bytes: ByteArray): ByteArray {
-        ByteArrayInputStream(bytes).use { bais ->
-            InflaterInputStream(bais).use { iis ->
-                val baos = ByteArrayOutputStream()
-                iis.copyTo(baos)
-                return baos.toByteArray()
+    override fun decompress(bytes: ByteArray, maximumOutputBytes: Int): ByteArray {
+        ByteArrayInputStream(bytes).use { input ->
+            InflaterInputStream(input).use { decoded ->
+                return decoded.readBoundedBytes(maximumOutputBytes)
             }
         }
     }

@@ -1,13 +1,14 @@
 package com.devuloopers.knet.ui.desktop.traffic.model
 
 import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
-import com.devuloopers.knet.domain.traffic.model.MethodFilter
-import com.devuloopers.knet.domain.traffic.model.ProtocolFilter
-import com.devuloopers.knet.domain.traffic.model.StatusFilter
 import com.devuloopers.knet.application.port.traffic.TrafficPageCursor
 import com.devuloopers.knet.traffic.id.CaptureSessionId
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
+import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
+import com.devuloopers.knet.traffic.model.http.HttpScheme
+import com.devuloopers.knet.traffic.model.http.StandardApplicationProtocol
+import com.devuloopers.knet.traffic.model.http.StandardHttpScheme
 
 /**
  * Capture execution state enum.
@@ -30,15 +31,6 @@ enum class InspectorTab {
 }
 
 /**
- * Preview format switcher mode enum.
- */
-enum class PreviewFormatMode {
-    PRETTY,
-    RAW,
-    HEX
-}
-
-/**
  * Top-level immutable UI state for `:ui:desktop:traffic` workspace.
  *
  * @property transactions Full live list of captured transactions.
@@ -54,7 +46,6 @@ enum class PreviewFormatMode {
  * @property activeInspectorTab Currently selected inspection tab.
  * @property activeRequestSubTab Currently selected request sub-tab (Headers, Query, Body).
  * @property activeResponseSubTab Currently selected response sub-tab (Headers, Body).
- * @property previewFormatMode Active response/request body preview format mode.
  */
 data class TrafficState(
     val transactions: List<TrafficRowUiState> = emptyList(),
@@ -63,10 +54,12 @@ data class TrafficState(
     val nextPageCursor: TrafficPageCursor? = null,
     val pageGeneration: Long = 0L,
     val isPageLoading: Boolean = false,
+    val isClearingHistory: Boolean = false,
     val selectedTransactionId: String? = null,
     val captureState: CaptureState = CaptureState.STOPPED,
     val engineState: ProxyRuntimeState = ProxyRuntimeState.Stopped,
     val engineErrorMessage: String? = null,
+    val trafficErrorMessage: String? = null,
     val searchQuery: String = "",
     val selectedProtocolFilter: ProtocolFilter = ProtocolFilter.ALL,
     val selectedMethodFilter: MethodFilter = MethodFilter.ALL,
@@ -75,7 +68,6 @@ data class TrafficState(
     val activeInspectorTab: InspectorTab = InspectorTab.OVERVIEW,
     val activeRequestSubTab: InspectorSubTab = InspectorSubTab.BODY,
     val activeResponseSubTab: InspectorSubTab = InspectorSubTab.BODY,
-    val previewFormatMode: PreviewFormatMode = PreviewFormatMode.PRETTY,
     val columnVisibility: ColumnVisibilityState = ColumnVisibilityState(),
     val preparedState: InspectorPreparedState = InspectorPreparedState(),
     val localIpAddress: String = "127.0.0.1",
@@ -95,37 +87,20 @@ data class TrafficState(
      * Calculated statistics counts for quick protocol chips.
      */
     val httpCount: Int
-        get() = transactions.count {
-            it.protocol.startsWith("HTTP/1") || (it.protocol.startsWith("HTTP") && !it.protocol.startsWith(
-                "HTTP/2"
-            ))
-        }
+        get() = transactions.count { row -> row.scheme.isStandard(StandardHttpScheme.HTTP) }
 
     val httpsCount: Int
-        get() = transactions.count {
-            it.protocol.startsWith("HTTP/2") || it.protocol.equals(
-                "HTTPS",
-                ignoreCase = true
-            )
-        }
+        get() = transactions.count { row -> row.scheme.isStandard(StandardHttpScheme.HTTPS) }
 
-    val wsCount: Int
-        get() = transactions.count {
-            it.method.equals("WS", ignoreCase = true) || it.protocol.equals(
-                "WS",
-                ignoreCase = true
-            )
-        }
-
-    val otherCount: Int
-        get() = (transactions.size - (httpCount + httpsCount + wsCount)).coerceAtLeast(0)
+    val http2Count: Int
+        get() = transactions.count { row -> row.protocol.isStandard(StandardApplicationProtocol.HTTP_2) }
 
     /**
      * Calculated total transferred payload size string.
      */
-    val formattedTotalSize: String
+    val formattedVisibleSize: String
         get() {
-            val totalBytes = transactions.sumOf { tx -> tx.transferredBytes }
+            val totalBytes = filteredTransactions.sumOf { transaction -> transaction.transferredBytes }
             return when {
                 totalBytes >= 1024 * 1024 -> "${(totalBytes / (1024.0 * 1024.0) * 100).toLong() / 100.0} MB"
                 totalBytes >= 1024 -> "${(totalBytes / 1024.0 * 100).toLong() / 100.0} KB"
@@ -133,3 +108,9 @@ data class TrafficState(
             }
         }
 }
+
+private fun HttpScheme.isStandard(expected: StandardHttpScheme): Boolean =
+    this is HttpScheme.Standard && value == expected
+
+private fun ApplicationProtocol.isStandard(expected: StandardApplicationProtocol): Boolean =
+    this is ApplicationProtocol.Standard && value == expected

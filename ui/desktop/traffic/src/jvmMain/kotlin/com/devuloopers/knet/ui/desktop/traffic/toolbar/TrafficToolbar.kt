@@ -33,7 +33,8 @@ data class TrafficToolbarState(
     val engineState: ProxyRuntimeState = ProxyRuntimeState.Stopped,
     val autoScroll: Boolean = true,
     val searchQuery: String = "",
-    val localIpAddress: String = "127.0.0.1"
+    val localIpAddress: String = "127.0.0.1",
+    val isClearingHistory: Boolean = false,
 )
 
 /**
@@ -174,7 +175,7 @@ fun TrafficToolbar(
                     modifier = Modifier
                         .clip(shapes.small)
                         .background(themeColors.border)
-                        .clickable { actions.onClearFeed() }
+                        .clickable(enabled = !state.isClearingHistory) { actions.onClearFeed() }
                         .padding(horizontal = spacing.sm, vertical = spacing.xs)
                         .handCursor(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -187,7 +188,7 @@ fun TrafficToolbar(
                         modifier = Modifier.size(dimensions.iconSizeSmall)
                     )
                     Text(
-                        text = "Clear",
+                        text = if (state.isClearingHistory) "Clearing…" else "Clear",
                         style = typography.bodySmall.copy(
                             color = themeColors.textSecondary
                         ),

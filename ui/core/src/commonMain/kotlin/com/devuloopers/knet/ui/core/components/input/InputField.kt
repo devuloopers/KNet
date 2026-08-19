@@ -2,7 +2,6 @@ package com.devuloopers.knet.ui.core.components.input
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,9 +13,9 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -30,10 +29,12 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.IntOffset
@@ -47,7 +48,8 @@ import androidx.compose.ui.window.PopupProperties
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
+import com.devuloopers.knet.ui.core.components.button.KNetIconButton
+import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.pointer.textCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
@@ -67,9 +69,22 @@ private class BelowAnchorPopupPositionProvider(
         layoutDirection: LayoutDirection,
         popupContentSize: IntSize
     ): IntOffset {
-        val x = anchorBounds.left
-        val y = anchorBounds.bottom + offsetPx
+        val maxX = (windowSize.width - popupContentSize.width).coerceAtLeast(0)
+        val x = anchorBounds.left.coerceIn(0, maxX)
+        val belowY = anchorBounds.bottom + offsetPx
+        val aboveY = anchorBounds.top - popupContentSize.height - offsetPx
+        val maxY = (windowSize.height - popupContentSize.height).coerceAtLeast(0)
+        val y = (if (belowY + popupContentSize.height <= windowSize.height) belowY else aboveY).coerceIn(0, maxY)
         return IntOffset(x, y)
+    }
+}
+
+private class HoverDelayController {
+    var job: Job? = null
+
+    fun cancel() {
+        job?.cancel()
+        job = null
     }
 }
 
@@ -93,25 +108,36 @@ fun KNetTextField(
     val dimensions = KNetTheme.dimensions
     val density = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
-
-    val backgroundColor = config.backgroundColor ?: themeColors.surfaceVariant
-    val borderColor = config.borderColor ?: if (state.isError) themeColors.semantic.error else themeColors.border
-    val textStyle = typography.bodySmall.copy(color = themeColors.textPrimary)
+    val hoverDelayController = remember { HoverDelayController() }
 
     var containerWidthPx by remember { mutableStateOf(0) }
     var isHovered by remember { mutableStateOf(false) }
     var isMouseStationary by remember { mutableStateOf(false) }
-    var hoverJob by remember { mutableStateOf<Job?>(null) }
+    var wasFocused by remember { mutableStateOf(false) }
+
+    val backgroundColor = config.backgroundColor ?: themeColors.surfaceVariant
+    val borderColor = config.borderColor ?: when {
+        state.isError -> themeColors.semantic.error
+        wasFocused -> themeColors.borderFocused
+        else -> themeColors.border
+    }
+    val textStyle = typography.bodySmall.copy(
+        color = if (state.enabled) themeColors.textPrimary else themeColors.textMuted
+    )
 
     fun resetHoverTimer() {
         isMouseStationary = false
-        hoverJob?.cancel()
+        hoverDelayController.cancel()
         if (isHovered) {
-            hoverJob = coroutineScope.launch {
+            hoverDelayController.job = coroutineScope.launch {
                 delay(config.hoverDebounceMs)
                 isMouseStationary = true
             }
         }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose(hoverDelayController::cancel)
     }
 
     // Measure exact text width reactively
@@ -128,14 +154,12 @@ fun KNetTextField(
     val shouldShowPopup = config.showHoverPopupOnOverflow && !isPassword && isHovered && isMouseStationary && isOverflowing && value.text.isNotEmpty()
 
     Column(
-        modifier = Modifier
-            .height(dimensions.inputHeightStandard)
-            .then(modifier)
+        modifier = modifier
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .fillMaxHeight()
+                .height(config.fieldHeight ?: dimensions.inputHeightStandard)
                 .onSizeChanged { containerWidthPx = it.width }
                 .onPointerEvent(PointerEventType.Enter) {
                     isHovered = true
@@ -147,7 +171,7 @@ fun KNetTextField(
                 .onPointerEvent(PointerEventType.Exit) {
                     isHovered = false
                     isMouseStationary = false
-                    hoverJob?.cancel()
+                    hoverDelayController.cancel()
                 }
         ) {
             BasicTextField(
@@ -158,6 +182,12 @@ fun KNetTextField(
                     .clip(shapes.small)
                     .background(backgroundColor)
                     .then(if (borderColor != androidx.compose.ui.graphics.Color.Transparent) Modifier.border(1.dp, borderColor, shapes.small) else Modifier)
+                    .onFocusChanged { focusState ->
+                        if (focusState.isFocused && !wasFocused && config.autoSelectAllOnFocus && value.text.isNotEmpty()) {
+                            onValueChange(value.copy(selection = TextRange(0, value.text.length)))
+                        }
+                        wasFocused = focusState.isFocused
+                    }
                     .textCursor(),
                 enabled = state.enabled,
                 readOnly = state.readOnly,
@@ -250,7 +280,11 @@ fun KNetTextField(
     slots: InputFieldSlots = InputFieldSlots.Empty
 ) {
     var tfv by remember { mutableStateOf(TextFieldValue(text = value)) }
-    val currentTfv = if (tfv.text == value) tfv else TextFieldValue(text = value)
+    val currentTfv = if (tfv.text == value) {
+        tfv
+    } else {
+        TextFieldValue(text = value, selection = TextRange(value.length))
+    }
 
     KNetTextField(
         value = currentTfv,
@@ -266,168 +300,6 @@ fun KNetTextField(
 }
 
 /**
- * Convenience inline overload for simple single-line fields with discrete arguments.
- */
-@Composable
-fun KNetTextField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    placeholder: String = "",
-    prefix: (@Composable () -> Unit)? = null,
-    suffix: (@Composable () -> Unit)? = null,
-    supportingText: String? = null,
-    enabled: Boolean = true,
-    readOnly: Boolean = false,
-    isError: Boolean = false,
-    visualTransformation: VisualTransformation = VisualTransformation.None,
-    keyboardOptions: KeyboardOptions = KeyboardOptions.Default
-) {
-    KNetTextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = modifier,
-        config = InputFieldConfig(
-            placeholder = placeholder,
-            supportingText = supportingText,
-            visualTransformation = visualTransformation,
-            keyboardOptions = keyboardOptions
-        ),
-        state = InputFieldState(
-            enabled = enabled,
-            readOnly = readOnly,
-            isError = isError
-        ),
-        slots = InputFieldSlots(
-            prefix = prefix,
-            suffix = suffix
-        )
-    )
-}
-
-/**
- * Convenience inline overload for simple single-line fields with discrete arguments (TextFieldValue).
- */
-@Composable
-fun KNetTextField(
-    value: TextFieldValue,
-    onValueChange: (TextFieldValue) -> Unit,
-    modifier: Modifier = Modifier,
-    placeholder: String = "",
-    prefix: (@Composable () -> Unit)? = null,
-    suffix: (@Composable () -> Unit)? = null,
-    supportingText: String? = null,
-    enabled: Boolean = true,
-    readOnly: Boolean = false,
-    isError: Boolean = false,
-    visualTransformation: VisualTransformation = VisualTransformation.None,
-    keyboardOptions: KeyboardOptions = KeyboardOptions.Default
-) {
-    KNetTextField(
-        value = value,
-        onValueChange = onValueChange,
-        modifier = modifier,
-        config = InputFieldConfig(
-            placeholder = placeholder,
-            supportingText = supportingText,
-            visualTransformation = visualTransformation,
-            keyboardOptions = keyboardOptions
-        ),
-        state = InputFieldState(
-            enabled = enabled,
-            readOnly = readOnly,
-            isError = isError
-        ),
-        slots = InputFieldSlots(
-            prefix = prefix,
-            suffix = suffix
-        )
-    )
-}
-
-/**
- * High-density input field wrapper alias (TextFieldValue variant).
- */
-@Composable
-fun KNetInputField(
-    value: TextFieldValue,
-    onValueChange: (TextFieldValue) -> Unit,
-    modifier: Modifier = Modifier,
-    placeholder: String = "",
-    enabled: Boolean = true,
-    readOnly: Boolean = false,
-    singleLine: Boolean = true,
-    isError: Boolean = false,
-    visualTransformation: VisualTransformation = VisualTransformation.None,
-    keyboardOptions: KeyboardOptions = KeyboardOptions.Default
-) {
-    if (singleLine) {
-        KNetTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = modifier,
-            placeholder = placeholder,
-            enabled = enabled,
-            readOnly = readOnly,
-            isError = isError,
-            visualTransformation = visualTransformation,
-            keyboardOptions = keyboardOptions
-        )
-    } else {
-        KNetMultilineField(
-            value = value.text,
-            onValueChange = { onValueChange(TextFieldValue(it)) },
-            modifier = modifier,
-            placeholder = placeholder,
-            enabled = enabled,
-            readOnly = readOnly,
-            isError = isError
-        )
-    }
-}
-
-/**
- * High-density input field wrapper alias.
- */
-@Composable
-fun KNetInputField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    modifier: Modifier = Modifier,
-    placeholder: String = "",
-    enabled: Boolean = true,
-    readOnly: Boolean = false,
-    singleLine: Boolean = true,
-    isError: Boolean = false,
-    visualTransformation: VisualTransformation = VisualTransformation.None,
-    keyboardOptions: KeyboardOptions = KeyboardOptions.Default
-) {
-    if (singleLine) {
-        KNetTextField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = modifier,
-            placeholder = placeholder,
-            enabled = enabled,
-            readOnly = readOnly,
-            isError = isError,
-            visualTransformation = visualTransformation,
-            keyboardOptions = keyboardOptions
-        )
-    } else {
-        KNetMultilineField(
-            value = value,
-            onValueChange = onValueChange,
-            modifier = modifier,
-            placeholder = placeholder,
-            enabled = enabled,
-            readOnly = readOnly,
-            isError = isError
-        )
-    }
-}
-
-/**
  * Password field with toggleable trailing visibility icon.
  */
 @Composable
@@ -438,16 +310,30 @@ fun KNetPasswordField(
     placeholder: String = "Password",
     enabled: Boolean = true
 ) {
+    var passwordVisible by remember { mutableStateOf(false) }
     KNetTextField(
         value = value,
         onValueChange = onValueChange,
         modifier = modifier,
         config = InputFieldConfig(
             placeholder = placeholder,
-            visualTransformation = PasswordVisualTransformation(),
+            visualTransformation = if (passwordVisible) VisualTransformation.None else PasswordVisualTransformation(),
             showHoverPopupOnOverflow = false
         ),
-        state = InputFieldState(enabled = enabled)
+        state = InputFieldState(enabled = enabled),
+        slots = InputFieldSlots(
+            suffix = {
+                KNetIconButton(
+                    onClick = { passwordVisible = !passwordVisible },
+                    icon = if (passwordVisible) KNetIcons.VisibilityOff else KNetIcons.Visibility,
+                    contentDescription = if (passwordVisible) "Hide password" else "Show password",
+                    enabled = enabled,
+                    size = 28.dp,
+                    iconSize = 15.dp,
+                    tint = KNetTheme.colors.textSecondary
+                )
+            }
+        )
     )
 }
 
@@ -456,8 +342,8 @@ fun KNetPasswordField(
  */
 @Composable
 fun KNetMultilineField(
-    value: String,
-    onValueChange: (String) -> Unit,
+    value: TextFieldValue,
+    onValueChange: (TextFieldValue) -> Unit,
     modifier: Modifier = Modifier,
     placeholder: String = "",
     enabled: Boolean = true,
@@ -467,8 +353,12 @@ fun KNetMultilineField(
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
     val shapes = KNetTheme.shapes
-
-    val borderColor = if (isError) themeColors.semantic.error else themeColors.border
+    var focused by remember { mutableStateOf(false) }
+    val borderColor = when {
+        isError -> themeColors.semantic.error
+        focused -> themeColors.borderFocused
+        else -> themeColors.border
+    }
 
     BasicTextField(
         value = value,
@@ -479,16 +369,19 @@ fun KNetMultilineField(
             .clip(shapes.small)
             .background(themeColors.surfaceVariant)
             .border(1.dp, borderColor, shapes.small)
+            .onFocusChanged { focused = it.isFocused }
             .textCursor()
             .padding(8.dp),
         enabled = enabled,
         readOnly = readOnly,
         singleLine = false,
-        textStyle = typography.bodySmall.copy(color = themeColors.textPrimary),
+        textStyle = typography.bodySmall.copy(
+            color = if (enabled) themeColors.textPrimary else themeColors.textMuted
+        ),
         cursorBrush = SolidColor(themeColors.accent),
         decorationBox = { innerTextField ->
             Box(contentAlignment = Alignment.TopStart) {
-                if (value.isEmpty() && placeholder.isNotEmpty()) {
+                if (value.text.isEmpty() && placeholder.isNotEmpty()) {
                     Text(
                         text = placeholder,
                         style = typography.bodySmall.copy(color = themeColors.textMuted)
@@ -497,5 +390,32 @@ fun KNetMultilineField(
                 innerTextField()
             }
         }
+    )
+}
+
+/** String convenience overload for [KNetMultilineField]. */
+@Composable
+fun KNetMultilineField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String = "",
+    enabled: Boolean = true,
+    readOnly: Boolean = false,
+    isError: Boolean = false
+) {
+    var textFieldValue by remember { mutableStateOf(TextFieldValue(value)) }
+    val resolvedValue = if (textFieldValue.text == value) textFieldValue else TextFieldValue(value, TextRange(value.length))
+    KNetMultilineField(
+        value = resolvedValue,
+        onValueChange = {
+            textFieldValue = it
+            onValueChange(it.text)
+        },
+        modifier = modifier,
+        placeholder = placeholder,
+        enabled = enabled,
+        readOnly = readOnly,
+        isError = isError
     )
 }

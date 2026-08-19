@@ -35,7 +35,7 @@ import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.ui.core.components.switch.KNetSwitch
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
-import com.devuloopers.knet.ui.core.foundation.theme.HttpMethodColors
+import com.devuloopers.knet.ui.desktop.httppanel.theme.HttpMethodColors
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 /**

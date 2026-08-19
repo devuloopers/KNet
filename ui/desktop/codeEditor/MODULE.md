@@ -19,9 +19,13 @@ The detailed design and extension guide is the repository-level
 - Literal and regular-expression find/replace in document coordinates.
 - Language registration and optional syntax, folding, indentation, bracket, and comment capabilities.
 - Stateful cross-line tokenization and incremental token projection.
+- Bounded immediate syntax presentation that keeps unchanged semantic colors stable between a document edit
+  and authoritative background-token convergence.
 - Compose state, semantic-token rendering, virtualized lines, keyboard/pointer interaction, folding,
   bracket auto-closing, language-aware comment toggling, built-in find/replace, clipboard actions,
   theming, and the controlled-string compatibility facade.
+- Viewport-contained word wrapping by default, variable-height logical rows, and wrapped-row-aware caret
+  navigation. Horizontal scrolling remains an explicit standalone-consumer opt-out.
 - Cooperative cancellation checkpoints for syntax, folding, and search work.
 
 ## Does not own
@@ -70,18 +74,28 @@ no dependency on KNet domain, traffic, application, engine, storage, or product 
 2. UI intent is translated into an `EditorTextEdit` or session command.
 3. `EditorSession` is the only document/history/caret/selection mutation owner.
 4. `ChunkedEditorDocument` publishes a new immutable snapshot and exact change delta.
-5. Compose observes the snapshot; syntax, folding, and search run on a worker dispatcher using the
-   immutable snapshot and cooperative cancellation.
-6. Only visible logical lines are composed. Syntax and document projections reuse unchanged chunks.
-7. Consumers receive exact session events; full-string serialization is explicit and opt-in.
+5. Compose observes the snapshot and immediately projects small syntax changes onto the new version without
+   discarding unchanged token chunks.
+6. Authoritative syntax, folding, and search work runs on a worker dispatcher using the immutable snapshot and
+   cooperative cancellation.
+7. Only visible logical lines are composed. Syntax and document projections reuse unchanged chunks.
+8. Consumers receive exact session events; full-string serialization is explicit and opt-in.
 
 Pointer ownership is fixed at the initial primary-button press. A gesture that starts over text keeps
 selection and auto-scroll ownership even after crossing a scrollbar hit zone; a gesture that starts on a
 scrollbar remains scrollbar-owned until release.
+Wrapped viewports do not reserve a bottom scrollbar hit zone because no horizontal scrollbar is rendered.
 
 Viewport selection painting is deterministic before and after a row receives native text-layout data.
 Selected line breaks occupy one character cell, zero-width range endpoints do not paint, and active-line
 text input does not publish focus-driven caret changes while a pointer drag selection is in progress.
+The keyed logical row retains compatible measured geometry while its read-only and editable renderers swap,
+while pointer-down gesture ownership protects selection from native caret and focus side effects before the
+selection has non-zero length. Active-line paint depends only on the caret line and remains stable while a
+selection is created or cleared on that line. Real whitespace remains selectable; unused viewport width never
+becomes a selection rectangle.
+Both renderer content surfaces retain the gutter's minimum logical-line height even when wrapping is enabled,
+so selection paint is continuous between logical rows while wrapped content can still grow naturally.
 Selection paint owns each complete visual-line slot, including the leading around centred text, so adjacent
 selected lines have no seams while typography, baselines, and vertical line spacing remain unchanged.
 
@@ -95,8 +109,12 @@ language's line or block comment capability.
 - A one-line edit copies at most one bounded document chunk plus the outer chunk index.
 - History retains changed fragments, not complete document snapshots.
 - Incremental syntax retains unchanged token chunks and cross-line lexical state.
+- Immediate presentation retokenizes at most 32 changed lines and 32 KiB of changed text on the UI thread;
+  larger edited lines are temporarily unstyled until background convergence.
 - The ordinary unfolded viewport uses an identity map without per-line mapping arrays.
 - Collapsed-fold mappings allocate only while folds are actually collapsed.
+- Word wrapping changes only visual layout. It never inserts document newlines, changes logical line numbers,
+  or alters serialized request, response, GraphQL, or script text.
 - Long-running syntax, folding, and search loops invoke cancellation checkpoints every bounded block.
 
 ## Language extension rule

@@ -4,7 +4,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.devuloopers.knet.ui.core.components.tabs.KNetTab
-import com.devuloopers.knet.ui.core.components.tabs.ScrollableTabRow
+import com.devuloopers.knet.ui.core.components.tabs.KNetTabRow
 import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
 
 /**
@@ -29,7 +29,7 @@ fun InspectorSubTabRow(
     cookieCount: Int = 0,
     modifier: Modifier = Modifier
 ) {
-    ScrollableTabRow(
+    KNetTabRow(
         modifier = modifier.fillMaxWidth()
     ) {
         tabs.forEach { subTab ->

@@ -20,12 +20,18 @@ fun isBinaryContentType(contentType: String?): Boolean {
 
 /**
  * Safely decodes a byte array into a UTF-8 string payload, executing transport Content-Encoding decompression.
+ *
+ * @param body Raw body bytes, or null when no body was captured.
+ * @param headers Ordered HTTP header pairs used for content encoding and media type.
+ * @param maximumDecodedBytes Maximum decoded bytes retained before a typed limit result is rendered.
+ * @return Decoded text or a safe bounded diagnostic placeholder.
  */
 fun decodeBodyToText(
     body: ByteArray?,
-    headers: List<Pair<String, String>> = emptyList()
+    headers: List<Pair<String, String>> = emptyList(),
+    maximumDecodedBytes: Int = 4 * 1024 * 1024,
 ): String {
-    val decodedBodyResult = BodyDecoder.decode(body, headers)
+    val decodedBodyResult = BodyDecoder.decode(body, headers, maximumDecodedBytes)
     return when (val textResult = BodyTextDecoder.decode(decodedBodyResult, headers)) {
         is DecodedTextResult.Success -> textResult.text
         is DecodedTextResult.BinaryKnownType -> "[Binary Payload - ${textResult.size} B (${textResult.category.name})]"
@@ -44,7 +50,7 @@ fun formatJsonIfPossible(rawJson: String): String {
         val json = Json { prettyPrint = true }
         val element = json.parseToJsonElement(rawJson)
         json.encodeToString(JsonElement.serializer(), element)
-    } catch (_: Throwable) {
+    } catch (_: Exception) {
         rawJson
     }
 }

@@ -17,60 +17,75 @@ import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.HttpExchangeSnapshot
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.withContext
-import java.util.concurrent.atomic.AtomicLong
 import kotlin.io.encoding.Base64
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.updateAndGet
 
 /**
  * Indexed canonical [TrafficQueryPort] over current exchange/body metadata.
  *
- * @property sessionId Session exclusively queried by this adapter.
- * @property dao Canonical Room DAO.
- * @property bodyStore Opaque bounded body access implementation.
+ * A null configured session permits a query across every retained capture session. This remains an
+ * internal storage implementation detail; application callers express scope through [TrafficPageQuery].
  */
-class CanonicalTrafficQueryAdapter(
-    private val sessionId: CaptureSessionId,
+internal class CanonicalTrafficQueryAdapter(
+    private val sessionId: CaptureSessionId?,
     private val dao: CanonicalCaptureDao,
     private val bodyStore: BodyStorePort,
+    private val currentGeneration: () -> Long = { 0L },
 ) : TrafficQueryPort {
-    private val observedGeneration = AtomicLong(0L)
+    private val observedGeneration = MutableStateFlow(0L)
 
-    override val generations: Flow<TrafficGeneration> = flow {
-        dao.observeExchangeChangeScalar(sessionId.value).collect {
-            emit(TrafficGeneration(sessionId, observedGeneration.incrementAndGet()))
+    override val generations: Flow<TrafficGeneration> = sessionId?.let { configuredSessionId ->
+        flow {
+            dao.observeExchangeChangeScalar(configuredSessionId.value).collect {
+                emit(TrafficGeneration(configuredSessionId, observedGeneration.updateAndGet { value -> value + 1L }))
+            }
         }
-    }
+    } ?: emptyFlow()
 
     override suspend fun query(query: TrafficPageQuery): TrafficPage = withContext(Dispatchers.IO) {
-        if (query.sessionId != sessionId) {
-            return@withContext TrafficPage(emptyList(), null, observedGeneration.get())
+        if (sessionId != null && query.sessionId != null && query.sessionId != sessionId) {
+            return@withContext TrafficPage(emptyList(), null, currentGenerationValue())
         }
+        val selectedSessionId = query.sessionId ?: sessionId
         val cursor = query.cursor?.let { CanonicalTrafficCursorCodec.decode(it, query.direction) }
         val methods = query.methods.map { it.token }.ifEmpty { listOf(UNUSED_METHOD) }
         val statuses = query.statuses.map { it.code }.ifEmpty { listOf(UNUSED_STATUS) }
-        val hostPattern = query.hostContains?.takeIf { it.isNotBlank() }?.let(::escapedContainsPattern)
+        val schemes = query.schemes.map { it.token }.ifEmpty { listOf(UNUSED_SCHEME) }
+        val protocols = query.protocols.map { it.token }.ifEmpty { listOf(UNUSED_PROTOCOL) }
+        val searchPattern = query.searchContains?.takeIf { it.isNotBlank() }?.let(::escapedContainsPattern)
         val entities = when (query.direction) {
             TrafficSortDirection.NEWEST_FIRST -> dao.getNewestExchangePage(
-                sessionId = sessionId.value,
+                sessionId = selectedSessionId?.value,
                 cursorTimestamp = cursor?.startedAtEpochMillis,
                 cursorId = cursor?.exchangeId,
-                hostPattern = hostPattern,
+                searchPattern = searchPattern,
                 filterMethods = if (query.methods.isEmpty()) 0 else 1,
                 methods = methods,
                 filterStatuses = if (query.statuses.isEmpty()) 0 else 1,
                 statuses = statuses,
+                filterSchemes = if (query.schemes.isEmpty()) 0 else 1,
+                schemes = schemes,
+                filterProtocols = if (query.protocols.isEmpty()) 0 else 1,
+                protocols = protocols,
                 limit = query.limit + 1,
             )
             TrafficSortDirection.OLDEST_FIRST -> dao.getOldestExchangePage(
-                sessionId = sessionId.value,
+                sessionId = selectedSessionId?.value,
                 cursorTimestamp = cursor?.startedAtEpochMillis,
                 cursorId = cursor?.exchangeId,
-                hostPattern = hostPattern,
+                searchPattern = searchPattern,
                 filterMethods = if (query.methods.isEmpty()) 0 else 1,
                 methods = methods,
                 filterStatuses = if (query.statuses.isEmpty()) 0 else 1,
                 statuses = statuses,
+                filterSchemes = if (query.schemes.isEmpty()) 0 else 1,
+                schemes = schemes,
+                filterProtocols = if (query.protocols.isEmpty()) 0 else 1,
+                protocols = protocols,
                 limit = query.limit + 1,
             )
         }
@@ -84,7 +99,7 @@ class CanonicalTrafficQueryAdapter(
                     CanonicalPageKey(entity.startedAtEpochMillis, entity.id, query.direction)
                 )
             },
-            generation = observedGeneration.get(),
+            generation = currentGenerationValue(),
         )
     }
 
@@ -103,6 +118,8 @@ class CanonicalTrafficQueryAdapter(
         ?.let { bodyIds -> dao.getBodies(bodyIds).associateBy { body -> body.id } }
         ?: emptyMap()
 
+    private fun currentGenerationValue(): Long = maxOf(observedGeneration.value, currentGeneration())
+
     /** Escapes SQL LIKE metacharacters before adding a contains pattern. */
     private fun escapedContainsPattern(value: String): String {
         val escaped = value
@@ -115,6 +132,8 @@ class CanonicalTrafficQueryAdapter(
     private companion object {
         private const val UNUSED_METHOD = "__KNET_NO_METHOD__"
         private const val UNUSED_STATUS = -1
+        private const val UNUSED_SCHEME = "__KNET_NO_SCHEME__"
+        private const val UNUSED_PROTOCOL = "__KNET_NO_PROTOCOL__"
     }
 }
 

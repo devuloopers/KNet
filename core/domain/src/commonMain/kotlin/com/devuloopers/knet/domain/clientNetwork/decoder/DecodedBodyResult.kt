@@ -82,4 +82,15 @@ sealed interface DecodedBodyResult {
             return result
         }
     }
+
+    /**
+     * Decoding stopped before retaining more than the caller's explicit output budget.
+     *
+     * @property encoding Content encoding whose output exceeded the budget.
+     * @property maximumOutputBytes Maximum permitted decoded byte count.
+     */
+    data class OutputLimitExceeded(
+        val encoding: String,
+        val maximumOutputBytes: Int,
+    ) : DecodedBodyResult
 }

@@ -31,7 +31,8 @@ import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.badge.KNetBadge
 import com.devuloopers.knet.ui.core.components.button.KNetIconButton
 import com.devuloopers.knet.ui.core.components.divider.HorizontalDivider
-import com.devuloopers.knet.ui.core.components.input.KNetInputField
+import com.devuloopers.knet.ui.core.components.input.InputFieldConfig
+import com.devuloopers.knet.ui.core.components.input.KNetTextField
 import com.devuloopers.knet.ui.core.components.menu.ContextMenuItem
 import com.devuloopers.knet.ui.core.components.menu.KNetContextMenuArea
 import com.devuloopers.knet.ui.core.components.treeview.TreeNode
@@ -181,10 +182,10 @@ fun CollectionsSidebar(
 
         // 2. Search Bar
         Box(modifier = Modifier.padding(horizontal = spacing.md, vertical = spacing.xs)) {
-            KNetInputField(
+            KNetTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = "Search...",
+                config = InputFieldConfig(placeholder = "Search…"),
                 modifier = Modifier.fillMaxWidth()
             )
         }

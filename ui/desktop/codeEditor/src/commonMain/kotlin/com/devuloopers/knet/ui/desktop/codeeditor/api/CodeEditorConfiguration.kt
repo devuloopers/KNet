@@ -72,7 +72,8 @@ data class CodeEditorStrings(
  * @property mode Read-only or editable behavior.
  * @property language Language contribution selected from the active registry.
  * @property isFoldingEnabled Whether language-provided folding is enabled.
- * @property isWordWrapEnabled Whether long logical lines wrap. Code-editor default is disabled.
+ * @property isWordWrapEnabled Whether long logical lines wrap. Enabled by default so content stays within
+ * the viewport; disabling it opts a standalone consumer into horizontal scrolling.
  * @property header Header visibility configuration.
  * @property placeholder Empty editable-document placeholder.
  * @property isSearchEnabled Whether the built-in find/replace surface and shortcut are enabled.
@@ -83,7 +84,7 @@ data class CodeEditorConfiguration(
     val mode: EditorMode = EditorMode.ReadOnly,
     val language: CodeLanguage = CodeLanguage.PLAIN,
     val isFoldingEnabled: Boolean = true,
-    val isWordWrapEnabled: Boolean = false,
+    val isWordWrapEnabled: Boolean = true,
     val header: CodeEditorHeaderConfiguration = CodeEditorHeaderConfiguration(),
     val placeholder: String = "",
     val isSearchEnabled: Boolean = true,

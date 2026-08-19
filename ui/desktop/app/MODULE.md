@@ -7,6 +7,8 @@ Provides the desktop application shell, navigation host, window scaffold, notifi
 ## Owns
 
 - Top-level routes, including Connect Device hosting, navigation state, shell layout, and global UI surfaces.
+- Sidebar grouping and ordering: primary inspection tools precede the divider; Connect Device then Certificates
+  form the setup/security group; Settings remains anchored above the branding footer.
 - Workspace-level placement of the Live Intercept drawer above destination-owned drawers, gated until its canonical Traffic row is projected.
 
 ## Does not own

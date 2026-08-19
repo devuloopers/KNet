@@ -1,9 +1,6 @@
 package com.devuloopers.knet.ui.core.components.button
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +13,8 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,7 +32,17 @@ import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.foundation.clipboard.setPlainText
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
+
+private class CopyJobController {
+    var job: Job? = null
+
+    fun cancel() {
+        job?.cancel()
+        job = null
+    }
+}
 
 /**
  * Shared Copy Button primitive encapsulating the modern Compose Multiplatform Clipboard API.
@@ -54,12 +63,17 @@ fun KNetCopyButton(
     val coroutineScope = rememberCoroutineScope()
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
+    val motion = KNetTheme.motion
+    val copyJobController = remember { CopyJobController() }
 
     var isCopied by remember { mutableStateOf(false) }
+    DisposableEffect(Unit) { onDispose(copyJobController::cancel) }
 
     val activeColor by animateColorAsState(
         targetValue = if (isCopied) themeColors.semantic.success else tint,
-        animationSpec = tween(durationMillis = 200)
+        animationSpec = tween(
+            durationMillis = if (motion.animationsEnabled) motion.durationNormal else motion.durationInstant
+        )
     )
 
     Row(
@@ -78,12 +92,15 @@ fun KNetCopyButton(
         } else {
             KNetIconButton(
                 onClick = {
-                    coroutineScope.launch {
-                        clipboard.setPlainText(textToCopy)
-                        isCopied = true
-                        onCopied?.invoke()
-                        delay(2000)
-                        isCopied = false
+                    copyJobController.cancel()
+                    copyJobController.job = coroutineScope.launch {
+                        runCatching { clipboard.setPlainText(textToCopy) }
+                            .onSuccess {
+                                isCopied = true
+                                onCopied?.invoke()
+                                delay(motion.durationFeedback.toLong())
+                                isCopied = false
+                            }
                     }
                 },
                 icon = if (isCopied) Icons.Default.Check else Icons.Default.ContentCopy,
@@ -101,6 +118,7 @@ fun KNetCopyButton(
  * @property label User-facing option label.
  * @property getTextToCopy Callback returning the string formatted according to this option.
  */
+@Immutable
 data class KNetCopyOption(
     val label: String,
     val getTextToCopy: () -> String
@@ -127,22 +145,30 @@ fun KNetCopyDropdownButton(
     val clipboard = LocalClipboard.current
     val coroutineScope = rememberCoroutineScope()
     val themeColors = KNetTheme.colors
+    val motion = KNetTheme.motion
+    val copyJobController = remember { CopyJobController() }
 
     var isCopied by remember { mutableStateOf(false) }
     var isMenuExpanded by remember { mutableStateOf(false) }
+    DisposableEffect(Unit) { onDispose(copyJobController::cancel) }
 
     fun performCopy(text: String) {
-        coroutineScope.launch {
-            clipboard.setPlainText(text)
-            isCopied = true
-            delay(2000)
-            isCopied = false
+        copyJobController.cancel()
+        copyJobController.job = coroutineScope.launch {
+            runCatching { clipboard.setPlainText(text) }
+                .onSuccess {
+                    isCopied = true
+                    delay(motion.durationFeedback.toLong())
+                    isCopied = false
+                }
         }
     }
 
     val iconColor by animateColorAsState(
         targetValue = if (isCopied) themeColors.semantic.success else tint,
-        animationSpec = tween(durationMillis = 200)
+        animationSpec = tween(
+            durationMillis = if (motion.animationsEnabled) motion.durationNormal else motion.durationInstant
+        )
     )
 
     Row(

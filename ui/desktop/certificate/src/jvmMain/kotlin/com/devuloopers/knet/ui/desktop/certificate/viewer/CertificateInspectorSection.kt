@@ -10,10 +10,10 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.devuloopers.knet.ui.core.foundation.color.KNetColors
-import com.devuloopers.knet.ui.core.foundation.typography.KNetTypography
+import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 @Composable
 fun CertificateInspectorSection(
@@ -23,12 +23,14 @@ fun CertificateInspectorSection(
     content: @Composable () -> Unit
 ) {
     var expanded by remember { mutableStateOf(initiallyExpanded) }
+    val colors = KNetTheme.colors
+    val typography = KNetTheme.typography
 
     Column(modifier = modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable { expanded = !expanded }
+                .clickable(role = Role.Button) { expanded = !expanded }
                 .padding(vertical = 12.dp, horizontal = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -39,14 +41,14 @@ fun CertificateInspectorSection(
                     Icons.AutoMirrored.Filled.KeyboardArrowRight
                 },
                 contentDescription = if (expanded) "Collapse" else "Expand",
-                tint = KNetColors.Dark.textSecondary,
+                tint = colors.textSecondary,
                 modifier = Modifier.size(20.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text(
                 text = title,
-                style = KNetTypography.labelSmall.copy(fontWeight = FontWeight.Bold),
-                color = KNetColors.Dark.textSecondary
+                style = typography.labelSmall.copy(fontWeight = FontWeight.Bold),
+                color = colors.textSecondary
             )
         }
         

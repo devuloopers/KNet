@@ -56,18 +56,45 @@ multiline strings and comments remain correct. After an edit, tokenization begin
 affected line and stops when text and incoming lexical state converge. Unchanged token chunks are
 reused instead of rebuilding a document-sized reference list on every key press.
 
+An ordinary edit also receives a bounded immediate presentation projection before the next frame. The directly
+changed lines are retokenized against the new snapshot, while the previous prefix and suffix token chunks remain
+visible until authoritative background convergence completes. This prevents the entire viewport from alternating
+between semantic colors and plain text on every keystroke. Immediate work is capped by changed-line and character
+budgets; an oversized edited line is temporarily plain rather than blocking the UI thread, and unrelated lines
+remain stable.
+
 The `LazyColumn` composes only visible lines. Exactly one active line owns a `BasicTextField`; other
-visible lines are lightweight text rows. Horizontal scroll is shared. The normal unfolded path uses
-an identity logical-to-visual mapping and allocates fold arrays only when folds are collapsed.
+visible lines are lightweight text rows. The optional non-wrapped mode shares one horizontal scroll state.
+The normal unfolded path uses an identity logical-to-visual mapping and allocates fold arrays only when folds
+are collapsed.
+
+Word wrapping is enabled by default, keeping code and payload text inside the viewport without changing the
+document. One logical line may therefore occupy multiple variable-height visual rows while retaining one gutter
+line number. Compose text layout owns visual wrapping and offset geometry; pointer hit testing and selection
+painting consume that measured geometry. Up/Down remains inside the active text field while another wrapped
+visual row exists and crosses to an adjacent logical line only at the first or final visual row. A standalone
+consumer may explicitly disable wrapping to opt into the retained horizontal-scroll mode.
 
 Pointer drag ownership is selected once at the initial press and retained until release. This prevents
 downward text selection from being cancelled when the pointer crosses the horizontal scrollbar while still
 allowing gestures that begin on either scrollbar to remain exclusively scrollbar-owned.
+When wrapping is active, the nonexistent horizontal scrollbar has no bottom-edge hit zone, so selection and
+vertical auto-scroll remain available across the complete text viewport.
 
 Selection ranges are projected into stable per-line paint bounds. Native text paths paint selected
 characters, selected logical newlines use one trailing character cell, and an exclusive end position at
 column zero produces no transient row paint. The editable active-line input suspends focus/caret publication
 for the duration of viewport drag selection so focus transfer cannot clear the canonical session selection.
+The keyed logical row, rather than either renderer child, owns its latest compatible `TextLayoutResult`.
+Switching a row between lightweight read-only text and its active `BasicTextField` therefore does not fall
+back to estimated geometry. Pointer-down also publishes selection-gesture ownership immediately, suppressing
+native caret and focus side effects before the range gains length. Active-line paint is an independent layer
+derived only from the caret line, so selecting or clearing text on that line never toggles its background.
+Selection still paints actual space characters at their document columns, but never paints unused viewport
+width beyond the logical end of line.
+Read-only and editable content share the gutter's minimum logical-line height. Enabling wrapping removes the
+fixed row height but not this minimum, so a selection painter owns every pixel between adjacent logical rows;
+multi-visual-line content remains free to expand without changing typography or document coordinates.
 
 ## Background work and stale-result prevention
 
@@ -77,7 +104,9 @@ call `EditorCancellationCheckpoint` every bounded block so cancellation is obser
 documents, not only after a full scan.
 
 Results carry or retain their source document version. Rendering accepts token/search results only
-for the current snapshot, preventing a slower older computation from being applied to newer text.
+for the current snapshot, preventing a slower older computation from being applied to newer text. A synchronous,
+current-version presentation model bridges normal edits until the background result is ready; it never publishes
+an older version as though it were current.
 
 ## Language contribution model
 

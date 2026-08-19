@@ -14,6 +14,7 @@ import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
+/** Full-pane error presentation with an optional feature-owned retry action. */
 @Composable
 fun ErrorView(
     message: String,
@@ -44,16 +45,4 @@ fun ErrorView(
             }
         }
     }
-}
-
-/**
- * Domain-agnostic generic error state alias.
- */
-@Composable
-fun ErrorState(
-    message: String,
-    modifier: Modifier = Modifier,
-    retryAction: (@Composable () -> Unit)? = null
-) {
-    ErrorView(message = message, modifier = modifier, retryAction = retryAction)
 }

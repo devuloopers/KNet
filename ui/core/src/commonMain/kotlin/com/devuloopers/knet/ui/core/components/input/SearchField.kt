@@ -1,7 +1,6 @@
 package com.devuloopers.knet.ui.core.components.input
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -14,7 +13,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
-import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
+import com.devuloopers.knet.ui.core.components.button.KNetIconButton
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 /**
@@ -47,7 +46,7 @@ fun KNetSearchField(
             prefix = {
                 Icon(
                     imageVector = KNetIcons.Search,
-                    contentDescription = "Search",
+                    contentDescription = null,
                     modifier = Modifier
                         .size(dimensions.iconSizeSmall)
                         .padding(end = 4.dp),
@@ -56,13 +55,12 @@ fun KNetSearchField(
             },
             suffix = {
                 if (query.isNotEmpty() && onClear != null) {
-                    Icon(
-                        imageVector = KNetIcons.Clear,
+                    KNetIconButton(
+                        icon = KNetIcons.Clear,
                         contentDescription = "Clear",
-                        modifier = Modifier
-                            .size(dimensions.iconSizeSmall)
-                            .clickable(onClick = onClear)
-                            .handCursor(),
+                        onClick = onClear,
+                        size = 28.dp,
+                        iconSize = dimensions.iconSizeSmall,
                         tint = themeColors.textSecondary
                     )
                 } else if (shortcutKey != null) {

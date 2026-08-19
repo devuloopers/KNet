@@ -29,6 +29,12 @@ object BodyTextDecoder {
             is DecodedBodyResult.CorruptedEncoding -> {
                 DecodedTextResult.DecodingError(result.encoding, result.errorMessage)
             }
+            is DecodedBodyResult.OutputLimitExceeded -> {
+                DecodedTextResult.DecodingError(
+                    encoding = result.encoding,
+                    errorMessage = "Decoded payload exceeds ${result.maximumOutputBytes} bytes",
+                )
+            }
         }
     }
 
@@ -53,7 +59,7 @@ object BodyTextDecoder {
 
         return try {
             DecodedTextResult.Success(bytes.decodeToString(), encoding)
-        } catch (_: Throwable) {
+        } catch (_: Exception) {
             DecodedTextResult.BinaryUnknownType(bytes.size.toLong(), contentType)
         }
     }

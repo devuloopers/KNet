@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
+/** Compact status-bar text item. */
 @Composable
 fun StatusItem(
     text: String,
@@ -30,6 +31,7 @@ fun StatusItem(
     )
 }
 
+/** Spacer that pushes subsequent status items to the trailing edge. */
 @Composable
 fun RowScope.FlexibleSpacer(
     modifier: Modifier = Modifier
@@ -37,6 +39,7 @@ fun RowScope.FlexibleSpacer(
     Spacer(modifier = modifier.weight(1f))
 }
 
+/** Fixed-height application status-bar container. */
 @Composable
 fun KNetStatusBar(
     modifier: Modifier = Modifier,

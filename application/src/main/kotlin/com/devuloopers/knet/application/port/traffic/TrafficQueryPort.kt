@@ -5,7 +5,9 @@ import com.devuloopers.knet.traffic.id.CaptureSessionId
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.HttpExchangeSnapshot
 import com.devuloopers.knet.traffic.model.http.HttpMethod
+import com.devuloopers.knet.traffic.model.http.HttpScheme
 import com.devuloopers.knet.traffic.model.http.HttpStatus
+import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -31,22 +33,26 @@ public enum class TrafficSortDirection {
 /**
  * Indexed query requested by Traffic or another authorized feature.
  *
- * @property sessionId Capture session to query.
+ * @property sessionId Optional capture session to query, or null for retained history across sessions.
  * @property cursor Optional keyset cursor from a previous page.
  * @property limit Maximum number of records to return.
  * @property direction Timestamp/keyset sort direction.
- * @property hostContains Optional host filter executed by the store.
+ * @property searchContains Optional host, path, method, or status text filter executed by the store.
  * @property methods Optional typed method filter.
  * @property statuses Optional typed status filter.
+ * @property schemes Optional typed request-scheme filter.
+ * @property protocols Optional typed effective application-protocol filter.
  */
 public data class TrafficPageQuery(
-    public val sessionId: CaptureSessionId,
+    public val sessionId: CaptureSessionId? = null,
     public val cursor: TrafficPageCursor? = null,
     public val limit: Int,
     public val direction: TrafficSortDirection = TrafficSortDirection.NEWEST_FIRST,
-    public val hostContains: String? = null,
+    public val searchContains: String? = null,
     public val methods: Set<HttpMethod> = emptySet(),
     public val statuses: Set<HttpStatus> = emptySet(),
+    public val schemes: Set<HttpScheme> = emptySet(),
+    public val protocols: Set<ApplicationProtocol> = emptySet(),
 ) {
     init {
         require(limit in 1..1_000) { "Traffic page limit must be between 1 and 1000." }

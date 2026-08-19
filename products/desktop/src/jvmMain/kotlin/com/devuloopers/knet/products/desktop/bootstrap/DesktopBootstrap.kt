@@ -17,6 +17,15 @@ import com.devuloopers.knet.products.desktop.lifecycle.ShutdownAware
 import com.devuloopers.knet.storage.database.KNetDatabase
 import com.devuloopers.knet.ui.core.foundation.resources.kNetLogoPainter
 import com.devuloopers.knet.ui.desktop.app.window.MainWindow
+import com.devuloopers.knet.application.usecase.traffic.ClearTrafficHistoryUseCase
+import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import org.koin.core.Koin
 import org.koin.core.context.startKoin
 import org.koin.dsl.module
@@ -37,6 +46,7 @@ object DesktopBootstrap {
         installExceptionHandler()
         val koin = startDependencyInjection(configuration)
         registerLifecycleResources(koin)
+        startStartupPolicies(koin)
         ApplicationLifecycle.installShutdownHook()
         launchDesktopApplication()
     }
@@ -128,6 +138,30 @@ object DesktopBootstrap {
                 wifiSharingRuntime.close()
             }
         })
+    }
+
+    /** Starts process-owned policies once, independently from whether a feature screen is composed. */
+    private fun startStartupPolicies(koin: Koin) {
+        val policyScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+        ApplicationLifecycle.registerResource(object : ShutdownAware {
+            override fun close() {
+                policyScope.cancel()
+            }
+        })
+        policyScope.launch {
+            try {
+                val workspace = koin.get<GetWorkspaceLayoutUseCase>().execute().first()
+                if (workspace.autoClearTrafficOnStartup) {
+                    koin.get<ClearTrafficHistoryUseCase>().execute()
+                }
+            } catch (failure: CancellationException) {
+                throw failure
+            } catch (failure: Exception) {
+                KNetLogger.error("DesktopBootstrap", failure) {
+                    "Startup traffic-history policy failed."
+                }
+            }
+        }
     }
 
     private fun launchDesktopApplication() {

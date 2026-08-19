@@ -3,8 +3,6 @@ package com.devuloopers.knet.ui.desktop.app.window
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.core.foundation.theme.ThemeMode
@@ -27,9 +25,7 @@ fun MainWindow(
     modifier: Modifier = Modifier
 ) {
     val destination by appState.navigationController.currentDestination.collectAsState()
-    val currentThemeMode by remember { mutableStateOf(ThemeMode.Dark) }
-
-    KNetTheme(themeMode = currentThemeMode) {
+    KNetTheme(themeMode = ThemeMode.System) {
         KNetApplicationScaffold(
             modifier = modifier,
             navigationRail = {

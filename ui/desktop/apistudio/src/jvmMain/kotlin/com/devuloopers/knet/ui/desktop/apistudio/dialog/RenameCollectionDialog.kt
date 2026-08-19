@@ -34,7 +34,8 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
-import com.devuloopers.knet.ui.core.components.input.KNetInputField
+import com.devuloopers.knet.ui.core.components.input.InputFieldConfig
+import com.devuloopers.knet.ui.core.components.input.KNetTextField
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 /**
@@ -91,10 +92,10 @@ fun RenameCollectionDialog(
                         text = "Collection Name",
                         style = typography.caption.copy(color = themeColors.textSecondary, fontWeight = FontWeight.Medium)
                     )
-                    KNetInputField(
+                    KNetTextField(
                         value = textFieldValue,
                         onValueChange = { textFieldValue = it },
-                        placeholder = "Collection Name...",
+                        config = InputFieldConfig(placeholder = "Collection Name…"),
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(focusRequester)

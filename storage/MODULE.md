@@ -6,10 +6,11 @@ Owns KNet's desktop persistence implementation and schema.
 
 ## Owns
 
-- Room database, schema-v15 entities, DAOs, and storage data sources.
-- The current 14-to-15 migration; unsupported older development schemas may still be reset.
+- Room database, schema-v16 entities, DAOs, and storage data sources.
+- The current 14-to-15 and 15-to-16 migrations; unsupported older development schemas may still be reset.
 - Durable metadata records and references to externally stored bodies.
-- Canonical session/connection/exchange/body/message/annotation/gap/deletion-outbox records and indexed keyset queries.
+- Canonical session/connection/exchange/body/message/annotation/gap/deletion-outbox records and indexed
+  single-session or global keyset queries.
 - Bounded exchange batches used by import and the 100,000-row indexed-query regression fixture.
 - Aggregate and oldest-first projections used by bounded global count/byte retention and startup lifecycle/body recovery.
 - Non-null opaque body storage keys and indexed ownership queries used for finalized-orphan reconciliation.
@@ -28,4 +29,9 @@ Expose storage-oriented APIs to data adapters; do not depend on UI or engine mod
 
 ## Current state
 
-Schema v15 adds registered identities, trusted-device credential digests/public keys, and pairing invitations to the existing canonical capture and API Studio schema. The 14-to-15 auto-migration preserves existing records while adding these tables. Plain pairing secrets and issued credentials are never stored. Unsupported earlier development databases are deliberately reset by Room instead of imported.
+Schema v15 adds registered identities, trusted-device credential digests/public keys, and pairing invitations
+to the existing canonical capture and API Studio schema. Schema v16 adds the global timestamp/ID index used by
+cross-session traffic history. Its DAO performs keyset paging plus host/path/method/status search and typed
+method/status/scheme/effective-protocol filtering without materializing a session. Both auto-migrations preserve
+supported existing records. Plain pairing secrets and issued credentials are never stored. Unsupported earlier
+development databases are deliberately reset by Room instead of imported.

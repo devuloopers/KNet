@@ -6,7 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -18,6 +18,14 @@ import com.devuloopers.knet.ui.core.components.button.KNetButton
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
+/**
+ * Responsive KNet dialog shell.
+ *
+ * @param onDismissRequest Invoked for outside-click, Escape, and explicit dismissal.
+ * @param modifier Modifier applied inside the responsive dialog width bound.
+ * @param title Optional dialog heading.
+ * @param content Dialog body.
+ */
 @Composable
 fun KNetDialog(
     onDismissRequest: () -> Unit,
@@ -31,17 +39,20 @@ fun KNetDialog(
 
     Dialog(onDismissRequest = onDismissRequest) {
         KNetSurface(
-            modifier = modifier.width(400.dp),
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .widthIn(max = KNetTheme.dimensions.dialogWidthMedium)
+                .then(modifier),
             color = themeColors.surface,
             border = BorderStroke(1.dp, themeColors.border),
             shape = shapes.medium
         ) {
-            Column(modifier = Modifier.padding(16.dp)) {
+            Column(modifier = Modifier.padding(KNetTheme.spacing.lg)) {
                 if (title != null) {
                     Text(
                         text = title,
                         style = typography.titleMedium.copy(color = themeColors.textPrimary),
-                        modifier = Modifier.padding(bottom = 12.dp)
+                        modifier = Modifier.padding(bottom = KNetTheme.spacing.md)
                     )
                 }
                 Box(modifier = Modifier.fillMaxWidth()) {
@@ -52,6 +63,11 @@ fun KNetDialog(
     }
 }
 
+/**
+ * Confirmation dialog with explicit confirm and dismiss actions.
+ *
+ * [onConfirm] owns the post-confirm state transition, including dismissal when appropriate.
+ */
 @Composable
 fun ConfirmDialog(
     title: String,
@@ -74,7 +90,7 @@ fun ConfirmDialog(
             Text(
                 text = message,
                 style = typography.bodyMedium.copy(color = themeColors.textSecondary),
-                modifier = Modifier.padding(bottom = 16.dp)
+                modifier = Modifier.padding(bottom = KNetTheme.spacing.lg)
             )
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -88,10 +104,7 @@ fun ConfirmDialog(
                     Text(dismissText)
                 }
                 KNetButton(
-                    onClick = {
-                        onConfirm()
-                        onDismissRequest()
-                    },
+                    onClick = onConfirm,
                     variant = ButtonVariant.Primary,
                     modifier = Modifier.weight(1f).padding(start = 4.dp)
                 ) {
@@ -102,6 +115,7 @@ fun ConfirmDialog(
     }
 }
 
+/** Single-action informational dialog. */
 @Composable
 fun AlertDialog(
     title: String,
@@ -109,17 +123,31 @@ fun AlertDialog(
     onDismissRequest: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    ConfirmDialog(
-        title = title,
-        message = message,
-        onConfirm = onDismissRequest,
+    KNetDialog(
         onDismissRequest = onDismissRequest,
         modifier = modifier,
-        confirmText = "OK",
-        dismissText = ""
-    )
+        title = title
+    ) {
+        val themeColors = KNetTheme.colors
+        val typography = KNetTheme.typography
+        Column {
+            Text(
+                text = message,
+                style = typography.bodyMedium.copy(color = themeColors.textSecondary),
+                modifier = Modifier.padding(bottom = KNetTheme.spacing.lg)
+            )
+            KNetButton(
+                onClick = onDismissRequest,
+                variant = ButtonVariant.Primary,
+                modifier = Modifier.align(Alignment.End)
+            ) {
+                Text("OK")
+            }
+        }
+    }
 }
 
+/** Dialog shell without a predefined title or action layout. */
 @Composable
 fun CustomDialog(
     onDismissRequest: () -> Unit,

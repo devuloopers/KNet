@@ -14,13 +14,14 @@ import com.devuloopers.knet.traffic.id.BodyId
 import com.devuloopers.knet.traffic.id.CaptureSessionId
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.HttpExchangeSnapshot
-import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.updateAndGet
 
 /** Desktop canonical traffic reader and session catalog. */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -28,7 +29,7 @@ class DesktopTrafficQueryAdapter(
     private val dao: CanonicalCaptureDao,
     private val bodyStore: BodyStorePort,
 ) : TrafficQueryPort, TrafficSessionCatalogPort {
-    private val generation = AtomicLong(0L)
+    private val generation = MutableStateFlow(0L)
 
     override val generations: Flow<TrafficGeneration> = dao.observeLatestSessionId()
         .filterNotNull()
@@ -37,7 +38,7 @@ class DesktopTrafficQueryAdapter(
             dao.observeExchangeChangeScalar(sessionId).map {
                 TrafficGeneration(
                     sessionId = CaptureSessionId(sessionId),
-                    generation = generation.incrementAndGet(),
+                    generation = generation.updateAndGet { value -> value + 1L },
                 )
             }
         }
@@ -57,6 +58,11 @@ class DesktopTrafficQueryAdapter(
     override suspend fun readBody(bodyId: BodyId, range: BodyRange): BodyChunk =
         bodyStore.readBody(bodyId, range)
 
-    private fun adapter(sessionId: CaptureSessionId): CanonicalTrafficQueryAdapter =
-        CanonicalTrafficQueryAdapter(sessionId, dao, bodyStore)
+    private fun adapter(sessionId: CaptureSessionId?): CanonicalTrafficQueryAdapter =
+        CanonicalTrafficQueryAdapter(
+            sessionId = sessionId,
+            dao = dao,
+            bodyStore = bodyStore,
+            currentGeneration = { generation.value },
+        )
 }
