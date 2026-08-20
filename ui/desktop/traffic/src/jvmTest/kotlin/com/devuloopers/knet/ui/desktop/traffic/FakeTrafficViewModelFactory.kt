@@ -45,9 +45,9 @@ import com.devuloopers.knet.domain.network.usecase.ObserveLocalIpUseCase
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.rules.repository.RulesRepository
 import com.devuloopers.knet.domain.rules.usecase.ObserveRulesUseCase
-import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
-import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
-import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
+import com.devuloopers.knet.domain.settings.model.ApplicationSettings
+import com.devuloopers.knet.domain.settings.repository.ApplicationSettingsRepository
+import com.devuloopers.knet.domain.settings.usecase.ObserveApplicationSettingsUseCase
 import com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -124,9 +124,9 @@ object FakeTrafficViewModelFactory {
             override suspend fun getLocalIp(): String = localIp
         }
 
-        val fakeWidgetRepo = object : WidgetPreferencesRepository {
-            override val settingsFlow: Flow<WorkspaceLayoutSettings> = flowOf(WorkspaceLayoutSettings())
-            override suspend fun saveSettings(settings: WorkspaceLayoutSettings) {}
+        val fakeApplicationSettings = object : ApplicationSettingsRepository {
+            override val settings: Flow<ApplicationSettings> = flowOf(ApplicationSettings())
+            override suspend fun update(transform: (ApplicationSettings) -> ApplicationSettings) = Unit
         }
 
         val fakeRulesRepo = object : RulesRepository {
@@ -162,7 +162,7 @@ object FakeTrafficViewModelFactory {
             observeTrafficCaptureStateUseCase = ObserveTrafficCaptureStateUseCase(fakeCaptureControl),
             loadTrafficExchangeDetailsUseCase = loadTrafficExchangeDetailsUseCase,
             observeLocalIpUseCase = customObserveLocalIpUseCase ?: ObserveLocalIpUseCase(fakeNetworkRepo),
-            getWorkspaceLayoutUseCase = GetWorkspaceLayoutUseCase(fakeWidgetRepo),
+            observeApplicationSettingsUseCase = ObserveApplicationSettingsUseCase(fakeApplicationSettings),
             prepareCapturedNetworkRequestUseCase = PrepareCapturedNetworkRequestUseCase(
                 PrepareTrafficRequestUseCase(fakeTrafficQueryPort),
             ),

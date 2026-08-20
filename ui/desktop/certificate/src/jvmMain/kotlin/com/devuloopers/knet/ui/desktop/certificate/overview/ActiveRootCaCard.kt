@@ -12,21 +12,22 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.badge.KNetBadge
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import com.devuloopers.knet.ui.core.foundation.time.KNetDateTime
 import com.devuloopers.knet.application.port.certificate.CertificateAuthoritySummary
-import com.devuloopers.knet.ui.desktop.certificate.model.CaStatus
+import com.devuloopers.knet.application.port.certificate.CertificateAuthorityStatus
 import com.devuloopers.knet.ui.desktop.certificate.model.TrustInstallationState
+import kotlin.time.Instant
 
 @Composable
 fun ActiveRootCaCard(
     caDetails: CertificateAuthoritySummary,
-    caStatus: CaStatus = CaStatus.AVAILABLE,
+    caStatus: CertificateAuthorityStatus,
     trustState: TrustInstallationState = TrustInstallationState.IDLE,
     modifier: Modifier = Modifier
 ) {
@@ -34,13 +35,18 @@ fun ActiveRootCaCard(
     val typography = KNetTheme.typography
     val shapes = KNetTheme.shapes
 
-    val isAvailable = caStatus == CaStatus.AVAILABLE
-    val statusText = if (isAvailable) "ACTIVE" else "MISSING"
+    val isAvailable = caStatus == CertificateAuthorityStatus.AVAILABLE
+    val statusText = when (caStatus) {
+        CertificateAuthorityStatus.AVAILABLE -> "ACTIVE"
+        CertificateAuthorityStatus.MISSING -> "MISSING"
+        CertificateAuthorityStatus.EXPIRED -> "EXPIRED"
+        CertificateAuthorityStatus.INVALID -> "INVALID"
+    }
     val statusBg = if (isAvailable) themeColors.semantic.success.copy(alpha = 0.15f) else themeColors.semantic.error.copy(alpha = 0.15f)
     val statusColor = if (isAvailable) themeColors.semantic.success else themeColors.semantic.error
 
-    val formattedSerial = if (caDetails.serialNumber.isNotBlank()) caDetails.serialNumber else "19:F9:95:0B:17:8"
-    val formattedExpires = if (caDetails.validUntil.isNotBlank()) caDetails.validUntil else "18 Mar 2035"
+    val formattedSerial = caDetails.serialNumber.ifBlank { "Not available" }
+    val formattedExpires = caDetails.validUntil.toHumanReadableCertificateDate()
 
     KNetSurface(
         modifier = modifier
@@ -63,13 +69,13 @@ fun ActiveRootCaCard(
                 Box(
                     modifier = Modifier
                         .size(36.dp)
-                        .background(Color(0xFF059669).copy(alpha = 0.15f), CircleShape),
+                        .background(statusColor.copy(alpha = 0.15f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Shield,
                         contentDescription = "Shield",
-                        tint = Color(0xFF34D399),
+                        tint = statusColor,
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -147,4 +153,11 @@ fun ActiveRootCaCard(
             }
         }
     }
+}
+
+private fun String.toHumanReadableCertificateDate(): String {
+    if (isBlank()) return "Not available"
+    return runCatching {
+        KNetDateTime.humanDate(Instant.parse(this).toEpochMilliseconds())
+    }.getOrDefault(this)
 }

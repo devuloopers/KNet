@@ -36,7 +36,7 @@ import com.devuloopers.knet.domain.request.descriptor.RequestDescriptorInput
 import com.devuloopers.knet.domain.request.descriptor.RequestKindId
 import com.devuloopers.knet.domain.request.usecase.DescribeRequestUseCase
 import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
-import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
+import com.devuloopers.knet.domain.settings.usecase.ObserveApplicationSettingsUseCase
 
 import com.devuloopers.knet.ui.desktop.traffic.model.*
 import kotlinx.coroutines.*
@@ -69,7 +69,7 @@ class TrafficViewModel(
     observeTrafficCaptureStateUseCase: ObserveTrafficCaptureStateUseCase,
     private val loadTrafficExchangeDetailsUseCase: LoadTrafficExchangeDetailsUseCase,
     observeLocalIpUseCase: ObserveLocalIpUseCase,
-    private val getWorkspaceLayoutUseCase: GetWorkspaceLayoutUseCase,
+    private val observeApplicationSettingsUseCase: ObserveApplicationSettingsUseCase,
     private val prepareCapturedNetworkRequestUseCase: PrepareCapturedNetworkRequestUseCase,
     private val observeInspectionAnnotationsUseCase: ObserveInspectionAnnotationsUseCase,
     private val describeRequestUseCase: DescribeRequestUseCase,
@@ -168,17 +168,9 @@ class TrafficViewModel(
 
         // Serialize desired capture state and dynamic port changes without cancelling lifecycle work.
         viewModelScope.launch {
-            val proxyPorts = flow {
-                var isFirst = true
-                getWorkspaceLayoutUseCase.execute()
-                    .map { settings -> settings.proxyPort }
-                    .distinctUntilChanged()
-                    .collect { port ->
-                        if (!isFirst) delay(500.milliseconds)
-                        isFirst = false
-                        emit(port)
-                    }
-            }
+            val proxyPorts = observeApplicationSettingsUseCase.execute()
+                .map { settings -> settings.proxyPort.value }
+                .distinctUntilChanged()
             combine(captureControlIntent, proxyPorts) { intent, port ->
                 CaptureCommand(
                     shouldCapture = intent.shouldCapture,

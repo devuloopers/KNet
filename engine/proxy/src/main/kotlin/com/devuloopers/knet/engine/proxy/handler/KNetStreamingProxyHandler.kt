@@ -2,8 +2,6 @@ package com.devuloopers.knet.engine.proxy.handler
 
 import com.devuloopers.knet.core.logger.KNetLogger
 import com.devuloopers.knet.engine.proxy.http.ProxyRequestContext
-import com.devuloopers.knet.engine.certificate.CertificateAuthority
-import com.devuloopers.knet.engine.certificate.CertificateCache
 import com.devuloopers.knet.engine.proxy.KNetProxyRuntimePolicy
 import com.devuloopers.knet.engine.proxy.ProxyConnectionAdmissionController
 import com.devuloopers.knet.engine.proxy.capture.ProxyConnectionCapture
@@ -59,6 +57,7 @@ import java.util.concurrent.Executor
 import java.util.concurrent.ForkJoinPool
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import com.devuloopers.knet.engine.proxy.tls.ServerTlsContextProvider
 
 private const val STREAMING_TAG = "ProxyEngine"
 
@@ -72,8 +71,7 @@ private const val STREAMING_TAG = "ProxyEngine"
  */
 @Suppress("HttpUrlsUsage")
 internal class KNetStreamingProxyHandler(
-    private val ca: CertificateAuthority,
-    private val certCache: CertificateCache,
+    private val serverTlsContextProvider: ServerTlsContextProvider,
     private val proxyScope: CoroutineScope,
     private val keyManagerProvider: com.devuloopers.knet.engine.proxy.tls.KeyManagerProvider? = null,
     private val strictSsl: Boolean = true,
@@ -445,11 +443,7 @@ internal class KNetStreamingProxyHandler(
                 context.close()
                 return@addListener
             }
-            certCache.getAsync(host, ca, certificateExecutor)
-                .thenApplyAsync(
-                    { leaf -> SslContextBuilder.forServer(leaf.keyPair.private, leaf.certificate).build() },
-                    certificateExecutor,
-                )
+            serverTlsContextProvider.resolve(host, certificateExecutor)
                 .whenComplete { sslContext, failure ->
                     context.executor().execute {
                         if (failure != null || sslContext == null || !context.channel().isActive) {

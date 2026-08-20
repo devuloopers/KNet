@@ -22,7 +22,8 @@ fun KNetSegmentedButton(
     options: List<String>,
     selectedIndex: Int,
     onOptionSelected: (Int) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -39,7 +40,11 @@ fun KNetSegmentedButton(
         options.forEachIndexed { index, option ->
             val isSelected = index == selectedIndex
             val backgroundColor = if (isSelected) themeColors.surface else themeColors.surfaceVariant
-            val textColor = if (isSelected) themeColors.textPrimary else themeColors.textSecondary
+            val textColor = when {
+                !enabled -> themeColors.textMuted
+                isSelected -> themeColors.textPrimary
+                else -> themeColors.textSecondary
+            }
 
             Text(
                 text = option,
@@ -50,10 +55,11 @@ fun KNetSegmentedButton(
                     .heightIn(min = 24.dp)
                     .selectable(
                         selected = isSelected,
+                        enabled = enabled,
                         role = Role.RadioButton,
                         onClick = { onOptionSelected(index) }
                     )
-                    .handCursor()
+                    .handCursor(enabled)
                     .padding(horizontal = 8.dp, vertical = 4.dp)
             )
         }

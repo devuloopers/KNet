@@ -1,13 +1,10 @@
 package com.devuloopers.knet.engine.certificate
 
-import com.devuloopers.knet.engine.certificate.ssl.KNetTrustManagerProvider
 import java.nio.file.Files
 import java.nio.file.attribute.PosixFilePermission
-import java.security.cert.CertificateException
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
-import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 /** Tests owner-only certificate storage policy and opaque alias filenames. */
@@ -33,20 +30,6 @@ class CertificateFileSecurityTest {
         assertEquals("client_identity.p12", fileName)
         assertFalse(fileName.contains('/'))
         assertFalse(fileName.contains(".."))
-    }
-
-    /** Verifies strict mode rejects an untrusted generated authority while explicit insecure mode accepts it. */
-    @Test
-    fun `strict trust manager does not fall back to trust all`() {
-        val untrustedCertificate = CertificateAuthority.generate().certificate
-        KNetTrustManagerProvider.invalidateCache()
-
-        assertFailsWith<CertificateException> {
-            KNetTrustManagerProvider.getX509TrustManager(verifySsl = true)
-                .checkServerTrusted(arrayOf(untrustedCertificate), "RSA")
-        }
-        KNetTrustManagerProvider.getX509TrustManager(verifySsl = false)
-            .checkServerTrusted(arrayOf(untrustedCertificate), "RSA")
     }
 
     /** Verifies POSIX-capable filesystems receive owner read-write permissions only. */

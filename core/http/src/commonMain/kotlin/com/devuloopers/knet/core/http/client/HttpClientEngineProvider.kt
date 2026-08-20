@@ -17,6 +17,7 @@ expect fun getKNetHttpEngine(): HttpClientEngineFactory<*>
  * proxy settings and unified SSL/TLS certificate trust policies.
  *
  * @param targetProxyPort Optional proxy port to route traffic through.
+ * @param localProxyTlsTrust Optional certificate authority trusted only by a proxy-configured client.
  * @param configuration Global HTTP client timeout, retry, and SSL verification settings.
  * @param customEngine Optional custom engine (e.g. MockEngine for testing).
  * @param block Additional Ktor client configuration block.
@@ -24,6 +25,7 @@ expect fun getKNetHttpEngine(): HttpClientEngineFactory<*>
  */
 expect fun createPlatformHttpClient(
     targetProxyPort: Int?,
+    localProxyTlsTrust: LocalProxyTlsTrust?,
     configuration: HttpClientConfiguration,
     customEngine: HttpClientEngine?,
     block: HttpClientConfig<*>.() -> Unit

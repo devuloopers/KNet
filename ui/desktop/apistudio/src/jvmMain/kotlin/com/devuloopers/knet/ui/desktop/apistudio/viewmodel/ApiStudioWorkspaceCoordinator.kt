@@ -1,23 +1,20 @@
 package com.devuloopers.knet.ui.desktop.apistudio.viewmodel
 
 import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
-import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
-import com.devuloopers.knet.domain.workspace.usecase.SaveWorkspaceLayoutUseCase
+import com.devuloopers.knet.domain.workspace.usecase.UpdateWorkspaceLayoutUseCase
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /** Serializes API Studio workspace preference changes in the same order as UI intents. */
 internal class ApiStudioWorkspaceCoordinator(
     scope: CoroutineScope,
     dispatcher: CoroutineDispatcher,
-    private val getWorkspaceLayout: GetWorkspaceLayoutUseCase,
-    private val saveWorkspaceLayout: SaveWorkspaceLayoutUseCase,
-    private val onFailure: (Throwable) -> Unit
+    private val updateWorkspaceLayout: UpdateWorkspaceLayoutUseCase,
+    private val onFailure: (Throwable) -> Unit,
 ) {
     private data class Update(
         val transform: (WorkspaceLayoutSettings) -> WorkspaceLayoutSettings,
@@ -54,8 +51,7 @@ internal class ApiStudioWorkspaceCoordinator(
     private suspend fun updateResult(
         transform: (WorkspaceLayoutSettings) -> WorkspaceLayoutSettings
     ): Result<Unit> = try {
-        val current = getWorkspaceLayout.execute().first()
-        saveWorkspaceLayout.execute(transform(current))
+        updateWorkspaceLayout.execute(transform)
         Result.success(Unit)
     } catch (cancellation: CancellationException) {
         throw cancellation

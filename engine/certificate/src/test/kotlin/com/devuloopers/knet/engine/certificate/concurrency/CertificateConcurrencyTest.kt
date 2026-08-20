@@ -5,6 +5,7 @@ import com.devuloopers.knet.engine.certificate.CertificateManagerImpl
 import com.devuloopers.knet.engine.certificate.EngineMtlsRule
 import com.devuloopers.knet.engine.certificate.LeafCertificateGenerator
 import com.devuloopers.knet.engine.certificate.util.TestCertificateFactory
+import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
@@ -80,6 +81,11 @@ class CertificateConcurrencyTest {
     @Test
     fun `certificate manager publishes atomic rule snapshots during concurrent mutation`() {
         val manager = CertificateManagerImpl(ca = ca)
+        val (certificatePem, privateKeyPem) = ca.saveToPemStrings()
+        val identityFile = File.createTempFile("concurrent-client-identity", ".pem").apply {
+            writeText(certificatePem + privateKeyPem)
+        }
+        manager.importClientCertificate(identityFile.absolutePath, "concurrent-client")
         val workers = 8
         val rulesPerWorker = 50
         val executor = Executors.newFixedThreadPool(workers)
@@ -91,7 +97,7 @@ class CertificateConcurrencyTest {
                             EngineMtlsRule(
                                 ruleName = "rule-$worker-$index",
                                 hostPattern = "service-$worker-$index.example.test",
-                                certificateAlias = "client-$worker",
+                                certificateAlias = "concurrent-client",
                                 enabled = true,
                             ),
                         )
@@ -104,6 +110,7 @@ class CertificateConcurrencyTest {
             assertEquals(workers * rulesPerWorker, manager.getMtlsRules().size)
         } finally {
             executor.shutdownNow()
+            identityFile.delete()
         }
     }
 }

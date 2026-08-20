@@ -4,6 +4,8 @@ import java.security.cert.X509Certificate
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executor
+import java.util.concurrent.locks.ReentrantLock
+import kotlin.concurrent.withLock
 import kotlin.time.TimeMark
 import kotlin.time.TimeSource
 
@@ -23,7 +25,7 @@ class CertificateCache(
     private val maximumWeightBytes: Long = 16L * 1_024L * 1_024L,
     private val expireAfterAccessMillis: Long = 60L * 60L * 1_000L,
 ) {
-    private val cacheLock = Any()
+    private val cacheLock = ReentrantLock()
     private val cache = LinkedHashMap<String, CachedLeaf>(16, 0.75f, true)
     private val inFlight = ConcurrentHashMap<String, CompletableFuture<LeafCertificate>>()
     private var cachedWeightBytes: Long = 0L
@@ -93,7 +95,7 @@ class CertificateCache(
      * Clears all cached certificates.
      */
     fun clear() {
-        synchronized(cacheLock) {
+        cacheLock.withLock {
             cache.clear()
             cachedWeightBytes = 0L
         }
@@ -105,16 +107,16 @@ class CertificateCache(
      * @return Cache size.
      */
     fun size(): Int {
-        return synchronized(cacheLock) { cache.size }
+        return cacheLock.withLock { cache.size }
     }
 
     /** Returns a valid cached leaf and refreshes its access timestamp, or removes a stale entry. */
-    private fun cachedLeaf(hostname: String): LeafCertificate? = synchronized(cacheLock) {
-        val cached = cache[hostname] ?: return@synchronized null
+    private fun cachedLeaf(hostname: String): LeafCertificate? = cacheLock.withLock {
+        val cached = cache[hostname] ?: return@withLock null
         val idleMillis = cached.lastAccess.elapsedNow().inWholeMilliseconds
         if (idleMillis >= expireAfterAccessMillis || !isCertificateValid(cached.leaf.certificate)) {
             removeCached(hostname, cached)
-            return@synchronized null
+            return@withLock null
         }
         cache[hostname] = cached.copy(lastAccess = TimeSource.Monotonic.markNow())
         cached.leaf
@@ -124,7 +126,7 @@ class CertificateCache(
     private fun generateAndCache(hostname: String, ca: CertificateAuthority): LeafCertificate {
         val leaf = LeafCertificateGenerator.generate(hostname, ca)
         val weight = estimateWeight(leaf)
-        synchronized(cacheLock) {
+        cacheLock.withLock {
             cache.remove(hostname)?.let { replaced -> cachedWeightBytes -= replaced.weightBytes }
             cache[hostname] = CachedLeaf(leaf, weight, TimeSource.Monotonic.markNow())
             cachedWeightBytes += weight

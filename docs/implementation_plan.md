@@ -1714,3 +1714,88 @@ coroutine delay, and searchable arrow activation now uses the same coordinator t
 multi-select anchors. Regression tests cover same-owner press/release suppression, different-owner immediate handoff,
 active-owner closing, and stale-owner isolation. `:ui:core:jvmTest`, all product UI compilation, product compilation,
 and the complete architecture-foundation gate pass. KNet was not launched, stopped, or restarted.
+
+## Phase 81: Settings Persistence, Runtime, and Responsive UI Hardening [COMPLETED]
+
+Started on 2026-08-20 after the Settings audit found that application preferences and workspace layout share one
+whole-snapshot persistence contract. Independent writers can therefore overwrite unrelated fields, proxy-port edits
+can restart the active listener for intermediate keystrokes, and persistence/runtime failures can be displayed as a
+successful save. This phase separates application settings from workspace layout ownership, introduces atomic
+preference updates, and moves API-client and breakpoint runtime synchronization out of the persistence mapper.
+
+The Settings presentation will gain validated committed inputs, typed feedback, cancellation-safe certificate
+operations, narrow-window category navigation, responsive rows, shared semantic components, and accurate capability
+copy. Persisted settings without a runtime consumer will be disabled until the corresponding body-retention policy
+exists. Dead settings search state and the unused legacy workspace-preferences data source will be removed. Focused
+tests will cover atomic updates, invalid input, failed persistence, concurrent actions, runtime propagation, and
+responsive state behavior. The desktop application will not be launched.
+
+Completed on 2026-08-21. Process-level preferences now use validated `ApplicationSettings`, `ProxyPort`, and Kotlin
+`Duration` values behind a dedicated atomic repository; `WorkspaceLayoutSettings` again contains only presentation
+state and also updates atomically. The DataStore adapters own disjoint key sets and have no runtime collaborators.
+One desktop lifecycle synchronizer applies distinct API Studio and breakpoint timeout changes, while startup policy,
+Traffic, Connectivity, Workspace, and API Studio consume the focused settings/layout use cases they require.
+
+Settings numeric fields now remain drafts until an explicit valid commit, persistence errors no longer appear as
+success, toggles revert after failure, reset requires confirmation, and certificate trust work is guarded and
+cancellation-safe with typed manual-action details. Dead search state and the obsolete map-based workspace datasource
+were removed. The body-retention limit and theme control are visibly disabled future capabilities instead of active
+settings without consumers. Shared semantic components, narrow-window category tabs, responsive setting rows,
+per-category scrolling, and typed footer notices preserve all existing information without engine coordination in
+Compose.
+
+Focused domain, Settings, API Studio, Connectivity, Traffic, persistence-isolation, and runtime-propagation tests
+pass. Product compilation and the architecture-foundation gate pass. KNet was not launched, stopped, or restarted.
+
+## Phase 82: Settings Scripting Dropdown Simplification [COMPLETED]
+
+Started on 2026-08-21. The scripting-language setting has a closed two-item value set, so search provides no value
+and makes the control behave like editable input. This phase replaces only that control with the shared non-searchable
+typed KNet dropdown while preserving its state, disabled-saving behavior, and styling. KNet will not be launched.
+
+Completed on 2026-08-21. Appearance Settings now uses the shared typed `KNetDropdown` for JavaScript and Kotlin;
+no search field or editable-query behavior remains. Settings and desktop-product compilation plus `git diff --check`
+pass. KNet was not launched.
+
+## Phase 83: Proxy-Only Traffic Authority [COMPLETED]
+
+Started on 2026-08-21 after clarifying that Traffic must contain only exchanges that actually traverse the active
+KNet proxy capture pipeline. Direct API Studio execution while the proxy is stopped must continue to return its
+response in API Studio but must not synthesize a capture session, canonical exchange, Room row, or body object.
+This phase removes the direct-recording workflow, its unused application contracts, desktop direct-session lifecycle,
+and associated tests/bindings. Proxy capture, paused-forwarding semantics, breakpoints, canonical persistence, and
+Traffic paging remain unchanged. KNet will not be launched.
+
+Completed on 2026-08-21. API Studio execution now owns only request execution, optional scripting, and response
+formatting. The synthetic `TrafficRecordPort`, direct-record command/payload models, recording use case, command
+factory, Koin bindings, and desktop direct-session lifecycle were removed. `DesktopProxyRuntimeAdapter` now exposes
+only proxy runtime and capture-session control, while `StreamingProxyCaptureSession` accepts exchanges solely from
+admitted proxy connections. Consequently, a direct API Studio request still returns normally but creates no capture
+session, canonical exchange, Room row, or body object. When API Studio is routed through the running proxy, the
+existing proxy callbacks remain the single capture source; paused capture continues forwarding without recording.
+
+Direct-recording tests were removed or converted to production streaming-capture fixtures so tests cannot normalize
+an API that production no longer supports. Focused application, data-desktop, API Studio, and desktop composition
+verification, `verifyArchitectureFoundation`, and `git diff --check` pass. KNet was not launched, stopped, or restarted.
+
+## Phase 84: Scoped API Studio Local-Proxy TLS Trust [COMPLETED]
+
+Started on 2026-08-21 after real API Studio proxy routing exposed that the strict JVM HTTP client trusts only
+platform roots and therefore rejects KNet's dynamically generated downstream certificates. This phase will add an
+explicit DER certificate input to the reusable HTTP client, compose platform roots with that one certificate only
+for proxy-configured clients, and inject the active process-owned KNet Root CA from the desktop composition root.
+Direct HTTP clients and the proxy's independent upstream TLS verification remain strict and unchanged. The HTTP
+module will not read certificate files or depend on `:engine:certificate`, and trust-all mode will not be used as a
+workaround. Focused certificate/trust tests, HTTP tests, desktop compilation, and architecture checks will run
+without launching KNet.
+
+Completed on 2026-08-21. `:core:http` now accepts a typed, defensively copied DER trust input and applies it
+only when the client is configured to use the local proxy. On JVM, strict proxy clients compose the platform
+trust manager with an isolated trust manager containing the supplied KNet Root CA; direct clients continue to
+use platform trust only. The DER input is validated as a current, self-signed CA certificate and invalid input
+fails closed. Desktop composition injects the active process-owned Root CA through
+`CertificateRuntimeRepository.rootCertificateDer()` without adding certificate-file knowledge or an
+`:engine:certificate` dependency to `:core:http`. Proxy-to-origin TLS verification remains independent and
+strict. Deterministic trust-chain regression tests cover proxy-scoped acceptance, direct-client rejection,
+invalid DER rejection, and defensive memory ownership. `:core:http:jvmTest`, desktop compilation and tests,
+`verifyArchitectureFoundation`, and `git diff --check` pass. KNet was not launched, stopped, or restarted.

@@ -30,7 +30,10 @@ class KNetStreamingProxyHandlerTest {
     @Test
     fun `valid CONNECT returns connection established`() {
         val channel = EmbeddedChannel(
-            KNetStreamingProxyHandler(certificateAuthority, certificateCache, proxyScope),
+            KNetStreamingProxyHandler(
+                com.devuloopers.knet.engine.proxy.TestServerTlsContextProvider(certificateAuthority, certificateCache),
+                proxyScope,
+            ),
         )
         val request = DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.CONNECT, "httpbin.org:443")
 
@@ -45,7 +48,10 @@ class KNetStreamingProxyHandlerTest {
     @Test
     fun `invalid CONNECT authority returns bad request`() {
         val channel = EmbeddedChannel(
-            KNetStreamingProxyHandler(certificateAuthority, certificateCache, proxyScope),
+            KNetStreamingProxyHandler(
+                com.devuloopers.knet.engine.proxy.TestServerTlsContextProvider(certificateAuthority, certificateCache),
+                proxyScope,
+            ),
         )
         val request = DefaultFullHttpRequest(
             HttpVersion.HTTP_1_1,

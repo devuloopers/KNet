@@ -7,7 +7,10 @@ Holds non-traffic feature business models, repository contracts, and use cases u
 ## Owns
 
 - API Studio outbound request bodies/results/authentication, collections, authored breakpoint rules,
-  workspace, and structured payload-policy contracts.
+  workspace, validated process-level application settings, and structured payload-policy contracts.
+- `ApplicationSettings`, validated `ProxyPort` and Kotlin `Duration` values, plus the atomic
+  `ApplicationSettingsRepository` update contract. Workspace layout remains a separate snapshot and cannot
+  overwrite process-level preferences.
 - The complete authored API Studio request document, including ordered query/header/cookie rows with enabled
   flags, typed body and raw-format values, structured form fields, authentication, scripts, and generated-versus-
   user-defined request-name ownership.
@@ -53,3 +56,6 @@ Zstandard content. Callers receive a typed output-limit result rather than allow
 expand without a memory bound.
 The former closed GraphQL/gRPC/WebSocket breakpoint criteria and interception-metadata hierarchies
 were removed. Adding a breakpoint protocol no longer changes `:core:domain`.
+Application settings use Kotlin time and a validated proxy-port value at the domain boundary. Consumers observe
+or atomically transform the latest application settings through focused use cases; workspace presentation uses a
+separate atomic update use case. Neither contract contains platform runtime collaborators.

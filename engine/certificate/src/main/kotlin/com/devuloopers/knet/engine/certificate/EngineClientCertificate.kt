@@ -1,7 +1,5 @@
 package com.devuloopers.knet.engine.certificate
 
-import kotlinx.serialization.Serializable
-
 /**
  * Domain-level representation of an imported client certificate used for mutual TLS authentication.
  *
@@ -20,7 +18,6 @@ import kotlinx.serialization.Serializable
  * @property sha256Fingerprint SHA-256 fingerprint hex string.
  * @property filePath Absolute file path of saved keypair on disk.
  */
-@Serializable
 data class EngineClientCertificate(
     val alias: String,
     val subject: String,

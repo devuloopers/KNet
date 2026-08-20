@@ -2,7 +2,7 @@ package com.devuloopers.knet.application.port.certificate
 
 /** Application-facing CA metadata with no X.509/JCA implementation types. */
 public data class CertificateAuthoritySummary(
-    public val status: String = "MISSING",
+    public val status: CertificateAuthorityStatus = CertificateAuthorityStatus.MISSING,
     public val subject: String = "",
     public val issuer: String = "",
     public val serialNumber: String = "",
@@ -14,6 +14,28 @@ public data class CertificateAuthoritySummary(
     public val trustedByOperatingSystem: Boolean = false,
 )
 
+/** Lifecycle states the product can render without parsing engine-owned strings. */
+public enum class CertificateAuthorityStatus {
+    AVAILABLE,
+    MISSING,
+    EXPIRED,
+    INVALID,
+}
+
+/** Typed outcome of an operating-system Root CA trust operation. */
+public sealed interface TrustInstallationResult {
+    public data object Installed : TrustInstallationResult
+
+    public data class ManualActionRequired(
+        public val message: String,
+        public val instructions: String,
+    ) : TrustInstallationResult
+
+    public data class Failed(
+        public val message: String,
+    ) : TrustInstallationResult
+}
+
 public enum class ClientCertificateFormat {
     PKCS12,
     PEM,
@@ -21,9 +43,10 @@ public enum class ClientCertificateFormat {
 
     public companion object {
         public fun fromToken(value: String): ClientCertificateFormat = when (value.uppercase().trim()) {
+            "PKCS12", "P12", "PFX" -> PKCS12
             "PEM", "CRT", "CER" -> PEM
             "JKS", "KEYSTORE" -> JKS
-            else -> PKCS12
+            else -> throw IllegalArgumentException("Unsupported client certificate format '$value'.")
         }
     }
 }
@@ -54,7 +77,7 @@ public data class MtlsRuleSpec(
 /** Certificate/trust operations used by UI and application features, independent from the engine. */
 public interface CertificateManagementPort {
     public suspend fun authoritySummary(): CertificateAuthoritySummary
-    public suspend fun installRootCertificate(): Boolean
+    public suspend fun installRootCertificate(): TrustInstallationResult
     public suspend fun isRootCertificateTrusted(): Boolean
     public suspend fun clientCertificates(): List<ClientCertificateSummary>
     public suspend fun importClientCertificate(path: String, alias: String, passphrase: String = "")

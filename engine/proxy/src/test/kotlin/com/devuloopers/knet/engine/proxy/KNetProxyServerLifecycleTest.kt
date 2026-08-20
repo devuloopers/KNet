@@ -56,8 +56,9 @@ class KNetProxyServerLifecycleTest {
     private fun createServer(port: Int): KNetProxyServer {
         return KNetProxyServer(
             port = port,
-            ca = CertificateAuthority.generate(),
-            certCache = CertificateCache(),
+            serverTlsContextProvider = TestServerTlsContextProvider(
+                CertificateAuthority.generate(), CertificateCache(),
+            ),
         )
     }
 

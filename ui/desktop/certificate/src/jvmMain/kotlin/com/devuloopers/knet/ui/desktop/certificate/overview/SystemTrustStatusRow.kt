@@ -73,19 +73,12 @@ fun SystemTrustStatusRow(
         HostPlatform.UNKNOWN -> "System Certificate Store"
     }
 
-    val iconBgColor: Color = when (platform) {
-        HostPlatform.MACOS -> Color(0xFF6366F1).copy(alpha = 0.15f)
-        HostPlatform.WINDOWS -> Color(0xFF2563EB).copy(alpha = 0.15f)
-        HostPlatform.LINUX -> Color(0xFFD97706).copy(alpha = 0.15f)
-        HostPlatform.UNKNOWN -> Color(0xFF6B7280).copy(alpha = 0.15f)
-    }
-
     val iconTintColor: Color = when (platform) {
-        HostPlatform.MACOS -> Color(0xFF818CF8)
-        HostPlatform.WINDOWS -> Color(0xFF60A5FA)
-        HostPlatform.LINUX -> Color(0xFFFBBF24)
-        HostPlatform.UNKNOWN -> Color(0xFF9CA3AF)
+        HostPlatform.MACOS, HostPlatform.WINDOWS -> themeColors.accent
+        HostPlatform.LINUX -> themeColors.semantic.warning
+        HostPlatform.UNKNOWN -> themeColors.textSecondary
     }
+    val iconBgColor = iconTintColor.copy(alpha = 0.14f)
 
     KNetSurface(
         modifier = modifier
@@ -164,6 +157,7 @@ fun SystemTrustStatusRow(
 
                 KNetButton(
                     onClick = onInstallClicked,
+                    enabled = trustState != TrustInstallationState.INSTALLING,
                     variant = ButtonVariant.Ghost,
                     colors = ButtonDefaults.colors(ButtonVariant.Ghost).copy(borderColor = themeColors.border),
                     size = ButtonSize.Compact,
@@ -186,16 +180,34 @@ fun SystemTrustStatusRow(
             } else {
                 Spacer(modifier = Modifier.height(12.dp))
 
+                if (trustState == TrustInstallationState.MANUAL_ACTION_REQUIRED) {
+                    KNetBadge(
+                        text = "Manual steps ready",
+                        containerColor = themeColors.semantic.warning.copy(alpha = 0.14f),
+                        contentColor = themeColors.semantic.warning,
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                } else if (trustState == TrustInstallationState.FAILED) {
+                    KNetBadge(
+                        text = "Installation failed",
+                        containerColor = themeColors.semantic.error.copy(alpha = 0.14f),
+                        contentColor = themeColors.semantic.error,
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                }
+
                 KNetButton(
                     onClick = onInstallClicked,
                     variant = ButtonVariant.Primary,
                     size = ButtonSize.Compact,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = trustState != TrustInstallationState.INSTALLING,
+                    loading = trustState == TrustInstallationState.INSTALLING,
                 ) {
                     Text(
                         text = when {
                             trustState == TrustInstallationState.INSTALLING -> "Installing..."
-                            platform == HostPlatform.LINUX -> "View Install Instructions"
+                            trustState == TrustInstallationState.MANUAL_ACTION_REQUIRED || platform == HostPlatform.LINUX -> "View Install Instructions"
                             else -> "Install Trust"
                         },
                         maxLines = 1,

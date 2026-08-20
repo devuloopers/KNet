@@ -2,9 +2,8 @@ package com.devuloopers.knet.ui.desktop.workspace.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
 import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
-import com.devuloopers.knet.domain.workspace.usecase.SaveWorkspaceLayoutUseCase
+import com.devuloopers.knet.domain.workspace.usecase.UpdateWorkspaceLayoutUseCase
 import com.devuloopers.knet.ui.desktop.workspace.model.ExplorerType
 import com.devuloopers.knet.ui.desktop.workspace.model.WorkspaceIntent
 import com.devuloopers.knet.ui.desktop.workspace.model.WorkspaceLayoutData
@@ -17,7 +16,7 @@ import kotlinx.coroutines.launch
  */
 class WorkspaceViewModel(
     private val getWorkspaceLayoutUseCase: GetWorkspaceLayoutUseCase,
-    private val saveWorkspaceLayoutUseCase: SaveWorkspaceLayoutUseCase
+    private val updateWorkspaceLayoutUseCase: UpdateWorkspaceLayoutUseCase,
 ) : ViewModel() {
 
     private val _activeExplorer = MutableStateFlow(ExplorerType.COLLECTIONS)
@@ -91,12 +90,12 @@ class WorkspaceViewModel(
     }
 
     private suspend fun saveSettingsFromState(state: WorkspaceState.Success) {
-        saveWorkspaceLayoutUseCase.execute(
-            WorkspaceLayoutSettings(
+        updateWorkspaceLayoutUseCase.execute { current ->
+            current.copy(
                 trafficFeedWidthDp = state.layout.explorerWidthDp,
                 sidebarWidthDp = state.layout.sidebarWidthDp,
-                bottomTrayHeightDp = state.layout.bottomTrayHeightDp
+                bottomTrayHeightDp = state.layout.bottomTrayHeightDp,
             )
-        )
+        }
     }
 }

@@ -1,5 +1,6 @@
-package com.devuloopers.knet.engine.certificate
+package com.devuloopers.knet.data.desktop.certificate
 
+import com.devuloopers.knet.engine.certificate.CertificateFileSecurity
 import java.io.File
 import java.security.MessageDigest
 import java.security.cert.X509Certificate
@@ -16,6 +17,9 @@ sealed interface InstallationResult {
      * Indicates the certificate was successfully registered and trusted by the operating system.
      */
     object Success : InstallationResult
+
+    /** Automatic installation is unavailable, but the certificate and exact manual steps are ready. */
+    data class ManualActionRequired(val message: String, val instructions: String) : InstallationResult
 
     /**
      * Indicates the registration failed.
@@ -41,29 +45,47 @@ object TrustStoreInstaller {
      * @return An [InstallationResult] indicating success or failure with manual instructions.
      */
     @OptIn(ExperimentalEncodingApi::class)
-    fun install(caCertificate: X509Certificate): InstallationResult {
-        val os = System.getProperty("os.name").lowercase()
-        val tempCertFile = File.createTempFile("knet_root_ca", ".crt")
+    fun install(caCertificate: X509Certificate, manualCertificateFile: File? = null): InstallationResult {
+        return install(
+            caCertificate = caCertificate,
+            manualCertificateFile = manualCertificateFile,
+            operatingSystem = System.getProperty("os.name").lowercase(),
+            commandRunner = ::executeCommand,
+        )
+    }
+
+    @OptIn(ExperimentalEncodingApi::class)
+    internal fun install(
+        caCertificate: X509Certificate,
+        manualCertificateFile: File?,
+        operatingSystem: String,
+        commandRunner: (Array<String>, String) -> InstallationResult,
+    ): InstallationResult {
+        val certificateFile = manualCertificateFile ?: File.createTempFile("knet_root_ca", ".crt")
+        var preserveTemporaryFile = false
 
         return try {
-            // Write certificate to temporary file in PEM format
-            tempCertFile.writer().use { writer ->
+            certificateFile.parentFile?.let(CertificateFileSecurity::secureDirectory)
+            certificateFile.writer().use { writer ->
                 writer.write("-----BEGIN CERTIFICATE-----\n")
                 writer.write(Base64.Mime.encode(caCertificate.encoded))
                 writer.write("\n-----END CERTIFICATE-----\n")
             }
+            check(CertificateFileSecurity.secureSecretFile(certificateFile))
 
-            when {
-                os.contains("win") -> installWindows(tempCertFile)
-                os.contains("mac") -> installMac(tempCertFile)
-                os.contains("nix") || os.contains("nux") || os.contains("aix") -> installLinux(tempCertFile)
-                else -> InstallationResult.Failure(
-                    "Unsupported Operating System: $os",
-                    "Please manually install the certificate file located at: ${tempCertFile.absolutePath}"
+            val result = when {
+                operatingSystem.contains("win") -> installWindows(certificateFile, commandRunner)
+                operatingSystem.contains("mac") -> installMac(certificateFile, commandRunner)
+                operatingSystem.contains("nix") || operatingSystem.contains("nux") || operatingSystem.contains("aix") -> installLinux(certificateFile)
+                else -> InstallationResult.ManualActionRequired(
+                    "Unsupported Operating System: $operatingSystem",
+                    "Install the Root CA certificate located at: ${certificateFile.absolutePath}"
                 )
             }
+            preserveTemporaryFile = manualCertificateFile == null && result is InstallationResult.ManualActionRequired
+            result
         } finally {
-            tempCertFile.delete()
+            if (manualCertificateFile == null && !preserveTemporaryFile) certificateFile.delete()
         }
     }
 
@@ -137,16 +159,22 @@ object TrustStoreInstaller {
     /**
      * Windows implementation utilizing command-line certutil for the current user.
      */
-    private fun installWindows(certFile: File): InstallationResult {
+    private fun installWindows(
+        certFile: File,
+        commandRunner: (Array<String>, String) -> InstallationResult,
+    ): InstallationResult {
         val command = arrayOf("certutil", "-user", "-addstore", "Root", certFile.absolutePath)
         val commandString = command.joinToString(" ")
-        return executeCommand(command, commandString)
+        return commandRunner(command, commandString)
     }
 
     /**
      * macOS implementation registering in the user's login keychain.
      */
-    private fun installMac(certFile: File): InstallationResult {
+    private fun installMac(
+        certFile: File,
+        commandRunner: (Array<String>, String) -> InstallationResult,
+    ): InstallationResult {
         // macOS: Install to user's login keychain so it does not prompt for administrator (sudo) privileges.
         val loginKeychain = "${System.getProperty("user.home")}/Library/Keychains/login.keychain-db"
         val command = arrayOf(
@@ -157,7 +185,7 @@ object TrustStoreInstaller {
         )
         val suggestedSudo =
             "sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain \"${certFile.absolutePath}\""
-        return executeCommand(command, suggestedSudo)
+        return commandRunner(command, suggestedSudo)
     }
 
     /**
@@ -169,7 +197,7 @@ object TrustStoreInstaller {
         val rhelCommand =
             "sudo cp \"${certFile.absolutePath}\" /etc/pki/ca-trust/source/anchors/knet_root_ca.crt && sudo update-ca-trust extract"
 
-        return InstallationResult.Failure(
+        return InstallationResult.ManualActionRequired(
             "Auto-installation is not supported on Linux due to administrative privilege restrictions.",
             "Run one of the following commands in your terminal depending on your distribution:\n" +
                     "Debian/Ubuntu:\n$debianCommand\n\n" +
@@ -213,17 +241,7 @@ object TrustStoreInstaller {
     }
 
     private fun runCertutilStore(vararg args: String): String {
-        return try {
-            val command = arrayOf("certutil") + args
-            val process = ProcessBuilder(*command)
-                .redirectErrorStream(true)
-                .start()
-            val output = process.inputStream.bufferedReader().readText()
-            process.waitFor(COMMAND_TIMEOUT_SECONDS, TimeUnit.SECONDS)
-            output
-        } catch (_: Exception) {
-            ""
-        }
+        return executeForOutput(*(arrayOf("certutil") + args)).orEmpty()
     }
 
     /**
@@ -231,18 +249,26 @@ object TrustStoreInstaller {
      * and checks whether the certificate's SHA-256 fingerprint appears in the output.
      */
     private fun isTrustedMac(caCertificate: X509Certificate): Boolean {
-        return try {
+        return runCatching {
             val fingerprint = sha256FingerprintHex(caCertificate).uppercase()
-            val process = ProcessBuilder("security", "find-certificate", "-a", "-Z")
-                .redirectErrorStream(true)
-                .start()
-            val output = process.inputStream.bufferedReader().readText()
-            process.waitFor(COMMAND_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            val output = executeForOutput("security", "find-certificate", "-a", "-Z") ?: return false
             val cleanOutput = output.uppercase().replace(" ", "").replace(":", "")
             cleanOutput.contains(fingerprint)
-        } catch (_: Exception) {
-            false
+        }.getOrDefault(false)
+    }
+
+    /** Reads process output concurrently while enforcing the timeout before waiting for EOF. */
+    private fun executeForOutput(vararg command: String): String? = try {
+        val process = ProcessBuilder(*command).redirectErrorStream(true).start()
+        val output = CompletableFuture.supplyAsync { process.inputStream.bufferedReader().readText() }
+        if (!process.waitFor(COMMAND_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            null
+        } else {
+            output.get(1, TimeUnit.SECONDS)
         }
+    } catch (_: Exception) {
+        null
     }
 
     /**

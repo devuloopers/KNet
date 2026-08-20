@@ -2,89 +2,11 @@ package com.devuloopers.knet.engine.certificate
 
 /**
  * Public facade interface exposing the engine capabilities for CA certificate management,
- * trust keystore installations, client certificate registrations, and wildcard mTLS routing configuration.
+ * client certificate registrations and wildcard mTLS routing configuration.
  */
 interface CertificateManager {
-
-    /**
-     * Retrieves the execution status of the Certificate Authority.
-     *
-     * @return The status string representation (e.g. "AVAILABLE", "MISSING").
-     */
-    fun getCaStatus(): String
-
-    /**
-     * Retrieves the X.500 Distinguished Name representing the Subject of the Root CA.
-     *
-     * @return The subject details string.
-     */
-    fun getCaSubject(): String
-
-    /**
-     * Retrieves the X.500 Distinguished Name representing the Issuer of the Root CA.
-     *
-     * @return The issuer details string.
-     */
-    fun getCaIssuer(): String
-
-    /**
-     * Retrieves the unique Serial Number of the Root CA.
-     *
-     * @return Colon-separated hexadecimal serial number string.
-     */
-    fun getCaSerialNumber(): String
-
-    /**
-     * Retrieves the cryptographic signature algorithm identifier of the Root CA.
-     *
-     * @return The algorithm name (e.g. "SHA256withRSA").
-     */
-    fun getCaSignatureAlgorithm(): String
-
-    /**
-     * Retrieves the ISO date string representing when the Root CA becomes valid.
-     *
-     * @return Validity starting date string.
-     */
-    fun getCaValidFrom(): String
-
-    /**
-     * Retrieves the ISO date string representing when the Root CA ceases to be valid.
-     *
-     * @return Validity ending date string.
-     */
-    fun getCaValidUntil(): String
-
-    /**
-     * Retrieves the SHA-1 digest fingerprint identifier of the Root CA.
-     *
-     * @return Hexadecimal SHA-1 digest fingerprint.
-     */
-    fun getCaSha1Fingerprint(): String
-
-    /**
-     * Retrieves the SHA-256 digest fingerprint identifier of the Root CA.
-     *
-     * @return Hexadecimal SHA-256 digest fingerprint.
-     */
-    fun getCaSha256Fingerprint(): String
-
-    /**
-     * Registers and installs the Root CA certificate into the local operating system trust store.
-     *
-     * @return True if trust setup completes successfully, false otherwise.
-     */
-    fun installRootCertificate(): Boolean
-
-    /**
-     * Checks whether the Root CA certificate is already trusted by the host operating system.
-     *
-     * When this returns true the user has already completed the one-time trust installation and
-     * does not need to be prompted again on subsequent application launches.
-     *
-     * @return True if the OS trust store already contains this Root CA, false otherwise.
-     */
-    fun isCaTrustedByOs(): Boolean
+    /** Returns one coherent Root CA snapshot instead of a series of racy field reads. */
+    fun getAuthorityDetails(): CertificateAuthorityDetails
 
     /**
      * Lists all imported client certificates registered for mutual TLS.

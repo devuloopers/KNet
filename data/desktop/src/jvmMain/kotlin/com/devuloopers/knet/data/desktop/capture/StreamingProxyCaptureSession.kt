@@ -4,8 +4,6 @@ import com.devuloopers.knet.application.port.traffic.BodyChunkReservation
 import com.devuloopers.knet.application.port.traffic.CaptureIngressLimits
 import com.devuloopers.knet.application.port.traffic.CaptureIngressPort
 import com.devuloopers.knet.application.port.traffic.CapturePublishResult
-import com.devuloopers.knet.application.port.traffic.RecordHttpExchangeCommand
-import com.devuloopers.knet.application.port.traffic.TrafficBodyPayload
 import com.devuloopers.knet.engine.proxy.capture.ProxyBodyReservation
 import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureConnectionMetadata
 import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureSink
@@ -34,9 +32,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import com.devuloopers.knet.traffic.model.IngressContext
-import com.devuloopers.knet.traffic.model.IngressKind
-import com.devuloopers.knet.traffic.model.TrafficEndpoint
 import kotlin.time.Clock
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -56,8 +51,6 @@ class StreamingProxyCaptureSession internal constructor(
     private val closed = AtomicBoolean(false)
     private val connections = ConcurrentHashMap.newKeySet<StreamingConnectionCapture>()
     private val shutdownScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val directLock = Any()
-    private var directConnection: ProxyConnectionCapture? = null
 
     override fun openConnection(metadata: ProxyCaptureConnectionMetadata): ProxyConnectionCapture? {
         if (closed.get()) return null
@@ -83,38 +76,6 @@ class StreamingProxyCaptureSession internal constructor(
         ingress.flush()
     }
 
-    /** Records an application-authored exchange through the same active canonical writer. */
-    fun recordCanonical(command: RecordHttpExchangeCommand) {
-        synchronized(directLock) {
-            check(!closed.get()) { "Canonical capture session is closed." }
-            val connection = directConnection ?: openConnection(
-                ProxyCaptureConnectionMetadata(
-                    ingress = IngressContext(IngressKind.Local),
-                    downstream = null,
-                    localListener = TrafficEndpoint(DIRECT_SOURCE_HOST),
-                    transportProtocol = DIRECT_TRANSPORT_PROTOCOL,
-                )
-            )?.also { opened -> directConnection = opened }
-                ?: error("Canonical direct-source connection was not admitted.")
-            val exchange = connection.startExchange(
-                exchangeId = command.exchangeId,
-                request = command.request,
-                occurredAtEpochMillis = command.startedAtEpochMillis,
-            ) ?: error("Canonical direct exchange was not admitted.")
-            publishBody(exchange, TrafficDirection.CLIENT_TO_SERVER, command.requestBody, command.completedAtEpochMillis)
-            command.response?.let { response ->
-                exchange.observeResponse(response, command.completedAtEpochMillis)
-            }
-            publishBody(exchange, TrafficDirection.SERVER_TO_CLIENT, command.responseBody, command.completedAtEpochMillis)
-            exchange.terminate(
-                state = command.state,
-                timings = command.timings,
-                occurredAtEpochMillis = command.completedAtEpochMillis,
-                errorCode = command.errorCode,
-            )
-        }
-    }
-
     /** Terminalizes live connections, drains accepted work, and closes the canonical writer. */
     suspend fun close() {
         if (!closed.compareAndSet(false, true)) return
@@ -137,29 +98,8 @@ class StreamingProxyCaptureSession internal constructor(
         return completed.await(timeoutMillis, TimeUnit.MILLISECONDS)
     }
 
-    private fun publishBody(
-        exchange: ProxyExchangeCapture,
-        direction: TrafficDirection,
-        body: TrafficBodyPayload?,
-        occurredAtEpochMillis: Long,
-    ) {
-        if (body == null || body.sizeBytes == 0) return
-        var offset = 0
-        while (offset < body.sizeBytes) {
-            val requested = body.sizeBytes - offset
-            val reservation = exchange.tryReserveBody(direction, body.contentEncoding, requested) ?: break
-            val length = reservation.writableBytes.size
-            body.copyInto(reservation.writableBytes, sourceOffset = offset, length = length)
-            offset += length
-            if (!reservation.publish(occurredAtEpochMillis)) break
-        }
-        exchange.completeBody(direction, body.sizeBytes.toLong(), occurredAtEpochMillis)
-    }
-
     private companion object {
         const val SESSION_CLOSED: String = "capture_session_closed"
-        const val DIRECT_SOURCE_HOST: String = "api-studio.local"
-        const val DIRECT_TRANSPORT_PROTOCOL: String = "in-process-http"
     }
 }
 

@@ -13,11 +13,7 @@ import com.devuloopers.knet.application.port.breakpoint.BreakpointDecision
 import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
 import com.devuloopers.knet.application.usecase.breakpoint.DropMatchingBreakpointsUseCase
 import com.devuloopers.knet.application.port.script.UnavailableScriptExecutionPort
-import com.devuloopers.knet.application.port.traffic.RecordHttpExchangeCommand
-import com.devuloopers.knet.application.port.traffic.TrafficRecordPort
-import com.devuloopers.knet.application.port.traffic.TrafficRecordReceipt
 import com.devuloopers.knet.application.usecase.apistudio.ExecuteApiStudioRequestUseCase
-import com.devuloopers.knet.application.usecase.traffic.RecordHttpExchangeUseCase
 import com.devuloopers.knet.connectivity.model.ProxyAccessRequirement
 import com.devuloopers.knet.connectivity.model.ProxyEndpoint
 import com.devuloopers.knet.connectivity.model.ProxyEndpointScope
@@ -43,12 +39,15 @@ import com.devuloopers.knet.domain.collection.usecase.UpdateRequestInCollectionU
 import com.devuloopers.knet.domain.payload.PayloadStrategyRegistry
 import com.devuloopers.knet.traffic.model.http.HttpMethod
 import com.devuloopers.knet.traffic.model.ExchangeTimings
-import com.devuloopers.knet.traffic.id.CaptureSessionId
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
+import com.devuloopers.knet.domain.settings.model.ApplicationSettings
+import com.devuloopers.knet.domain.settings.repository.ApplicationSettingsRepository
+import com.devuloopers.knet.domain.settings.usecase.ObserveApplicationSettingsUseCase
+import com.devuloopers.knet.domain.settings.usecase.UpdateApplicationSettingsUseCase
 import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
 import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
 import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
-import com.devuloopers.knet.domain.workspace.usecase.SaveWorkspaceLayoutUseCase
+import com.devuloopers.knet.domain.workspace.usecase.UpdateWorkspaceLayoutUseCase
 import com.devuloopers.knet.ui.desktop.apistudio.usecase.AutoSaveApiSessionUseCase
 import com.devuloopers.knet.ui.desktop.apistudio.model.ApiStudioState
 import com.devuloopers.knet.ui.desktop.apistudio.model.ExecutionState
@@ -122,11 +121,6 @@ class TestHttpExecutor : HttpExecutor {
     override fun close() { }
 }
 
-class DiscardingTrafficRecordPort : TrafficRecordPort {
-    override suspend fun record(command: RecordHttpExchangeCommand): TrafficRecordReceipt =
-        TrafficRecordReceipt(CaptureSessionId("api-studio-test"), command.exchangeId)
-}
-
 /**
  * Test factory that creates an [ObserveProxyRuntimeStateUseCase] stub backed by a
  * [MutableStateFlow] emitting the given [initialState].
@@ -177,15 +171,28 @@ fun runningProxyRuntimeState(port: Int): ProxyRuntimeState.Running = ProxyRuntim
 
 fun createTestLayoutUseCases(
     initialSettings: WorkspaceLayoutSettings = WorkspaceLayoutSettings()
-): Pair<GetWorkspaceLayoutUseCase, SaveWorkspaceLayoutUseCase> {
+): Pair<GetWorkspaceLayoutUseCase, UpdateWorkspaceLayoutUseCase> {
     val stateFlow = MutableStateFlow(initialSettings)
     val repo = object : WidgetPreferencesRepository {
         override val settingsFlow: Flow<WorkspaceLayoutSettings> = stateFlow
-        override suspend fun saveSettings(settings: WorkspaceLayoutSettings) {
-            stateFlow.value = settings
+        override suspend fun updateSettings(
+            transform: (WorkspaceLayoutSettings) -> WorkspaceLayoutSettings,
+        ) {
+            stateFlow.value = transform(stateFlow.value)
         }
     }
-    return GetWorkspaceLayoutUseCase(repo) to SaveWorkspaceLayoutUseCase(repo)
+    return GetWorkspaceLayoutUseCase(repo) to UpdateWorkspaceLayoutUseCase(repo)
+}
+
+fun createTestApplicationSettingsUseCases(): Pair<ObserveApplicationSettingsUseCase, UpdateApplicationSettingsUseCase> {
+    val stateFlow = MutableStateFlow(ApplicationSettings())
+    val repository = object : ApplicationSettingsRepository {
+        override val settings: Flow<ApplicationSettings> = stateFlow
+        override suspend fun update(transform: (ApplicationSettings) -> ApplicationSettings) {
+            stateFlow.value = transform(stateFlow.value)
+        }
+    }
+    return ObserveApplicationSettingsUseCase(repository) to UpdateApplicationSettingsUseCase(repository)
 }
 
 
@@ -268,21 +275,23 @@ class ApiStudioViewModelTest {
         breakpointControl: BreakpointControlPort = fakeBreakpointControl,
         collectionsRepository: TestCollectionsRepository = TestCollectionsRepository(),
         initialSettings: WorkspaceLayoutSettings = WorkspaceLayoutSettings(),
-        layoutUseCases: Pair<GetWorkspaceLayoutUseCase, SaveWorkspaceLayoutUseCase>? = null
+        layoutUseCases: Pair<GetWorkspaceLayoutUseCase, UpdateWorkspaceLayoutUseCase>? = null
     ): ApiStudioViewModel {
-        val (getLayoutUseCase, saveLayoutUseCase) =
+        val (getLayoutUseCase, updateLayoutUseCase) =
             layoutUseCases ?: createTestLayoutUseCases(initialSettings)
+        val (observeApplicationSettings, updateApplicationSettings) = createTestApplicationSettingsUseCases()
         return ApiStudioViewModel(
             executeApiStudioRequestUseCase = ExecuteApiStudioRequestUseCase(
                 executeRequest = executeUseCase,
                 formatResponseBody = FormatResponseBodyUseCase(),
-                recordHttpExchange = RecordHttpExchangeUseCase(DiscardingTrafficRecordPort()),
                 scriptExecution = UnavailableScriptExecutionPort,
                 ioDispatcher = testDispatcher
             ),
             observeProxyRuntimeStateUseCase = createTestObserveProxyRuntimeStateUseCase(),
             getWorkspaceLayoutUseCase = getLayoutUseCase,
-            saveWorkspaceLayoutUseCase = saveLayoutUseCase,
+            updateWorkspaceLayoutUseCase = updateLayoutUseCase,
+            observeApplicationSettingsUseCase = observeApplicationSettings,
+            updateApplicationSettingsUseCase = updateApplicationSettings,
             importRequestToStudioUseCase = com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCase(),
             describeRequestUseCase = DescribeRequestUseCase(listOf(HttpRequestDescriptorStrategy())),
             dropMatchingBreakpointsUseCase = DropMatchingBreakpointsUseCase(breakpointControl),
@@ -819,11 +828,13 @@ class ApiStudioViewModelTest {
                 throw IllegalStateException("Workspace storage is unavailable")
             }
 
-            override suspend fun saveSettings(settings: WorkspaceLayoutSettings) = Unit
+            override suspend fun updateSettings(
+                transform: (WorkspaceLayoutSettings) -> WorkspaceLayoutSettings,
+            ) = Unit
         }
         val viewModel = createTestViewModel(
             executeUseCase = ExecuteClientApiRequestUseCase(TestHttpExecutor()),
-            layoutUseCases = GetWorkspaceLayoutUseCase(repository) to SaveWorkspaceLayoutUseCase(repository)
+            layoutUseCases = GetWorkspaceLayoutUseCase(repository) to UpdateWorkspaceLayoutUseCase(repository)
         )
 
         testDispatcher.scheduler.advanceUntilIdle()

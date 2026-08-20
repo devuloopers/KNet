@@ -2,10 +2,10 @@ package com.devuloopers.knet.ui.desktop.settings.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
@@ -17,10 +17,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import com.devuloopers.knet.ui.core.components.scrollbar.KNetVerticalScrollbar
+import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.desktop.settings.model.SettingsTab
 
 /**
@@ -36,46 +38,56 @@ fun SettingsSidebar(
     val typography = KNetTheme.typography
     val sidebarScrollState = rememberScrollState()
 
-    Column(
+    Box(
         modifier = modifier
-            .width(220.dp)
+            .width(KNetTheme.dimensions.sidebarWidth)
             .fillMaxHeight()
             .background(themeColors.surface)
-            .border(1.dp, themeColors.border)
-            .verticalScroll(sidebarScrollState)
-            .padding(vertical = 16.dp, horizontal = 12.dp)
+            .border(1.dp, themeColors.border),
     ) {
-        Text(
-            text = "Settings",
-            style = typography.titleSmall.copy(color = themeColors.textPrimary),
-            maxLines = 1,
-            softWrap = false,
-            modifier = Modifier.padding(start = 8.dp, bottom = 16.dp)
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .selectableGroup()
+                .verticalScroll(sidebarScrollState)
+                .padding(vertical = 16.dp, horizontal = 12.dp),
+        ) {
+            Text(
+                text = "Settings",
+                style = typography.titleSmall.copy(color = themeColors.textPrimary),
+                maxLines = 1,
+                softWrap = false,
+                modifier = Modifier.padding(start = 8.dp, bottom = 16.dp),
+            )
 
-        SidebarNavItem(
-            label = "Network & Proxy",
-            icon = Icons.Default.Router,
-            isSelected = activeTab == SettingsTab.NETWORK_PROXY,
-            onClick = { onTabSelected(SettingsTab.NETWORK_PROXY) }
-        )
+            SidebarNavItem(
+                label = "Network & Proxy",
+                icon = Icons.Default.Router,
+                isSelected = activeTab == SettingsTab.NETWORK_PROXY,
+                onClick = { onTabSelected(SettingsTab.NETWORK_PROXY) },
+            )
 
-        Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
-        SidebarNavItem(
-            label = "Traffic & Storage",
-            icon = Icons.AutoMirrored.Filled.List,
-            isSelected = activeTab == SettingsTab.TRAFFIC_STORAGE,
-            onClick = { onTabSelected(SettingsTab.TRAFFIC_STORAGE) }
-        )
+            SidebarNavItem(
+                label = "Traffic & Storage",
+                icon = Icons.AutoMirrored.Filled.List,
+                isSelected = activeTab == SettingsTab.TRAFFIC_STORAGE,
+                onClick = { onTabSelected(SettingsTab.TRAFFIC_STORAGE) },
+            )
 
-        Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(4.dp))
 
-        SidebarNavItem(
-            label = "Appearance",
-            icon = Icons.Default.Palette,
-            isSelected = activeTab == SettingsTab.APPEARANCE,
-            onClick = { onTabSelected(SettingsTab.APPEARANCE) }
+            SidebarNavItem(
+                label = "Appearance",
+                icon = Icons.Default.Palette,
+                isSelected = activeTab == SettingsTab.APPEARANCE,
+                onClick = { onTabSelected(SettingsTab.APPEARANCE) },
+            )
+        }
+        KNetVerticalScrollbar(
+            scrollState = sidebarScrollState,
+            modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
         )
     }
 }
@@ -90,16 +102,21 @@ private fun SidebarNavItem(
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
 
-    val background = if (isSelected) Color(0xFF10B981).copy(alpha = 0.12f) else Color.Transparent
-    val contentColor = if (isSelected) Color(0xFF10B981) else themeColors.textSecondary
+    val background = if (isSelected) themeColors.accent.copy(alpha = 0.12f) else themeColors.surface
+    val contentColor = if (isSelected) themeColors.accent else themeColors.textSecondary
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(36.dp)
-            .clip(RoundedCornerShape(6.dp))
+            .clip(KNetTheme.shapes.small)
             .background(background)
-            .clickable(onClick = onClick)
+            .selectable(
+                selected = isSelected,
+                role = Role.Tab,
+                onClick = onClick,
+            )
+            .handCursor()
             .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

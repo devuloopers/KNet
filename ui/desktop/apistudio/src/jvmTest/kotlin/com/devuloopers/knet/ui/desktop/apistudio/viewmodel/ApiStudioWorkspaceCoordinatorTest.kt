@@ -2,8 +2,7 @@ package com.devuloopers.knet.ui.desktop.apistudio.viewmodel
 
 import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
 import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
-import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
-import com.devuloopers.knet.domain.workspace.usecase.SaveWorkspaceLayoutUseCase
+import com.devuloopers.knet.domain.workspace.usecase.UpdateWorkspaceLayoutUseCase
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
@@ -24,8 +23,7 @@ class ApiStudioWorkspaceCoordinatorTest {
         val coordinator = ApiStudioWorkspaceCoordinator(
             scope = backgroundScope,
             dispatcher = StandardTestDispatcher(testScheduler),
-            getWorkspaceLayout = GetWorkspaceLayoutUseCase(repository),
-            saveWorkspaceLayout = SaveWorkspaceLayoutUseCase(repository),
+            updateWorkspaceLayout = UpdateWorkspaceLayoutUseCase(repository),
             onFailure = { throw it }
         )
 
@@ -50,9 +48,12 @@ class ApiStudioWorkspaceCoordinatorTest {
 
         override val settingsFlow: Flow<WorkspaceLayoutSettings> = settings
 
-        override suspend fun saveSettings(settings: WorkspaceLayoutSettings) {
-            saved += settings
-            this.settings.value = settings
+        override suspend fun updateSettings(
+            transform: (WorkspaceLayoutSettings) -> WorkspaceLayoutSettings,
+        ) {
+            val updated = transform(settings.value)
+            saved += updated
+            settings.value = updated
         }
     }
 }

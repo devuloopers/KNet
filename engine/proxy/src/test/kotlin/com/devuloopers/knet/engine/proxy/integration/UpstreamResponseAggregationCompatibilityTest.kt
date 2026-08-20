@@ -72,8 +72,9 @@ class UpstreamBreakpointAggregationTest {
         val sawContentChunk = AtomicBoolean(false)
         val proxy = KNetProxyServer(
             port = availableLoopbackPort(),
-            ca = CertificateAuthority.generate(),
-            certCache = CertificateCache(),
+            serverTlsContextProvider = com.devuloopers.knet.engine.proxy.TestServerTlsContextProvider(
+                CertificateAuthority.generate(), CertificateCache(),
+            ),
             pipelineInitializers = listOf({ pipeline ->
                 pipeline.addLast(
                     "responseShapeObserver",
@@ -155,8 +156,9 @@ class UpstreamBreakpointAggregationTest {
         val sawContentChunk = AtomicBoolean(false)
         val proxy = KNetProxyServer(
             port = availableLoopbackPort(),
-            ca = CertificateAuthority.generate(),
-            certCache = CertificateCache(),
+            serverTlsContextProvider = com.devuloopers.knet.engine.proxy.TestServerTlsContextProvider(
+                CertificateAuthority.generate(), CertificateCache(),
+            ),
             pipelineInitializers = listOf({ pipeline ->
                 pipeline.addLast(
                     "requestSelectiveAggregator",

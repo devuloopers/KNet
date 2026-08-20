@@ -1,12 +1,12 @@
 package com.devuloopers.knet.ui.desktop.certificate
 
-import com.devuloopers.knet.ui.desktop.certificate.model.CaStatus
+import com.devuloopers.knet.application.port.certificate.CertificateAuthorityStatus
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 /**
- * Unit tests verifying the functionality and enum values of [CaStatus].
+ * Unit tests verifying the application-owned certificate authority statuses.
  *
  * This test ensures that the certificate authority status options are correctly
  * defined and available for UI state mapping.
@@ -14,19 +14,18 @@ import kotlin.test.assertTrue
 class CaStatusTest {
 
     /**
-     * Verifies that the [CaStatus] enum contains all expected states.
+     * Verifies that the status enum contains all expected states.
      *
      * Design Intent: UI components rely on these specific enum values to represent
      * the root CA's state accurately.
      */
     @Test
     fun testCaStatusEnumValues() {
-        val statuses = CaStatus.entries
-        assertTrue(statuses.contains(CaStatus.AVAILABLE))
-        assertTrue(statuses.contains(CaStatus.MISSING))
-        assertTrue(statuses.contains(CaStatus.EXPIRED))
-        assertTrue(statuses.contains(CaStatus.INVALID))
-        assertTrue(statuses.contains(CaStatus.INSTALLATION_REQUIRED))
-        assertEquals(5, statuses.size)
+        val statuses = CertificateAuthorityStatus.entries
+        assertTrue(statuses.contains(CertificateAuthorityStatus.AVAILABLE))
+        assertTrue(statuses.contains(CertificateAuthorityStatus.MISSING))
+        assertTrue(statuses.contains(CertificateAuthorityStatus.EXPIRED))
+        assertTrue(statuses.contains(CertificateAuthorityStatus.INVALID))
+        assertEquals(4, statuses.size)
     }
 }

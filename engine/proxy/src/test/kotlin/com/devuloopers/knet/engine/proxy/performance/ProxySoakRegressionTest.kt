@@ -34,8 +34,9 @@ class ProxySoakRegressionTest {
         val origin = EmptyResponseOrigin(totalRequests)
         val proxy = KNetProxyServer(
             port = availableLoopbackPort(),
-            ca = CertificateAuthority.generate(),
-            certCache = CertificateCache(),
+            serverTlsContextProvider = com.devuloopers.knet.engine.proxy.TestServerTlsContextProvider(
+                CertificateAuthority.generate(), CertificateCache(),
+            ),
         )
         val initialDescriptors = openFileDescriptors()
         val failures = ConcurrentLinkedQueue<Throwable>()

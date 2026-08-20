@@ -14,6 +14,7 @@ Implements the high-throughput proxy transport: listeners, channels, TLS interce
 - Protocol-neutral pre-forward exchange admission and one-shot capture handoff across optional forwarding gates.
 - A reusable protocol-neutral selective HTTP/1 aggregator that falls back to ordered streaming when a
   selected message crosses its bound instead of rejecting otherwise valid traffic.
+- The `ServerTlsContextProvider` transport port and scheduling boundary used for CONNECT interception; its implementation is injected by desktop data.
 
 ## Does not own
 
@@ -21,7 +22,7 @@ Implements the high-throughput proxy transport: listeners, channels, TLS interce
 
 ## Dependency rule
 
-Depends inward on stable contracts and injected certificate/traffic extension interfaces. It must never depend on `:ui:*`, `:products:*`, `:data:*`, or `:connectivity:*`.
+Depends inward on stable contracts and injected TLS/traffic extension interfaces. It has no production dependency on `:engine:certificate` and must never depend on `:ui:*`, `:products:*`, `:data:*`, or `:connectivity:*`.
 
 ## Current state
 
@@ -34,3 +35,5 @@ canonical exchange metadata is admitted before a forwarding gate can pause and t
 consumed after resume. Response capture becomes terminal only after final downstream delivery; premature
 upstream/downstream closure also releases exchange ownership. Optional ingress attribution consumes a neutral
 one-shot socket identity contract.
+Strict upstream TLS uses the host JVM trust roots. KNet's interception CA is downstream identity material and is
+never added to upstream trust; insecure upstream validation remains an explicit runtime policy.

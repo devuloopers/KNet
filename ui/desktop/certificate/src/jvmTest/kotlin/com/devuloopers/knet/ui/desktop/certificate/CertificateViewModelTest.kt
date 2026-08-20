@@ -1,11 +1,12 @@
 package com.devuloopers.knet.ui.desktop.certificate
 
 import com.devuloopers.knet.application.port.certificate.CertificateAuthoritySummary
+import com.devuloopers.knet.application.port.certificate.CertificateAuthorityStatus
 import com.devuloopers.knet.application.port.certificate.CertificateManagementPort
 import com.devuloopers.knet.application.port.certificate.ClientCertificateSummary
 import com.devuloopers.knet.application.port.certificate.ClientCertificateFormat
 import com.devuloopers.knet.application.port.certificate.MtlsRuleSpec
-import com.devuloopers.knet.ui.desktop.certificate.model.CaStatus
+import com.devuloopers.knet.application.port.certificate.TrustInstallationResult
 import com.devuloopers.knet.ui.desktop.certificate.model.CertificateIntent
 import com.devuloopers.knet.ui.desktop.certificate.model.TrustInstallationState
 import com.devuloopers.knet.ui.desktop.certificate.viewmodel.CertificateViewModel
@@ -31,9 +32,10 @@ import kotlin.test.assertTrue
 class FakeCertificateManager : CertificateManagementPort {
     private val clientCertificates: MutableList<ClientCertificateSummary> = mutableListOf()
     private val mtlsRules: MutableList<MtlsRuleSpec> = mutableListOf()
+    var trustInstallationResult: TrustInstallationResult = TrustInstallationResult.Installed
 
     override suspend fun authoritySummary(): CertificateAuthoritySummary = CertificateAuthoritySummary(
-        "AVAILABLE",
+        CertificateAuthorityStatus.AVAILABLE,
         "CN=KNet Intercepting Root CA, O=Devuloopers, L=Desktop",
         "CN=KNet Intercepting Root CA, O=Devuloopers, L=Desktop",
         "DE:AD:BE:EF:12:34:56:78",
@@ -44,7 +46,7 @@ class FakeCertificateManager : CertificateManagementPort {
         "F5:C2:17:8D:2D:E8:C9:F0:A1:2B:3C:4D:5E:6F:7A:8B:9C:0D:1E:2F:3A:4B:5C:6D:7E:8F:90:A1:B2:C3",
         true,
     )
-    override suspend fun installRootCertificate(): Boolean = true
+    override suspend fun installRootCertificate(): TrustInstallationResult = trustInstallationResult
     override suspend fun isRootCertificateTrusted(): Boolean = true
     override suspend fun clientCertificates(): List<ClientCertificateSummary> = clientCertificates.toList()
 
@@ -72,6 +74,7 @@ class FakeCertificateManager : CertificateManagementPort {
 
     override suspend fun deleteClientCertificate(alias: String) {
         clientCertificates.removeAll { it.alias == alias }
+        mtlsRules.removeAll { it.certificateAlias == alias }
     }
 
     override suspend fun setClientCertificateEnabled(alias: String, enabled: Boolean) {
@@ -137,7 +140,7 @@ class CertificateViewModelTest {
     @Test
     fun testInitialState() = runTest {
         val state = viewModel.uiState.value
-        assertEquals(CaStatus.AVAILABLE, state.caStatus)
+        assertEquals(CertificateAuthorityStatus.AVAILABLE, state.caStatus)
         assertEquals("CN=KNet Intercepting Root CA, O=Devuloopers, L=Desktop", state.caDetails.subject)
     }
 
@@ -150,7 +153,7 @@ class CertificateViewModelTest {
     fun testRefreshIntent() = runTest {
         viewModel.processIntent(CertificateIntent.Refresh)
         val state = viewModel.uiState.value
-        assertEquals(CaStatus.AVAILABLE, state.caStatus)
+        assertEquals(CertificateAuthorityStatus.AVAILABLE, state.caStatus)
     }
 
     /**
@@ -164,6 +167,26 @@ class CertificateViewModelTest {
         advanceUntilIdle()
         val state = viewModel.uiState.value
         assertEquals(TrustInstallationState.INSTALLED, state.trustState)
+    }
+
+    @Test
+    fun `manual trust instructions remain available after the initial dialog is dismissed`() = runTest {
+        certificateManager.trustInstallationResult = TrustInstallationResult.ManualActionRequired(
+            message = "Administrator approval is required.",
+            instructions = "sudo install-knet-ca",
+        )
+
+        viewModel.processIntent(CertificateIntent.InstallTrust)
+        advanceUntilIdle()
+
+        assertEquals(TrustInstallationState.MANUAL_ACTION_REQUIRED, viewModel.uiState.value.trustState)
+        assertEquals("sudo install-knet-ca", viewModel.uiState.value.manualTrustInstructions)
+        assertTrue(viewModel.uiState.value.isTrustInstructionsVisible)
+
+        viewModel.processIntent(CertificateIntent.DismissTrustInstructions)
+        assertFalse(viewModel.uiState.value.isTrustInstructionsVisible)
+        viewModel.processIntent(CertificateIntent.ViewTrustInstructions)
+        assertTrue(viewModel.uiState.value.isTrustInstructionsVisible)
     }
 
     /**
@@ -188,14 +211,15 @@ class CertificateViewModelTest {
         assertFalse(state.isExportDialogVisible)
 
         // Select
-        viewModel.processIntent(CertificateIntent.SelectCertificate(cert = state.clientCertificates[0]))
+        viewModel.processIntent(CertificateIntent.SelectCertificate(alias = state.clientCertificates[0].alias))
         advanceUntilIdle()
         state = viewModel.uiState.value
-        assertNotNull(state.selectedCertificate)
-        assertEquals("test-alias", state.selectedCertificate.alias)
+        val selectedCertificate = assertNotNull(state.selectedCertificate)
+        assertEquals("test-alias", selectedCertificate.alias)
 
         // Delete
-        viewModel.processIntent(CertificateIntent.DeleteCertificate(alias = "test-alias"))
+        viewModel.processIntent(CertificateIntent.RequestDeleteCertificate(alias = "test-alias"))
+        viewModel.processIntent(CertificateIntent.ConfirmDeleteCertificate)
         advanceUntilIdle()
         state = viewModel.uiState.value
         assertTrue(state.clientCertificates.isEmpty())
@@ -228,7 +252,8 @@ class CertificateViewModelTest {
         assertEquals("*.knet.io", state.mtlsRules[0].hostPattern)
 
         // Remove
-        viewModel.processIntent(CertificateIntent.RemoveRule(ruleName = "my-rule"))
+        viewModel.processIntent(CertificateIntent.RequestRemoveRule(ruleName = "my-rule"))
+        viewModel.processIntent(CertificateIntent.ConfirmRemoveRule)
         advanceUntilIdle()
         state = viewModel.uiState.value
         assertTrue(state.mtlsRules.isEmpty())
@@ -249,5 +274,19 @@ class CertificateViewModelTest {
 
         viewModel.processIntent(CertificateIntent.SetRuleDialogVisible(true))
         assertTrue(viewModel.uiState.value.isRuleDialogVisible)
+    }
+
+    @Test
+    fun `compact trust and certificate drawers are mutually exclusive`() = runTest {
+        viewModel.processIntent(CertificateIntent.ImportCertificate("/path/to/cert", "drawer-cert"))
+        advanceUntilIdle()
+
+        viewModel.processIntent(CertificateIntent.SetTrustDrawerVisible(true))
+        assertTrue(viewModel.uiState.value.isTrustDrawerVisible)
+        assertNull(viewModel.uiState.value.selectedCertificate)
+
+        viewModel.processIntent(CertificateIntent.SelectCertificate("drawer-cert"))
+        assertFalse(viewModel.uiState.value.isTrustDrawerVisible)
+        assertEquals("drawer-cert", viewModel.uiState.value.selectedCertificateAlias)
     }
 }

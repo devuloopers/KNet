@@ -12,7 +12,10 @@ class InterceptorIntegrationTest {
     fun testInterceptorPipelineIntegrationSetup() {
         val ca = CertificateAuthority.generate()
         val cache = CertificateCache()
-        val server = KNetProxyServer(port = 18090, ca = ca, certCache = cache)
+        val server = KNetProxyServer(
+            port = 18090,
+            serverTlsContextProvider = com.devuloopers.knet.engine.proxy.TestServerTlsContextProvider(ca, cache),
+        )
 
         assertNotNull(server)
     }

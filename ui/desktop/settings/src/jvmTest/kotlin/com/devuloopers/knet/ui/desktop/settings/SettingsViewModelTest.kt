@@ -1,15 +1,21 @@
 package com.devuloopers.knet.ui.desktop.settings
 
-import com.devuloopers.knet.domain.workspace.model.TimeoutUnit
-import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
-import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
+import com.devuloopers.knet.application.port.certificate.CertificateAuthorityStatus
 import com.devuloopers.knet.application.port.certificate.CertificateAuthoritySummary
 import com.devuloopers.knet.application.port.certificate.CertificateManagementPort
 import com.devuloopers.knet.application.port.certificate.ClientCertificateSummary
 import com.devuloopers.knet.application.port.certificate.MtlsRuleSpec
+import com.devuloopers.knet.application.port.certificate.TrustInstallationResult
+import com.devuloopers.knet.domain.settings.model.ApplicationSettings
+import com.devuloopers.knet.domain.settings.model.ProxyPort
+import com.devuloopers.knet.domain.settings.repository.ApplicationSettingsRepository
+import com.devuloopers.knet.domain.settings.usecase.ObserveApplicationSettingsUseCase
+import com.devuloopers.knet.domain.settings.usecase.UpdateApplicationSettingsUseCase
+import com.devuloopers.knet.scripting.model.ScriptLanguage
+import com.devuloopers.knet.ui.desktop.settings.model.SettingsField
 import com.devuloopers.knet.ui.desktop.settings.model.SettingsIntent
-import com.devuloopers.knet.ui.desktop.settings.model.SettingsState
-import com.devuloopers.knet.ui.desktop.settings.model.SettingsTab
+import com.devuloopers.knet.ui.desktop.settings.model.SettingsNoticeTone
+import com.devuloopers.knet.ui.desktop.settings.model.TimeoutUnit
 import com.devuloopers.knet.ui.desktop.settings.platform.SettingsPlatformActions
 import com.devuloopers.knet.ui.desktop.settings.viewmodel.SettingsViewModel
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -20,39 +26,58 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlin.test.AfterTest
+import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.minutes
 
-/**
- * Fake implementation of [WidgetPreferencesRepository] for unit testing.
- */
-private class FakeWidgetPreferencesRepository(
-    initialSettings: WorkspaceLayoutSettings = WorkspaceLayoutSettings()
-) : WidgetPreferencesRepository {
-    val stateFlow = MutableStateFlow(initialSettings)
-    override val settingsFlow: Flow<WorkspaceLayoutSettings> = stateFlow
+/** Atomic in-memory application-settings repository used by Settings tests. */
+private class FakeApplicationSettingsRepository(
+    initialSettings: ApplicationSettings = ApplicationSettings(),
+) : ApplicationSettingsRepository {
+    val state = MutableStateFlow(initialSettings)
+    var updateCount: Int = 0
+    var failure: Exception? = null
 
-    override suspend fun saveSettings(settings: WorkspaceLayoutSettings) {
-        stateFlow.value = settings
+    override val settings: Flow<ApplicationSettings> = state
+
+    override suspend fun update(transform: (ApplicationSettings) -> ApplicationSettings) {
+        failure?.let { throw it }
+        updateCount += 1
+        state.value = transform(state.value)
     }
 }
 
-/**
- * Fake implementation of [CertificateManagementPort] for unit testing.
- */
+/** Configurable certificate boundary used by Settings tests. */
 private class FakeCertificateManager : CertificateManagementPort {
     var isTrusted: Boolean = false
+    var installationResult: TrustInstallationResult = TrustInstallationResult.Installed
+
     override suspend fun isRootCertificateTrusted(): Boolean = isTrusted
-    override suspend fun installRootCertificate(): Boolean {
-        isTrusted = true
-        return true
+
+    override suspend fun installRootCertificate(): TrustInstallationResult {
+        if (installationResult is TrustInstallationResult.Installed) isTrusted = true
+        return installationResult
     }
+
     override suspend fun authoritySummary(): CertificateAuthoritySummary = CertificateAuthoritySummary(
-        "AVAILABLE", "CN=KNet Root CA", "CN=KNet Root CA", "01:23:45", "SHA256withRSA",
-        "2024-01-01", "2034-01-01", "AA:BB:CC", "AA:BB:CC:DD", isTrusted,
+        CertificateAuthorityStatus.AVAILABLE,
+        "CN=KNet Root CA",
+        "CN=KNet Root CA",
+        "01:23:45",
+        "SHA256withRSA",
+        "2024-01-01",
+        "2034-01-01",
+        "AA:BB:CC",
+        "AA:BB:CC:DD",
+        isTrusted,
     )
+
     override suspend fun clientCertificates(): List<ClientCertificateSummary> = emptyList()
     override suspend fun importClientCertificate(path: String, alias: String, passphrase: String) = Unit
     override suspend fun exportClientCertificate(alias: String, destinationPath: String) = Unit
@@ -64,141 +89,199 @@ private class FakeCertificateManager : CertificateManagementPort {
     override suspend fun deleteMtlsRule(ruleName: String) = Unit
 }
 
-/** In-memory desktop action boundary used by settings ViewModel tests. */
+/** In-memory desktop action boundary used by Settings tests. */
 private class FakeSettingsPlatformActions : SettingsPlatformActions {
     override val dataDirectory: String = "/test/.knet"
     var openRequested: Boolean = false
+    var openResult: Boolean = true
 
     override suspend fun openDataDirectory(): Boolean {
         openRequested = true
-        return true
+        return openResult
     }
 }
 
-/**
- * Unit tests verifying Settings state transitions, timeout conversions, and intent contracts.
- */
+/** Verifies validated drafts, atomic persistence, failure feedback, and Settings platform actions. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelTest {
+    private val dispatcher = StandardTestDispatcher()
 
-    private val testDispatcher = StandardTestDispatcher()
-
-    @kotlin.test.BeforeTest
+    @BeforeTest
     fun setUp() {
-        kotlinx.coroutines.Dispatchers.setMain(testDispatcher)
+        kotlinx.coroutines.Dispatchers.setMain(dispatcher)
     }
 
-    @kotlin.test.AfterTest
+    @AfterTest
     fun tearDown() {
         kotlinx.coroutines.Dispatchers.resetMain()
     }
 
     @Test
-    fun `verify default settings state values`() {
-        val state = SettingsState()
-        assertEquals(SettingsTab.NETWORK_PROXY, state.activeTab)
-        assertEquals("8080", state.proxyPort)
-        assertFalse(state.isCaTrusted)
-        assertFalse(state.autoClearTrafficOnStartup)
-        assertEquals(10, state.maxPayloadMb)
-        assertEquals("DARK", state.theme)
-        assertEquals("JAVASCRIPT", state.scriptLanguage)
-        assertEquals("60", state.apiStudioTimeoutValue)
-        assertEquals(TimeoutUnit.SECONDS, state.apiStudioTimeoutUnit)
-        assertEquals("60", state.liveInterceptionTimeoutValue)
-        assertEquals(TimeoutUnit.SECONDS, state.liveInterceptionTimeoutUnit)
-    }
-
-    @Test
-    fun `verify timeout unit toSeconds and fromSeconds conversions`() {
-        assertEquals(45, TimeoutUnit.SECONDS.toSeconds(45))
-        assertEquals(120, TimeoutUnit.MINUTES.toSeconds(2))
-
-        val (val1, unit1) = TimeoutUnit.fromSeconds(120)
-        assertEquals(2, val1)
-        assertEquals(TimeoutUnit.MINUTES, unit1)
-
-        val (val2, unit2) = TimeoutUnit.fromSeconds(45)
-        assertEquals(45, val2)
-        assertEquals(TimeoutUnit.SECONDS, unit2)
-    }
-
-    @Test
-    fun `verify UpdateApiStudioTimeout persists minutes converted to total seconds`() = runTest(testDispatcher) {
-        val repo = FakeWidgetPreferencesRepository()
-        val certManager = FakeCertificateManager()
-        val viewModel = SettingsViewModel(repo, certManager, FakeSettingsPlatformActions(), testDispatcher)
-
-        advanceUntilIdle()
-
-        // Set API Studio timeout to 3 minutes
-        viewModel.processIntent(SettingsIntent.UpdateApiStudioTimeout("3", TimeoutUnit.MINUTES))
-        advanceUntilIdle()
-
-        assertEquals("3", viewModel.uiState.value.apiStudioTimeoutValue)
-        assertEquals(TimeoutUnit.MINUTES, viewModel.uiState.value.apiStudioTimeoutUnit)
-        assertEquals(180, repo.stateFlow.value.apiStudioTimeoutSeconds)
-    }
-
-    @Test
-    fun `verify UpdateLiveInterceptionTimeout persists application breakpoint deadline`() = runTest(testDispatcher) {
-        val repo = FakeWidgetPreferencesRepository()
-        val certManager = FakeCertificateManager()
-        val viewModel = SettingsViewModel(repo, certManager, FakeSettingsPlatformActions(), testDispatcher)
-
-        advanceUntilIdle()
-
-        // Set Live Interception timeout to 2 minutes (120 sec)
-        viewModel.processIntent(SettingsIntent.UpdateLiveInterceptionTimeout("2", TimeoutUnit.MINUTES))
-        advanceUntilIdle()
-
-        assertEquals("2", viewModel.uiState.value.liveInterceptionTimeoutValue)
-        assertEquals(TimeoutUnit.MINUTES, viewModel.uiState.value.liveInterceptionTimeoutUnit)
-        assertEquals(120, repo.stateFlow.value.liveInterceptionTimeoutSeconds)
-    }
-
-    @Test
-    fun `verify ResetDefaults restores default timeouts to 60s for both`() = runTest(testDispatcher) {
-        val customInitial = WorkspaceLayoutSettings(
-            apiStudioTimeoutSeconds = 300,
-            liveInterceptionTimeoutSeconds = 600
+    fun `persisted application settings hydrate typed UI state`() = runTest(dispatcher) {
+        val repository = FakeApplicationSettingsRepository(
+            ApplicationSettings(
+                proxyPort = ProxyPort(9090),
+                defaultScriptLanguage = ScriptLanguage.KOTLIN,
+                apiStudioTimeout = 5.minutes,
+            ),
         )
-        val repo = FakeWidgetPreferencesRepository(customInitial)
-        val certManager = FakeCertificateManager()
-        val viewModel = SettingsViewModel(repo, certManager, FakeSettingsPlatformActions(), testDispatcher)
+        val viewModel = createViewModel(repository)
 
         advanceUntilIdle()
 
+        assertFalse(viewModel.uiState.value.isLoading)
+        assertEquals("9090", viewModel.uiState.value.proxyPort)
+        assertEquals(ScriptLanguage.KOTLIN, viewModel.uiState.value.scriptLanguage)
         assertEquals("5", viewModel.uiState.value.apiStudioTimeoutValue)
         assertEquals(TimeoutUnit.MINUTES, viewModel.uiState.value.apiStudioTimeoutUnit)
-
-        // Reset defaults
-        viewModel.processIntent(SettingsIntent.ResetDefaults)
-        advanceUntilIdle()
-
-        assertEquals("1", viewModel.uiState.value.apiStudioTimeoutValue)
-        assertEquals(TimeoutUnit.MINUTES, viewModel.uiState.value.apiStudioTimeoutUnit)
-        assertEquals("1", viewModel.uiState.value.liveInterceptionTimeoutValue)
-        assertEquals(TimeoutUnit.MINUTES, viewModel.uiState.value.liveInterceptionTimeoutUnit)
-        assertEquals(60, repo.stateFlow.value.apiStudioTimeoutSeconds)
-        assertEquals(60, repo.stateFlow.value.liveInterceptionTimeoutSeconds)
     }
 
     @Test
-    fun `OpenDataDirectory delegates to the injected desktop platform action`() = runTest(testDispatcher) {
-        val platformActions = FakeSettingsPlatformActions()
-        val viewModel = SettingsViewModel(
-            FakeWidgetPreferencesRepository(),
-            FakeCertificateManager(),
-            platformActions,
-            testDispatcher,
+    fun `proxy port remains a draft until explicit valid commit`() = runTest(dispatcher) {
+        val repository = FakeApplicationSettingsRepository()
+        val viewModel = createViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.processIntent(SettingsIntent.UpdateProxyPort("9090"))
+        advanceUntilIdle()
+
+        assertEquals(0, repository.updateCount)
+        assertEquals(ProxyPort.Default, repository.state.value.proxyPort)
+        assertTrue(SettingsField.PROXY_PORT in viewModel.uiState.value.dirtyFields)
+
+        viewModel.processIntent(SettingsIntent.CommitProxyPort)
+        advanceUntilIdle()
+
+        assertEquals(1, repository.updateCount)
+        assertEquals(ProxyPort(9090), repository.state.value.proxyPort)
+        assertEquals(SettingsNoticeTone.SUCCESS, viewModel.uiState.value.notice?.tone)
+    }
+
+    @Test
+    fun `invalid proxy port is rejected without persistence`() = runTest(dispatcher) {
+        val repository = FakeApplicationSettingsRepository()
+        val viewModel = createViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.processIntent(SettingsIntent.UpdateProxyPort("99999"))
+        viewModel.processIntent(SettingsIntent.CommitProxyPort)
+        advanceUntilIdle()
+
+        assertEquals(0, repository.updateCount)
+        assertNotNull(viewModel.uiState.value.proxyPortError)
+    }
+
+    @Test
+    fun `timeout draft commits as Kotlin duration`() = runTest(dispatcher) {
+        val repository = FakeApplicationSettingsRepository()
+        val viewModel = createViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.processIntent(SettingsIntent.UpdateLiveInterceptionTimeout("2", TimeoutUnit.MINUTES))
+        assertEquals(0, repository.updateCount)
+        viewModel.processIntent(SettingsIntent.CommitLiveInterceptionTimeout)
+        advanceUntilIdle()
+
+        assertEquals(2.minutes, repository.state.value.liveInterceptionTimeout)
+        assertNull(viewModel.uiState.value.liveInterceptionTimeoutError)
+    }
+
+    @Test
+    fun `failed persistence is reported as error and never as success`() = runTest(dispatcher) {
+        val repository = FakeApplicationSettingsRepository().apply {
+            failure = IllegalStateException("disk unavailable")
+        }
+        val viewModel = createViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.processIntent(SettingsIntent.UpdateProxyPort("9090"))
+        viewModel.processIntent(SettingsIntent.CommitProxyPort)
+        advanceUntilIdle()
+
+        assertEquals(SettingsNoticeTone.ERROR, viewModel.uiState.value.notice?.tone)
+        assertEquals("disk unavailable", viewModel.uiState.value.notice?.details)
+        assertTrue(SettingsField.PROXY_PORT in viewModel.uiState.value.dirtyFields)
+    }
+
+    @Test
+    fun `external updates refresh clean fields but preserve dirty drafts`() = runTest(dispatcher) {
+        val repository = FakeApplicationSettingsRepository()
+        val viewModel = createViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.processIntent(SettingsIntent.UpdateProxyPort("9090"))
+        repository.state.value = repository.state.value.copy(
+            proxyPort = ProxyPort(8181),
+            defaultScriptLanguage = ScriptLanguage.KOTLIN,
         )
+        advanceUntilIdle()
+
+        assertEquals("9090", viewModel.uiState.value.proxyPort)
+        assertEquals(ScriptLanguage.KOTLIN, viewModel.uiState.value.scriptLanguage)
+    }
+
+    @Test
+    fun `reset requires confirmation and restores only application defaults`() = runTest(dispatcher) {
+        val repository = FakeApplicationSettingsRepository(
+            ApplicationSettings(proxyPort = ProxyPort(9090), apiStudioTimeout = 5.minutes),
+        )
+        val viewModel = createViewModel(repository)
+        advanceUntilIdle()
+
+        viewModel.processIntent(SettingsIntent.RequestResetDefaults)
+        assertTrue(viewModel.uiState.value.isResetConfirmationVisible)
+        assertEquals(0, repository.updateCount)
+
+        viewModel.processIntent(SettingsIntent.ConfirmResetDefaults)
+        advanceUntilIdle()
+
+        assertEquals(ApplicationSettings(), repository.state.value)
+        assertFalse(viewModel.uiState.value.isResetConfirmationVisible)
+    }
+
+    @Test
+    fun `manual trust result exposes full instructions as warning details`() = runTest(dispatcher) {
+        val certificates = FakeCertificateManager().apply {
+            installationResult = TrustInstallationResult.ManualActionRequired(
+                message = "Administrator approval is required.",
+                instructions = "Open the system trust settings and approve KNet Root CA.",
+            )
+        }
+        val viewModel = createViewModel(certificates = certificates)
+        advanceUntilIdle()
+
+        viewModel.processIntent(SettingsIntent.InstallRootCa)
+        advanceUntilIdle()
+
+        assertEquals(SettingsNoticeTone.WARNING, viewModel.uiState.value.notice?.tone)
+        assertEquals(
+            "Open the system trust settings and approve KNet Root CA.",
+            viewModel.uiState.value.notice?.details,
+        )
+    }
+
+    @Test
+    fun `open data directory delegates to desktop platform boundary`() = runTest(dispatcher) {
+        val platform = FakeSettingsPlatformActions()
+        val viewModel = createViewModel(platformActions = platform)
         advanceUntilIdle()
 
         viewModel.processIntent(SettingsIntent.OpenDataDirectory)
         advanceUntilIdle()
 
-        assertTrue(platformActions.openRequested)
-        assertEquals(platformActions.dataDirectory, viewModel.uiState.value.dataDirectory)
+        assertTrue(platform.openRequested)
+        assertEquals(platform.dataDirectory, viewModel.uiState.value.dataDirectory)
     }
+
+    private fun createViewModel(
+        repository: FakeApplicationSettingsRepository = FakeApplicationSettingsRepository(),
+        certificates: FakeCertificateManager = FakeCertificateManager(),
+        platformActions: FakeSettingsPlatformActions = FakeSettingsPlatformActions(),
+    ): SettingsViewModel = SettingsViewModel(
+        observeApplicationSettings = ObserveApplicationSettingsUseCase(repository),
+        updateApplicationSettings = UpdateApplicationSettingsUseCase(repository),
+        certificateManager = certificates,
+        platformActions = platformActions,
+        ioDispatcher = dispatcher,
+    )
 }

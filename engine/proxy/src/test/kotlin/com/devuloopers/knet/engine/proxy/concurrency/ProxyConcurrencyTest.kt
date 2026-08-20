@@ -43,7 +43,10 @@ class ProxyConcurrencyTest {
     fun testConcurrentProxyServerInitializationSafety() = runBlocking {
         val ca = CertificateAuthority.generate()
         val cache = CertificateCache()
-        val server = KNetProxyServer(port = 19088, ca = ca, certCache = cache)
+        val server = KNetProxyServer(
+            port = 19088,
+            serverTlsContextProvider = com.devuloopers.knet.engine.proxy.TestServerTlsContextProvider(ca, cache),
+        )
 
         server.start()
 

@@ -31,6 +31,9 @@ object KNetDateTime {
     /** Returns local `HH:mm:ss - dd/MM` time and compact date. */
     fun timeAndDayMonth(epochMillis: Long): String = timeAndDayMonth(epochMillis, displayTimeZone)
 
+    /** Returns a human-readable local date such as `8 Aug 2036`. */
+    fun humanDate(epochMillis: Long): String = humanDate(epochMillis, displayTimeZone)
+
     internal fun dateKey(epochMillis: Long, timeZone: TimeZone): String =
         localDateTime(epochMillis, timeZone).date.toString()
 
@@ -56,6 +59,11 @@ object KNetDateTime {
         }
     }
 
+    internal fun humanDate(epochMillis: Long, timeZone: TimeZone): String {
+        val date = localDateTime(epochMillis, timeZone).date
+        return "${date.day} ${MONTH_ABBREVIATIONS[date.month.number - 1]} ${date.year}"
+    }
+
     private fun localDateTime(epochMillis: Long, timeZone: TimeZone): LocalDateTime = Instant
         .fromEpochMilliseconds(epochMillis)
         .toLocalDateTime(timeZone)
@@ -71,4 +79,9 @@ object KNetDateTime {
     private fun Int.fixedWidth(width: Int): String = toString().padStart(width, '0')
 
     private const val NANOS_PER_MILLISECOND: Int = 1_000_000
+
+    private val MONTH_ABBREVIATIONS: List<String> = listOf(
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+    )
 }

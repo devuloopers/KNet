@@ -1,7 +1,5 @@
 package com.devuloopers.knet.engine.proxy
 
-import com.devuloopers.knet.engine.certificate.CertificateAuthority
-import com.devuloopers.knet.engine.certificate.CertificateCache
 import com.devuloopers.knet.engine.proxy.handler.KNetStreamingProxyHandler
 import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureConnectionMetadata
 import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureSink
@@ -40,6 +38,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import io.netty.util.concurrent.ScheduledFuture
+import com.devuloopers.knet.engine.proxy.tls.ServerTlsContextProvider
 
 
 /**
@@ -48,8 +47,7 @@ import io.netty.util.concurrent.ScheduledFuture
  *
  * @property bindHost Explicit listener host. The safe default is IPv4 loopback.
  * @property port The port KNet will bind to (default: 8080).
- * @property ca The Root Certificate Authority used to dynamically sign leaf certificates for SSL decryption.
- * @property certCache The cache managing generated leaf certificates.
+ * @property serverTlsContextProvider Supplies per-host server TLS contexts without exposing key material.
  * @property keyManagerProvider Optional upstream client-identity selector for mTLS.
  * @property verifyUpstreamTls Whether upstream server certificates must be verified.
  * @property runtimePolicy Enforced connection and timeout limits for this runtime.
@@ -61,8 +59,7 @@ import io.netty.util.concurrent.ScheduledFuture
 class KNetProxyServer(
     val bindHost: String = DEFAULT_BIND_HOST,
     val port: Int = 8080,
-    private val ca: CertificateAuthority,
-    private val certCache: CertificateCache,
+    private val serverTlsContextProvider: ServerTlsContextProvider,
     private val keyManagerProvider: com.devuloopers.knet.engine.proxy.tls.KeyManagerProvider? = null,
     private val verifyUpstreamTls: Boolean = true,
     private val runtimePolicy: KNetProxyRuntimePolicy = KNetProxyRuntimePolicy(),
@@ -169,8 +166,7 @@ class KNetProxyServer(
                         pipelineInitializers.forEach { it(pipeline) }
 
                         val proxyHandler = KNetStreamingProxyHandler(
-                            ca = ca,
-                            certCache = certCache,
+                            serverTlsContextProvider = serverTlsContextProvider,
                             keyManagerProvider = keyManagerProvider,
                             strictSsl = verifyUpstreamTls,
                             proxyScope = scope,

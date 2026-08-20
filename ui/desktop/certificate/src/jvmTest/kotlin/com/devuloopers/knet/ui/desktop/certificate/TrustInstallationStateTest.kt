@@ -22,7 +22,8 @@ class TrustInstallationStateTest {
         assertTrue(states.contains(TrustInstallationState.IDLE))
         assertTrue(states.contains(TrustInstallationState.INSTALLING))
         assertTrue(states.contains(TrustInstallationState.INSTALLED))
+        assertTrue(states.contains(TrustInstallationState.MANUAL_ACTION_REQUIRED))
         assertTrue(states.contains(TrustInstallationState.FAILED))
-        assertEquals(5, states.size)
+        assertEquals(6, states.size)
     }
 }

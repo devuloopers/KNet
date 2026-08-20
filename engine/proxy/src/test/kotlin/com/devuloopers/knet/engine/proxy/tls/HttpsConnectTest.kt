@@ -31,7 +31,12 @@ class HttpsConnectTest {
 
     @Test
     fun testHttpsConnectHandshakeInitiation() {
-        val channel = EmbeddedChannel(KNetStreamingProxyHandler(ca, certCache, proxyScope))
+        val channel = EmbeddedChannel(
+            KNetStreamingProxyHandler(
+                com.devuloopers.knet.engine.proxy.TestServerTlsContextProvider(ca, certCache),
+                proxyScope,
+            )
+        )
         val connectReq = DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.CONNECT, "api.github.com:443")
 
         channel.writeInbound(connectReq)

@@ -86,8 +86,9 @@ class ProxyCapacityBaselineTest {
         val captureSink = QualificationCaptureSink(STREAM_CAPTURE_PREFIX_BYTES)
         val proxy = KNetProxyServer(
             port = availableLoopbackPort(),
-            ca = CertificateAuthority.generate(),
-            certCache = CertificateCache(),
+            serverTlsContextProvider = com.devuloopers.knet.engine.proxy.TestServerTlsContextProvider(
+                CertificateAuthority.generate(), CertificateCache(),
+            ),
             captureSink = captureSink,
             runtimePolicy = STANDARD_POLICY.copy(
                 readIdleTimeoutMillis = STREAMING_TIMEOUT_MILLIS,
@@ -147,8 +148,9 @@ class ProxyCapacityBaselineTest {
         )
         val proxy = KNetProxyServer(
             port = availableLoopbackPort(),
-            ca = CertificateAuthority.generate(),
-            certCache = CertificateCache(),
+            serverTlsContextProvider = com.devuloopers.knet.engine.proxy.TestServerTlsContextProvider(
+                CertificateAuthority.generate(), CertificateCache(),
+            ),
             captureSink = captureSink,
             runtimePolicy = STANDARD_POLICY.copy(
                 readIdleTimeoutMillis = STREAMING_TIMEOUT_MILLIS,
@@ -410,8 +412,9 @@ class ProxyCapacityBaselineTest {
     /** Creates a strict loopback proxy with the supplied runtime policy. */
     private fun createProxy(port: Int, policy: KNetProxyRuntimePolicy): KNetProxyServer = KNetProxyServer(
         port = port,
-        ca = CertificateAuthority.generate(),
-        certCache = CertificateCache(),
+        serverTlsContextProvider = com.devuloopers.knet.engine.proxy.TestServerTlsContextProvider(
+            CertificateAuthority.generate(), CertificateCache(),
+        ),
         runtimePolicy = policy,
     )
 

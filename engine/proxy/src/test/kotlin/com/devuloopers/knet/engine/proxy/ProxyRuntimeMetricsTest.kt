@@ -28,8 +28,9 @@ class ProxyRuntimeMetricsTest {
     fun `running proxy samples event loop lag without traffic`() {
         val server = KNetProxyServer(
             port = availableLoopbackPort(),
-            ca = CertificateAuthority.generate(),
-            certCache = CertificateCache(),
+            serverTlsContextProvider = TestServerTlsContextProvider(
+                CertificateAuthority.generate(), CertificateCache(),
+            ),
         )
         server.start()
         try {

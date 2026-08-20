@@ -12,7 +12,7 @@ import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 /**
- * Opens canonical sessions used by streaming proxy capture and direct application recording.
+ * Opens canonical sessions used by streaming proxy capture.
  *
  * The factory owns no active session and can therefore be reused across proxy restart cycles.
  * Each open call creates a fresh session, reconciles abandoned temporary body objects, and
@@ -57,29 +57,6 @@ class CanonicalCaptureSessionFactory(
         )
     }
 
-    /**
-     * Opens one canonical session for direct API Studio execution while no proxy listener is active.
-     *
-     * The same writer, schema, body store, query, retention, and recovery paths are used; only the
-     * typed synthetic source endpoint differs.
-     *
-     * @param startedAtEpochMillis Session start time used for durable ordering.
-     * @return Initialized direct-recording adapter.
-     */
-    suspend fun openDirect(
-        startedAtEpochMillis: Long = Clock.System.now().toEpochMilliseconds(),
-    ): StreamingProxyCaptureSession {
-        require(startedAtEpochMillis >= 0L) { "Canonical capture session timestamp must not be negative." }
-        recoverStartupStateOnce(startedAtEpochMillis)
-        val orderedStartedAtEpochMillis = reserveSessionTimestamp(startedAtEpochMillis)
-        val sessionId = CaptureSessionId("api-studio-${Uuid.random()}")
-        return StreamingProxyCaptureSession(
-            sessionId = sessionId,
-            ingress = openWriter(sessionId, orderedStartedAtEpochMillis),
-            limits = limits,
-        )
-    }
-
     /** Creates and durably opens the sole writer for one newly allocated session. */
     private suspend fun openWriter(
         sessionId: CaptureSessionId,
@@ -117,7 +94,7 @@ class CanonicalCaptureSessionFactory(
         }
 
     companion object {
-        /** Conservative production bounds for streaming proxy and direct capture. */
+        /** Conservative production bounds for streaming proxy capture. */
         val DEFAULT_LIMITS: CaptureIngressLimits = CaptureIngressLimits(
             metadataEventsInFlight = 4_096,
             bodyBytesInFlight = 16L * 1_024L * 1_024L,

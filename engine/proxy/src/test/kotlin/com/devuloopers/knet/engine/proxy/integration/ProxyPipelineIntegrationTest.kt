@@ -13,7 +13,10 @@ class ProxyPipelineIntegrationTest {
     fun testProxyServerStartStopLifecycle() {
         val ca = CertificateAuthority.generate()
         val cache = CertificateCache()
-        val server = KNetProxyServer(port = 18088, ca = ca, certCache = cache)
+        val server = KNetProxyServer(
+            port = 18088,
+            serverTlsContextProvider = com.devuloopers.knet.engine.proxy.TestServerTlsContextProvider(ca, cache),
+        )
 
         assertFalse(server.isRunning())
         server.start()

@@ -11,15 +11,16 @@ import com.devuloopers.knet.data.desktop.inspection.DesktopSemanticInspectionRun
 import com.devuloopers.knet.data.desktop.rules.repository.RulesRepositoryImpl
 import com.devuloopers.knet.data.desktop.proxy.repository.DesktopProxyRuntimeAdapter
 import com.devuloopers.knet.domain.config.AppMetadata
+import com.devuloopers.knet.domain.settings.usecase.ObserveApplicationSettingsUseCase
 import com.devuloopers.knet.products.desktop.config.DesktopConfiguration
 import com.devuloopers.knet.products.desktop.di.DesktopModules
 import com.devuloopers.knet.products.desktop.lifecycle.ApplicationLifecycle
 import com.devuloopers.knet.products.desktop.lifecycle.ShutdownAware
+import com.devuloopers.knet.products.desktop.runtime.ApplicationSettingsRuntimeSynchronizer
 import com.devuloopers.knet.storage.database.KNetDatabase
 import com.devuloopers.knet.ui.core.foundation.resources.kNetLogoPainter
 import com.devuloopers.knet.ui.desktop.app.window.MainWindow
 import com.devuloopers.knet.application.usecase.traffic.ClearTrafficHistoryUseCase
-import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -156,10 +157,11 @@ object DesktopBootstrap {
                 policyScope.cancel()
             }
         })
+        koin.get<ApplicationSettingsRuntimeSynchronizer>().start(policyScope)
         policyScope.launch {
             try {
-                val workspace = koin.get<GetWorkspaceLayoutUseCase>().execute().first()
-                if (workspace.autoClearTrafficOnStartup) {
+                val settings = koin.get<ObserveApplicationSettingsUseCase>().execute().first()
+                if (settings.autoClearTrafficOnStartup) {
                     koin.get<ClearTrafficHistoryUseCase>().execute()
                 }
             } catch (failure: CancellationException) {

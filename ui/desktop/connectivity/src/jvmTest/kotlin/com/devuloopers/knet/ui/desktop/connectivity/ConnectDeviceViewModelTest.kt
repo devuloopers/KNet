@@ -22,9 +22,10 @@ import com.devuloopers.knet.connectivity.model.WifiSharingMetrics
 import com.devuloopers.knet.connectivity.model.WifiSharingSession
 import com.devuloopers.knet.connectivity.model.WifiSharingSessionId
 import com.devuloopers.knet.connectivity.model.WifiSharingState
-import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
-import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
-import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
+import com.devuloopers.knet.domain.settings.model.ApplicationSettings
+import com.devuloopers.knet.domain.settings.model.ProxyPort
+import com.devuloopers.knet.domain.settings.repository.ApplicationSettingsRepository
+import com.devuloopers.knet.domain.settings.usecase.ObserveApplicationSettingsUseCase
 import com.devuloopers.knet.ui.desktop.connectivity.model.ConnectDeviceIntent
 import com.devuloopers.knet.ui.desktop.connectivity.viewmodel.ConnectDeviceViewModel
 import kotlinx.coroutines.Dispatchers
@@ -110,7 +111,7 @@ class ConnectDeviceViewModelTest {
         startLoopbackProxy = StartLoopbackProxyUseCase(proxy),
         observeProxyRuntimeState = ObserveProxyRuntimeStateUseCase(proxy),
         observeWifiSharing = ObserveWifiSharingUseCase(wifi),
-        getWorkspaceLayout = GetWorkspaceLayoutUseCase(FakeWorkspaceRepository(proxyPort)),
+        observeApplicationSettings = ObserveApplicationSettingsUseCase(FakeApplicationSettingsRepository(proxyPort)),
     )
 
     private class FakeProxyRuntime(runningPort: Int? = null) : ProxyRuntimePort {
@@ -138,11 +139,11 @@ class ConnectDeviceViewModelTest {
         override val state: StateFlow<WifiSharingState> = mutableState
     }
 
-    private class FakeWorkspaceRepository(proxyPort: Int) : WidgetPreferencesRepository {
-        override val settingsFlow: Flow<WorkspaceLayoutSettings> =
-            MutableStateFlow(WorkspaceLayoutSettings(proxyPort = proxyPort))
+    private class FakeApplicationSettingsRepository(proxyPort: Int) : ApplicationSettingsRepository {
+        override val settings: Flow<ApplicationSettings> =
+            MutableStateFlow(ApplicationSettings(proxyPort = ProxyPort(proxyPort)))
 
-        override suspend fun saveSettings(settings: WorkspaceLayoutSettings) = Unit
+        override suspend fun update(transform: (ApplicationSettings) -> ApplicationSettings) = Unit
     }
 
     private companion object {

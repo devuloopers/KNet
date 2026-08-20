@@ -5,7 +5,6 @@ plugins {
 dependencies {
     api(project(":core:domain"))
     api(project(":core:traffic"))
-    api(project(":engine:certificate"))
     api(project(":core:logger"))
     api(libs.netty.all)
 
@@ -15,4 +14,5 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(project(":testingServer"))
     testImplementation(libs.spring.boot.starter.webflux)
+    testImplementation(project(":engine:certificate"))
 }

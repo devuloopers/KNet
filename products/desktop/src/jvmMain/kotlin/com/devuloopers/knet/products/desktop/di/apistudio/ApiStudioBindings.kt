@@ -3,7 +3,9 @@ package com.devuloopers.knet.products.desktop.di.apistudio
 import com.devuloopers.knet.application.port.script.ScriptExecutionPort
 import com.devuloopers.knet.application.usecase.apistudio.ExecuteApiStudioRequestUseCase
 import com.devuloopers.knet.core.http.client.KNetApiClient
+import com.devuloopers.knet.core.http.client.LocalProxyTlsTrust
 import com.devuloopers.knet.data.desktop.apistudio.repository.CollectionsRepositoryImpl
+import com.devuloopers.knet.data.desktop.runtime.CertificateRuntimeRepository
 import com.devuloopers.knet.data.desktop.script.DesktopScriptExecutionAdapter
 import com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCase
 import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor
@@ -32,7 +34,12 @@ import org.koin.dsl.module
 
 /** API Studio transport, scripting adapter, collections persistence, and promotion workflow. */
 internal val apiStudioBindings: Module = module {
-    single { KNetApiClient() }
+    single {
+        val certificates: CertificateRuntimeRepository = get()
+        KNetApiClient(
+            localProxyTlsTrust = LocalProxyTlsTrust(certificates.rootCertificateDer()),
+        )
+    }
     single<HttpExecutor> { get<KNetApiClient>() }
     single<ScriptExecutionPort> { DesktopScriptExecutionAdapter() }
     single<CollectionsRepository> {
@@ -41,7 +48,7 @@ internal val apiStudioBindings: Module = module {
 
     factory { ExecuteClientApiRequestUseCase(get()) }
     factory { FormatResponseBodyUseCase() }
-    factory { ExecuteApiStudioRequestUseCase(get(), get(), get(), get(), Dispatchers.IO) }
+    factory { ExecuteApiStudioRequestUseCase(get(), get(), get(), Dispatchers.IO) }
     factory { ImportRequestToStudioUseCase() }
     factory { ObserveCollectionsUseCase(get()) }
     factory { ObserveUnsavedRequestsUseCase(get()) }
@@ -60,7 +67,9 @@ internal val apiStudioBindings: Module = module {
             executeApiStudioRequestUseCase = get(),
             observeProxyRuntimeStateUseCase = get(),
             getWorkspaceLayoutUseCase = get(),
-            saveWorkspaceLayoutUseCase = get(),
+            updateWorkspaceLayoutUseCase = get(),
+            observeApplicationSettingsUseCase = get(),
+            updateApplicationSettingsUseCase = get(),
             importRequestToStudioUseCase = get(),
             describeRequestUseCase = get(),
             dropMatchingBreakpointsUseCase = get(),

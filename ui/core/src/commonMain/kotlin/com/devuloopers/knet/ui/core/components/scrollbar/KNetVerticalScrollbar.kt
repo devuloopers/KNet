@@ -73,7 +73,7 @@ fun KNetVerticalScrollbar(
 }
 
 @Composable
-private fun rememberKNetScrollbarStyle(): ScrollbarStyle {
+internal fun rememberKNetScrollbarStyle(): ScrollbarStyle {
     val colors = KNetTheme.colors
     val dimensions = KNetTheme.dimensions
     return remember(colors, dimensions) {

@@ -21,10 +21,7 @@ import org.bouncycastle.openssl.jcajce.JcaPEMKeyConverter
 import org.bouncycastle.openssl.jcajce.JcaPEMWriter
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder
 import org.bouncycastle.operator.jcajce.JcaDigestCalculatorProviderBuilder
-import java.io.ByteArrayInputStream
 import java.io.File
-import java.io.FileReader
-import java.io.FileWriter
 import java.io.Reader
 import java.io.StringReader
 import java.io.StringWriter
@@ -34,7 +31,10 @@ import java.security.KeyPairGenerator
 import java.security.PrivateKey
 import java.security.SecureRandom
 import java.security.Security
+import java.security.Signature
 import java.security.cert.X509Certificate
+import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import java.util.Date
 
 /**
@@ -154,7 +154,7 @@ class CertificateAuthority(
                 .setProvider(BouncyCastleProvider.PROVIDER_NAME)
                 .getCertificate(holder)
 
-            return CertificateAuthority(keyPair.private, certificate)
+            return CertificateAuthority(keyPair.private, certificate).also(CertificateAuthority::validate)
         }
 
         /**
@@ -200,7 +200,7 @@ class CertificateAuthority(
                 else -> throw IllegalArgumentException("Unsupported private key type: ${keyObj::class.java.name}")
             }
 
-            return CertificateAuthority(privateKey, cert)
+            return CertificateAuthority(privateKey, cert).also(CertificateAuthority::validate)
         }
 
         /**
@@ -222,15 +222,31 @@ class CertificateAuthority(
      * @param keyFile The destination file for the private key.
      */
     fun saveToPem(certFile: File, keyFile: File) {
-        certFile.parentFile?.let(CertificateFileSecurity::secureDirectory)
-        keyFile.parentFile?.let(CertificateFileSecurity::secureDirectory)
-        certFile.writer().use { certWriter ->
-            keyFile.writer().use { keyWriter ->
-                saveToPem(certWriter, keyWriter)
-            }
+        validate()
+        val certDirectory = requireNotNull(certFile.parentFile)
+        val keyDirectory = requireNotNull(keyFile.parentFile)
+        check(CertificateFileSecurity.secureDirectory(certDirectory)) {
+            "Unable to secure CA certificate directory '${certDirectory.absolutePath}'."
         }
-        CertificateFileSecurity.secureSecretFile(certFile)
-        CertificateFileSecurity.secureSecretFile(keyFile)
+        check(CertificateFileSecurity.secureDirectory(keyDirectory)) {
+            "Unable to secure CA private-key directory '${keyDirectory.absolutePath}'."
+        }
+        val (certificatePem, privateKeyPem) = saveToPemStrings()
+        val temporaryCertificate = File.createTempFile("knet_ca_", ".crt.tmp", certDirectory)
+        val temporaryKey = File.createTempFile("knet_ca_", ".key.tmp", keyDirectory)
+        try {
+            temporaryCertificate.writeText(certificatePem)
+            temporaryKey.writeText(privateKeyPem)
+            check(CertificateFileSecurity.secureSecretFile(temporaryCertificate))
+            check(CertificateFileSecurity.secureSecretFile(temporaryKey))
+            replaceAtomically(temporaryKey, keyFile)
+            replaceAtomically(temporaryCertificate, certFile)
+            check(CertificateFileSecurity.secureSecretFile(certFile))
+            check(CertificateFileSecurity.secureSecretFile(keyFile))
+        } finally {
+            temporaryCertificate.delete()
+            temporaryKey.delete()
+        }
     }
 
     /**
@@ -259,5 +275,40 @@ class CertificateAuthority(
         val keyWriter = StringWriter()
         saveToPem(certWriter, keyWriter)
         return Pair(certWriter.toString(), keyWriter.toString())
+    }
+
+    /** Validates expiry, CA constraints, and that the persisted private key matches the certificate. */
+    fun validate() {
+        certificate.checkValidity()
+        require(certificate.basicConstraints >= 0) { "Certificate is not a certificate authority." }
+        val keyUsage = certificate.keyUsage
+        require(keyUsage == null || keyUsage.getOrNull(5) == true) {
+            "Certificate authority is not permitted to sign certificates."
+        }
+        val challenge = ByteArray(32).also(SecureRandom()::nextBytes)
+        val signature = Signature.getInstance(SIGNING_ALGORITHM).run {
+            initSign(privateKey)
+            update(challenge)
+            sign()
+        }
+        val matches = Signature.getInstance(SIGNING_ALGORITHM).run {
+            initVerify(certificate.publicKey)
+            update(challenge)
+            verify(signature)
+        }
+        require(matches) { "Certificate authority private key does not match its certificate." }
+    }
+
+    private fun replaceAtomically(source: File, destination: File) {
+        try {
+            Files.move(
+                source.toPath(),
+                destination.toPath(),
+                StandardCopyOption.REPLACE_EXISTING,
+                StandardCopyOption.ATOMIC_MOVE,
+            )
+        } catch (_: java.nio.file.AtomicMoveNotSupportedException) {
+            Files.move(source.toPath(), destination.toPath(), StandardCopyOption.REPLACE_EXISTING)
+        }
     }
 }

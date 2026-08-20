@@ -6,7 +6,7 @@ import com.devuloopers.knet.application.port.proxy.ProxyStartResult
 import com.devuloopers.knet.application.usecase.connectivity.wifi.ObserveWifiSharingUseCase
 import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUseCase
 import com.devuloopers.knet.application.usecase.proxy.StartLoopbackProxyUseCase
-import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
+import com.devuloopers.knet.domain.settings.usecase.ObserveApplicationSettingsUseCase
 import com.devuloopers.knet.ui.desktop.connectivity.model.ConnectDeviceIntent
 import com.devuloopers.knet.ui.desktop.connectivity.model.ConnectDeviceMessage
 import com.devuloopers.knet.ui.desktop.connectivity.model.ConnectDeviceMessageTone
@@ -30,7 +30,7 @@ class ConnectDeviceViewModel(
     private val startLoopbackProxy: StartLoopbackProxyUseCase,
     observeProxyRuntimeState: ObserveProxyRuntimeStateUseCase,
     observeWifiSharing: ObserveWifiSharingUseCase,
-    getWorkspaceLayout: GetWorkspaceLayoutUseCase,
+    observeApplicationSettings: ObserveApplicationSettingsUseCase,
 ) : ViewModel() {
     private val operationMutex = Mutex()
     private val proxyStates = observeProxyRuntimeState.execute()
@@ -50,8 +50,8 @@ class ConnectDeviceViewModel(
         sharingStates
             .onEach { sharingState -> mutableUiState.update { current -> current.copy(sharingState = sharingState) } }
             .launchIn(viewModelScope)
-        getWorkspaceLayout.execute()
-            .map { settings -> settings.proxyPort }
+        observeApplicationSettings.execute()
+            .map { settings -> settings.proxyPort.value }
             .distinctUntilChanged()
             .catch { emit(StartLoopbackProxyUseCase.DEFAULT_PORT) }
             .onEach { port ->

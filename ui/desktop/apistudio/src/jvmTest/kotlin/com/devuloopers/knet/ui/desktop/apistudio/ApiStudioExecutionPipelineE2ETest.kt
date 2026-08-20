@@ -96,7 +96,9 @@ class ApiStudioExecutionPipelineE2ETest {
     }
 
     private fun createPipelineViewModel(executor: HttpExecutor): ApiStudioViewModel {
-        val (getLayoutUseCase, saveLayoutUseCase) = createTestLayoutUseCases()
+        val (getLayoutUseCase, updateLayoutUseCase) = createTestLayoutUseCases()
+        val (observeApplicationSettings, updateApplicationSettings) =
+            createTestApplicationSettingsUseCases()
         val breakpointControl = FakeTestBreakpointControl()
         val collectionsRepository = TestCollectionsRepository()
 
@@ -104,15 +106,14 @@ class ApiStudioExecutionPipelineE2ETest {
             executeApiStudioRequestUseCase = com.devuloopers.knet.application.usecase.apistudio.ExecuteApiStudioRequestUseCase(
                 executeRequest = com.devuloopers.knet.domain.clientNetwork.usecase.ExecuteClientApiRequestUseCase(executor),
                 formatResponseBody = com.devuloopers.knet.domain.clientNetwork.usecase.FormatResponseBodyUseCase(),
-                recordHttpExchange = com.devuloopers.knet.application.usecase.traffic.RecordHttpExchangeUseCase(
-                    DiscardingTrafficRecordPort()
-                ),
                 scriptExecution = com.devuloopers.knet.application.port.script.UnavailableScriptExecutionPort,
                 ioDispatcher = testDispatcher
             ),
             observeProxyRuntimeStateUseCase = ObserveProxyRuntimeStateUseCase(proxyRuntime),
             getWorkspaceLayoutUseCase = getLayoutUseCase,
-            saveWorkspaceLayoutUseCase = saveLayoutUseCase,
+            updateWorkspaceLayoutUseCase = updateLayoutUseCase,
+            observeApplicationSettingsUseCase = observeApplicationSettings,
+            updateApplicationSettingsUseCase = updateApplicationSettings,
             importRequestToStudioUseCase = com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCase(),
             describeRequestUseCase = DescribeRequestUseCase(listOf(HttpRequestDescriptorStrategy())),
             dropMatchingBreakpointsUseCase = DropMatchingBreakpointsUseCase(breakpointControl),

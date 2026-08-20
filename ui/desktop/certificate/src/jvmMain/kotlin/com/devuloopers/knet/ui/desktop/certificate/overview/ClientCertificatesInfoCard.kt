@@ -16,7 +16,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.ui.desktop.certificate.model.CertificateFileFormat
 
 /**
  * Sidebar info card explaining client certificate usage matching the mockup design.
@@ -24,7 +23,7 @@ import com.devuloopers.knet.ui.desktop.certificate.model.CertificateFileFormat
 @Composable
 fun ClientCertificatesInfoCard(
     modifier: Modifier = Modifier,
-    onLearnMoreClick: () -> Unit = {}
+    onLearnMoreClick: () -> Unit,
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -64,11 +63,11 @@ fun ClientCertificatesInfoCard(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = CertificateFileFormat.defaultDescription,
+                text = "Import a PKCS#12, JKS, or PEM identity containing a private key and certificate chain for mTLS authentication.",
                 style = typography.labelSmall,
                 color = themeColors.textSecondary,
-                maxLines = 2,
-                softWrap = false,
+                maxLines = 3,
+                softWrap = true,
                 overflow = TextOverflow.Ellipsis
             )
 

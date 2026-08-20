@@ -14,6 +14,7 @@ class KNetDateTimeTest {
             KNetDateTime.time(epochMillis = 0L, includeMilliseconds = true, timeZone = TimeZone.UTC),
         )
         assertEquals("00:00:00 - 01/01", KNetDateTime.timeAndDayMonth(0L, TimeZone.UTC))
+        assertEquals("1 Jan 1970", KNetDateTime.humanDate(0L, TimeZone.UTC))
     }
 
     @Test

@@ -3,274 +3,312 @@ package com.devuloopers.knet.ui.desktop.certificate.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.application.port.certificate.CertificateManagementPort
-import com.devuloopers.knet.ui.desktop.certificate.model.*
+import com.devuloopers.knet.application.port.certificate.MtlsRuleSpec
+import com.devuloopers.knet.application.port.certificate.TrustInstallationResult
+import com.devuloopers.knet.ui.desktop.certificate.model.CertificateIntent
+import com.devuloopers.knet.ui.desktop.certificate.model.CertificateOperation
+import com.devuloopers.knet.ui.desktop.certificate.model.CertificateState
+import com.devuloopers.knet.ui.desktop.certificate.model.TrustInstallationState
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
-/**
- * ViewModel managing Certificate manager status, trust wizards, client identities, and mTLS rules.
- *
- * It delegates PKI and mutual TLS configuration through the application boundary.
- *
- * @property certificateManager The engine facade instance injected via constructor.
- * @property ioDispatcher Coroutine dispatcher for asynchronous I/O operations (defaults to [Dispatchers.IO]).
- */
+/** Owns the certificate workspace state and serializes all persistent mutations. */
 class CertificateViewModel(
     private val certificateManager: CertificateManagementPort,
-    private val ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = Dispatchers.IO
+    private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
 
-    private val _uiState: MutableStateFlow<CertificateState> = MutableStateFlow(CertificateState(isLoading = true))
+    private val _uiState = MutableStateFlow(CertificateState(isLoading = true))
+    private val mutationMutex = Mutex()
+    private var refreshJob: Job? = null
 
-    /**
-     * Exposes the read-only unidirectional state flow for UI mapping.
-     */
     val uiState: StateFlow<CertificateState> = _uiState.asStateFlow()
 
     init {
-        loadData()
+        refresh()
     }
 
-    /**
-     * Loads or reloads CA details, client certificates, and mTLS rules into the view state from the engine.
-     */
-    private fun loadData() {
-        _uiState.update { it.copy(isLoading = true) }
-        viewModelScope.launch {
-            try {
-                val authority = withContext(ioDispatcher) { certificateManager.authoritySummary() }
-                val statusStr = authority.status
-                val caStatus = try {
-                    CaStatus.valueOf(statusStr)
-                } catch (_: Exception) {
-                    CaStatus.INVALID
-                }
+    fun processIntent(intent: CertificateIntent) {
+        when (intent) {
+            CertificateIntent.Refresh -> refresh()
+            CertificateIntent.InstallTrust -> installTrust()
+            is CertificateIntent.ImportCertificate -> importCertificate(intent)
+            is CertificateIntent.ExportCertificate -> exportCertificate(intent)
+            is CertificateIntent.RequestDeleteCertificate -> _uiState.update {
+                it.copy(pendingCertificateDeletionAlias = intent.alias)
+            }
+            CertificateIntent.ConfirmDeleteCertificate -> deleteCertificate()
+            CertificateIntent.DismissDeleteCertificate -> _uiState.update {
+                it.copy(pendingCertificateDeletionAlias = null)
+            }
+            is CertificateIntent.AddRule -> saveRule(intent.rule, editing = false)
+            is CertificateIntent.EditRule -> saveRule(intent.rule, editing = true)
+            is CertificateIntent.RequestRemoveRule -> _uiState.update {
+                it.copy(pendingRuleDeletionName = intent.ruleName)
+            }
+            CertificateIntent.ConfirmRemoveRule -> deleteRule()
+            CertificateIntent.DismissRemoveRule -> _uiState.update { it.copy(pendingRuleDeletionName = null) }
+            is CertificateIntent.SelectCertificate -> _uiState.update {
+                it.copy(
+                    selectedCertificateAlias = intent.alias,
+                    isTrustDrawerVisible = if (intent.alias != null) false else it.isTrustDrawerVisible,
+                )
+            }
+            is CertificateIntent.SetImportDialogVisible -> _uiState.update {
+                it.copy(isImportDialogVisible = intent.visible, errorMessage = null)
+            }
+            is CertificateIntent.SetExportDialogVisible -> _uiState.update {
+                it.copy(isExportDialogVisible = intent.visible, errorMessage = null)
+            }
+            is CertificateIntent.SetRuleDialogVisible -> _uiState.update {
+                it.copy(
+                    isRuleDialogVisible = intent.visible,
+                    editingRule = intent.rule.takeIf { _ -> intent.visible },
+                    errorMessage = null,
+                )
+            }
+            is CertificateIntent.SetTrustDrawerVisible -> _uiState.update {
+                it.copy(
+                    isTrustDrawerVisible = intent.visible,
+                    selectedCertificateAlias = if (intent.visible) null else it.selectedCertificateAlias,
+                )
+            }
+            CertificateIntent.ViewTrustInstructions -> _uiState.update {
+                it.copy(isTrustInstructionsVisible = it.manualTrustInstructions != null)
+            }
+            CertificateIntent.DismissTrustInstructions -> _uiState.update {
+                it.copy(isTrustInstructionsVisible = false)
+            }
+            is CertificateIntent.SwitchTab -> _uiState.update { it.copy(activeTab = intent.tab) }
+            is CertificateIntent.SwitchSidebarItem -> _uiState.update { it.copy(activeSidebarItem = intent.item) }
+            is CertificateIntent.ToggleCertificateEnabled -> toggleCertificate(intent.alias, intent.enabled)
+            is CertificateIntent.ToggleRuleEnabled -> saveRule(
+                rule = intent.rule.copy(enabled = intent.enabled),
+                editing = true,
+                operation = CertificateOperation.TOGGLE_RULE,
+            )
+            is CertificateIntent.Search -> _uiState.update { it.copy(searchQuery = intent.query) }
+            CertificateIntent.ClearMessage -> _uiState.update {
+                it.copy(errorMessage = null, informationMessage = null)
+            }
+        }
+    }
 
-                val certs = withContext(ioDispatcher) {
-                    certificateManager.clientCertificates()
+    private fun refresh() {
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
+            mutationMutex.withLock {
+                _uiState.update {
+                    it.copy(
+                        isLoading = true,
+                        activeOperation = CertificateOperation.REFRESH,
+                        errorMessage = null,
+                    )
                 }
-
-                val rules = withContext(ioDispatcher) {
-                    certificateManager.mtlsRules()
-                }
-
-                val detectedTrustState = withContext(ioDispatcher) {
-                    if (authority.trustedByOperatingSystem) {
-                        TrustInstallationState.INSTALLED
-                    } else {
-                        TrustInstallationState.IDLE
+                try {
+                    val snapshot = withContext(ioDispatcher) {
+                        coroutineScope {
+                            val authority = async { certificateManager.authoritySummary() }
+                            val certificates = async { certificateManager.clientCertificates() }
+                            val rules = async { certificateManager.mtlsRules() }
+                            Triple(authority.await(), certificates.await(), rules.await())
+                        }
                     }
-                }
-
-                _uiState.update {
-                    it.copy(
-                        caStatus = caStatus,
-                        caDetails = authority,
-                        clientCertificates = certs,
-                        mtlsRules = rules,
-                        trustState = detectedTrustState,
-                        isLoading = false,
-                        errorMessage = null
-                    )
-                }
-            } catch (e: Exception) {
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        errorMessage = e.message
-                    )
+                    _uiState.update { current ->
+                        val (authority, certificates, rules) = snapshot
+                        current.copy(
+                            caStatus = authority.status,
+                            caDetails = authority,
+                            clientCertificates = certificates,
+                            mtlsRules = rules,
+                            selectedCertificateAlias = current.selectedCertificateAlias
+                                ?.takeIf { alias -> certificates.any { it.alias == alias } },
+                            trustState = when {
+                                authority.trustedByOperatingSystem -> TrustInstallationState.INSTALLED
+                                current.manualTrustInstructions != null -> TrustInstallationState.MANUAL_ACTION_REQUIRED
+                                else -> TrustInstallationState.IDLE
+                            },
+                            manualTrustInstructions = current.manualTrustInstructions
+                                .takeUnless { authority.trustedByOperatingSystem },
+                            isTrustInstructionsVisible = current.isTrustInstructionsVisible &&
+                                !authority.trustedByOperatingSystem,
+                            isLoading = false,
+                            activeOperation = null,
+                        )
+                    }
+                } catch (error: Exception) {
+                    finishWithError(error)
                 }
             }
         }
     }
 
-    /**
-     * Processes incoming user actions (intents) asynchronously by delegating to the certificate engine.
-     * All disk operations and heavy parsing tasks are explicitly dispatched to [ioDispatcher].
-     *
-     * @param intent The [CertificateIntent] UI user action model to execute.
-     */
-    fun processIntent(intent: CertificateIntent) {
+    private fun installTrust() = runOperation(CertificateOperation.INSTALL_TRUST) {
+        _uiState.update { it.copy(trustState = TrustInstallationState.INSTALLING) }
+        when (val result = withContext(ioDispatcher) { certificateManager.installRootCertificate() }) {
+            TrustInstallationResult.Installed -> _uiState.update {
+                it.copy(
+                    trustState = TrustInstallationState.INSTALLED,
+                    informationMessage = "KNet Root CA is trusted by this operating system.",
+                    manualTrustInstructions = null,
+                    isTrustInstructionsVisible = false,
+                )
+            }
+            is TrustInstallationResult.ManualActionRequired -> _uiState.update {
+                it.copy(
+                    trustState = TrustInstallationState.MANUAL_ACTION_REQUIRED,
+                    informationMessage = result.message,
+                    manualTrustInstructions = result.instructions,
+                    isTrustInstructionsVisible = true,
+                )
+            }
+            is TrustInstallationResult.Failed -> _uiState.update {
+                it.copy(
+                    trustState = TrustInstallationState.FAILED,
+                    errorMessage = result.message,
+                    manualTrustInstructions = null,
+                    isTrustInstructionsVisible = false,
+                )
+            }
+        }
+    }
+
+    private fun importCertificate(intent: CertificateIntent.ImportCertificate) =
+        runOperation(CertificateOperation.IMPORT_CERTIFICATE) {
+            val certificates = withContext(ioDispatcher) {
+                certificateManager.importClientCertificate(intent.path, intent.alias, intent.passphrase)
+                certificateManager.clientCertificates()
+            }
+            _uiState.update {
+                it.copy(
+                    clientCertificates = certificates,
+                    selectedCertificateAlias = intent.alias.trim(),
+                    isImportDialogVisible = false,
+                    informationMessage = "Client certificate '${intent.alias.trim()}' imported.",
+                )
+            }
+        }
+
+    private fun exportCertificate(intent: CertificateIntent.ExportCertificate) =
+        runOperation(CertificateOperation.EXPORT_CERTIFICATE) {
+            withContext(ioDispatcher) {
+                certificateManager.exportClientCertificate(intent.alias, intent.destinationPath)
+            }
+            _uiState.update {
+                it.copy(
+                    isExportDialogVisible = false,
+                    informationMessage = "Client certificate '${intent.alias}' exported.",
+                )
+            }
+        }
+
+    private fun deleteCertificate() {
+        val alias = _uiState.value.pendingCertificateDeletionAlias ?: return
+        runOperation(CertificateOperation.DELETE_CERTIFICATE) {
+            val (certificates, rules) = withContext(ioDispatcher) {
+                certificateManager.deleteClientCertificate(alias)
+                certificateManager.clientCertificates() to certificateManager.mtlsRules()
+            }
+            _uiState.update {
+                it.copy(
+                    clientCertificates = certificates,
+                    mtlsRules = rules,
+                    selectedCertificateAlias = it.selectedCertificateAlias.takeUnless { selected -> selected == alias },
+                    pendingCertificateDeletionAlias = null,
+                    informationMessage = "Client certificate '$alias' and its mTLS mappings were deleted.",
+                )
+            }
+        }
+    }
+
+    private fun saveRule(
+        rule: MtlsRuleSpec,
+        editing: Boolean,
+        operation: CertificateOperation = CertificateOperation.SAVE_RULE,
+    ) = runOperation(operation) {
+        val rules = withContext(ioDispatcher) {
+            if (editing) certificateManager.editMtlsRule(rule) else certificateManager.addMtlsRule(rule)
+            certificateManager.mtlsRules()
+        }
+        _uiState.update {
+            it.copy(
+                mtlsRules = rules,
+                isRuleDialogVisible = false,
+                editingRule = null,
+                informationMessage = "mTLS rule '${rule.ruleName}' saved.",
+            )
+        }
+    }
+
+    private fun deleteRule() {
+        val ruleName = _uiState.value.pendingRuleDeletionName ?: return
+        runOperation(CertificateOperation.DELETE_RULE) {
+            val rules = withContext(ioDispatcher) {
+                certificateManager.deleteMtlsRule(ruleName)
+                certificateManager.mtlsRules()
+            }
+            _uiState.update {
+                it.copy(
+                    mtlsRules = rules,
+                    pendingRuleDeletionName = null,
+                    informationMessage = "mTLS rule '$ruleName' deleted.",
+                )
+            }
+        }
+    }
+
+    private fun toggleCertificate(alias: String, enabled: Boolean) =
+        runOperation(CertificateOperation.TOGGLE_CERTIFICATE) {
+            val certificates = withContext(ioDispatcher) {
+                certificateManager.setClientCertificateEnabled(alias, enabled)
+                certificateManager.clientCertificates()
+            }
+            _uiState.update { it.copy(clientCertificates = certificates) }
+        }
+
+    private fun runOperation(operation: CertificateOperation, block: suspend () -> Unit): Job =
         viewModelScope.launch {
-            when (intent) {
-                CertificateIntent.Refresh -> loadData()
-                CertificateIntent.InstallTrust -> {
-                    _uiState.update { it.copy(trustState = TrustInstallationState.INSTALLING) }
-                    try {
-                        val success = withContext(ioDispatcher) { certificateManager.installRootCertificate() }
-                        if (success) {
-                            _uiState.update { it.copy(trustState = TrustInstallationState.INSTALLED) }
-                        } else {
-                            _uiState.update {
-                                it.copy(
-                                    trustState = TrustInstallationState.FAILED,
-                                    errorMessage = "Operating system trust store registration failed."
-                                )
-                            }
-                        }
-                    } catch (e: Exception) {
-                        _uiState.update {
-                            it.copy(
-                                trustState = TrustInstallationState.FAILED,
-                                errorMessage = e.message
-                            )
-                        }
+            mutationMutex.withLock {
+                _uiState.update {
+                    it.copy(activeOperation = operation, errorMessage = null, informationMessage = null)
+                }
+                try {
+                    block()
+                } catch (error: Exception) {
+                    finishWithError(error)
+                } finally {
+                    _uiState.update {
+                        it.copy(
+                            activeOperation = null,
+                            isLoading = false,
+                            trustState = if (
+                                operation == CertificateOperation.INSTALL_TRUST &&
+                                it.trustState == TrustInstallationState.INSTALLING
+                            ) TrustInstallationState.FAILED else it.trustState,
+                        )
                     }
-                }
-
-                is CertificateIntent.ImportCertificate -> {
-                    try {
-                        val certs = withContext(ioDispatcher) {
-                            certificateManager.importClientCertificate(intent.path, intent.alias, intent.passphrase)
-                            certificateManager.clientCertificates()
-                        }
-                        _uiState.update {
-                            it.copy(
-                                clientCertificates = certs,
-                                isImportDialogVisible = false,
-                                errorMessage = null
-                            )
-                        }
-                    } catch (e: Exception) {
-                        _uiState.update { it.copy(errorMessage = e.message) }
-                    }
-                }
-
-                is CertificateIntent.ExportCertificate -> {
-                    try {
-                        withContext(ioDispatcher) {
-                            certificateManager.exportClientCertificate(
-                                intent.alias,
-                                intent.destinationPath
-                            )
-                        }
-                        _uiState.update {
-                            it.copy(
-                                isExportDialogVisible = false,
-                                errorMessage = null
-                            )
-                        }
-                    } catch (e: Exception) {
-                        _uiState.update { it.copy(errorMessage = e.message) }
-                    }
-                }
-
-                is CertificateIntent.DeleteCertificate -> {
-                    try {
-                        val certs = withContext(ioDispatcher) {
-                            certificateManager.deleteClientCertificate(intent.alias)
-                            certificateManager.clientCertificates()
-                        }
-                        _uiState.update {
-                            it.copy(
-                                clientCertificates = certs,
-                                selectedCertificate = if (it.selectedCertificate?.alias == intent.alias) null else it.selectedCertificate,
-                                errorMessage = null
-                            )
-                        }
-                    } catch (e: Exception) {
-                        _uiState.update { it.copy(errorMessage = e.message) }
-                    }
-                }
-
-                is CertificateIntent.AddRule -> {
-                    try {
-                        val rules = withContext(ioDispatcher) {
-                            certificateManager.addMtlsRule(intent.rule)
-                            certificateManager.mtlsRules()
-                        }
-                        _uiState.update {
-                            it.copy(
-                                mtlsRules = rules,
-                                isRuleDialogVisible = false,
-                                errorMessage = null
-                            )
-                        }
-                    } catch (e: Exception) {
-                        _uiState.update { it.copy(errorMessage = e.message) }
-                    }
-                }
-
-                is CertificateIntent.EditRule -> {
-                    try {
-                        val rules = withContext(ioDispatcher) {
-                            certificateManager.editMtlsRule(intent.rule)
-                            certificateManager.mtlsRules()
-                        }
-                        _uiState.update {
-                            it.copy(
-                                mtlsRules = rules,
-                                isRuleDialogVisible = false,
-                                errorMessage = null
-                            )
-                        }
-                    } catch (e: Exception) {
-                        _uiState.update { it.copy(errorMessage = e.message) }
-                    }
-                }
-
-                is CertificateIntent.RemoveRule -> {
-                    try {
-                        val rules = withContext(ioDispatcher) {
-                            certificateManager.deleteMtlsRule(intent.ruleName)
-                            certificateManager.mtlsRules()
-                        }
-                        _uiState.update {
-                            it.copy(
-                                mtlsRules = rules,
-                                errorMessage = null
-                            )
-                        }
-                    } catch (e: Exception) {
-                        _uiState.update { it.copy(errorMessage = e.message) }
-                    }
-                }
-
-                is CertificateIntent.SelectCertificate -> {
-                    _uiState.update { it.copy(selectedCertificate = intent.cert) }
-                }
-
-                is CertificateIntent.SetImportDialogVisible -> {
-                    _uiState.update { it.copy(isImportDialogVisible = intent.visible) }
-                }
-
-                is CertificateIntent.SetExportDialogVisible -> {
-                    _uiState.update { it.copy(isExportDialogVisible = intent.visible) }
-                }
-
-                is CertificateIntent.SetRuleDialogVisible -> {
-                    _uiState.update { it.copy(isRuleDialogVisible = intent.visible) }
-                }
-
-                is CertificateIntent.SwitchTab -> {
-                    _uiState.update { it.copy(activeTab = intent.tab) }
-                }
-
-                is CertificateIntent.SwitchSidebarItem -> {
-                    _uiState.update { it.copy(activeSidebarItem = intent.item) }
-                }
-
-                is CertificateIntent.ToggleCertificateEnabled -> {
-                    try {
-                        val certs = withContext(ioDispatcher) {
-                            certificateManager.setClientCertificateEnabled(intent.alias, intent.enabled)
-                            certificateManager.clientCertificates()
-                        }
-                        _uiState.update { it.copy(clientCertificates = certs) }
-                    } catch (e: Exception) {
-                        _uiState.update { it.copy(errorMessage = e.message) }
-                    }
-                }
-
-                is CertificateIntent.Search -> {
-                    _uiState.update { it.copy(searchQuery = intent.query) }
                 }
             }
+        }
+
+    private fun finishWithError(error: Exception) {
+        _uiState.update {
+            it.copy(
+                isLoading = false,
+                activeOperation = null,
+                errorMessage = error.message ?: "Certificate operation failed.",
+            )
         }
     }
 }

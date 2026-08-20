@@ -5,7 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import com.devuloopers.knet.data.desktop.workspace.repository.WidgetPreferencesRepositoryImpl
 import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
 import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
-import com.devuloopers.knet.domain.workspace.usecase.SaveWorkspaceLayoutUseCase
+import com.devuloopers.knet.domain.workspace.usecase.UpdateWorkspaceLayoutUseCase
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
@@ -14,10 +14,8 @@ internal val workspaceBindings: Module = module {
     single<WidgetPreferencesRepository> {
         WidgetPreferencesRepositoryImpl(
             dataStore = get<DataStore<Preferences>>(),
-            apiClient = get(),
-            breakpointControl = get(),
         )
     }
     factory { GetWorkspaceLayoutUseCase(get()) }
-    factory { SaveWorkspaceLayoutUseCase(get()) }
+    factory { UpdateWorkspaceLayoutUseCase(get()) }
 }

@@ -5,10 +5,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
-import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
-import com.devuloopers.knet.core.http.client.KNetApiClient
-import com.devuloopers.knet.application.port.breakpoint.BreakpointControlPort
 import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
 import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
 import kotlinx.coroutines.flow.Flow
@@ -17,16 +14,12 @@ import kotlinx.coroutines.flow.map
 /**
  * Desktop implementation of [WidgetPreferencesRepository].
  *
- * Persists workspace preferences to DataStore and synchronizes timeout configurations
- * to low-level Netty interceptors and Ktor HTTP clients at runtime.
+ * Persists only workspace layout and active-document presentation preferences to DataStore.
  *
  * @param dataStore DataStore preferences persistence engine.
- * @param apiClient Optional [KNetApiClient] HTTP client instance for timeout synchronization.
  */
 class WidgetPreferencesRepositoryImpl(
     private val dataStore: DataStore<Preferences>,
-    private val apiClient: KNetApiClient? = null,
-    private val breakpointControl: BreakpointControlPort? = null,
 ) : WidgetPreferencesRepository {
 
     private companion object {
@@ -42,23 +35,31 @@ class WidgetPreferencesRepositoryImpl(
         private val keyScriptPhase = stringPreferencesKey("active_script_phase")
         private val keyResponseSubTab = stringPreferencesKey("active_response_sub_tab")
         private val keyActiveSessionId = stringPreferencesKey("active_session_id")
-        private val keyScriptLanguage = stringPreferencesKey("script_language")
-        private val keyProxyPort = intPreferencesKey("proxy_port")
-        private val keyAutoClearTraffic = booleanPreferencesKey("auto_clear_traffic_startup")
-        private val keyTheme = stringPreferencesKey("theme")
-        private val keyMaxPayloadMb = intPreferencesKey("max_payload_mb")
-        private val keyApiStudioTimeout = intPreferencesKey("api_studio_timeout_seconds")
-        private val keyLiveInterceptionTimeout = intPreferencesKey("live_interception_timeout_seconds")
     }
 
-    override val settingsFlow: Flow<WorkspaceLayoutSettings> = dataStore.data.map { preferences ->
-        val liveTimeout = preferences[keyLiveInterceptionTimeout] ?: 60
-        val apiStudioTimeout = preferences[keyApiStudioTimeout] ?: 60
+    override val settingsFlow: Flow<WorkspaceLayoutSettings> = dataStore.data.map(::readWorkspaceLayout)
 
-        // Synchronize Netty and Ktor
-        breakpointControl?.setDecisionTimeoutMillis(liveTimeout * 1_000L)
-        apiClient?.updateTimeoutSeconds(apiStudioTimeout)
+    override suspend fun updateSettings(
+        transform: (WorkspaceLayoutSettings) -> WorkspaceLayoutSettings,
+    ) {
+        dataStore.edit { preferences ->
+            val settings = transform(readWorkspaceLayout(preferences))
+            preferences[keyTrafficFeed] = settings.isTrafficFeedVisible
+            preferences[keyInspector] = settings.isInspectorVisible
+            preferences[keyRulesConsole] = settings.isRulesConsoleVisible
+            preferences[keyQuickReplay] = settings.isQuickReplayVisible
+            preferences[keyNotesTags] = settings.isNotesTagsVisible
+            preferences[keyTrafficWidth] = settings.trafficFeedWidthDp
+            preferences[keySidebarWidth] = settings.sidebarWidthDp
+            preferences[keyTrayHeight] = settings.bottomTrayHeightDp
+            preferences[keyRequestSubTab] = settings.activeRequestSubTab
+            preferences[keyScriptPhase] = settings.activeScriptPhase
+            preferences[keyResponseSubTab] = settings.activeResponseSubTab
+            preferences[keyActiveSessionId] = settings.activeSessionId
+        }
+    }
 
+    private fun readWorkspaceLayout(preferences: Preferences): WorkspaceLayoutSettings =
         WorkspaceLayoutSettings(
             isTrafficFeedVisible = preferences[keyTrafficFeed] ?: true,
             isInspectorVisible = preferences[keyInspector] ?: true,
@@ -72,41 +73,5 @@ class WidgetPreferencesRepositoryImpl(
             activeScriptPhase = preferences[keyScriptPhase] ?: "PRE_REQUEST",
             activeResponseSubTab = preferences[keyResponseSubTab] ?: "BODY",
             activeSessionId = preferences[keyActiveSessionId] ?: "",
-            scriptLanguage = preferences[keyScriptLanguage] ?: "JAVASCRIPT",
-            proxyPort = preferences[keyProxyPort] ?: 8080,
-            autoClearTrafficOnStartup = preferences[keyAutoClearTraffic] ?: false,
-            theme = preferences[keyTheme] ?: "DARK",
-            maxPayloadMb = preferences[keyMaxPayloadMb] ?: 10,
-            apiStudioTimeoutSeconds = apiStudioTimeout,
-            liveInterceptionTimeoutSeconds = liveTimeout
         )
-    }
-
-    override suspend fun saveSettings(settings: WorkspaceLayoutSettings) {
-        // Synchronize Netty and Ktor
-        breakpointControl?.setDecisionTimeoutMillis(settings.liveInterceptionTimeoutSeconds * 1_000L)
-        apiClient?.updateTimeoutSeconds(settings.apiStudioTimeoutSeconds)
-
-        dataStore.edit { preferences ->
-            preferences[keyTrafficFeed] = settings.isTrafficFeedVisible
-            preferences[keyInspector] = settings.isInspectorVisible
-            preferences[keyRulesConsole] = settings.isRulesConsoleVisible
-            preferences[keyQuickReplay] = settings.isQuickReplayVisible
-            preferences[keyNotesTags] = settings.isNotesTagsVisible
-            preferences[keyTrafficWidth] = settings.trafficFeedWidthDp
-            preferences[keySidebarWidth] = settings.sidebarWidthDp
-            preferences[keyTrayHeight] = settings.bottomTrayHeightDp
-            preferences[keyRequestSubTab] = settings.activeRequestSubTab
-            preferences[keyScriptPhase] = settings.activeScriptPhase
-            preferences[keyResponseSubTab] = settings.activeResponseSubTab
-            preferences[keyActiveSessionId] = settings.activeSessionId
-            preferences[keyScriptLanguage] = settings.scriptLanguage
-            preferences[keyProxyPort] = settings.proxyPort
-            preferences[keyAutoClearTraffic] = settings.autoClearTrafficOnStartup
-            preferences[keyTheme] = settings.theme
-            preferences[keyMaxPayloadMb] = settings.maxPayloadMb
-            preferences[keyApiStudioTimeout] = settings.apiStudioTimeoutSeconds
-            preferences[keyLiveInterceptionTimeout] = settings.liveInterceptionTimeoutSeconds
-        }
-    }
 }

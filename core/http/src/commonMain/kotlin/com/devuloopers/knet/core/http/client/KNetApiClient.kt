@@ -33,6 +33,7 @@ import kotlin.time.TimeSource
  * Implements [DomainHttpExecutor] and [AutoCloseable] for Kotlin Multiplatform execution.
  *
  * @param proxyPort Optional proxy port to route outgoing calls through KNet's proxy engine.
+ * @param localProxyTlsTrust Optional certificate authority trusted only for proxy-routed TLS.
  * @param routingStrategy Strategy dictating proxy routing attempt and fallback criteria.
  * @param configuration Configuration options for timeouts, retries, and redirects.
  * @param cookieStore Cookie storage instance.
@@ -40,6 +41,7 @@ import kotlin.time.TimeSource
  */
 open class KNetApiClient(
     private val proxyPort: Int? = null,
+    private val localProxyTlsTrust: LocalProxyTlsTrust? = null,
     private val routingStrategy: ProxyRoutingStrategy = DefaultProxyRoutingStrategy(),
     private val configuration: HttpClientConfiguration = HttpClientConfiguration(),
     private val cookieStore: CookieStore = MemoryCookieStore(),
@@ -120,6 +122,7 @@ open class KNetApiClient(
 
         return createPlatformHttpClient(
             targetProxyPort = targetProxyPort,
+            localProxyTlsTrust = localProxyTlsTrust.takeIf { targetProxyPort?.let { it > 0 } == true },
             configuration = currentConfiguration,
             customEngine = customEngine,
             block = block

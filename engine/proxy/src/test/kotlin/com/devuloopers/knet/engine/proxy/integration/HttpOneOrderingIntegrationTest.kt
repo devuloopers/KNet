@@ -53,8 +53,9 @@ class HttpOneOrderingIntegrationTest {
         val proxyPort = availableLoopbackPort()
         val proxy = KNetProxyServer(
             port = proxyPort,
-            ca = CertificateAuthority.generate(),
-            certCache = CertificateCache(),
+            serverTlsContextProvider = com.devuloopers.knet.engine.proxy.TestServerTlsContextProvider(
+                CertificateAuthority.generate(), CertificateCache(),
+            ),
         )
         proxy.start()
 

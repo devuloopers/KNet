@@ -22,7 +22,6 @@ import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.ui.desktop.certificate.model.CertificateFileFormat
 
 /**
  * Hero empty state component matching the exact visual design of the mockup.
@@ -101,7 +100,7 @@ fun CertificateEmptyState(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = CertificateFileFormat.defaultDescription,
+                text = "Import a PKCS#12, JKS, or PEM identity containing a private key and certificate chain.",
                 style = typography.bodySmall,
                 color = themeColors.textSecondary,
                 textAlign = TextAlign.Center
@@ -126,7 +125,7 @@ fun CertificateEmptyState(
             Spacer(modifier = Modifier.height(16.dp))
 
             Text(
-                text = CertificateFileFormat.supportsFooterLabel,
+                text = "Supports: PKCS#12, JKS, and combined PEM identities",
                 style = typography.labelSmall,
                 color = themeColors.textSecondary.copy(alpha = 0.7f)
             )

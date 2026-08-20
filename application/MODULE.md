@@ -10,8 +10,7 @@ Owns JVM desktop application use cases and UI-neutral ports that coordinate KNet
 - Safe loopback proxy start/stop/state use cases, independent capture pause/resume/state use cases,
   and technology-neutral runtime policy values.
 - Bounded body-access/write, finalized-object maintenance, pre-allocation capture ingress, explicit
-  streaming-body completion, cross-session canonical traffic query, direct HTTP recording, and traffic-detail
-  ports/use cases.
+  streaming-body completion, cross-session canonical traffic query, and traffic-detail ports/use cases.
 - Traffic-clear orchestration that rotates capture ownership before terminal metadata/body deletion without disconnecting proxy clients.
 - A capture-availability boundary that bypasses and releases breakpoints while no Traffic row can
   be created, without changing engine aggregation requirements or closing connections.
@@ -36,10 +35,11 @@ Owns JVM desktop application use cases and UI-neutral ports that coordinate KNet
   sandboxed script-execution ports.
 - Cross-capability orchestration contracts.
 - Application-level commands, results, and lifecycle policies.
+- Typed certificate-authority lifecycle and Root trust-installation results, including explicit manual-action instructions; UI never parses engine strings or JCA types.
 - One captured-request conversion use case that produces the shared API Studio/replay
   `NetworkRequestSpec` without duplicating URL, ordered-header, repeated-query, or body-decoding behavior in UI.
 - API Studio request execution orchestration from the canonical `SavedApiRequest`, including scripts,
-  outbound execution, response formatting, and canonical direct-traffic recording.
+  outbound execution, and response formatting. It deliberately cannot manufacture captured Traffic.
 
 ## Does not own
 
@@ -56,7 +56,7 @@ May depend on stable `:core:*` contracts. Implementations depend inward on this 
 ## Current state
 
 This is intentionally a Kotlin/JVM module, not a KMP sharing boundary. Traffic paging/detail, desktop proxy
-control, direct API Studio recording, clear/session rotation, breakpoints, certificates, connectivity,
+control, clear/session rotation, breakpoints, certificates, connectivity,
 pairing, companion-device registration, semantic inspection, and script execution all cross it. Wi-Fi
 sharing exposes a read-only application state because the desktop adapter follows proxy lifecycle directly.
 Its ports reuse canonical core/domain values instead of declaring application-local copies. Every new traffic
@@ -74,3 +74,5 @@ Traffic page queries use optional session scope, typed method/status/scheme/appl
 and an opaque keyset cursor. A null session deliberately means all retained history rather than "latest."
 API Studio execution accepts one complete domain document; it has no dependency on Compose editor state and
 can therefore be reused by another desktop surface, automation entry point, or remote-control adapter.
+It also has no traffic-recording port: direct execution returns its response only to the caller, while a
+proxy-routed execution can appear in Traffic exclusively through the active proxy capture ingress.

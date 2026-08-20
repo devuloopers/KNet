@@ -65,7 +65,7 @@ internal val connectivityBindings: Module = module {
     single {
         val certificates: CertificateRuntimeRepository = get()
         AppleProfileSetupProvider(get()) {
-            certificates.certificateAuthority.certificate.encoded
+            certificates.rootCertificateDer()
         }
     } bind SetupDescriptorProvider::class
     single { AdbSetupProvider() } bind SetupDescriptorProvider::class
@@ -84,7 +84,7 @@ internal val connectivityBindings: Module = module {
             proxyRuntime = get(),
             connectivityRuntime = get(),
             attributions = get<IngressAttributionRegistration>(),
-            certificateDer = { certificates.certificateAuthority.certificate.encoded },
+            certificateDer = certificates::rootCertificateDer,
         )
     }
     single<WifiSharingPort> { get<DesktopWifiSharingRuntime>() }
@@ -94,7 +94,7 @@ internal val connectivityBindings: Module = module {
             startLoopbackProxy = get(),
             observeProxyRuntimeState = get(),
             observeWifiSharing = get(),
-            getWorkspaceLayout = get(),
+            observeApplicationSettings = get(),
         )
     }
 
@@ -114,7 +114,7 @@ internal val connectivityBindings: Module = module {
                 renderIndex = { _, _ ->
                     """<!doctype html><html><head><meta charset="utf-8"><title>KNet Setup</title></head><body><h1>KNet Setup</h1><p>Choose a registered connectivity mechanism in KNet.</p><a href="/knet-ca.crt">Install KNet CA</a></body></html>"""
                 },
-                certificateDer = { certificates.certificateAuthority.certificate.encoded },
+                certificateDer = certificates::rootCertificateDer,
             ),
         )
     }

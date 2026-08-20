@@ -16,8 +16,9 @@ class TrafficModifierIntegrationTest {
         }
         val server = KNetProxyServer(
             port = availableLoopbackPort(),
-            ca = CertificateAuthority.generate(),
-            certCache = CertificateCache(),
+            serverTlsContextProvider = com.devuloopers.knet.engine.proxy.TestServerTlsContextProvider(
+                CertificateAuthority.generate(), CertificateCache(),
+            ),
             pipelineInitializers = listOf(customInitializer),
         )
         try {

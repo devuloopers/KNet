@@ -21,14 +21,19 @@ object CertificateFileSecurity {
      */
     fun secureDirectory(directory: File): Boolean {
         if (!directory.exists() && !directory.mkdirs()) return false
-        applyPortableOwnerFlags(directory, executable = true)
-        runCatching {
+        val portableSecured = applyPortableOwnerFlags(directory, executable = true)
+        val posixSecured = try {
             Files.setPosixFilePermissions(
                 directory.toPath(),
                 PosixFilePermissions.fromString("rwx------"),
             )
+            true
+        } catch (_: UnsupportedOperationException) {
+            true
+        } catch (_: Exception) {
+            false
         }
-        return directory.isDirectory
+        return directory.isDirectory && portableSecured && posixSecured
     }
 
     /**
@@ -39,14 +44,19 @@ object CertificateFileSecurity {
      */
     fun secureSecretFile(file: File): Boolean {
         if (!file.exists()) return false
-        applyPortableOwnerFlags(file, executable = false)
-        runCatching {
+        val portableSecured = applyPortableOwnerFlags(file, executable = false)
+        val posixSecured = try {
             Files.setPosixFilePermissions(
                 file.toPath(),
                 PosixFilePermissions.fromString("rw-------"),
             )
+            true
+        } catch (_: UnsupportedOperationException) {
+            true
+        } catch (_: Exception) {
+            false
         }
-        return file.isFile
+        return file.isFile && portableSecured && posixSecured
     }
 
     /**
@@ -102,12 +112,15 @@ object CertificateFileSecurity {
     }
 
     /** Clears broad Java permission flags before granting only owner access. */
-    private fun applyPortableOwnerFlags(file: File, executable: Boolean) {
-        file.setReadable(false, false)
-        file.setWritable(false, false)
-        file.setExecutable(false, false)
-        file.setReadable(true, true)
-        file.setWritable(true, true)
-        if (executable) file.setExecutable(true, true)
+    private fun applyPortableOwnerFlags(file: File, executable: Boolean): Boolean {
+        val results = listOf(
+            file.setReadable(false, false),
+            file.setWritable(false, false),
+            file.setExecutable(false, false),
+            file.setReadable(true, true),
+            file.setWritable(true, true),
+            !executable || file.setExecutable(true, true),
+        )
+        return results.all { it }
     }
 }

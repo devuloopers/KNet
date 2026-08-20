@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
@@ -16,7 +17,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -24,17 +24,19 @@ import com.devuloopers.knet.ui.core.components.badge.KNetBadge
 import com.devuloopers.knet.ui.core.components.empty.EmptyState
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.components.switch.KNetSwitch
+import com.devuloopers.knet.ui.core.components.button.KNetIconButton
+import com.devuloopers.knet.ui.core.components.scrollbar.KNetVerticalScrollbar
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.application.port.certificate.ClientCertificateFormat
 import com.devuloopers.knet.application.port.certificate.ClientCertificateSummary
 
 @Composable
 fun ClientCertificateList(
     certificates: List<ClientCertificateSummary>,
-    selectedCertificate: ClientCertificateSummary?,
+    selectedCertificateAlias: String?,
     onSelect: (ClientCertificateSummary) -> Unit,
     onToggleEnabled: (String, Boolean) -> Unit,
     onDelete: (ClientCertificateSummary) -> Unit,
+    actionsEnabled: Boolean = true,
     modifier: Modifier = Modifier
 ) {
     if (certificates.isEmpty()) {
@@ -43,19 +45,28 @@ fun ClientCertificateList(
             modifier = modifier.fillMaxSize()
         )
     } else {
-        LazyColumn(
-            modifier = modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(vertical = 8.dp)
-        ) {
-            items(certificates) { cert ->
+        val listState = rememberLazyListState()
+        Box(modifier = modifier.fillMaxSize()) {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize().padding(end = 6.dp),
+                contentPadding = PaddingValues(vertical = 8.dp)
+            ) {
+            items(certificates, key = ClientCertificateSummary::alias) { cert ->
                 ClientCertificateCard(
                     cert = cert,
-                    isSelected = cert.alias == selectedCertificate?.alias,
+                    isSelected = cert.alias == selectedCertificateAlias,
                     onClick = { onSelect(cert) },
                     onToggleEnabled = { onToggleEnabled(cert.alias, !cert.enabled) },
-                    onDelete = { onDelete(cert) }
+                    onDelete = { onDelete(cert) },
+                    actionsEnabled = actionsEnabled,
                 )
             }
+            }
+            KNetVerticalScrollbar(
+                lazyListState = listState,
+                modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
+            )
         }
     }
 }
@@ -66,11 +77,17 @@ private fun ClientCertificateCard(
     isSelected: Boolean,
     onClick: () -> Unit,
     onToggleEnabled: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    actionsEnabled: Boolean,
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
     val shapes = KNetTheme.shapes
+    val expirationText = when {
+        cert.daysUntilExpiration < 0 -> "Expired ${-cert.daysUntilExpiration} days ago"
+        cert.daysUntilExpiration == 0 -> "Expires today"
+        else -> "Expires in ${cert.daysUntilExpiration} days"
+    }
 
     val borderColor = if (isSelected) themeColors.accent else themeColors.border
     val backgroundColor = if (isSelected) themeColors.surfaceVariant.copy(alpha = 0.5f) else themeColors.surfaceVariant
@@ -127,8 +144,8 @@ private fun ClientCertificateCard(
                     Spacer(modifier = Modifier.width(8.dp))
                     KNetBadge(
                         text = cert.format.name,
-                        containerColor = if (cert.format == ClientCertificateFormat.PKCS12) Color(0xFFC0C1FF).copy(alpha = 0.2f) else themeColors.surface,
-                        contentColor = if (cert.format == ClientCertificateFormat.PKCS12) Color(0xFFC0C1FF) else themeColors.textSecondary
+                        containerColor = themeColors.semantic.infoContainer,
+                        contentColor = themeColors.semantic.info,
                     )
                 }
                 
@@ -155,7 +172,7 @@ private fun ClientCertificateCard(
                 Spacer(modifier = Modifier.height(4.dp))
                 
                 Text(
-                    text = "Expires in ${cert.daysUntilExpiration} days",
+                    text = expirationText,
                     style = typography.labelSmall,
                     color = expiryColor,
                     maxLines = 1,
@@ -168,16 +185,18 @@ private fun ClientCertificateCard(
             Row(verticalAlignment = Alignment.CenterVertically) {
                 KNetSwitch(
                     checked = cert.enabled,
-                    onCheckedChange = { onToggleEnabled() }
+                    onCheckedChange = { onToggleEnabled() },
+                    enabled = actionsEnabled,
                 )
                 Spacer(modifier = Modifier.width(12.dp))
-                Icon(
-                    imageVector = Icons.Default.Delete,
-                    contentDescription = "Delete",
+                KNetIconButton(
+                    onClick = onDelete,
+                    icon = Icons.Default.Delete,
+                    contentDescription = "Delete ${cert.alias}",
                     tint = themeColors.semantic.error,
-                    modifier = Modifier
-                        .size(20.dp)
-                        .clickable(onClick = onDelete)
+                    size = 32.dp,
+                    iconSize = 18.dp,
+                    enabled = actionsEnabled,
                 )
             }
         }

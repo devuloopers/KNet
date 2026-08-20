@@ -2,11 +2,12 @@ package com.devuloopers.knet.ui.desktop.certificate.viewer
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.WorkspacePremium
@@ -15,18 +16,20 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.badge.KNetBadge
 import com.devuloopers.knet.ui.core.components.button.KNetCopyButton
+import com.devuloopers.knet.ui.core.components.button.KNetIconButton
+import com.devuloopers.knet.ui.core.components.scrollbar.KNetVerticalScrollbar
 import com.devuloopers.knet.ui.core.components.inspector.KNetInspectorRow
 import com.devuloopers.knet.ui.core.components.panel.PanelHeader
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.application.port.certificate.ClientCertificateSummary
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun CertificateViewer(
     certificate: ClientCertificateSummary?,
@@ -36,6 +39,7 @@ fun CertificateViewer(
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
     val shapes = KNetTheme.shapes
+    val scrollState = rememberScrollState()
 
     if (certificate == null) return
 
@@ -51,24 +55,25 @@ fun CertificateViewer(
             PanelHeader(
                 title = "X.509 Certificate Details",
                 actions = {
-                    Icon(
-                        imageVector = Icons.Default.Close,
+                    KNetIconButton(
+                        onClick = onClose,
+                        icon = Icons.Default.Close,
                         contentDescription = "Close",
                         tint = themeColors.textSecondary,
-                        modifier = Modifier
-                            .size(20.dp)
-                            .clip(CircleShape)
-                            .clickable(onClick = onClose)
+                        size = 30.dp,
+                        iconSize = 17.dp,
                     )
                 },
                 modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
             )
 
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .verticalScroll(scrollState)
                     .padding(16.dp)
-                    .verticalScroll(rememberScrollState())
+                    .padding(end = 4.dp)
             ) {
                 // Header Card
                 Row(
@@ -115,18 +120,14 @@ fun CertificateViewer(
                         text = certificate.subjectDn.ifBlank { certificate.subject },
                         style = typography.bodySmall,
                         color = themeColors.textPrimary,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
                 KNetInspectorRow(label = "Issuer DN") {
                     Text(
-                        text = certificate.issuerDn.ifBlank { "CN=KNet Proxy Local CA" },
+                        text = certificate.issuerDn.ifBlank { "Not available" },
                         style = typography.bodySmall,
                         color = themeColors.textPrimary,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
                     )
                 }
 
@@ -135,9 +136,7 @@ fun CertificateViewer(
                         text = certificate.serialNumber.ifBlank { "N/A" },
                         style = typography.bodySmall,
                         color = themeColors.textPrimary,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis
+                        softWrap = true,
                     )
                 }
 
@@ -146,16 +145,15 @@ fun CertificateViewer(
                         text = "${certificate.expiration} (${certificate.daysUntilExpiration} days remaining)",
                         style = typography.bodySmall,
                         color = themeColors.textPrimary,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis
+                        softWrap = true,
                     )
                 }
 
                 if (certificate.sanList.isNotEmpty()) {
                     KNetInspectorRow(label = "SANs") {
-                        Row(
+                        FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
                             modifier = Modifier.fillMaxWidth()
                         ) {
                             certificate.sanList.forEach { san ->
@@ -197,6 +195,11 @@ fun CertificateViewer(
                         }
                     }
                 }
+            }
+            KNetVerticalScrollbar(
+                scrollState = scrollState,
+                modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
+            )
             }
         }
     }

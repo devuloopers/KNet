@@ -1,6 +1,6 @@
 package com.devuloopers.knet.ui.desktop.certificate
 
-import com.devuloopers.knet.ui.desktop.certificate.model.CaStatus
+import com.devuloopers.knet.application.port.certificate.CertificateAuthorityStatus
 import com.devuloopers.knet.ui.desktop.certificate.model.CertificateState
 import com.devuloopers.knet.ui.desktop.certificate.model.TrustInstallationState
 import kotlin.test.Test
@@ -22,7 +22,7 @@ class CertificateStateTest {
     @Test
     fun testCertificateStateDefaultValues() {
         val state = CertificateState()
-        assertEquals(CaStatus.MISSING, state.caStatus)
+        assertEquals(CertificateAuthorityStatus.MISSING, state.caStatus)
         assertEquals(TrustInstallationState.CHECKING, state.trustState)
         assertTrue(state.clientCertificates.isEmpty())
         assertTrue(state.mtlsRules.isEmpty())
@@ -30,6 +30,8 @@ class CertificateStateTest {
         assertFalse(state.isImportDialogVisible)
         assertFalse(state.isExportDialogVisible)
         assertFalse(state.isRuleDialogVisible)
+        assertFalse(state.isTrustInstructionsVisible)
+        assertNull(state.manualTrustInstructions)
         assertFalse(state.isLoading)
         assertNull(state.errorMessage)
     }

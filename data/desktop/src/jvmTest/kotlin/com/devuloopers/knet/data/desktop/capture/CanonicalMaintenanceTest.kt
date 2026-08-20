@@ -272,7 +272,7 @@ class CanonicalMaintenanceTest {
             database = restartedDatabase,
             bodyStore = restartedBodyStore,
             bodyStoreMaintenance = restartedBodyStore,
-        ).openDirect(startedAtEpochMillis = 100L)
+        ).openStreamingProxy(localListenerPort = 8_080, startedAtEpochMillis = 100L)
         try {
             val restartedDao = restartedDatabase.canonicalCaptureDao()
             assertEquals("RECOVERED_AFTER_CRASH", restartedDao.getSession(RESTART_SESSION_ID)?.state)

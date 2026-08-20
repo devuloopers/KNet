@@ -11,7 +11,6 @@ import com.devuloopers.knet.application.usecase.traffic.PrepareTrafficRequestUse
 import com.devuloopers.knet.application.usecase.traffic.PrepareCapturedNetworkRequestUseCase
 import com.devuloopers.knet.application.usecase.traffic.PauseTrafficCaptureUseCase
 import com.devuloopers.knet.application.usecase.traffic.QueryTrafficPageUseCase
-import com.devuloopers.knet.application.usecase.traffic.RecordHttpExchangeUseCase
 import com.devuloopers.knet.application.usecase.traffic.ResumeTrafficCaptureUseCase
 import com.devuloopers.knet.application.usecase.traffic.ObserveTrafficCaptureStateUseCase
 import com.devuloopers.knet.data.desktop.traffic.repository.DesktopTrafficMaintenanceAdapter
@@ -47,7 +46,6 @@ internal val trafficBindings: Module = module {
     factory { ObserveTrafficGenerationsUseCase(get()) }
     factory { PrepareTrafficRequestUseCase(get()) }
     factory { PrepareCapturedNetworkRequestUseCase(get()) }
-    factory { RecordHttpExchangeUseCase(get()) }
     factory { PauseTrafficCaptureUseCase(get()) }
     factory { ResumeTrafficCaptureUseCase(get()) }
     factory { ObserveTrafficCaptureStateUseCase(get()) }
@@ -66,7 +64,7 @@ internal val trafficBindings: Module = module {
             observeTrafficCaptureStateUseCase = get(),
             loadTrafficExchangeDetailsUseCase = get(),
             observeLocalIpUseCase = get(),
-            getWorkspaceLayoutUseCase = get(),
+            observeApplicationSettingsUseCase = get(),
             prepareCapturedNetworkRequestUseCase = get(),
             observeInspectionAnnotationsUseCase = get(),
             describeRequestUseCase = get(),

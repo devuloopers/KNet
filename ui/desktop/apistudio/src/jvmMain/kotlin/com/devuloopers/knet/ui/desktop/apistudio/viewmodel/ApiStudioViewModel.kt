@@ -15,10 +15,12 @@ import com.devuloopers.knet.domain.collection.usecase.GetSavedRequestUseCase
 import com.devuloopers.knet.domain.collection.usecase.SaveRequestToCollectionUseCase
 import com.devuloopers.knet.domain.network.mapper.NetworkSpecMappers.sanitizeTransportHeaders
 import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
+import com.devuloopers.knet.domain.settings.usecase.ObserveApplicationSettingsUseCase
+import com.devuloopers.knet.domain.settings.usecase.UpdateApplicationSettingsUseCase
 import com.devuloopers.knet.domain.util.UrlQueryStringParser
 import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
 import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
-import com.devuloopers.knet.domain.workspace.usecase.SaveWorkspaceLayoutUseCase
+import com.devuloopers.knet.domain.workspace.usecase.UpdateWorkspaceLayoutUseCase
 import com.devuloopers.knet.scripting.model.ScriptLanguage
 import com.devuloopers.knet.scripting.model.ScriptPhase
 import com.devuloopers.knet.traffic.model.http.HttpMethod
@@ -75,7 +77,9 @@ import kotlin.uuid.Uuid
  * @param executeApiStudioRequestUseCase Executes the authored request including scripts and response formatting.
  * @param observeProxyRuntimeStateUseCase Observes the currently routable local proxy endpoint.
  * @param getWorkspaceLayoutUseCase Reads persisted API Studio workspace selection and view preferences.
- * @param saveWorkspaceLayoutUseCase Persists API Studio workspace selection and view preferences.
+ * @param updateWorkspaceLayoutUseCase Atomically updates API Studio workspace selection and view preferences.
+ * @param observeApplicationSettingsUseCase Reads process-level defaults used for new request documents.
+ * @param updateApplicationSettingsUseCase Atomically updates process-level request defaults.
  * @param importRequestToStudioUseCase Normalizes requests imported from captured traffic.
  * @param describeRequestUseCase Resolves generated titles and semantic request metadata through ordered strategies.
  * @param dropMatchingBreakpointsUseCase Releases suspended traffic when execution fails or is cancelled.
@@ -89,7 +93,9 @@ class ApiStudioViewModel(
     private val executeApiStudioRequestUseCase: ExecuteApiStudioRequestUseCase,
     observeProxyRuntimeStateUseCase: ObserveProxyRuntimeStateUseCase,
     private val getWorkspaceLayoutUseCase: GetWorkspaceLayoutUseCase,
-    saveWorkspaceLayoutUseCase: SaveWorkspaceLayoutUseCase,
+    updateWorkspaceLayoutUseCase: UpdateWorkspaceLayoutUseCase,
+    private val observeApplicationSettingsUseCase: ObserveApplicationSettingsUseCase,
+    private val updateApplicationSettingsUseCase: UpdateApplicationSettingsUseCase,
     private val importRequestToStudioUseCase: ImportRequestToStudioUseCase,
     private val describeRequestUseCase: DescribeRequestUseCase,
     private val dropMatchingBreakpointsUseCase: DropMatchingBreakpointsUseCase,
@@ -140,9 +146,8 @@ class ApiStudioViewModel(
     private val workspaceCoordinator = ApiStudioWorkspaceCoordinator(
         scope = viewModelScope,
         dispatcher = ioDispatcher,
-        getWorkspaceLayout = getWorkspaceLayoutUseCase,
-        saveWorkspaceLayout = saveWorkspaceLayoutUseCase,
-        onFailure = ::publishPersistenceFailure
+        updateWorkspaceLayout = updateWorkspaceLayoutUseCase,
+        onFailure = ::publishPersistenceFailure,
     )
 
     private val activeProxyPort: StateFlow<Int?> = observeProxyRuntimeStateUseCase.execute()
@@ -230,10 +235,20 @@ class ApiStudioViewModel(
         updateWorkspaceSettings { it.copy(activeScriptPhase = phase.name) }
     }
 
-    /** Changes the persisted document scripting language and the default workspace preference. */
+    /** Changes the persisted document scripting language and the application default. */
     fun updateScriptLanguage(language: ScriptLanguage) {
         mutateEditor { editor -> editor.copy(scriptLanguage = language) }
-        updateWorkspaceSettings { it.copy(scriptLanguage = language.name) }
+        viewModelScope.launch(ioDispatcher) {
+            try {
+                updateApplicationSettingsUseCase.execute { settings ->
+                    settings.copy(defaultScriptLanguage = language)
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                publishPersistenceFailure(failure)
+            }
+        }
     }
 
     /** Selects the response inspector sub-tab. */
@@ -686,20 +701,19 @@ class ApiStudioViewModel(
     private fun restoreWorkspaceDocument() {
         viewModelScope.launch(ioDispatcher) {
             try {
-                val settings = getWorkspaceLayoutUseCase.execute().first()
+                val workspace = getWorkspaceLayoutUseCase.execute().first()
+                val applicationSettings = observeApplicationSettingsUseCase.execute().first()
                 val requestSubTab = InspectorSubTab.entries.firstOrNull {
-                    it.name.equals(settings.activeRequestSubTab, ignoreCase = true)
+                    it.name.equals(workspace.activeRequestSubTab, ignoreCase = true)
                 } ?: InspectorSubTab.BODY
                 val scriptPhase = ScriptPhase.entries.firstOrNull {
-                    it.name.equals(settings.activeScriptPhase, ignoreCase = true)
+                    it.name.equals(workspace.activeScriptPhase, ignoreCase = true)
                 } ?: ScriptPhase.PRE_REQUEST
                 val responseSubTab = ResponseSubTab.entries.firstOrNull {
-                    it.name.equals(settings.activeResponseSubTab, ignoreCase = true)
+                    it.name.equals(workspace.activeResponseSubTab, ignoreCase = true)
                 } ?: ResponseSubTab.BODY
-                val defaultScriptLanguage = ScriptLanguage.entries.firstOrNull {
-                    it.name.equals(settings.scriptLanguage, ignoreCase = true)
-                } ?: ScriptLanguage.JAVASCRIPT
-                val context = SessionContextSerializer.deserialize(settings.activeSessionId)
+                val defaultScriptLanguage = applicationSettings.defaultScriptLanguage
+                val context = SessionContextSerializer.deserialize(workspace.activeSessionId)
                 val requestId = when (context) {
                     is SessionContext.UnsavedDraft -> context.sessionId
                     is SessionContext.SavedRequest -> context.requestId

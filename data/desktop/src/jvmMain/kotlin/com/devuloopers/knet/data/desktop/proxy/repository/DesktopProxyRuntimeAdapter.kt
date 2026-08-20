@@ -13,9 +13,6 @@ import com.devuloopers.knet.application.port.traffic.CapturePauseResult
 import com.devuloopers.knet.application.port.traffic.CaptureResumeResult
 import com.devuloopers.knet.application.port.traffic.CaptureSessionControlPort
 import com.devuloopers.knet.application.port.traffic.CaptureSessionState
-import com.devuloopers.knet.application.port.traffic.RecordHttpExchangeCommand
-import com.devuloopers.knet.application.port.traffic.TrafficRecordPort
-import com.devuloopers.knet.application.port.traffic.TrafficRecordReceipt
 import com.devuloopers.knet.connectivity.model.ProxyAccessRequirement
 import com.devuloopers.knet.connectivity.model.ProxyEndpoint
 import com.devuloopers.knet.connectivity.model.ProxyEndpointScope
@@ -57,7 +54,7 @@ class DesktopProxyRuntimeAdapter(
     private val proxyRuntimeRepository: ProxyRuntimeRepository,
     private val canonicalCaptureSessionFactory: CanonicalCaptureSessionFactory,
     private val breakpointCaptureAvailability: BreakpointCaptureAvailabilityPort,
-) : ProxyRuntimePort, CaptureSessionControlPort, TrafficRecordPort {
+) : ProxyRuntimePort, CaptureSessionControlPort {
 
     private val lifecycleMutex = Mutex()
     private val endpointVersion = AtomicLong(0L)
@@ -71,8 +68,6 @@ class DesktopProxyRuntimeAdapter(
     @Volatile
     private var canonicalCaptureSession: StreamingProxyCaptureSession? = null
     private var switchableCaptureSink: SwitchableProxyCaptureSink? = null
-    @Volatile
-    private var directCaptureSession: StreamingProxyCaptureSession? = null
 
     /**
      * Starts the Netty implementation through the application runtime contract.
@@ -95,7 +90,6 @@ class DesktopProxyRuntimeAdapter(
         _runtimeState.value = ProxyRuntimeState.Starting
         _captureState.value = CaptureSessionState.Starting
         try {
-            closeDirectCaptureSession()
             val session = canonicalCaptureSessionFactory.openStreamingProxy(binding.port)
             val captureSink = SwitchableProxyCaptureSink(session)
             synchronized(canonicalCallbackLock) {
@@ -164,39 +158,11 @@ class DesktopProxyRuntimeAdapter(
         }
     }
 
-    /**
-     * Records one complete application-authored exchange through the active canonical authority.
-     *
-     * Direct calls reuse a running proxy session when one exists. Otherwise one persistent direct
-     * session is opened and reused until proxy start, clear, or application shutdown. This preserves
-     * one active capture authority.
-     */
-    override suspend fun record(command: RecordHttpExchangeCommand): TrafficRecordReceipt = lifecycleMutex.withLock {
-        check(!closed.get()) { "Traffic recording is unavailable after repository shutdown." }
-        val proxySession = synchronized(canonicalCallbackLock) { canonicalCaptureSession }
-        if (proxySession != null) {
-            proxySession.recordCanonical(command)
-            proxySession.flush()
-            return@withLock TrafficRecordReceipt(
-                sessionId = proxySession.sessionId,
-                exchangeId = command.exchangeId,
-            )
-        }
-        val directSession = directCaptureSession
-            ?: canonicalCaptureSessionFactory.openDirect(command.startedAtEpochMillis)
-                .also { opened -> directCaptureSession = opened }
-        directSession.recordCanonical(command)
-        directSession.flush()
-        TrafficRecordReceipt(sessionId = directSession.sessionId, exchangeId = command.exchangeId)
-    }
-
-
     /** Stops the Netty runtime and awaits active channel and event-loop closure. */
     override suspend fun stop(reason: ProxyStopReason): ProxyStopResult = lifecycleMutex.withLock {
         if (_runtimeState.value is ProxyRuntimeState.Stopped) {
             breakpointCaptureAvailability.setCaptureAvailable(false)
             closeCanonicalCaptureSession()
-            closeDirectCaptureSession()
             _captureState.value = CaptureSessionState.Inactive
             return@withLock ProxyStopResult.Stopped
         }
@@ -209,7 +175,6 @@ class DesktopProxyRuntimeAdapter(
                 proxyRuntimeRepository.stopProxy()
             }
             canonicalSession?.close()
-            closeDirectCaptureSession()
             _runtimeState.value = ProxyRuntimeState.Stopped
             _captureState.value = CaptureSessionState.Inactive
             KNetLogger.info(tag = LogTags.PROXY) { "Proxy engine stopped for reason ${reason.name}." }
@@ -219,12 +184,6 @@ class DesktopProxyRuntimeAdapter(
                 .onFailure { closeFailure ->
                     KNetLogger.error(tag = LogTags.PROXY, throwable = closeFailure) {
                         "Failed to close canonical capture after proxy shutdown failure."
-                    }
-                }
-            runCatching { closeDirectCaptureSession() }
-                .onFailure { closeFailure ->
-                    KNetLogger.error(tag = LogTags.PROXY, throwable = closeFailure) {
-                        "Failed to close direct capture after proxy shutdown failure."
                     }
                 }
             KNetLogger.error(tag = LogTags.PROXY, throwable = failure) { "Error stopping proxy engine." }
@@ -274,7 +233,6 @@ class DesktopProxyRuntimeAdapter(
         }
 
         _captureState.value = CaptureSessionState.Starting
-        closeDirectCaptureSession()
         val listenerPort = running.handle.endpoints.endpoints.singleOrNull()?.port
             ?: error("Capture resume requires one active listener endpoint.")
         try {
@@ -307,10 +265,8 @@ class DesktopProxyRuntimeAdapter(
         val running = _runtimeState.value as? ProxyRuntimeState.Running
         if (running == null) {
             closeCanonicalCaptureSession()
-            closeDirectCaptureSession()
             return@withLock CaptureClearPreparation.CANONICAL_SESSION_INACTIVE
         }
-        closeDirectCaptureSession()
         if (synchronized(canonicalCallbackLock) { canonicalCaptureSession } == null) {
             return@withLock CaptureClearPreparation.CANONICAL_SESSION_INACTIVE
         }
@@ -360,13 +316,6 @@ class DesktopProxyRuntimeAdapter(
                 }
             }
         }
-        directCaptureSession?.also { directCaptureSession = null }?.let { session ->
-            if (!session.closeAndAwait(CANONICAL_WRITER_SHUTDOWN_TIMEOUT_MILLIS)) {
-                KNetLogger.error(tag = LogTags.PROXY) {
-                    "Timed out while closing the direct canonical writer during application shutdown."
-                }
-            }
-        }
         if (!retirementOwner.closeAndAwait(CANONICAL_WRITER_SHUTDOWN_TIMEOUT_MILLIS)) {
             KNetLogger.error(tag = LogTags.PROXY) {
                 "Timed out while draining retired canonical capture writers during application shutdown."
@@ -391,13 +340,6 @@ class DesktopProxyRuntimeAdapter(
             switchableCaptureSink = null
             current
         }
-
-    /** Closes the direct producer session before another owner becomes active. */
-    private suspend fun closeDirectCaptureSession() {
-        val session = directCaptureSession ?: return
-        directCaptureSession = null
-        session.close()
-    }
 
     private companion object {
         private const val CANONICAL_WRITER_SHUTDOWN_TIMEOUT_MILLIS = 5_000L

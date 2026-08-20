@@ -13,18 +13,32 @@ import com.devuloopers.knet.engine.proxy.KNetProxyServer
 import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureSink
 import com.devuloopers.knet.engine.proxy.pipeline.PipelineHandlerNames
 import com.devuloopers.knet.engine.proxy.tls.KeyManagerProvider
+import com.devuloopers.knet.engine.proxy.tls.ServerTlsContextProvider
+import com.devuloopers.knet.data.desktop.certificate.DesktopServerTlsContextProvider
 import com.devuloopers.knet.traffic.model.IngressAttributionLookup
 
 /**
  * Desktop runtime coordinator managing Netty proxy server lifecycle.
  */
 class ProxyRuntimeRepository(
-    private val certificateAuthority: CertificateAuthority,
-    private val certificateCache: CertificateCache,
+    private val serverTlsContextProvider: ServerTlsContextProvider,
     private val keyManagerProvider: KeyManagerProvider? = null,
     private val breakpointGate: BreakpointGate,
     private val ingressAttribution: IngressAttributionLookup? = null,
 ) {
+    constructor(
+        certificateAuthority: CertificateAuthority,
+        certificateCache: CertificateCache,
+        keyManagerProvider: KeyManagerProvider? = null,
+        breakpointGate: BreakpointGate,
+        ingressAttribution: IngressAttributionLookup? = null,
+    ) : this(
+        serverTlsContextProvider = DesktopServerTlsContextProvider(certificateAuthority, certificateCache),
+        keyManagerProvider = keyManagerProvider,
+        breakpointGate = breakpointGate,
+        ingressAttribution = ingressAttribution,
+    )
+
     private val lifecycleLock = Any()
     private var proxyServer: KNetProxyServer? = null
     private var closed = false
@@ -64,8 +78,7 @@ class ProxyRuntimeRepository(
             val server = KNetProxyServer(
                 bindHost = host,
                 port = port,
-                ca = certificateAuthority,
-                certCache = certificateCache,
+                serverTlsContextProvider = serverTlsContextProvider,
                 keyManagerProvider = keyManagerProvider,
                 verifyUpstreamTls = verifyUpstreamTls,
                 runtimePolicy = runtimePolicy,

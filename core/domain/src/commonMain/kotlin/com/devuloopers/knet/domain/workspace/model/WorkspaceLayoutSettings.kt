@@ -25,11 +25,4 @@ data class WorkspaceLayoutSettings(
     val activeScriptPhase: String = "PRE_REQUEST",
     val activeResponseSubTab: String = "BODY",
     val activeSessionId: String = "",
-    val scriptLanguage: String = "JAVASCRIPT",
-    val proxyPort: Int = 8080,
-    val autoClearTrafficOnStartup: Boolean = false,
-    val theme: String = "DARK",
-    val maxPayloadMb: Int = 10,
-    val apiStudioTimeoutSeconds: Int = 60,
-    val liveInterceptionTimeoutSeconds: Int = 60
 )

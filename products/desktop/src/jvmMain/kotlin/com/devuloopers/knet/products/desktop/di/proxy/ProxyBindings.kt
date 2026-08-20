@@ -2,7 +2,6 @@ package com.devuloopers.knet.products.desktop.di.proxy
 
 import com.devuloopers.knet.application.port.proxy.ProxyRuntimePort
 import com.devuloopers.knet.application.port.traffic.CaptureSessionControlPort
-import com.devuloopers.knet.application.port.traffic.TrafficRecordPort
 import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUseCase
 import com.devuloopers.knet.application.usecase.proxy.StartLoopbackProxyUseCase
 import com.devuloopers.knet.application.usecase.proxy.StopProxyRuntimeUseCase
@@ -21,8 +20,7 @@ internal val proxyBindings: Module = module {
         val certificates: CertificateRuntimeRepository = get()
         val certificateManager: CertificateManager = get()
         ProxyRuntimeRepository(
-            certificateAuthority = certificates.certificateAuthority,
-            certificateCache = certificates.certificateCache,
+            serverTlsContextProvider = certificates.serverTlsContextProvider(),
             keyManagerProvider = certificateManager::getKeyManagerFactory,
             breakpointGate = get(),
             ingressAttribution = get<IngressAttributionLookup>(),
@@ -44,8 +42,6 @@ internal val proxyBindings: Module = module {
     }
     single<ProxyRuntimePort> { get<DesktopProxyRuntimeAdapter>() }
     single<CaptureSessionControlPort> { get<DesktopProxyRuntimeAdapter>() }
-    single<TrafficRecordPort> { get<DesktopProxyRuntimeAdapter>() }
-
     factory { StartLoopbackProxyUseCase(get()) }
     factory { StopProxyRuntimeUseCase(get()) }
     factory { ObserveProxyRuntimeStateUseCase(get()) }

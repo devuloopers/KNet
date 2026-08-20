@@ -11,11 +11,13 @@ import com.devuloopers.knet.ui.core.components.button.KNetButton
 import com.devuloopers.knet.ui.core.components.dialog.KNetDialog
 import com.devuloopers.knet.ui.core.components.input.InputFieldConfig
 import com.devuloopers.knet.ui.core.components.input.KNetTextField
+import com.devuloopers.knet.ui.core.components.input.InputFieldState
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.core.components.chip.KNetTag
 import com.devuloopers.knet.ui.core.components.dropdown.KNetSearchableDropdown
 import com.devuloopers.knet.application.port.certificate.ClientCertificateSummary
 import com.devuloopers.knet.application.port.certificate.MtlsRuleSpec
+import androidx.compose.ui.text.style.TextOverflow
 
 @Composable
 fun AddEditMtlsRuleDialog(
@@ -23,18 +25,20 @@ fun AddEditMtlsRuleDialog(
     onDismiss: () -> Unit,
     onSave: (MtlsRuleSpec) -> Unit,
     initialRule: MtlsRuleSpec? = null,
+    errorMessage: String? = null,
+    isSaving: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    var ruleName by remember { mutableStateOf(initialRule?.ruleName ?: "") }
-    var hostPattern by remember { mutableStateOf(initialRule?.hostPattern ?: "") }
-    var certAlias by remember { mutableStateOf(initialRule?.certificateAlias ?: "") }
+    var ruleName by remember(initialRule) { mutableStateOf(initialRule?.ruleName ?: "") }
+    var hostPattern by remember(initialRule) { mutableStateOf(initialRule?.hostPattern ?: "") }
+    var certAlias by remember(initialRule) { mutableStateOf(initialRule?.certificateAlias ?: "") }
 
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
 
     KNetDialog(
         onDismissRequest = onDismiss,
-        modifier = modifier.width(440.dp),
+        modifier = modifier.widthIn(max = 440.dp),
         title = if (initialRule == null) "Add mTLS Host Rule" else "Edit mTLS Host Rule"
     ) {
         Column {
@@ -48,7 +52,8 @@ fun AddEditMtlsRuleDialog(
                 value = ruleName,
                 onValueChange = { ruleName = it },
                 modifier = Modifier.fillMaxWidth(),
-                config = InputFieldConfig(placeholder = "e.g. Bank API Rule")
+                config = InputFieldConfig(placeholder = "e.g. Bank API Rule"),
+                state = InputFieldState(enabled = !isSaving, readOnly = initialRule != null),
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -63,7 +68,8 @@ fun AddEditMtlsRuleDialog(
                 value = hostPattern,
                 onValueChange = { hostPattern = it },
                 modifier = Modifier.fillMaxWidth(),
-                config = InputFieldConfig(placeholder = "*.api.internal.bank.com")
+                config = InputFieldConfig(placeholder = "*.api.internal.bank.com"),
+                state = InputFieldState(enabled = !isSaving),
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -82,6 +88,7 @@ fun AddEditMtlsRuleDialog(
                 },
                 modifier = Modifier.fillMaxWidth(),
                 placeholder = "Select Certificate...",
+                enabled = !isSaving,
                 itemText = { it.alias },
                 itemContent = { cert ->
                     Row(
@@ -92,13 +99,25 @@ fun AddEditMtlsRuleDialog(
                         Text(
                             text = cert.alias,
                             style = typography.bodyMedium,
-                            color = themeColors.textPrimary
+                            color = themeColors.textPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         KNetTag(text = cert.format.name)
                     }
                 }
             )
+
+            if (!errorMessage.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = errorMessage,
+                    style = typography.bodySmall,
+                    color = themeColors.semantic.error,
+                )
+            }
 
             Spacer(modifier = Modifier.height(20.dp))
 
@@ -109,7 +128,8 @@ fun AddEditMtlsRuleDialog(
             ) {
                 KNetButton(
                     onClick = onDismiss,
-                    variant = ButtonVariant.Ghost
+                    variant = ButtonVariant.Ghost,
+                    enabled = !isSaving,
                 ) {
                     Text("Cancel")
                 }
@@ -128,6 +148,7 @@ fun AddEditMtlsRuleDialog(
                         }
                     },
                     enabled = ruleName.isNotBlank() && hostPattern.isNotBlank() && certAlias.isNotBlank(),
+                    loading = isSaving,
                     variant = ButtonVariant.Primary
                 ) {
                     Text("Save Rule")

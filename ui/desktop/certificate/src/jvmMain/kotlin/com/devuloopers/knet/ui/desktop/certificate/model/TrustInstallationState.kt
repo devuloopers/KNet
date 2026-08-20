@@ -8,5 +8,6 @@ enum class TrustInstallationState {
     IDLE,
     INSTALLING,
     INSTALLED,
+    MANUAL_ACTION_REQUIRED,
     FAILED
 }

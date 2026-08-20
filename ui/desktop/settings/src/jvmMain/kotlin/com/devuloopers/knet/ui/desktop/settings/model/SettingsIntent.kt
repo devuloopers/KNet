@@ -1,21 +1,24 @@
 package com.devuloopers.knet.ui.desktop.settings.model
 
-import com.devuloopers.knet.domain.workspace.model.TimeoutUnit
+import com.devuloopers.knet.scripting.model.ScriptLanguage
 
 /**
  * User actions dispatched from SettingsScreen.
  */
 sealed interface SettingsIntent {
     data class SelectTab(val tab: SettingsTab) : SettingsIntent
-    data class UpdateSearchQuery(val query: String) : SettingsIntent
     data class UpdateProxyPort(val port: String) : SettingsIntent
+    data object CommitProxyPort : SettingsIntent
     data class ToggleAutoClearTraffic(val enabled: Boolean) : SettingsIntent
-    data class SetMaxPayloadMb(val mb: Int) : SettingsIntent
-    data class SetTheme(val theme: String) : SettingsIntent
-    data class SetScriptLanguage(val language: String) : SettingsIntent
+    data class SetScriptLanguage(val language: ScriptLanguage) : SettingsIntent
     data class UpdateApiStudioTimeout(val value: String, val unit: TimeoutUnit) : SettingsIntent
+    data object CommitApiStudioTimeout : SettingsIntent
     data class UpdateLiveInterceptionTimeout(val value: String, val unit: TimeoutUnit) : SettingsIntent
+    data object CommitLiveInterceptionTimeout : SettingsIntent
     data object InstallRootCa : SettingsIntent
     data object OpenDataDirectory : SettingsIntent
-    data object ResetDefaults : SettingsIntent
+    data object RequestResetDefaults : SettingsIntent
+    data object CancelResetDefaults : SettingsIntent
+    data object ConfirmResetDefaults : SettingsIntent
+    data object DismissNotice : SettingsIntent
 }

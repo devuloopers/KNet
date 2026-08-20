@@ -1,121 +1,86 @@
 package com.devuloopers.knet.ui.desktop.settings.components
 
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.Switch
-import androidx.compose.material3.SwitchDefaults
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.devuloopers.knet.ui.core.components.badge.KNetBadge
 import com.devuloopers.knet.ui.core.components.dropdown.KNetSearchableDropdown
+import com.devuloopers.knet.ui.core.components.switch.KNetSwitch
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import com.devuloopers.knet.ui.desktop.settings.model.SettingsField
 import com.devuloopers.knet.ui.desktop.settings.model.SettingsIntent
 import com.devuloopers.knet.ui.desktop.settings.model.SettingsState
 
-/**
- * Tab content view rendering Auto-Clear Traffic and Payload Cache Limit settings.
- */
+/** Renders startup traffic policy and truthful payload-retention capability settings. */
 @Composable
 fun TrafficStorageTab(
     state: SettingsState,
     onIntent: (SettingsIntent) -> Unit,
-    modifier: Modifier = Modifier
+    compact: Boolean,
+    modifier: Modifier = Modifier,
 ) {
-    val themeColors = KNetTheme.colors
+    val colors = KNetTheme.colors
     val typography = KNetTheme.typography
 
     Column(
         modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+        verticalArrangement = Arrangement.spacedBy(20.dp),
     ) {
         Column {
             Text(
                 text = "Traffic & Storage",
-                style = typography.titleLarge.copy(color = themeColors.textPrimary),
-                maxLines = 1,
-                softWrap = false
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Manage live traffic session flushing and payload memory limits.",
-                style = typography.bodyMedium.copy(color = themeColors.textSecondary),
+                style = typography.titleLarge.copy(color = colors.textPrimary),
                 maxLines = 1,
                 softWrap = false,
-                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "Control stored traffic startup behavior and inspect payload-retention capabilities.",
+                style = typography.bodyMedium.copy(color = colors.textSecondary),
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
             )
         }
 
-        SettingsCard {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Auto-Clear Traffic on Startup",
-                        style = typography.titleSmall.copy(color = themeColors.textPrimary),
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "Automatically flushes previous traffic records when KNet launches.",
-                        style = typography.bodySmall.copy(color = themeColors.textSecondary),
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                Switch(
-                    checked = state.autoClearTrafficOnStartup,
-                    onCheckedChange = { onIntent(SettingsIntent.ToggleAutoClearTraffic(it)) },
-                    colors = SwitchDefaults.colors(
-                        checkedThumbColor = Color.White,
-                        checkedTrackColor = Color(0xFF10B981)
-                    )
-                )
-            }
+        SettingsItem(
+            title = "Auto-Clear Traffic on Startup",
+            description = "Clears stored traffic once during the next KNet application launch.",
+            compact = compact,
+        ) {
+            KNetSwitch(
+                checked = state.autoClearTrafficOnStartup,
+                onCheckedChange = { onIntent(SettingsIntent.ToggleAutoClearTraffic(it)) },
+                enabled = !state.isLoading && SettingsField.AUTO_CLEAR_TRAFFIC !in state.savingFields,
+            )
         }
 
-        SettingsCard {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Payload Size Cache Limit",
-                        style = typography.titleSmall.copy(color = themeColors.textPrimary),
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "Maximum response body payload size cached per transaction.",
-                        style = typography.bodySmall.copy(color = themeColors.textSecondary),
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-
-                KNetSearchableDropdown(
-                    items = listOf("2 MB", "10 MB", "50 MB", "100 MB"),
-                    selectedItem = "${state.maxPayloadMb} MB",
-                    onItemSelected = { selected ->
-                        val mb = selected.replace(" MB", "").toIntOrNull() ?: 10
-                        onIntent(SettingsIntent.SetMaxPayloadMb(mb))
-                    },
-                    modifier = Modifier.width(160.dp),
-                    itemText = { it }
+        SettingsItem(
+            title = "Payload Size Cache Limit",
+            description = "A configurable body-retention policy is not connected to traffic capture yet.",
+            compact = compact,
+            titleAccessory = {
+                KNetBadge(
+                    text = "UPCOMING",
+                    containerColor = colors.semantic.infoContainer,
+                    contentColor = colors.semantic.info,
                 )
-            }
+            },
+        ) {
+            KNetSearchableDropdown(
+                items = listOf("${state.payloadCacheLimitMb} MB"),
+                selectedItem = "${state.payloadCacheLimitMb} MB",
+                onItemSelected = {},
+                enabled = false,
+                itemText = { it },
+            )
         }
     }
 }

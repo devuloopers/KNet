@@ -21,6 +21,7 @@ class TrustWizardTest {
             TrustInstallationState.IDLE,
             TrustInstallationState.INSTALLING,
             TrustInstallationState.INSTALLED,
+            TrustInstallationState.MANUAL_ACTION_REQUIRED,
             TrustInstallationState.FAILED
         )
 
@@ -30,6 +31,7 @@ class TrustWizardTest {
                 TrustInstallationState.IDLE -> "Trust Certificate Authority"
                 TrustInstallationState.INSTALLING -> "Integrating with system keystore..."
                 TrustInstallationState.INSTALLED -> "Certificate Trusted Successfully!"
+                TrustInstallationState.MANUAL_ACTION_REQUIRED -> "Manual installation required"
                 TrustInstallationState.FAILED -> "Installation Failed. Retry?"
             }
         }
@@ -38,6 +40,7 @@ class TrustWizardTest {
         assertEquals("Trust Certificate Authority", labels[1])
         assertEquals("Integrating with system keystore...", labels[2])
         assertEquals("Certificate Trusted Successfully!", labels[3])
-        assertEquals("Installation Failed. Retry?", labels[4])
+        assertEquals("Manual installation required", labels[4])
+        assertEquals("Installation Failed. Retry?", labels[5])
     }
 }

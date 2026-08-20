@@ -1,10 +1,9 @@
 package com.devuloopers.knet.data.desktop.inspection
 
 import com.devuloopers.knet.application.port.inspection.SemanticInspectionScheduler
-import com.devuloopers.knet.application.port.traffic.RecordHttpExchangeCommand
-import com.devuloopers.knet.application.port.traffic.TrafficBodyPayload
 import com.devuloopers.knet.data.desktop.capture.CanonicalCaptureSessionFactory
 import com.devuloopers.knet.data.desktop.capture.CanonicalTrafficQueryAdapter
+import com.devuloopers.knet.data.desktop.capture.recordTestProxyExchange
 import com.devuloopers.knet.engine.protocol.inspector.sse.SseSemanticInspector
 import com.devuloopers.knet.engine.session.FileBodyStore
 import com.devuloopers.knet.storage.database.DatabaseFactory
@@ -23,32 +22,29 @@ class SseSemanticInspectionEndToEndTest {
         val root = Files.createTempDirectory("knet-sse-e2e-").toFile()
         val database = DatabaseFactory.create(root.resolve("traffic.db"))
         val bodyStore = FileBodyStore(root.resolve("bodies"))
-        val session = CanonicalCaptureSessionFactory(database, bodyStore, bodyStore).openDirect(1L)
+        val session = CanonicalCaptureSessionFactory(database, bodyStore, bodyStore)
+            .openStreamingProxy(localListenerPort = 8_080, startedAtEpochMillis = 1L)
         val exchangeId = ExchangeId("sse-e2e-exchange")
         try {
-            session.recordCanonical(
-                RecordHttpExchangeCommand(
-                    exchangeId = exchangeId,
-                    request = RequestHead(
-                        HttpMethod.fromToken("GET"),
-                        RequestTarget.Absolute(HttpScheme.fromToken("https"), Authority("events.test"), "/stream"),
-                        ApplicationProtocol.fromToken("HTTP/1.1"),
-                        emptyList(),
-                    ),
-                    requestBody = null,
-                    response = ResponseHead(
-                        ApplicationProtocol.fromToken("HTTP/1.1"),
-                        HttpStatus(200),
-                        "OK",
-                        listOf(HeaderField(HeaderName("Content-Type"), "text/event-stream")),
-                    ),
-                    responseBody = TrafficBodyPayload("event: update\ndata: ready\n\n".encodeToByteArray()),
-                    state = ExchangeState.COMPLETED,
-                    startedAtEpochMillis = 10L,
-                    completedAtEpochMillis = 20L,
+            session.recordTestProxyExchange(
+                exchangeId = exchangeId,
+                request = RequestHead(
+                    HttpMethod.fromToken("GET"),
+                    RequestTarget.Absolute(HttpScheme.fromToken("https"), Authority("events.test"), "/stream"),
+                    ApplicationProtocol.fromToken("HTTP/1.1"),
+                    emptyList(),
                 ),
+                response = ResponseHead(
+                    ApplicationProtocol.fromToken("HTTP/1.1"),
+                    HttpStatus(200),
+                    "OK",
+                    listOf(HeaderField(HeaderName("Content-Type"), "text/event-stream")),
+                ),
+                responseBody = "event: update\ndata: ready\n\n".encodeToByteArray(),
+                state = ExchangeState.COMPLETED,
+                startedAtEpochMillis = 10L,
+                completedAtEpochMillis = 20L,
             )
-            session.flush()
             val query = CanonicalTrafficQueryAdapter(session.sessionId, database.canonicalCaptureDao(), bodyStore)
             val annotations = RoomInspectionAnnotationAdapter(database.canonicalCaptureDao())
             SemanticInspectionScheduler(query, annotations, listOf(SseSemanticInspector()))

@@ -1,7 +1,6 @@
 package com.devuloopers.knet.core.http.client
 
 import com.devuloopers.knet.core.http.config.HttpClientConfiguration
-import com.devuloopers.knet.engine.certificate.ssl.KNetTrustManagerProvider
 import io.ktor.client.HttpClient
 import io.ktor.client.HttpClientConfig
 import io.ktor.client.engine.HttpClientEngine
@@ -19,10 +18,11 @@ actual fun getKNetHttpEngine(): HttpClientEngineFactory<*> = CIO
 
 /**
  * JVM implementation creating a CIO [HttpClient] configured with proxy routing and
- * unified SSL trust manager from [KNetTrustManagerProvider].
+ * explicit platform SSL policy.
  */
 actual fun createPlatformHttpClient(
     targetProxyPort: Int?,
+    localProxyTlsTrust: LocalProxyTlsTrust?,
     configuration: HttpClientConfiguration,
     customEngine: HttpClientEngine?,
     block: HttpClientConfig<*>.() -> Unit
@@ -37,8 +37,11 @@ actual fun createPlatformHttpClient(
                 proxy = ProxyBuilder.http(Url("http://127.0.0.1:$targetProxyPort"))
             }
             https {
-                trustManager = KNetTrustManagerProvider.getX509TrustManager(
-                    verifySsl = configuration.verifySsl
+                trustManager = PlatformHttpTrustManager.get(
+                    verifySsl = configuration.verifySsl,
+                    localProxyTlsTrust = localProxyTlsTrust.takeIf {
+                        targetProxyPort?.let { port -> port > 0 } == true
+                    },
                 )
             }
         }
