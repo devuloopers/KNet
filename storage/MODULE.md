@@ -12,13 +12,15 @@ Owns KNet's desktop persistence implementation and schema.
 - Durable metadata records and references to externally stored bodies.
 - Canonical session/connection/exchange/body/message/annotation/gap/deletion-outbox records and indexed
   single-session or global keyset queries.
+- Single-exchange detail and bounded multi-exchange `Flow` queries for semantic annotations, allowing list
+  presentation to react to post-capture inspection without reading message bodies.
 - Bounded exchange batches used by import and the 100,000-row indexed-query regression fixture.
 - Aggregate and oldest-first projections used by bounded global count/byte retention and startup lifecycle/body recovery.
 - Non-null opaque body storage keys and indexed ownership queries used for finalized-orphan reconciliation.
 - Durable corrupt/missing body states used by bounded integrity verification and fail-safe presentation.
 - Registered-device identities, non-plaintext trusted credential material, and one-shot pairing invitations.
 - Breakpoint rule rows containing transport filters plus a generic normalized protocol ID and opaque
-  extension-owned criteria payload; storage never decodes protocol semantics.
+  extension-owned criteria payload and deterministic priority; storage never decodes protocol semantics.
 - Complete API Studio authored-request rows, including JSON-encoded query/header/cookie/body-field state.
 
 ## Does not own
@@ -42,3 +44,4 @@ structured form fields. Draft promotion uses one DAO transaction so the saved ro
 be observed partially.
 Schema v18 adds request-title ownership. Existing rows default to `USER_DEFINED`, preventing generated naming
 from changing any request title created before this capability.
+Breakpoint queries return priority then ID order so persistence and live rule evaluation share one stable order.

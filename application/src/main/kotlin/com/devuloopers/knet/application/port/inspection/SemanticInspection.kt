@@ -54,6 +54,14 @@ public interface InspectionAnnotationPort {
     public suspend fun put(sessionId: CaptureSessionId, annotation: InspectionAnnotation)
     public suspend fun get(exchangeId: ExchangeId): List<InspectionAnnotation>
     public fun observe(exchangeId: ExchangeId): Flow<List<InspectionAnnotation>>
+
+    /**
+     * Observes annotations for a bounded set of exchanges as one storage query.
+     *
+     * Exchanges without annotations are omitted from the returned map. Callers must keep [exchangeIds]
+     * bounded to their visible or retained presentation window.
+     */
+    public fun observe(exchangeIds: Set<ExchangeId>): Flow<Map<ExchangeId, List<InspectionAnnotation>>>
 }
 
 /** Independent scheduler budgets; no value can make forwarding wait for inspection. */
@@ -179,6 +187,11 @@ public class ObserveInspectionAnnotationsUseCase(
     private val annotations: InspectionAnnotationPort,
 ) {
     public fun execute(exchangeId: ExchangeId): Flow<List<InspectionAnnotation>> = annotations.observe(exchangeId)
+
+    /** Observes semantic annotations for one bounded Traffic row window. */
+    public fun execute(
+        exchangeIds: Set<ExchangeId>,
+    ): Flow<Map<ExchangeId, List<InspectionAnnotation>>> = annotations.observe(exchangeIds)
 }
 
 /** Capability claim maturity displayed by KNet. */

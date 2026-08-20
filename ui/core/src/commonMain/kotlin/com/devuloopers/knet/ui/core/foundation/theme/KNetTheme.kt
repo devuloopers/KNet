@@ -9,6 +9,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.ReadOnlyComposable
+import androidx.compose.runtime.remember
 import com.devuloopers.knet.ui.core.foundation.color.Colors
 import com.devuloopers.knet.ui.core.foundation.color.KNetDarkColors
 import com.devuloopers.knet.ui.core.foundation.color.KNetLightColors
@@ -16,6 +17,8 @@ import com.devuloopers.knet.ui.core.foundation.dimensions.Dimensions
 import com.devuloopers.knet.ui.core.foundation.dimensions.KNetDimensions
 import com.devuloopers.knet.ui.core.foundation.elevation.Elevation
 import com.devuloopers.knet.ui.core.foundation.elevation.KNetElevation
+import com.devuloopers.knet.ui.core.foundation.interaction.DropdownExpansionCoordinator
+import com.devuloopers.knet.ui.core.foundation.interaction.LocalDropdownExpansionCoordinator
 import com.devuloopers.knet.ui.core.foundation.motion.KNetMotion
 import com.devuloopers.knet.ui.core.foundation.motion.Motion
 import com.devuloopers.knet.ui.core.foundation.shapes.KNetShapes
@@ -57,6 +60,7 @@ fun KNetTheme(
         ThemeMode.System -> isSystemInDarkTheme()
     }
     val resolvedColors = colors ?: if (useDarkPalette) KNetDarkColors else KNetLightColors
+    val dropdownExpansionCoordinator = remember { DropdownExpansionCoordinator() }
     val materialColorScheme = if (useDarkPalette) {
         darkColorScheme(
             primary = resolvedColors.accent,
@@ -112,7 +116,8 @@ fun KNetTheme(
         LocalShapes provides shapes,
         LocalDimensions provides dimensions,
         LocalElevation provides elevation,
-        LocalMotion provides motion
+        LocalMotion provides motion,
+        LocalDropdownExpansionCoordinator provides dropdownExpansionCoordinator,
     ) {
         MaterialTheme(
             colorScheme = materialColorScheme,

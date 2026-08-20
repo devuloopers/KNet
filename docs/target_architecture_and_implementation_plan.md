@@ -1005,13 +1005,13 @@ compiled immutable rule snapshot
 
 Canonical exchange admission precedes the optional forwarding gate. The connection capture side output publishes request metadata and returns a one-shot exchange handle; a matching breakpoint then suspends forwarding, and the proxy handler consumes that same handle after resume. It never starts a second capture. Desktop Traffic joins the bounded pending record to the capture row by `ExchangeId`, temporarily forces `In Progress`, and applies a typed pause marker without changing `HttpRequestSnapshot` or `HttpResponseSnapshot`. The shell reveals the drawer only after that paused row projection exists, preserving deterministic row-first/drawer-second presentation even while Room publication converges through its asynchronous writer.
 
-HTTP/1 streaming versus bounded full-message aggregation is a per-connection pipeline decision. Desktop
-runtime composition observes the reduced request/response requirements exposed by `BreakpointGate`. When
-that pipeline shape changes because rules are added, restored, enabled, disabled, or globally toggled, it
-closes existing child connections while leaving the proxy listener and canonical capture session running.
-Clients reconnect through one internally consistent pipeline; ordinary traffic returns to streaming when no
-enabled breakpoint requires aggregation. The proxy engine exposes only the neutral child-connection refresh
-operation and does not import rule persistence, application coordination, or UI state.
+HTTP/1 forwarding remains streaming for every connection. A protocol-neutral adapter consults the current
+immutable `BreakpointGate` transport prefilter for each request and selectively aggregates only request or
+response candidates that may require full-body editing. If a selected message crosses the editable bound, the
+adapter replays the retained head/chunks in order and continues streaming. Adding, restoring, enabling,
+disabling, or globally toggling rules therefore does not mutate established pipelines or disconnect clients.
+The proxy engine owns only the generic selective-aggregation mechanism and does not import rule persistence,
+application coordination, protocol matchers, or UI state.
 
 Mutation supports explicit modes:
 
@@ -1868,7 +1868,7 @@ Work inside current modules before structural migration.
 **MODIFY**
 
 - `KNetProxyServer`: loopback default, explicit LAN mode, atomic start rollback, awaited stop.
-- `KNetProxyHandler`: robust authority parser, strict upstream TLS default, correct HTTP/1 ordering or temporary one-active-request serialization.
+- `KNetStreamingProxyHandler`: robust authority parser, strict upstream TLS default, and bounded one-active-request HTTP/1 ordering.
 - `InterceptCoordinator`: exact reference-count ownership across resume/modify/drop/timeout/disconnect/removal.
 - `KNetInterceptorHandler`/outbound capture: separate request and response breakpoint phase; always terminally capture or drop once.
 - `ProxyEngineRepositoryImpl`/DAO: monotonic update or single ordered compatibility writer; no late pending overwrite.

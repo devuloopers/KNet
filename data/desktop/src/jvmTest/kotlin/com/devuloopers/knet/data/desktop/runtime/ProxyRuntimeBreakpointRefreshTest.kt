@@ -23,7 +23,6 @@ import com.devuloopers.knet.traffic.model.http.ResponseHead
 import java.net.InetSocketAddress
 import java.net.ServerSocket
 import java.net.Socket
-import java.net.SocketException
 import kotlin.concurrent.thread
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -38,7 +37,7 @@ import kotlinx.coroutines.withTimeout
 /** End-to-end coverage for breakpoint rules activated after a proxy client is already connected. */
 class ProxyRuntimeBreakpointRefreshTest {
 
-    /** Verifies a newly enabled request rule replaces a pre-existing streaming client pipeline. */
+    /** Verifies a newly enabled request rule applies to an existing streaming client pipeline. */
     @Test
     fun `request breakpoint added after client connects pauses the next request`() {
         verifyDynamicRuleActivation(BreakpointPhase.REQUEST)
@@ -70,9 +69,9 @@ class ProxyRuntimeBreakpointRefreshTest {
         )
 
         try {
-            Socket().use { staleClient ->
-                staleClient.soTimeout = TEST_TIMEOUT_MILLIS
-                staleClient.connect(InetSocketAddress(KNetProxyServer.DEFAULT_BIND_HOST, proxyPort))
+            Socket().use { activeClient ->
+                activeClient.soTimeout = TEST_TIMEOUT_MILLIS
+                activeClient.connect(InetSocketAddress(KNetProxyServer.DEFAULT_BIND_HOST, proxyPort))
                 withTimeout(TEST_TIMEOUT_MILLIS.toLong()) { firstConnectionAccepted.await() }
 
                 coordinator.replaceRules(
@@ -85,12 +84,6 @@ class ProxyRuntimeBreakpointRefreshTest {
                     )
                 )
 
-                assertTrue(staleClient.awaitRemoteClose(), "The stale streaming connection must be refreshed.")
-            }
-
-            Socket().use { activeClient ->
-                activeClient.soTimeout = TEST_TIMEOUT_MILLIS
-                activeClient.connect(InetSocketAddress(KNetProxyServer.DEFAULT_BIND_HOST, proxyPort))
                 activeClient.getOutputStream().apply {
                     write(
                         (
@@ -128,13 +121,6 @@ class ProxyRuntimeBreakpointRefreshTest {
         coordinator.pendingBreakpoints.first { events ->
             events.any { event -> event.candidate.phase == phase }
         }.first { event -> event.candidate.phase == phase }
-    }
-
-    /** Returns true when the proxy closes this connection to apply a new pipeline shape. */
-    private fun Socket.awaitRemoteClose(): Boolean = try {
-        getInputStream().read() == -1
-    } catch (_: SocketException) {
-        true
     }
 
     /** Reserves and releases a loopback listener port. */

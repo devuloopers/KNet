@@ -2,6 +2,7 @@ package com.devuloopers.knet.application.port.breakpoint
 
 import com.devuloopers.knet.domain.rules.model.BreakpointProtocolId
 import com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria
+import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 
 /** Stable identifier for one editable field contributed by a protocol extension. */
 @JvmInline
@@ -98,6 +99,23 @@ public data class ProtocolCriteriaValue(
 )
 
 /**
+ * Bounded canonical request offered to protocol extensions when creating a rule from captured traffic.
+ *
+ * The application layer owns body loading and supplies at most its configured preview limit. Extensions
+ * must treat an incomplete body as a detection hint only and must not retain the request or body after
+ * returning from the suggestion call.
+ *
+ * @property request Canonical captured request metadata.
+ * @property requestBody Defensive-copy body preview, or null when the request has no readable body.
+ * @property requestBodyComplete Whether [requestBody] contains the complete captured request body.
+ */
+public data class BreakpointRuleSuggestionInput(
+    public val request: HttpRequestSnapshot,
+    public val requestBody: BreakpointBody?,
+    public val requestBodyComplete: Boolean,
+)
+
+/**
  * Compact extension-owned semantic result for one exchange.
  *
  * Observations are ephemeral and must not retain request or response bodies. They can be cached by
@@ -136,6 +154,14 @@ public interface BreakpointProtocolExtension {
     public val definition: BreakpointProtocolDefinition
 
     /**
+     * Relative ordering used only when several extensions can suggest a rule for the same request.
+     *
+     * Higher values are evaluated first. Runtime breakpoint matching does not use this priority.
+     */
+    public val suggestionPriority: Int
+        get() = 0
+
+    /**
      * Validates and compiles persisted [criteria].
      *
      * @return a matcher when the payload is valid for this extension, or null to fail closed.
@@ -158,6 +184,17 @@ public interface BreakpointProtocolExtension {
      * @return encoded criteria, or null when required or selected values are invalid.
      */
     public fun createCriteria(values: List<ProtocolCriteriaValue>): ProtocolMatchCriteria?
+
+    /**
+     * Suggests extension-owned criteria for a rule created from captured traffic.
+     *
+     * Returning null means this extension did not confidently recognize the request. The application
+     * registry validates the returned criteria through [compile] before exposing it to presentation.
+     *
+     * @param input Bounded canonical request and optional body preview.
+     * @return Persistable protocol criteria, or null when the request is not recognized.
+     */
+    public fun suggestCriteria(input: BreakpointRuleSuggestionInput): ProtocolMatchCriteria? = null
 }
 
 /**
@@ -170,6 +207,7 @@ public class BreakpointProtocolRegistry(
     extensions: List<BreakpointProtocolExtension> = emptyList(),
 ) {
     private val extensionsById: Map<BreakpointProtocolId, BreakpointProtocolExtension>
+    private val suggestionExtensions: List<BreakpointProtocolExtension>
 
     /** Protocol definitions presented to rule-management workflows, with HTTP first. */
     public val definitions: List<BreakpointProtocolDefinition>
@@ -184,6 +222,10 @@ public class BreakpointProtocolRegistry(
         }
         extensionsById = allExtensions.associateBy { it.definition.protocolId }
         definitions = allExtensions.map(BreakpointProtocolExtension::definition)
+        suggestionExtensions = extensions.sortedWith(
+            compareByDescending<BreakpointProtocolExtension> { it.suggestionPriority }
+                .thenBy { it.definition.protocolId.value },
+        )
     }
 
     /** Compiles one persisted criterion, returning null when its extension or payload is invalid. */
@@ -226,6 +268,27 @@ public class BreakpointProtocolRegistry(
         return runCatching { extension.createCriteria(values) }
             .getOrNull()
             ?.takeIf { it.protocolId == protocolId }
+    }
+
+    /**
+     * Returns the highest-priority valid semantic criteria suggested for [input].
+     *
+     * HTTP is intentionally the caller-owned fallback and is not queried here. Invalid extension
+     * output fails closed, allowing the next registered semantic extension to inspect the request.
+     *
+     * @param input Bounded canonical request being converted into a breakpoint rule draft.
+     * @return Validated semantic criteria, or null when no extension recognizes the request.
+     */
+    public fun suggestCriteria(input: BreakpointRuleSuggestionInput): ProtocolMatchCriteria? {
+        suggestionExtensions.forEach { extension ->
+            val criteria = runCatching { extension.suggestCriteria(input) }.getOrNull()
+                ?.takeIf { it.protocolId == extension.definition.protocolId }
+                ?: return@forEach
+            val isValid = runCatching { extension.compile(criteria) }.getOrNull()
+                ?.protocolId == criteria.protocolId
+            if (isValid) return criteria
+        }
+        return null
     }
 }
 

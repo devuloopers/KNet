@@ -28,9 +28,9 @@ import com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult
 import com.devuloopers.knet.domain.clientNetwork.model.OutboundRequestBody
 import com.devuloopers.knet.domain.clientNetwork.usecase.ExecuteClientApiRequestUseCase
 import com.devuloopers.knet.domain.clientNetwork.usecase.FormatResponseBodyUseCase
-import com.devuloopers.knet.domain.apistudio.descriptor.HttpRequestDescriptorStrategy
+import com.devuloopers.knet.domain.request.descriptor.HttpRequestDescriptorStrategy
 import com.devuloopers.knet.domain.apistudio.naming.RequestNameOrigin
-import com.devuloopers.knet.domain.apistudio.usecase.DescribeRequestUseCase
+import com.devuloopers.knet.domain.request.usecase.DescribeRequestUseCase
 import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
 import com.devuloopers.knet.domain.collection.model.ApiCollection
 import com.devuloopers.knet.domain.collection.model.CollectionFolder
@@ -196,7 +196,7 @@ class FakeTestBreakpointControl : BreakpointControlPort {
     override val pendingBreakpoints = MutableStateFlow<List<PendingBreakpoint>>(emptyList())
     override val isEnabled = MutableStateFlow(true)
     override fun replaceRules(rules: List<BreakpointRule>) = Unit
-    override fun setEnabled(enabled: Boolean) {
+    override suspend fun setEnabled(enabled: Boolean) {
         isEnabled.value = enabled
     }
     override fun setDecisionTimeoutMillis(timeoutMillis: Long) = Unit

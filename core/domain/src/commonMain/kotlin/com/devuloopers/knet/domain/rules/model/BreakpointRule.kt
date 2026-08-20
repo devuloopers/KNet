@@ -15,11 +15,13 @@ data class BreakpointRule(
     val method: HttpMethod? = null,
     val phase: BreakpointPhase = BreakpointPhase.BOTH,
     val enabled: Boolean = true,
+    val priority: Int = 0,
     val protocolCriteria: ProtocolMatchCriteria = ProtocolMatchCriteria.HttpDefault,
 ) {
     init {
         require(id.isNotBlank()) { "Breakpoint rule ID must not be blank." }
         require(urlPattern.isNotBlank()) { "Breakpoint URL pattern must not be blank." }
+        require(priority >= 0) { "Breakpoint rule priority must not be negative." }
     }
 }
 

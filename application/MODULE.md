@@ -15,11 +15,22 @@ Owns JVM desktop application use cases and UI-neutral ports that coordinate KNet
 - Traffic-clear orchestration that rotates capture ownership before terminal metadata/body deletion without disconnecting proxy clients.
 - A capture-availability boundary that bypasses and releases breakpoints while no Traffic row can
   be created, without changing engine aggregation requirements or closing connections.
-- Application-owned breakpoint coordination with bounded rules, pauses, bytes, decisions, deadlines,
-  and an additive protocol-extension registry.
+- Application-owned breakpoint coordination with deterministic rule priority, bounded rules, pauses,
+  retained transport/edit bytes, headers, phase-specific decisions, deadlines, and an additive
+  protocol-extension registry.
+- Explicit breakpoint body ownership: `Unchanged` forwards retained wire bytes while `Replace`
+  intentionally substitutes even an empty body. Nullable body edits are not used as intent.
+- A current immutable transport prefilter used by optional engine adapters without reconnecting clients
+  or exposing protocol-specific matching to the proxy.
+- Global interception disablement immediately continues existing pauses unchanged and prevents candidates
+  that raced with the toggle from entering the pending queue.
 - UI-neutral protocol criteria field schemas, extension-owned criteria compilation, fail-closed
   matching, and bounded compact request observations correlated to response phases by `ExchangeId`.
-- Asynchronous semantic-inspection scheduling, generic annotation persistence/query, and capability truth.
+- Protocol-aware breakpoint draft preparation from one canonical exchange: semantic extensions receive
+  a bounded request/body input, suggestions are validated in deterministic priority order, volatile query
+  parameters are excluded from the endpoint pattern, and unrecognized traffic falls back to HTTP criteria.
+- Asynchronous semantic-inspection scheduling, generic annotation persistence/query, bounded multi-exchange
+  annotation observation for list presentation, and capability truth.
 - Connectivity provider/mechanism coordination, canonical certificate-management summaries/rules,
   pairing, durable companion-device coordination, read-only stock-phone Wi-Fi lifecycle observation, and
   sandboxed script-execution ports.
@@ -52,7 +63,11 @@ Its ports reuse canonical core/domain values instead of declaring application-lo
 record uses the canonical writer and the UI does not call concrete runtimes or storage.
 Protocol extensions implement the application breakpoint SPI from outer engine modules. The coordinator
 never imports GraphQL, gRPC, WebSocket, SSE, or custom-format implementations and never retains their raw
-request bodies between phases.
+request bodies between phases. Compact request observations are released by terminal response inspection,
+streaming response completion, explicit drop, disconnect, or capture detachment.
+The same registry may ask those extensions for a rule-editor suggestion when a user creates a breakpoint
+from captured traffic. The application loads at most one bounded preview and returns only a canonical rule
+plus generic field values, so neither Traffic nor the breakpoint editor imports protocol implementations.
 Proxy runtime and capture state are intentionally separate: a running listener can be `Capturing` or
 `Paused`, and only full product/configuration lifecycle commands stop the listener.
 Traffic page queries use optional session scope, typed method/status/scheme/application-protocol criteria,

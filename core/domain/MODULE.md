@@ -11,8 +11,8 @@ Holds non-traffic feature business models, repository contracts, and use cases u
 - The complete authored API Studio request document, including ordered query/header/cookie rows with enabled
   flags, typed body and raw-format values, structured form fields, authentication, scripts, and generated-versus-
   user-defined request-name ownership.
-- The ordered request-descriptor contribution contract, HTTP path/host fallback, semantic kind/badge metadata,
-  and stable descriptor use case.
+- The ordered cross-feature request-descriptor contribution contract, HTTP path/host fallback, semantic
+  kind/badge metadata, bounded immutable descriptor body, and stable resolver use case under `domain.request`.
 - Feature values that are independent from canonical captured traffic.
 - Collection and outbound-execution contracts consume the canonical `:core:traffic` `HttpMethod`; they do not define another method enum.
 - Breakpoint rules consume that same `HttpMethod` plus one `BreakpointPhase`; application,
@@ -20,6 +20,8 @@ Holds non-traffic feature business models, repository contracts, and use cases u
 - Breakpoint rules carry an open typed protocol ID plus an opaque extension-owned criteria payload.
   `BreakpointTransportMatcher` compiles only phase, method, and URL; no protocol-specific hierarchy
   or matcher branch belongs in this module.
+- Authored breakpoint rules carry a persisted non-negative priority; lower values are evaluated first
+  and rule identity is the deterministic tie breaker.
 
 ## Does not own
 
@@ -40,10 +42,12 @@ Outbound execution uses `OutboundRequestBody` and `ExecutionResult`; transport t
 instead of copying its fields.
 `SavedApiRequest` is the persistence and execution source of truth. Storage strings and presentation body
 selectors are translated only at their respective module boundaries; the domain body kind is `RequestBodyType`.
-API Studio session/request titles and sidebar protocol badges are resolved together from that same canonical
-document. Protocol modules contribute optional descriptor strategies; collection names remain user-controlled
-and outside this derived-metadata pipeline. The request kind identifier is open so future protocols do not modify
-the stable core contract, and the actual HTTP method remains available independently as transport metadata.
+API Studio session/request titles, Traffic method labels, and live-interception queue labels resolve through the
+same request-descriptor pipeline. Authored requests adapt their canonical document; captured and pending requests
+provide canonical HTTP metadata, an optional bounded body, and an optional semantic kind hint. Protocol modules
+contribute priority-ordered strategies; collection names remain user-controlled and outside this metadata
+pipeline. The request kind identifier is open so future protocols do not modify the stable core contract, and
+the actual HTTP method remains independently available as transport metadata.
 Shared body decoding enforces an explicit decoded-output ceiling for identity, gzip, deflate, Brotli, and
 Zstandard content. Callers receive a typed output-limit result rather than allowing compressed payloads to
 expand without a memory bound.

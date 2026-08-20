@@ -5,8 +5,6 @@ import com.devuloopers.knet.application.usecase.apistudio.ExecuteApiStudioReques
 import com.devuloopers.knet.core.http.client.KNetApiClient
 import com.devuloopers.knet.data.desktop.apistudio.repository.CollectionsRepositoryImpl
 import com.devuloopers.knet.data.desktop.script.DesktopScriptExecutionAdapter
-import com.devuloopers.knet.domain.apistudio.descriptor.HttpRequestDescriptorStrategy
-import com.devuloopers.knet.domain.apistudio.usecase.DescribeRequestUseCase
 import com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCase
 import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor
 import com.devuloopers.knet.domain.clientNetwork.usecase.ExecuteClientApiRequestUseCase
@@ -23,7 +21,6 @@ import com.devuloopers.knet.domain.collection.usecase.RenameCollectionUseCase
 import com.devuloopers.knet.domain.collection.usecase.SaveRequestToCollectionUseCase
 import com.devuloopers.knet.domain.collection.usecase.SaveUnsavedRequestUseCase
 import com.devuloopers.knet.domain.collection.usecase.UpdateRequestInCollectionUseCase
-import com.devuloopers.knet.engine.formatter.descriptor.GraphQlRequestDescriptorStrategy
 import com.devuloopers.knet.storage.database.KNetDatabase
 import com.devuloopers.knet.ui.desktop.apistudio.usecase.AutoSaveApiSessionUseCase
 import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.ApiStudioViewModel
@@ -46,16 +43,6 @@ internal val apiStudioBindings: Module = module {
     factory { FormatResponseBodyUseCase() }
     factory { ExecuteApiStudioRequestUseCase(get(), get(), get(), get(), Dispatchers.IO) }
     factory { ImportRequestToStudioUseCase() }
-    factory { GraphQlRequestDescriptorStrategy() }
-    factory { HttpRequestDescriptorStrategy() }
-    factory {
-        DescribeRequestUseCase(
-            strategies = listOf(
-                get<GraphQlRequestDescriptorStrategy>(),
-                get<HttpRequestDescriptorStrategy>()
-            )
-        )
-    }
     factory { ObserveCollectionsUseCase(get()) }
     factory { ObserveUnsavedRequestsUseCase(get()) }
     factory { SaveUnsavedRequestUseCase(get()) }

@@ -13,6 +13,8 @@ import com.devuloopers.knet.ui.core.components.dropdown.dropdownPopupProperties
 import com.devuloopers.knet.ui.core.components.dropdown.resolvedDropdownPopupWidth
 import com.devuloopers.knet.ui.core.components.dropdown.shouldComposeDropdownPopup
 import com.devuloopers.knet.ui.core.components.input.isOverflowTextPopupRequired
+import com.devuloopers.knet.ui.core.components.scrollbar.shouldShowScrollbar
+import com.devuloopers.knet.ui.core.foundation.interaction.DropdownExpansionCoordinator
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -68,9 +70,58 @@ class ComponentTest {
     }
 
     @Test
-    fun dropdownPopupFocusPolicyMatchesItsAnchorType() {
-        assertTrue(dropdownPopupProperties(focusable = true).focusable)
-        assertFalse(dropdownPopupProperties(focusable = false).focusable)
+    fun dropdownPopupDoesNotStealFocusFromTheNextAnchor() {
+        assertFalse(dropdownPopupProperties().focusable)
+    }
+
+    @Test
+    fun dropdownExpansionOwnershipHandsOffInOneOperation() {
+        val coordinator = DropdownExpansionCoordinator()
+        val firstOwner = Any()
+        val secondOwner = Any()
+        var firstCloseCount = 0
+        var secondCloseCount = 0
+
+        coordinator.open(firstOwner) { firstCloseCount++ }
+        assertTrue(coordinator.ownsExpansion(firstOwner))
+
+        assertTrue(coordinator.toggle(secondOwner) { secondCloseCount++ })
+        assertEquals(1, firstCloseCount)
+        assertTrue(coordinator.ownsExpansion(secondOwner))
+
+        coordinator.release(firstOwner)
+        assertTrue(coordinator.ownsExpansion(secondOwner))
+
+        assertFalse(coordinator.toggle(secondOwner) { secondCloseCount++ })
+        assertEquals(1, secondCloseCount)
+        assertFalse(coordinator.ownsExpansion(secondOwner))
+    }
+
+    @Test
+    fun dismissedDropdownHeaderReleaseDoesNotReopenTheSameOwner() {
+        val coordinator = DropdownExpansionCoordinator()
+        val owner = Any()
+        var closeCount = 0
+
+        coordinator.open(owner) { closeCount++ }
+        coordinator.dismissFromPopup(owner)
+
+        assertFalse(coordinator.toggle(owner) { closeCount++ })
+        assertEquals(1, closeCount)
+        assertFalse(coordinator.ownsExpansion(owner))
+    }
+
+    @Test
+    fun dismissedDropdownStillHandsOffImmediatelyToAnotherOwner() {
+        val coordinator = DropdownExpansionCoordinator()
+        val firstOwner = Any()
+        val secondOwner = Any()
+
+        coordinator.open(firstOwner) {}
+        coordinator.dismissFromPopup(firstOwner)
+
+        assertTrue(coordinator.toggle(secondOwner) {})
+        assertTrue(coordinator.ownsExpansion(secondOwner))
     }
 
     @Test
@@ -78,6 +129,15 @@ class ComponentTest {
         assertEquals(300, resolvedDropdownPopupWidth(180, 300, 0, 500))
         assertEquals(240, resolvedDropdownPopupWidth(180, 300, 0, 240))
         assertEquals(180, resolvedDropdownPopupWidth(180, 120, 0, 500))
+    }
+
+    @Test
+    fun scrollbarAppearsOnlyForMeasuredOverflow() {
+        assertFalse(shouldShowScrollbar(maximumScrollOffset = 0))
+        assertTrue(shouldShowScrollbar(maximumScrollOffset = 1))
+        assertFalse(shouldShowScrollbar(canScrollBackward = false, canScrollForward = false))
+        assertTrue(shouldShowScrollbar(canScrollBackward = true, canScrollForward = false))
+        assertTrue(shouldShowScrollbar(canScrollBackward = false, canScrollForward = true))
     }
 
     @Test

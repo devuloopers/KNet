@@ -23,8 +23,10 @@ import com.devuloopers.knet.application.port.inspection.InspectionAnnotationPort
 import com.devuloopers.knet.application.port.inspection.ObserveInspectionAnnotationsUseCase
 import com.devuloopers.knet.application.port.breakpoint.BreakpointControlPort
 import com.devuloopers.knet.application.port.breakpoint.BreakpointDecision
+import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolRegistry
 import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
 import com.devuloopers.knet.application.usecase.breakpoint.ObservePendingBreakpointsUseCase
+import com.devuloopers.knet.application.usecase.breakpoint.PrepareBreakpointRuleDraftUseCase
 import com.devuloopers.knet.application.usecase.traffic.ClearTrafficHistoryUseCase
 import com.devuloopers.knet.application.usecase.traffic.LoadTrafficExchangeDetailsUseCase
 import com.devuloopers.knet.application.usecase.traffic.ObserveLatestTrafficSessionUseCase
@@ -57,6 +59,9 @@ import com.devuloopers.knet.traffic.id.CaptureSessionId
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.HttpExchangeSnapshot
 import com.devuloopers.knet.traffic.inspection.InspectionAnnotation
+import com.devuloopers.knet.domain.request.descriptor.HttpRequestDescriptorStrategy
+import com.devuloopers.knet.domain.request.usecase.DescribeRequestUseCase
+import com.devuloopers.knet.engine.formatter.descriptor.GraphQlRequestDescriptorStrategy
 
 object FakeTrafficViewModelFactory {
 
@@ -67,6 +72,7 @@ object FakeTrafficViewModelFactory {
         customSessionCatalogPort: TrafficSessionCatalogPort? = null,
         customProxyRuntime: ProxyRuntimePort? = null,
         customCaptureSessionControl: CaptureSessionControlPort? = null,
+        customInspectionAnnotationPort: InspectionAnnotationPort? = null,
         pendingBreakpointFlow: StateFlow<List<PendingBreakpoint>> = MutableStateFlow(emptyList()),
     ): TrafficViewModel {
         val fakeProxyRuntime = customProxyRuntime ?: object : ProxyRuntimePort {
@@ -131,6 +137,7 @@ object FakeTrafficViewModelFactory {
             override suspend fun toggleRule(ruleId: String, enabled: Boolean) {}
             override suspend fun toggleGlobalInterception(enabled: Boolean) {}
         }
+        val loadTrafficExchangeDetailsUseCase = LoadTrafficExchangeDetailsUseCase(fakeTrafficQueryPort)
 
         return TrafficViewModel(
             observeLatestTrafficSessionUseCase = ObserveLatestTrafficSessionUseCase(
@@ -153,18 +160,28 @@ object FakeTrafficViewModelFactory {
             pauseTrafficCaptureUseCase = PauseTrafficCaptureUseCase(fakeCaptureControl),
             resumeTrafficCaptureUseCase = ResumeTrafficCaptureUseCase(fakeCaptureControl),
             observeTrafficCaptureStateUseCase = ObserveTrafficCaptureStateUseCase(fakeCaptureControl),
-            loadTrafficExchangeDetailsUseCase = LoadTrafficExchangeDetailsUseCase(fakeTrafficQueryPort),
+            loadTrafficExchangeDetailsUseCase = loadTrafficExchangeDetailsUseCase,
             observeLocalIpUseCase = customObserveLocalIpUseCase ?: ObserveLocalIpUseCase(fakeNetworkRepo),
             getWorkspaceLayoutUseCase = GetWorkspaceLayoutUseCase(fakeWidgetRepo),
             prepareCapturedNetworkRequestUseCase = PrepareCapturedNetworkRequestUseCase(
                 PrepareTrafficRequestUseCase(fakeTrafficQueryPort),
             ),
             observeInspectionAnnotationsUseCase = ObserveInspectionAnnotationsUseCase(
-                object : InspectionAnnotationPort {
+                customInspectionAnnotationPort ?: object : InspectionAnnotationPort {
                     override suspend fun put(sessionId: CaptureSessionId, annotation: InspectionAnnotation) = Unit
                     override suspend fun get(exchangeId: ExchangeId): List<InspectionAnnotation> = emptyList()
                     override fun observe(exchangeId: ExchangeId): Flow<List<InspectionAnnotation>> = flowOf(emptyList())
+                    override fun observe(
+                        exchangeIds: Set<ExchangeId>,
+                    ): Flow<Map<ExchangeId, List<InspectionAnnotation>>> = flowOf(emptyMap())
                 },
+            ),
+            describeRequestUseCase = DescribeRequestUseCase(
+                listOf(GraphQlRequestDescriptorStrategy(), HttpRequestDescriptorStrategy()),
+            ),
+            prepareBreakpointRuleDraftUseCase = PrepareBreakpointRuleDraftUseCase(
+                loadTrafficExchangeDetailsUseCase = loadTrafficExchangeDetailsUseCase,
+                protocolRegistry = BreakpointProtocolRegistry(),
             ),
             observeRulesUseCase = ObserveRulesUseCase(fakeRulesRepo),
             observePendingBreakpointsUseCase = ObservePendingBreakpointsUseCase(
@@ -172,7 +189,7 @@ object FakeTrafficViewModelFactory {
                     override val pendingBreakpoints: StateFlow<List<PendingBreakpoint>> = pendingBreakpointFlow
                     override val isEnabled: StateFlow<Boolean> = MutableStateFlow(true)
                     override fun replaceRules(rules: List<BreakpointRule>) = Unit
-                    override fun setEnabled(enabled: Boolean) = Unit
+                    override suspend fun setEnabled(enabled: Boolean) = Unit
                     override fun setDecisionTimeoutMillis(timeoutMillis: Long) = Unit
                     override suspend fun resolve(pendingId: String, decision: BreakpointDecision): Boolean = false
                     override suspend fun dropMatching(url: String, method: String): Int = 0

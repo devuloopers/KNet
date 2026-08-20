@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -34,6 +35,7 @@ import com.devuloopers.knet.ui.desktop.traffic.model.TrafficInterceptionUiState
 import com.devuloopers.knet.ui.core.components.table.KNetCell
 import com.devuloopers.knet.ui.core.components.table.KNetRow
 import com.devuloopers.knet.ui.core.components.table.KNetTableHeader
+import com.devuloopers.knet.ui.core.components.scrollbar.KNetVerticalScrollbar
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.core.foundation.time.KNetDateTime
 import com.devuloopers.knet.ui.desktop.traffic.model.ColumnVisibilityState
@@ -171,6 +173,12 @@ fun TrafficTable(
                         }
                     }
                 }
+                KNetVerticalScrollbar(
+                    lazyListState = listState,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .fillMaxHeight(),
+                )
             }
         }
 
@@ -284,15 +292,18 @@ private fun TableRowItem(
     val isPausedByBreakpoint = item.interception is TrafficInterceptionUiState.Paused
     val isMatchedByBreakpoint = item.interception !is TrafficInterceptionUiState.None
 
-    val displayMethod = item.method
+    val displayMethod = item.displayMethod
 
-    val methodColor = when (displayMethod.uppercase()) {
-        "GQL" -> androidx.compose.ui.graphics.Color(0xFFCBA6F7)
-        "GET" -> themeColors.semantic.success
-        "POST" -> themeColors.semantic.info
-        "OPTIONS" -> themeColors.semantic.warning
-        "WS" -> themeColors.semantic.info
-        else -> themeColors.textSecondary
+    val methodColor = when (item.requestKind) {
+        com.devuloopers.knet.domain.request.descriptor.RequestKindId.GRAPHQL ->
+            androidx.compose.ui.graphics.Color(0xFFCBA6F7)
+
+        else -> when (item.method.uppercase()) {
+            "GET" -> themeColors.semantic.success
+            "POST" -> themeColors.semantic.info
+            "OPTIONS" -> themeColors.semantic.warning
+            else -> themeColors.textSecondary
+        }
     }
 
     val isCompleted = item.formattedTime != "-"

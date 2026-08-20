@@ -19,10 +19,13 @@ public class ResolveBreakpointUseCase(
     private val control: BreakpointControlPort,
 ) {
     public suspend fun resumeRequest(pendingId: String, edit: BreakpointRequestEdit): Boolean =
-        control.resolve(pendingId, BreakpointDecision.Resume(requestEdit = edit))
+        control.resolve(pendingId, BreakpointDecision.ResumeRequest(edit))
 
     public suspend fun resumeResponse(pendingId: String, edit: BreakpointResponseEdit): Boolean =
-        control.resolve(pendingId, BreakpointDecision.Resume(responseEdit = edit))
+        control.resolve(pendingId, BreakpointDecision.ResumeResponse(edit))
+
+    public suspend fun continueUnchanged(pendingId: String): Boolean =
+        control.resolve(pendingId, BreakpointDecision.ContinueUnchanged)
 
     public suspend fun drop(pendingId: String): Boolean =
         control.resolve(pendingId, BreakpointDecision.Drop)

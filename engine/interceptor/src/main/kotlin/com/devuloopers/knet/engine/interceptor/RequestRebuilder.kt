@@ -1,11 +1,11 @@
 package com.devuloopers.knet.engine.interceptor
 
+import com.devuloopers.knet.application.port.breakpoint.BreakpointBodyEdit
 import com.devuloopers.knet.application.port.breakpoint.BreakpointRequestEdit
 import com.devuloopers.knet.traffic.model.http.RequestTarget
 import io.netty.buffer.Unpooled
 import io.netty.handler.codec.http.DefaultFullHttpRequest
 import io.netty.handler.codec.http.FullHttpRequest
-import io.netty.handler.codec.http.HttpHeaderNames
 import io.netty.handler.codec.http.HttpMethod
 
 /**
@@ -13,26 +13,37 @@ import io.netty.handler.codec.http.HttpMethod
  */
 object RequestRebuilder {
 
+    /**
+     * Rebuilds [original] from a validated canonical [edit].
+     *
+     * An unchanged body retains the original buffer and trailers. A replacement copies the
+     * application-owned bytes into a new Netty buffer. Framing is normalized in both cases.
+     *
+     * @return A newly owned full request that the caller must forward or release.
+     */
     fun rebuild(original: FullHttpRequest, edit: BreakpointRequestEdit): FullHttpRequest {
-        val body = edit.body?.copyBytes()
-        val content = if (body != null) {
-            Unpooled.copiedBuffer(body)
-        } else {
-            Unpooled.EMPTY_BUFFER
+        val content = when (val bodyEdit = edit.body) {
+            BreakpointBodyEdit.Unchanged -> original.content().retainedDuplicate()
+            is BreakpointBodyEdit.Replace -> Unpooled.copiedBuffer(bodyEdit.body.copyBytes())
         }
 
         val rebuilt = DefaultFullHttpRequest(
             original.protocolVersion(),
             HttpMethod.valueOf(edit.request.head.method.token),
             relativeTarget(edit.request.head.target),
-            content
+            content,
         )
+        val preserveTrailers = edit.body == BreakpointBodyEdit.Unchanged &&
+            !original.trailingHeaders().isEmpty
 
-        rebuilt.headers().clear()
-        edit.request.head.headers.forEach { header ->
-            rebuilt.headers().add(header.name.value, header.value)
+        rebuilt.headers().replaceWithFullMessageHeaders(
+            headers = edit.request.head.headers,
+            contentLength = content.readableBytes().toLong(),
+            trailerNames = if (preserveTrailers) original.trailingHeaders().names() else emptySet(),
+        )
+        if (preserveTrailers) {
+            rebuilt.trailingHeaders().set(original.trailingHeaders())
         }
-        rebuilt.headers().set(HttpHeaderNames.CONTENT_LENGTH, content.readableBytes())
         return rebuilt
     }
 

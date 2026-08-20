@@ -8,6 +8,7 @@ import com.devuloopers.knet.connectivity.desktop.portal.DedicatedSetupPortal
 import com.devuloopers.knet.connectivity.desktop.wifi.DesktopWifiSharingRuntime
 import com.devuloopers.knet.core.logger.KNetLogger
 import com.devuloopers.knet.data.desktop.inspection.DesktopSemanticInspectionRuntime
+import com.devuloopers.knet.data.desktop.rules.repository.RulesRepositoryImpl
 import com.devuloopers.knet.data.desktop.proxy.repository.DesktopProxyRuntimeAdapter
 import com.devuloopers.knet.domain.config.AppMetadata
 import com.devuloopers.knet.products.desktop.config.DesktopConfiguration
@@ -84,6 +85,13 @@ object DesktopBootstrap {
         ApplicationLifecycle.registerResource(object : ShutdownAware {
             override fun close() {
                 database.close()
+            }
+        })
+
+        val rulesRepository = koin.get<RulesRepositoryImpl>()
+        ApplicationLifecycle.registerResource(object : ShutdownAware {
+            override fun close() {
+                rulesRepository.close()
             }
         })
 

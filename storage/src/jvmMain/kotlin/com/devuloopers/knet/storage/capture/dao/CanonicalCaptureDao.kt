@@ -334,6 +334,13 @@ interface CanonicalCaptureDao {
     )
     fun observeInspectionAnnotations(exchangeId: String): Flow<List<InspectionAnnotationEntity>>
 
+    /** Observes semantic annotations for one bounded set of retained Traffic exchanges. */
+    @Query(
+        "SELECT * FROM inspection_annotations WHERE exchangeId IN (:exchangeIds) " +
+            "ORDER BY exchangeId ASC, inspectorId ASC, version DESC",
+    )
+    fun observeInspectionAnnotations(exchangeIds: List<String>): Flow<List<InspectionAnnotationEntity>>
+
     /** Enqueues one idempotent body deletion operation. */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun enqueueDeletion(operation: DeletionOutboxEntity): Long

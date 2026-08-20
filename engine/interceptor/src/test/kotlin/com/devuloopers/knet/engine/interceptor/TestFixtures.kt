@@ -1,6 +1,7 @@
 package com.devuloopers.knet.engine.interceptor
 
 import com.devuloopers.knet.application.port.breakpoint.BreakpointBody
+import com.devuloopers.knet.application.port.breakpoint.BreakpointBodyEdit
 import com.devuloopers.knet.application.port.breakpoint.BreakpointRequestEdit
 import com.devuloopers.knet.application.port.breakpoint.BreakpointResponseEdit
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
@@ -47,7 +48,10 @@ object TestFixtures {
                     headers = headers.map { (name, value) -> HeaderField(HeaderName(name), value) },
                 ),
             ),
-            body = body?.encodeToByteArray()?.let(::BreakpointBody),
+            body = body?.encodeToByteArray()
+                ?.let(::BreakpointBody)
+                ?.let(BreakpointBodyEdit::Replace)
+                ?: BreakpointBodyEdit.Unchanged,
         )
     }
 
@@ -65,7 +69,10 @@ object TestFixtures {
                     headers = headers.map { (name, value) -> HeaderField(HeaderName(name), value) },
                 ),
             ),
-            body = body?.encodeToByteArray()?.let(::BreakpointBody),
+            body = body?.encodeToByteArray()
+                ?.let(::BreakpointBody)
+                ?.let(BreakpointBodyEdit::Replace)
+                ?: BreakpointBodyEdit.Unchanged,
         )
     }
 

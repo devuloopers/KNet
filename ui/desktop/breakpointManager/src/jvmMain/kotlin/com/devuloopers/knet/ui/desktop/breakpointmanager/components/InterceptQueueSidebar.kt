@@ -23,6 +23,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
+import com.devuloopers.knet.domain.request.descriptor.RequestDescriptor
 import com.devuloopers.knet.traffic.model.absoluteUrl
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
@@ -35,6 +36,7 @@ import com.devuloopers.knet.ui.core.foundation.time.KNetDateTime
  * Displays vertically scrollable queue cards, selection state, individual drop buttons, and a bulk "Drop All" action.
  *
  * @param events The full list of active in-flight suspended transactions.
+ * @param requestDescriptors Protocol-aware presentation keyed by pending event ID.
  * @param selectedEventId The unique ID of the currently focused transaction in the editor.
  * @param onSelectEvent Callback invoked when the user clicks a transaction card to focus it.
  * @param onDropItem Callback invoked when the user clicks the individual drop button on a transaction card.
@@ -44,6 +46,7 @@ import com.devuloopers.knet.ui.core.foundation.time.KNetDateTime
 @Composable
 fun InterceptQueueSidebar(
     events: List<PendingBreakpoint>,
+    requestDescriptors: Map<String, RequestDescriptor>,
     selectedEventId: String?,
     onSelectEvent: (String) -> Unit,
     onDropItem: (String) -> Unit,
@@ -129,6 +132,7 @@ fun InterceptQueueSidebar(
             ) { item ->
                 InterceptQueueItemCard(
                     item = item,
+                    requestDescriptor = requestDescriptors[item.id],
                     isSelected = item.id == selectedEventId,
                     onSelect = { onSelectEvent(item.id) },
                     onDrop = { onDropItem(item.id) },
@@ -145,6 +149,7 @@ fun InterceptQueueSidebar(
 @Composable
 private fun InterceptQueueItemCard(
     item: PendingBreakpoint,
+    requestDescriptor: RequestDescriptor?,
     isSelected: Boolean,
     onSelect: () -> Unit,
     onDrop: () -> Unit,
@@ -226,7 +231,7 @@ private fun InterceptQueueItemCard(
                     }
 
                     Text(
-                        text = item.candidate.request.head.method.token,
+                        text = requestDescriptor?.badgeLabel ?: item.candidate.request.head.method.token,
                         style = typography.codeSmall.copy(
                             color = themeColors.textPrimary,
                             fontWeight = FontWeight.Bold,

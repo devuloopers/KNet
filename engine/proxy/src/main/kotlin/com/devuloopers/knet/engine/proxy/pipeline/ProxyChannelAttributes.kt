@@ -16,6 +16,15 @@ data class PreparedProxyExchange(
 
 /** Cross-handler channel attributes owned by the proxy transport module. */
 object ProxyChannelAttributes {
+    /** CONNECT authority host retained after the request target becomes origin-form. */
+    val HOST: AttributeKey<String> = AttributeKey.valueOf("knet.host")
+
+    /** CONNECT authority port retained for upstream connection establishment. */
+    val PORT: AttributeKey<Int> = AttributeKey.valueOf("knet.port")
+
+    /** Whether this client channel has entered the decrypted TLS pipeline. */
+    val IS_SSL: AttributeKey<Boolean> = AttributeKey.valueOf("knet.ssl")
+
     /** Fresh canonical request context for the request currently crossing the pipeline. */
     val REQUEST_CONTEXT: AttributeKey<ProxyRequestContext> = AttributeKey.valueOf("knet.request")
 

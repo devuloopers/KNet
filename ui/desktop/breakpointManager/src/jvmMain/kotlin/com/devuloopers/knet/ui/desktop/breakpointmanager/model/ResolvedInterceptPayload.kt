@@ -5,10 +5,9 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
 /**
  * Immutable container holding pre-resolved body inspection specifications for a single intercepted transaction.
  *
- * Computed once off-thread by [BreakpointManagerViewModel] via [PayloadInspectionSpec.fromBytes] when a new
- * [com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint] enters the queue.
+ * Computed off-thread only for the active pending breakpoint and discarded when selection changes.
  *
- * Stored in [BreakpointManagerState.resolvedPayloads] keyed by transaction ID so that
+ * Stored as the bounded active entry in [BreakpointManagerState.resolvedPayloads] so that
  * [LiveInterceptDrawer] can look up the result and construct [RequestBodyState] / [ResponseBodyState]
  * via their respective [fromResolved] factories — without calling
  * [com.devuloopers.knet.engine.formatter.registry.BodyFormatterRegistry] at render time.

@@ -200,14 +200,16 @@ class ProxyEngineStreamingCaptureTest {
         val root = Files.createTempDirectory("knet-canonical-callback-").toFile()
         val database = DatabaseFactory.create(root.resolve("traffic.db"))
         val bodyStore = FileBodyStore(root.resolve("bodies"))
+        val breakpointCoordinator = BreakpointCoordinator()
         val runtime = ProxyRuntimeRepository(
             certificateAuthority = CertificateAuthority.generate(),
             certificateCache = CertificateCache(),
+            breakpointGate = breakpointCoordinator,
         )
         val repository = DesktopProxyRuntimeAdapter(
             proxyRuntimeRepository = runtime,
             canonicalCaptureSessionFactory = CanonicalCaptureSessionFactory(database, bodyStore, bodyStore),
-            breakpointCaptureAvailability = BreakpointCoordinator(),
+            breakpointCaptureAvailability = breakpointCoordinator,
         )
         return Fixture(root, database, bodyStore, runtime, repository)
     }

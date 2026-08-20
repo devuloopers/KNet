@@ -1,6 +1,8 @@
 package com.devuloopers.knet.ui.desktop.traffic.model
 
 import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
+import com.devuloopers.knet.domain.request.descriptor.RequestDescriptor
+import com.devuloopers.knet.domain.request.descriptor.RequestKindId
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.traffic.model.ExchangeState
 import com.devuloopers.knet.traffic.model.ExchangeTimings
@@ -44,11 +46,16 @@ sealed interface TrafficInterceptionUiState {
  *
  * @property sequenceNumber One-based visible capture sequence, where the oldest retained row is
  * `1` and the newest retained row has the highest number.
+ * @property method Actual HTTP transport method retained for filters and request behavior.
+ * @property displayMethod Protocol-aware method identity rendered in the table, such as `POST` or `GQL`.
+ * @property requestKind Semantic request kind used for stable presentation styling.
  */
 data class TrafficRowUiState(
     val sequenceNumber: Int,
     val transactionId: String,
     val method: String,
+    val displayMethod: String = method,
+    val requestKind: RequestKindId = RequestKindId.HTTP,
     val scheme: HttpScheme,
     val host: String,
     val path: String,
@@ -72,12 +79,20 @@ data class TrafficRowUiState(
             host.isBlank() -> path
             else -> "${scheme.token}://$host$path"
         }
+
+    /** Returns a copy decorated by the unified semantic request descriptor. */
+    fun withDescriptor(descriptor: RequestDescriptor): TrafficRowUiState = copy(
+        displayMethod = descriptor.badgeLabel,
+        requestKind = descriptor.kind,
+    )
 }
 
 /** Builds an immediate body-free Traffic projection for a suspended canonical exchange. */
-internal fun PendingBreakpoint.toTrafficRowUiState(): TrafficRowUiState {
+internal fun PendingBreakpoint.toTrafficRowUiState(
+    descriptor: RequestDescriptor? = null,
+): TrafficRowUiState {
     val exchange = toTrafficExchangeSnapshot()
-    return exchange.toTrafficRowUiState().copy(
+    val row = exchange.toTrafficRowUiState().copy(
         status = 0,
         statusText = "In Progress",
         formattedTime = "-",
@@ -87,6 +102,7 @@ internal fun PendingBreakpoint.toTrafficRowUiState(): TrafficRowUiState {
             phase = candidate.phase,
         ),
     )
+    return descriptor?.let(row::withDescriptor) ?: row
 }
 
 /** Builds the canonical metadata available while a breakpoint is still suspended. */

@@ -2,6 +2,7 @@ package com.devuloopers.knet.engine.protocol.inspector.graphql
 
 import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolDefinition
 import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolExtension
+import com.devuloopers.knet.application.port.breakpoint.BreakpointRuleSuggestionInput
 import com.devuloopers.knet.application.port.breakpoint.CompiledProtocolCriteria
 import com.devuloopers.knet.application.port.breakpoint.ProtocolCriteriaFieldDefinition
 import com.devuloopers.knet.application.port.breakpoint.ProtocolCriteriaFieldId
@@ -11,6 +12,7 @@ import com.devuloopers.knet.application.port.breakpoint.ProtocolObservation
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.BreakpointProtocolId
 import com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria
+import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.absoluteUrl
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
@@ -53,6 +55,8 @@ class GraphQLBreakpointExtension(
     private val parser: GraphQLDocumentParser = GraphQLDocumentParser(),
     private val json: Json = Json { ignoreUnknownKeys = false },
 ) : BreakpointProtocolExtension {
+    override val suggestionPriority: Int = 100
+
     override val definition: BreakpointProtocolDefinition = BreakpointProtocolDefinition(
         protocolId = GraphQLBreakpointProtocol.id,
         displayName = "GraphQL",
@@ -78,16 +82,41 @@ class GraphQLBreakpointExtension(
         val retained = input.requestObservation as? GraphQLBreakpointObservation
         if (input.candidate.phase == BreakpointPhase.RESPONSE && retained != null) return retained
 
-        val request = input.candidate.request
+        return inspectRequest(
+            request = input.candidate.request,
+            bodyBytes = input.candidate.requestBody?.copyBytes(),
+        )
+    }
+
+    override fun suggestCriteria(input: BreakpointRuleSuggestionInput): ProtocolMatchCriteria? {
+        val observation = inspectRequest(
+            request = input.request,
+            bodyBytes = input.requestBody
+                ?.takeIf { input.requestBodyComplete }
+                ?.copyBytes(),
+        ) ?: return null
+        val operationName = observation.operations.singleOrNull()?.name.orEmpty()
+        return createCriteria(
+            listOf(
+                ProtocolCriteriaValue(
+                    fieldId = GraphQLBreakpointProtocol.operationNameFieldId,
+                    value = operationName,
+                ),
+            ),
+        )
+    }
+
+    private fun inspectRequest(
+        request: HttpRequestSnapshot,
+        bodyBytes: ByteArray?,
+    ): GraphQLBreakpointObservation? {
         val absoluteUrl = request.absoluteUrl()
         val contentType = request.head.headers.firstOrNull {
             it.name.value.equals(CONTENT_TYPE_HEADER, ignoreCase = true)
         }?.value.orEmpty()
         val endpointHint = absoluteUrl.contains(GRAPHQL_PATH_HINT, ignoreCase = true) ||
             contentType.contains(GRAPHQL_MEDIA_HINT, ignoreCase = true)
-        val document = input.candidate.requestBody
-            ?.copyBytes()
-            ?.let(parser::parse)
+        val document = bodyBytes?.let(parser::parse)
         if (document != null) {
             return GraphQLBreakpointObservation(
                 document.operations.map { operation ->
@@ -143,8 +172,7 @@ class GraphQLBreakpointExtension(
             ?: return null
         if (root.keys.any { it !in CRITERIA_FIELDS }) return null
         if ((root[VERSION_FIELD] as? JsonPrimitive)?.intOrNull != CRITERIA_VERSION) return null
-        val operationElement = root[OPERATION_NAME_FIELD]
-        val operationName = when (operationElement) {
+        val operationName = when (val operationElement = root[OPERATION_NAME_FIELD]) {
             null, JsonNull -> null
             else -> (operationElement as? JsonPrimitive)?.contentOrNull
                 ?.trim()

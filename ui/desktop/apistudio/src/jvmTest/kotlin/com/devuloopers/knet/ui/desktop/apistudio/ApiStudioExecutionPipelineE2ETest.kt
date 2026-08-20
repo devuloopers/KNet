@@ -1,7 +1,7 @@
 package com.devuloopers.knet.ui.desktop.apistudio
 
-import com.devuloopers.knet.domain.apistudio.descriptor.HttpRequestDescriptorStrategy
-import com.devuloopers.knet.domain.apistudio.usecase.DescribeRequestUseCase
+import com.devuloopers.knet.domain.request.descriptor.HttpRequestDescriptorStrategy
+import com.devuloopers.knet.domain.request.usecase.DescribeRequestUseCase
 import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor
 import com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult
 import com.devuloopers.knet.domain.clientNetwork.model.OutboundRequestBody

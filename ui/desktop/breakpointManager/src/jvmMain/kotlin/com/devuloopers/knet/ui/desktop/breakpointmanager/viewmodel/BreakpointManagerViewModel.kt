@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.application.port.breakpoint.BreakpointRequestEdit
 import com.devuloopers.knet.application.port.breakpoint.BreakpointResponseEdit
 import com.devuloopers.knet.application.port.breakpoint.ProtocolCriteriaValue
+import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
 import com.devuloopers.knet.application.usecase.breakpoint.ClearPendingBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.ObservePendingBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.ResolveBreakpointUseCase
@@ -13,12 +14,14 @@ import com.devuloopers.knet.domain.rules.model.BreakpointProtocolId
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.rules.usecase.*
+import com.devuloopers.knet.domain.request.descriptor.RequestDescriptorBody
+import com.devuloopers.knet.domain.request.descriptor.RequestKindId
+import com.devuloopers.knet.domain.request.usecase.DescribeRequestUseCase
 import com.devuloopers.knet.traffic.model.http.HttpMethod
 import com.devuloopers.knet.ui.desktop.breakpointmanager.model.BreakpointManagerState
 import com.devuloopers.knet.ui.desktop.breakpointmanager.model.ResolvedInterceptPayload
 import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
 import kotlinx.coroutines.CoroutineDispatcher
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -39,7 +42,8 @@ class BreakpointManagerViewModel(
     private val resolveBreakpointUseCase: ResolveBreakpointUseCase,
     private val clearPendingBreakpointsUseCase: ClearPendingBreakpointsUseCase,
     private val breakpointProtocolRuleUseCase: BreakpointProtocolRuleUseCase,
-    private val ioDispatcher: CoroutineDispatcher = Dispatchers.Default
+    private val describeRequestUseCase: DescribeRequestUseCase,
+    private val ioDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(
@@ -48,11 +52,13 @@ class BreakpointManagerViewModel(
         ),
     )
     val uiState: StateFlow<BreakpointManagerState> = _uiState.asStateFlow()
+    private var requestDescriptorJob: kotlinx.coroutines.Job? = null
 
     init {
         getRulesUseCase()
             .onEach { rules ->
                 _uiState.update { it.copy(rules = rules) }
+                scheduleRequestDescriptors()
             }
             .launchIn(viewModelScope)
 
@@ -62,54 +68,45 @@ class BreakpointManagerViewModel(
             }
             .launchIn(viewModelScope)
 
-        // Reactive stream of active suspended in-flight HTTP connections via domain UseCase.
-        // For each new transaction that has not yet been resolved, payload decoding and format
-        // detection are dispatched off-thread (Dispatchers.Default) via PayloadResolver so
-        // that LiveInterceptDrawer receives pre-computed ResolvedInterceptPayload objects.
+        // Publish the pending queue before decoding. A breakpoint drawer must become actionable
+        // immediately even when a large compressed or structured payload is expensive to inspect.
         observePendingBreakpointsUseCase.execute()
             .onEach { events ->
-                val currentPayloads = _uiState.value.resolvedPayloads
-                val activeIds = events.map { it.id }.toSet()
-
-                // Prune entries for transactions that have left the queue.
-                val prunedPayloads = currentPayloads.filterKeys { it in activeIds }.toMutableMap()
-
-                // Resolve payloads for any new transactions not yet in the cache.
-                val newTransactions = events.filter { it.id !in prunedPayloads }
-                if (newTransactions.isNotEmpty()) {
-                    val freshResolved = withContext(ioDispatcher) {
-                        newTransactions.associate { tx ->
-                            val requestBodySpec = PayloadInspectionSpec.fromBytes(
-                                body = tx.candidate.requestBody?.copyBytes(),
-                                headers = tx.candidate.request.head.headers.map { it.name.value to it.value }
-                            )
-                            val responseBodySpec = tx.candidate.response?.let { response ->
-                                PayloadInspectionSpec.fromBytes(
-                                    body = tx.candidate.responseBody?.copyBytes(),
-                                    headers = response.head.headers.map { it.name.value to it.value }
-                                )
-                            } ?: PayloadInspectionSpec.EMPTY
-                            tx.id to ResolvedInterceptPayload(
-                                transactionId = tx.id,
-                                requestPayloadSpec = requestBodySpec,
-                                responsePayloadSpec = responseBodySpec
-                            )
-                        }
-                    }
-                    prunedPayloads.putAll(freshResolved)
-                }
-
                 _uiState.update { current ->
                     val stillSelected = events.find { it.id == current.activeEvent?.id }
-                    val activeEv = stillSelected ?: events.firstOrNull()
+                    val activeEvent = stillSelected ?: events.firstOrNull()
                     current.copy(
                         activeEvents = events,
-                        activeEvent = activeEv,
-                        resolvedPayloads = prunedPayloads
+                        activeEvent = activeEvent,
+                        resolvedPayloads = current.resolvedPayloads.filterKeys { it == activeEvent?.id },
+                        requestDescriptors = current.requestDescriptors.filterKeys { eventId ->
+                            events.any { it.id == eventId }
+                        },
                     )
                 }
+                scheduleRequestDescriptors()
             }
             .launchIn(viewModelScope)
+
+        // Resolve only the selected payload. mapLatest cancels obsolete work when the user moves
+        // through the queue, while a one-entry cache keeps presentation memory strictly bounded.
+        viewModelScope.launch {
+            uiState
+                .map { state: BreakpointManagerState -> state.activeEvent }
+                .distinctUntilChangedBy { it?.id }
+                .collectLatest { event ->
+                    if (event == null) return@collectLatest
+                    val payload = withContext(ioDispatcher) { resolvePayload(event) }
+                    val eventId = event.id
+                    _uiState.update { current ->
+                        if (current.activeEvent?.id == eventId) {
+                            current.copy(resolvedPayloads = mapOf(eventId to payload))
+                        } else {
+                            current
+                        }
+                    }
+                }
+        }
     }
 
     /**
@@ -121,7 +118,7 @@ class BreakpointManagerViewModel(
         _uiState.update { current ->
             val selected = current.activeEvents.find { it.id == eventId }
             if (selected != null) {
-                current.copy(activeEvent = selected)
+                current.copy(activeEvent = selected, resolvedPayloads = emptyMap())
             } else {
                 current
             }
@@ -149,6 +146,12 @@ class BreakpointManagerViewModel(
         }
     }
 
+    fun forwardUnchanged(transactionId: String) {
+        viewModelScope.launch {
+            resolveBreakpointUseCase.continueUnchanged(transactionId)
+        }
+    }
+
     fun dropEvent(transactionId: String) {
         viewModelScope.launch {
             resolveBreakpointUseCase.drop(transactionId)
@@ -157,7 +160,7 @@ class BreakpointManagerViewModel(
 
     fun disableMatchingRule(ruleId: String) {
         if (ruleId.isNotBlank()) {
-            toggleRuleStatus(ruleId)
+            setRuleEnabled(ruleId, enabled = false)
         }
         val currentEvent = _uiState.value.activeEvent
         if (currentEvent != null) {
@@ -185,9 +188,14 @@ class BreakpointManagerViewModel(
 
     fun toggleRuleStatus(ruleId: String) {
         val targetRule = _uiState.value.rules.find { it.id == ruleId } ?: return
-        val updated = targetRule.copy(enabled = !targetRule.enabled)
+        setRuleEnabled(ruleId, enabled = !targetRule.enabled)
+    }
+
+    private fun setRuleEnabled(ruleId: String, enabled: Boolean) {
+        val targetRule = _uiState.value.rules.find { it.id == ruleId } ?: return
+        val updated = targetRule.copy(enabled = enabled)
         viewModelScope.launch {
-            toggleRuleUseCase(ruleId, updated.enabled)
+            toggleRuleUseCase(ruleId, enabled)
             _uiState.update { state ->
                 state.copy(rules = state.rules.map { if (it.id == ruleId) updated else it })
             }
@@ -244,6 +252,7 @@ class BreakpointManagerViewModel(
             method = method,
             phase = phase,
             enabled = enabled,
+            priority = currentEditing?.priority ?: 0,
             protocolCriteria = protocolCriteria
         )
 
@@ -274,4 +283,72 @@ class BreakpointManagerViewModel(
             }
         }
     }
+
+    private fun resolvePayload(event: com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint):
+        ResolvedInterceptPayload {
+        val requestBodySpec = PayloadInspectionSpec.fromBytes(
+            body = event.candidate.requestBody?.copyBytes(),
+            headers = event.candidate.request.head.headers.map { it.name.value to it.value },
+        )
+        val responseBodySpec = event.candidate.response?.let { response ->
+            PayloadInspectionSpec.fromBytes(
+                body = event.candidate.responseBody?.copyBytes(),
+                headers = response.head.headers.map { it.name.value to it.value },
+            )
+        } ?: PayloadInspectionSpec.EMPTY
+        return ResolvedInterceptPayload(
+            transactionId = event.id,
+            requestPayloadSpec = requestBodySpec,
+            responsePayloadSpec = responseBodySpec,
+        )
+    }
+
+    /** Resolves protocol-aware queue labels off-thread without delaying pending-event publication. */
+    private fun scheduleRequestDescriptors() {
+        requestDescriptorJob?.cancel()
+        val state = _uiState.value
+        val events = state.activeEvents
+        if (events.isEmpty()) {
+            _uiState.update { it.copy(requestDescriptors = emptyMap()) }
+            return
+        }
+        val rulesById = state.rules.associateBy(BreakpointRule::id)
+        requestDescriptorJob = viewModelScope.launch {
+            val descriptors = withContext(ioDispatcher) {
+                events.associate { event ->
+                    val requestBody = event.candidate.requestBody
+                    val retainedBody = requestBody?.let { body ->
+                        RequestDescriptorBody(body.copyBytes(RequestDescriptorBody.MAXIMUM_BYTES))
+                    }
+                    val bodyComplete = when {
+                        requestBody == null -> event.candidate.requestObservedBodyBytes == 0L
+                        requestBody.size > RequestDescriptorBody.MAXIMUM_BYTES -> false
+                        else -> event.candidate.requestObservedBodyBytes == requestBody.size.toLong()
+                    }
+                    val kindHint = rulesById[event.ruleId]
+                        ?.protocolCriteria
+                        ?.protocolId
+                        ?.value
+                        ?.toRequestKindIdOrNull()
+                    event.id to describeRequestUseCase.execute(
+                        request = event.candidate.request,
+                        body = retainedBody,
+                        bodyComplete = bodyComplete,
+                        semanticKindHint = kindHint,
+                    )
+                }
+            }
+            _uiState.update { current ->
+                if (current.activeEvents.map(PendingBreakpoint::id) == events.map(PendingBreakpoint::id)) {
+                    current.copy(requestDescriptors = descriptors)
+                } else {
+                    current
+                }
+            }
+        }
+    }
+
 }
+
+private fun String.toRequestKindIdOrNull(): RequestKindId? =
+    runCatching { RequestKindId(trim().lowercase()) }.getOrNull()

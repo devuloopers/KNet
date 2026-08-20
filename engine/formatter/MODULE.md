@@ -9,7 +9,8 @@ Formats and presents body content into bounded, human-readable or structured rep
 - Content-type-aware body formatters and formatter selection.
 - JSON, HTML, text, image, GraphQL, CBOR, MessagePack, and stream presentation helpers.
 - GraphQL request-descriptor contribution backed by the same envelope and AST parser used for body formatting;
-  it supplies both the operation title and `GQL` semantic badge without replacing the HTTP transport method.
+  it accepts authored, pending, or captured descriptor input and supplies both the operation title and `GQL`
+  semantic badge without replacing the HTTP transport method.
 - JSON transport-shape detection: a valid complete JSON document is resolved first; explicit
   NDJSON/JSONL media types and otherwise independently valid newline records resolve to
   `BodyFormat.JsonStream`.

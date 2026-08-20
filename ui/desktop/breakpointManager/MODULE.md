@@ -12,6 +12,11 @@ Owns breakpoint rule management and live intercepted-request/response presentati
 - Schema-driven protocol selection and standard text/choice criteria fields supplied through the
   application protocol-rule use case; the dialog contains no GraphQL or other engine-specific branch.
 - UI edit state for proposed request/response patches.
+- Immediate pending-event presentation followed by cancellable, off-main preparation of only the selected
+  body; resolved-payload memory is bounded to one active transaction.
+- Off-main protocol-aware queue descriptors resolved from the same shared request pipeline as API Studio and
+  Traffic; the queue retains the HTTP method only as transport truth and renders the semantic badge separately.
+- Explicit unchanged forwarding that avoids rebuilding wire bodies when no metadata/body edit occurred.
 
 ## Does not own
 
@@ -30,3 +35,7 @@ interceptor consume the same values. Complete feature assembly lives in `:produc
 `di/breakpoint`.
 Protocol modules remain outside the UI dependency graph. Adding a registered extension automatically
 adds its protocol option and standard criteria fields to the rule editor.
+The live drawer exposes cohesive immutable state and action parameter objects. It can open as soon as a
+candidate is published, shows preparation state without blocking metadata actions, and never decodes or
+formats payload bytes during Compose rendering. Queue descriptor preparation owns at most a one-mebibyte
+defensive body prefix per active request during resolution and retains only descriptor metadata afterward.

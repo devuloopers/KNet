@@ -22,6 +22,11 @@ import com.devuloopers.knet.domain.rules.usecase.ObserveGlobalInterceptionUseCas
 import com.devuloopers.knet.domain.rules.usecase.SaveRuleUseCase
 import com.devuloopers.knet.domain.rules.usecase.ToggleGlobalInterceptionUseCase
 import com.devuloopers.knet.domain.rules.usecase.ToggleRuleUseCase
+import com.devuloopers.knet.domain.request.descriptor.HttpRequestDescriptorStrategy
+import com.devuloopers.knet.domain.request.descriptor.RequestDescriptorContribution
+import com.devuloopers.knet.domain.request.descriptor.RequestDescriptorStrategy
+import com.devuloopers.knet.domain.request.descriptor.RequestKindId
+import com.devuloopers.knet.domain.request.usecase.DescribeRequestUseCase
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.HttpResponseSnapshot
@@ -40,6 +45,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -86,7 +92,7 @@ private class FakeBreakpointControl : BreakpointControlPort {
     }
 
     override fun replaceRules(rules: List<BreakpointRule>) = Unit
-    override fun setEnabled(enabled: Boolean) {
+    override suspend fun setEnabled(enabled: Boolean) {
         isEnabled.value = enabled
     }
     override fun setDecisionTimeoutMillis(timeoutMillis: Long) = Unit
@@ -117,7 +123,12 @@ class BreakpointManagerViewModelTest {
         Dispatchers.resetMain()
     }
 
-    private fun viewModel(): BreakpointManagerViewModel = BreakpointManagerViewModel(
+    private fun viewModel(
+        ioDispatcher: kotlinx.coroutines.CoroutineDispatcher = UnconfinedTestDispatcher(),
+        describeRequestUseCase: DescribeRequestUseCase = DescribeRequestUseCase(
+            listOf(HttpRequestDescriptorStrategy()),
+        ),
+    ): BreakpointManagerViewModel = BreakpointManagerViewModel(
         getRulesUseCase = GetRulesUseCase(rules),
         observeGlobalInterceptionUseCase = ObserveGlobalInterceptionUseCase(rules),
         observePendingBreakpointsUseCase = ObservePendingBreakpointsUseCase(breakpoints),
@@ -128,7 +139,8 @@ class BreakpointManagerViewModelTest {
         resolveBreakpointUseCase = ResolveBreakpointUseCase(breakpoints),
         clearPendingBreakpointsUseCase = ClearPendingBreakpointsUseCase(breakpoints),
         breakpointProtocolRuleUseCase = BreakpointProtocolRuleUseCase(BreakpointProtocolRegistry()),
-        ioDispatcher = UnconfinedTestDispatcher(),
+        describeRequestUseCase = describeRequestUseCase,
+        ioDispatcher = ioDispatcher,
     )
 
     @Test
@@ -158,25 +170,64 @@ class BreakpointManagerViewModelTest {
     }
 
     @Test
+    fun `pending drawer state publishes before payload preparation completes`() = runTest {
+        val backgroundDispatcher = StandardTestDispatcher(testScheduler)
+        val viewModel = viewModel(backgroundDispatcher)
+        val event = pending("event-slow", BreakpointPhase.REQUEST, "request-body")
+
+        breakpoints.emit(listOf(event))
+
+        assertEquals(event, viewModel.uiState.value.activeEvent)
+        assertTrue(viewModel.uiState.value.resolvedPayloads.isEmpty())
+        testScheduler.advanceUntilIdle()
+        assertEquals(
+            "request-body",
+            viewModel.uiState.value.resolvedPayloads.getValue(event.id).requestPayloadSpec.rawBody,
+        )
+    }
+
+    @Test
+    fun `pending queue uses semantic request descriptor instead of transport verb`() = runTest {
+        val semanticStrategy = RequestDescriptorStrategy { input ->
+            input.absoluteUrl.takeIf { it.contains("graphql") }?.let {
+                RequestDescriptorContribution(RequestKindId.GRAPHQL, "GQL")
+            }
+        }
+        val viewModel = viewModel(
+            describeRequestUseCase = DescribeRequestUseCase(
+                listOf(semanticStrategy, HttpRequestDescriptorStrategy()),
+            ),
+        )
+        val event = pending("semantic", BreakpointPhase.REQUEST)
+
+        breakpoints.emit(listOf(event))
+
+        val descriptor = viewModel.uiState.value.requestDescriptors.getValue(event.id)
+        assertEquals("POST", descriptor.transportMethod.token)
+        assertEquals("GQL", descriptor.badgeLabel)
+        assertEquals(RequestKindId.GRAPHQL, descriptor.kind)
+    }
+
+    @Test
     fun `request and response edits resolve through the application boundary`() = runTest {
         val viewModel = viewModel()
         val requestEvent = pending("request-event", BreakpointPhase.REQUEST)
         breakpoints.emit(listOf(requestEvent))
-        val requestEdit = BreakpointRequestEdit(requestEvent.candidate.request, null)
+        val requestEdit = BreakpointRequestEdit(requestEvent.candidate.request)
 
         viewModel.forwardRequest(requestEvent.id, requestEdit)
 
         assertEquals(requestEvent.id, breakpoints.lastResolution?.first)
-        assertIs<BreakpointDecision.Resume>(breakpoints.lastResolution?.second)
+        assertIs<BreakpointDecision.ResumeRequest>(breakpoints.lastResolution?.second)
 
         val responseEvent = pending("response-event", BreakpointPhase.RESPONSE)
         breakpoints.emit(listOf(responseEvent))
-        val responseEdit = BreakpointResponseEdit(requireNotNull(responseEvent.candidate.response), null)
+        val responseEdit = BreakpointResponseEdit(requireNotNull(responseEvent.candidate.response))
 
         viewModel.forwardResponse(responseEvent.id, responseEdit)
 
         assertEquals(responseEvent.id, breakpoints.lastResolution?.first)
-        assertIs<BreakpointDecision.Resume>(breakpoints.lastResolution?.second)
+        assertIs<BreakpointDecision.ResumeResponse>(breakpoints.lastResolution?.second)
     }
 
     @Test
@@ -196,6 +247,18 @@ class BreakpointManagerViewModelTest {
         viewModel.dropAllEvents()
         assertTrue(viewModel.uiState.value.activeEvents.isEmpty())
         assertNull(viewModel.uiState.value.activeEvent)
+    }
+
+    @Test
+    fun `forward unchanged resolves without constructing an edit`() = runTest {
+        val viewModel = viewModel()
+        val event = pending("unchanged", BreakpointPhase.REQUEST)
+        breakpoints.emit(listOf(event))
+
+        viewModel.forwardUnchanged(event.id)
+
+        assertEquals(event.id, breakpoints.lastResolution?.first)
+        assertIs<BreakpointDecision.ContinueUnchanged>(breakpoints.lastResolution?.second)
     }
 
     private fun pending(

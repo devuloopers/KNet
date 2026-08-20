@@ -1,9 +1,8 @@
 package com.devuloopers.knet.engine.formatter
 
-import com.devuloopers.knet.domain.apistudio.descriptor.RequestKindId
-import com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType
-import com.devuloopers.knet.domain.collection.model.ApiRequestBody
-import com.devuloopers.knet.domain.collection.model.SavedApiRequest
+import com.devuloopers.knet.domain.request.descriptor.RequestKindId
+import com.devuloopers.knet.domain.request.descriptor.RequestDescriptorBody
+import com.devuloopers.knet.domain.request.descriptor.RequestDescriptorInput
 import com.devuloopers.knet.engine.formatter.descriptor.GraphQlRequestDescriptorStrategy
 import com.devuloopers.knet.traffic.model.http.HttpMethod
 import kotlin.test.Test
@@ -44,22 +43,41 @@ class GraphQlRequestDescriptorStrategyTest {
     }
 
     @Test
-    fun describe_returnsNullForOtherBodyTypes() {
-        val request = request("query GetUser { user { id } }").copy(
-            body = ApiRequestBody(
-                content = "query GetUser { user { id } }",
-                type = RequestBodyType.RAW_TEXT
-            )
+    fun describe_returnsNullForOrdinaryHttpJson() {
+        assertNull(
+            strategy.describe(
+                request(
+                    content = """{"message":"ordinary JSON"}""",
+                    url = "https://api.example.com/events",
+                    semanticKindHint = null,
+                ),
+            ),
         )
-
-        assertNull(strategy.describe(request))
     }
 
-    private fun request(content: String): SavedApiRequest = SavedApiRequest(
-        id = "graphql-request",
-        name = "Untitled Request",
-        method = HttpMethod.POST,
-        url = "https://api.example.com/graphql",
-        body = ApiRequestBody(content = content, type = RequestBodyType.GRAPHQL)
+    @Test
+    fun describe_acceptsPersistedSemanticHintForNonstandardEndpoint() {
+        val descriptor = strategy.describe(
+            request(
+                content = "",
+                url = "https://api.example.com/gateway",
+                semanticKindHint = RequestKindId.GRAPHQL,
+            ),
+        )
+
+        assertEquals(RequestKindId.GRAPHQL, descriptor?.kind)
+        assertEquals("GQL", descriptor?.badgeLabel)
+    }
+
+    private fun request(
+        content: String,
+        url: String = "https://api.example.com/graphql",
+        semanticKindHint: RequestKindId? = RequestKindId.GRAPHQL,
+    ): RequestDescriptorInput = RequestDescriptorInput(
+        transportMethod = HttpMethod.POST,
+        absoluteUrl = url,
+        body = RequestDescriptorBody(content.encodeToByteArray()),
+        bodyComplete = true,
+        semanticKindHint = semanticKindHint,
     )
 }

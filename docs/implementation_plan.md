@@ -496,6 +496,10 @@ verification passed `:application:test`, `:engine:proxy:test`, `:engine:intercep
 `:data:desktop:jvmTest`, `:products:desktop:test`, `verifyArchitectureFoundation`, and `git diff --check`
 (149 actionable tasks in the wider gate). The desktop application was not launched.
 
+Superseded on 2026-08-20 by Phase 75: rule changes are now evaluated per message through bounded selective
+aggregation. They no longer close established client connections, and the connection-refresh behavior above is
+retained only as historical migration context.
+
 ## Phase 26: Extensible Protocol Breakpoint Matching [COMPLETED]
 
 Started on 2026-08-19 after the live breakpoint path was found to evaluate only phase, method, and URL while
@@ -1569,3 +1573,144 @@ composition, empty-input no-op behavior, and reverse multiline replacement with 
 restoration. Existing gesture tests continue to cover double-click word and triple-click line range calculation.
 `git diff --check` passed. Gradle verification was intentionally deferred because the user-owned KNet process
 remains active on the build-JAR classpath; the application was not launched, stopped, or restarted.
+
+## Phase 75: Interception Correctness and Scalability Hardening [COMPLETED]
+
+Started on 2026-08-20 after the interception audit found correctness risks in the edit contract, HTTP message
+rebuilding, informational-response correlation, disconnect cleanup, response capture ordering, and eager UI body
+preparation. This phase will make unchanged forwarding explicitly lossless, replace the nullable cross-phase
+resume payload with phase-specific decisions, normalize edited HTTP framing, validate decision phase and edit
+bounds at the application boundary, retain request correlation through provisional responses, and release all
+request observations when a channel terminates.
+
+The breakpoint drawer will publish a pending interception before potentially expensive body decoding and prepare
+only the active payload with bounded retention. Rule evaluation and ordering will remain additive for future
+protocol matchers while avoiding transport/UI coupling. Focused tests will cover the new invariants. The desktop
+application will not be launched.
+
+Completed on 2026-08-20. The application contract now distinguishes unchanged body ownership from explicit
+replacement and exposes phase-specific request/response decisions. It validates phase, body, header count, and
+header bytes before resolving a pending event. Rules use persisted deterministic priority, protocol observations
+have bounded eviction plus terminal cleanup, and provisional responses retain the request correlation needed by
+the final response.
+
+Production forwarding now has one streaming proxy handler. A protocol-neutral selective HTTP aggregator buffers
+only transport candidates; messages crossing the edit limit are replayed and continue streaming instead of
+failing or imposing an all-traffic memory cost. Live rules are read per request, so existing Wi-Fi clients are not
+closed when rule state changes. Edited messages receive deterministic framing, body-forbidden response handling,
+custom reason phrases, and safe trailer preservation. Capture completes after downstream acceptance and releases
+ownership on premature channel failure. Response correlation tracks every forwarded request head, so mixed
+selected/unselected pipelining and provisional responses cannot consume a later exchange's identity. Absolute
+proxy targets and tunneled non-default ports retain the same scheme/authority used by forwarding.
+
+The drawer publishes pending metadata immediately, resolves only the active payload off the Compose thread, and
+retains at most one resolved payload. An untouched Forward action preserves original wire bytes. Module
+responsibility documents were updated. Disabling global interception immediately continues existing pauses
+unchanged and closes the admission race for candidates arriving with the toggle. Focused application, proxy,
+interceptor, desktop-data, and breakpoint UI tests plus desktop-product compilation pass in an isolated build
+directory. The complete `check verifyArchitectureFoundation` gate then passed with 269 actionable tasks. KNet
+was not launched, stopped, or restarted.
+
+## Phase 76: Protocol-Aware Breakpoint Rule Drafts [COMPLETED]
+
+Started on 2026-08-20 after captured GraphQL traffic still opened the breakpoint editor as a generic
+HTTP/REST rule with no operation criterion. This phase adds a bounded, protocol-neutral suggestion input to
+the existing breakpoint extension SPI, lets semantic extensions contribute validated editor criteria in a
+deterministic priority order, and introduces an application use case that prepares one immutable rule draft
+from canonical captured traffic. GraphQL will reuse its existing parser to select GraphQL and prefill a single
+operation name while batched or anonymous requests remain endpoint-scoped. Traffic presentation will pass only
+the resulting generic rule and field values to the existing editor. The desktop application will not be launched.
+
+Completed on 2026-08-20. The breakpoint protocol SPI now accepts one bounded captured-rule suggestion input
+and validates extension output through the same compiled criteria contract used by live matching. Suggestions
+are evaluated by deterministic semantic priority; HTTP remains the safe application fallback. The new
+application use case loads no more than the existing one-mebibyte traffic preview, supports not-yet-durable
+pending candidates under the same bound, removes volatile query/fragment data from the endpoint pattern, and
+returns one canonical rule plus generic editor values.
+
+GraphQL reuses its existing document parser for both live observations and captured-rule suggestions. A single
+named operation preselects GraphQL and fills `Operation Name`; anonymous, batched, body-incomplete, or endpoint-
+hint-only GraphQL remains GraphQL with an empty operation criterion. Traffic performs preparation off the UI
+thread, opens the dialog only when the immutable draft is ready, and passes the values through the desktop
+workspace without importing the GraphQL engine. Focused tests cover different operation names on the identical
+`/graphql` endpoint, batch fallback, semantic suggestion transport defaults, HTTP fallback, and Traffic state
+wiring. Application/protocol checks, Traffic JVM tests, desktop-product compilation, module documentation,
+module boundaries, UI runtime isolation, Kotlin-first source verification, composition ownership, and the
+complete architecture-foundation gate all pass. KNet was not launched, stopped, or restarted.
+
+## Phase 77: Unified Semantic Request Method Presentation [COMPLETED]
+
+Started on 2026-08-20 after the live-interception queue and Traffic method column continued to render the HTTP
+transport verb (`POST`) for GraphQL requests even though API Studio already exposed a semantic `GQL` identity.
+This phase will generalize the existing request-descriptor strategy input so authored, pending, and captured
+requests use one ordered descriptor pipeline. Traffic rows will retain the real HTTP method for filtering and
+transport behavior while rendering a separate semantic method label. Persisted semantic annotation kinds will
+be observed in one bounded batch rather than rereading request bodies for every visible row, and pending
+breakpoints will use bounded body previews plus the matched rule's protocol identity. New protocol formats will
+therefore add a descriptor strategy and semantic inspector/extension without changing either UI renderer. The
+desktop application will not be launched.
+
+Completed on 2026-08-20. The request descriptor contract now lives in the neutral `domain.request` boundary and
+accepts protocol-neutral request metadata, an owned bounded body preview, and an optional open semantic-kind hint.
+API Studio, pending breakpoint cards, and Traffic rows all resolve through the same ordered descriptor strategies.
+The canonical HTTP method remains unchanged for transport behavior and method filters, while `displayMethod` renders
+the semantic badge (`GQL` for GraphQL today). Captured semantic annotations are observed in one bounded Room query,
+and pending breakpoint descriptors are resolved asynchronously so neither list waits for protocol recognition. The
+desktop composition root owns the descriptor multibindings, so another format adds a prioritized strategy and its
+semantic inspector/extension without changing the Traffic table or intercept queue. Domain, formatter, Traffic,
+breakpoint-manager, data-desktop, API Studio, application, product compilation, and all architecture-foundation gates
+pass. KNet was not launched, stopped, or restarted.
+
+## Phase 78: Overflow-Aware Traffic and Dropdown Scrollbars [COMPLETED]
+
+Started on 2026-08-20 to make scroll position and overflow discoverable in the Traffic table and every shared KNet
+dropdown variant. This phase adds one theme-aware vertical scrollbar primitive in `:ui:core`, renders it only when
+the attached scroll state can actually move, and reuses it for single-select, multi-select, searchable dropdowns,
+and the virtualized Traffic table. Scrollbars overlay the trailing edge without changing table columns, popup width,
+or list ownership. The desktop application will not be launched.
+
+Completed on 2026-08-20. `:ui:core` now owns one theme-aware `KNetVerticalScrollbar` with adapters for finite
+`ScrollState` and virtualized `LazyListState` content. Both adapters derive visibility from measured scrollability,
+so no scrollbar is composed when content fits. Single-select, multi-select, and searchable KNet dropdowns reuse the
+primitive at their popup trailing edge, and the Traffic table overlays the same primitive on its existing lazy list.
+Shared UI tests cover the overflow visibility rules; `:ui:core:jvmTest`, `:ui:desktop:traffic:jvmTest`, Traffic
+compilation, module boundaries, module documentation, UI runtime isolation, composition ownership, Kotlin-first
+sources, and the complete architecture-foundation gate pass. KNet was not launched, stopped, or restarted.
+
+## Phase 79: Single-Click Dropdown Handoff [COMPLETED]
+
+Started on 2026-08-20 after focus-owning dropdown popups required one click to dismiss the active menu and a second
+click to open a neighboring dropdown. This phase replaces per-popup pointer ownership with one composition-scoped
+dropdown expansion coordinator. Dropdown popups will retain keyboard and outside-click dismissal without stealing
+focus from another anchor; an anchor click will atomically close the previous owner and open the new owner. The same
+coordinator will cover single-select, multi-select, and searchable KNet dropdowns, enforce one expanded dropdown at a
+time, and preserve one-click closing on the currently active anchor. The desktop application will not be launched.
+
+Completed on 2026-08-20. `KNetTheme` now provides one composition-scoped `DropdownExpansionCoordinator`, and each
+single-select, multi-select, or searchable dropdown owns a disposable expansion token through the shared
+`DropdownExpansionState`. Opening a token atomically closes the previous owner; toggling the active token closes it.
+Dropdown popups are non-focus-stealing, allowing the same native pointer event to reach a neighboring anchor. Popup
+outside dismissal defers only its identity-checked coordinator release until the next frame, preventing stale
+dismissal from closing a newly opened owner while preserving the existing one-click active-anchor close behavior.
+The obsolete focusable popup anchor proxy and its custom layout were removed. Shared UI tests cover ownership
+handoff, active-owner toggle, and stale-release isolation; all dropdown-consuming desktop modules compile,
+`:ui:core:jvmTest`, product compilation, and the complete architecture-foundation gate pass. KNet was not launched,
+stopped, or restarted.
+
+## Phase 80: Active Dropdown Header Click-Through Guard [COMPLETED]
+
+Started on 2026-08-20 after the non-focus-stealing popup correctly enabled one-click handoff but exposed a desktop
+pointer timing edge case on the active header: outside dismissal occurs on press, while the underlying anchor click
+arrives on release, after the one-frame ownership grace period, and reopens the same dropdown. This phase moves the
+guard into `DropdownExpansionCoordinator` as an identity- and monotonic-time-based click-through dismissal marker.
+The next toggle from the dismissed owner will be consumed as the close action, while a different owner can still open
+immediately. All dropdown variants will use coordinator toggling for pointer activation. The desktop application will
+not be launched.
+
+Completed on 2026-08-20. Popup dismissal now records an identity-scoped monotonic marker for 500 ms in the shared
+`DropdownExpansionCoordinator`. The matching owner's next pointer toggle consumes that marker and remains closed;
+a different owner clears the marker and opens immediately. `DropdownExpansionState` no longer relies on a one-frame
+coroutine delay, and searchable arrow activation now uses the same coordinator toggle as the standard and
+multi-select anchors. Regression tests cover same-owner press/release suppression, different-owner immediate handoff,
+active-owner closing, and stale-owner isolation. `:ui:core:jvmTest`, all product UI compilation, product compilation,
+and the complete architecture-foundation gate pass. KNet was not launched, stopped, or restarted.

@@ -63,13 +63,15 @@ class CanonicalCaptureCutoverTest {
         val root = Files.createTempDirectory("knet-canonical-direct-record-").toFile()
         val database = DatabaseFactory.create(root.resolve("traffic.db"))
         val bodyStore = FileBodyStore(root.resolve("bodies"))
+        val breakpointCoordinator = BreakpointCoordinator()
         val repository = DesktopProxyRuntimeAdapter(
             proxyRuntimeRepository = ProxyRuntimeRepository(
                 certificateAuthority = CertificateAuthority.generate(),
                 certificateCache = CertificateCache(),
+                breakpointGate = breakpointCoordinator,
             ),
             canonicalCaptureSessionFactory = CanonicalCaptureSessionFactory(database, bodyStore, bodyStore),
-            breakpointCaptureAvailability = BreakpointCoordinator(),
+            breakpointCaptureAvailability = breakpointCoordinator,
         )
         try {
             val receipt = repository.record(directCommand(DIRECT_EXCHANGE_ID))
@@ -100,13 +102,15 @@ class CanonicalCaptureCutoverTest {
         val root = Files.createTempDirectory("knet-canonical-direct-proxy-handoff-").toFile()
         val database = DatabaseFactory.create(root.resolve("traffic.db"))
         val bodyStore = FileBodyStore(root.resolve("bodies"))
+        val breakpointCoordinator = BreakpointCoordinator()
         val repository = DesktopProxyRuntimeAdapter(
             proxyRuntimeRepository = ProxyRuntimeRepository(
                 certificateAuthority = CertificateAuthority.generate(),
                 certificateCache = CertificateCache(),
+                breakpointGate = breakpointCoordinator,
             ),
             canonicalCaptureSessionFactory = CanonicalCaptureSessionFactory(database, bodyStore, bodyStore),
-            breakpointCaptureAvailability = BreakpointCoordinator(),
+            breakpointCaptureAvailability = breakpointCoordinator,
         )
         try {
             val directReceipt = repository.record(directCommand(DIRECT_HANDOFF_EXCHANGE_ID))
@@ -134,13 +138,15 @@ class CanonicalCaptureCutoverTest {
         val root = Files.createTempDirectory("knet-canonical-rotate-clear-").toFile()
         val database = DatabaseFactory.create(root.resolve("traffic.db"))
         val bodyStore = FileBodyStore(root.resolve("bodies"))
+        val breakpointCoordinator = BreakpointCoordinator()
         val repository = DesktopProxyRuntimeAdapter(
             proxyRuntimeRepository = ProxyRuntimeRepository(
                 certificateAuthority = CertificateAuthority.generate(),
                 certificateCache = CertificateCache(),
+                breakpointGate = breakpointCoordinator,
             ),
             canonicalCaptureSessionFactory = CanonicalCaptureSessionFactory(database, bodyStore, bodyStore),
-            breakpointCaptureAvailability = BreakpointCoordinator(),
+            breakpointCaptureAvailability = breakpointCoordinator,
         )
         val trafficRepository = DesktopTrafficMaintenanceAdapter(
             database = database,
@@ -178,13 +184,15 @@ class CanonicalCaptureCutoverTest {
         val root = Files.createTempDirectory("knet-canonical-pause-resume-").toFile()
         val database = DatabaseFactory.create(root.resolve("traffic.db"))
         val bodyStore = FileBodyStore(root.resolve("bodies"))
+        val breakpointCoordinator = BreakpointCoordinator()
         val repository = DesktopProxyRuntimeAdapter(
             proxyRuntimeRepository = ProxyRuntimeRepository(
                 certificateAuthority = CertificateAuthority.generate(),
                 certificateCache = CertificateCache(),
+                breakpointGate = breakpointCoordinator,
             ),
             canonicalCaptureSessionFactory = CanonicalCaptureSessionFactory(database, bodyStore, bodyStore),
-            breakpointCaptureAvailability = BreakpointCoordinator(),
+            breakpointCaptureAvailability = breakpointCoordinator,
         )
         try {
             val started = assertIs<ProxyStartResult.Running>(repository.start(configuration(availableLoopbackPort())))
@@ -223,14 +231,16 @@ class CanonicalCaptureCutoverTest {
         val root = Files.createTempDirectory("knet-canonical-cutover-").toFile()
         val database = DatabaseFactory.create(root.resolve("traffic.db"))
         val bodyStore = FileBodyStore(root.resolve("bodies"))
+        val breakpointCoordinator = BreakpointCoordinator()
         val runtime = ProxyRuntimeRepository(
             certificateAuthority = CertificateAuthority.generate(),
             certificateCache = CertificateCache(),
+            breakpointGate = breakpointCoordinator,
         )
         val repository = DesktopProxyRuntimeAdapter(
             proxyRuntimeRepository = runtime,
             canonicalCaptureSessionFactory = CanonicalCaptureSessionFactory(database, bodyStore, bodyStore),
-            breakpointCaptureAvailability = BreakpointCoordinator(),
+            breakpointCaptureAvailability = breakpointCoordinator,
         )
         val port = availableLoopbackPort()
 

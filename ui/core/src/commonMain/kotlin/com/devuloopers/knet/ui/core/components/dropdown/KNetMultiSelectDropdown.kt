@@ -9,6 +9,7 @@ import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -34,6 +35,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.checkbox.KNetCheckboxIndicator
+import com.devuloopers.knet.ui.core.components.scrollbar.KNetVerticalScrollbar
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
@@ -64,7 +66,8 @@ fun <T> KNetMultiSelectDropdown(
     itemText: (T) -> String = { it.toString() }
 ) {
     val colors = KNetTheme.colors
-    var expanded by remember { mutableStateOf(false) }
+    val expansionState = rememberDropdownExpansionState()
+    val expanded = expansionState.expanded
     var anchorSizePx by remember { mutableStateOf(IntSize.Zero) }
     val canExpand = enabled && items.isNotEmpty()
 
@@ -80,28 +83,42 @@ fun <T> KNetMultiSelectDropdown(
             size = size,
             textColor = if (canExpand) colors.textSecondary else colors.textMuted,
             fontWeight = FontWeight.Medium,
-            onExpandedChange = { expanded = it }
+            onToggle = { expansionState.toggle() },
+            onOpen = expansionState::open,
+            onClose = expansionState::close,
         )
 
         KNetDropdownPopup(
             expanded = expanded,
-            onDismissRequest = { expanded = false },
+            onDismissRequest = expansionState::dismissFromPopup,
             anchorSizePx = anchorSizePx,
-            focusable = true
         ) {
-            Column(
+            val menuScrollState = rememberScrollState()
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = KNetDropdownDefaults.MaxMenuHeight)
-                    .verticalScroll(rememberScrollState())
             ) {
-                items.forEach { item ->
-                    KNetMultiSelectDropdownItem(
-                        text = itemText(item),
-                        selected = isItemSelected(item),
-                        onToggle = { onItemToggle(item) }
-                    )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = KNetDropdownDefaults.MaxMenuHeight)
+                        .verticalScroll(menuScrollState)
+                ) {
+                    items.forEach { item ->
+                        KNetMultiSelectDropdownItem(
+                            text = itemText(item),
+                            selected = isItemSelected(item),
+                            onToggle = { onItemToggle(item) }
+                        )
+                    }
                 }
+                KNetVerticalScrollbar(
+                    scrollState = menuScrollState,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .fillMaxHeight(),
+                )
             }
         }
     }

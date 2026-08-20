@@ -11,9 +11,12 @@ Adapts desktop engines and storage to existing domain and application-facing rep
   capture pause/resume and active canonical session rotation for clear.
 - The sole production canonical writer/query adapter, streaming proxy capture session, direct-recording session coordination, deletion-outbox reconciler, bounded global retention, and startup recovery.
 - Translation between storage/engine models and feature-facing contracts.
-- Composition-controlled bounded full-message aggregation when an enabled breakpoint requires editing, including connection refresh when the required pipeline shape changes; ordinary traffic remains streaming.
+- Composition-controlled selective request/response aggregation using the current immutable breakpoint
+  prefilter. Rule changes affect the next request on already-connected clients; ordinary and oversized
+  traffic remains streaming.
 - Concrete adapters for certificates and script execution; UI sees only application ports.
-- Post-capture semantic inspection orchestration and annotation persistence.
+- Post-capture semantic inspection orchestration, annotation persistence, and grouped bounded annotation
+  observation for retained Traffic rows.
 - Bounded body-integrity verification in addition to retention/startup recovery.
 - Room-backed registered-device and trusted-pairing persistence behind application ports.
 - Generic breakpoint criteria-envelope persistence. Room stores a normalized protocol ID and opaque
@@ -38,8 +41,8 @@ canonical events directly into the current Room schema. A stable switchable capt
 or Traffic Stop detach stored capture state without closing client transport channels. Detached writers drain
 through one bounded process-owned retirement queue; resume attaches a fresh generation immediately and each
 exchange remains owned by the generation where it began. Breakpoint request/response aggregation requirements
-are observed by the desktop runtime adapter; a shape change closes only active child connections so reconnects
-use the current streaming or full-message pipeline without restarting the proxy listener or capture session.
+are queried per request by the desktop runtime adapter. Adding, disabling, or editing a rule does not mutate
+pipelines, restart the listener, rotate capture, or disconnect active Wi-Fi clients.
 Registered identity and pairing state share the same Room source of truth; open Wi-Fi clients do not persist
 identity or authorization. No old traffic reader or writer remains. All adapter selection and connectivity
 assembly live in `:products:desktop`.

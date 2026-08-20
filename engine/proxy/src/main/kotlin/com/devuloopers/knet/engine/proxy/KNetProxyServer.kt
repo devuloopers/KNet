@@ -2,7 +2,6 @@ package com.devuloopers.knet.engine.proxy
 
 import com.devuloopers.knet.engine.certificate.CertificateAuthority
 import com.devuloopers.knet.engine.certificate.CertificateCache
-import com.devuloopers.knet.engine.proxy.handler.KNetProxyHandler
 import com.devuloopers.knet.engine.proxy.handler.KNetStreamingProxyHandler
 import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureConnectionMetadata
 import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureSink
@@ -12,6 +11,7 @@ import com.devuloopers.knet.traffic.model.IngressContext
 import com.devuloopers.knet.traffic.model.IngressKind
 import com.devuloopers.knet.traffic.model.TrafficEndpoint
 import com.devuloopers.knet.traffic.model.IngressAttributionLookup
+import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import io.netty.bootstrap.ServerBootstrap
 import io.netty.channel.Channel
 import io.netty.channel.ChannelInitializer
@@ -22,7 +22,6 @@ import io.netty.channel.group.DefaultChannelGroup
 import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.SocketChannel
 import io.netty.channel.socket.nio.NioServerSocketChannel
-import io.netty.handler.codec.http.HttpObjectAggregator
 import io.netty.handler.codec.http.HttpServerCodec
 import io.netty.handler.logging.LogLevel
 import io.netty.handler.logging.LoggingHandler
@@ -55,12 +54,8 @@ import io.netty.util.concurrent.ScheduledFuture
  * @property verifyUpstreamTls Whether upstream server certificates must be verified.
  * @property runtimePolicy Enforced connection and timeout limits for this runtime.
  * @property pipelineInitializers Instance-owned pipeline extensions installed by composition.
- * @property requiresFullResponseAggregation Breakpoint capability decision supplied by composition
- * for features that require a bounded [io.netty.handler.codec.http.FullHttpResponse]. Normal
- * traffic must leave this false so upstream responses retain streaming backpressure.
- * @property requiresFullRequestAggregation Breakpoint capability decision supplied by composition
- * for features that require a bounded [io.netty.handler.codec.http.FullHttpRequest]. When false,
- * the HTTP/1 transport streams uploads directly to the origin.
+ * @property requiresFullResponseAggregation Per-request inspection decision supplied by composition.
+ * False keeps that response streaming; true uses overflow-safe bounded aggregation.
  * @property runtimeMetrics Runtime-owned constant-time operational metrics sink.
  */
 class KNetProxyServer(
@@ -75,8 +70,7 @@ class KNetProxyServer(
     private val captureSink: ProxyCaptureSink? = null,
     private val ingressContext: IngressContext = IngressContext(IngressKind.Local),
     private val ingressAttribution: IngressAttributionLookup? = null,
-    private val requiresFullResponseAggregation: () -> Boolean = { false },
-    private val requiresFullRequestAggregation: () -> Boolean = { false },
+    private val requiresFullResponseAggregation: (HttpRequestSnapshot) -> Boolean = { false },
     private val runtimeMetrics: ProxyRuntimeMetrics = ProxyRuntimeMetrics(),
 ) {
 
@@ -172,43 +166,20 @@ class KNetProxyServer(
                             WriteTimeoutHandler(runtimePolicy.writeIdleTimeoutMillis, TimeUnit.MILLISECONDS),
                         )
                         pipeline.addLast(PipelineHandlerNames.HTTP_CODEC, HttpServerCodec())
-                        val aggregateRequest = requiresFullRequestAggregation()
-                        if (aggregateRequest) {
-                            pipeline.addLast(
-                                PipelineHandlerNames.HTTP_AGGREGATOR,
-                                HttpObjectAggregator(PipelineHandlerNames.MAX_CONTENT_LENGTH_BYTES),
-                            )
-                        }
-
                         pipelineInitializers.forEach { it(pipeline) }
 
-                        val proxyHandler = if (aggregateRequest) {
-                            KNetProxyHandler(
-                                ca = ca,
-                                certCache = certCache,
-                                keyManagerProvider = keyManagerProvider,
-                                strictSsl = verifyUpstreamTls,
-                                proxyScope = scope,
-                                runtimePolicy = runtimePolicy,
-                                admissionController = admissionController,
-                                certificateExecutor = cryptoExecutor,
-                                connectionCapture = connectionCapture,
-                                requiresFullResponseAggregation = requiresFullResponseAggregation,
-                            )
-                        } else {
-                            KNetStreamingProxyHandler(
-                                ca = ca,
-                                certCache = certCache,
-                                keyManagerProvider = keyManagerProvider,
-                                strictSsl = verifyUpstreamTls,
-                                proxyScope = scope,
-                                runtimePolicy = runtimePolicy,
-                                admissionController = admissionController,
-                                certificateExecutor = cryptoExecutor,
-                                connectionCapture = connectionCapture,
-                                requiresFullResponseAggregation = requiresFullResponseAggregation,
-                            )
-                        }
+                        val proxyHandler = KNetStreamingProxyHandler(
+                            ca = ca,
+                            certCache = certCache,
+                            keyManagerProvider = keyManagerProvider,
+                            strictSsl = verifyUpstreamTls,
+                            proxyScope = scope,
+                            runtimePolicy = runtimePolicy,
+                            admissionController = admissionController,
+                            certificateExecutor = cryptoExecutor,
+                            connectionCapture = connectionCapture,
+                            requiresFullResponseAggregation = requiresFullResponseAggregation,
+                        )
                         pipeline.addLast(PipelineHandlerNames.PROXY_HANDLER, proxyHandler)
                     }
                 })
@@ -224,8 +195,8 @@ class KNetProxyServer(
     /**
      * Closes all active client channels while keeping the listener available for immediate reconnects.
      *
-     * Connectivity adapters use this boundary after a network transition, and runtime composition
-     * uses it when a per-connection capability such as breakpoint aggregation changes.
+     * Connectivity adapters may use this boundary after a real network transition. Breakpoint rule
+     * changes do not require it because selective decisions are evaluated for each request.
      */
     fun closeActiveConnections() {
         activeChannels.close().syncUninterruptibly()
@@ -248,8 +219,6 @@ class KNetProxyServer(
         serverScope = null
         eventLoopLagTask?.cancel(false)
         eventLoopLagTask = null
-
-
         closeActiveConnections()
         serverChannel?.close()?.syncUninterruptibly()
         serverChannel = null

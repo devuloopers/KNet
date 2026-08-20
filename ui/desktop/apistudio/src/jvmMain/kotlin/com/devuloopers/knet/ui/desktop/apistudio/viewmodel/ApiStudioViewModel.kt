@@ -7,7 +7,7 @@ import com.devuloopers.knet.application.usecase.apistudio.ExecuteApiStudioReques
 import com.devuloopers.knet.application.usecase.breakpoint.DropMatchingBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUseCase
 import com.devuloopers.knet.domain.apistudio.naming.RequestNameOrigin
-import com.devuloopers.knet.domain.apistudio.usecase.DescribeRequestUseCase
+import com.devuloopers.knet.domain.request.usecase.DescribeRequestUseCase
 import com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCase
 import com.devuloopers.knet.domain.collection.model.ApiCollection
 import com.devuloopers.knet.domain.collection.model.CollectionFolder

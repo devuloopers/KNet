@@ -1,11 +1,11 @@
 package com.devuloopers.knet.ui.desktop.apistudio
 
-import com.devuloopers.knet.domain.apistudio.descriptor.HttpRequestDescriptorStrategy
-import com.devuloopers.knet.domain.apistudio.descriptor.RequestDescriptorContribution
-import com.devuloopers.knet.domain.apistudio.descriptor.RequestDescriptorStrategy
-import com.devuloopers.knet.domain.apistudio.descriptor.RequestKindId
+import com.devuloopers.knet.domain.request.descriptor.HttpRequestDescriptorStrategy
+import com.devuloopers.knet.domain.request.descriptor.RequestDescriptorContribution
+import com.devuloopers.knet.domain.request.descriptor.RequestDescriptorStrategy
+import com.devuloopers.knet.domain.request.descriptor.RequestKindId
 import com.devuloopers.knet.domain.apistudio.naming.RequestNameOrigin
-import com.devuloopers.knet.domain.apistudio.usecase.DescribeRequestUseCase
+import com.devuloopers.knet.domain.request.usecase.DescribeRequestUseCase
 import com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType
 import com.devuloopers.knet.domain.collection.model.ApiCollection
 import com.devuloopers.knet.domain.collection.model.ApiRequestBody
@@ -114,7 +114,7 @@ class CollectionsViewModelTest {
             )
         )
         val graphQlStrategy = RequestDescriptorStrategy { request ->
-            if (request.body.type == RequestBodyType.GRAPHQL) {
+            if (request.semanticKindHint == RequestKindId.GRAPHQL) {
                 RequestDescriptorContribution(
                     kind = RequestKindId.GRAPHQL,
                     badgeLabel = "GQL",

@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -33,6 +34,7 @@ import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.BreakpointProtocolId
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.traffic.model.http.HttpMethod
+import com.devuloopers.knet.traffic.model.http.StandardHttpMethod
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
 import com.devuloopers.knet.ui.core.components.dialog.KNetDialog
@@ -119,14 +121,16 @@ fun AddEditBreakpointRuleDialog(
                     style = typography.caption.copy(color = themeColors.textMuted, fontWeight = FontWeight.SemiBold)
                 )
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     protocolDefinitions.forEach { definition ->
                         val isSelected = selectedProtocolId == definition.protocolId
                         Box(
                             modifier = Modifier
-                                .weight(1f)
+                                .widthIn(min = 112.dp, max = 200.dp)
                                 .background(
                                     if (isSelected) themeColors.accent.copy(alpha = 0.2f) else themeColors.surfaceVariant,
                                     RoundedCornerShape(4.dp)
@@ -182,8 +186,10 @@ fun AddEditBreakpointRuleDialog(
                         .horizontalScroll(methodScrollState),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    val availableMethods: List<HttpMethod?> =
-                        listOf(null, HttpMethod.GET, HttpMethod.POST, HttpMethod.PUT, HttpMethod.DELETE, HttpMethod.PATCH)
+                    val availableMethods: List<HttpMethod?> = listOf(null) +
+                        StandardHttpMethod.entries
+                            .filterNot { it == StandardHttpMethod.CONNECT }
+                            .map(HttpMethod::Standard)
                     availableMethods.forEach { methodOpt ->
                         val isSelected = selectedMethod == methodOpt
                         val label = methodOpt?.token ?: "ALL"

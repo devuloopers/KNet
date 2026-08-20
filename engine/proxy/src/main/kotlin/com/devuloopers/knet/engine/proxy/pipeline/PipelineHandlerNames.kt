@@ -35,6 +35,9 @@ object PipelineHandlerNames {
      */
     const val HTTP_AGGREGATOR = "httpAggregator"
 
+    /** Overflow-safe selective aggregation installed by an optional inspection adapter. */
+    const val SELECTIVE_HTTP_AGGREGATOR = "selectiveHttpAggregator"
+
     /**
      * Primary proxy inbound request handler (streaming or bounded breakpoint variant).
      *

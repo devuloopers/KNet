@@ -1,6 +1,4 @@
-package com.devuloopers.knet.domain.apistudio.descriptor
-
-import com.devuloopers.knet.domain.collection.model.SavedApiRequest
+package com.devuloopers.knet.domain.request.descriptor
 
 /**
  * Terminal HTTP descriptor deriving a path/host title and retaining the actual method as its badge.
@@ -8,12 +6,13 @@ import com.devuloopers.knet.domain.collection.model.SavedApiRequest
  * Query parameters and fragments are excluded because they are mutable request data rather than document identity.
  */
 class HttpRequestDescriptorStrategy : RequestDescriptorStrategy {
+    override val priority: Int = Int.MIN_VALUE
 
-    override fun describe(request: SavedApiRequest): RequestDescriptorContribution =
+    override fun describe(request: RequestDescriptorInput): RequestDescriptorContribution =
         RequestDescriptorContribution(
             kind = RequestKindId.HTTP,
-            badgeLabel = request.method.token,
-            suggestedName = request.url.meaningfulTargetName()
+            badgeLabel = request.transportMethod.token,
+            suggestedName = request.absoluteUrl.meaningfulTargetName()
         )
 
     private fun String.meaningfulTargetName(): String? {

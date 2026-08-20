@@ -1,10 +1,10 @@
 package com.devuloopers.knet.domain
 
-import com.devuloopers.knet.domain.apistudio.descriptor.HttpRequestDescriptorStrategy
-import com.devuloopers.knet.domain.apistudio.descriptor.RequestDescriptorContribution
-import com.devuloopers.knet.domain.apistudio.descriptor.RequestDescriptorStrategy
-import com.devuloopers.knet.domain.apistudio.descriptor.RequestKindId
-import com.devuloopers.knet.domain.apistudio.usecase.DescribeRequestUseCase
+import com.devuloopers.knet.domain.request.descriptor.HttpRequestDescriptorStrategy
+import com.devuloopers.knet.domain.request.descriptor.RequestDescriptorContribution
+import com.devuloopers.knet.domain.request.descriptor.RequestDescriptorStrategy
+import com.devuloopers.knet.domain.request.descriptor.RequestKindId
+import com.devuloopers.knet.domain.request.usecase.DescribeRequestUseCase
 import com.devuloopers.knet.domain.collection.model.SavedApiRequest
 import com.devuloopers.knet.traffic.model.http.HttpMethod
 import kotlin.test.Test
@@ -36,13 +36,13 @@ class RequestDescriptorTest {
     }
 
     @Test
-    fun useCase_prefersEarlierProtocolDescriptor() {
+    fun useCase_runsSemanticDescriptorBeforeTerminalHttpRegardlessOfRegistrationOrder() {
         val useCase = DescribeRequestUseCase(
             listOf(
+                httpStrategy,
                 RequestDescriptorStrategy {
                     RequestDescriptorContribution(RequestKindId.GRAPHQL, "GQL", "GetProfile")
                 },
-                httpStrategy
             )
         )
 

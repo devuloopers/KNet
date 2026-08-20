@@ -1,6 +1,6 @@
 package com.devuloopers.knet.ui.desktop.apistudio.model
 
-import com.devuloopers.knet.domain.apistudio.descriptor.RequestDescriptor
+import com.devuloopers.knet.domain.request.descriptor.RequestDescriptor
 import com.devuloopers.knet.domain.collection.model.ApiCollection
 import com.devuloopers.knet.domain.collection.model.SavedApiRequest
 import com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarFolderItem

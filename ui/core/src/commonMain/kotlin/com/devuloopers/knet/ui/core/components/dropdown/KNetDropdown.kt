@@ -20,6 +20,7 @@ import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -55,7 +56,6 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -65,7 +65,6 @@ import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -76,6 +75,7 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import com.devuloopers.knet.ui.core.components.input.OverflowTextPopupHost
+import com.devuloopers.knet.ui.core.components.scrollbar.KNetVerticalScrollbar
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.dimensions.KNetDimensions
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
@@ -185,7 +185,8 @@ fun <T> KNetDropdown(
     val motion = KNetTheme.motion
     val density = LocalDensity.current
     val textMeasurer = rememberTextMeasurer()
-    var expanded by remember { mutableStateOf(false) }
+    val expansionState = rememberDropdownExpansionState()
+    val expanded = expansionState.expanded
     var anchorSizePx by remember { mutableStateOf(IntSize.Zero) }
 
     val isDefaultSelected = selectedItem == defaultItem
@@ -255,35 +256,49 @@ fun <T> KNetDropdown(
             textColor = textColor,
             fontWeight = if (isDefaultSelected) FontWeight.Medium else FontWeight.SemiBold,
             centeredContent = centeredAnchorContent,
-            onExpandedChange = { expanded = it }
+            onToggle = { expansionState.toggle() },
+            onOpen = expansionState::open,
+            onClose = expansionState::close,
         )
 
         KNetDropdownPopup(
             expanded = expanded,
-            onDismissRequest = { expanded = false },
+            onDismissRequest = expansionState::dismissFromPopup,
             anchorSizePx = anchorSizePx,
-            focusable = true,
             preferredMenuWidth = animatedMenuWidth
         ) {
-            Column(
+            val menuScrollState = rememberScrollState()
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = KNetDropdownDefaults.MaxMenuHeight)
-                    .verticalScroll(rememberScrollState())
             ) {
-                items.forEach { item ->
-                    val isSelected = item == selectedItem
-                    val customColor = itemColor?.invoke(item)?.takeUnless { it == Color.Unspecified }
-                    KNetDropdownMenuItem(
-                        text = itemText(item),
-                        selected = isSelected,
-                        textColor = customColor,
-                        onClick = {
-                            onItemSelected(item)
-                            expanded = false
-                        }
-                    )
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = KNetDropdownDefaults.MaxMenuHeight)
+                        .verticalScroll(menuScrollState)
+                ) {
+                    items.forEach { item ->
+                        val isSelected = item == selectedItem
+                        val customColor = itemColor?.invoke(item)?.takeUnless { it == Color.Unspecified }
+                        KNetDropdownMenuItem(
+                            text = itemText(item),
+                            selected = isSelected,
+                            textColor = customColor,
+                            onClick = {
+                                onItemSelected(item)
+                                expansionState.close()
+                            }
+                        )
+                    }
                 }
+                KNetVerticalScrollbar(
+                    scrollState = menuScrollState,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .fillMaxHeight(),
+                )
             }
         }
     }
@@ -304,7 +319,9 @@ internal fun KNetDropdownAnchor(
     textColor: Color,
     fontWeight: FontWeight,
     centeredContent: Boolean = false,
-    onExpandedChange: (Boolean) -> Unit,
+    onToggle: () -> Unit,
+    onOpen: () -> Unit,
+    onClose: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val colors = KNetTheme.colors
@@ -355,16 +372,16 @@ internal fun KNetDropdownAnchor(
                 indication = null,
                 enabled = enabled,
                 role = Role.Button
-            ) { onExpandedChange(!expanded) }
+            ) { onToggle() }
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown || !enabled) return@onPreviewKeyEvent false
                 when (event.key) {
                     Key.Enter, Key.Spacebar, Key.DirectionDown, Key.DirectionUp -> {
-                        onExpandedChange(true)
+                        onOpen()
                         true
                     }
                     Key.Escape -> {
-                        onExpandedChange(false)
+                        onClose()
                         true
                     }
                     else -> false
@@ -440,12 +457,22 @@ private class DropdownMenuPopupPositionProvider(
         val belowY = anchorBounds.bottom + verticalOffsetPx
         val aboveY = anchorBounds.top - popupContentSize.height - verticalOffsetPx
         val maxY = (windowSize.height - popupContentSize.height).coerceAtLeast(0)
-        val alignedY = if (belowY + popupContentSize.height <= windowSize.height) belowY else aboveY
+        val alignedY = when (
+            dropdownPopupVerticalPlacement(
+                anchorBounds = anchorBounds,
+                windowHeight = windowSize.height,
+                menuHeight = popupContentSize.height,
+                verticalOffset = verticalOffsetPx,
+            )
+        ) {
+            DropdownPopupVerticalPlacement.Below -> belowY
+            DropdownPopupVerticalPlacement.Above -> aboveY
+        }
         return IntOffset(alignedX, alignedY.coerceIn(0, maxY))
     }
 }
 
-/** Vertical side selected for a focusable dropdown menu relative to its anchor. */
+/** Vertical side selected for a dropdown menu relative to its anchor. */
 internal enum class DropdownPopupVerticalPlacement {
     Below,
     Above
@@ -472,60 +499,12 @@ internal fun dropdownPopupVerticalPlacement(
 }
 
 /**
- * Positions one popup layer across both the visible anchor and its menu.
- *
- * Keeping the transparent anchor interaction proxy inside the focusable popup retains desktop pointer ownership
- * while expanded. [placeAbove] is consumed during child placement after [calculatePosition] resolves the side.
- */
-private class InteractiveDropdownPopupPositionProvider(
-    private val anchorHeightPx: Int,
-    private val verticalOffsetPx: Int
-) : PopupPositionProvider {
-    var placeAbove: Boolean = false
-        private set
-    var anchorOffsetXPx: Int = 0
-        private set
-
-    override fun calculatePosition(
-        anchorBounds: IntRect,
-        windowSize: IntSize,
-        layoutDirection: LayoutDirection,
-        popupContentSize: IntSize
-    ): IntOffset {
-        val maxX = (windowSize.width - popupContentSize.width).coerceAtLeast(0)
-        val alignedX = when (layoutDirection) {
-            LayoutDirection.Ltr -> anchorBounds.left
-            LayoutDirection.Rtl -> anchorBounds.right - popupContentSize.width
-        }.coerceIn(0, maxX)
-        anchorOffsetXPx = (anchorBounds.left - alignedX).coerceIn(
-            minimumValue = 0,
-            maximumValue = (popupContentSize.width - anchorBounds.width).coerceAtLeast(0)
-        )
-        val menuHeight = (popupContentSize.height - anchorHeightPx - verticalOffsetPx).coerceAtLeast(0)
-        placeAbove = dropdownPopupVerticalPlacement(
-            anchorBounds = anchorBounds,
-            windowHeight = windowSize.height,
-            menuHeight = menuHeight,
-            verticalOffset = verticalOffsetPx
-        ) == DropdownPopupVerticalPlacement.Above
-        val alignedY = if (placeAbove) {
-            anchorBounds.bottom - popupContentSize.height
-        } else {
-            anchorBounds.top
-        }
-        return IntOffset(alignedX, alignedY)
-    }
-}
-
-/**
- * Intrinsic-measurement-free popup shell shared by regular and searchable dropdowns.
+ * Intrinsic-measurement-free, non-focus-stealing popup shell shared by every KNet dropdown.
  *
  * Explicit width and height constraints allow lazy result content without nesting a `SubcomposeLayout`
- * inside Material dropdown intrinsic measurement.
+ * inside Material dropdown intrinsic measurement. Pointer events outside the menu can reach another anchor,
+ * while the shared expansion coordinator guarantees one active popup.
  *
- * @param focusable Whether the popup owns focus and consumes outside pointer events. Ordinary selection
- * dropdowns enable this so an anchor click closes once without reaching the anchor again. Searchable
- * comboboxes keep focus in their text field and therefore disable it.
  * @param preferredMenuWidth Optional content-derived menu width. It may exceed the anchor width but is clamped
  * by the popup window's measurement constraints.
  */
@@ -534,7 +513,6 @@ internal fun KNetDropdownPopup(
     expanded: Boolean,
     onDismissRequest: () -> Unit,
     anchorSizePx: IntSize,
-    focusable: Boolean,
     preferredMenuWidth: Dp? = null,
     content: @Composable () -> Unit
 ) {
@@ -550,8 +528,6 @@ internal fun KNetDropdownPopup(
 
     val resolvedAnchorWidthPx = anchorSizePx.width.takeIf { it > 0 }
         ?: with(density) { KNetDropdownDefaults.MinimumWidth.roundToPx() }
-    val resolvedAnchorHeightPx = anchorSizePx.height.takeIf { it > 0 }
-        ?: with(density) { KNetDropdownDefaults.FieldHeight.roundToPx() }
     val resolvedPreferredMenuWidthPx = preferredMenuWidth
         ?.let { with(density) { it.roundToPx() } }
         ?.coerceAtLeast(resolvedAnchorWidthPx)
@@ -562,17 +538,11 @@ internal fun KNetDropdownPopup(
     val menuPositionProvider = remember(verticalOffsetPx) {
         DropdownMenuPopupPositionProvider(verticalOffsetPx)
     }
-    val interactivePositionProvider = remember(resolvedAnchorHeightPx, verticalOffsetPx) {
-        InteractiveDropdownPopupPositionProvider(
-            anchorHeightPx = resolvedAnchorHeightPx,
-            verticalOffsetPx = verticalOffsetPx
-        )
-    }
 
     Popup(
-        popupPositionProvider = if (focusable) interactivePositionProvider else menuPositionProvider,
+        popupPositionProvider = menuPositionProvider,
         onDismissRequest = onDismissRequest,
-        properties = dropdownPopupProperties(focusable)
+        properties = dropdownPopupProperties()
     ) {
         val menu: @Composable () -> Unit = {
             AnimatedVisibility(
@@ -607,87 +577,7 @@ internal fun KNetDropdownPopup(
             }
         }
 
-        if (focusable) {
-            InteractiveDropdownPopupLayout(
-                anchorSize = IntSize(resolvedAnchorWidthPx, resolvedAnchorHeightPx),
-                preferredMenuWidthPx = resolvedPreferredMenuWidthPx,
-                verticalOffsetPx = verticalOffsetPx,
-                positionProvider = interactivePositionProvider,
-                onAnchorClick = onDismissRequest,
-                menu = menu
-            )
-        } else {
-            menu()
-        }
-    }
-}
-
-/**
- * Hosts the menu and a transparent anchor-sized pointer target in one focusable desktop popup layer.
- *
- * Compose Desktop gives a focusable popup pointer ownership while it is open. Mirroring only the anchor's
- * interaction region here preserves its hand cursor and routes a header click directly to dismissal without
- * allowing that click to reach the underlying anchor and reopen the menu. The menu may be wider than the anchor;
- * window constraints cap that preferred width and the position provider keeps the proxy over the real anchor.
- */
-@Composable
-private fun InteractiveDropdownPopupLayout(
-    anchorSize: IntSize,
-    preferredMenuWidthPx: Int,
-    verticalOffsetPx: Int,
-    positionProvider: InteractiveDropdownPopupPositionProvider,
-    onAnchorClick: () -> Unit,
-    menu: @Composable () -> Unit
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    Layout(
-        content = {
-            Box(
-                modifier = Modifier
-                    .handCursor()
-                    .clickable(
-                        interactionSource = interactionSource,
-                        indication = null,
-                        role = Role.Button,
-                        onClick = onAnchorClick
-                    )
-                    .semantics { stateDescription = "Expanded" }
-            )
-            menu()
-        }
-    ) { measurables, constraints ->
-        val width = resolvedDropdownPopupWidth(
-            anchorWidthPx = anchorSize.width,
-            preferredMenuWidthPx = preferredMenuWidthPx,
-            minimumWidthPx = constraints.minWidth,
-            maximumWidthPx = constraints.maxWidth
-        )
-        val anchorWidth = anchorSize.width.coerceIn(1, width)
-        val anchorHeight = anchorSize.height.coerceAtLeast(1)
-        val maximumMenuHeight = minOf(
-            with(density) { KNetDropdownDefaults.MaxMenuHeight.roundToPx() },
-            (constraints.maxHeight - anchorHeight - verticalOffsetPx).coerceAtLeast(0)
-        )
-        val anchorPlaceable = measurables[0].measure(Constraints.fixed(anchorWidth, anchorHeight))
-        val menuPlaceable = measurables[1].measure(
-            Constraints(
-                minWidth = width,
-                maxWidth = width,
-                minHeight = 0,
-                maxHeight = maximumMenuHeight
-            )
-        )
-        val popupHeight = anchorHeight + verticalOffsetPx + menuPlaceable.height
-        layout(width, popupHeight) {
-            val anchorX = positionProvider.anchorOffsetXPx.coerceIn(0, width - anchorWidth)
-            if (positionProvider.placeAbove) {
-                menuPlaceable.place(0, 0)
-                anchorPlaceable.place(anchorX, menuPlaceable.height + verticalOffsetPx)
-            } else {
-                anchorPlaceable.place(anchorX, 0)
-                menuPlaceable.place(0, anchorHeight + verticalOffsetPx)
-            }
-        }
+        menu()
     }
 }
 
@@ -708,10 +598,10 @@ internal fun shouldComposeDropdownPopup(currentVisible: Boolean, targetVisible: 
     return currentVisible || targetVisible
 }
 
-/** Resolves popup input ownership without changing the shared dismissal contract. */
-internal fun dropdownPopupProperties(focusable: Boolean): PopupProperties {
+/** Lets pointer input reach another anchor while retaining outside-click and keyboard dismissal. */
+internal fun dropdownPopupProperties(): PopupProperties {
     return PopupProperties(
-        focusable = focusable,
+        focusable = false,
         dismissOnBackPress = true,
         dismissOnClickOutside = true
     )

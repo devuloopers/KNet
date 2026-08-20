@@ -2,25 +2,18 @@ package com.devuloopers.knet.data.desktop.runtime
 
 import com.devuloopers.knet.core.logger.KNetLogger
 import com.devuloopers.knet.core.logger.LogTags
-import com.devuloopers.knet.application.port.breakpoint.BreakpointCoordinator
 import com.devuloopers.knet.application.port.breakpoint.BreakpointGate
-import com.devuloopers.knet.application.port.breakpoint.BreakpointRequirements
+import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.engine.certificate.CertificateAuthority
 import com.devuloopers.knet.engine.certificate.CertificateCache
 import com.devuloopers.knet.engine.interceptor.KNetInterceptorHandler
+import com.devuloopers.knet.engine.interceptor.KNetBreakpointRequestAggregator
 import com.devuloopers.knet.engine.proxy.KNetProxyRuntimePolicy
 import com.devuloopers.knet.engine.proxy.KNetProxyServer
 import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureSink
+import com.devuloopers.knet.engine.proxy.pipeline.PipelineHandlerNames
 import com.devuloopers.knet.engine.proxy.tls.KeyManagerProvider
 import com.devuloopers.knet.traffic.model.IngressAttributionLookup
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.launchIn
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach
 
 /**
  * Desktop runtime coordinator managing Netty proxy server lifecycle.
@@ -29,25 +22,12 @@ class ProxyRuntimeRepository(
     private val certificateAuthority: CertificateAuthority,
     private val certificateCache: CertificateCache,
     private val keyManagerProvider: KeyManagerProvider? = null,
-    private val breakpointGate: BreakpointGate = BreakpointCoordinator(),
+    private val breakpointGate: BreakpointGate,
     private val ingressAttribution: IngressAttributionLookup? = null,
 ) {
     private val lifecycleLock = Any()
-    private val runtimeScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var observedBreakpointRequirements = breakpointGate.requirements.value.toPipelineRequirements()
     private var proxyServer: KNetProxyServer? = null
     private var closed = false
-
-    init {
-        // A downstream Netty channel selects either the streaming or full-message pipeline exactly
-        // once when accepted. Close existing child channels whenever that selection changes so the
-        // client reconnects through a pipeline built from the current breakpoint requirements.
-        breakpointGate.requirements
-            .map { requirements -> requirements.toPipelineRequirements() }
-            .distinctUntilChanged()
-            .onEach(::applyBreakpointRequirements)
-            .launchIn(runtimeScope)
-    }
 
     /**
      * Starts the Netty MITM proxy server using an explicit listener and upstream trust policy.
@@ -75,6 +55,10 @@ class ProxyRuntimeRepository(
             KNetLogger.info(tag = LogTags.PROXY) { "Starting Netty proxy server on port $port..." }
 
             val pipelineInitializers = listOf<(io.netty.channel.ChannelPipeline) -> Unit>({ pipeline ->
+                pipeline.addLast(
+                    PipelineHandlerNames.SELECTIVE_HTTP_AGGREGATOR,
+                    KNetBreakpointRequestAggregator(breakpointGate),
+                )
                 pipeline.addLast("knetInterceptorHandler", KNetInterceptorHandler(breakpointGate))
             })
             val server = KNetProxyServer(
@@ -88,12 +72,8 @@ class ProxyRuntimeRepository(
                 pipelineInitializers = pipelineInitializers,
                 captureSink = captureSink,
                 ingressAttribution = ingressAttribution,
-                requiresFullResponseAggregation = {
-                    breakpointGate.requirements.value.hasResponseRules
-                },
-                requiresFullRequestAggregation = {
-                    breakpointGate.requirements.value.hasRequestRules ||
-                        breakpointGate.requirements.value.hasResponseRules
+                requiresFullResponseAggregation = { request ->
+                    breakpointGate.mayIntercept(request, BreakpointPhase.RESPONSE)
                 },
             )
             server.start()
@@ -119,12 +99,7 @@ class ProxyRuntimeRepository(
      */
     fun isRunning(): Boolean = synchronized(lifecycleLock) { proxyServer != null }
 
-    /**
-     * Permanently closes the runtime observer and any active proxy server.
-     *
-     * A stopped repository may be started again, while a closed repository is process-terminal and
-     * no longer observes breakpoint pipeline requirements.
-     */
+    /** Permanently closes this repository and any active proxy server. */
     fun close() {
         val shouldClose = synchronized(lifecycleLock) {
             if (closed) {
@@ -135,36 +110,6 @@ class ProxyRuntimeRepository(
             }
         }
         if (!shouldClose) return
-        runtimeScope.cancel()
         stopProxy()
     }
-
-    /** Applies one distinct breakpoint pipeline selection to current and future client channels. */
-    private fun applyBreakpointRequirements(requirements: BreakpointPipelineRequirements) {
-        val server = synchronized(lifecycleLock) {
-            if (requirements == observedBreakpointRequirements) return
-            observedBreakpointRequirements = requirements
-            proxyServer
-        } ?: return
-
-        KNetLogger.info(tag = LogTags.PROXY) {
-            "Breakpoint pipeline requirements changed; refreshing active client connections " +
-                "(requestAggregation=${requirements.aggregateRequests}, " +
-                "responseAggregation=${requirements.aggregateResponses})."
-        }
-        server.closeActiveConnections()
-    }
-
-    /** Immutable selection that controls the per-connection HTTP pipeline shape. */
-    private data class BreakpointPipelineRequirements(
-        val aggregateRequests: Boolean,
-        val aggregateResponses: Boolean,
-    )
-
-    /** Reduces application breakpoint requirements to the fields that alter Netty pipeline shape. */
-    private fun BreakpointRequirements.toPipelineRequirements() =
-        BreakpointPipelineRequirements(
-            aggregateRequests = hasRequestRules || hasResponseRules,
-            aggregateResponses = hasResponseRules,
-        )
 }

@@ -4,6 +4,7 @@ import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
 import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolDefinition
 import com.devuloopers.knet.application.port.breakpoint.ProtocolCriteriaValue
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
+import com.devuloopers.knet.domain.request.descriptor.RequestDescriptor
 
 /**
  * Presentation UI State for Breakpoint Manager Screen and Live Intercept Drawer.
@@ -17,9 +18,10 @@ import com.devuloopers.knet.domain.rules.model.BreakpointRule
  * @param editingProtocolValues Decoded values for the rule currently being edited.
  * @param activeEvents List of all in-flight suspended HTTP connection events.
  * @param activeEvent The currently selected or top in-flight suspended HTTP connection event.
- * @param resolvedPayloads Map from transaction ID to its pre-resolved request/response payloads.
- *   Computed once off-thread by [BreakpointManagerViewModel] via [PayloadInspectionSpec.fromBytes], so that
- *   [LiveInterceptDrawer] never calls [BodyFormatterRegistry] at Compose render time.
+ * @param resolvedPayloads Zero-or-one entry containing the active transaction's prepared payload.
+ *   Preparation runs off-thread after queue publication, so the drawer never waits for decoding and
+ *   never calls formatters during Compose rendering.
+ * @param requestDescriptors Bounded protocol-aware presentation descriptors keyed by pending event ID.
  */
 data class BreakpointManagerState(
     val isGlobalInterceptionEnabled: Boolean = true,
@@ -31,7 +33,8 @@ data class BreakpointManagerState(
     val editingProtocolValues: List<ProtocolCriteriaValue> = emptyList(),
     val activeEvents: List<PendingBreakpoint> = emptyList(),
     val activeEvent: PendingBreakpoint? = null,
-    val resolvedPayloads: Map<String, ResolvedInterceptPayload> = emptyMap()
+    val resolvedPayloads: Map<String, ResolvedInterceptPayload> = emptyMap(),
+    val requestDescriptors: Map<String, RequestDescriptor> = emptyMap(),
 ) {
     /**
      * Filtered list of rules matching the active search query.

@@ -26,6 +26,8 @@ import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.ApiStudioViewModel
 import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.CollectionsViewModel
 import com.devuloopers.knet.ui.desktop.app.navigation.DesktopDestination
 import com.devuloopers.knet.ui.desktop.breakpointmanager.components.AddEditBreakpointRuleDialog
+import com.devuloopers.knet.ui.desktop.breakpointmanager.components.LiveInterceptDrawerActions
+import com.devuloopers.knet.ui.desktop.breakpointmanager.components.LiveInterceptDrawerState
 import com.devuloopers.knet.ui.desktop.breakpointmanager.components.LiveInterceptDrawer
 import com.devuloopers.knet.ui.desktop.breakpointmanager.view.BreakpointManagerScreen
 import com.devuloopers.knet.ui.desktop.breakpointmanager.viewmodel.BreakpointManagerViewModel
@@ -76,7 +78,7 @@ fun KNetWorkspaceHost(
                     AddEditBreakpointRuleDialog(
                         rule = trafficState.prefilledBreakpointRule,
                         protocolDefinitions = breakpointState.protocolDefinitions,
-                        initialProtocolValues = emptyList(),
+                        initialProtocolValues = trafficState.prefilledBreakpointProtocolValues,
                         onDismiss = { trafficViewModel.closeBreakpointDialog() },
                         onSave = { urlPattern, method, phase, enabled, protocolId, protocolValues ->
                             breakpointViewModel.saveRule(
@@ -143,38 +145,42 @@ fun KNetWorkspaceHost(
 
         // Live Intercept Side Drawer Overlay
         LiveInterceptDrawer(
-            events = breakpointState.activeEvents,
-            activeEvent = drawerEvent,
-            isVisible = drawerEvent != null,
-            resolvedPayloads = breakpointState.resolvedPayloads,
-            onSelectEvent = { eventId ->
-                breakpointViewModel.selectActiveEvent(eventId)
-            },
-            onDropItem = { eventId ->
-                breakpointViewModel.dropEvent(eventId)
-            },
-            onDropAll = {
-                breakpointViewModel.dropAllEvents()
-            },
-            onForwardRequest = { modifiedReq ->
-                val event = breakpointState.activeEvent ?: return@LiveInterceptDrawer
-                breakpointViewModel.forwardRequest(event.id, modifiedReq)
-            },
-            onForwardResponse = { modifiedResp ->
-                val event = breakpointState.activeEvent ?: return@LiveInterceptDrawer
-                breakpointViewModel.forwardResponse(event.id, modifiedResp)
-            },
-            onDrop = {
-                val event = breakpointState.activeEvent ?: return@LiveInterceptDrawer
-                breakpointViewModel.dropEvent(event.id)
-            },
-            onDisableRule = {
-                val event = breakpointState.activeEvent ?: return@LiveInterceptDrawer
-                breakpointViewModel.disableMatchingRule(event.ruleId)
-            },
-            onDismiss = {
-                breakpointViewModel.dismissCurrentEvent()
-            },
+            state = LiveInterceptDrawerState(
+                events = breakpointState.activeEvents,
+                activeEvent = drawerEvent,
+                isVisible = drawerEvent != null,
+                resolvedPayloads = breakpointState.resolvedPayloads,
+                requestDescriptors = breakpointState.requestDescriptors,
+            ),
+            actions = LiveInterceptDrawerActions(
+                selectEvent = breakpointViewModel::selectActiveEvent,
+                dropItem = breakpointViewModel::dropEvent,
+                dropAll = breakpointViewModel::dropAllEvents,
+                forwardRequest = { modifiedRequest ->
+                    breakpointState.activeEvent?.let { event ->
+                        breakpointViewModel.forwardRequest(event.id, modifiedRequest)
+                    }
+                },
+                forwardResponse = { modifiedResponse ->
+                    breakpointState.activeEvent?.let { event ->
+                        breakpointViewModel.forwardResponse(event.id, modifiedResponse)
+                    }
+                },
+                forwardUnchanged = {
+                    breakpointState.activeEvent?.let { event ->
+                        breakpointViewModel.forwardUnchanged(event.id)
+                    }
+                },
+                drop = {
+                    breakpointState.activeEvent?.let { event -> breakpointViewModel.dropEvent(event.id) }
+                },
+                disableRule = {
+                    breakpointState.activeEvent?.let { event ->
+                        breakpointViewModel.disableMatchingRule(event.ruleId)
+                    }
+                },
+                dismiss = breakpointViewModel::dismissCurrentEvent,
+            ),
             modifier = Modifier.fillMaxSize()
         )
     }

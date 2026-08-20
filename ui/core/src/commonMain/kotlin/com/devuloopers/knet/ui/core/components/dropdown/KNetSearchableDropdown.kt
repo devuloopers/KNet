@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -14,6 +15,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -43,6 +45,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.button.KNetIconButton
+import com.devuloopers.knet.ui.core.components.scrollbar.KNetVerticalScrollbar
 import com.devuloopers.knet.ui.core.foundation.pointer.textCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
@@ -75,10 +78,14 @@ fun <T> KNetSearchableDropdown(
     val interactionSource = remember { MutableInteractionSource() }
     val focusRequester = remember { FocusRequester() }
     val focused by interactionSource.collectIsFocusedAsState()
-    var expanded by remember { mutableStateOf(false) }
     var anchorSizePx by remember { mutableStateOf(IntSize.Zero) }
     var query by remember { mutableStateOf("") }
     var highlightedIndex by remember { mutableStateOf(-1) }
+    val expansionState = rememberDropdownExpansionState {
+        query = ""
+        highlightedIndex = -1
+    }
+    val expanded = expansionState.expanded
 
     val visibleText = if (expanded) query else selectedItem?.let(itemText).orEmpty()
     val filteredItems = remember(items, query, itemText) {
@@ -88,9 +95,7 @@ fun <T> KNetSearchableDropdown(
     val borderColor = if (focused || expanded) colors.borderFocused else colors.border
 
     fun close() {
-        expanded = false
-        query = ""
-        highlightedIndex = -1
+        expansionState.close()
     }
 
     Box(
@@ -101,7 +106,7 @@ fun <T> KNetSearchableDropdown(
         BasicTextField(
             value = visibleText,
             onValueChange = { value ->
-                if (!expanded) expanded = true
+                if (!expanded) expansionState.open()
                 query = value
                 highlightedIndex = -1
             },
@@ -121,12 +126,12 @@ fun <T> KNetSearchableDropdown(
                     if (event.type != KeyEventType.KeyDown || !enabled) return@onPreviewKeyEvent false
                     when (event.key) {
                         Key.DirectionDown -> {
-                            if (!expanded) expanded = true
+                            if (!expanded) expansionState.open()
                             if (filteredItems.isNotEmpty()) highlightedIndex = (highlightedIndex + 1).mod(filteredItems.size)
                             true
                         }
                         Key.DirectionUp -> {
-                            if (!expanded) expanded = true
+                            if (!expanded) expansionState.open()
                             if (filteredItems.isNotEmpty()) highlightedIndex = (highlightedIndex - 1).mod(filteredItems.size)
                             true
                         }
@@ -178,9 +183,8 @@ fun <T> KNetSearchableDropdown(
                         icon = if (expanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
                         contentDescription = if (expanded) "Collapse options" else "Expand options",
                         onClick = {
-                            if (expanded) close() else {
-                                focusRequester.requestFocus()
-                                expanded = true
+                            focusRequester.requestFocus()
+                            if (expansionState.toggle()) {
                                 query = ""
                                 highlightedIndex = -1
                             }
@@ -197,9 +201,8 @@ fun <T> KNetSearchableDropdown(
 
         KNetDropdownPopup(
             expanded = expanded,
-            onDismissRequest = ::close,
+            onDismissRequest = expansionState::dismissFromPopup,
             anchorSizePx = anchorSizePx,
-            focusable = false
         ) {
             if (filteredItems.isEmpty()) {
                 Box(
@@ -212,26 +215,40 @@ fun <T> KNetSearchableDropdown(
                     Text(text = "No matching options", color = colors.textMuted, style = typography.bodySmall)
                 }
             } else {
-                LazyColumn(
+                val resultListState = rememberLazyListState()
+                Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(max = KNetDropdownDefaults.MaxMenuHeight)
                 ) {
-                    itemsIndexed(
-                        items = filteredItems,
-                        key = { index, item -> "${itemText(item)}-$index" }
-                    ) { index, item ->
-                        KNetDropdownMenuItem(
-                            text = itemText(item),
-                            selected = item == selectedItem,
-                            highlighted = index == highlightedIndex,
-                            onClick = {
-                                onItemSelected(item)
-                                close()
-                            },
-                            content = itemContent?.let { renderer -> { renderer(item) } }
-                        )
+                    LazyColumn(
+                        state = resultListState,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = KNetDropdownDefaults.MaxMenuHeight)
+                    ) {
+                        itemsIndexed(
+                            items = filteredItems,
+                            key = { index, item -> "${itemText(item)}-$index" }
+                        ) { index, item ->
+                            KNetDropdownMenuItem(
+                                text = itemText(item),
+                                selected = item == selectedItem,
+                                highlighted = index == highlightedIndex,
+                                onClick = {
+                                    onItemSelected(item)
+                                    close()
+                                },
+                                content = itemContent?.let { renderer -> { renderer(item) } }
+                            )
+                        }
                     }
+                    KNetVerticalScrollbar(
+                        lazyListState = resultListState,
+                        modifier = Modifier
+                            .align(Alignment.CenterEnd)
+                            .fillMaxHeight(),
+                    )
                 }
             }
         }

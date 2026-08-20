@@ -10,8 +10,7 @@ import com.devuloopers.knet.traffic.model.http.HttpMethod
 import com.devuloopers.knet.storage.rules.dao.BreakpointRuleDao
 import com.devuloopers.knet.storage.rules.entity.BreakpointRuleEntity
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
@@ -27,8 +26,8 @@ import kotlinx.coroutines.flow.onEach
 class RulesRepositoryImpl(
     private val breakpointRuleDao: BreakpointRuleDao,
     private val breakpointControl: BreakpointControlPort,
-    coroutineScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-) : RulesRepository {
+    private val coroutineScope: CoroutineScope,
+) : RulesRepository, AutoCloseable {
 
     init {
         // Eagerly project Room rows into one immutable application-owned compiled snapshot.
@@ -60,6 +59,11 @@ class RulesRepositoryImpl(
         breakpointRuleDao.deleteRule(ruleId)
     }
 
+    /** Stops Room-to-runtime rule synchronization for this repository instance. */
+    override fun close() {
+        coroutineScope.cancel()
+    }
+
     private fun BreakpointRuleEntity.toDomainRule(): BreakpointRule {
         val protocolId = runCatching {
             BreakpointProtocolId(protocolCriteriaType.trim().lowercase())
@@ -76,7 +80,8 @@ class RulesRepositoryImpl(
             urlPattern = urlPattern,
             method = method?.takeIf(String::isNotBlank)?.let(HttpMethod::fromToken),
             enabled = enabled,
-            protocolCriteria = criteria
+            priority = priority,
+            protocolCriteria = criteria,
         )
     }
 
@@ -87,6 +92,7 @@ class RulesRepositoryImpl(
             method = method?.token,
             phase = phase.name,
             enabled = enabled,
+            priority = priority,
             protocolCriteriaType = protocolCriteria.protocolId.value,
             protocolCriteriaData = protocolCriteria.encodedPayload,
         )

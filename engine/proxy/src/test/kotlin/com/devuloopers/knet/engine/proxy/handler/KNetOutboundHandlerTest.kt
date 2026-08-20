@@ -28,7 +28,31 @@ class KNetOutboundHandlerTest {
         val relayedResponse = clientChannel.readOutbound<DefaultFullHttpResponse>()
         assertNotNull(relayedResponse)
         assertEquals(HttpResponseStatus.OK, relayedResponse.status())
+        relayedResponse.release()
         clientChannel.close()
         serverChannel.close()
+    }
+
+    @Test
+    fun `upstream close before response returns bad gateway and completes ownership`() {
+        val clientChannel = EmbeddedChannel()
+        var completionCount = 0
+        val serverChannel = EmbeddedChannel(
+            KNetOutboundHandler(
+                clientChannel = clientChannel,
+                request = DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"),
+                onExchangeComplete = { completionCount += 1 },
+            ),
+        )
+
+        serverChannel.close()
+
+        val response = clientChannel.readOutbound<DefaultFullHttpResponse>()
+        assertNotNull(response)
+        assertEquals(HttpResponseStatus.BAD_GATEWAY, response.status())
+        assertEquals(1, completionCount)
+        response.release()
+        clientChannel.finishAndReleaseAll()
+        serverChannel.finishAndReleaseAll()
     }
 }

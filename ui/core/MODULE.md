@@ -13,16 +13,22 @@ Provides the KMP-safe Compose design system, foundations, themes, layouts, and r
   widest option, plus an independently content-responsive popup width that is clamped by window constraints.
   Anchor and popup width targets are stable across selection changes, animate only when their option-set-derived
   target changes, and remain overridable by feature layout. Genuinely clipped standard labels reuse the shared
-  stationary-hover overflow preview. Ordinary dropdown popups consume
-  outside clicks so one anchor click closes them once. While expanded, their focusable popup mirrors the anchor's
-  pointer region so the hand cursor and close action remain truthful without allowing click-through reopening;
-  searchable popups preserve text-field focus and text-cursor ownership. Popup entry and exit use the shared
-  reduced-motion-aware motion tokens. Single-select callers may opt into a centered label-and-chevron group
+  stationary-hover overflow preview. A composition-scoped expansion coordinator gives single-select,
+  multi-select, and searchable dropdowns one active owner: clicking another anchor closes the previous popup and
+  opens the new one in the same pointer event, while clicking the active anchor closes it once. Popups do not steal
+  focus or consume the next anchor's click. A short-lived, monotonic owner marker bridges desktop popup dismissal on
+  pointer press to anchor activation on release, preventing the just-closed header from reopening. Searchable controls
+  preserve text-field focus and text-cursor ownership.
+  Popup entry and exit use the shared reduced-motion-aware motion tokens. Single-select callers may opt into a
+  centered label-and-chevron group
   without changing width calculation or the default edge-separated arrangement; both arrangements retain the
   shared label-to-chevron spacing token.
 - A generic multi-select dropdown that reuses the same anchor and popup contract, keeps the menu open across
   toggles, and gives each accessible checkbox row one interaction owner. Feature-specific option types remain
   outside `:ui:core`.
+- One theme-aware vertical scrollbar primitive for finite and virtualized scroll states. It renders only after
+  measured content overflows its viewport; single-select, multi-select, and searchable dropdowns reuse it instead
+  of owning separate scrollbar styling or visibility rules.
 - Constraint-stable, horizontally scrollable tab rows whose shared surface uses the design-system medium corner
   shape and whose single-line labels retain their measured width under unbounded scroll constraints, truncating
   only at the design-system maximum.

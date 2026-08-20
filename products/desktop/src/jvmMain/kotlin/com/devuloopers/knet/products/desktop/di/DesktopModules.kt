@@ -8,6 +8,7 @@ import com.devuloopers.knet.products.desktop.di.httppanel.httpPanelBindings
 import com.devuloopers.knet.products.desktop.di.inspection.inspectionBindings
 import com.devuloopers.knet.products.desktop.di.platform.desktopPlatformBindings
 import com.devuloopers.knet.products.desktop.di.proxy.proxyBindings
+import com.devuloopers.knet.products.desktop.di.request.requestDescriptorBindings
 import com.devuloopers.knet.products.desktop.di.settings.settingsBindings
 import com.devuloopers.knet.products.desktop.di.traffic.trafficBindings
 import com.devuloopers.knet.products.desktop.di.workspace.workspaceBindings
@@ -31,6 +32,7 @@ object DesktopModules {
         httpPanelBindings,
         inspectionBindings,
         proxyBindings,
+        requestDescriptorBindings,
         settingsBindings,
         trafficBindings,
         workspaceBindings,

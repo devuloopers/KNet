@@ -15,13 +15,13 @@ interface BreakpointRuleDao {
     /**
      * Cold stream emitting all configured breakpoint rules sorted by execution priority.
      */
-    @Query("SELECT * FROM breakpoint_rules ORDER BY priority ASC")
+    @Query("SELECT * FROM breakpoint_rules ORDER BY priority ASC, id ASC")
     fun observeAllRules(): Flow<List<BreakpointRuleEntity>>
 
     /**
      * Synchronous lookup returning snapshot list of all breakpoint rules.
      */
-    @Query("SELECT * FROM breakpoint_rules ORDER BY priority ASC")
+    @Query("SELECT * FROM breakpoint_rules ORDER BY priority ASC, id ASC")
     suspend fun getAllRules(): List<BreakpointRuleEntity>
 
     /**

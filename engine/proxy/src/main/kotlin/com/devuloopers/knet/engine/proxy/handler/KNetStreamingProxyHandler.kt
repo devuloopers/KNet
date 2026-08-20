@@ -14,12 +14,14 @@ import com.devuloopers.knet.engine.proxy.http.AuthorityParser
 import com.devuloopers.knet.engine.proxy.mapper.HttpMapper
 import com.devuloopers.knet.engine.proxy.pipeline.ProxyChannelAttributes
 import com.devuloopers.knet.engine.proxy.pipeline.PipelineHandlerNames
+import com.devuloopers.knet.engine.proxy.pipeline.SelectiveHttpObjectAggregator
 import com.devuloopers.knet.engine.proxy.ssl.ProxyTrustManager
 import com.devuloopers.knet.engine.proxy.timing.NetworkTimingCollector
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.ExchangeState
 import com.devuloopers.knet.traffic.model.TrafficDirection
 import com.devuloopers.knet.traffic.model.body.ContentEncoding
+import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import io.netty.bootstrap.Bootstrap
 import io.netty.buffer.Unpooled
 import io.netty.channel.Channel
@@ -38,7 +40,6 @@ import io.netty.handler.codec.http.HttpContent
 import io.netty.handler.codec.http.HttpHeaderNames
 import io.netty.handler.codec.http.HttpMethod
 import io.netty.handler.codec.http.HttpObject
-import io.netty.handler.codec.http.HttpObjectAggregator
 import io.netty.handler.codec.http.HttpRequest
 import io.netty.handler.codec.http.HttpResponseStatus
 import io.netty.handler.codec.http.HttpServerCodec
@@ -47,10 +48,8 @@ import io.netty.handler.codec.http.LastHttpContent
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.timeout.ReadTimeoutHandler
 import io.netty.handler.timeout.WriteTimeoutHandler
-import io.netty.util.AttributeKey
 import io.netty.util.ReferenceCountUtil
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
 import java.net.InetAddress
@@ -72,18 +71,18 @@ private const val STREAMING_TAG = "ProxyEngine"
  * side output through [ProxyExchangeCapture].
  */
 @Suppress("HttpUrlsUsage")
-class KNetStreamingProxyHandler(
+internal class KNetStreamingProxyHandler(
     private val ca: CertificateAuthority,
     private val certCache: CertificateCache,
+    private val proxyScope: CoroutineScope,
     private val keyManagerProvider: com.devuloopers.knet.engine.proxy.tls.KeyManagerProvider? = null,
     private val strictSsl: Boolean = true,
-    private val proxyScope: CoroutineScope = CoroutineScope(Dispatchers.IO),
     private val runtimePolicy: KNetProxyRuntimePolicy = KNetProxyRuntimePolicy(),
     private val admissionController: ProxyConnectionAdmissionController =
         ProxyConnectionAdmissionController(runtimePolicy),
     private val certificateExecutor: Executor = ForkJoinPool.commonPool(),
     private val connectionCapture: ProxyConnectionCapture? = null,
-    private val requiresFullResponseAggregation: () -> Boolean = { false },
+    private val requiresFullResponseAggregation: (HttpRequestSnapshot) -> Boolean = { false },
 ) : ChannelInboundHandlerAdapter() {
 
     companion object {
@@ -95,9 +94,6 @@ class KNetStreamingProxyHandler(
         private const val UPSTREAM_WRITE_ERROR: String = "upstream_request_write_failed"
         private const val DOWNSTREAM_CANCELLED: String = "downstream_cancelled"
 
-        private val HOST_ATTR = AttributeKey.valueOf<String>("knet.host")
-        private val PORT_ATTR = AttributeKey.valueOf<Int>("knet.port")
-        private val SSL_ATTR = AttributeKey.valueOf<Boolean>("knet.ssl")
     }
 
     private val pendingObjects = ArrayDeque<HttpObject>()
@@ -183,15 +179,19 @@ class KNetStreamingProxyHandler(
     /** Parses the target, publishes request metadata, pauses reads, and starts the upstream dial. */
     private fun beginRequest(context: ChannelHandlerContext, request: HttpRequest) {
         val target = resolveTarget(context, request) ?: return
-        val mappedRequest = HttpMapper.mapRequestContext(
+        val preparedRequest = context.channel().attr(ProxyChannelAttributes.REQUEST_CONTEXT).getAndSet(null)
+        val preparedExchange = context.channel().attr(ProxyChannelAttributes.PREPARED_EXCHANGE).getAndSet(null)
+        val mappedRequest = preparedRequest ?: HttpMapper.mapRequestContext(
             nettyReq = request,
             isSsl = target.isSsl,
             host = target.host,
             port = target.port,
             relativeUri = target.relativeUri,
         )
-        context.channel().attr(ProxyChannelAttributes.REQUEST_CONTEXT).set(mappedRequest)
-        val capture = connectionCapture?.startExchange(
+        check(preparedExchange == null || preparedExchange.exchangeId == mappedRequest.exchangeId) {
+            "Prepared capture identity does not match the streamed request."
+        }
+        val capture = preparedExchange?.capture ?: connectionCapture?.startExchange(
             exchangeId = mappedRequest.exchangeId,
             request = mappedRequest.request.head,
             occurredAtEpochMillis = mappedRequest.startedAtEpochMillis,
@@ -386,10 +386,13 @@ class KNetStreamingProxyHandler(
             pipeline.addLast(PipelineHandlerNames.SSL, sslHandler)
         }
         pipeline.addLast(PipelineHandlerNames.HTTP_CODEC, HttpClientCodec())
-        if (requiresFullResponseAggregation()) {
+        if (requiresFullResponseAggregation(active.mappedRequest.request)) {
             pipeline.addLast(
                 PipelineHandlerNames.HTTP_AGGREGATOR,
-                HttpObjectAggregator(PipelineHandlerNames.MAX_CONTENT_LENGTH_BYTES),
+                SelectiveHttpObjectAggregator(
+                    maximumContentBytes = PipelineHandlerNames.MAX_CONTENT_LENGTH_BYTES,
+                    shouldAggregate = { _, _ -> true },
+                ),
             )
         }
         pipeline.addLast(
@@ -427,9 +430,9 @@ class KNetStreamingProxyHandler(
         }
         val host = parsedAuthority.authority.host
         val port = parsedAuthority.authority.port
-        context.channel().attr(HOST_ATTR).set(host)
-        context.channel().attr(PORT_ATTR).set(port)
-        context.channel().attr(SSL_ATTR).set(true)
+        context.channel().attr(ProxyChannelAttributes.HOST).set(host)
+        context.channel().attr(ProxyChannelAttributes.PORT).set(port)
+        context.channel().attr(ProxyChannelAttributes.IS_SSL).set(true)
 
         val response = DefaultFullHttpResponse(
             HttpVersion.HTTP_1_1,
@@ -480,10 +483,10 @@ class KNetStreamingProxyHandler(
 
     /** Resolves absolute/origin-form request routing without accepting malformed authorities. */
     private fun resolveTarget(context: ChannelHandlerContext, request: HttpRequest): ResolvedTarget? {
-        val tunnelSsl = context.channel().attr(SSL_ATTR).get() ?: false
+        val tunnelSsl = context.channel().attr(ProxyChannelAttributes.IS_SSL).get() ?: false
         var isSsl = tunnelSsl
-        var targetHost = context.channel().attr(HOST_ATTR).get()
-        var targetPort = context.channel().attr(PORT_ATTR).get() ?: if (isSsl) 443 else 80
+        var targetHost = context.channel().attr(ProxyChannelAttributes.HOST).get()
+        var targetPort = context.channel().attr(ProxyChannelAttributes.PORT).get() ?: if (isSsl) 443 else 80
         val absoluteUri = if (request.uri().startsWith("http://") || request.uri().startsWith("https://")) {
             runCatching { URI.create(request.uri()) }.getOrNull()
         } else {

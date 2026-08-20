@@ -5,6 +5,7 @@ import com.devuloopers.knet.application.port.breakpoint.BreakpointCandidate
 import com.devuloopers.knet.application.port.breakpoint.BreakpointCoordinator
 import com.devuloopers.knet.application.port.breakpoint.BreakpointDecision
 import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolRegistry
+import com.devuloopers.knet.application.port.breakpoint.BreakpointRuleSuggestionInput
 import com.devuloopers.knet.application.port.breakpoint.ProtocolCriteriaValue
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
@@ -84,6 +85,54 @@ class GraphQLBreakpointExtensionTest {
         coordinator.resolve(pending.id, BreakpointDecision.ContinueUnchanged)
 
         assertSame(BreakpointDecision.ContinueUnchanged, decision.await())
+    }
+
+    @Test
+    fun `smart drafts distinguish operation names on the same GraphQL endpoint`() {
+        val registry = BreakpointProtocolRegistry(listOf(extension))
+        val getProfile = requestCandidate("get-profile", "GetProfile")
+        val updateProfile = requestCandidate("update-profile", "UpdateProfile")
+
+        assertEquals(getProfile.request.head.target, updateProfile.request.head.target)
+        val getCriteria = assertNotNull(
+            registry.suggestCriteria(getProfile.toSuggestionInput()),
+        )
+        val updateCriteria = assertNotNull(
+            registry.suggestCriteria(updateProfile.toSuggestionInput()),
+        )
+
+        assertEquals(GraphQLBreakpointProtocol.id, getCriteria.protocolId)
+        assertEquals(
+            "GetProfile",
+            registry.editorValues(getCriteria).single().value,
+        )
+        assertEquals(
+            "UpdateProfile",
+            registry.editorValues(updateCriteria).single().value,
+        )
+    }
+
+    @Test
+    fun `smart draft keeps a GraphQL batch endpoint scoped`() {
+        val registry = BreakpointProtocolRegistry(listOf(extension))
+        val request = requestCandidate("batch", "Ignored").request
+        val body = """[
+            {"operationName":"GetProfile","query":"query GetProfile { viewer { id } }"},
+            {"operationName":"UpdateProfile","query":"mutation UpdateProfile { updateProfile { id } }"}
+        ]""".encodeToByteArray()
+
+        val criteria = assertNotNull(
+            registry.suggestCriteria(
+                BreakpointRuleSuggestionInput(
+                    request = request,
+                    requestBody = BreakpointBody(body),
+                    requestBodyComplete = true,
+                ),
+            ),
+        )
+
+        assertEquals(GraphQLBreakpointProtocol.id, criteria.protocolId)
+        assertEquals("", registry.editorValues(criteria).single().value)
     }
 
     @Test
@@ -185,4 +234,11 @@ class GraphQLBreakpointExtensionTest {
         ),
         startedAtEpochMillis = request.startedAtEpochMillis,
     )
+
+    private fun BreakpointCandidate.toSuggestionInput(): BreakpointRuleSuggestionInput =
+        BreakpointRuleSuggestionInput(
+            request = request,
+            requestBody = requestBody,
+            requestBodyComplete = requestObservedBodyBytes == requestBody?.size?.toLong(),
+        )
 }

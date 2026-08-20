@@ -3,7 +3,7 @@ package com.devuloopers.knet.ui.desktop.apistudio.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.domain.apistudio.naming.RequestNameOrigin
-import com.devuloopers.knet.domain.apistudio.usecase.DescribeRequestUseCase
+import com.devuloopers.knet.domain.request.usecase.DescribeRequestUseCase
 import com.devuloopers.knet.domain.collection.usecase.CreateCollectionUseCase
 import com.devuloopers.knet.domain.collection.usecase.DeleteCollectionUseCase
 import com.devuloopers.knet.domain.collection.usecase.DeleteSavedSessionUseCase

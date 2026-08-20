@@ -3,6 +3,7 @@ package com.devuloopers.knet.engine.proxy.integration
 import com.devuloopers.knet.engine.certificate.CertificateAuthority
 import com.devuloopers.knet.engine.certificate.CertificateCache
 import com.devuloopers.knet.engine.proxy.KNetProxyServer
+import com.devuloopers.knet.engine.proxy.pipeline.SelectiveHttpObjectAggregator
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelInboundHandlerAdapter
 import io.netty.channel.ChannelOutboundHandlerAdapter
@@ -158,6 +159,10 @@ class UpstreamBreakpointAggregationTest {
             certCache = CertificateCache(),
             pipelineInitializers = listOf({ pipeline ->
                 pipeline.addLast(
+                    "requestSelectiveAggregator",
+                    SelectiveHttpObjectAggregator(1024) { _, _ -> requiresAggregation },
+                )
+                pipeline.addLast(
                     "requestShapeObserver",
                     object : ChannelInboundHandlerAdapter() {
                         override fun channelRead(context: ChannelHandlerContext, message: Any) {
@@ -170,7 +175,6 @@ class UpstreamBreakpointAggregationTest {
                     },
                 )
             }),
-            requiresFullRequestAggregation = { requiresAggregation },
         )
         proxy.start()
 

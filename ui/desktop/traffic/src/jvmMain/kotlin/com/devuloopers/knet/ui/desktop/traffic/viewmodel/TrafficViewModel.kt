@@ -15,6 +15,8 @@ import com.devuloopers.knet.application.usecase.traffic.PauseTrafficCaptureUseCa
 import com.devuloopers.knet.application.usecase.traffic.ResumeTrafficCaptureUseCase
 import com.devuloopers.knet.application.usecase.traffic.ObserveTrafficCaptureStateUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.ObservePendingBreakpointsUseCase
+import com.devuloopers.knet.application.usecase.breakpoint.PrepareBreakpointRuleDraftResult
+import com.devuloopers.knet.application.usecase.breakpoint.PrepareBreakpointRuleDraftUseCase
 import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
 import com.devuloopers.knet.application.port.inspection.ObserveInspectionAnnotationsUseCase
 import com.devuloopers.knet.application.port.traffic.TrafficPageQuery
@@ -28,6 +30,11 @@ import com.devuloopers.knet.core.logger.KNetLogger
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.domain.network.usecase.ObserveLocalIpUseCase
+import com.devuloopers.knet.domain.request.descriptor.RequestDescriptor
+import com.devuloopers.knet.domain.request.descriptor.RequestDescriptorBody
+import com.devuloopers.knet.domain.request.descriptor.RequestDescriptorInput
+import com.devuloopers.knet.domain.request.descriptor.RequestKindId
+import com.devuloopers.knet.domain.request.usecase.DescribeRequestUseCase
 import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
 import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
 
@@ -35,9 +42,7 @@ import com.devuloopers.knet.ui.desktop.traffic.model.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlin.time.Duration.Companion.milliseconds
-import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.rules.usecase.ObserveRulesUseCase
-import kotlin.uuid.Uuid
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.http.HttpMethod as CanonicalHttpMethod
 import com.devuloopers.knet.traffic.model.http.HttpStatus as CanonicalHttpStatus
@@ -67,6 +72,8 @@ class TrafficViewModel(
     private val getWorkspaceLayoutUseCase: GetWorkspaceLayoutUseCase,
     private val prepareCapturedNetworkRequestUseCase: PrepareCapturedNetworkRequestUseCase,
     private val observeInspectionAnnotationsUseCase: ObserveInspectionAnnotationsUseCase,
+    private val describeRequestUseCase: DescribeRequestUseCase,
+    private val prepareBreakpointRuleDraftUseCase: PrepareBreakpointRuleDraftUseCase,
     observeRulesUseCase: ObserveRulesUseCase,
     observePendingBreakpointsUseCase: ObservePendingBreakpointsUseCase,
     private val backgroundDispatcher: CoroutineDispatcher = Dispatchers.Default,
@@ -91,8 +98,12 @@ class TrafficViewModel(
     private val pageLoadMutex = Mutex()
     private val clearPresentationMutex = Mutex()
     private var filterRefreshJob: Job? = null
+    private var breakpointDraftJob: Job? = null
+    private var pendingDescriptorJob: Job? = null
+    private var durableAnnotationJob: Job? = null
     private var durableTransactions: List<TrafficRowUiState> = emptyList()
     private var pendingBreakpoints: List<PendingBreakpoint> = emptyList()
+    private var pendingRequestDescriptors: Map<String, RequestDescriptor> = emptyMap()
     private val interceptionHistory = object :
         LinkedHashMap<String, TrafficInterceptionUiState.Matched>(64, 0.75f, true) {
         override fun removeEldestEntry(
@@ -139,6 +150,7 @@ class TrafficViewModel(
         observeRulesUseCase()
             .onEach { rules ->
                 _uiState.update { it.copy(activeBreakpointRules = rules) }
+                schedulePendingRequestDescriptors()
             }
             .launchIn(viewModelScope)
 
@@ -150,6 +162,7 @@ class TrafficViewModel(
                 pendingBreakpoints = events
                 events.forEach(::rememberInterception)
                 publishTrafficProjection()
+                schedulePendingRequestDescriptors()
             }
             .launchIn(viewModelScope)
 
@@ -368,6 +381,7 @@ class TrafficViewModel(
                         try {
                             clearTrafficHistoryUseCase.execute()
                             pageLoadMutex.withLock {
+                                durableAnnotationJob?.cancel()
                                 preparedStateCache.clear()
                                 durableTransactions = emptyList()
                                 interceptionHistory.clear()
@@ -523,7 +537,9 @@ class TrafficViewModel(
                 statusText = "In Progress",
                 formattedTime = "-",
                 interception = paused,
-            ) ?: event.toTrafficRowUiState()
+            )?.let { row ->
+                pendingRequestDescriptors[event.id]?.let(row::withDescriptor) ?: row
+            } ?: event.toTrafficRowUiState(pendingRequestDescriptors[event.id])
         }
         val pendingIds = pendingByExchange.keys
         val sortedRows = (pendingRows + projectedDurable.filterNot { row -> row.transactionId in pendingIds })
@@ -592,7 +608,9 @@ class TrafficViewModel(
                 )
                 val latestState = _uiState.value
                 if (latestState.sessionId != sessionId) return
-                val refreshedRows = page.items.map { snapshot -> snapshot.toTrafficRowUiState() }
+                val refreshedRows = page.items.map { snapshot ->
+                    snapshot.toTrafficRowUiState().withDescriptor(describeRequestUseCase.execute(snapshot.request))
+                }
                 val sortedRows = mergePageRows(mode, refreshedRows)
                 val filtersStillMatch = latestState.searchQuery == before.searchQuery &&
                     latestState.selectedProtocolFilter == before.selectedProtocolFilter &&
@@ -600,6 +618,7 @@ class TrafficViewModel(
                     latestState.selectedStatusFilter == before.selectedStatusFilter
                 if (!filtersStillMatch) return
                 durableTransactions = sortedRows
+                observeDurableRequestKinds()
                 _uiState.update { current ->
                     current.copy(
                         nextPageCursor = when (mode) {
@@ -654,6 +673,7 @@ class TrafficViewModel(
                     item.host.contains(query, ignoreCase = true) ||
                     item.path.contains(query, ignoreCase = true) ||
                     item.method.contains(query, ignoreCase = true) ||
+                    item.displayMethod.contains(query, ignoreCase = true) ||
                     item.status.toString().contains(query)
 
             val matchesProtocol = protocol.matches(item)
@@ -673,29 +693,119 @@ class TrafficViewModel(
     }
 
     /**
-     * Constructs a pre-populated [BreakpointRule] from a captured transaction and opens the Add/Edit dialog.
+     * Resolves semantic identities for pending rows away from Compose and retains no body bytes.
+     *
+     * The queue is published first with its HTTP fallback. Descriptor completion then decorates the
+     * same exchange rows without delaying the interception drawer.
+     */
+    private fun schedulePendingRequestDescriptors() {
+        pendingDescriptorJob?.cancel()
+        val events = pendingBreakpoints
+        if (events.isEmpty()) {
+            pendingRequestDescriptors = emptyMap()
+            return
+        }
+        val rulesById = _uiState.value.activeBreakpointRules.associateBy { it.id }
+        pendingDescriptorJob = viewModelScope.launch {
+            val descriptors = withContext(backgroundDispatcher) {
+                events.associate { event ->
+                    val requestBody = event.candidate.requestBody
+                    val retainedBody = requestBody?.let { body ->
+                        RequestDescriptorBody(body.copyBytes(RequestDescriptorBody.MAXIMUM_BYTES))
+                    }
+                    val bodyComplete = when {
+                        requestBody == null -> event.candidate.requestObservedBodyBytes == 0L
+                        requestBody.size > RequestDescriptorBody.MAXIMUM_BYTES -> false
+                        else -> event.candidate.requestObservedBodyBytes == requestBody.size.toLong()
+                    }
+                    val kindHint = rulesById[event.ruleId]
+                        ?.protocolCriteria
+                        ?.protocolId
+                        ?.value
+                        ?.toRequestKindIdOrNull()
+                    event.id to describeRequestUseCase.execute(
+                        request = event.candidate.request,
+                        body = retainedBody,
+                        bodyComplete = bodyComplete,
+                        semanticKindHint = kindHint,
+                    )
+                }
+            }
+            if (pendingBreakpoints.map(PendingBreakpoint::id) == events.map(PendingBreakpoint::id)) {
+                pendingRequestDescriptors = descriptors
+                publishTrafficProjection()
+            }
+        }
+    }
+
+    /**
+     * Observes persisted semantic kinds for the bounded retained Traffic window as one Room flow.
+     *
+     * Semantic inspectors parse bodies once after capture. This projection consumes only their small
+     * annotations and therefore keeps row rendering body-free even for large traffic histories.
+     */
+    private fun observeDurableRequestKinds() {
+        durableAnnotationJob?.cancel()
+        val exchangeIds = durableTransactions.asSequence()
+            .take(MAXIMUM_ANNOTATION_OBSERVATION_ROWS)
+            .map { ExchangeId(it.transactionId) }
+            .toSet()
+        if (exchangeIds.isEmpty()) return
+
+        durableAnnotationJob = viewModelScope.launch {
+            observeInspectionAnnotationsUseCase.execute(exchangeIds).collect { annotationsByExchange ->
+                durableTransactions = durableTransactions.map { row ->
+                    val kindHint = annotationsByExchange[ExchangeId(row.transactionId)]
+                        .orEmpty()
+                        .asSequence()
+                        .mapNotNull { it.document?.kind?.toRequestKindIdOrNull() }
+                        .firstOrNull { it != RequestKindId.HTTP }
+                        ?: return@map row
+                    row.withDescriptor(
+                        describeRequestUseCase.execute(
+                            RequestDescriptorInput(
+                                transportMethod = CanonicalHttpMethod.fromToken(row.method),
+                                absoluteUrl = row.fullUrl,
+                                semanticKindHint = kindHint,
+                            ),
+                        ),
+                    )
+                }
+                publishTrafficProjection()
+            }
+        }
+    }
+
+    /**
+     * Prepares a protocol-aware breakpoint rule draft from a captured transaction.
+     *
+     * Semantic detection runs off the presentation thread through the application use case. The
+     * dialog opens only after one complete immutable draft is available, avoiding an HTTP-to-protocol
+     * visual transition while body inspection finishes.
      *
      * @param transactionId Target transaction UUID.
      */
     fun createBreakpointFromTransaction(transactionId: String) {
-        val item = uiState.value.transactions.find { it.transactionId == transactionId } ?: return
-        val targetUrl = item.fullUrl
-
-        val prefilledModel = BreakpointRule(
-            id = Uuid.random().toString(),
-            name = targetUrl,
-            phase = com.devuloopers.knet.domain.rules.model.BreakpointPhase.BOTH,
-            urlPattern = targetUrl,
-            method = CanonicalHttpMethod.fromToken(item.method),
-            enabled = true,
-            protocolCriteria = com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria.HttpDefault,
-        )
-
-        _uiState.update { state ->
-            state.copy(
-                isBreakpointDialogVisible = true,
-                prefilledBreakpointRule = prefilledModel
-            )
+        if (uiState.value.transactions.none { it.transactionId == transactionId }) return
+        val pendingCandidate = pendingBreakpoints.firstOrNull {
+            it.candidate.exchangeId.value == transactionId
+        }?.candidate
+        breakpointDraftJob?.cancel()
+        breakpointDraftJob = viewModelScope.launch {
+            val result = withContext(backgroundDispatcher) {
+                prepareBreakpointRuleDraftUseCase.execute(
+                    exchangeId = ExchangeId(transactionId),
+                    pendingCandidate = pendingCandidate,
+                )
+            }
+            val draft = (result as? PrepareBreakpointRuleDraftResult.Found)?.draft ?: return@launch
+            _uiState.update { state ->
+                state.copy(
+                    isBreakpointDialogVisible = true,
+                    prefilledBreakpointRule = draft.rule,
+                    prefilledBreakpointProtocolValues = draft.protocolValues,
+                )
+            }
         }
     }
 
@@ -703,7 +813,13 @@ class TrafficViewModel(
      * Closes the traffic workspace breakpoint rule dialog.
      */
     fun closeBreakpointDialog() {
-        _uiState.update { it.copy(isBreakpointDialogVisible = false, prefilledBreakpointRule = null) }
+        _uiState.update {
+            it.copy(
+                isBreakpointDialogVisible = false,
+                prefilledBreakpointRule = null,
+                prefilledBreakpointProtocolValues = emptyList(),
+            )
+        }
     }
 
     private fun createInitialState(): TrafficState {
@@ -727,6 +843,7 @@ class TrafficViewModel(
         private const val MAX_TRAFFIC_ROWS = 1_000
         private const val MAX_PREPARED_INSPECTOR_ENTRIES = 8
         private const val MAX_PREPARED_INSPECTOR_BYTES = 16L * 1_024L * 1_024L
+        private const val MAXIMUM_ANNOTATION_OBSERVATION_ROWS = 900
     }
 
     /** Purpose of a persisted page query and its bounded-window merge policy. */
@@ -749,6 +866,9 @@ class TrafficViewModel(
         val revision: Long,
     )
 }
+
+private fun String.toRequestKindIdOrNull(): RequestKindId? =
+    runCatching { RequestKindId(trim().lowercase()) }.getOrNull()
 
 private fun MethodFilter.toCanonicalMethods(): Set<CanonicalHttpMethod> = when (this) {
     MethodFilter.ALL -> emptySet()

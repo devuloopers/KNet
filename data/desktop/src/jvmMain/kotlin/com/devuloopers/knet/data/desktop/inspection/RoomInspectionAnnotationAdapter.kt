@@ -37,6 +37,15 @@ class RoomInspectionAnnotationAdapter(
     override fun observe(exchangeId: ExchangeId): Flow<List<InspectionAnnotation>> =
         dao.observeInspectionAnnotations(exchangeId.value).map { entities -> entities.mapNotNull(::toModel) }
 
+    override fun observe(
+        exchangeIds: Set<ExchangeId>,
+    ): Flow<Map<ExchangeId, List<InspectionAnnotation>>> {
+        require(exchangeIds.isNotEmpty()) { "At least one exchange ID is required for batch observation." }
+        return dao.observeInspectionAnnotations(exchangeIds.map(ExchangeId::value)).map { entities ->
+            entities.mapNotNull(::toModel).groupBy(InspectionAnnotation::exchangeId)
+        }
+    }
+
     private fun InspectionAnnotation.toEntity(sessionId: CaptureSessionId): InspectionAnnotationEntity =
         InspectionAnnotationEntity(
             id = "${exchangeId.value}|${inspectorId.value}|$schemaVersion",

@@ -7,13 +7,11 @@ import com.devuloopers.knet.application.port.breakpoint.BreakpointGate
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.engine.proxy.http.ProxyRequestContext
 import com.devuloopers.knet.engine.proxy.mapper.HttpMapper
-import com.devuloopers.knet.engine.proxy.pipeline.PipelineHandlerNames
 import com.devuloopers.knet.engine.proxy.pipeline.PreparedProxyExchange
 import com.devuloopers.knet.engine.proxy.pipeline.ProxyChannelAttributes
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.ExchangeState
 import com.devuloopers.knet.traffic.model.ExchangeTimings
-import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.HttpResponseSnapshot
 import com.devuloopers.knet.traffic.model.body.MessageBodyRef
 import io.netty.channel.ChannelDuplexHandler
@@ -22,7 +20,7 @@ import io.netty.channel.ChannelPromise
 import io.netty.handler.codec.http.FullHttpRequest
 import io.netty.handler.codec.http.FullHttpResponse
 import io.netty.handler.codec.http.HttpMethod
-import io.netty.handler.codec.http.HttpResponse as NettyHttpResponse
+import io.netty.handler.codec.http.HttpRequest
 import io.netty.util.ReferenceCountUtil
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -31,15 +29,17 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
-import java.net.URI
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Clock
+import io.netty.handler.codec.http.HttpResponse as NettyHttpResponse
 
 /**
  * Netty adapter for the application-owned [BreakpointGate].
  *
  * The adapter owns each paused Netty message exactly once, performs no persistence/UI work, and
  * schedules every pipeline mutation back onto the channel event loop.
+ *
+ * @param breakpointGate Application-owned matching, admission, and decision boundary.
  */
 class KNetInterceptorHandler(
     private val breakpointGate: BreakpointGate,
@@ -49,12 +49,20 @@ class KNetInterceptorHandler(
     private val orderedRequests = ArrayDeque<ProxyRequestContext>()
 
     override fun channelRead(context: ChannelHandlerContext, msg: Any) {
-        if (msg !is FullHttpRequest || msg.method() == HttpMethod.CONNECT) {
+        if (msg !is HttpRequest || msg.method() == HttpMethod.CONNECT) {
             super.channelRead(context, msg)
             return
         }
-        val requestContext = mapRequest(context, msg)
-        context.channel().attr(ChannelAttributes.REQUEST_CONTEXT).set(requestContext)
+        val requestContext = mapBreakpointRequest(context, msg)
+        context.channel().attr(ProxyChannelAttributes.REQUEST_CONTEXT).set(requestContext)
+        if (msg !is FullHttpRequest) {
+            // Keep every forwarded request in the response-order queue. Tracking only requests
+            // selected for aggregation would let an earlier unselected response consume the
+            // correlation of a later selected pipelined request.
+            orderedRequests.addLast(requestContext)
+            super.channelRead(context, msg)
+            return
+        }
         // Capture metadata is admitted before the application forwarding gate can suspend. The
         // forwarding handler consumes this exact handle after resume, so the table can publish one
         // in-progress row without starting a duplicate exchange or coupling capture to UI state.
@@ -69,45 +77,52 @@ class KNetInterceptorHandler(
         context.channel().attr(ProxyChannelAttributes.PREPARED_EXCHANGE).set(
             PreparedProxyExchange(requestContext.exchangeId, exchangeCapture),
         )
-        val candidate = BreakpointCandidate(
-            exchangeId = requestContext.exchangeId,
-            phase = BreakpointPhase.REQUEST,
-            request = requestContext.request,
-            requestBody = boundedBody(msg.content().readableBytes()) { copyContent(msg) },
-            requestObservedBodyBytes = msg.content().readableBytes().toLong(),
-            startedAtEpochMillis = requestContext.startedAtEpochMillis,
-        )
+        val readableBodyBytes = msg.content().readableBytes()
         pauseReads(context)
         coordinate(
             context = context,
-            candidate = candidate,
+            exchangeId = requestContext.exchangeId,
+            candidateFactory = {
+                BreakpointCandidate(
+                    exchangeId = requestContext.exchangeId,
+                    phase = BreakpointPhase.REQUEST,
+                    request = requestContext.request,
+                    requestBody = boundedBody(readableBodyBytes) { copyContent(msg) },
+                    requestObservedBodyBytes = readableBodyBytes.toLong(),
+                    retainedTransportBytes = readableBodyBytes.toLong(),
+                    startedAtEpochMillis = requestContext.startedAtEpochMillis,
+                )
+            },
             original = msg,
             promise = null,
         ) { decision ->
             when (decision) {
                 BreakpointDecision.Drop -> {
+                    breakpointGate.releaseExchange(requestContext.exchangeId)
                     cancelPreparedCapture(context, REQUEST_REJECTED_ERROR)
                     ReferenceCountUtil.release(msg)
                     context.close()
                 }
+
                 BreakpointDecision.ContinueUnchanged -> {
                     orderedRequests.addLast(requestContext)
                     context.fireChannelRead(msg)
                     resumeReads(context)
                 }
-                is BreakpointDecision.Resume -> {
-                    val edit = decision.requestEdit
-                    if (edit == null) {
-                        orderedRequests.addLast(requestContext)
-                        context.fireChannelRead(msg)
-                    } else {
-                        val updatedContext = requestContext.copy(request = edit.request)
-                        context.channel().attr(ChannelAttributes.REQUEST_CONTEXT).set(updatedContext)
-                        orderedRequests.addLast(updatedContext)
-                        val rebuilt = RequestRebuilder.rebuild(msg, edit)
-                        ReferenceCountUtil.release(msg)
-                        context.fireChannelRead(rebuilt)
-                    }
+
+                is BreakpointDecision.ResumeRequest -> {
+                    val updatedContext = requestContext.copy(request = decision.edit.request)
+                    context.channel().attr(ProxyChannelAttributes.REQUEST_CONTEXT).set(updatedContext)
+                    orderedRequests.addLast(updatedContext)
+                    val rebuilt = RequestRebuilder.rebuild(msg, decision.edit)
+                    ReferenceCountUtil.release(msg)
+                    context.fireChannelRead(rebuilt)
+                    resumeReads(context)
+                }
+
+                is BreakpointDecision.ResumeResponse -> {
+                    orderedRequests.addLast(requestContext)
+                    context.fireChannelRead(msg)
                     resumeReads(context)
                 }
             }
@@ -116,6 +131,10 @@ class KNetInterceptorHandler(
 
     override fun write(context: ChannelHandlerContext, msg: Any, promise: ChannelPromise) {
         if (msg is FullHttpResponse) {
+            if (msg.status().code() in 100..199 && msg.status().code() != 101) {
+                super.write(context, msg, promise)
+                return
+            }
             val requestContext = orderedRequests.firstOrNull()
             if (requestContext == null) {
                 super.write(context, msg, promise)
@@ -125,19 +144,23 @@ class KNetInterceptorHandler(
                 head = HttpMapper.mapResponseHead(msg),
                 body = MessageBodyRef.Empty,
             )
-            val candidate = BreakpointCandidate(
-                exchangeId = requestContext.exchangeId,
-                phase = BreakpointPhase.RESPONSE,
-                request = requestContext.request,
-                response = responseSnapshot,
-                responseBody = boundedBody(msg.content().readableBytes()) { copyContent(msg) },
-                responseObservedBodyBytes = msg.content().readableBytes().toLong(),
-                startedAtEpochMillis = requestContext.startedAtEpochMillis,
-            )
+            val readableBodyBytes = msg.content().readableBytes()
             pauseReads(context)
             coordinate(
                 context = context,
-                candidate = candidate,
+                exchangeId = requestContext.exchangeId,
+                candidateFactory = {
+                    BreakpointCandidate(
+                        exchangeId = requestContext.exchangeId,
+                        phase = BreakpointPhase.RESPONSE,
+                        request = requestContext.request,
+                        response = responseSnapshot,
+                        responseBody = boundedBody(readableBodyBytes) { copyContent(msg) },
+                        responseObservedBodyBytes = readableBodyBytes.toLong(),
+                        retainedTransportBytes = readableBodyBytes.toLong(),
+                        startedAtEpochMillis = requestContext.startedAtEpochMillis,
+                    )
+                },
                 original = msg,
                 promise = promise,
             ) { decision ->
@@ -145,30 +168,38 @@ class KNetInterceptorHandler(
                 when (decision) {
                     BreakpointDecision.Drop -> {
                         ReferenceCountUtil.release(msg)
-                        promise.trySuccess()
+                        promise.tryFailure(BreakpointResponseRejectedException())
                         context.close()
                     }
+
                     BreakpointDecision.ContinueUnchanged -> {
                         context.writeAndFlush(msg, promise)
                         resumeReads(context)
                     }
-                    is BreakpointDecision.Resume -> {
-                        val edit = decision.responseEdit
-                        if (edit == null) {
-                            context.writeAndFlush(msg, promise)
-                        } else {
-                            val rebuilt = ResponseRebuilder.rebuild(msg, edit)
-                            ReferenceCountUtil.release(msg)
-                            context.writeAndFlush(rebuilt, promise)
-                        }
+
+                    is BreakpointDecision.ResumeResponse -> {
+                        val rebuilt = ResponseRebuilder.rebuild(
+                            original = msg,
+                            edit = decision.edit,
+                            requestMethod = HttpMethod.valueOf(requestContext.request.head.method.token),
+                        )
+                        ReferenceCountUtil.release(msg)
+                        context.writeAndFlush(rebuilt, promise)
+                        resumeReads(context)
+                    }
+
+                    is BreakpointDecision.ResumeRequest -> {
+                        context.writeAndFlush(msg, promise)
                         resumeReads(context)
                     }
                 }
             }
             return
         }
-        if (msg is NettyHttpResponse && msg.status().code() >= 200) {
-            orderedRequests.removeFirstOrNull()
+        if (msg is NettyHttpResponse && (msg.status().code() >= 200 || msg.status().code() == 101)) {
+            orderedRequests.removeFirstOrNull()?.let { requestContext ->
+                breakpointGate.releaseExchange(requestContext.exchangeId)
+            }
         }
         super.write(context, msg, promise)
     }
@@ -187,7 +218,8 @@ class KNetInterceptorHandler(
 
     private fun coordinate(
         context: ChannelHandlerContext,
-        candidate: BreakpointCandidate,
+        exchangeId: ExchangeId,
+        candidateFactory: () -> BreakpointCandidate,
         original: Any,
         promise: ChannelPromise?,
         applyDecision: (BreakpointDecision) -> Unit,
@@ -195,7 +227,9 @@ class KNetInterceptorHandler(
         val originalHandled = AtomicBoolean(false)
         val job = scope.launch {
             val decision = try {
-                breakpointGate.intercept(candidate)
+                // The paused message is exclusively owned by this handler, so bounded body copying
+                // and protocol inspection can run away from the Netty event loop without mutation.
+                breakpointGate.intercept(candidateFactory())
             } catch (_: CancellationException) {
                 throw CancellationException("Breakpoint channel work cancelled.")
             } catch (_: Exception) {
@@ -203,7 +237,7 @@ class KNetInterceptorHandler(
             }
             context.executor().execute {
                 if (!originalHandled.compareAndSet(false, true)) return@execute
-                activeJobs.remove(candidate.exchangeId)
+                activeJobs.remove(exchangeId)
                 if (!context.channel().isActive) {
                     ReferenceCountUtil.release(original)
                     promise?.tryFailure(IllegalStateException("Breakpoint channel closed before decision."))
@@ -218,15 +252,7 @@ class KNetInterceptorHandler(
                 promise?.tryFailure(failure)
             }
         }
-        activeJobs[candidate.exchangeId] = job
-    }
-
-    private fun mapRequest(context: ChannelHandlerContext, request: FullHttpRequest): ProxyRequestContext {
-        val isSsl = context.channel().attr(ChannelAttributes.SSL_ATTR).get() == true ||
-            context.pipeline().get(PipelineHandlerNames.SSL) != null
-        val authority = resolveAuthority(context, request, isSsl)
-        val relativeUri = relativeUri(request.uri())
-        return HttpMapper.mapRequestContext(request, isSsl, authority.first, authority.second, relativeUri)
+        activeJobs[exchangeId] = job
     }
 
     private fun boundedBody(readableBytes: Int, copy: () -> ByteArray): BreakpointBody? =
@@ -240,39 +266,10 @@ class KNetInterceptorHandler(
         request.content().getBytes(request.content().readerIndex(), it)
     }
 
-    private fun copyContent(response: FullHttpResponse): ByteArray = ByteArray(response.content().readableBytes()).also {
-        response.content().getBytes(response.content().readerIndex(), it)
-    }
-
-    private fun resolveAuthority(
-        context: ChannelHandlerContext,
-        request: FullHttpRequest,
-        isSsl: Boolean,
-    ): Pair<String, Int> {
-        val tunneledHost = context.channel().attr(ChannelAttributes.HOST_ATTR).get()
-        if (!tunneledHost.isNullOrBlank()) return tunneledHost to if (isSsl) 443 else 80
-        val hostHeader = request.headers()["Host"].orEmpty()
-        val defaultPort = if (isSsl) 443 else 80
-        val bracketEnd = hostHeader.indexOf(']')
-        return if (hostHeader.startsWith('[') && bracketEnd > 0) {
-            val host = hostHeader.substring(1, bracketEnd)
-            host to (hostHeader.substring(bracketEnd + 1).removePrefix(":").toIntOrNull() ?: defaultPort)
-        } else {
-            val possiblePort = hostHeader.substringAfterLast(':', "").toIntOrNull()
-            val host = if (possiblePort == null) hostHeader else hostHeader.substringBeforeLast(':')
-            host.ifBlank { "unknown" } to (possiblePort ?: defaultPort)
+    private fun copyContent(response: FullHttpResponse): ByteArray =
+        ByteArray(response.content().readableBytes()).also {
+            response.content().getBytes(response.content().readerIndex(), it)
         }
-    }
-
-    private fun relativeUri(uri: String): String = if (uri.startsWith("http://") || uri.startsWith("https://")) {
-        runCatching {
-            val parsed = URI.create(uri)
-            val path = parsed.rawPath?.ifBlank { "/" } ?: "/"
-            parsed.rawQuery?.let { "$path?$it" } ?: path
-        }.getOrDefault(uri)
-    } else {
-        uri
-    }
 
     private fun pauseReads(context: ChannelHandlerContext) {
         context.channel().config().isAutoRead = false
@@ -297,7 +294,7 @@ class KNetInterceptorHandler(
     }
 
     private fun cancelActiveWork() {
-        val exchanges = activeJobs.keys.toList()
+        val exchanges = (activeJobs.keys + orderedRequests.map(ProxyRequestContext::exchangeId)).distinct()
         exchanges.forEach(breakpointGate::cancelExchange)
         activeJobs.values.forEach(Job::cancel)
         activeJobs.clear()
@@ -310,7 +307,8 @@ class KNetInterceptorHandler(
         const val DOWNSTREAM_CANCELLED_ERROR: String = "downstream_cancelled_before_forwarding"
         const val HANDLER_REMOVED_ERROR: String = "interceptor_removed_before_forwarding"
     }
-
 }
 
-private fun <T> ArrayDeque<T>.removeFirstOrNull(): T? = if (isEmpty()) null else removeFirst()
+private class BreakpointResponseRejectedException : java.io.IOException(
+    "The intercepted response was dropped before downstream delivery.",
+)

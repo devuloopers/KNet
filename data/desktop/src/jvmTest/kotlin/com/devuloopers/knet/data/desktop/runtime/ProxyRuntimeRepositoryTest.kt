@@ -1,5 +1,6 @@
 package com.devuloopers.knet.data.desktop.runtime
 
+import com.devuloopers.knet.application.port.breakpoint.BreakpointCoordinator
 import com.devuloopers.knet.engine.certificate.CertificateAuthority
 import com.devuloopers.knet.engine.certificate.CertificateCache
 import kotlin.test.Test
@@ -14,7 +15,7 @@ class ProxyRuntimeRepositoryTest {
     fun testProxyIsNotRunningInitially() {
         val ca = CertificateAuthority.generate()
         val certCache = CertificateCache()
-        val repo = ProxyRuntimeRepository(ca, certCache)
+        val repo = ProxyRuntimeRepository(ca, certCache, breakpointGate = BreakpointCoordinator())
 
         assertFalse(repo.isRunning(), "Proxy server must not be running initially")
         repo.close()
@@ -24,7 +25,7 @@ class ProxyRuntimeRepositoryTest {
     fun testStopProxyWhenNotStartedDoesNotThrow() {
         val ca = CertificateAuthority.generate()
         val certCache = CertificateCache()
-        val repo = ProxyRuntimeRepository(ca, certCache)
+        val repo = ProxyRuntimeRepository(ca, certCache, breakpointGate = BreakpointCoordinator())
 
         repo.stopProxy()
         assertFalse(repo.isRunning())

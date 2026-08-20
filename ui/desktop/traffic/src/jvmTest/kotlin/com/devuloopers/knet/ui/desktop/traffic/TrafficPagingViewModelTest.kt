@@ -10,6 +10,7 @@ import com.devuloopers.knet.application.port.traffic.TrafficPageCursor
 import com.devuloopers.knet.application.port.traffic.TrafficPageQuery
 import com.devuloopers.knet.application.port.traffic.TrafficQueryPort
 import com.devuloopers.knet.application.port.traffic.TrafficSessionCatalogPort
+import com.devuloopers.knet.application.port.inspection.InspectionAnnotationPort
 import com.devuloopers.knet.traffic.id.BodyId
 import com.devuloopers.knet.traffic.id.CaptureSessionId
 import com.devuloopers.knet.traffic.id.ExchangeId
@@ -25,7 +26,13 @@ import com.devuloopers.knet.traffic.model.http.RequestHead
 import com.devuloopers.knet.traffic.model.http.RequestTarget
 import com.devuloopers.knet.traffic.model.http.ResponseHead
 import com.devuloopers.knet.traffic.model.http.HttpStatus
+import com.devuloopers.knet.traffic.inspection.InspectionAnnotation
+import com.devuloopers.knet.traffic.inspection.InspectionAnnotationState
+import com.devuloopers.knet.traffic.inspection.InspectionDocument
+import com.devuloopers.knet.traffic.inspection.InspectorId
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
+import com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria
+import com.devuloopers.knet.domain.request.descriptor.RequestKindId
 import com.devuloopers.knet.ui.desktop.traffic.model.TrafficIntent
 import com.devuloopers.knet.ui.desktop.traffic.model.TrafficInterceptionUiState
 import kotlinx.coroutines.Dispatchers
@@ -34,6 +41,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -131,6 +139,88 @@ class TrafficPagingViewModelTest {
 
         assertEquals("live-49", viewModel.uiState.value.transactions.first().transactionId)
         assertTrue(port.queryCalls >= 2)
+    }
+
+    @Test
+    fun `traffic row renders semantic method while retaining http transport method`() = runTest(dispatcher) {
+        val graphQl = snapshot("graphql-row", 2_000L).copy(
+            request = HttpRequestSnapshot(
+                snapshot("graphql-row", 2_000L).request.head.copy(
+                    method = HttpMethod.POST,
+                    target = RequestTarget.Absolute(
+                        HttpScheme.fromToken("https"),
+                        Authority("api.example.com"),
+                        "/graphql",
+                    ),
+                ),
+            ),
+        )
+        val viewModel = FakeTrafficViewModelFactory.create(
+            customTrafficQueryPort = LiveTrafficPort(CaptureSessionId("fake-session"), listOf(graphQl)),
+        )
+
+        advanceUntilIdle()
+
+        val row = viewModel.uiState.value.transactions.single()
+        assertEquals("POST", row.method)
+        assertEquals("GQL", row.displayMethod)
+        assertEquals(RequestKindId.GRAPHQL, row.requestKind)
+    }
+
+    @Test
+    fun `persisted semantic annotation reactively refines a nonstandard endpoint`() = runTest(dispatcher) {
+        val exchange = snapshot("semantic-hint", 2_000L).copy(
+            request = HttpRequestSnapshot(
+                snapshot("semantic-hint", 2_000L).request.head.copy(
+                    method = HttpMethod.POST,
+                    target = RequestTarget.Absolute(
+                        HttpScheme.fromToken("https"),
+                        Authority("api.example.com"),
+                        "/gateway",
+                    ),
+                ),
+            ),
+        )
+        val annotations = MutableStateFlow<Map<ExchangeId, List<InspectionAnnotation>>>(emptyMap())
+        val annotationPort = object : InspectionAnnotationPort {
+            override suspend fun put(sessionId: CaptureSessionId, annotation: InspectionAnnotation) = Unit
+            override suspend fun get(exchangeId: ExchangeId): List<InspectionAnnotation> =
+                annotations.value[exchangeId].orEmpty()
+
+            override fun observe(exchangeId: ExchangeId): Flow<List<InspectionAnnotation>> =
+                annotations.map { it[exchangeId].orEmpty() }
+
+            override fun observe(
+                exchangeIds: Set<ExchangeId>,
+            ): Flow<Map<ExchangeId, List<InspectionAnnotation>>> = annotations.map { current ->
+                current.filterKeys { it in exchangeIds }
+            }
+        }
+        val viewModel = FakeTrafficViewModelFactory.create(
+            customTrafficQueryPort = LiveTrafficPort(CaptureSessionId("fake-session"), listOf(exchange)),
+            customInspectionAnnotationPort = annotationPort,
+        )
+        advanceUntilIdle()
+        assertEquals("POST", viewModel.uiState.value.transactions.single().displayMethod)
+
+        annotations.value = mapOf(
+            exchange.id to listOf(
+                InspectionAnnotation(
+                    exchangeId = exchange.id,
+                    inspectorId = InspectorId("graphql"),
+                    schemaVersion = 1L,
+                    state = InspectionAnnotationState.COMPLETED,
+                    document = InspectionDocument(kind = "graphql", title = "GraphQL query"),
+                    createdAtEpochMillis = 2_100L,
+                ),
+            ),
+        )
+        advanceUntilIdle()
+
+        val refined = viewModel.uiState.value.transactions.single()
+        assertEquals("POST", refined.method)
+        assertEquals("GQL", refined.displayMethod)
+        assertEquals(RequestKindId.GRAPHQL, refined.requestKind)
     }
 
     @Test
@@ -256,6 +346,30 @@ class TrafficPagingViewModelTest {
         val resolved = viewModel.uiState.value.transactions.single()
         assertEquals(204, resolved.status)
         assertTrue(resolved.interception is TrafficInterceptionUiState.Matched)
+    }
+
+    @Test
+    fun `captured row opens one application-prepared breakpoint draft`() = runTest(dispatcher) {
+        val captured = snapshot("draft-source", 6_000L)
+        val viewModel = FakeTrafficViewModelFactory.create(
+            customTrafficQueryPort = LiveTrafficPort(
+                sessionId = CaptureSessionId("fake-session"),
+                initialSnapshots = listOf(captured),
+            ),
+        )
+        advanceUntilIdle()
+
+        viewModel.createBreakpointFromTransaction(captured.id.value)
+        advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertTrue(state.isBreakpointDialogVisible)
+        assertEquals("https://api.example.com/items/draft-source", state.prefilledBreakpointRule?.urlPattern)
+        assertEquals(
+            ProtocolMatchCriteria.HttpDefault,
+            state.prefilledBreakpointRule?.protocolCriteria,
+        )
+        assertEquals(emptyList(), state.prefilledBreakpointProtocolValues)
     }
 
     private class FakePagedPort(rowCount: Int) : TrafficQueryPort {

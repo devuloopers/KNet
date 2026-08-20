@@ -1,5 +1,6 @@
 package com.devuloopers.knet.ui.desktop.traffic.model
 
+import com.devuloopers.knet.application.port.breakpoint.ProtocolCriteriaValue
 import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
 import com.devuloopers.knet.application.port.traffic.TrafficPageCursor
 import com.devuloopers.knet.traffic.id.CaptureSessionId
@@ -46,6 +47,7 @@ enum class InspectorTab {
  * @property activeInspectorTab Currently selected inspection tab.
  * @property activeRequestSubTab Currently selected request sub-tab (Headers, Query, Body).
  * @property activeResponseSubTab Currently selected response sub-tab (Headers, Body).
+ * @property prefilledBreakpointProtocolValues Generic extension-owned values for a captured rule draft.
  */
 data class TrafficState(
     val transactions: List<TrafficRowUiState> = emptyList(),
@@ -73,7 +75,8 @@ data class TrafficState(
     val localIpAddress: String = "127.0.0.1",
     val activeBreakpointRules: List<BreakpointRule> = emptyList(),
     val isBreakpointDialogVisible: Boolean = false,
-    val prefilledBreakpointRule: BreakpointRule? = null
+    val prefilledBreakpointRule: BreakpointRule? = null,
+    val prefilledBreakpointProtocolValues: List<ProtocolCriteriaValue> = emptyList(),
 ) {
     /**
      * Selected transaction UI model matching [selectedTransactionId].

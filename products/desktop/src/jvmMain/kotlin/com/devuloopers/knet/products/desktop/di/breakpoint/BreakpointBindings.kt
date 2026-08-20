@@ -11,6 +11,7 @@ import com.devuloopers.knet.application.usecase.breakpoint.DropMatchingBreakpoin
 import com.devuloopers.knet.application.usecase.breakpoint.ObservePendingBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.ResolveBreakpointUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.BreakpointProtocolRuleUseCase
+import com.devuloopers.knet.application.usecase.breakpoint.PrepareBreakpointRuleDraftUseCase
 import com.devuloopers.knet.data.desktop.rules.repository.RulesRepositoryImpl
 import com.devuloopers.knet.domain.rules.repository.RulesRepository
 import com.devuloopers.knet.domain.rules.usecase.DeleteRuleUseCase
@@ -25,6 +26,9 @@ import com.devuloopers.knet.ui.desktop.breakpointmanager.viewmodel.BreakpointMan
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.SupervisorJob
 
 /** Breakpoint gate, rule persistence, active sessions, workflows, and presentation. */
 internal val breakpointBindings: Module = module {
@@ -34,9 +38,14 @@ internal val breakpointBindings: Module = module {
     single<BreakpointControlPort> { get<BreakpointCoordinator>() }
     single<BreakpointCaptureAvailabilityPort> { get<BreakpointCoordinator>() }
 
-    single<RulesRepository> {
-        RulesRepositoryImpl(get<KNetDatabase>().breakpointRuleDao(), get())
+    single {
+        RulesRepositoryImpl(
+            breakpointRuleDao = get<KNetDatabase>().breakpointRuleDao(),
+            breakpointControl = get(),
+            coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+        )
     }
+    single<RulesRepository> { get<RulesRepositoryImpl>() }
     factory { GetRulesUseCase(get()) }
     factory { ObserveRulesUseCase(get()) }
     factory { SaveRuleUseCase(get()) }
@@ -49,6 +58,7 @@ internal val breakpointBindings: Module = module {
     factory { DropMatchingBreakpointsUseCase(get()) }
     factory { ClearPendingBreakpointsUseCase(get()) }
     factory { BreakpointProtocolRuleUseCase(get()) }
+    factory { PrepareBreakpointRuleDraftUseCase(get(), get()) }
 
     viewModel {
         BreakpointManagerViewModel(
@@ -62,6 +72,8 @@ internal val breakpointBindings: Module = module {
             resolveBreakpointUseCase = get(),
             clearPendingBreakpointsUseCase = get(),
             breakpointProtocolRuleUseCase = get(),
+            describeRequestUseCase = get(),
+            ioDispatcher = Dispatchers.Default,
         )
     }
 }

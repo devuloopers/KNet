@@ -17,11 +17,14 @@ import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.ExchangeState
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.TrafficDirection
+import com.devuloopers.knet.traffic.model.absoluteUrl
 import com.devuloopers.knet.traffic.model.body.ContentEncoding
 import com.devuloopers.knet.traffic.model.http.RequestHead
 import com.devuloopers.knet.traffic.model.http.ResponseHead
 import io.netty.channel.embedded.EmbeddedChannel
 import io.netty.handler.codec.http.DefaultFullHttpResponse
+import io.netty.handler.codec.http.DefaultHttpRequest
+import io.netty.handler.codec.http.DefaultHttpResponse
 import io.netty.handler.codec.http.FullHttpRequest
 import io.netty.handler.codec.http.FullHttpResponse
 import io.netty.handler.codec.http.HttpResponseStatus
@@ -129,6 +132,72 @@ class ApplicationBreakpointGateIntegrationTest {
         assertEquals(1, forwardedResponse.refCnt())
         forwardedResponse.release()
         assertEquals(0, response.refCnt())
+        channel.finishAndReleaseAll()
+    }
+
+    @Test
+    fun `provisional response does not consume final response correlation`() {
+        val coordinator = coordinator(BreakpointPhase.RESPONSE)
+        val channel = EmbeddedChannel(KNetInterceptorHandler(coordinator))
+        channel.writeInbound(TestFixtures.createFullHttpRequest("https://api.example.com/v1/data"))
+        awaitCondition(channel) { channel.config().isAutoRead }
+        channel.readInbound<FullHttpRequest>().release()
+
+        val provisional = DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.CONTINUE)
+        channel.writeOutbound(provisional)
+        assertTrue(coordinator.pendingBreakpoints.value.isEmpty())
+        assertSame(provisional, channel.readOutbound<FullHttpResponse>())
+        provisional.release()
+
+        val finalResponse = DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK)
+        channel.writeOutbound(finalResponse)
+        val pending = awaitPending(coordinator, channel)
+        runBlocking { coordinator.resolve(pending.id, BreakpointDecision.ContinueUnchanged) }
+        awaitCondition(channel) { channel.config().isAutoRead }
+        channel.readOutbound<FullHttpResponse>().release()
+        channel.finishAndReleaseAll()
+    }
+
+    @Test
+    fun `unselected response does not consume later selected request correlation`() {
+        val coordinator = BreakpointCoordinator().also { value ->
+            value.replaceRules(
+                listOf(
+                    BreakpointRule(
+                        id = "selected-response",
+                        phase = BreakpointPhase.RESPONSE,
+                        urlPattern = "*selected*",
+                    ),
+                ),
+            )
+        }
+        val channel = EmbeddedChannel(KNetInterceptorHandler(coordinator))
+
+        val unselectedRequest = DefaultHttpRequest(
+            HttpVersion.HTTP_1_1,
+            io.netty.handler.codec.http.HttpMethod.GET,
+            "https://api.example.com/unselected",
+        ).apply { headers().set(HttpHeaderNames.HOST, "api.example.com") }
+        channel.writeInbound(unselectedRequest)
+        assertSame(unselectedRequest, channel.readInbound<DefaultHttpRequest>())
+
+        val selectedRequest = TestFixtures.createFullHttpRequest("https://api.example.com/selected")
+        channel.writeInbound(selectedRequest)
+        awaitCondition(channel) { channel.config().isAutoRead }
+        channel.readInbound<FullHttpRequest>().release()
+
+        val unselectedResponse = DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK)
+        channel.writeOutbound(unselectedResponse)
+        assertSame(unselectedResponse, channel.readOutbound<DefaultHttpResponse>())
+
+        val selectedResponse = DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK)
+        channel.writeOutbound(selectedResponse)
+        val pending = awaitPending(coordinator, channel)
+
+        assertEquals("https://api.example.com:443/selected", pending.candidate.request.absoluteUrl())
+        runBlocking { coordinator.resolve(pending.id, BreakpointDecision.ContinueUnchanged) }
+        awaitCondition(channel) { channel.config().isAutoRead }
+        channel.readOutbound<FullHttpResponse>().release()
         channel.finishAndReleaseAll()
     }
 
