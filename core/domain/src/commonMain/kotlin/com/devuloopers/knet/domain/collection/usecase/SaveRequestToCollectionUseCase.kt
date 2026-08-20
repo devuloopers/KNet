@@ -49,9 +49,15 @@ class SaveRequestToCollectionUseCase(
         request: SavedApiRequest,
         unsavedRequestIdToDelete: String? = null
     ) {
-        repository.saveRequest(collectionId = collectionId, folderId = folderId, request = request)
-        if (unsavedRequestIdToDelete != null) {
-            repository.deleteUnsavedRequest(unsavedRequestIdToDelete)
+        if (unsavedRequestIdToDelete == null) {
+            repository.saveRequest(collectionId = collectionId, folderId = folderId, request = request)
+        } else {
+            repository.saveUnsavedToExistingCollectionTx(
+                collectionId = collectionId,
+                folderId = folderId,
+                request = request,
+                unsavedRequestIdToDelete = unsavedRequestIdToDelete
+            )
         }
     }
 }

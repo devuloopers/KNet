@@ -1,49 +1,48 @@
 package com.devuloopers.knet.ui.desktop.apistudio.editor
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.devuloopers.knet.ui.core.components.button.ButtonVariant
-import com.devuloopers.knet.ui.core.components.button.KNetButton
-import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdown
-import com.devuloopers.knet.ui.core.components.input.InputFieldConfig
-import com.devuloopers.knet.ui.core.components.input.KNetTextField
-import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
-import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import com.devuloopers.knet.ui.core.components.button.ButtonVariant
+import com.devuloopers.knet.ui.core.components.button.KNetButton
+import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdown
+import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdownSize
+import com.devuloopers.knet.ui.core.components.input.InputFieldConfig
+import com.devuloopers.knet.ui.core.components.input.KNetTextField
+import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.ui.desktop.apistudio.theme.ApiStudioColors
+import com.devuloopers.knet.ui.desktop.httppanel.theme.HttpMethodColors
+import com.devuloopers.knet.traffic.model.http.HttpMethod
 
-private val httpMethods = listOf("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS")
+private val httpMethods = listOf(
+    HttpMethod.GET,
+    HttpMethod.POST,
+    HttpMethod.PUT,
+    HttpMethod.PATCH,
+    HttpMethod.DELETE,
+    HttpMethod.HEAD,
+    HttpMethod.OPTIONS
+)
 
 /**
- * Modern, high-density URL authoring bar featuring:
- * Sleek Method Dropdown Box + Seamless Monospaced URL TextField with Overflow Hover Dialog + Action Send KNetButton with loading support.
+ * High-density request authoring bar with a standalone method selector, flexible URL field, and request actions.
  *
- * @param method Active HTTP method string (GET, POST, PUT, DELETE, etc.).
+ * @param method Active strongly typed HTTP method.
  * @param url Target request URL string.
  * @param onMethodChanged Callback when HTTP method selection changes.
  * @param onUrlChanged Callback when URL text input changes.
@@ -55,9 +54,9 @@ private val httpMethods = listOf("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"
  */
 @Composable
 fun RequestUrlBar(
-    method: String,
+    method: HttpMethod,
     url: String,
-    onMethodChanged: (String) -> Unit,
+    onMethodChanged: (HttpMethod) -> Unit,
     onUrlChanged: (String) -> Unit,
     onSendClicked: () -> Unit,
     onCancelClicked: (() -> Unit)? = null,
@@ -65,7 +64,6 @@ fun RequestUrlBar(
     isExecuting: Boolean = false,
     modifier: Modifier = Modifier
 ) {
-    val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
     val spacing = KNetTheme.spacing
 
@@ -76,60 +74,42 @@ fun RequestUrlBar(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Single Seamless Combined URL Bar Container
-        Row(
+        KNetDropdown(
+            selectedItem = method,
+            items = httpMethods,
+            onItemSelected = onMethodChanged,
+            defaultItem = null,
+            size = KNetDropdownSize.Large,
+            centeredAnchorContent = true,
+            itemText = HttpMethod::token,
+            itemColor = { HttpMethodColors.getMethodTextColor(it.token) }
+        )
+
+        KNetTextField(
+            value = url,
+            onValueChange = onUrlChanged,
             modifier = Modifier
                 .weight(1f)
-                .height(40.dp)
-                .clip(RoundedCornerShape(6.dp))
-                .background(themeColors.surfaceVariant)
-                .border(width = 1.dp, color = themeColors.border, shape = RoundedCornerShape(6.dp)),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Method Dropdown Selector Box with left padding
-            KNetDropdown(
-                selectedItem = method,
-                items = httpMethods,
-                onItemSelected = onMethodChanged,
-                itemColor = { ApiStudioColors.getMethodTextColor(it) },
-                modifier = Modifier.padding(start = 8.dp, top = 4.dp, bottom = 4.dp, end = 6.dp)
-            )
-
-            // Vertical Divider line between Method and URL input
-            Box(
-                modifier = Modifier
-                    .fillMaxHeight()
-                    .padding(vertical = 6.dp)
-                    .border(width = 0.5.dp, color = themeColors.border.copy(alpha = 0.6f))
-            )
-
-            // Seamless Monospaced URL Input Field with automatic overflow hover popup support
-            KNetTextField(
-                value = url,
-                onValueChange = onUrlChanged,
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .onKeyEvent { keyEvent ->
-                        if (keyEvent.type == KeyEventType.KeyDown && (keyEvent.key == Key.Enter || keyEvent.key == Key.NumPadEnter)) {
-                            if (isExecuting) {
-                                onCancelClicked?.invoke()
-                            } else {
-                                onSendClicked()
-                            }
-                            true
+                .onKeyEvent { keyEvent ->
+                    if (keyEvent.type == KeyEventType.KeyDown &&
+                        (keyEvent.key == Key.Enter || keyEvent.key == Key.NumPadEnter)
+                    ) {
+                        if (isExecuting) {
+                            onCancelClicked?.invoke()
                         } else {
-                            false
+                            onSendClicked()
                         }
-                    },
-                config = InputFieldConfig(
-                    placeholder = "URL",
-                    backgroundColor = Color.Transparent,
-                    borderColor = Color.Transparent,
-                    showHoverPopupOnOverflow = true
-                )
+                        true
+                    } else {
+                        false
+                    }
+                },
+            config = InputFieldConfig(
+                placeholder = "Enter request URL",
+                showHoverPopupOnOverflow = true,
+                fieldHeight = 40.dp
             )
-        }
+        )
 
         // Action Save Button
         KNetButton(
@@ -164,6 +144,7 @@ fun RequestUrlBar(
             },
             variant = if (isExecuting) ButtonVariant.Secondary else ButtonVariant.Primary,
             loading = isExecuting,
+            clickableWhileLoading = onCancelClicked != null,
             modifier = Modifier.height(40.dp)
         ) {
             Row(
@@ -190,4 +171,3 @@ fun RequestUrlBar(
         }
     }
 }
-

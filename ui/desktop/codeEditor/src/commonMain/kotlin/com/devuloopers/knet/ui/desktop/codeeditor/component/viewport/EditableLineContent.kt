@@ -51,6 +51,8 @@ internal fun EditableLineContent(
     isWordWrapEnabled: Boolean = true,
     lineSelectionBounds: LineSelectionBounds? = null,
     isViewportSelecting: Boolean = false,
+    isSelectionGestureActiveNow: () -> Boolean = { false },
+    onInputFocused: () -> Unit = {},
     focusRequester: FocusRequester = remember { FocusRequester() },
     isActive: Boolean = false,
     shouldRequestFocus: Boolean,
@@ -171,7 +173,14 @@ internal fun EditableLineContent(
                         if (textChanged) {
                             onTextChanged(updated.text)
                         }
-                        if ((selectionChanged || textChanged) && !isViewportSelecting) {
+                        if (
+                            (selectionChanged || textChanged) &&
+                            shouldPublishLineInputCaret(
+                                isFocused = true,
+                                isViewportSelecting = isViewportSelecting,
+                                isSelectionGestureActive = isSelectionGestureActiveNow()
+                            )
+                        ) {
                             onFocused(updated.selection.start)
                         }
                     }
@@ -193,7 +202,14 @@ internal fun EditableLineContent(
                     .fillMaxWidth()
                     .focusRequester(focusRequester)
                     .onFocusChanged { state ->
-                        if (shouldPublishLineInputCaret(state.isFocused, isViewportSelecting)) {
+                        if (state.isFocused) onInputFocused()
+                        if (
+                            shouldPublishLineInputCaret(
+                                isFocused = state.isFocused,
+                                isViewportSelecting = isViewportSelecting,
+                                isSelectionGestureActive = isSelectionGestureActiveNow()
+                            )
+                        ) {
                             onFocused(fieldValue.selection.start)
                         }
                     }
@@ -234,6 +250,10 @@ internal fun shouldRequestLineInputFocus(
 }
 
 /** Returns whether a focus event may publish a caret update to the editor session. */
-internal fun shouldPublishLineInputCaret(isFocused: Boolean, isViewportSelecting: Boolean): Boolean {
-    return isFocused && !isViewportSelecting
+internal fun shouldPublishLineInputCaret(
+    isFocused: Boolean,
+    isViewportSelecting: Boolean,
+    isSelectionGestureActive: Boolean
+): Boolean {
+    return isFocused && !isViewportSelecting && !isSelectionGestureActive
 }

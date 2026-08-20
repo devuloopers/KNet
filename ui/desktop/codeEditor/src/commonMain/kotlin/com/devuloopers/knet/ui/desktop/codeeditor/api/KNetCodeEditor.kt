@@ -24,12 +24,13 @@ import com.devuloopers.knet.ui.desktop.codeeditor.component.EditorHeaderToolbar
 import com.devuloopers.knet.ui.desktop.codeeditor.component.EditorSearchPanel
 import com.devuloopers.knet.ui.desktop.codeeditor.component.LazyCodeBody
 import com.devuloopers.knet.ui.desktop.codeeditor.component.LazyCodeBodyMode
-import com.devuloopers.knet.ui.desktop.codeeditor.component.rememberClipboardCopyAction
+import com.devuloopers.knet.ui.desktop.codeeditor.component.shouldShowFoldActionSlot
 import com.devuloopers.knet.ui.desktop.codeeditor.concurrency.EditorCancellationCheckpoint
+import com.devuloopers.knet.ui.desktop.codeeditor.command.EditorCommand
+import com.devuloopers.knet.ui.desktop.codeeditor.command.EditorCommandDispatcher
 import com.devuloopers.knet.ui.desktop.codeeditor.document.EditorEditKind
 import com.devuloopers.knet.ui.desktop.codeeditor.document.EditorPosition
 import com.devuloopers.knet.ui.desktop.codeeditor.document.EditorRange
-import com.devuloopers.knet.ui.desktop.codeeditor.document.EditorSelection
 import com.devuloopers.knet.ui.desktop.codeeditor.document.EditorTextEdit
 import com.devuloopers.knet.ui.desktop.codeeditor.language.EditorLanguageRegistry
 import com.devuloopers.knet.ui.desktop.codeeditor.language.EditorLanguageEditing
@@ -85,6 +86,7 @@ fun KNetCodeEditor(
     var foldRegions by remember(state, languageSupport.language.id) { mutableStateOf<List<FoldRegion>>(emptyList()) }
     var collapsedFoldStarts by remember(state) { mutableStateOf<Set<Int>>(emptySet()) }
     val currentActions by rememberUpdatedState(actions)
+    val commandDispatcher = remember { EditorCommandDispatcher() }
 
     LaunchedEffect(snapshot.version, languageSupport) {
         val previous = completedTokenizedDocument
@@ -170,7 +172,6 @@ fun KNetCodeEditor(
         onDispose(subscription::cancel)
     }
 
-    val copyAction = rememberClipboardCopyAction()
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -185,11 +186,14 @@ fun KNetCodeEditor(
         EditorHeaderToolbar(
             totalLines = snapshot.lineCount,
             showLineCountHeader = configuration.header.showLineCount,
-            showFoldActionsHeader = configuration.header.showFoldActions,
-            hasFoldRegions = foldRegions.isNotEmpty(),
+            showFoldActionsHeader = shouldShowFoldActionSlot(
+                configured = configuration.header.showFoldActions,
+                foldingSupported = configuration.isFoldingEnabled && languageSupport.foldingProvider != null
+            ),
+            foldActionsEnabled = foldRegions.isNotEmpty(),
+            headerActions = configuration.header.actions,
             strings = configuration.strings,
-            onCopyAll = { copyAction(snapshot.text()) },
-            onPrettify = actions.onPrettify,
+            onCommand = actions.onCommand,
             onExpandAll = { collapsedFoldStarts = emptySet() },
             onCollapseAll = { collapsedFoldStarts = foldRegions.mapTo(mutableSetOf(), FoldRegion::startLine) }
         )
@@ -232,9 +236,7 @@ fun KNetCodeEditor(
                 selection = state.selection,
                 onSelectionChange = state.session::select,
                 onDeleteSelection = {
-                    state.selection?.let { selection ->
-                        state.session.apply(EditorTextEdit(selection.range, "", EditorEditKind.Structural))
-                    }
+                    commandDispatcher.dispatch(EditorCommand.DeleteSelection, state.session)
                 },
                 onDeleteCurrentLine = {
                     deleteCurrentLine(state)
@@ -243,12 +245,12 @@ fun KNetCodeEditor(
                     state.session.insert(text, EditorEditKind.Structural)
                 },
                 onSelectAll = {
-                    val lastLine = snapshot.lineCount - 1
-                    state.session.select(
-                        EditorSelection(
-                            anchor = EditorPosition(0, 0),
-                            active = EditorPosition(lastLine, snapshot.line(lastLine).length)
-                        )
+                    commandDispatcher.dispatch(EditorCommand.SelectAll, state.session)
+                },
+                onSelectionTextInput = { text ->
+                    commandDispatcher.dispatch(
+                        EditorCommand.InsertText(text, EditorEditKind.Replacement),
+                        state.session
                     )
                 },
                 onLineChanged = { lineIndex, newText ->
@@ -368,7 +370,9 @@ fun KNetCodeEditor(
                 lastInternallyEmittedText = text
                 currentActions.onTextChange?.invoke(text)
             },
-            onPrettify = actions.onPrettify
+            onCommand = if (actions.onCommand == null) null else { command ->
+                currentActions.onCommand?.invoke(command)
+            }
         ),
         registry = registry,
         style = style,

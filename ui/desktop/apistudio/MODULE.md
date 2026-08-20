@@ -2,30 +2,45 @@
 
 ## Responsibility
 
-Owns API Studio's desktop editor, collections, environments, tabs, execution presentation, and feature state.
+Owns API Studio's desktop editor, collection sidebar, active-document presentation state, dialogs, and response
+inspection projection.
 
 ## Owns
 
-- Mutable request drafts and editor-only models.
-- Conversion of the draft method string to the canonical extension-safe `HttpMethod` at save and execution boundaries.
+- One active `RequestEditorState` projection and editor-only view selections.
+- Lossless conversion between that projection and the canonical `SavedApiRequest` document.
+- Typed `HttpMethod` plus ordered `KeyValueEntry` query/header/cookie rows that retain enabled state.
 - API Studio ViewModels, components, and the `ResponseInspectorState` UI projection for loading,
   failures, console logs, and assertions.
-- Conversion of completed direct executions to the shared canonical HTTP heads at the application recording boundary.
-- Presentation orchestration of pre-request and response-test scripts through `ScriptExecutionPort`.
+- Ordered auto-save coordination and explicit restoration/persistence-failure presentation.
+- Debounced latest-wins publication of generated session/request titles while preserving user-defined names.
+- Sidebar projection of semantic request badges from the shared descriptor use case; the editor method selector
+  continues to edit the real HTTP transport method.
+- A standalone, selection-stable method selector whose label and chevron form a centered compact group, plus a
+  flexible URL authoring field in the request bar.
+- An execution action that changes from Send to an interactive loading Cancel control without weakening the
+  shared button's default duplicate-submit protection.
 
 ## Does not own
 
-- A second canonical HTTP request/response model, HTTP engine internals, persistence implementations, or product DI bindings.
+- A second canonical HTTP request/response model, HTTP/script execution orchestration, traffic recording,
+  persistence implementations, or product DI bindings.
 
 ## Dependency rule
 
-Draft strings are validated into shared HTTP semantic types at execution boundaries; results use shared `HttpResponseSnapshot`/`HttpExchangeSnapshot`. Runtime work goes through use cases.
+Presentation state maps to one complete `SavedApiRequest`. Runtime work crosses application/domain use cases;
+the screen never coordinates hydration or persistence.
 
 ## Current state
 
-Direct executions use canonical `OutboundRequestBody`/`ExecutionResult`, then record through
-`RecordHttpExchangeUseCase` using canonical request/response heads and separately owned bodies.
-Scripts consume `:core:scripting` values through an application port implemented in desktop data.
-Editor drafts and the response-inspector projection remain feature-local; prepared traffic requests
-reuse `HttpRequestSnapshot` and refuse silently truncated replay bodies. Assembly for this feature
-lives in `:products:desktop` under `di/apistudio`.
+`ApiStudioViewModel` is the sole active-document owner. `CollectionsViewModel` observes sidebar data and performs
+collection CRUD only. Startup restoration loads one request directly; editor changes enter one serialized,
+latest-state auto-save actor; draft promotion is transactional and changes UI identity only after success.
+Generated titles are recomputed from immutable canonical request snapshots off the UI dispatcher and persisted
+with their ownership. Manual save-dialog or sidebar renames disable future automatic replacement.
+Saved and unsaved sidebar rows derive their badge from the same canonical descriptor pipeline: ordinary HTTP
+uses its actual method, GraphQL uses `GQL`, and unknown future kinds use the neutral feature accent without a
+sidebar code change.
+Execution is delegated to `:application` with cancellation revision checks so superseded results cannot publish.
+The old phantom tab/environment models and feature-local execution/recording workflows have been removed.
+Assembly lives in `:products:desktop` under `di/apistudio`.

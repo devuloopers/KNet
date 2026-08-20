@@ -1,29 +1,42 @@
 package com.devuloopers.knet.products.desktop.di.apistudio
 
 import com.devuloopers.knet.application.port.script.ScriptExecutionPort
+import com.devuloopers.knet.application.usecase.apistudio.ExecuteApiStudioRequestUseCase
 import com.devuloopers.knet.core.http.client.KNetApiClient
 import com.devuloopers.knet.data.desktop.apistudio.repository.CollectionsRepositoryImpl
 import com.devuloopers.knet.data.desktop.script.DesktopScriptExecutionAdapter
+import com.devuloopers.knet.domain.apistudio.descriptor.HttpRequestDescriptorStrategy
+import com.devuloopers.knet.domain.apistudio.usecase.DescribeRequestUseCase
 import com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCase
-import com.devuloopers.knet.domain.apistudio.usecase.ResolveUniqueSessionTitleUseCase
+import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor
 import com.devuloopers.knet.domain.clientNetwork.usecase.ExecuteClientApiRequestUseCase
 import com.devuloopers.knet.domain.clientNetwork.usecase.FormatResponseBodyUseCase
 import com.devuloopers.knet.domain.collection.repository.CollectionsRepository
-import com.devuloopers.knet.domain.collection.usecase.*
+import com.devuloopers.knet.domain.collection.usecase.CreateCollectionUseCase
+import com.devuloopers.knet.domain.collection.usecase.DeleteCollectionUseCase
+import com.devuloopers.knet.domain.collection.usecase.DeleteSavedSessionUseCase
+import com.devuloopers.knet.domain.collection.usecase.DeleteUnsavedRequestUseCase
+import com.devuloopers.knet.domain.collection.usecase.GetSavedRequestUseCase
+import com.devuloopers.knet.domain.collection.usecase.ObserveCollectionsUseCase
+import com.devuloopers.knet.domain.collection.usecase.ObserveUnsavedRequestsUseCase
+import com.devuloopers.knet.domain.collection.usecase.RenameCollectionUseCase
+import com.devuloopers.knet.domain.collection.usecase.SaveRequestToCollectionUseCase
+import com.devuloopers.knet.domain.collection.usecase.SaveUnsavedRequestUseCase
+import com.devuloopers.knet.domain.collection.usecase.UpdateRequestInCollectionUseCase
+import com.devuloopers.knet.engine.formatter.descriptor.GraphQlRequestDescriptorStrategy
 import com.devuloopers.knet.storage.database.KNetDatabase
 import com.devuloopers.knet.ui.desktop.apistudio.usecase.AutoSaveApiSessionUseCase
-import com.devuloopers.knet.ui.desktop.apistudio.usecase.ExecuteScriptedApiRequestUseCase
 import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.ApiStudioViewModel
 import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.CollectionsViewModel
+import kotlinx.coroutines.Dispatchers
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
-import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor as DomainHttpExecutor
 
 /** API Studio transport, scripting adapter, collections persistence, and promotion workflow. */
 internal val apiStudioBindings: Module = module {
     single { KNetApiClient() }
-    single<DomainHttpExecutor> { get<KNetApiClient>() }
+    single<HttpExecutor> { get<KNetApiClient>() }
     single<ScriptExecutionPort> { DesktopScriptExecutionAdapter() }
     single<CollectionsRepository> {
         CollectionsRepositoryImpl(get<KNetDatabase>().collectionDao())
@@ -31,9 +44,18 @@ internal val apiStudioBindings: Module = module {
 
     factory { ExecuteClientApiRequestUseCase(get()) }
     factory { FormatResponseBodyUseCase() }
-    factory { ExecuteScriptedApiRequestUseCase(get(), get(), get(), get()) }
+    factory { ExecuteApiStudioRequestUseCase(get(), get(), get(), get(), Dispatchers.IO) }
     factory { ImportRequestToStudioUseCase() }
-    factory { ResolveUniqueSessionTitleUseCase() }
+    factory { GraphQlRequestDescriptorStrategy() }
+    factory { HttpRequestDescriptorStrategy() }
+    factory {
+        DescribeRequestUseCase(
+            strategies = listOf(
+                get<GraphQlRequestDescriptorStrategy>(),
+                get<HttpRequestDescriptorStrategy>()
+            )
+        )
+    }
     factory { ObserveCollectionsUseCase(get()) }
     factory { ObserveUnsavedRequestsUseCase(get()) }
     factory { SaveUnsavedRequestUseCase(get()) }
@@ -44,32 +66,36 @@ internal val apiStudioBindings: Module = module {
     factory { RenameCollectionUseCase(get()) }
     factory { SaveRequestToCollectionUseCase(get()) }
     factory { UpdateRequestInCollectionUseCase(get()) }
-    factory { AutoSaveApiSessionUseCase(get(), get(), get()) }
+    factory { GetSavedRequestUseCase(get()) }
+    factory { AutoSaveApiSessionUseCase(get(), get()) }
     viewModel {
         ApiStudioViewModel(
-            executeScriptedUseCase = get(),
+            executeApiStudioRequestUseCase = get(),
             observeProxyRuntimeStateUseCase = get(),
             getWorkspaceLayoutUseCase = get(),
             saveWorkspaceLayoutUseCase = get(),
             importRequestToStudioUseCase = get(),
+            describeRequestUseCase = get(),
             dropMatchingBreakpointsUseCase = get(),
             syncBodyStateUseCase = get(),
             autoSaveApiSessionUseCase = get(),
+            getSavedRequestUseCase = get(),
+            saveRequestToCollectionUseCase = get(),
+            ioDispatcher = Dispatchers.IO,
         )
     }
     viewModel {
         CollectionsViewModel(
             observeCollectionsUseCase = get(),
             observeUnsavedRequestsUseCase = get(),
-            saveUnsavedRequestUseCase = get(),
+            describeRequestUseCase = get(),
             deleteUnsavedRequestUseCase = get(),
             createCollectionUseCase = get(),
             deleteCollectionUseCase = get(),
             renameCollectionUseCase = get(),
-            saveRequestToCollectionUseCase = get(),
             updateRequestInCollectionUseCase = get(),
             deleteSavedSessionUseCase = get(),
-            resolveUniqueSessionTitleUseCase = get(),
+            ioDispatcher = Dispatchers.IO,
         )
     }
 }

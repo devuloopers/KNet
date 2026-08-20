@@ -14,16 +14,21 @@ The detailed design and extension guide is the repository-level
 
 - Immutable, versioned document snapshots and position/range/selection coordinates.
 - A chunked document implementation that shares unchanged line chunks between versions.
-- Directional selection, caret, editing commands, and one session mutation owner.
+- Directional selection, caret, selection replacement/deletion, editing commands, and one session mutation owner.
 - Delta-based bounded undo and redo history.
 - Literal and regular-expression find/replace in document coordinates.
 - Language registration and optional syntax, folding, indentation, bracket, and comment capabilities.
 - Stateful cross-line tokenization and incremental token projection.
 - Bounded immediate syntax presentation that keeps unchanged semantic colors stable between a document edit
   and authoritative background-token convergence.
-- Compose state, semantic-token rendering, virtualized lines, keyboard/pointer interaction, folding,
+- Compose state, semantic-token rendering, virtualized lines, keyboard/pointer and IME interaction, folding,
   bracket auto-closing, language-aware comment toggling, built-in find/replace, clipboard actions,
   theming, and the controlled-string compatibility facade.
+- A structurally stable editor toolbar whose fold-action slot is owned by configuration plus language capability;
+  asynchronous fold results enable or disable its actions without adding, removing, or shifting toolbar controls.
+- An ordered consumer-action rendering boundary. Features declare callback-free `CodeEditorHeaderAction` values
+  with existing `EditorCommandId.Custom` identities and handle them through the generic `CodeEditorActions.onCommand`
+  dispatcher. Stable command identities prevent asynchronous enabled-state changes from recreating toolbar nodes.
 - Viewport-contained word wrapping by default, variable-height logical rows, and wrapped-row-aware caret
   navigation. Horizontal scrolling remains an explicit standalone-consumer opt-out.
 - Cooperative cancellation checkpoints for syntax, folding, and search work.
@@ -33,7 +38,8 @@ The detailed design and extension guide is the repository-level
 - HTTP request/response models, traffic capture, API Studio state, GraphQL transport semantics, or
   script execution.
 - Persistence, files, networking, dependency injection, or feature navigation.
-- Payload formatting. Consumers may expose a formatter through `CodeEditorActions.onPrettify`.
+- Payload formatting or other format-specific command behavior. Consumers may expose these operations through
+  declarative header actions and the generic custom-command dispatcher.
 - Autocomplete, completion providers, or language servers. These are intentionally outside the
   current scope.
 
@@ -47,6 +53,8 @@ The detailed design and extension guide is the repository-level
 - `EditorLanguageRegistry` and `EditorLanguageSupport` are the additive language extension boundary.
 - `EditorSearchEngine` and `EditorSearchSession` provide UI-neutral find/replace behavior.
 - `EditorCommandDispatcher` maps platform-neutral commands to a session and accepts custom handlers.
+- `CodeEditorHeaderAction` projects a consumer-owned `EditorCommandId.Custom` into the toolbar without teaching
+  editor core the command's format semantics.
 
 Everything under `component`, `gesture`, `modifier`, `render`, `shortcut`, and `viewport` is an
 implementation detail. Feature modules must not depend on those packages.
@@ -71,7 +79,8 @@ no dependency on KNet domain, traffic, application, engine, storage, or product 
 ## Runtime flow
 
 1. A consumer creates or remembers `CodeEditorState`.
-2. UI intent is translated into an `EditorTextEdit` or session command.
+2. UI intent is translated into an `EditorTextEdit` or session command. Consumer header actions emit their
+   existing custom command identity back through `CodeEditorActions.onCommand`.
 3. `EditorSession` is the only document/history/caret/selection mutation owner.
 4. `ChunkedEditorDocument` publishes a new immutable snapshot and exact change delta.
 5. Compose observes the snapshot and immediately projects small syntax changes onto the new version without
@@ -80,6 +89,10 @@ no dependency on KNet domain, traffic, application, engine, storage, or product 
    cooperative cancellation.
 7. Only visible logical lines are composed. Syntax and document projections reuse unchanged chunks.
 8. Consumers receive exact session events; full-string serialization is explicit and opt-in.
+
+A workspace with multiple logical documents retains one `CodeEditorState` per document. Switching the presented
+state must not replace one session's complete text with another document, because that would discard document-local
+history and leak caret or selection ownership between tabs.
 
 Pointer ownership is fixed at the initial primary-button press. A gesture that starts over text keeps
 selection and auto-scroll ownership even after crossing a scrollbar hit zone; a gesture that starts on a
@@ -94,13 +107,25 @@ while pointer-down gesture ownership protects selection from native caret and fo
 selection has non-zero length. Active-line paint depends only on the caret line and remains stable while a
 selection is created or cleared on that line. Real whitespace remains selectable; unused viewport width never
 becomes a selection rectangle.
+The active line reads pointer ownership directly during native callbacks, so a double-click word range cannot be
+cleared by a line-field caret event later in the same pointer dispatch. After a document range is established, an
+invisible Compose text-input bridge owns keyboard, dead-key, and IME composition until the active line safely
+retakes focus. Committed text dispatches the existing typed insertion command and therefore replaces single-line,
+reverse, multiline, and whole-document ranges through the same session transaction.
 Both renderer content surfaces retain the gutter's minimum logical-line height even when wrapping is enabled,
 so selection paint is continuous between logical rows while wrapped content can still grow naturally.
 Selection paint owns each complete visual-line slot, including the leading around centred text, so adjacent
 selected lines have no seams while typography, baselines, and vertical line spacing remain unchanged.
 
 The default keyboard adapter provides Ctrl/Cmd+F for find/replace and Ctrl/Cmd+/ for the active
-language's line or block comment capability.
+language's line or block comment capability. Ctrl/Cmd+A retains the current viewport while selecting the complete
+document; the session still records the correct directional selection and document-end active caret. Partial
+selection, search navigation, ordinary caret movement, editing, and drag-selection auto-scroll continue to reveal
+their active position. Backspace and Delete first dispatch the typed `DeleteSelection` command against the live
+session. The viewport consumes the key only when that command deletes a non-empty selection; otherwise the focused
+line editor retains ordinary character and line-boundary deletion behavior. Select All transfers focus to the
+editor input boundary without moving the viewport, so deletion or replacement remains immediately available even
+when the document-end caret is not composed.
 
 ## Memory and concurrency rules
 

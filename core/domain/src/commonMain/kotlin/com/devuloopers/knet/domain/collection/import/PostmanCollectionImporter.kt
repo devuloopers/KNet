@@ -4,6 +4,7 @@ import com.devuloopers.knet.domain.collection.model.ApiCollection
 import com.devuloopers.knet.domain.collection.model.ApiRequestBody
 import com.devuloopers.knet.domain.collection.model.CollectionFolder
 import com.devuloopers.knet.domain.collection.model.SavedApiRequest
+import com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType
 import com.devuloopers.knet.traffic.model.http.HttpMethod
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonArray
@@ -94,7 +95,10 @@ class PostmanCollectionImporter {
             name = name,
             method = method,
             url = urlStr,
-            body = ApiRequestBody(content = bodyStr)
+            body = ApiRequestBody(
+                content = bodyStr,
+                type = if (bodyStr.isBlank()) RequestBodyType.NONE else RequestBodyType.JSON
+            )
         )
     }
 }

@@ -20,7 +20,7 @@ class ImportRequestToStudioUseCaseTest {
         val result = useCase.execute(spec)
 
         assertEquals("https://api.example.com/v1/users", result.spec.url)
-        assertEquals("/v1/users", result.displayTitle)
+        assertEquals(null, result.requestedTitle)
     }
 
     @Test
@@ -47,6 +47,6 @@ class ImportRequestToStudioUseCaseTest {
 
         val result = useCase.execute(spec, title = "Update Settings Request")
 
-        assertEquals("Update Settings Request", result.displayTitle)
+        assertEquals("Update Settings Request", result.requestedTitle)
     }
 }

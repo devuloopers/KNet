@@ -1,12 +1,11 @@
 package com.devuloopers.knet.ui.desktop.apistudio.usecase
 
-import com.devuloopers.knet.domain.apistudio.usecase.ResolveUniqueSessionTitleUseCase
+import com.devuloopers.knet.domain.apistudio.naming.RequestNameOrigin
 import com.devuloopers.knet.domain.collection.usecase.SaveUnsavedRequestUseCase
 import com.devuloopers.knet.domain.collection.usecase.UpdateRequestInCollectionUseCase
 import com.devuloopers.knet.ui.desktop.apistudio.model.RequestDomainConverter.toDomainSavedRequest
 import com.devuloopers.knet.ui.desktop.apistudio.model.RequestEditorState
 import com.devuloopers.knet.ui.desktop.apistudio.model.SessionContext
-import kotlin.uuid.Uuid
 
 /**
  * Presentation UseCase responsible for auto-saving API Studio session edits to persistent storage.
@@ -16,33 +15,32 @@ import kotlin.uuid.Uuid
  *
  * @param saveUnsavedRequestUseCase Domain UseCase for saving unsaved request drafts to Room DB.
  * @param updateRequestInCollectionUseCase Domain UseCase for updating saved collection requests in Room DB.
- * @param resolveUniqueSessionTitleUseCase UseCase resolving non-conflicting session titles.
  */
 class AutoSaveApiSessionUseCase(
     private val saveUnsavedRequestUseCase: SaveUnsavedRequestUseCase,
-    private val updateRequestInCollectionUseCase: UpdateRequestInCollectionUseCase,
-    private val resolveUniqueSessionTitleUseCase: ResolveUniqueSessionTitleUseCase = ResolveUniqueSessionTitleUseCase()
+    private val updateRequestInCollectionUseCase: UpdateRequestInCollectionUseCase
 ) {
 
     /**
      * Executes asynchronous auto-save for the current active request session.
      *
      * @param sessionContext Strongly-typed session context (UnsavedDraft vs SavedRequest).
+     * @param documentTitle Stable user-visible document title that must survive auto-save.
+     * @param nameOrigin Whether the title can continue following request-derived naming.
      * @param editorState Current [RequestEditorState] containing fields to persist.
-     * @param existingUnsavedTitles List of active unsaved session titles used for title collision resolution.
-     * @param onLinkedIdAssigned Callback invoked if a new unsaved session ID and title are generated.
      */
     suspend fun execute(
         sessionContext: SessionContext,
-        editorState: RequestEditorState,
-        existingUnsavedTitles: List<String> = emptyList(),
-        onLinkedIdAssigned: ((String, String) -> Unit)? = null
+        documentTitle: String,
+        nameOrigin: RequestNameOrigin,
+        editorState: RequestEditorState
     ) {
         when (sessionContext) {
             is SessionContext.SavedRequest -> {
                 val savedReq = editorState.toDomainSavedRequest(
                     id = sessionContext.requestId,
-                    name = "Saved Request"
+                    name = documentTitle,
+                    nameOrigin = nameOrigin
                 )
                 updateRequestInCollectionUseCase.execute(
                     collectionId = sessionContext.collectionId,
@@ -51,21 +49,16 @@ class AutoSaveApiSessionUseCase(
                 )
             }
 
-            is SessionContext.UnsavedDraft, SessionContext.None -> {
-                val draftIdFromContext = (sessionContext as? SessionContext.UnsavedDraft)?.sessionId
-                val effectiveLinkedId = editorState.linkedUnsavedId ?: draftIdFromContext ?: Uuid.random().toString()
-                
-                val sessionName = resolveUniqueSessionTitleUseCase.execute("Untitled Request", existingUnsavedTitles)
-                if (editorState.linkedUnsavedId == null) {
-                    onLinkedIdAssigned?.invoke(effectiveLinkedId, sessionName)
-                }
-
+            is SessionContext.UnsavedDraft -> {
                 val savedReq = editorState.toDomainSavedRequest(
-                    id = effectiveLinkedId,
-                    name = sessionName
+                    id = sessionContext.sessionId,
+                    name = documentTitle,
+                    nameOrigin = nameOrigin
                 )
                 saveUnsavedRequestUseCase.execute(savedReq)
             }
+
+            SessionContext.None -> Unit
         }
     }
 }

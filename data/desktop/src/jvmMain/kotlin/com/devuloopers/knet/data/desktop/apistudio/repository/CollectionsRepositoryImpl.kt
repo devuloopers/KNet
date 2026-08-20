@@ -77,6 +77,9 @@ class CollectionsRepositoryImpl(
         return CollectionMapper.mapEntityToDomain(entity, folders)
     }
 
+    override suspend fun getRequestById(id: String): SavedApiRequest? =
+        collectionDao.getRequestById(id)?.let(RequestMapper::mapEntityToDomain)
+
     override suspend fun saveCollection(collection: ApiCollection) {
         val entity = CollectionMapper.mapDomainToEntity(collection)
         collectionDao.insertCollection(entity)
@@ -143,6 +146,18 @@ class CollectionsRepositoryImpl(
             collection = collectionEntity,
             folder = folderEntity,
             request = requestEntity,
+            unsavedRequestIdToDelete = unsavedRequestIdToDelete
+        )
+    }
+
+    override suspend fun saveUnsavedToExistingCollectionTx(
+        collectionId: String,
+        folderId: String,
+        request: SavedApiRequest,
+        unsavedRequestIdToDelete: String
+    ) {
+        collectionDao.saveUnsavedToExistingCollectionTx(
+            request = RequestMapper.mapDomainToEntity(request, collectionId, folderId),
             unsavedRequestIdToDelete = unsavedRequestIdToDelete
         )
     }

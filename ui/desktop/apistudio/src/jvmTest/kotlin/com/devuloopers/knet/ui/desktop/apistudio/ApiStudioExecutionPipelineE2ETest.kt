@@ -1,5 +1,7 @@
 package com.devuloopers.knet.ui.desktop.apistudio
 
+import com.devuloopers.knet.domain.apistudio.descriptor.HttpRequestDescriptorStrategy
+import com.devuloopers.knet.domain.apistudio.usecase.DescribeRequestUseCase
 import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor
 import com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult
 import com.devuloopers.knet.domain.clientNetwork.model.OutboundRequestBody
@@ -13,6 +15,14 @@ import com.devuloopers.knet.application.usecase.breakpoint.DropMatchingBreakpoin
 import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUseCase
 import com.devuloopers.knet.ui.desktop.apistudio.model.ExecutionState
 import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.ApiStudioViewModel
+import com.devuloopers.knet.domain.collection.usecase.GetSavedRequestUseCase
+import com.devuloopers.knet.domain.collection.usecase.SaveRequestToCollectionUseCase
+import com.devuloopers.knet.domain.collection.usecase.SaveUnsavedRequestUseCase
+import com.devuloopers.knet.domain.collection.usecase.UpdateRequestInCollectionUseCase
+import com.devuloopers.knet.domain.payload.PayloadStrategyRegistry
+import com.devuloopers.knet.ui.desktop.apistudio.usecase.AutoSaveApiSessionUseCase
+import com.devuloopers.knet.ui.desktop.httppanel.mapper.GraphQlPayloadMapper
+import com.devuloopers.knet.ui.desktop.httppanel.usecase.SyncBodyStateUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.StandardTestDispatcher
@@ -88,18 +98,33 @@ class ApiStudioExecutionPipelineE2ETest {
     private fun createPipelineViewModel(executor: HttpExecutor): ApiStudioViewModel {
         val (getLayoutUseCase, saveLayoutUseCase) = createTestLayoutUseCases()
         val breakpointControl = FakeTestBreakpointControl()
+        val collectionsRepository = TestCollectionsRepository()
 
         return ApiStudioViewModel(
-            executeScriptedUseCase = com.devuloopers.knet.ui.desktop.apistudio.usecase.ExecuteScriptedApiRequestUseCase(
-                executeUseCase = com.devuloopers.knet.domain.clientNetwork.usecase.ExecuteClientApiRequestUseCase(executor),
-                formatResponseBodyUseCase = com.devuloopers.knet.domain.clientNetwork.usecase.FormatResponseBodyUseCase(),
+            executeApiStudioRequestUseCase = com.devuloopers.knet.application.usecase.apistudio.ExecuteApiStudioRequestUseCase(
+                executeRequest = com.devuloopers.knet.domain.clientNetwork.usecase.ExecuteClientApiRequestUseCase(executor),
+                formatResponseBody = com.devuloopers.knet.domain.clientNetwork.usecase.FormatResponseBodyUseCase(),
+                recordHttpExchange = com.devuloopers.knet.application.usecase.traffic.RecordHttpExchangeUseCase(
+                    DiscardingTrafficRecordPort()
+                ),
+                scriptExecution = com.devuloopers.knet.application.port.script.UnavailableScriptExecutionPort,
                 ioDispatcher = testDispatcher
             ),
             observeProxyRuntimeStateUseCase = ObserveProxyRuntimeStateUseCase(proxyRuntime),
             getWorkspaceLayoutUseCase = getLayoutUseCase,
             saveWorkspaceLayoutUseCase = saveLayoutUseCase,
             importRequestToStudioUseCase = com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCase(),
+            describeRequestUseCase = DescribeRequestUseCase(listOf(HttpRequestDescriptorStrategy())),
             dropMatchingBreakpointsUseCase = DropMatchingBreakpointsUseCase(breakpointControl),
+            syncBodyStateUseCase = SyncBodyStateUseCase(
+                PayloadStrategyRegistry(listOf(GraphQlPayloadMapper()))
+            ),
+            autoSaveApiSessionUseCase = AutoSaveApiSessionUseCase(
+                SaveUnsavedRequestUseCase(collectionsRepository),
+                UpdateRequestInCollectionUseCase(collectionsRepository)
+            ),
+            getSavedRequestUseCase = GetSavedRequestUseCase(collectionsRepository),
+            saveRequestToCollectionUseCase = SaveRequestToCollectionUseCase(collectionsRepository),
             ioDispatcher = testDispatcher
         )
     }

@@ -41,6 +41,10 @@ Undo, redo, syntax invalidation, and consumer callbacks use those deltas.
 Directional selection stores an anchor and active endpoint. Its normalized range is derived. This
 avoids the common backward-selection bug where normalization destroys the Shift/drag anchor.
 
+One `CodeEditorState` represents one logical document. A tabbed consumer retains a separate state for each
+document and changes which state is presented; it must not switch documents by repeatedly replacing the text of a
+single session. This preserves document-local undo, caret, selection, and search ownership.
+
 ## Large-document behavior
 
 The default document stores lines in immutable bounded chunks. A normal one-line edit rebuilds one
@@ -64,7 +68,10 @@ budgets; an oversized edited line is temporarily plain rather than blocking the 
 remain stable.
 
 The `LazyColumn` composes only visible lines. Exactly one active line owns a `BasicTextField`; other
-visible lines are lightweight text rows. The optional non-wrapped mode shares one horizontal scroll state.
+visible lines are lightweight text rows. While a document-level range is selected, a minimal transparent
+Compose input bridge retains keyboard, dead-key, and IME composition without copying document text. It remains a
+presentation adapter: committed text becomes the existing platform-neutral insertion command, and the session
+performs the range replacement. The optional non-wrapped mode shares one horizontal scroll state.
 The normal unfolded path uses an identity logical-to-visual mapping and allocates fold arrays only when folds
 are collapsed.
 
@@ -83,8 +90,9 @@ vertical auto-scroll remain available across the complete text viewport.
 
 Selection ranges are projected into stable per-line paint bounds. Native text paths paint selected
 characters, selected logical newlines use one trailing character cell, and an exclusive end position at
-column zero produces no transient row paint. The editable active-line input suspends focus/caret publication
-for the duration of viewport drag selection so focus transfer cannot clear the canonical session selection.
+column zero produces no transient row paint. The editable active-line input reads live gesture ownership and
+suspends focus/caret publication for the duration of viewport selection, including the remainder of the pointer
+event that establishes a double-click word range. Focus transfer therefore cannot clear the canonical selection.
 The keyed logical row, rather than either renderer child, owns its latest compatible `TextLayoutResult`.
 Switching a row between lightweight read-only text and its active `BasicTextField` therefore does not fall
 back to estimated geometry. Pointer-down also publishes selection-gesture ownership immediately, suppressing
@@ -107,6 +115,15 @@ Results carry or retain their source document version. Rendering accepts token/s
 for the current snapshot, preventing a slower older computation from being applied to newer text. A synchronous,
 current-version presentation model bridges normal edits until the background result is ready; it never publishes
 an older version as though it were current.
+
+Toolbar structure is independent from transient background results. Configuration and registered language
+capabilities decide whether the fold-action slot exists; asynchronous fold analysis only enables or disables the
+actions. Consumer features contribute an ordered list of callback-free `CodeEditorHeaderAction` declarations,
+each backed by the existing namespaced `EditorCommandId.Custom` contract, and receive interaction through the
+single `CodeEditorActions.onCommand` dispatcher. Stable command identities preserve Compose toolbar nodes as an
+action's label or enabled state changes. Adding Validate, Decode, Execute, or another format command therefore
+does not add a format-specific callback to editor core. Folding remains editor-owned because it operates directly
+on editor presentation state.
 
 ## Language contribution model
 
@@ -156,9 +173,15 @@ typed invalid-regex failure. Replacement uses session edits, and replace-all is 
 group. The built-in Ctrl/Cmd+F panel is a Compose adapter over this state and is available in both
 editable and read-only surfaces; mutation controls are hidden in read-only mode.
 
-`EditorCommandDispatcher` converts platform-neutral commands to session operations. Custom commands
-use validated namespaced identifiers and ordered external handlers. Platform key handling remains a
-Compose adapter concern, keeping the command/session foundation reusable by another UI toolkit.
+`EditorCommandDispatcher` converts platform-neutral commands to session operations. Selection deletion is a
+session-owned `DeleteSelection` command: it reads the authoritative directional selection at invocation time,
+performs one undoable deletion, and reports whether it handled the command. A UI adapter therefore consumes
+Backspace or Delete only when a selection was actually removed and otherwise lets its native text input perform
+ordinary deletion. Committed selection text dispatches `InsertText`; because insertion already targets the current
+selection or caret, single-line, reverse, multiline, and whole-document replacement require no Compose-specific
+mutation path. Custom commands use validated namespaced identifiers and ordered external handlers. Platform key
+and IME handling remain Compose adapter concerns, keeping the command/session foundation reusable by another UI
+toolkit.
 
 ## Consumer guidance
 

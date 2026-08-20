@@ -44,10 +44,12 @@ import com.devuloopers.knet.storage.rules.entity.BreakpointRuleEntity
         TrustedDeviceCredentialEntity::class,
         PairingInvitationEntity::class,
     ],
-    version = 16,
+    version = 18,
     autoMigrations = [
         AutoMigration(from = 14, to = 15),
         AutoMigration(from = 15, to = 16),
+        AutoMigration(from = 16, to = 17),
+        AutoMigration(from = 17, to = 18),
     ],
 )
 abstract class KNetDatabase : RoomDatabase() {

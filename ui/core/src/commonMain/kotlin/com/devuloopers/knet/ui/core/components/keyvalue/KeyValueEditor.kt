@@ -35,6 +35,7 @@ import com.devuloopers.knet.ui.core.components.button.KNetIconButton
 import com.devuloopers.knet.ui.core.components.checkbox.KNetCheckbox
 import com.devuloopers.knet.ui.core.components.divider.HorizontalDivider
 import com.devuloopers.knet.ui.core.components.divider.VerticalDivider
+import com.devuloopers.knet.ui.core.components.input.OverflowTextPopupHost
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
@@ -56,7 +57,8 @@ data class KeyValueEntry(
 
 /**
  * Domain-agnostic Key-Value editor composable table with panelHeader styling,
- * alternating row colors, and inline editing controls.
+ * alternating row colors, and compact single-line editing controls. A stationary hover exposes the complete key
+ * or value only when its measured text exceeds the available cell width.
  *
  * @param entries Interactive list of [KeyValueEntry] items to render and edit.
  * @param onEntryChange Callback triggered when an entry's key, value, or enabled status changes.
@@ -145,6 +147,13 @@ fun KNetKeyValueEditor(
                 modifier = Modifier.fillMaxWidth().weight(1f, fill = false)
             ) {
                 itemsIndexed(entries, key = { _, entry -> entry.id }) { index, entry ->
+                    val keyTextStyle = typography.codeSmall.copy(
+                        color = if (entry.enabled) themeColors.textPrimary else themeColors.textMuted,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    val valueTextStyle = typography.codeSmall.copy(
+                        color = if (entry.enabled) themeColors.textSecondary else themeColors.textMuted
+                    )
                     Column(modifier = Modifier.fillMaxWidth()) {
                         Row(
                             modifier = Modifier
@@ -163,7 +172,10 @@ fun KNetKeyValueEditor(
                                 )
                             }
                             VerticalDivider(color = themeColors.border.copy(alpha = 0.3f), modifier = Modifier.height(28.dp))
-                            Box(
+                            OverflowTextPopupHost(
+                                text = entry.key,
+                                textStyle = keyTextStyle,
+                                enabled = true,
                                 modifier = Modifier
                                     .weight(0.4f)
                                     .padding(horizontal = 8.dp, vertical = 6.dp),
@@ -181,10 +193,7 @@ fun KNetKeyValueEditor(
                                 BasicTextField(
                                     value = entry.key,
                                     onValueChange = { onEntryChange(index, entry.copy(key = it)) },
-                                    textStyle = typography.codeSmall.copy(
-                                        color = if (entry.enabled) themeColors.textPrimary else themeColors.textMuted,
-                                        fontWeight = FontWeight.SemiBold
-                                    ),
+                                    textStyle = keyTextStyle,
                                     cursorBrush = SolidColor(themeColors.textPrimary),
                                     singleLine = true,
                                     modifier = Modifier
@@ -193,7 +202,10 @@ fun KNetKeyValueEditor(
                                 )
                             }
                             VerticalDivider(color = themeColors.border.copy(alpha = 0.3f), modifier = Modifier.height(28.dp))
-                            Box(
+                            OverflowTextPopupHost(
+                                text = entry.value,
+                                textStyle = valueTextStyle,
+                                enabled = true,
                                 modifier = Modifier
                                     .weight(0.6f)
                                     .padding(horizontal = 8.dp, vertical = 6.dp),
@@ -210,9 +222,7 @@ fun KNetKeyValueEditor(
                                 BasicTextField(
                                     value = entry.value,
                                     onValueChange = { onEntryChange(index, entry.copy(value = it)) },
-                                    textStyle = typography.codeSmall.copy(
-                                        color = if (entry.enabled) themeColors.textSecondary else themeColors.textMuted
-                                    ),
+                                    textStyle = valueTextStyle,
                                     cursorBrush = SolidColor(themeColors.textPrimary),
                                     singleLine = true,
                                     modifier = Modifier
@@ -270,7 +280,9 @@ fun KNetKeyValueEditor(
  * @param keyHeader Column header label for the key column (default: "HEADER NAME").
  * @param valueHeader Column header label for the value column (default: "VALUE").
  * @param emptyMessage Message shown when no entries exist.
- * @param allowMultiLine True to allow long values (like User-Agent or tokens) to wrap vertically across multiple lines.
+ * @param wrapValues Whether long values such as cookies, tokens, and User-Agent fields wrap onto additional lines.
+ * Enabled by default because read-only inspection must preserve visible network content. Compact consumers may
+ * disable wrapping explicitly.
  */
 @Composable
 fun KNetReadOnlyKeyValueViewer(
@@ -279,7 +291,7 @@ fun KNetReadOnlyKeyValueViewer(
     keyHeader: String = "HEADER NAME",
     valueHeader: String = "VALUE",
     emptyMessage: String = "No data available.",
-    allowMultiLine: Boolean = false
+    wrapValues: Boolean = true
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -306,7 +318,10 @@ fun KNetReadOnlyKeyValueViewer(
                         color = themeColors.textMuted,
                         fontWeight = FontWeight.Bold
                     ),
-                    modifier = Modifier.weight(0.4f)
+                    modifier = Modifier.weight(0.4f),
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
                 )
                 Text(
                     text = valueHeader,
@@ -314,7 +329,10 @@ fun KNetReadOnlyKeyValueViewer(
                         color = themeColors.textMuted,
                         fontWeight = FontWeight.Bold
                     ),
-                    modifier = Modifier.weight(0.6f)
+                    modifier = Modifier.weight(0.6f),
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
 
@@ -330,7 +348,7 @@ fun KNetReadOnlyKeyValueViewer(
                             .fillMaxWidth()
                             .background(if (index % 2 == 1) themeColors.surfaceVariant.copy(alpha = 0.3f) else Color.Transparent)
                             .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = if (allowMultiLine) Alignment.Top else Alignment.CenterVertically
+                        verticalAlignment = if (wrapValues) Alignment.Top else Alignment.CenterVertically
                     ) {
                         Text(
                             text = entry.key,
@@ -339,20 +357,22 @@ fun KNetReadOnlyKeyValueViewer(
                                 fontWeight = FontWeight.SemiBold
                             ),
                             modifier = Modifier.weight(0.4f),
-                            maxLines = if (allowMultiLine) Int.MAX_VALUE else 1,
-                            overflow = if (allowMultiLine) TextOverflow.Clip else TextOverflow.Ellipsis
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis
                         )
                         Row(
                             modifier = Modifier.weight(0.6f),
                             horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = if (allowMultiLine) Alignment.Top else Alignment.CenterVertically
+                            verticalAlignment = if (wrapValues) Alignment.Top else Alignment.CenterVertically
                         ) {
                             Text(
                                 text = entry.value,
                                 style = typography.codeSmall.copy(color = themeColors.textSecondary),
                                 modifier = Modifier.weight(1f).padding(end = 8.dp),
-                                maxLines = if (allowMultiLine) Int.MAX_VALUE else 1,
-                                overflow = if (allowMultiLine) TextOverflow.Clip else TextOverflow.Ellipsis
+                                maxLines = if (wrapValues) Int.MAX_VALUE else 1,
+                                softWrap = wrapValues,
+                                overflow = if (wrapValues) TextOverflow.Clip else TextOverflow.Ellipsis
                             )
                             KNetCopyButton(textToCopy = entry.value)
                         }

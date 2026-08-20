@@ -99,11 +99,13 @@ fun KNetTabRow(
     content: @Composable () -> Unit
 ) {
     val colors = KNetTheme.colors
+    val shapes = KNetTheme.shapes
     val scrollState = rememberScrollState()
     Row(
         modifier = modifier
             .selectableGroup()
-            .background(colors.surfaceVariant)
+            .clip(shapes.medium)
+            .background(colors.surfaceVariant, shapes.medium)
             .horizontalScroll(scrollState)
             .padding(2.dp),
         verticalAlignment = Alignment.CenterVertically

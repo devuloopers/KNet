@@ -11,88 +11,32 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.onPointerEvent
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.layout.onSizeChanged
-import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.TextFieldValue
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.rememberTextMeasurer
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntRect
-import androidx.compose.ui.unit.IntSize
-import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Popup
-import androidx.compose.ui.window.PopupPositionProvider
-import androidx.compose.ui.window.PopupProperties
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import com.devuloopers.knet.ui.core.components.button.KNetIconButton
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.pointer.textCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 /**
- * A [PopupPositionProvider] that positions the popup content directly below the anchor composable,
- * aligned with its left edge and offset vertically by [offsetPx] pixels.
- *
- * Uses absolute screen coordinates ([anchorBounds]) ensuring stable positioning regardless of
- * any parent layout structure.
- */
-private class BelowAnchorPopupPositionProvider(
-    private val offsetPx: Int
-) : PopupPositionProvider {
-    override fun calculatePosition(
-        anchorBounds: IntRect,
-        windowSize: IntSize,
-        layoutDirection: LayoutDirection,
-        popupContentSize: IntSize
-    ): IntOffset {
-        val maxX = (windowSize.width - popupContentSize.width).coerceAtLeast(0)
-        val x = anchorBounds.left.coerceIn(0, maxX)
-        val belowY = anchorBounds.bottom + offsetPx
-        val aboveY = anchorBounds.top - popupContentSize.height - offsetPx
-        val maxY = (windowSize.height - popupContentSize.height).coerceAtLeast(0)
-        val y = (if (belowY + popupContentSize.height <= windowSize.height) belowY else aboveY).coerceIn(0, maxY)
-        return IntOffset(x, y)
-    }
-}
-
-private class HoverDelayController {
-    var job: Job? = null
-
-    fun cancel() {
-        job?.cancel()
-        job = null
-    }
-}
-
-/**
  * High-density single line text input field using cohesive parameter objects (< 7 parameters total).
  * Supports precision text overflow hover popups anchored below the field when text exceeds viewport bounds.
  */
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun KNetTextField(
     value: TextFieldValue,
@@ -106,13 +50,6 @@ fun KNetTextField(
     val typography = KNetTheme.typography
     val shapes = KNetTheme.shapes
     val dimensions = KNetTheme.dimensions
-    val density = LocalDensity.current
-    val coroutineScope = rememberCoroutineScope()
-    val hoverDelayController = remember { HoverDelayController() }
-
-    var containerWidthPx by remember { mutableStateOf(0) }
-    var isHovered by remember { mutableStateOf(false) }
-    var isMouseStationary by remember { mutableStateOf(false) }
     var wasFocused by remember { mutableStateOf(false) }
 
     val backgroundColor = config.backgroundColor ?: themeColors.surfaceVariant
@@ -125,54 +62,20 @@ fun KNetTextField(
         color = if (state.enabled) themeColors.textPrimary else themeColors.textMuted
     )
 
-    fun resetHoverTimer() {
-        isMouseStationary = false
-        hoverDelayController.cancel()
-        if (isHovered) {
-            hoverDelayController.job = coroutineScope.launch {
-                delay(config.hoverDebounceMs)
-                isMouseStationary = true
-            }
-        }
-    }
-
-    DisposableEffect(Unit) {
-        onDispose(hoverDelayController::cancel)
-    }
-
-    // Measure exact text width reactively
-    val textMeasurer = rememberTextMeasurer()
-    val textWidthPx = remember(value.text, textStyle) {
-        if (value.text.isEmpty()) 0 else textMeasurer.measure(text = value.text, style = textStyle).size.width
-    }
-    val paddingPx = with(density) { 16.dp.toPx() }
-    val isOverflowing = remember(textWidthPx, containerWidthPx, paddingPx) {
-        containerWidthPx > 0 && textWidthPx > (containerWidthPx - paddingPx)
-    }
-
     val isPassword = config.visualTransformation is PasswordVisualTransformation
-    val shouldShowPopup = config.showHoverPopupOnOverflow && !isPassword && isHovered && isMouseStationary && isOverflowing && value.text.isNotEmpty()
 
     Column(
         modifier = modifier
     ) {
-        Box(
+        OverflowTextPopupHost(
+            text = value.text,
+            textStyle = textStyle,
+            enabled = config.showHoverPopupOnOverflow && !isPassword,
+            horizontalContentPadding = 16.dp,
+            hoverDebounceMs = config.hoverDebounceMs,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(config.fieldHeight ?: dimensions.inputHeightStandard)
-                .onSizeChanged { containerWidthPx = it.width }
-                .onPointerEvent(PointerEventType.Enter) {
-                    isHovered = true
-                    resetHoverTimer()
-                }
-                .onPointerEvent(PointerEventType.Move) {
-                    if (isHovered) resetHoverTimer()
-                }
-                .onPointerEvent(PointerEventType.Exit) {
-                    isHovered = false
-                    isMouseStationary = false
-                    hoverDelayController.cancel()
-                }
         ) {
             BasicTextField(
                 value = value,
@@ -227,34 +130,6 @@ fun KNetTextField(
                     }
                 }
             )
-
-            if (shouldShowPopup) {
-                Popup(
-                    popupPositionProvider = remember(density) {
-                        BelowAnchorPopupPositionProvider(with(density) { 4.dp.roundToPx() })
-                    },
-                    properties = PopupProperties(
-                        focusable = false,
-                        dismissOnBackPress = false,
-                        dismissOnClickOutside = false
-                    )
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .pointerInput(Unit) {}
-                            .widthIn(max = 600.dp)
-                            .clip(shapes.small)
-                            .background(themeColors.surface)
-                            .border(1.dp, themeColors.border, shapes.small)
-                            .padding(horizontal = 10.dp, vertical = 6.dp)
-                    ) {
-                        Text(
-                            text = value.text,
-                            style = typography.bodySmall.copy(color = themeColors.textPrimary)
-                        )
-                    }
-                }
-            }
         }
 
         if (config.supportingText != null) {

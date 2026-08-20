@@ -19,7 +19,30 @@ class LineInputFocusPolicyTest {
 
     @Test
     fun focusedInputDoesNotPublishCaretDuringViewportDragSelection() {
-        assertFalse(shouldPublishLineInputCaret(isFocused = true, isViewportSelecting = true))
-        assertTrue(shouldPublishLineInputCaret(isFocused = true, isViewportSelecting = false))
+        assertFalse(
+            shouldPublishLineInputCaret(
+                isFocused = true,
+                isViewportSelecting = true,
+                isSelectionGestureActive = false
+            )
+        )
+        assertTrue(
+            shouldPublishLineInputCaret(
+                isFocused = true,
+                isViewportSelecting = false,
+                isSelectionGestureActive = false
+            )
+        )
+    }
+
+    @Test
+    fun livePointerOwnershipSuppressesCaretBeforeComposeSelectionStateCatchesUp() {
+        assertFalse(
+            shouldPublishLineInputCaret(
+                isFocused = true,
+                isViewportSelecting = false,
+                isSelectionGestureActive = true
+            )
+        )
     }
 }

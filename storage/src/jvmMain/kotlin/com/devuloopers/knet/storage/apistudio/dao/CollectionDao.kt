@@ -68,6 +68,9 @@ interface CollectionDao {
     @Query("SELECT * FROM saved_requests WHERE collectionId = :collectionId ORDER BY id ASC")
     fun getRequestsForCollectionFlow(collectionId: String): Flow<List<SavedRequestEntity>>
 
+    @Query("SELECT * FROM saved_requests WHERE id = :id LIMIT 1")
+    suspend fun getRequestById(id: String): SavedRequestEntity?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertRequest(request: SavedRequestEntity)
 
@@ -85,5 +88,21 @@ interface CollectionDao {
         insertFolder(folder)
         insertRequest(request)
         deleteRequest(unsavedRequestIdToDelete)
+    }
+
+    /**
+     * Promotes a draft into an existing collection as one SQLite transaction.
+     *
+     * The insert occurs before draft deletion so a failure cannot leave the request in neither location.
+     */
+    @Transaction
+    suspend fun saveUnsavedToExistingCollectionTx(
+        request: SavedRequestEntity,
+        unsavedRequestIdToDelete: String
+    ) {
+        insertRequest(request)
+        if (unsavedRequestIdToDelete != request.id) {
+            deleteRequest(unsavedRequestIdToDelete)
+        }
     }
 }

@@ -1072,3 +1072,500 @@ UI-core and Traffic module contracts document the new ownership, and component c
 width presets. Focused UI-core, Traffic, and desktop product verification passed with 133 actionable tasks. The
 full `check verifyArchitectureFoundation` gate passed with 269 actionable tasks, and the desktop application was
 not launched.
+
+## Phase 51: API Studio State, Persistence, and Execution Remediation [COMPLETED]
+
+Started on 2026-08-20 after a repository-backed audit found that API Studio document hydration, autosave,
+promotion, startup restoration, and request cancellation were coordinated by two ViewModels plus the screen.
+That ownership permitted partial or duplicate writes, stale execution results, successful no-op dependency
+fallbacks, and lossy request persistence. This phase establishes one active-document owner, one ordered latest-
+state autosave path, atomic draft-to-saved transitions, cancellation-safe execution identity, lossless request
+round trips, transactional promotions, explicit loading/failure presentation state, and production Koin
+verification. Application orchestration will move out of presentation where the existing boundaries support it;
+shared mutable editor state will remain a UI projection of canonical authored and observed HTTP values. The
+desktop application will not be launched.
+
+Completed on 2026-08-20. `ApiStudioViewModel` is now the sole owner of the active request document while
+`CollectionsViewModel` owns only persisted sidebar CRUD. `SavedApiRequest` is the canonical authored-request
+model across API Studio and persistence, with typed HTTP methods and body formats plus lossless query-parameter,
+header, cookie, body-field, authentication, and script state. Room schema 17 persists that complete model, and
+draft promotion is transactional instead of a delete-then-save sequence.
+
+Autosave and workspace selection now pass through ordered, cancellation-aware coordinators, startup restores the
+exact saved request, stale executions cannot replace newer editor results, and persistence failures are visible
+without falsely updating the UI. Request execution and direct traffic recording moved to the application layer;
+the desktop product supplies explicit production bindings for dispatchers and scripting. Dead request tabs,
+environment UI, duplicate API Studio theme/sidebar models, and obsolete presentation execution use cases were
+removed. Module responsibility documents were updated for each affected boundary.
+
+Focused domain, application, data, storage, API Studio, and desktop-product verification passed. The complete
+`check verifyArchitectureFoundation` gate passed with 269 actionable tasks (136 executed, 133 up-to-date), and
+the desktop application was not launched.
+
+## Phase 52: API Studio Request Bar Visual Refinement [COMPLETED]
+
+Started on 2026-08-20 to give the request method and URL distinct visual ownership. The method selector will be
+a fixed-width standalone dropdown on the left with a centered method label, while the URL remains the flexible
+middle field with vertically centered content and a concise empty-state hint. Existing send, cancel, save,
+keyboard, overflow, and responsive behavior will remain unchanged. The desktop application will not be launched.
+
+Completed on 2026-08-20. The method dropdown is now a standalone, fixed-width control before the independently
+bordered URL field. Its selected method is centered without moving the trailing chevron, and method colors are
+applied consistently for every method rather than treating GET as a placeholder selection. The URL field retains
+the flexible width, Enter-to-send behavior, overflow preview, and vertically centered single-line text while
+showing the compact `Enter request URL` hint only when empty.
+
+The shared dropdown gained opt-in selected-label alignment with start alignment preserved as the default, so no
+other KNet dropdown changed visually. UI-core and API Studio module contracts document the ownership. Focused
+UI-core tests, API Studio tests, desktop product compilation, and `verifyArchitectureFoundation` passed with 139
+actionable tasks. `git diff --check` passed, and the desktop application was not launched.
+
+## Phase 53: API Studio Request Bar Height and Alignment Correction [COMPLETED]
+
+Started on 2026-08-20 after visual verification showed the standalone method dropdown using the shared 36 dp
+standard height beside 40 dp URL and action controls. This correction adds an explicit 40 dp dropdown density,
+uses it for the request method, and restores normal start alignment so the method retains compact left padding
+while remaining vertically centered. The desktop application will not be launched.
+
+Completed on 2026-08-20. API Studio now selects the shared 40 dp large dropdown density, matching the URL, Save,
+and Send control heights exactly. The method label again uses the standard 10 dp leading inset and remains
+vertically centered; the earlier horizontal-centering option was removed because it no longer had a real caller.
+Compact and standard dropdowns remain unchanged. UI-core coverage now locks all three density heights.
+
+Focused UI-core tests, API Studio tests, desktop product compilation, and `verifyArchitectureFoundation` passed
+with 139 actionable tasks. `git diff --check` passed, and the desktop application was not launched.
+
+## Phase 54: Content-Responsive Single-Select Dropdown Width [COMPLETED]
+
+Started on 2026-08-20 to replace the single-select dropdown's hardcoded 120 dp default width with a measured,
+content-responsive width. The default anchor and popup will size to the widest option plus their required visual
+chrome, bounded by design-system minimum and maximum widths. Width will remain stable across selection changes,
+and explicit caller sizing will continue to override the calculated default. Verification will be deferred while
+the user-owned KNet process is running so its live classpath is not overwritten.
+
+Completed on 2026-08-20. `KNetDropdown` now measures every option label using the active design-system text style
+and derives one stable anchor width from the widest result. Anchor and selected-menu chrome are included in the
+calculation, with a 72 dp minimum and 280 dp maximum. This removes the former 120 dp hardcoded single-select
+width without allowing the control to jump when selection changes or grow without a responsive bound. Explicit
+feature widths still win through the caller modifier; searchable and multi-select controls retain their distinct
+120 dp and 148 dp defaults because their content and interaction contracts differ.
+
+Pure sizing coverage locks the lower bound, calculated content width, upper bound, density chrome, and specialized
+dropdown defaults. `git diff --check` passed. Gradle verification was intentionally not run because the user-owned
+KNet process remained active, preventing another live-classpath JAR replacement failure.
+
+## Phase 55: Extensible API Studio Session/Request Naming [COMPLETED]
+
+Started on 2026-08-20 to replace URL-only and ViewModel-owned API Studio document naming with an extensible
+request-naming pipeline. This phase applies only to session/request titles; collection names remain entirely
+user-controlled. The canonical saved-request model will persist whether a title is generated or user-defined,
+HTTP naming will use a meaningful path/host fallback, and GraphQL naming will reuse the existing formatter to
+resolve explicit or document operation names. Product DI will compose ordered protocol strategies so future
+formats can add naming support without modifying the API Studio ViewModel or stable naming use case.
+
+Completed on 2026-08-20. API Studio session/request titles now resolve from the canonical `SavedApiRequest`
+through an ordered contribution pipeline. The terminal HTTP strategy returns a query/fragment-free path or root
+host; the GraphQL contribution reuses `GraphQLBodyFormatter` to resolve explicit envelope and named AST
+operations, falling back cleanly for anonymous operations. Product DI owns strategy precedence, so another
+protocol adds one contribution and one binding without adding protocol branches to the ViewModel. Collection
+names remain entirely user-controlled. Phase 56 subsequently widened this same contribution boundary to resolve
+the sidebar protocol badge alongside the generated title.
+
+Generated-versus-user-defined ownership is now part of the canonical request and Room schema v18. Generated
+titles use a 250 ms latest-wins debounce and perform canonical conversion plus protocol parsing off the UI
+dispatcher. Save-dialog changes and sidebar renames become user-defined and cannot be overwritten later; legacy
+rows migrate as `USER_DEFINED`. Ordered auto-save snapshots retain this ownership across draft/saved promotion,
+proxy/app restarts, and direct request restoration. Domain, formatter, mapper, auto-save, ViewModel, and sidebar
+coverage was added. `git diff --check` passed. Gradle execution and the generated schema-v18 export were
+intentionally deferred because the user-owned KNet process remained active on the build JAR classpath; the
+desktop application was not launched or restarted.
+
+## Phase 56: Unified API Studio Request Descriptor and Protocol Badge [COMPLETED]
+
+Started on 2026-08-20 to evolve the new request-name-only contribution into one extensible descriptor pipeline.
+The same protocol recognition will now provide both the generated session/request title and the compact sidebar
+badge, preventing duplicate GraphQL/future-protocol parsing. Normal HTTP requests retain their method badge;
+GraphQL requests use `GQL` while preserving their actual HTTP method as transport metadata. API Studio's request
+bar continues to edit the real HTTP method, and collection names remain outside this feature.
+
+Completed on 2026-08-20. `DescribeRequestUseCase` now resolves a generated title, open semantic kind, compact
+badge, and actual HTTP transport method from one canonical `SavedApiRequest`. Ordered product composition installs
+the GraphQL contribution before the terminal HTTP contribution. Named GraphQL documents therefore use their
+operation name and `GQL`; anonymous GraphQL documents retain `GQL` while borrowing only `/graphql` as the HTTP
+name fallback. Ordinary requests continue to show `GET`, `POST`, or their real method.
+
+Both unsaved sessions and saved collection rows receive the descriptor in the Room-backed sidebar projection,
+which already runs on the injected I/O dispatcher. The request bar remains unchanged and continues to author the
+transport method. Future protocols can contribute a new kind, badge, and optional name through one strategy plus
+one product binding; the sidebar renders unknown kinds with its neutral accent fallback without requiring a core
+change. Domain, formatter, and sidebar ViewModel coverage locks priority, anonymous-name fallback, parser reuse,
+badge identity, and method retention. `git diff --check` passed. Gradle verification was intentionally deferred
+because the user-owned KNet process remains active on the build-JAR classpath; the application was not launched,
+stopped, or restarted.
+
+## Phase 57: Stable Centered API Studio Method Selector [COMPLETED]
+
+Started on 2026-08-20 after visual review found that the stable method-selector width correctly prevents request-
+bar movement but its edge-separated label and chevron create excessive empty space for short methods. The shared
+dropdown will gain an opt-in centered anchor-content arrangement. API Studio alone will use it to keep the method
+and chevron as one compact group with fixed spacing while preserving the existing widest-option width, popup
+animation, keyboard behavior, and unchanged URL/action positions. The desktop application will not be launched.
+
+Completed on 2026-08-20. `KNetDropdown` now offers an opt-in centered anchor-content arrangement while retaining
+its existing edge-separated default for Traffic filters, forms, and multi-select controls. API Studio enables the
+option only for the HTTP method selector. Its label and rotating chevron now render as one centered group with a
+design-system-owned 8 dp gap, while the anchor and popup remain sized from the widest method option. Selecting
+`POST`, `OPTIONS`, or another method therefore cannot resize the selector or move the URL, Save, and Send controls.
+The existing reduced-motion-aware popup and chevron animations are unchanged. UI-core sizing coverage locks the
+new spacing token, and module responsibility documents record the opt-in ownership. `git diff --check` passed.
+Gradle verification was intentionally deferred because the user-owned KNet process remains active on the build-
+JAR classpath; the application was not launched, stopped, or restarted.
+
+## Phase 58: Interactive API Studio Execution Cancellation [COMPLETED]
+
+Started on 2026-08-20 after runtime verification showed that API Studio correctly changes Send into a loading
+Cancel control, but the shared button's default loading policy disables pointer input and the hand cursor. The
+button primitive will retain that safe default for ordinary submissions and gain an explicit opt-in for controls
+whose loading state represents a valid cancellation action. API Studio will enable the opt-in only while a cancel
+callback is available. Existing execution cancellation and keyboard routing remain unchanged, and the desktop
+application will not be launched.
+
+Completed on 2026-08-20. `KNetButton` retains its default `enabled && !loading` interaction policy and now exposes
+an explicit `clickableWhileLoading` override for genuine cancellation controls. The override feeds the same
+resolved interaction state into Compose click handling and the desktop hand cursor, so visual and pointer states
+cannot disagree. API Studio opts in only for its Send/Cancel action when a cancellation callback exists; its
+spinner and Cancel label remain visible while clicks now invoke the existing revision-safe `cancelExecution()`.
+All other loading buttons remain protected from duplicate submission. UI-core policy coverage locks enabled,
+disabled, loading, and cancellable-loading combinations, and module documents record the ownership.
+`git diff --check` passed. Gradle verification was intentionally deferred because the user-owned KNet process remains
+active on the build-JAR classpath; the application was not launched, stopped, or restarted.
+
+## Phase 59: Expanded Dropdown Anchor Pointer Ownership [COMPLETED]
+
+Started on 2026-08-20 after desktop verification showed that opening a focusable dropdown transfers pointer
+ownership to the popup layer, causing the still-visible anchor to fall back from the hand cursor to the system
+default. The shared popup will include a transparent, anchor-sized interaction proxy only for focusable selection
+dropdowns. That proxy will retain the hand cursor and close the dropdown directly, while the same focusable popup
+continues to consume the click so the former close-then-reopen defect cannot return. Searchable comboboxes will
+retain their non-focusable popup and text cursor contract. The desktop application will not be launched.
+
+Completed on 2026-08-20. Focusable single-select and multi-select dropdowns now measure the complete anchor size
+and host a transparent anchor interaction proxy in the same popup layer as the animated menu. The proxy exposes
+the hand cursor and directly dismisses the popup, so clicking an expanded header closes exactly once and cannot
+reach the underlying anchor. Popup placement accounts for the proxy whether the menu opens above or below and
+prefers the side with enough space, while outside-click dismissal and the existing focusable input policy remain
+unchanged. Searchable comboboxes continue to use their non-focusable menu-only popup and text cursor. Pure
+placement coverage locks below, above, and constrained-side behavior. `git diff --check` passed. Gradle
+verification was intentionally deferred because the user-owned KNet process remains active on the build-JAR
+classpath; the application was not launched, stopped, or restarted.
+
+## Phase 60: Request Tab Alignment and Select-All Viewport Stability [COMPLETED]
+
+Started on 2026-08-20 after API Studio visual verification found that the primary Params/Auth/Headers/Body tab
+strip remained edge-to-edge while the surrounding request-authoring controls use the shared medium horizontal
+inset. The request editor will apply that existing spacing token at its call site without imposing fixed tab
+widths or changing shared Traffic/response inspector layouts. Code-editor verification also found that Ctrl/Cmd+A
+moves the logical caret to the full selection's active document-end boundary, after which the viewport's generic
+caret-reveal effect scrolls to the final line. The session will retain that correct directional selection and
+caret model, while the viewport will recognize a whole-document selection as a keep-viewport operation. Search,
+ordinary navigation, editing, and drag-selection auto-scroll behavior will remain unchanged. The desktop
+application will not be launched.
+
+Completed on 2026-08-20. The reusable request-authoring panel now applies the existing medium horizontal spacing
+token to its primary Params/Auth/Headers/Body/Cookies/Scripts tab strip. Individual tabs remain content-sized and
+the shared row retains horizontal overflow, so counts, future labels, and narrow split panes do not require fixed
+widths. Read-only Traffic and response inspector call sites were not changed.
+
+The virtualized code-editor viewport now distinguishes complete-document selection from navigation before its
+caret-reveal effect runs. Ctrl/Cmd+A and the shared Select All action therefore preserve the current scroll
+position while `EditorSession` continues to own the correct full directional selection and document-end active
+caret. Partial selections still reveal their endpoint, preserving search and ordinary selection behavior; pointer
+drag auto-scroll remains independently owned by its existing controller. Pure policy coverage locks caret-only,
+partial, forward whole-document, and reverse whole-document cases. `git diff --check` passed. Gradle verification
+was intentionally deferred because the user-owned KNet process remains active on the build-JAR classpath; the
+application was not launched, stopped, or restarted.
+
+## Phase 61: Request Tab Divider Removal [COMPLETED]
+
+Started on 2026-08-20 after visual verification of Phase 60 showed that the request tab surface is correctly
+inset but the separate, full-width divider below it remains visible across the authoring pane. That divider will
+be removed only from `RequestEditorPanel`; the tab surface and spacing already provide the required grouping.
+Traffic and response inspector separators will remain unchanged. The desktop application will not be launched.
+
+Completed on 2026-08-20. The standalone `HorizontalDivider` immediately below the request-authoring primary tab
+strip was removed along with its now-unused import. The inset tab surface remains the sole visual grouping, while
+the URL-bar divider above and all Traffic/response inspector separators remain unchanged. `git diff --check`
+passed. Gradle verification was intentionally deferred because the user-owned KNet process remains active on the
+build-JAR classpath; the application was not launched, stopped, or restarted.
+
+## Phase 62: Stable GraphQL Editor Sessions and Toolbar Actions [COMPLETED]
+
+Started on 2026-08-20 after runtime verification showed the editor toolbar flashing when switching among GraphQL
+Query, Variables, and Extensions. The active tab currently changes both text and language on one controlled editor
+session: external replacement occurs after composition, language changes reset fold regions, and the debounced fold
+analysis temporarily removes Expand All/Collapse All, shifting Prettify. GraphQL will retain one `CodeEditorState`
+per logical sub-document so undo, caret, selection, and document identity do not leak across tabs. The shared editor
+toolbar will reserve its fold-action slot from configured language capability and disable actions while no fold
+regions exist, rather than conditionally removing the slot based on transient asynchronous results. The desktop
+application will not be launched.
+
+Completed on 2026-08-20. `GraphQlEditor` now unconditionally retains independent `CodeEditorState` instances for
+Query, Variables, and Extensions and presents the active state through the existing single editor call site.
+User-originated text is marked before updating the controlling GraphQL model, while genuine external changes such
+as request restoration, operation-name synchronization, and Prettify results synchronize only the matching
+session. Switching tabs no longer performs an asynchronous full-document replacement, clears another tab's undo
+history, or shares its caret and selection.
+
+The editor header now reserves Expand All/Collapse All from header configuration plus the registered language's
+folding capability. Fold analysis results only control whether those actions are enabled and use a hand cursor;
+they never remove the action container or shift Prettify. GraphQL and JSON both contribute folding providers, so
+the toolbar structure remains identical throughout GraphQL sub-tab switches. Pure policy coverage locks supported,
+disabled-by-configuration, and unsupported-language cases. Module contracts and the code-editor architecture
+guide now record per-document state ownership and stable toolbar rules. `git diff --check` passed. Gradle
+verification was intentionally deferred because the user-owned KNet process remains active on the build-JAR
+classpath; the application was not launched, stopped, or restarted.
+
+## Phase 63: Extensible Code-Editor Header Actions [COMPLETED]
+
+Started on 2026-08-20 after confirming that the editor session and folding architecture is extensible but the
+header still exposes a format-specific `onPrettify` callback. The code-editor API will replace that callback with
+an ordered list of strongly identified, declarative header actions plus one generic action dispatcher. Existing
+HTTP-panel formatting integrations will contribute Prettify through this contract. Folding will remain an
+editor-owned capability. The renderer will use stable action identities and preserve disabled action slots, so
+future JSON, GraphQL, XML, gRPC, WebSocket, or other format actions can be added without modifying editor core.
+The desktop application will not be launched.
+
+Completed on 2026-08-20. `CodeEditorHeaderConfiguration` now accepts an ordered list of callback-free
+`CodeEditorHeaderAction` declarations. Each action reuses the existing validated `EditorCommandId.Custom`
+identity, and `CodeEditorActions.onCommand` is the single generic interaction boundary. The toolbar renders
+contributions with stable Compose keys, preserves declared disabled actions, rejects duplicate identities, and
+remains unaware of format semantics. The dedicated `onPrettify` callback and editor-owned Prettify label were
+removed rather than retained as compatibility APIs.
+
+The HTTP panel now owns one namespaced Prettify contribution and routes it to the active request, response, or
+GraphQL formatter. Future format actions can add declarations and command handling without modifying code-editor
+configuration, action callbacks, or rendering. Folding remains editor-owned and continues to reserve its stable
+capability-based slot. Pure tests cover duplicate command identities and namespaced Prettify dispatch. Module
+contracts and the architecture guide document the extension boundary. `git diff --check` passed. Gradle
+verification was intentionally deferred because the user-owned KNet process remains active on the build-JAR
+classpath; the application was not launched, stopped, or restarted.
+
+## Phase 64: Wrapped Read-Only Key-Value Content [COMPLETED]
+
+Started on 2026-08-20 after response-cookie inspection showed long values being ellipsized despite available
+vertical space. The shared `KNetReadOnlyKeyValueViewer` already contains an opt-in multiline path, but its default
+is single-line and no network-inspection caller enables it. Read-only values will wrap by default and grow their
+row naturally, while key labels and table headers remain stable single-line columns and the copy action stays at
+the row's top edge. Editable key-value tables will remain single-line. Compact read-only consumers may still opt
+out explicitly. The desktop application will not be launched.
+
+Completed on 2026-08-20. `KNetReadOnlyKeyValueViewer` now wraps value content by default and uses the resulting
+multi-line measurement to grow each row naturally. Key labels and both column headers remain single-line and
+ellipsized, while multiline rows top-align the key, value, and existing copy action. The explicit `wrapValues`
+parameter retains a compact single-line opt-out and replaces the less precise `allowMultiLine` name. Because all
+request-header, response-header, cookie, parameter, and form-data inspection paths already consume this shared
+viewer, they inherit the behavior without feature-specific changes. The editable `KNetKeyValueEditor` remains
+single-line. The UI-core module contract records the shared policy. `git diff --check` passed. Gradle verification
+was intentionally deferred because the user-owned KNet process remains active on the build-JAR classpath; the
+application was not launched, stopped, or restarted.
+
+## Phase 65: Shared Editable-Value Overflow Preview [COMPLETED]
+
+Started on 2026-08-20 after choosing the API Studio URL field's measured-overflow preview for compact editable
+key/value rows. The existing hover measurement, stationary-pointer delay, popup placement, and styling are
+currently private implementation inside `KNetTextField`; copying that behavior into the key/value editor would
+create two divergent interaction paths. UI core will extract one internal overflow-popup host and compose it from
+both `KNetTextField` and the editable key/value key/value cells. Rows and stored values remain single-line, and a
+popup is composed only when the actual rendered text width exceeds its cell. Read-only wrapped values remain
+unchanged. The desktop application will not be launched.
+
+Completed on 2026-08-20. UI core now owns one internal `OverflowTextPopupHost` that measures complete text with
+the caller's exact inline style, subtracts caller-declared unavailable horizontal space, waits for stationary
+hover, and displays the complete value through the existing bounded non-focusable popup placement. The original
+`KNetTextField` now composes this host instead of owning a private duplicate implementation, preserving API Studio
+URL and other text-field behavior.
+
+Both editable key and value cells now compose the same host around their existing single-line
+`BasicTextField`. The table's appearance, row height, editing callbacks, checkbox/delete controls, and stored
+values remain unchanged; only genuinely clipped text receives the full-value preview. Password fields continue
+to suppress previews, and Phase 64's read-only wrapping remains independent. Pure coverage locks unmeasured,
+exact-fit, and overflowing width decisions. The UI-core module contract records the shared ownership.
+`git diff --check` passed. Gradle verification was intentionally deferred because the user-owned KNet process
+remains active on the build-JAR classpath; the application was not launched, stopped, or restarted.
+
+## Phase 66: Inset API Studio Request Separator [COMPLETED]
+
+Started on 2026-08-20 after the remaining separator above API Studio's primary request tabs was shown extending
+past the inset tab surface. The separator is owned by `ApiStudioScreen`, not the reusable HTTP request panel. It
+will retain the URL-bar/request-editor boundary while adopting the same shared horizontal spacing token as the
+primary tabs. Traffic inspection, response inspection, and the already-removed divider below the tabs will remain
+unchanged. The desktop application will not be launched.
+
+Completed on 2026-08-20. The URL-bar separator now uses the shared medium horizontal spacing token already used
+by API Studio's primary request-tab surface. The line therefore retains the intended structural separation but
+terminates at the same left and right bounds as the tabs instead of reaching the pane edges. The change is local
+to `ApiStudioScreen`; Traffic inspection, response inspection, and the reusable HTTP request panel are unchanged.
+The API Studio module contract records ownership of this boundary. `git diff --check` passed. Gradle verification
+was intentionally deferred because the user-owned KNet process remains active on the build-JAR classpath; the
+application was not launched, stopped, or restarted.
+
+## Phase 67: Rounded Shared Tab Container [COMPLETED]
+
+Started on 2026-08-20 after API Studio's inset primary request-tab surface remained square beside rounded inputs,
+buttons, and dropdowns. The existing shared `KNetTabRow` will clip its background and scrollable content with the
+same small theme shape already used by individual tabs. This keeps feature call sites free of duplicated shaping
+and gives all shared tab rows one consistent design-system treatment without changing their sizing, overflow, or
+selection behavior. The desktop application will not be launched.
+
+Completed on 2026-08-20. `KNetTabRow` now clips its surface and scrollable children with the design-system small
+shape before painting its background. API Studio's primary request tabs therefore receive matching rounded
+container corners through the existing shared component, with no feature-specific shape or duplicate wrapper.
+Tab height, insets, content-responsive widths, horizontal overflow, and selection behavior are unchanged. The
+UI-core module contract records the shared styling policy. `git diff --check` passed. Gradle verification was
+intentionally deferred because the user-owned KNet process remains active on the build-JAR classpath; the
+application was not launched, stopped, or restarted.
+
+## Phase 68: Visible Shared Tab Corners [COMPLETED]
+
+Started on 2026-08-20 after visual verification showed that the shared 2 dp small shape is effectively
+imperceptible on API Studio's wide dark tab surface. `KNetTabRow` will use the design-system medium shape already
+used by dropdown surfaces and apply that shape to both clipping and background painting. Tab dimensions, insets,
+scrolling, and selection behavior will remain unchanged. The desktop application will not be launched.
+
+Completed on 2026-08-20. The shared tab-row surface now clips with the 4 dp medium theme shape and paints its
+background with that same shape, matching KNet dropdown containers and making the outer corners visibly rounded
+on wide dark surfaces. The previous 2 dp radius was valid but visually negligible at this scale. No dimensions,
+spacing, scrolling, or interaction behavior changed. The UI-core module contract now records the medium-corner
+policy. `git diff --check` passed. Gradle verification was intentionally deferred because the user-owned KNet
+process remains active on the build-JAR classpath; the application was not launched, stopped, or restarted.
+
+## Phase 69: Remove API Studio Top Tab Divider [COMPLETED]
+
+Started on 2026-08-20 after confirming that API Studio still renders an explicit separator between the URL bar
+and its rounded primary request-tab surface. That screen-owned divider and its unused import will be removed so
+the inset rounded tab container provides the grouping without a competing line. Traffic and response inspector
+dividers will remain unchanged. The desktop application will not be launched.
+
+Completed on 2026-08-20. `ApiStudioScreen` no longer renders the horizontal separator after `RequestUrlBar`, and
+the now-unused divider import was removed. The rounded, inset primary request-tab surface is now the only visual
+grouping between request actions and request content. Traffic, response inspection, and split-pane dividers were
+not changed. The obsolete separator ownership entry was removed from the API Studio module contract.
+`git diff --check` passed. Gradle verification was intentionally deferred because the user-owned KNet process
+remains active on the build-JAR classpath; the application was not launched, stopped, or restarted.
+
+## Phase 70: Inset Request Key-Value Editors [COMPLETED]
+
+Started on 2026-08-20 after Params, Headers, and Cookies showed their editable table header and divider extending
+to the request-pane edges beneath the inset rounded primary tabs. `RequestEditorPanel` will reuse one local
+modifier that applies the existing medium horizontal/vertical spacing and medium clipping shape to those three
+key-value editors. The domain-agnostic UI-core editor will remain unchanged so scripting, breakpoint, response,
+and body-format layouts keep control of their own placement. The desktop application will not be launched.
+
+Completed on 2026-08-20. `RequestEditorPanel` now builds one request-specific key-value editor modifier from the
+shared medium spacing and shape tokens and reuses it for Headers, Params, and Cookies. Their table headers, row
+dividers, empty states, and controls now sit within the same inset bounds as the primary request tabs, and the
+clipped table surface exposes matching rounded corners. Body, Auth, Scripts, and unrelated UI-core editor callers
+retain their previous layout. Static call-site inspection confirmed exactly the three intended branches use the
+modifier. The HTTP-panel module contract records this placement policy. `git diff --check` passed. Gradle
+verification was intentionally deferred because the user-owned KNet process remains active on the build-JAR
+classpath; the application was not launched, stopped, or restarted.
+
+## Phase 71: Content-Responsive Dropdown Width Policy [COMPLETED]
+
+Started on 2026-08-20 after the Auth selector truncated “Inherit auth from parent” even though its measured
+content-responsive width should accommodate the label. The shared single-select dropdown will separate stable
+anchor width from preferred menu width, derive both from the complete option set, animate width only when that
+set changes, and allow the menu to grow beyond the anchor while its popup layout clamps to window constraints.
+Anchor and menu labels will reuse the existing overflow-preview host only when their rendered allocation still
+clips the complete text. The selected-row chrome will remove its duplicate spacing so measurement and rendering
+use the same contract. Searchable and multi-select dropdown behavior will remain unchanged unless using the
+existing default popup width. The desktop application will not be launched.
+
+Completed on 2026-08-20. Standard single-select dropdowns now measure their complete option label set with the
+exact anchor and menu typography, derive independent anchor and menu width targets, and animate those targets
+through the shared reduced-motion-aware duration. Selection changes do not participate in the width target. The
+anchor remains bounded by its design maximum and incoming layout constraints; the menu may request the complete
+widest-row width and the focusable popup layout clamps it to window constraints while keeping its transparent
+dismissal proxy aligned over the real anchor, including when the wider menu shifts away from a window edge.
+
+Both anchor labels and ordinary menu labels now use the existing measured overflow-preview host, which remains
+dormant unless the rendered text actually exceeds its allocation. The redundant selected-row spacer was removed,
+so the menu chrome rendered beside the checkmark now exactly matches the width calculation and “Inherit auth from
+parent” no longer truncates unnecessarily. Searchable, multi-select, and custom-rendered menu content retain their
+existing contracts. Pure coverage records independent anchor/menu chrome and menu growth, anchor-flooring, and
+window clamping. The UI-core module contract records the policy. `git diff --check` passed. Gradle verification
+was intentionally deferred because the user-owned KNet process remains active on the build-JAR classpath; the
+application was not launched, stopped, or restarted.
+
+## Phase 72: Dropdown Label-to-Chevron Spacing [COMPLETED]
+
+Started on 2026-08-20 after visual verification showed non-centered dropdown labels sitting directly against the
+chevron's independently highlighted region. The standard anchor will apply the existing 8 dp shared content gap
+as trailing label padding and include it in its content-responsive width calculation. Centered anchors already
+use that token and will remain unchanged. Menu sizing, viewport clamping, and selection behavior will remain
+unchanged. The desktop application will not be launched.
+
+Completed on 2026-08-20. Non-centered `KNetDropdownAnchor` labels now retain the shared 8 dp trailing gap before
+the chevron region, matching the spacing already used by centered label-and-chevron groups. The anchor width
+calculator includes that gap, so adding the visual separation does not steal space from the measured label or
+introduce new truncation. Menu width, checkmark spacing, viewport clamping, and selection-stable animation remain
+unchanged. The sizing assertion and UI-core module contract were updated. `git diff --check` passed. Gradle
+verification was intentionally deferred because the user-owned KNet process remains active on the build-JAR
+classpath; the application was not launched, stopped, or restarted.
+
+## Phase 73: Session-Owned Selection Deletion [COMPLETED]
+
+Started on 2026-08-20 after multiline and full-document selections failed to clear with Backspace even though
+ordinary active-line deletion worked. The viewport currently gates selection deletion on a presentation-derived
+selected-text string before asking the session to mutate, allowing a selection transition and the next key event
+to fall through to the focused per-line text field. The editor foundation will add one UI-neutral
+`EditorSession.deleteSelection` mutation and a typed `EditorCommand.DeleteSelection`. The editable viewport will
+dispatch that operation first for Backspace/Delete and consume the key only when the authoritative live session
+actually deleted a selection. Select All will use the same built-in dispatcher rather than a duplicated Compose
+range calculation. Tests will cover full multiline, reverse partial, no-selection, command dispatch, caret,
+selection clearing, and undo restoration. The desktop application will not be launched.
+
+Completed on 2026-08-20. `EditorSession.deleteSelection()` now owns the complete selection-deletion transaction:
+it reads the live directional selection, applies one typed deletion edit, clears selection, places the caret at
+the normalized range start, preserves the editor's one-empty-line document invariant, and records the operation
+for undo. `EditorCommand.DeleteSelection` exposes that behavior through the existing UI-neutral dispatcher, and
+Select All now uses the same dispatcher rather than a Compose-local range calculation.
+
+The editable viewport dispatches selection deletion for both Backspace and Delete and consumes the key only when
+the session reports that a non-empty selection was removed. With no selection, the event continues to the focused
+line input, preserving normal character and line-boundary deletion. Session and dispatcher coverage locks full-
+document clearing, reverse multiline ranges, caret and selection state, undo restoration, and no-selection
+fall-through semantics. Module and architecture documentation record the reusable ownership boundary.
+`git diff --check` passed. Gradle verification was intentionally deferred because the user-owned KNet process
+remains active on the build-JAR classpath; the application was not launched, stopped, or restarted.
+
+## Phase 74: Document Selection Input and Multi-Click Ownership [COMPLETED]
+
+Started on 2026-08-20 after repository history and current event-flow inspection confirmed two editing regressions
+introduced when the former full-document `BasicTextField` was replaced by virtualized per-line inputs. A custom
+viewport double-click can currently establish a word range and then lose it to a native line-field caret callback
+later in the same pointer event. Once a viewport range does survive, focus is intentionally withheld from the line
+field, but the focusable viewport has no text-input/IME connection; printable input therefore cannot replace a
+single-line, multiline, reverse, or whole-document selection.
+
+This phase adds a Compose-only document-selection text-input bridge while retaining `EditorSession` and typed
+editor commands as the mutation boundary. Committed keyboard or IME text will dispatch the existing insertion
+command, which replaces the session's authoritative range as one undoable edit. Pointer gesture ownership will be
+read live during native line callbacks so a same-event double-click cannot publish a competing caret transition.
+The virtualized renderer, language SPI, HTTP consumers, and feature modules will remain unchanged. Focused tests
+will cover live gesture suppression, committed/composing input policy, word selection persistence, and multiline
+replacement semantics. The desktop application will not be launched.
+
+Completed on 2026-08-20. Editable line callbacks now consult live viewport-gesture ownership before publishing a
+caret transition, closing the same-pointer-event race that removed double-click word selection. A minimal hidden
+Compose text input retains keyboard, dead-key, and IME composition while a document-level selection owns focus;
+committed text is forwarded through `EditorCommand.InsertText`, so `EditorSession` replaces the authoritative
+range as one undoable operation. The bridge remains focused through the first commit until the visible active line
+safely retakes focus, avoiding dropped follow-up characters when the selection endpoint was outside the composed
+viewport.
+
+Regression coverage records live gesture suppression, Unicode and multiline committed input, retained IME
+composition, empty-input no-op behavior, and reverse multiline replacement with caret, selection, and undo
+restoration. Existing gesture tests continue to cover double-click word and triple-click line range calculation.
+`git diff --check` passed. Gradle verification was intentionally deferred because the user-owned KNet process
+remains active on the build-JAR classpath; the application was not launched, stopped, or restarted.

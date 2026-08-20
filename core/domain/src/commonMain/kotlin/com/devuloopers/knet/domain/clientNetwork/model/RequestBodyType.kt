@@ -11,7 +11,37 @@ enum class RequestBodyType {
     X_WWW_FORM_URLENCODED,
     MULTIPART,
     GRAPHQL,
-    RAW_TEXT
+    RAW_TEXT;
+
+    companion object {
+        /** Resolves persisted and imported body-type tokens into the canonical enum. */
+        fun fromToken(token: String): RequestBodyType = when (token.trim().replace('-', '_').uppercase()) {
+            "JSON" -> JSON
+            "XML" -> XML
+            "FORM", "FORM_DATA" -> FORM_DATA
+            "X_WWW_FORM_URLENCODED", "URLENCODED" -> X_WWW_FORM_URLENCODED
+            "MULTIPART" -> MULTIPART
+            "GRAPHQL" -> GRAPHQL
+            "RAW", "RAW_TEXT", "TEXT" -> RAW_TEXT
+            else -> NONE
+        }
+    }
+}
+
+/** Supported media formats for a canonical [RequestBodyType.RAW_TEXT] body. */
+enum class RawBodyFormat(val mediaType: String) {
+    TEXT("text/plain"),
+    JSON("application/json"),
+    XML("application/xml"),
+    HTML("text/html"),
+    JAVASCRIPT("application/javascript");
+
+    companion object {
+        /** Resolves a persisted raw-format token, defaulting safely to plain text. */
+        fun fromToken(token: String): RawBodyFormat = entries.firstOrNull {
+            it.name.equals(token.trim(), ignoreCase = true)
+        } ?: TEXT
+    }
 }
 
 /** One ordered form field used by URL-encoded and multipart request bodies. */

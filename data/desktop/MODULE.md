@@ -18,6 +18,7 @@ Adapts desktop engines and storage to existing domain and application-facing rep
 - Room-backed registered-device and trusted-pairing persistence behind application ports.
 - Generic breakpoint criteria-envelope persistence. Room stores a normalized protocol ID and opaque
   versioned payload without GraphQL/gRPC/WebSocket mapping branches.
+- Lossless API Studio request mapping and transactional draft promotion through the collection DAO.
 
 ## Does not own
 
@@ -42,3 +43,7 @@ use the current streaming or full-message pipeline without restarting the proxy 
 Registered identity and pairing state share the same Room source of truth; open Wi-Fi clients do not persist
 identity or authorization. No old traffic reader or writer remains. All adapter selection and connectivity
 assembly live in `:products:desktop`.
+API Studio query parameters, headers, cookies, body fields, authentication, and scripts round-trip without
+delimiter encoding or loss of disabled-row state. Body type strings exist only in the Room row and are mapped
+to canonical domain enums at this boundary. Request title ownership is likewise translated between the Room
+token and the domain `RequestNameOrigin` enum without leaking storage strings into presentation code.

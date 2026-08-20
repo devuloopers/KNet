@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -22,8 +24,11 @@ import com.devuloopers.knet.ui.core.components.tabs.KNetTabRow
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.codeeditor.api.CodeEditorActions
 import com.devuloopers.knet.ui.desktop.codeeditor.api.CodeEditorConfiguration
+import com.devuloopers.knet.ui.desktop.codeeditor.api.CodeEditorHeaderConfiguration
+import com.devuloopers.knet.ui.desktop.codeeditor.api.CodeEditorState
 import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
 import com.devuloopers.knet.ui.desktop.codeeditor.api.KNetCodeEditor
+import com.devuloopers.knet.ui.desktop.codeeditor.api.rememberCodeEditorState
 import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlState
 import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlSubTab
 
@@ -32,7 +37,9 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlSubTab
  * Query / Mutation document, Variables (JSON), Extensions (JSON), and Operation Name.
  *
  * SRP: Manages GraphQL body presentation sub-tabs and controls independently of generic HTTP body modes.
- * Uses a single stable [KNetCodeEditor] call site driven by [GraphQlSubTab] SSOT to prevent layout flashing.
+ * Uses one stable editor session per GraphQL sub-document and a single [KNetCodeEditor] presentation call site.
+ * Switching tabs therefore preserves document-local history, caret, and selection without replacing one session's
+ * complete text with another logical document.
  *
  * @param state Immutable [GraphQlState] holding active query, variables, operationName, and sub-tab selection.
  * @param onStateChange Callback invoked with updated [GraphQlState] whenever any field changes.
@@ -48,6 +55,47 @@ fun GraphQlEditor(
     val typography = KNetTheme.typography
     val spacing = KNetTheme.spacing
     val activeSubTab = state.activeSubTab
+    val queryEditorState = rememberCodeEditorState(state.queryText)
+    val variablesEditorState = rememberCodeEditorState(state.variablesText)
+    val extensionsEditorState = rememberCodeEditorState(state.extensionsText)
+    val synchronizedTexts = remember {
+        mutableMapOf(
+            GraphQlSubTab.QUERY to state.queryText,
+            GraphQlSubTab.VARIABLES to state.variablesText,
+            GraphQlSubTab.EXTENSIONS to state.extensionsText
+        )
+    }
+
+    LaunchedEffect(state.queryText) {
+        synchronizeGraphQlEditorState(
+            subTab = GraphQlSubTab.QUERY,
+            externalText = state.queryText,
+            editorState = queryEditorState,
+            synchronizedTexts = synchronizedTexts
+        )
+    }
+    LaunchedEffect(state.variablesText) {
+        synchronizeGraphQlEditorState(
+            subTab = GraphQlSubTab.VARIABLES,
+            externalText = state.variablesText,
+            editorState = variablesEditorState,
+            synchronizedTexts = synchronizedTexts
+        )
+    }
+    LaunchedEffect(state.extensionsText) {
+        synchronizeGraphQlEditorState(
+            subTab = GraphQlSubTab.EXTENSIONS,
+            externalText = state.extensionsText,
+            editorState = extensionsEditorState,
+            synchronizedTexts = synchronizedTexts
+        )
+    }
+
+    val activeEditorState = when (activeSubTab) {
+        GraphQlSubTab.QUERY -> queryEditorState
+        GraphQlSubTab.VARIABLES -> variablesEditorState
+        GraphQlSubTab.EXTENSIONS -> extensionsEditorState
+    }
 
     Column(
         modifier = modifier.fillMaxSize(),
@@ -115,18 +163,42 @@ fun GraphQlEditor(
                 .fillMaxWidth()
         ) {
             KNetCodeEditor(
-                code = activeSubTab.getPayload(state),
+                state = activeEditorState,
                 configuration = CodeEditorConfiguration(
                     mode = EditorMode.Editable,
                     language = activeSubTab.codeLanguage,
+                    header = CodeEditorHeaderConfiguration(actions = prettifyEditorHeaderActions),
                     placeholder = activeSubTab.placeholder
                 ),
                 actions = CodeEditorActions(
-                    onTextChange = { onStateChange(activeSubTab.updatePayload(state, it)) },
-                    onPrettify = { onStateChange(activeSubTab.prettify(state)) }
+                    onTextChange = { updatedText ->
+                        synchronizedTexts[activeSubTab] = updatedText
+                        onStateChange(activeSubTab.updatePayload(state, updatedText))
+                    },
+                    onCommand = { command ->
+                        dispatchPrettifyEditorHeaderAction(command) {
+                            onStateChange(activeSubTab.prettify(state))
+                        }
+                    }
                 ),
                 modifier = Modifier.fillMaxSize()
             )
         }
     }
+}
+
+/**
+ * Applies a controlling GraphQL payload change to its matching editor session without echoing user edits back as
+ * external document replacements. External changes include request restoration, operation-name synchronization,
+ * and Prettify results.
+ */
+private fun synchronizeGraphQlEditorState(
+    subTab: GraphQlSubTab,
+    externalText: String,
+    editorState: CodeEditorState,
+    synchronizedTexts: MutableMap<GraphQlSubTab, String>
+) {
+    if (synchronizedTexts[subTab] == externalText) return
+    synchronizedTexts[subTab] = externalText
+    editorState.replaceFromExternal(externalText)
 }

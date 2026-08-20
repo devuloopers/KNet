@@ -1,10 +1,10 @@
 package com.devuloopers.knet.ui.desktop.apistudio.model
 
+import com.devuloopers.knet.domain.apistudio.descriptor.RequestDescriptor
 import com.devuloopers.knet.domain.collection.model.ApiCollection
 import com.devuloopers.knet.domain.collection.model.SavedApiRequest
 import com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarFolderItem
 import com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarRequestItem
-import com.devuloopers.knet.ui.desktop.httppanel.model.toAuthState
 
 /**
  * Presentation mapper transforming domain collection entities into UI sidebar tree models.
@@ -15,9 +15,13 @@ object SidebarTreeMapper {
      * Transforms a list of domain [ApiCollection] models into presentation [SidebarFolderItem] tree models.
      *
      * @param collections List of domain API collection entities.
+     * @param describeRequest Resolves semantic presentation metadata for each canonical request.
      * @return List of formatted [SidebarFolderItem] UI items.
      */
-    fun toSidebarFolders(collections: List<ApiCollection>): List<SidebarFolderItem> {
+    fun toSidebarFolders(
+        collections: List<ApiCollection>,
+        describeRequest: (SavedApiRequest) -> RequestDescriptor
+    ): List<SidebarFolderItem> {
         return collections.flatMap { collection ->
             if (collection.folders.isNotEmpty()) {
                 collection.folders.map { folder ->
@@ -36,17 +40,10 @@ object SidebarTreeMapper {
                             SidebarRequestItem(
                                 id = req.id,
                                 name = req.name,
-                                method = req.methodString,
-                                url = req.url,
-                                headers = req.headers.map { it.key to it.value },
-                                bodyPayload = req.body.content,
-                                bodyType = req.body.type,
-                                preRequestScript = req.scripts.preRequest,
-                                testScript = req.scripts.test,
-                                authState = req.auth.toAuthState(),
+                                document = req,
+                                descriptor = describeRequest(req),
                                 collectionId = collection.id,
-                                folderId = folder.id,
-                                sessionType = SessionType.SAVED_REQUEST
+                                folderId = folder.id
                             )
                         }
                     )
@@ -69,22 +66,19 @@ object SidebarTreeMapper {
      * Transforms a list of domain unsaved [SavedApiRequest] scratch items into presentation [SidebarRequestItem] models.
      *
      * @param unsavedRequests List of domain unsaved scratch request entities.
+     * @param describeRequest Resolves semantic presentation metadata for each canonical request.
      * @return List of formatted [SidebarRequestItem] UI items.
      */
-    fun toSidebarUnsavedRequests(unsavedRequests: List<SavedApiRequest>): List<SidebarRequestItem> {
+    fun toSidebarUnsavedRequests(
+        unsavedRequests: List<SavedApiRequest>,
+        describeRequest: (SavedApiRequest) -> RequestDescriptor
+    ): List<SidebarRequestItem> {
         return unsavedRequests.map { req ->
             SidebarRequestItem(
                 id = req.id,
                 name = req.name,
-                method = req.methodString,
-                url = req.url,
-                headers = req.headers.map { it.key to it.value },
-                bodyPayload = req.body.content,
-                bodyType = req.body.type,
-                preRequestScript = req.scripts.preRequest,
-                testScript = req.scripts.test,
-                authState = req.auth.toAuthState(),
-                sessionType = SessionType.UNSAVED_DRAFT
+                document = req,
+                descriptor = describeRequest(req)
             )
         }
     }

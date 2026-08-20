@@ -8,6 +8,11 @@ Holds non-traffic feature business models, repository contracts, and use cases u
 
 - API Studio outbound request bodies/results/authentication, collections, authored breakpoint rules,
   workspace, and structured payload-policy contracts.
+- The complete authored API Studio request document, including ordered query/header/cookie rows with enabled
+  flags, typed body and raw-format values, structured form fields, authentication, scripts, and generated-versus-
+  user-defined request-name ownership.
+- The ordered request-descriptor contribution contract, HTTP path/host fallback, semantic kind/badge metadata,
+  and stable descriptor use case.
 - Feature values that are independent from canonical captured traffic.
 - Collection and outbound-execution contracts consume the canonical `:core:traffic` `HttpMethod`; they do not define another method enum.
 - Breakpoint rules consume that same `HttpMethod` plus one `BreakpointPhase`; application,
@@ -33,6 +38,12 @@ Platform detection is not a domain concern; desktop-only host-platform behavior 
 Outbound execution uses `OutboundRequestBody` and `ExecutionResult`; transport timing is the canonical
 `:core:traffic` `ExchangeTimings`, and GraphQL UI state composes `StructuredPayloadState.GraphQL`
 instead of copying its fields.
+`SavedApiRequest` is the persistence and execution source of truth. Storage strings and presentation body
+selectors are translated only at their respective module boundaries; the domain body kind is `RequestBodyType`.
+API Studio session/request titles and sidebar protocol badges are resolved together from that same canonical
+document. Protocol modules contribute optional descriptor strategies; collection names remain user-controlled
+and outside this derived-metadata pipeline. The request kind identifier is open so future protocols do not modify
+the stable core contract, and the actual HTTP method remains available independently as transport metadata.
 Shared body decoding enforces an explicit decoded-output ceiling for identity, gzip, deflate, Brotli, and
 Zstandard content. Callers receive a typed output-limit result rather than allowing compressed payloads to
 expand without a memory bound.

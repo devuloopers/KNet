@@ -11,8 +11,19 @@ Provides reusable HTTP request/response inspection and editing panels for Traffi
 - UI-level mapping from shared traffic data to bounded viewer state.
 - A single inspection-text projection that joins formatted `BodyFormat.JsonStream` records with visible
   boundaries before passing them to the existing read-only JSON editor.
+- The HTTP-panel Prettify header contribution and its custom-command routing. Request, response, and GraphQL
+  formats own the formatting implementation; the generic editor only renders the declaration.
 - Shared inspector sub-tabs and a small GraphQL editor wrapper that composes the canonical
-  `StructuredPayloadState.GraphQL` payload with only the active UI tab.
+  `StructuredPayloadState.GraphQL` payload with only the active UI tab. Query, Variables, and Extensions retain
+  independent editor sessions so their undo, caret, and selection state cannot leak across tab switches.
+- Request-authoring primary tabs retain content-responsive label widths and horizontal overflow while using the
+  same design-system horizontal inset as the surrounding URL, body-mode, and editor controls. Their inset surface
+  provides grouping without an additional full-width divider. Read-only Traffic inspector tab placement and
+  separators remain caller-owned and edge-to-edge where intended.
+- Params, Headers, and Cookies reuse one request-panel placement policy that insets and clips their editable
+  key-value table surfaces to the same medium spacing and corner tokens as the primary tabs.
+- Reusable typed request-editor rows; query, header, cookie, and structured-body entries retain identity and
+  enabled state instead of being projected through lossy `Pair` lists.
 
 ## Does not own
 

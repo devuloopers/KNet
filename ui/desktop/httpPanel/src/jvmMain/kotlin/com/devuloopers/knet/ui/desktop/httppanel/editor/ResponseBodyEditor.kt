@@ -22,6 +22,7 @@ import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.codeeditor.api.CodeEditorActions
 import com.devuloopers.knet.ui.desktop.codeeditor.api.CodeEditorConfiguration
+import com.devuloopers.knet.ui.desktop.codeeditor.api.CodeEditorHeaderConfiguration
 import com.devuloopers.knet.ui.desktop.codeeditor.api.EditorMode
 import com.devuloopers.knet.ui.desktop.codeeditor.api.KNetCodeEditor
 import com.devuloopers.knet.ui.desktop.httppanel.model.ResponseBodyMode
@@ -111,11 +112,16 @@ fun ResponseBodyEditor(
                 configuration = CodeEditorConfiguration(
                     mode = EditorMode.Editable,
                     language = state.mode.codeLanguage,
+                    header = CodeEditorHeaderConfiguration(
+                        actions = if (state.mode.isPrettifiable) prettifyEditorHeaderActions else emptyList()
+                    ),
                     placeholder = state.mode.placeholder
                 ),
                 actions = CodeEditorActions(
                     onTextChange = { onStateChange(state.copy(payloadText = it)) },
-                    onPrettify = prettifyAction
+                    onCommand = if (prettifyAction == null) null else { command ->
+                        dispatchPrettifyEditorHeaderAction(command, prettifyAction)
+                    }
                 ),
                 modifier = Modifier
                     .weight(1f)

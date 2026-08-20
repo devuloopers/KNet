@@ -31,6 +31,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.checkbox.KNetCheckboxIndicator
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
@@ -64,13 +65,13 @@ fun <T> KNetMultiSelectDropdown(
 ) {
     val colors = KNetTheme.colors
     var expanded by remember { mutableStateOf(false) }
-    var anchorWidthPx by remember { mutableStateOf(0) }
+    var anchorSizePx by remember { mutableStateOf(IntSize.Zero) }
     val canExpand = enabled && items.isNotEmpty()
 
     Box(
         modifier = modifier
             .width(KNetDropdownDefaults.MultiSelectWidth)
-            .onSizeChanged { anchorWidthPx = it.width }
+            .onSizeChanged { anchorSizePx = it }
     ) {
         KNetDropdownAnchor(
             text = label,
@@ -85,7 +86,7 @@ fun <T> KNetMultiSelectDropdown(
         KNetDropdownPopup(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            anchorWidthPx = anchorWidthPx,
+            anchorSizePx = anchorSizePx,
             focusable = true
         ) {
             Column(

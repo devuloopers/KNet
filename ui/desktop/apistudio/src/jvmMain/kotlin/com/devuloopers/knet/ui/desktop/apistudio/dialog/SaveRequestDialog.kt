@@ -55,14 +55,19 @@ enum class CollectionSaveMode {
  * @param defaultName Default request title prefilled in the name input field.
  * @param existingCollections List of current existing collection folders available for selection.
  * @param onDismiss Callback when the dialog is cancelled or closed.
- * @param onConfirm Save callback passing (requestName, saveMode, selectedCollectionId, newCollectionName).
+ * @param onConfirm Save callback passing the request name, mode, typed folder destination, and new collection name.
  */
 @Composable
 fun SaveRequestDialog(
     defaultName: String,
     existingCollections: List<SidebarFolderItem>,
     onDismiss: () -> Unit,
-    onConfirm: (requestName: String, mode: CollectionSaveMode, selectedCollectionId: String?, newCollectionName: String) -> Unit
+    onConfirm: (
+        requestName: String,
+        mode: CollectionSaveMode,
+        selectedFolder: SidebarFolderItem?,
+        newCollectionName: String
+    ) -> Unit
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -80,15 +85,8 @@ fun SaveRequestDialog(
             if (existingCollections.isNotEmpty()) CollectionSaveMode.EXISTING_COLLECTION else CollectionSaveMode.NEW_COLLECTION
         )
     }
-    var selectedCollectionId by remember { mutableStateOf(existingCollections.firstOrNull()?.id) }
+    var selectedFolder by remember(existingCollections) { mutableStateOf(existingCollections.firstOrNull()) }
     var newCollectionName by remember { mutableStateOf("") }
-
-    val collectionNames = remember(existingCollections) {
-        existingCollections.map { it.name }
-    }
-    var selectedCollectionName by remember(selectedCollectionId, existingCollections) {
-        mutableStateOf(existingCollections.find { it.id == selectedCollectionId }?.name ?: "")
-    }
 
     Dialog(onDismissRequest = onDismiss) {
         Box(
@@ -121,12 +119,12 @@ fun SaveRequestDialog(
                             .focusRequester(focusRequester)
                             .onKeyEvent { keyEvent ->
                                 val isConfirmEnabled = requestName.isNotBlank() && (
-                                    saveMode == CollectionSaveMode.EXISTING_COLLECTION && selectedCollectionId != null ||
+                                    saveMode == CollectionSaveMode.EXISTING_COLLECTION && selectedFolder != null ||
                                     saveMode == CollectionSaveMode.NEW_COLLECTION && newCollectionName.isNotBlank()
                                 )
                                 if (keyEvent.type == KeyEventType.KeyDown && (keyEvent.key == Key.Enter || keyEvent.key == Key.NumPadEnter)) {
                                     if (isConfirmEnabled) {
-                                        onConfirm(requestName, saveMode, selectedCollectionId, newCollectionName)
+                                        onConfirm(requestName, saveMode, selectedFolder, newCollectionName)
                                         true
                                     } else false
                                 } else false
@@ -164,12 +162,10 @@ fun SaveRequestDialog(
                         if (saveMode == CollectionSaveMode.EXISTING_COLLECTION) {
                             Box(modifier = Modifier.fillMaxWidth().padding(start = 32.dp)) {
                                 KNetDropdown(
-                                    selectedItem = selectedCollectionName.ifBlank { collectionNames.firstOrNull() ?: "" },
-                                    items = collectionNames,
-                                    onItemSelected = { selectedName ->
-                                        selectedCollectionName = selectedName
-                                        selectedCollectionId = existingCollections.find { it.name == selectedName }?.id
-                                    },
+                                    selectedItem = selectedFolder ?: existingCollections.first(),
+                                    items = existingCollections,
+                                    onItemSelected = { selectedFolder = it },
+                                    itemText = SidebarFolderItem::name,
                                     modifier = Modifier.fillMaxWidth()
                                 )
                             }
@@ -222,14 +218,14 @@ fun SaveRequestDialog(
                     }
 
                     val isConfirmEnabled = requestName.isNotBlank() && (
-                            saveMode == CollectionSaveMode.EXISTING_COLLECTION && selectedCollectionId != null ||
+                            saveMode == CollectionSaveMode.EXISTING_COLLECTION && selectedFolder != null ||
                                     saveMode == CollectionSaveMode.NEW_COLLECTION && newCollectionName.isNotBlank()
                             )
 
                     KNetButton(
                         onClick = {
                             if (isConfirmEnabled) {
-                                onConfirm(requestName, saveMode, selectedCollectionId, newCollectionName)
+                                onConfirm(requestName, saveMode, selectedFolder, newCollectionName)
                             }
                         },
                         variant = ButtonVariant.Primary,

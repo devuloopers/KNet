@@ -1,12 +1,18 @@
 package com.devuloopers.knet.ui.core
 
+import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.button.ButtonSize
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
+import com.devuloopers.knet.ui.core.components.button.isKNetButtonClickable
+import com.devuloopers.knet.ui.core.components.dropdown.DropdownPopupVerticalPlacement
 import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdownDefaults
 import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdownSize
+import com.devuloopers.knet.ui.core.components.dropdown.dropdownPopupVerticalPlacement
 import com.devuloopers.knet.ui.core.components.dropdown.dropdownPopupProperties
+import com.devuloopers.knet.ui.core.components.dropdown.resolvedDropdownPopupWidth
 import com.devuloopers.knet.ui.core.components.dropdown.shouldComposeDropdownPopup
+import com.devuloopers.knet.ui.core.components.input.isOverflowTextPopupRequired
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -24,14 +30,33 @@ class ComponentTest {
     }
 
     @Test
+    fun loadingButtonInteractionRequiresExplicitOptIn() {
+        assertTrue(isKNetButtonClickable(enabled = true, loading = false, clickableWhileLoading = false))
+        assertFalse(isKNetButtonClickable(enabled = true, loading = true, clickableWhileLoading = false))
+        assertTrue(isKNetButtonClickable(enabled = true, loading = true, clickableWhileLoading = true))
+        assertFalse(isKNetButtonClickable(enabled = false, loading = true, clickableWhileLoading = true))
+    }
+
+    @Test
     fun dropdownUsesCompactUsableDimensions() {
-        assertEquals(2, KNetDropdownSize.entries.size)
+        assertEquals(3, KNetDropdownSize.entries.size)
         assertEquals(26.dp, KNetDropdownDefaults.fieldHeight(KNetDropdownSize.Compact))
         assertEquals(36.dp, KNetDropdownDefaults.FieldHeight)
         assertEquals(36.dp, KNetDropdownDefaults.fieldHeight(KNetDropdownSize.Standard))
+        assertEquals(40.dp, KNetDropdownDefaults.LargeFieldHeight)
+        assertEquals(40.dp, KNetDropdownDefaults.fieldHeight(KNetDropdownSize.Large))
         assertEquals(34.dp, KNetDropdownDefaults.ItemHeight)
-        assertEquals(120.dp, KNetDropdownDefaults.DefaultWidth)
+        assertEquals(72.dp, KNetDropdownDefaults.MinimumWidth)
+        assertEquals(280.dp, KNetDropdownDefaults.MaximumWidth)
+        assertEquals(120.dp, KNetDropdownDefaults.SearchableWidth)
         assertEquals(148.dp, KNetDropdownDefaults.MultiSelectWidth)
+        assertEquals(8.dp, KNetDropdownDefaults.AnchorContentSpacing)
+        assertEquals(72.dp, KNetDropdownDefaults.contentWidth(0.dp, KNetDropdownSize.Standard))
+        assertEquals(98.dp, KNetDropdownDefaults.contentWidth(50.dp, KNetDropdownSize.Standard))
+        assertEquals(280.dp, KNetDropdownDefaults.contentWidth(500.dp, KNetDropdownSize.Standard))
+        assertEquals(72.dp, KNetDropdownDefaults.menuContentWidth(0.dp))
+        assertEquals(93.dp, KNetDropdownDefaults.menuContentWidth(50.dp))
+        assertEquals(543.dp, KNetDropdownDefaults.menuContentWidth(500.dp))
         assertTrue(KNetDropdownDefaults.MaxMenuHeight > KNetDropdownDefaults.ItemHeight)
     }
 
@@ -46,5 +71,68 @@ class ComponentTest {
     fun dropdownPopupFocusPolicyMatchesItsAnchorType() {
         assertTrue(dropdownPopupProperties(focusable = true).focusable)
         assertFalse(dropdownPopupProperties(focusable = false).focusable)
+    }
+
+    @Test
+    fun dropdownPopupWidthGrowsBeyondAnchorAndClampsToWindow() {
+        assertEquals(300, resolvedDropdownPopupWidth(180, 300, 0, 500))
+        assertEquals(240, resolvedDropdownPopupWidth(180, 300, 0, 240))
+        assertEquals(180, resolvedDropdownPopupWidth(180, 120, 0, 500))
+    }
+
+    @Test
+    fun overflowPreviewRequiresMeasuredTextBeyondUsableWidth() {
+        assertFalse(
+            isOverflowTextPopupRequired(
+                textWidthPx = 200,
+                containerWidthPx = 0,
+                horizontalContentPaddingPx = 0
+            )
+        )
+        assertFalse(
+            isOverflowTextPopupRequired(
+                textWidthPx = 100,
+                containerWidthPx = 116,
+                horizontalContentPaddingPx = 16
+            )
+        )
+        assertTrue(
+            isOverflowTextPopupRequired(
+                textWidthPx = 101,
+                containerWidthPx = 116,
+                horizontalContentPaddingPx = 16
+            )
+        )
+    }
+
+    @Test
+    fun dropdownPopupPrefersBelowAndUsesAvailableSpaceWhenConstrained() {
+        assertEquals(
+            DropdownPopupVerticalPlacement.Below,
+            dropdownPopupVerticalPlacement(
+                anchorBounds = IntRect(left = 20, top = 100, right = 180, bottom = 140),
+                windowHeight = 600,
+                menuHeight = 220,
+                verticalOffset = 4
+            )
+        )
+        assertEquals(
+            DropdownPopupVerticalPlacement.Above,
+            dropdownPopupVerticalPlacement(
+                anchorBounds = IntRect(left = 20, top = 480, right = 180, bottom = 520),
+                windowHeight = 600,
+                menuHeight = 220,
+                verticalOffset = 4
+            )
+        )
+        assertEquals(
+            DropdownPopupVerticalPlacement.Below,
+            dropdownPopupVerticalPlacement(
+                anchorBounds = IntRect(left = 20, top = 170, right = 180, bottom = 210),
+                windowHeight = 400,
+                menuHeight = 300,
+                verticalOffset = 4
+            )
+        )
     }
 }

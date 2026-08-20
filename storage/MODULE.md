@@ -6,8 +6,9 @@ Owns KNet's desktop persistence implementation and schema.
 
 ## Owns
 
-- Room database, schema-v16 entities, DAOs, and storage data sources.
-- The current 14-to-15 and 15-to-16 migrations; unsupported older development schemas may still be reset.
+- Room database, schema-v18 entities, DAOs, and storage data sources.
+- The current 14-to-15, 15-to-16, 16-to-17, and 17-to-18 migrations; unsupported older development schemas may
+  still be reset.
 - Durable metadata records and references to externally stored bodies.
 - Canonical session/connection/exchange/body/message/annotation/gap/deletion-outbox records and indexed
   single-session or global keyset queries.
@@ -18,6 +19,7 @@ Owns KNet's desktop persistence implementation and schema.
 - Registered-device identities, non-plaintext trusted credential material, and one-shot pairing invitations.
 - Breakpoint rule rows containing transport filters plus a generic normalized protocol ID and opaque
   extension-owned criteria payload; storage never decodes protocol semantics.
+- Complete API Studio authored-request rows, including JSON-encoded query/header/cookie/body-field state.
 
 ## Does not own
 
@@ -35,3 +37,8 @@ cross-session traffic history. Its DAO performs keyset paging plus host/path/met
 method/status/scheme/effective-protocol filtering without materializing a session. Both auto-migrations preserve
 supported existing records. Plain pairing secrets and issued credentials are never stored. Unsupported earlier
 development databases are deliberately reset by Room instead of imported.
+Schema v17 completes API Studio request persistence with query parameters, cookies, raw-body format, and
+structured form fields. Draft promotion uses one DAO transaction so the saved row and draft deletion cannot
+be observed partially.
+Schema v18 adds request-title ownership. Existing rows default to `USER_DEFINED`, preventing generated naming
+from changing any request title created before this capability.

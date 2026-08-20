@@ -6,6 +6,8 @@ import com.devuloopers.knet.ui.desktop.codeeditor.document.EditorSelection
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class EditorSessionTest {
@@ -70,5 +72,53 @@ class EditorSessionTest {
         assertEquals(EditorPosition(0, 1), session.selection?.range?.start)
         assertEquals(EditorPosition(1, 3), session.selection?.range?.end)
         assertEquals(EditorPosition(0, 1), session.caret)
+    }
+
+    @Test
+    fun fullMultilineSelectionDeletionClearsDocumentAndRemainsUndoable() {
+        val originalText = "alpha\nbeta\ngamma"
+        val session = EditorSession(originalText)
+        session.select(
+            EditorSelection(
+                anchor = EditorPosition(0, 0),
+                active = EditorPosition(2, 5)
+            )
+        )
+
+        val change = assertNotNull(session.deleteSelection())
+
+        assertEquals(originalText, change.removedText)
+        assertEquals("", session.snapshot.text())
+        assertEquals(1, session.snapshot.lineCount)
+        assertEquals(EditorPosition(0, 0), session.caret)
+        assertNull(session.selection)
+        assertTrue(session.undo())
+        assertEquals(originalText, session.snapshot.text())
+    }
+
+    @Test
+    fun reverseMultilineSelectionDeletionUsesNormalizedRange() {
+        val session = EditorSession("alpha\nbeta\ngamma")
+        session.select(
+            EditorSelection(
+                anchor = EditorPosition(2, 2),
+                active = EditorPosition(0, 2)
+            )
+        )
+
+        assertNotNull(session.deleteSelection())
+
+        assertEquals("almma", session.snapshot.text())
+        assertEquals(EditorPosition(0, 2), session.caret)
+        assertNull(session.selection)
+    }
+
+    @Test
+    fun selectionDeletionWithoutSelectionIsANoOp() {
+        val session = EditorSession("alpha\nbeta")
+
+        assertNull(session.deleteSelection())
+        assertEquals("alpha\nbeta", session.snapshot.text())
+        assertFalse(session.canUndo)
     }
 }

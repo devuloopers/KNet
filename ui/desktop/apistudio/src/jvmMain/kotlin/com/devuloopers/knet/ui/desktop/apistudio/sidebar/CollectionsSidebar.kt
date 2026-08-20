@@ -28,6 +28,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.devuloopers.knet.domain.apistudio.descriptor.RequestDescriptor
+import com.devuloopers.knet.domain.apistudio.descriptor.RequestKindId
+import com.devuloopers.knet.domain.collection.model.SavedApiRequest
 import com.devuloopers.knet.ui.core.components.badge.KNetBadge
 import com.devuloopers.knet.ui.core.components.button.KNetIconButton
 import com.devuloopers.knet.ui.core.components.divider.HorizontalDivider
@@ -35,28 +38,23 @@ import com.devuloopers.knet.ui.core.components.input.InputFieldConfig
 import com.devuloopers.knet.ui.core.components.input.KNetTextField
 import com.devuloopers.knet.ui.core.components.menu.ContextMenuItem
 import com.devuloopers.knet.ui.core.components.menu.KNetContextMenuArea
+import com.devuloopers.knet.ui.core.components.progress.CircularProgress
 import com.devuloopers.knet.ui.core.components.treeview.TreeNode
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.ui.desktop.apistudio.theme.ApiStudioColors
+import com.devuloopers.knet.ui.desktop.httppanel.theme.HttpMethodColors
 
 data class SidebarRequestItem(
     val id: String,
     val name: String,
-    val method: String,
-    val url: String = "",
-    val headers: List<Pair<String, String>> = emptyList(),
-    val bodyPayload: String = "",
-    val bodyType: String = "NONE",
-    val preRequestScript: String = "",
-    val testScript: String = "",
-    val authState: com.devuloopers.knet.ui.desktop.httppanel.model.AuthState = com.devuloopers.knet.ui.desktop.httppanel.model.AuthState(),
+    val document: SavedApiRequest,
+    /** Semantic name/badge metadata resolved from the same canonical document. */
+    val descriptor: RequestDescriptor,
     /** Non-null when this item belongs to a saved collection. Used for in-place edit routing. */
     val collectionId: String? = null,
     /** Non-null when this item belongs to a saved collection folder. Used for in-place edit routing. */
-    val folderId: String? = null,
-    val sessionType: com.devuloopers.knet.ui.desktop.apistudio.model.SessionType = com.devuloopers.knet.ui.desktop.apistudio.model.SessionType.UNSAVED_DRAFT
+    val folderId: String? = null
 )
 
 data class SidebarFolderItem(
@@ -65,12 +63,6 @@ data class SidebarFolderItem(
     val name: String,
     val requests: List<SidebarRequestItem> = emptyList(),
     val isExpanded: Boolean = true
-)
-
-data class SidebarCollectionItem(
-    val id: String,
-    val name: String,
-    val folders: List<SidebarFolderItem> = emptyList()
 )
 
 /**
@@ -85,7 +77,6 @@ data class CollectionsSidebarActions(
     val onDeleteCollection: (SidebarFolderItem) -> Unit = {},
     val onRenameSavedRequest: (SidebarRequestItem) -> Unit = {},
     val onDeleteSavedRequest: (SidebarRequestItem) -> Unit = {},
-    val onImportClicked: () -> Unit = {},
     val onNewCollectionClicked: () -> Unit = {}
 )
 
@@ -99,31 +90,51 @@ fun CollectionsSidebar(
     selectedRequestId: String?,
     modifier: Modifier = Modifier.width(256.dp)
 ) {
-    CollectionsSidebar(
-        unsavedRequests = state.unsavedRequests,
-        collections = state.collections,
-        selectedRequestId = selectedRequestId,
-        onRequestSelected = actions.onRequestSelected,
-        onSaveUnsavedRequest = actions.onSaveUnsavedRequest,
-        onDeleteUnsavedRequest = actions.onDeleteUnsavedRequest,
-        onNewUnsavedSessionClicked = actions.onNewUnsavedSessionClicked,
-        onRenameCollection = actions.onRenameCollection,
-        onDeleteCollection = actions.onDeleteCollection,
-        onRenameSavedRequest = actions.onRenameSavedRequest,
-        onDeleteSavedRequest = actions.onDeleteSavedRequest,
-        onImportClicked = actions.onImportClicked,
-        onNewCollectionClicked = actions.onNewCollectionClicked,
-        modifier = modifier
-    )
+    val themeColors = KNetTheme.colors
+    Box(modifier = modifier.fillMaxHeight()) {
+        CollectionsSidebarContent(
+            unsavedRequests = state.unsavedRequests,
+            collections = state.collections,
+            selectedRequestId = selectedRequestId,
+            onRequestSelected = actions.onRequestSelected,
+            onSaveUnsavedRequest = actions.onSaveUnsavedRequest,
+            onDeleteUnsavedRequest = actions.onDeleteUnsavedRequest,
+            onNewUnsavedSessionClicked = actions.onNewUnsavedSessionClicked,
+            onRenameCollection = actions.onRenameCollection,
+            onDeleteCollection = actions.onDeleteCollection,
+            onRenameSavedRequest = actions.onRenameSavedRequest,
+            onDeleteSavedRequest = actions.onDeleteSavedRequest,
+            onNewCollectionClicked = actions.onNewCollectionClicked,
+            modifier = Modifier.fillMaxSize()
+        )
+        if (state.isLoading) {
+            Box(
+                modifier = Modifier.fillMaxSize().background(themeColors.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgress(modifier = Modifier.size(24.dp))
+            }
+        }
+        state.errorMessage?.let { message ->
+            Text(
+                text = message,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(themeColors.semantic.errorContainer)
+                    .padding(horizontal = KNetTheme.spacing.sm, vertical = KNetTheme.spacing.xs),
+                style = KNetTheme.typography.caption.copy(color = themeColors.semantic.error)
+            )
+        }
+    }
 }
 
 /**
  * Leftmost Collections Sidebar component for KNet API Studio.
  */
 @Composable
-fun CollectionsSidebar(
-    unsavedRequests: List<SidebarRequestItem> = emptyList(),
-    collections: List<SidebarFolderItem> = emptyList(),
+private fun CollectionsSidebarContent(
+    unsavedRequests: List<SidebarRequestItem>,
+    collections: List<SidebarFolderItem>,
     selectedRequestId: String?,
     onRequestSelected: (SidebarRequestItem) -> Unit,
     onSaveUnsavedRequest: (SidebarRequestItem) -> Unit = {},
@@ -133,7 +144,6 @@ fun CollectionsSidebar(
     onDeleteCollection: (SidebarFolderItem) -> Unit = {},
     onRenameSavedRequest: (SidebarRequestItem) -> Unit = {},
     onDeleteSavedRequest: (SidebarRequestItem) -> Unit = {},
-    onImportClicked: () -> Unit = {},
     onNewCollectionClicked: () -> Unit = {},
     modifier: Modifier = Modifier.width(256.dp)
 ) {
@@ -203,7 +213,7 @@ fun CollectionsSidebar(
             val filteredUnsaved = unsavedRequests.filter {
                 searchQuery.isBlank() ||
                         it.name.contains(searchQuery, ignoreCase = true) ||
-                        it.url.contains(searchQuery, ignoreCase = true)
+                        it.document.url.contains(searchQuery, ignoreCase = true)
             }
 
             // Filter Saved Folders
@@ -211,7 +221,7 @@ fun CollectionsSidebar(
                 val matchingRequests = folder.requests.filter {
                     searchQuery.isBlank() ||
                             it.name.contains(searchQuery, ignoreCase = true) ||
-                            it.url.contains(searchQuery, ignoreCase = true)
+                            it.document.url.contains(searchQuery, ignoreCase = true)
                 }
                 if (searchQuery.isBlank() || matchingRequests.isNotEmpty() || folder.name.contains(searchQuery, ignoreCase = true)) {
                     folder.copy(requests = matchingRequests)
@@ -287,10 +297,11 @@ fun CollectionsSidebar(
                                         verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(6.dp)
                                     ) {
+                                        val badgeColors = requestBadgeColors(req.descriptor, themeColors.accent)
                                         KNetBadge(
-                                            text = req.method,
-                                            containerColor = ApiStudioColors.getMethodBackgroundColor(req.method),
-                                            contentColor = ApiStudioColors.getMethodTextColor(req.method)
+                                            text = req.descriptor.badgeLabel,
+                                            containerColor = badgeColors.container,
+                                            contentColor = badgeColors.content
                                         )
                                         Text(
                                             text = req.name,
@@ -408,10 +419,11 @@ fun CollectionsSidebar(
                                                 verticalAlignment = Alignment.CenterVertically,
                                                 horizontalArrangement = Arrangement.spacedBy(6.dp)
                                             ) {
+                                                val badgeColors = requestBadgeColors(req.descriptor, themeColors.accent)
                                                 KNetBadge(
-                                                    text = req.method,
-                                                    containerColor = ApiStudioColors.getMethodBackgroundColor(req.method),
-                                                    contentColor = ApiStudioColors.getMethodTextColor(req.method)
+                                                    text = req.descriptor.badgeLabel,
+                                                    containerColor = badgeColors.container,
+                                                    contentColor = badgeColors.content
                                                 )
                                                 Text(
                                                     text = req.name,
@@ -435,3 +447,24 @@ fun CollectionsSidebar(
         }
     }
 }
+
+private data class RequestBadgeColors(
+    val container: Color,
+    val content: Color
+)
+
+private fun requestBadgeColors(descriptor: RequestDescriptor, fallbackAccent: Color): RequestBadgeColors =
+    when (descriptor.kind) {
+        RequestKindId.HTTP -> RequestBadgeColors(
+            container = HttpMethodColors.getMethodBackgroundColor(descriptor.transportMethod.token),
+            content = HttpMethodColors.getMethodTextColor(descriptor.transportMethod.token)
+        )
+        RequestKindId.GRAPHQL -> RequestBadgeColors(
+            container = Color(0x26E879C6),
+            content = Color(0xFFE879C6)
+        )
+        else -> RequestBadgeColors(
+            container = fallbackAccent.copy(alpha = 0.15f),
+            content = fallbackAccent
+        )
+    }

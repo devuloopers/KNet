@@ -66,12 +66,7 @@ fun KNetWorkspaceHost(
                 TrafficScreen(
                     viewModel = trafficViewModel,
                     onSendToApiStudio = { spec ->
-                        val newSessionId = apiStudioViewModel.importRequestSpec(spec)
-                        collectionsViewModel.createUnsavedDraftSession(
-                            id = newSessionId,
-                            editorState = apiStudioViewModel.uiState.value.editorState,
-                            title = apiStudioViewModel.uiState.value.tabs.find { it.id == newSessionId }?.title
-                        )
+                        apiStudioViewModel.importRequestSpec(spec)
                         onNavigateToDestination(DesktopDestination.ApiStudio)
                     },
                     modifier = Modifier.fillMaxSize()

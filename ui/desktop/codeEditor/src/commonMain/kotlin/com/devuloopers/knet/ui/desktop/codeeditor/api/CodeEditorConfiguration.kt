@@ -1,5 +1,6 @@
 package com.devuloopers.knet.ui.desktop.codeeditor.api
 
+import com.devuloopers.knet.ui.desktop.codeeditor.command.EditorCommand
 import com.devuloopers.knet.ui.desktop.codeeditor.model.CodeLanguage
 import com.devuloopers.knet.ui.desktop.codeeditor.search.EditorSearchOptions
 import com.devuloopers.knet.ui.desktop.codeeditor.session.EditorSessionEvent
@@ -8,19 +9,28 @@ import com.devuloopers.knet.ui.desktop.codeeditor.session.EditorSessionEvent
  * Header visibility options for the editor surface.
  *
  * @property showLineCount Whether to display the logical line count.
- * @property showFoldActions Whether to display expand-all and collapse-all actions when folds exist.
+ * @property showFoldActions Whether to reserve expand-all and collapse-all actions for folding-capable languages.
+ * Actions remain visible but disabled while the current document has no fold regions.
+ * @property actions Ordered consumer-contributed actions rendered before editor-owned folding actions.
+ * @throws IllegalArgumentException When two contributed actions use the same stable identity.
  */
 data class CodeEditorHeaderConfiguration(
     val showLineCount: Boolean = true,
-    val showFoldActions: Boolean = true
-)
+    val showFoldActions: Boolean = true,
+    val actions: List<CodeEditorHeaderAction> = emptyList()
+) {
+    init {
+        require(actions.distinctBy(CodeEditorHeaderAction::commandId).size == actions.size) {
+            "Code-editor header action identities must be unique."
+        }
+    }
+}
 
 /**
  * User-facing editor labels, kept outside rendering so applications can localize or rebrand them.
  *
  * @property singularLine Singular line-count noun.
  * @property pluralLines Plural line-count noun.
- * @property prettify Formatting action label.
  * @property expandAll Expand-all folds label.
  * @property collapseAll Collapse-all folds label.
  * @property expandBlock Expand-one-fold accessibility label.
@@ -44,7 +54,6 @@ data class CodeEditorHeaderConfiguration(
 data class CodeEditorStrings(
     val singularLine: String = "line",
     val pluralLines: String = "lines",
-    val prettify: String = "Prettify",
     val expandAll: String = "Expand All",
     val collapseAll: String = "Collapse All",
     val expandBlock: String = "Expand block",
@@ -101,10 +110,11 @@ data class CodeEditorConfiguration(
  *
  * @property onDocumentChange Called synchronously for every user, undo, or redo document transition.
  * @property onTextChange Optional full-text controlled-state callback.
- * @property onPrettify Optional consumer-owned formatting command.
+ * @property onCommand Optional generic dispatcher for custom commands declared by
+ * [CodeEditorHeaderConfiguration.actions].
  */
 data class CodeEditorActions(
     val onDocumentChange: (EditorSessionEvent) -> Unit = {},
     val onTextChange: ((String) -> Unit)? = null,
-    val onPrettify: (() -> Unit)? = null
+    val onCommand: ((EditorCommand.Custom) -> Unit)? = null
 )

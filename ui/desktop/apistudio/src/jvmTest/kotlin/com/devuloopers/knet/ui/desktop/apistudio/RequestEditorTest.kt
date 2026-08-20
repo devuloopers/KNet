@@ -1,6 +1,8 @@
 package com.devuloopers.knet.ui.desktop.apistudio
 
 import com.devuloopers.knet.ui.desktop.apistudio.model.RequestEditorState
+import com.devuloopers.knet.traffic.model.http.HttpMethod
+import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyMode
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -13,8 +15,11 @@ class RequestEditorTest {
     fun `RequestEditorState default values are set`() {
         val state = RequestEditorState()
         assertEquals("", state.url)
-        assertEquals("GET", state.method)
-        assertEquals("No Auth", state.authType)
-        assertEquals("None", state.bodyType)
+        assertEquals(HttpMethod.GET, state.method)
+        assertEquals(
+            com.devuloopers.knet.ui.desktop.httppanel.model.AuthType.NO_AUTH,
+            state.authState.authType
+        )
+        assertEquals(RequestBodyMode.NONE, state.bodyState.mode)
     }
 }

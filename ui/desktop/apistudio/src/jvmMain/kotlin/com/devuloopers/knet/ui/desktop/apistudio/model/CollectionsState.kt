@@ -8,7 +8,8 @@ import com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarRequestItem
  *
  * @property collections List of saved collection folder items observed from Room DB.
  * @property unsavedRequests List of active unsaved scratch session request items.
- * @property isSaveDialogOpen True if the Save Request modal dialog is open.
+ * @property isLoading True until both Room-backed collection streams have emitted.
+ * @property errorMessage Non-null when sidebar persistence observation fails.
  * @property isCreateCollectionDialogOpen True if the Create Collection modal dialog is open.
  * @property isRenameDialogOpen True if the Rename Collection modal dialog is open.
  * @property renamingCollectionId Target collection ID being renamed.
@@ -19,7 +20,8 @@ import com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarRequestItem
 data class CollectionsState(
     val collections: List<SidebarFolderItem> = emptyList(),
     val unsavedRequests: List<SidebarRequestItem> = emptyList(),
-    val isSaveDialogOpen: Boolean = false,
+    val isLoading: Boolean = true,
+    val errorMessage: String? = null,
     val isCreateCollectionDialogOpen: Boolean = false,
     val isRenameDialogOpen: Boolean = false,
     val renamingCollectionId: String? = null,

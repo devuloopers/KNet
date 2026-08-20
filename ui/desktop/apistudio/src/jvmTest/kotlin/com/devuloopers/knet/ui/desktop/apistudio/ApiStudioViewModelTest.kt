@@ -12,6 +12,12 @@ import com.devuloopers.knet.application.port.breakpoint.BreakpointControlPort
 import com.devuloopers.knet.application.port.breakpoint.BreakpointDecision
 import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
 import com.devuloopers.knet.application.usecase.breakpoint.DropMatchingBreakpointsUseCase
+import com.devuloopers.knet.application.port.script.UnavailableScriptExecutionPort
+import com.devuloopers.knet.application.port.traffic.RecordHttpExchangeCommand
+import com.devuloopers.knet.application.port.traffic.TrafficRecordPort
+import com.devuloopers.knet.application.port.traffic.TrafficRecordReceipt
+import com.devuloopers.knet.application.usecase.apistudio.ExecuteApiStudioRequestUseCase
+import com.devuloopers.knet.application.usecase.traffic.RecordHttpExchangeUseCase
 import com.devuloopers.knet.connectivity.model.ProxyAccessRequirement
 import com.devuloopers.knet.connectivity.model.ProxyEndpoint
 import com.devuloopers.knet.connectivity.model.ProxyEndpointScope
@@ -22,23 +28,48 @@ import com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult
 import com.devuloopers.knet.domain.clientNetwork.model.OutboundRequestBody
 import com.devuloopers.knet.domain.clientNetwork.usecase.ExecuteClientApiRequestUseCase
 import com.devuloopers.knet.domain.clientNetwork.usecase.FormatResponseBodyUseCase
+import com.devuloopers.knet.domain.apistudio.descriptor.HttpRequestDescriptorStrategy
+import com.devuloopers.knet.domain.apistudio.naming.RequestNameOrigin
+import com.devuloopers.knet.domain.apistudio.usecase.DescribeRequestUseCase
 import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
+import com.devuloopers.knet.domain.collection.model.ApiCollection
+import com.devuloopers.knet.domain.collection.model.CollectionFolder
+import com.devuloopers.knet.domain.collection.model.SavedApiRequest
+import com.devuloopers.knet.domain.collection.repository.CollectionsRepository
+import com.devuloopers.knet.domain.collection.usecase.GetSavedRequestUseCase
+import com.devuloopers.knet.domain.collection.usecase.SaveRequestToCollectionUseCase
+import com.devuloopers.knet.domain.collection.usecase.SaveUnsavedRequestUseCase
+import com.devuloopers.knet.domain.collection.usecase.UpdateRequestInCollectionUseCase
+import com.devuloopers.knet.domain.payload.PayloadStrategyRegistry
 import com.devuloopers.knet.traffic.model.http.HttpMethod
 import com.devuloopers.knet.traffic.model.ExchangeTimings
+import com.devuloopers.knet.traffic.id.CaptureSessionId
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
 import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
 import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
 import com.devuloopers.knet.domain.workspace.usecase.SaveWorkspaceLayoutUseCase
-import com.devuloopers.knet.ui.desktop.apistudio.usecase.ExecuteScriptedApiRequestUseCase
+import com.devuloopers.knet.ui.desktop.apistudio.usecase.AutoSaveApiSessionUseCase
 import com.devuloopers.knet.ui.desktop.apistudio.model.ApiStudioState
 import com.devuloopers.knet.ui.desktop.apistudio.model.ExecutionState
+import com.devuloopers.knet.ui.desktop.apistudio.model.SessionContext
+import com.devuloopers.knet.ui.desktop.apistudio.model.SessionContextSerializer
+import com.devuloopers.knet.ui.desktop.apistudio.dialog.CollectionSaveMode
+import com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarFolderItem
 import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.ApiStudioViewModel
+import com.devuloopers.knet.ui.desktop.httppanel.mapper.GraphQlPayloadMapper
+import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyMode
+import com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyState
+import com.devuloopers.knet.ui.desktop.httppanel.usecase.SyncBodyStateUseCase
+import com.devuloopers.knet.ui.core.components.keyvalue.KeyValueEntry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -47,9 +78,15 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+
+private fun entries(vararg values: Pair<String, String>): List<KeyValueEntry> =
+    values.mapIndexed { index, (key, value) -> KeyValueEntry("test-entry-$index", key, value) }
+
+private fun KeyValueEntry.asPair(): Pair<String, String> = key to value
 
 class TestHttpExecutor : HttpExecutor {
     var lastExecutedUrl: String = ""
@@ -83,6 +120,11 @@ class TestHttpExecutor : HttpExecutor {
     }
 
     override fun close() { }
+}
+
+class DiscardingTrafficRecordPort : TrafficRecordPort {
+    override suspend fun record(command: RecordHttpExchangeCommand): TrafficRecordReceipt =
+        TrafficRecordReceipt(CaptureSessionId("api-studio-test"), command.exchangeId)
 }
 
 /**
@@ -167,6 +209,54 @@ class FakeTestBreakpointControl : BreakpointControlPort {
     override suspend fun clear(): Int = 0
 }
 
+/** In-memory collection boundary used by API Studio ViewModel tests. */
+class TestCollectionsRepository : CollectionsRepository {
+    val drafts = linkedMapOf<String, SavedApiRequest>()
+    val saved = linkedMapOf<String, SavedApiRequest>()
+    var promotionFailure: Exception? = null
+
+    override fun observeCollections(): Flow<List<ApiCollection>> = flowOf(emptyList())
+    override suspend fun getCollectionById(id: String): ApiCollection? = null
+    override suspend fun getRequestById(id: String): SavedApiRequest? = drafts[id] ?: saved[id]
+    override suspend fun saveCollection(collection: ApiCollection) = Unit
+    override suspend fun deleteCollection(collectionId: String) = Unit
+    override suspend fun saveFolder(collectionId: String, folder: CollectionFolder) = Unit
+    override suspend fun deleteFolder(folderId: String) = Unit
+    override suspend fun saveRequest(collectionId: String, folderId: String, request: SavedApiRequest) {
+        saved[request.id] = request
+    }
+    override suspend fun deleteRequest(requestId: String) {
+        saved.remove(requestId)
+    }
+    override fun observeUnsavedRequests(): Flow<List<SavedApiRequest>> = flowOf(emptyList())
+    override suspend fun saveUnsavedRequest(request: SavedApiRequest) {
+        drafts[request.id] = request
+    }
+    override suspend fun deleteUnsavedRequest(requestId: String) {
+        drafts.remove(requestId)
+    }
+    override suspend fun saveUnsavedToNewCollectionTx(
+        collection: ApiCollection,
+        folder: CollectionFolder,
+        request: SavedApiRequest,
+        unsavedRequestIdToDelete: String
+    ) {
+        promotionFailure?.let { throw it }
+        saved[request.id] = request
+        drafts.remove(unsavedRequestIdToDelete)
+    }
+    override suspend fun saveUnsavedToExistingCollectionTx(
+        collectionId: String,
+        folderId: String,
+        request: SavedApiRequest,
+        unsavedRequestIdToDelete: String
+    ) {
+        promotionFailure?.let { throw it }
+        saved[request.id] = request
+        drafts.remove(unsavedRequestIdToDelete)
+    }
+}
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class ApiStudioViewModelTest {
 
@@ -175,20 +265,36 @@ class ApiStudioViewModelTest {
 
     private fun createTestViewModel(
         executeUseCase: ExecuteClientApiRequestUseCase,
-        breakpointControl: BreakpointControlPort = fakeBreakpointControl
+        breakpointControl: BreakpointControlPort = fakeBreakpointControl,
+        collectionsRepository: TestCollectionsRepository = TestCollectionsRepository(),
+        initialSettings: WorkspaceLayoutSettings = WorkspaceLayoutSettings(),
+        layoutUseCases: Pair<GetWorkspaceLayoutUseCase, SaveWorkspaceLayoutUseCase>? = null
     ): ApiStudioViewModel {
-        val (getLayoutUseCase, saveLayoutUseCase) = createTestLayoutUseCases()
+        val (getLayoutUseCase, saveLayoutUseCase) =
+            layoutUseCases ?: createTestLayoutUseCases(initialSettings)
         return ApiStudioViewModel(
-            executeScriptedUseCase = ExecuteScriptedApiRequestUseCase(
-                executeUseCase = executeUseCase,
-                formatResponseBodyUseCase = FormatResponseBodyUseCase(),
+            executeApiStudioRequestUseCase = ExecuteApiStudioRequestUseCase(
+                executeRequest = executeUseCase,
+                formatResponseBody = FormatResponseBodyUseCase(),
+                recordHttpExchange = RecordHttpExchangeUseCase(DiscardingTrafficRecordPort()),
+                scriptExecution = UnavailableScriptExecutionPort,
                 ioDispatcher = testDispatcher
             ),
             observeProxyRuntimeStateUseCase = createTestObserveProxyRuntimeStateUseCase(),
             getWorkspaceLayoutUseCase = getLayoutUseCase,
             saveWorkspaceLayoutUseCase = saveLayoutUseCase,
             importRequestToStudioUseCase = com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCase(),
+            describeRequestUseCase = DescribeRequestUseCase(listOf(HttpRequestDescriptorStrategy())),
             dropMatchingBreakpointsUseCase = DropMatchingBreakpointsUseCase(breakpointControl),
+            syncBodyStateUseCase = SyncBodyStateUseCase(
+                PayloadStrategyRegistry(listOf(GraphQlPayloadMapper()))
+            ),
+            autoSaveApiSessionUseCase = AutoSaveApiSessionUseCase(
+                SaveUnsavedRequestUseCase(collectionsRepository),
+                UpdateRequestInCollectionUseCase(collectionsRepository)
+            ),
+            getSavedRequestUseCase = GetSavedRequestUseCase(collectionsRepository),
+            saveRequestToCollectionUseCase = SaveRequestToCollectionUseCase(collectionsRepository),
             ioDispatcher = testDispatcher
         )
     }
@@ -206,8 +312,8 @@ class ApiStudioViewModelTest {
     @Test
     fun `ApiStudioState default state is initialized correctly`() {
         val state = ApiStudioState()
-        assertEquals(1, state.tabs.size)
-        assertEquals("tab_1", state.activeTabId)
+        assertEquals(SessionContext.None, state.sessionContext)
+        assertNull(state.selectedRequestId)
         assertEquals(ExecutionState.IDLE, state.executionState)
         assertNull(state.responseInspection)
     }
@@ -218,7 +324,7 @@ class ApiStudioViewModelTest {
         val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(testExecutor))
 
         viewModel.updateUrl("https://api.example.com/v1/users")
-        viewModel.updateMethod("POST")
+        viewModel.updateMethod(HttpMethod.POST)
         viewModel.executeRequest()
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -240,11 +346,11 @@ class ApiStudioViewModelTest {
         viewModel.updateUrl("http://localhost:9090/api/get?user=anant&role=admin")
         var state = viewModel.uiState.value
         assertEquals(2, state.editorState.queryParams.size)
-        assertEquals("user" to "anant", state.editorState.queryParams[0])
-        assertEquals("role" to "admin", state.editorState.queryParams[1])
+        assertEquals("user" to "anant", state.editorState.queryParams[0].asPair())
+        assertEquals("role" to "admin", state.editorState.queryParams[1].asPair())
 
         // 2. Modifying queryParams table reconstructs URL string
-        viewModel.updateQueryParams(listOf("user" to "anant", "role" to "superadmin", "page" to "1"))
+        viewModel.updateQueryParams(entries("user" to "anant", "role" to "superadmin", "page" to "1"))
         state = viewModel.uiState.value
         assertEquals("http://localhost:9090/api/get?user=anant&role=superadmin&page=1", state.editorState.url)
         assertEquals(3, state.editorState.queryParams.size)
@@ -269,14 +375,14 @@ class ApiStudioViewModelTest {
         val parsedParams = state.editorState.queryParams
 
         assertEquals(5, parsedParams.size)
-        assertEquals("q" to "kotlin", parsedParams[0])
-        assertEquals("category" to "mobile", parsedParams[1])
-        assertEquals("page" to "1", parsedParams[2])
-        assertEquals("limit" to "25", parsedParams[3])
-        assertEquals("active" to "true", parsedParams[4])
+        assertEquals("q" to "kotlin", parsedParams[0].asPair())
+        assertEquals("category" to "mobile", parsedParams[1].asPair())
+        assertEquals("page" to "1", parsedParams[2].asPair())
+        assertEquals("limit" to "25", parsedParams[3].asPair())
+        assertEquals("active" to "true", parsedParams[4].asPair())
 
         // 2. Modify multi-query list (update page, limit, and append sort parameter)
-        val updatedMultiQueryList = listOf(
+        val updatedMultiQueryList = entries(
             "q" to "multiplatform",
             "category" to "desktop",
             "page" to "2",
@@ -292,7 +398,7 @@ class ApiStudioViewModelTest {
         assertEquals(6, state.editorState.queryParams.size)
 
         // 3. Remove 2 parameters from multi-query list and verify URL reflects updated subset
-        val trimmedMultiQueryList = listOf(
+        val trimmedMultiQueryList = entries(
             "q" to "multiplatform",
             "page" to "2",
             "limit" to "50"
@@ -309,32 +415,37 @@ class ApiStudioViewModelTest {
         val testExecutor = TestHttpExecutor()
         val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(testExecutor))
 
-        viewModel.updateMethod("POST")
+        viewModel.updateMethod(HttpMethod.POST)
         viewModel.updateUrl("http://localhost:9090/api/post?debug=true")
-        viewModel.updateHeaders(listOf("Authorization" to "Bearer token_123", "X-Custom" to "HeaderValue"))
-        viewModel.updateBodyPayload("{\"name\": \"KNet\"}")
-        viewModel.updateBodyMode(com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyMode.JSON)
+        viewModel.updateHeaders(entries("Authorization" to "Bearer token_123", "X-Custom" to "HeaderValue"))
+        viewModel.updateBodyState(
+            RequestBodyState(
+                mode = RequestBodyMode.JSON,
+                payloadText = "{\"name\": \"KNet\"}"
+            )
+        )
         viewModel.updateAuthState(com.devuloopers.knet.ui.desktop.httppanel.model.AuthState(
             authType = com.devuloopers.knet.ui.desktop.httppanel.model.AuthType.BEARER_TOKEN,
             bearerToken = "secret_token_abc"
         ))
-        viewModel.updateCookies(listOf("session_id" to "sess_999"))
-        viewModel.updateScripts("// pre-request", "// test assertion")
+        viewModel.updateCookies(entries("session_id" to "sess_999"))
+        viewModel.updatePreRequestScript("// pre-request")
+        viewModel.updateTestScript("// test assertion")
         viewModel.updateActiveSubTab(com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab.HEADERS)
 
         val state = viewModel.uiState.value.editorState
-        assertEquals("POST", state.method)
+        assertEquals(HttpMethod.POST, state.method)
         assertEquals("http://localhost:9090/api/post?debug=true", state.url)
         assertEquals(1, state.queryParams.size)
-        assertEquals("debug" to "true", state.queryParams[0])
+        assertEquals("debug" to "true", state.queryParams[0].asPair())
         assertEquals(2, state.headers.size)
-        assertEquals("Authorization" to "Bearer token_123", state.headers[0])
-        assertEquals("{\"name\": \"KNet\"}", state.bodyPayload)
-        assertEquals("JSON", state.bodyType)
-        assertEquals("Bearer Token", state.authType)
-        assertEquals("secret_token_abc", state.authToken)
+        assertEquals("Authorization" to "Bearer token_123", state.headers[0].asPair())
+        assertEquals("{\"name\": \"KNet\"}", state.bodyState.payloadText)
+        assertEquals(RequestBodyMode.JSON, state.bodyState.mode)
+        assertEquals(com.devuloopers.knet.ui.desktop.httppanel.model.AuthType.BEARER_TOKEN, state.authState.authType)
+        assertEquals("secret_token_abc", state.authState.bearerToken)
         assertEquals(1, state.cookies.size)
-        assertEquals("session_id" to "sess_999", state.cookies[0])
+        assertEquals("session_id" to "sess_999", state.cookies[0].asPair())
         assertEquals("// pre-request", state.preRequestScript)
         assertEquals("// test assertion", state.testScript)
         assertEquals(com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab.HEADERS, state.activeSubTab)
@@ -432,17 +543,50 @@ class ApiStudioViewModelTest {
             cookies = listOf("session" to "xyz123")
         )
 
-        val initialTabCount = viewModel.uiState.value.tabs.size
         viewModel.importRequestSpec(spec, title = "Create Order")
 
         val state = viewModel.uiState.value
-        assertEquals(initialTabCount + 1, state.tabs.size)
-        assertEquals("POST", state.editorState.method)
+        assertEquals(HttpMethod.POST, state.editorState.method)
         assertEquals("https://api.example.com/v1/orders", state.editorState.url)
-        assertEquals(listOf("Authorization" to "Bearer secret_token"), state.editorState.headers)
-        assertEquals(listOf("filter" to "active"), state.editorState.queryParams)
-        assertTrue(state.editorState.bodyPayload.contains("\"item\": \"laptop\""))
-        assertEquals(listOf("session" to "xyz123"), state.editorState.cookies)
+        assertEquals(listOf("Authorization" to "Bearer secret_token"), state.editorState.headers.map(KeyValueEntry::asPair))
+        assertEquals(listOf("filter" to "active"), state.editorState.queryParams.map(KeyValueEntry::asPair))
+        assertTrue(state.editorState.bodyState.payloadText.contains("\"item\": \"laptop\""))
+        assertEquals(listOf("session" to "xyz123"), state.editorState.cookies.map(KeyValueEntry::asPair))
+        assertEquals("Create Order", state.activeDocumentTitle)
+        assertEquals(RequestNameOrigin.USER_DEFINED, state.activeDocumentNameOrigin)
+    }
+
+    @Test
+    fun importRequestSpec_generatesMeaningfulHttpRequestName() = runTest(testDispatcher) {
+        val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(TestHttpExecutor()))
+        val spec = com.devuloopers.knet.domain.network.model.NetworkRequestSpec(
+            method = HttpMethod.GET,
+            url = "https://api.example.com/account/user?expanded=true"
+        )
+
+        viewModel.importRequestSpec(spec)
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals("/account/user", state.activeDocumentTitle)
+        assertEquals(RequestNameOrigin.GENERATED, state.activeDocumentNameOrigin)
+    }
+
+    @Test
+    fun explicitRequestName_isNotReplacedByLaterRequestEdits() = runTest(testDispatcher) {
+        val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(TestHttpExecutor()))
+        val spec = com.devuloopers.knet.domain.network.model.NetworkRequestSpec(
+            method = HttpMethod.GET,
+            url = "https://api.example.com/account/user"
+        )
+
+        viewModel.importRequestSpec(spec, title = "Load current account")
+        viewModel.updateUrl("https://api.example.com/orders/latest")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals("Load current account", state.activeDocumentTitle)
+        assertEquals(RequestNameOrigin.USER_DEFINED, state.activeDocumentNameOrigin)
     }
 
     @Test
@@ -451,8 +595,13 @@ class ApiStudioViewModelTest {
         val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(testExecutor))
 
         viewModel.updateUrl("https://stg-04astra.cnbc.com/graphql")
-        viewModel.updateMethod("POST")
-        viewModel.updateBodyPayload("{\"query\": \"...\"}")
+        viewModel.updateMethod(HttpMethod.POST)
+        viewModel.updateBodyState(
+            RequestBodyState(
+                mode = RequestBodyMode.JSON,
+                payloadText = "{\"query\": \"...\"}"
+            )
+        )
         viewModel.executeRequest()
         testDispatcher.scheduler.advanceUntilIdle()
 
@@ -463,11 +612,10 @@ class ApiStudioViewModelTest {
 
         val state = viewModel.uiState.value
         assertEquals("", state.editorState.url)
-        assertEquals("GET", state.editorState.method)
-        assertEquals("", state.editorState.bodyPayload)
+        assertEquals(HttpMethod.GET, state.editorState.method)
+        assertEquals("", state.editorState.bodyState.payloadText)
         assertNull(state.responseInspection)
         assertEquals(ExecutionState.IDLE, state.executionState)
-        assertEquals(com.devuloopers.knet.ui.desktop.apistudio.model.SessionType.NONE, state.editorState.sessionType)
         assertEquals(com.devuloopers.knet.ui.desktop.apistudio.model.SessionContext.None, state.sessionContext)
     }
 
@@ -485,15 +633,12 @@ class ApiStudioViewModelTest {
 
         assertEquals("https://api.example.com/v1/users", viewModel.uiState.value.editorState.url)
 
-        // Close all tabs
-        val allTabIds = viewModel.uiState.value.tabs.map { it.id }
-        allTabIds.forEach { viewModel.closeTab(it) }
+        viewModel.closeTab(tabId)
 
         val state = viewModel.uiState.value
-        assertTrue(state.tabs.isEmpty())
+        assertNull(state.selectedRequestId)
         assertEquals("", state.editorState.url)
-        assertEquals("", state.editorState.bodyPayload)
-        assertEquals(com.devuloopers.knet.ui.desktop.apistudio.model.SessionType.NONE, state.editorState.sessionType)
+        assertEquals("", state.editorState.bodyState.payloadText)
         assertEquals(com.devuloopers.knet.ui.desktop.apistudio.model.SessionContext.None, state.sessionContext)
     }
 
@@ -519,22 +664,20 @@ class ApiStudioViewModelTest {
         viewModel.closeTab(tabId2)
 
         val state = viewModel.uiState.value
-        assertEquals(2, state.tabs.size)
+        assertNull(state.selectedRequestId)
         assertEquals("", state.editorState.url)
-        assertEquals(com.devuloopers.knet.ui.desktop.apistudio.model.SessionType.NONE, state.editorState.sessionType)
         assertEquals(com.devuloopers.knet.ui.desktop.apistudio.model.SessionContext.None, state.sessionContext)
     }
 
     @Test
-    fun `updateBodyMode directly sets strongly typed RequestBodyMode`() = runTest {
+    fun `updateBodyState retains strongly typed request body mode`() = runTest {
         val testExecutor = TestHttpExecutor()
         val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(testExecutor))
 
-        viewModel.updateBodyMode(com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyMode.GRAPHQL)
+        viewModel.updateBodyState(RequestBodyState(mode = RequestBodyMode.GRAPHQL))
 
         val state = viewModel.uiState.value.editorState
-        assertEquals(com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyMode.GRAPHQL, state.bodyState.mode)
-        assertEquals("GRAPHQL", state.bodyType)
+        assertEquals(RequestBodyMode.GRAPHQL, state.bodyState.mode)
     }
 
     @Test
@@ -579,7 +722,7 @@ class ApiStudioViewModelTest {
         )
 
         viewModel.updateUrl("https://api.example.com/cancel-test")
-        viewModel.updateMethod("POST")
+        viewModel.updateMethod(HttpMethod.POST)
 
         // Trigger cancel
         viewModel.cancelExecution()
@@ -623,7 +766,7 @@ class ApiStudioViewModelTest {
         )
 
         viewModel.updateUrl("https://api.example.com/timeout-test")
-        viewModel.updateMethod("GET")
+        viewModel.updateMethod(HttpMethod.GET)
 
         viewModel.executeRequest()
         testScheduler.advanceUntilIdle()
@@ -631,5 +774,209 @@ class ApiStudioViewModelTest {
         assertEquals(ExecutionState.ERROR, viewModel.uiState.value.executionState)
         assertEquals("https://api.example.com/timeout-test", customInterceptionRepo.droppedUrl)
         assertEquals("GET", customInterceptionRepo.droppedMethod)
+    }
+
+    @Test
+    fun `startup restores exact persisted document without waiting for sidebar streams`() = runTest {
+        val repository = TestCollectionsRepository()
+        repository.drafts["draft-restore"] = SavedApiRequest(
+            id = "draft-restore",
+            name = "Restored request",
+            method = HttpMethod.POST,
+            url = "https://api.example.com/restored",
+            cookies = listOf(com.devuloopers.knet.domain.collection.model.RequestCookie("session", "abc")),
+            auth = ApiRequestAuth.Basic("user", "password"),
+            scripts = com.devuloopers.knet.domain.collection.model.ApiRequestScripts(
+                preRequest = "before()",
+                language = com.devuloopers.knet.scripting.model.ScriptLanguage.KOTLIN
+            )
+        )
+        val viewModel = createTestViewModel(
+            executeUseCase = ExecuteClientApiRequestUseCase(TestHttpExecutor()),
+            collectionsRepository = repository,
+            initialSettings = WorkspaceLayoutSettings(
+                activeSessionId = SessionContextSerializer.serialize(
+                    SessionContext.UnsavedDraft("draft-restore")
+                )
+            )
+        )
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(SessionContext.UnsavedDraft("draft-restore"), state.sessionContext)
+        assertEquals("Restored request", state.activeDocumentTitle)
+        assertEquals("https://api.example.com/restored", state.editorState.url)
+        assertEquals("abc", state.editorState.cookies.single().value)
+        assertEquals("user", state.editorState.authState.basicUsername)
+        assertEquals(com.devuloopers.knet.scripting.model.ScriptLanguage.KOTLIN, state.editorState.scriptLanguage)
+    }
+
+    @Test
+    fun `startup restoration failure exits loading and exposes persistence error`() = runTest {
+        val repository = object : WidgetPreferencesRepository {
+            override val settingsFlow: Flow<WorkspaceLayoutSettings> = flow {
+                throw IllegalStateException("Workspace storage is unavailable")
+            }
+
+            override suspend fun saveSettings(settings: WorkspaceLayoutSettings) = Unit
+        }
+        val viewModel = createTestViewModel(
+            executeUseCase = ExecuteClientApiRequestUseCase(TestHttpExecutor()),
+            layoutUseCases = GetWorkspaceLayoutUseCase(repository) to SaveWorkspaceLayoutUseCase(repository)
+        )
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse(viewModel.uiState.value.isRestoring)
+        assertEquals("Workspace storage is unavailable", viewModel.uiState.value.persistenceErrorMessage)
+    }
+
+    @Test
+    fun `promotion changes draft identity once and later edits stay in saved collection`() = runTest {
+        val repository = TestCollectionsRepository()
+        val viewModel = createTestViewModel(
+            executeUseCase = ExecuteClientApiRequestUseCase(TestHttpExecutor()),
+            collectionsRepository = repository
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+        viewModel.updateUrl("https://api.example.com/draft")
+        val draftContext = viewModel.uiState.value.sessionContext as SessionContext.UnsavedDraft
+
+        viewModel.saveRequestToCollection(
+            requestName = "Saved request",
+            mode = CollectionSaveMode.EXISTING_COLLECTION,
+            selectedFolder = SidebarFolderItem(
+                id = "folder-1",
+                collectionId = "collection-1",
+                name = "Requests"
+            ),
+            newCollectionName = ""
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val savedContext = viewModel.uiState.value.sessionContext as SessionContext.SavedRequest
+        assertEquals("collection-1", savedContext.collectionId)
+        assertEquals("folder-1", savedContext.folderId)
+        assertTrue(draftContext.sessionId !in repository.drafts)
+        assertEquals("Saved request", repository.saved[savedContext.requestId]?.name)
+
+        viewModel.updateUrl("https://api.example.com/saved-edit")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertTrue(repository.drafts.isEmpty())
+        assertEquals("https://api.example.com/saved-edit", repository.saved[savedContext.requestId]?.url)
+        assertEquals("Saved request", repository.saved[savedContext.requestId]?.name)
+    }
+
+    @Test
+    fun `failed promotion keeps draft identity and exposes persistence failure`() = runTest {
+        val repository = TestCollectionsRepository()
+        val viewModel = createTestViewModel(
+            executeUseCase = ExecuteClientApiRequestUseCase(TestHttpExecutor()),
+            collectionsRepository = repository
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+        viewModel.updateUrl("https://api.example.com/draft")
+        testDispatcher.scheduler.advanceUntilIdle()
+        val draftContext = viewModel.uiState.value.sessionContext as SessionContext.UnsavedDraft
+        repository.promotionFailure = IllegalStateException("Database is unavailable")
+
+        viewModel.saveRequestToCollection(
+            requestName = "Saved request",
+            mode = CollectionSaveMode.EXISTING_COLLECTION,
+            selectedFolder = SidebarFolderItem(
+                id = "folder-1",
+                collectionId = "collection-1",
+                name = "Requests"
+            ),
+            newCollectionName = ""
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val state = viewModel.uiState.value
+        assertEquals(draftContext, state.sessionContext)
+        assertEquals(draftContext.sessionId, state.selectedRequestId)
+        assertEquals("Database is unavailable", state.persistenceErrorMessage)
+        assertTrue(draftContext.sessionId in repository.drafts)
+        assertTrue(repository.saved.isEmpty())
+    }
+
+    @Test
+    fun `autosave retains disabled query header and cookie rows`() = runTest {
+        val repository = TestCollectionsRepository()
+        val viewModel = createTestViewModel(
+            executeUseCase = ExecuteClientApiRequestUseCase(TestHttpExecutor()),
+            collectionsRepository = repository
+        )
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.updateUrl("https://api.example.com/items?enabled=yes")
+        viewModel.updateQueryParams(
+            listOf(
+                KeyValueEntry("query-enabled", "enabled", "yes"),
+                KeyValueEntry("query-disabled", "draft", "value", enabled = false)
+            )
+        )
+        viewModel.updateHeaders(
+            listOf(KeyValueEntry("header-disabled", "X-Draft", "secret", enabled = false))
+        )
+        viewModel.updateCookies(
+            listOf(KeyValueEntry("cookie-disabled", "preview", "true", enabled = false))
+        )
+
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val saved = repository.drafts.values.single()
+        assertEquals(false, saved.queryParameters.single { it.name == "draft" }.isEnabled)
+        assertEquals(false, saved.headers.single().isEnabled)
+        assertEquals(false, saved.cookies.single().isEnabled)
+    }
+
+    @Test
+    fun `superseded execution cannot publish a stale result`() = runTest {
+        val executor = object : HttpExecutor {
+            override suspend fun execute(
+                url: String,
+                method: HttpMethod,
+                headers: Map<String, String>,
+                body: OutboundRequestBody,
+                auth: ApiRequestAuth,
+                proxyPort: Int?
+            ): ExecutionResult {
+                if (url.endsWith("/first")) {
+                    try {
+                        awaitCancellation()
+                    } catch (_: kotlinx.coroutines.CancellationException) {
+                        return successfulResult("{\"source\":\"first\"}")
+                    }
+                }
+                return successfulResult("{\"source\":\"second\"}")
+            }
+
+            override fun close() = Unit
+
+            private fun successfulResult(body: String): ExecutionResult = ExecutionResult(
+                statusCode = 200,
+                statusText = "OK",
+                headers = mapOf("Content-Type" to "application/json"),
+                responseBody = body,
+                timings = ExchangeTimings(totalMillis = 1L),
+                responseSizeBytes = body.length.toLong()
+            )
+        }
+        val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(executor))
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        viewModel.updateUrl("https://api.example.com/first")
+        viewModel.executeRequest()
+        testDispatcher.scheduler.runCurrent()
+        viewModel.updateUrl("https://api.example.com/second")
+        viewModel.executeRequest()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        val response = assertNotNull(viewModel.uiState.value.responseInspection)
+        assertTrue(response.responseBody.contains("second"))
+        assertTrue(!response.responseBody.contains("first"))
     }
 }

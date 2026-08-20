@@ -1,6 +1,7 @@
 package com.devuloopers.knet.storage.apistudio.entity
 
 import androidx.room.Entity
+import androidx.room.ColumnInfo
 import androidx.room.PrimaryKey
 
 /**
@@ -12,11 +13,23 @@ data class SavedRequestEntity(
     val folderId: String,
     val collectionId: String,
     val name: String,
+    @ColumnInfo(defaultValue = "'USER_DEFINED'")
+    val nameOrigin: String = "USER_DEFINED",
     val method: String,
     val url: String,
-    val headersJson: String = "{}",
+    @ColumnInfo(defaultValue = "'[]'")
+    val queryParamsJson: String = "[]",
+    val headersJson: String = "[]",
+    @ColumnInfo(defaultValue = "'[]'")
+    val cookiesJson: String = "[]",
     val bodyType: String = "NONE",
     val bodyContent: String = "",
+    @ColumnInfo(defaultValue = "'TEXT'")
+    val bodyRawSubType: String = "TEXT",
+    @ColumnInfo(defaultValue = "'[]'")
+    val bodyFormDataJson: String = "[]",
+    @ColumnInfo(defaultValue = "'[]'")
+    val bodyUrlEncodedJson: String = "[]",
     val authType: String = "NONE",
     val authToken: String = "",
     val expectedStatus: Int = 200,

@@ -192,6 +192,20 @@ class EditorSession(
     }
 
     /**
+     * Deletes the current directional selection as one undoable edit.
+     *
+     * The session reads its authoritative selection at invocation time, so keyboard, menu, and future command
+     * adapters do not need to derive mutation eligibility from a potentially stale presentation snapshot.
+     *
+     * @return Accepted deletion, or `null` when there is no active selection.
+     */
+    fun deleteSelection(): EditorDocumentChange? {
+        val range = selection?.range ?: return null
+        val change = apply(EditorTextEdit(range, "", EditorEditKind.Deletion))
+        return change.takeIf { it.afterVersion != it.beforeVersion }
+    }
+
+    /**
      * Replaces the active selection or inserts text at the caret.
      *
      * @param text Text to insert.

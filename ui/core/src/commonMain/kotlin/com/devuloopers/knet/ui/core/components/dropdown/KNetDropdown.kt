@@ -2,6 +2,7 @@ package com.devuloopers.knet.ui.core.components.dropdown
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.MutableTransitionState
 import androidx.compose.animation.core.tween
@@ -54,6 +55,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
@@ -61,7 +63,9 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntRect
@@ -71,6 +75,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
+import com.devuloopers.knet.ui.core.components.input.OverflowTextPopupHost
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.dimensions.KNetDimensions
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
@@ -78,7 +83,8 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 /** Density presets shared by KNet single-select and multi-select dropdowns. */
 enum class KNetDropdownSize {
     Compact,
-    Standard
+    Standard,
+    Large
 }
 
 /** Shared dimensions for compact KNet dropdown fields and menus. */
@@ -87,38 +93,76 @@ object KNetDropdownDefaults {
     val CompactFieldHeight: Dp = KNetDimensions.inputHeightCompact
     /** Height of the anchored selection field. */
     val FieldHeight: Dp = 36.dp
+    /** Height used when a dropdown sits beside large request-authoring controls. */
+    val LargeFieldHeight: Dp = 40.dp
     /** Minimum height of each popup option. */
     val ItemHeight: Dp = 34.dp
     /** Horizontal inset shared by the field and popup items. */
     val HorizontalPadding: Dp = 10.dp
+    /** Spacing between the selected label and chevron when rendered as one centered group. */
+    val AnchorContentSpacing: Dp = 8.dp
     /** Maximum popup height before its content scrolls. */
     val MaxMenuHeight: Dp = 248.dp
-    /** Finite default anchor width; callers can override it through their [Modifier]. */
-    val DefaultWidth: Dp = 120.dp
+    /** Minimum content-responsive width for a single-select dropdown. */
+    val MinimumWidth: Dp = 72.dp
+    /** Maximum content-responsive anchor width before its selected label truncates. */
+    val MaximumWidth: Dp = 280.dp
+    /** Default width for searchable controls before query results are known. */
+    val SearchableWidth: Dp = 120.dp
     /** Default width for multi-select controls whose popup rows include a selection indicator. */
     val MultiSelectWidth: Dp = 148.dp
+    /** Horizontal space between a popup label and its selected indicator. */
+    val ItemContentSpacing: Dp = 8.dp
+    /** Size of the popup's selected indicator. */
+    val SelectionIndicatorSize: Dp = 15.dp
 
     /** Resolves the fixed anchor height for [size]. */
     fun fieldHeight(size: KNetDropdownSize): Dp = when (size) {
         KNetDropdownSize.Compact -> CompactFieldHeight
         KNetDropdownSize.Standard -> FieldHeight
+        KNetDropdownSize.Large -> LargeFieldHeight
+    }
+
+    /** Resolves the chevron region width for [size]. */
+    fun chevronWidth(size: KNetDropdownSize): Dp = when (size) {
+        KNetDropdownSize.Compact -> 26.dp
+        KNetDropdownSize.Standard,
+        KNetDropdownSize.Large -> 30.dp
+    }
+
+    /**
+     * Resolves a stable dropdown width from the widest measured option label.
+     *
+     * Anchor label padding and chevron chrome are included so changing the current selection never changes width.
+     */
+    fun contentWidth(widestLabelWidth: Dp, size: KNetDropdownSize): Dp {
+        val anchorChrome = HorizontalPadding + AnchorContentSpacing + chevronWidth(size)
+        return (widestLabelWidth + anchorChrome).coerceIn(MinimumWidth, MaximumWidth)
+    }
+
+    /** Resolves the menu width required by the widest option plus its selected-row indicator chrome. */
+    fun menuContentWidth(widestLabelWidth: Dp): Dp {
+        val menuChrome = HorizontalPadding * 2 + ItemContentSpacing + SelectionIndicatorSize
+        return maxOf(MinimumWidth, widestLabelWidth + menuChrome)
     }
 }
 
 /**
  * Compact, anchored KNet selection field.
  *
- * The popup follows the anchor width, selection is represented independently from display text, and
- * keyboard users can open or close the list with Enter, Space, the arrow keys, or Escape.
+ * The anchor is stably sized from the complete option set while the popup may grow wider for menu chrome and
+ * long labels. Selection is represented independently from display text, and keyboard users can open or close
+ * the list with Enter, Space, the arrow keys, or Escape.
  *
  * @param selectedItem Current selection.
  * @param items Available values in visual order.
  * @param onItemSelected Invoked once when a value is chosen.
- * @param modifier Modifier applied to the anchored field; sizing modifiers override the compact default width.
+ * @param modifier Modifier applied to the anchored field; sizing modifiers override the content-responsive width.
  * @param placeholder Text shown for [defaultItem].
  * @param defaultItem Explicit value represented by [placeholder].
  * @param enabled Whether the field can be opened.
- * @param size Fixed anchor density. Selection text never participates in anchor measurement.
+ * @param size Fixed anchor density used when calculating height and visual chrome.
+ * @param centeredAnchorContent Whether the selected label and chevron form one centered, compact group.
  * @param itemText Converts a value into visible text.
  * @param itemColor Optionally supplies a semantic text color for a value.
  */
@@ -132,12 +176,17 @@ fun <T> KNetDropdown(
     defaultItem: T? = items.firstOrNull(),
     enabled: Boolean = true,
     size: KNetDropdownSize = KNetDropdownSize.Standard,
+    centeredAnchorContent: Boolean = false,
     itemText: (T) -> String = { it.toString() },
     itemColor: ((T) -> Color?)? = null
 ) {
     val colors = KNetTheme.colors
+    val typography = KNetTheme.typography
+    val motion = KNetTheme.motion
+    val density = LocalDensity.current
+    val textMeasurer = rememberTextMeasurer()
     var expanded by remember { mutableStateOf(false) }
-    var anchorWidthPx by remember { mutableStateOf(0) }
+    var anchorSizePx by remember { mutableStateOf(IntSize.Zero) }
 
     val isDefaultSelected = selectedItem == defaultItem
     val displayText = if (isDefaultSelected && !placeholder.isNullOrBlank()) placeholder else itemText(selectedItem)
@@ -149,11 +198,54 @@ fun <T> KNetDropdown(
         else -> colors.textPrimary
     }
     val canExpand = enabled && items.isNotEmpty()
+    val optionLabels = remember(items, placeholder, itemText) {
+        buildList {
+            items.forEach { add(itemText(it)) }
+            placeholder?.takeIf(String::isNotBlank)?.let(::add)
+            if (isEmpty()) add("")
+        }
+    }
+    val widestAnchorLabelWidthPx = remember(optionLabels, typography.labelMedium) {
+        optionLabels.maxOf { label ->
+            textMeasurer.measure(
+                text = label,
+                style = typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
+                maxLines = 1
+            ).size.width
+        }
+    }
+    val widestMenuLabelWidthPx = remember(optionLabels, typography.bodySmall) {
+        optionLabels.maxOf { label ->
+            textMeasurer.measure(
+                text = label,
+                style = typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+                maxLines = 1
+            ).size.width
+        }
+    }
+    val contentResponsiveAnchorWidth = KNetDropdownDefaults.contentWidth(
+        widestLabelWidth = with(density) { widestAnchorLabelWidthPx.toDp() },
+        size = size
+    )
+    val contentResponsiveMenuWidth = KNetDropdownDefaults.menuContentWidth(
+        widestLabelWidth = with(density) { widestMenuLabelWidthPx.toDp() }
+    )
+    val widthAnimationDuration = if (motion.animationsEnabled) motion.durationFast else motion.durationInstant
+    val animatedAnchorWidth by animateDpAsState(
+        targetValue = contentResponsiveAnchorWidth,
+        animationSpec = tween(widthAnimationDuration),
+        label = "dropdownAnchorWidth"
+    )
+    val animatedMenuWidth by animateDpAsState(
+        targetValue = contentResponsiveMenuWidth,
+        animationSpec = tween(widthAnimationDuration),
+        label = "dropdownMenuWidth"
+    )
 
     Box(
         modifier = modifier
-            .width(KNetDropdownDefaults.DefaultWidth)
-            .onSizeChanged { anchorWidthPx = it.width }
+            .width(animatedAnchorWidth)
+            .onSizeChanged { anchorSizePx = it }
     ) {
         KNetDropdownAnchor(
             text = displayText,
@@ -162,14 +254,16 @@ fun <T> KNetDropdown(
             size = size,
             textColor = textColor,
             fontWeight = if (isDefaultSelected) FontWeight.Medium else FontWeight.SemiBold,
+            centeredContent = centeredAnchorContent,
             onExpandedChange = { expanded = it }
         )
 
         KNetDropdownPopup(
             expanded = expanded,
             onDismissRequest = { expanded = false },
-            anchorWidthPx = anchorWidthPx,
-            focusable = true
+            anchorSizePx = anchorSizePx,
+            focusable = true,
+            preferredMenuWidth = animatedMenuWidth
         ) {
             Column(
                 modifier = Modifier
@@ -209,6 +303,7 @@ internal fun KNetDropdownAnchor(
     size: KNetDropdownSize,
     textColor: Color,
     fontWeight: FontWeight,
+    centeredContent: Boolean = false,
     onExpandedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -220,8 +315,12 @@ internal fun KNetDropdownAnchor(
     val hovered by interactionSource.collectIsHoveredAsState()
     val focused by interactionSource.collectIsFocusedAsState()
     val fieldHeight = KNetDropdownDefaults.fieldHeight(size)
-    val chevronWidth = if (size == KNetDropdownSize.Compact) 26.dp else 30.dp
+    val chevronWidth = KNetDropdownDefaults.chevronWidth(size)
     val active = expanded || focused
+    val anchorTextStyle = typography.labelMedium.copy(
+        color = textColor,
+        fontWeight = fontWeight
+    )
     val duration = if (motion.animationsEnabled) motion.durationFast else motion.durationInstant
     val containerColor by animateColorAsState(
         targetValue = if (hovered && enabled) {
@@ -273,25 +372,45 @@ internal fun KNetDropdownAnchor(
             }
             .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" }
             .handCursor(enabled),
+        horizontalArrangement = if (centeredContent) Arrangement.Center else Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
+        OverflowTextPopupHost(
             text = text,
-            modifier = Modifier
-                .weight(1f)
-                .padding(start = KNetDropdownDefaults.HorizontalPadding),
-            color = textColor,
-            style = typography.labelMedium,
-            fontWeight = fontWeight,
-            maxLines = 1,
-            softWrap = false,
-            overflow = TextOverflow.Ellipsis
-        )
+            textStyle = anchorTextStyle,
+            enabled = text.isNotEmpty(),
+            modifier = if (centeredContent) {
+                Modifier
+            } else {
+                Modifier
+                    .weight(1f)
+                    .padding(
+                        start = KNetDropdownDefaults.HorizontalPadding,
+                        end = KNetDropdownDefaults.AnchorContentSpacing
+                    )
+            },
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Text(
+                text = text,
+                style = anchorTextStyle,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        if (centeredContent) {
+            Spacer(modifier = Modifier.width(KNetDropdownDefaults.AnchorContentSpacing))
+        }
         Box(
-            modifier = Modifier
-                .height(fieldHeight)
-                .width(chevronWidth)
-                .background(if (active) colors.interaction.selectedOverlay else Color.Transparent),
+            modifier = if (centeredContent) {
+                Modifier.size(17.dp)
+            } else {
+                Modifier
+                    .height(fieldHeight)
+                    .width(chevronWidth)
+                    .background(if (active) colors.interaction.selectedOverlay else Color.Transparent)
+            },
             contentAlignment = Alignment.Center
         ) {
             Icon(
@@ -304,7 +423,7 @@ internal fun KNetDropdownAnchor(
     }
 }
 
-private class DropdownPopupPositionProvider(
+private class DropdownMenuPopupPositionProvider(
     private val verticalOffsetPx: Int
 ) : PopupPositionProvider {
     override fun calculatePosition(
@@ -326,6 +445,78 @@ private class DropdownPopupPositionProvider(
     }
 }
 
+/** Vertical side selected for a focusable dropdown menu relative to its anchor. */
+internal enum class DropdownPopupVerticalPlacement {
+    Below,
+    Above
+}
+
+/**
+ * Selects the side that keeps the menu visible, preferring the conventional below-anchor position.
+ *
+ * When neither side contains the complete menu, the side with more available space wins.
+ */
+internal fun dropdownPopupVerticalPlacement(
+    anchorBounds: IntRect,
+    windowHeight: Int,
+    menuHeight: Int,
+    verticalOffset: Int
+): DropdownPopupVerticalPlacement {
+    val availableBelow = (windowHeight - anchorBounds.bottom - verticalOffset).coerceAtLeast(0)
+    val availableAbove = (anchorBounds.top - verticalOffset).coerceAtLeast(0)
+    return if (menuHeight <= availableBelow || availableBelow >= availableAbove) {
+        DropdownPopupVerticalPlacement.Below
+    } else {
+        DropdownPopupVerticalPlacement.Above
+    }
+}
+
+/**
+ * Positions one popup layer across both the visible anchor and its menu.
+ *
+ * Keeping the transparent anchor interaction proxy inside the focusable popup retains desktop pointer ownership
+ * while expanded. [placeAbove] is consumed during child placement after [calculatePosition] resolves the side.
+ */
+private class InteractiveDropdownPopupPositionProvider(
+    private val anchorHeightPx: Int,
+    private val verticalOffsetPx: Int
+) : PopupPositionProvider {
+    var placeAbove: Boolean = false
+        private set
+    var anchorOffsetXPx: Int = 0
+        private set
+
+    override fun calculatePosition(
+        anchorBounds: IntRect,
+        windowSize: IntSize,
+        layoutDirection: LayoutDirection,
+        popupContentSize: IntSize
+    ): IntOffset {
+        val maxX = (windowSize.width - popupContentSize.width).coerceAtLeast(0)
+        val alignedX = when (layoutDirection) {
+            LayoutDirection.Ltr -> anchorBounds.left
+            LayoutDirection.Rtl -> anchorBounds.right - popupContentSize.width
+        }.coerceIn(0, maxX)
+        anchorOffsetXPx = (anchorBounds.left - alignedX).coerceIn(
+            minimumValue = 0,
+            maximumValue = (popupContentSize.width - anchorBounds.width).coerceAtLeast(0)
+        )
+        val menuHeight = (popupContentSize.height - anchorHeightPx - verticalOffsetPx).coerceAtLeast(0)
+        placeAbove = dropdownPopupVerticalPlacement(
+            anchorBounds = anchorBounds,
+            windowHeight = windowSize.height,
+            menuHeight = menuHeight,
+            verticalOffset = verticalOffsetPx
+        ) == DropdownPopupVerticalPlacement.Above
+        val alignedY = if (placeAbove) {
+            anchorBounds.bottom - popupContentSize.height
+        } else {
+            anchorBounds.top
+        }
+        return IntOffset(alignedX, alignedY)
+    }
+}
+
 /**
  * Intrinsic-measurement-free popup shell shared by regular and searchable dropdowns.
  *
@@ -335,13 +526,16 @@ private class DropdownPopupPositionProvider(
  * @param focusable Whether the popup owns focus and consumes outside pointer events. Ordinary selection
  * dropdowns enable this so an anchor click closes once without reaching the anchor again. Searchable
  * comboboxes keep focus in their text field and therefore disable it.
+ * @param preferredMenuWidth Optional content-derived menu width. It may exceed the anchor width but is clamped
+ * by the popup window's measurement constraints.
  */
 @Composable
 internal fun KNetDropdownPopup(
     expanded: Boolean,
     onDismissRequest: () -> Unit,
-    anchorWidthPx: Int,
+    anchorSizePx: IntSize,
     focusable: Boolean,
+    preferredMenuWidth: Dp? = null,
     content: @Composable () -> Unit
 ) {
     val colors = KNetTheme.colors
@@ -354,48 +548,159 @@ internal fun KNetDropdownPopup(
     }
     if (!shouldComposeDropdownPopup(visibilityState.currentState, visibilityState.targetState)) return
 
-    val popupWidth = if (anchorWidthPx > 0) with(density) { anchorWidthPx.toDp() } else KNetDropdownDefaults.DefaultWidth
+    val resolvedAnchorWidthPx = anchorSizePx.width.takeIf { it > 0 }
+        ?: with(density) { KNetDropdownDefaults.MinimumWidth.roundToPx() }
+    val resolvedAnchorHeightPx = anchorSizePx.height.takeIf { it > 0 }
+        ?: with(density) { KNetDropdownDefaults.FieldHeight.roundToPx() }
+    val resolvedPreferredMenuWidthPx = preferredMenuWidth
+        ?.let { with(density) { it.roundToPx() } }
+        ?.coerceAtLeast(resolvedAnchorWidthPx)
+        ?: resolvedAnchorWidthPx
+    val popupWidth = with(density) { resolvedPreferredMenuWidthPx.toDp() }
     val animationDuration = if (motion.animationsEnabled) motion.durationFast else motion.durationInstant
-    val positionProvider = remember(density) {
-        DropdownPopupPositionProvider(with(density) { 4.dp.roundToPx() })
+    val verticalOffsetPx = with(density) { 4.dp.roundToPx() }
+    val menuPositionProvider = remember(verticalOffsetPx) {
+        DropdownMenuPopupPositionProvider(verticalOffsetPx)
+    }
+    val interactivePositionProvider = remember(resolvedAnchorHeightPx, verticalOffsetPx) {
+        InteractiveDropdownPopupPositionProvider(
+            anchorHeightPx = resolvedAnchorHeightPx,
+            verticalOffsetPx = verticalOffsetPx
+        )
     }
 
     Popup(
-        popupPositionProvider = positionProvider,
+        popupPositionProvider = if (focusable) interactivePositionProvider else menuPositionProvider,
         onDismissRequest = onDismissRequest,
         properties = dropdownPopupProperties(focusable)
     ) {
-        AnimatedVisibility(
-            visibleState = visibilityState,
-            enter = fadeIn(
-                animationSpec = tween(animationDuration, easing = motion.easingStandard)
-            ) + scaleIn(
-                initialScale = 0.98f,
-                transformOrigin = TransformOrigin(0.5f, 0f),
-                animationSpec = tween(animationDuration, easing = motion.easingStandard)
-            ),
-            exit = fadeOut(
-                animationSpec = tween(animationDuration, easing = motion.easingStandard)
-            ) + scaleOut(
-                targetScale = 0.98f,
-                transformOrigin = TransformOrigin(0.5f, 0f),
-                animationSpec = tween(animationDuration, easing = motion.easingStandard)
+        val menu: @Composable () -> Unit = {
+            AnimatedVisibility(
+                visibleState = visibilityState,
+                enter = fadeIn(
+                    animationSpec = tween(animationDuration, easing = motion.easingStandard)
+                ) + scaleIn(
+                    initialScale = 0.98f,
+                    transformOrigin = TransformOrigin(0.5f, 0f),
+                    animationSpec = tween(animationDuration, easing = motion.easingStandard)
+                ),
+                exit = fadeOut(
+                    animationSpec = tween(animationDuration, easing = motion.easingStandard)
+                ) + scaleOut(
+                    targetScale = 0.98f,
+                    transformOrigin = TransformOrigin(0.5f, 0f),
+                    animationSpec = tween(animationDuration, easing = motion.easingStandard)
+                )
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(popupWidth)
+                        .heightIn(max = KNetDropdownDefaults.MaxMenuHeight)
+                        .shadow(elevation.level3, shapes.medium)
+                        .clip(shapes.medium)
+                        .background(colors.surfaceVariant)
+                        .border(1.dp, colors.borderFocused.copy(alpha = 0.7f), shapes.medium)
+                        .padding(vertical = 4.dp)
+                ) {
+                    content()
+                }
+            }
+        }
+
+        if (focusable) {
+            InteractiveDropdownPopupLayout(
+                anchorSize = IntSize(resolvedAnchorWidthPx, resolvedAnchorHeightPx),
+                preferredMenuWidthPx = resolvedPreferredMenuWidthPx,
+                verticalOffsetPx = verticalOffsetPx,
+                positionProvider = interactivePositionProvider,
+                onAnchorClick = onDismissRequest,
+                menu = menu
             )
-        ) {
+        } else {
+            menu()
+        }
+    }
+}
+
+/**
+ * Hosts the menu and a transparent anchor-sized pointer target in one focusable desktop popup layer.
+ *
+ * Compose Desktop gives a focusable popup pointer ownership while it is open. Mirroring only the anchor's
+ * interaction region here preserves its hand cursor and routes a header click directly to dismissal without
+ * allowing that click to reach the underlying anchor and reopen the menu. The menu may be wider than the anchor;
+ * window constraints cap that preferred width and the position provider keeps the proxy over the real anchor.
+ */
+@Composable
+private fun InteractiveDropdownPopupLayout(
+    anchorSize: IntSize,
+    preferredMenuWidthPx: Int,
+    verticalOffsetPx: Int,
+    positionProvider: InteractiveDropdownPopupPositionProvider,
+    onAnchorClick: () -> Unit,
+    menu: @Composable () -> Unit
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    Layout(
+        content = {
             Box(
                 modifier = Modifier
-                    .width(popupWidth)
-                    .heightIn(max = KNetDropdownDefaults.MaxMenuHeight)
-                    .shadow(elevation.level3, shapes.medium)
-                    .clip(shapes.medium)
-                    .background(colors.surfaceVariant)
-                    .border(1.dp, colors.borderFocused.copy(alpha = 0.7f), shapes.medium)
-                    .padding(vertical = 4.dp)
-            ) {
-                content()
+                    .handCursor()
+                    .clickable(
+                        interactionSource = interactionSource,
+                        indication = null,
+                        role = Role.Button,
+                        onClick = onAnchorClick
+                    )
+                    .semantics { stateDescription = "Expanded" }
+            )
+            menu()
+        }
+    ) { measurables, constraints ->
+        val width = resolvedDropdownPopupWidth(
+            anchorWidthPx = anchorSize.width,
+            preferredMenuWidthPx = preferredMenuWidthPx,
+            minimumWidthPx = constraints.minWidth,
+            maximumWidthPx = constraints.maxWidth
+        )
+        val anchorWidth = anchorSize.width.coerceIn(1, width)
+        val anchorHeight = anchorSize.height.coerceAtLeast(1)
+        val maximumMenuHeight = minOf(
+            with(density) { KNetDropdownDefaults.MaxMenuHeight.roundToPx() },
+            (constraints.maxHeight - anchorHeight - verticalOffsetPx).coerceAtLeast(0)
+        )
+        val anchorPlaceable = measurables[0].measure(Constraints.fixed(anchorWidth, anchorHeight))
+        val menuPlaceable = measurables[1].measure(
+            Constraints(
+                minWidth = width,
+                maxWidth = width,
+                minHeight = 0,
+                maxHeight = maximumMenuHeight
+            )
+        )
+        val popupHeight = anchorHeight + verticalOffsetPx + menuPlaceable.height
+        layout(width, popupHeight) {
+            val anchorX = positionProvider.anchorOffsetXPx.coerceIn(0, width - anchorWidth)
+            if (positionProvider.placeAbove) {
+                menuPlaceable.place(0, 0)
+                anchorPlaceable.place(anchorX, menuPlaceable.height + verticalOffsetPx)
+            } else {
+                anchorPlaceable.place(anchorX, 0)
+                menuPlaceable.place(0, anchorHeight + verticalOffsetPx)
             }
         }
     }
+}
+
+/** Resolves a preferred menu width against its anchor and the popup window's finite constraints. */
+internal fun resolvedDropdownPopupWidth(
+    anchorWidthPx: Int,
+    preferredMenuWidthPx: Int,
+    minimumWidthPx: Int,
+    maximumWidthPx: Int
+): Int {
+    val boundedMaximumWidthPx = maximumWidthPx.coerceAtLeast(1)
+    return maxOf(anchorWidthPx, preferredMenuWidthPx, minimumWidthPx, 1)
+        .coerceAtMost(boundedMaximumWidthPx)
 }
 
 /** Keeps the popup composed until its exit transition has completed. */
@@ -429,22 +734,34 @@ internal fun KNetDropdownMenuItem(
         highlighted -> colors.interaction.hoverOverlay
         else -> Color.Transparent
     }
+    val resolvedTextColor = textColor ?: if (selected || highlighted) colors.textPrimary else colors.textSecondary
+    val resolvedFontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal
+    val itemTextStyle = typography.bodySmall.copy(
+        color = resolvedTextColor,
+        fontWeight = resolvedFontWeight
+    )
     DropdownMenuItem(
         text = {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(KNetDropdownDefaults.ItemContentSpacing)
             ) {
-                Box(modifier = Modifier.weight(1f)) {
-                    if (content != null) {
+                if (content != null) {
+                    Box(modifier = Modifier.weight(1f)) {
                         content()
-                    } else {
+                    }
+                } else {
+                    OverflowTextPopupHost(
+                        text = text,
+                        textStyle = itemTextStyle,
+                        enabled = true,
+                        modifier = Modifier.weight(1f),
+                        contentAlignment = Alignment.CenterStart
+                    ) {
                         Text(
                             text = text,
-                            color = textColor ?: if (selected || highlighted) colors.textPrimary else colors.textSecondary,
-                            style = typography.bodySmall,
-                            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
+                            style = itemTextStyle,
                             maxLines = 1,
                             softWrap = false,
                             overflow = TextOverflow.Ellipsis
@@ -452,12 +769,11 @@ internal fun KNetDropdownMenuItem(
                     }
                 }
                 if (selected) {
-                    Spacer(Modifier.width(2.dp))
                     Icon(
                         imageVector = Icons.Default.Check,
                         contentDescription = null,
                         tint = colors.accent,
-                        modifier = Modifier.size(15.dp)
+                        modifier = Modifier.size(KNetDropdownDefaults.SelectionIndicatorSize)
                     )
                 }
             }

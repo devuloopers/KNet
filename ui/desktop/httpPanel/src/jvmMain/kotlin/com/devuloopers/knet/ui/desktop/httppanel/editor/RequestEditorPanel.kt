@@ -6,27 +6,27 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.scripting.model.ScriptLanguage
 import com.devuloopers.knet.scripting.model.ScriptPhase
-import com.devuloopers.knet.ui.core.components.divider.HorizontalDivider
 import com.devuloopers.knet.ui.core.components.keyvalue.KNetKeyValueEditor
 import com.devuloopers.knet.ui.core.components.keyvalue.KeyValueEntry
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.httppanel.components.InspectorSubTabRow
 import com.devuloopers.knet.ui.desktop.httppanel.model.*
+import kotlin.uuid.Uuid
 
 /**
  * Cohesive actions parameter object for [RequestEditorPanel].
  */
 data class RequestEditorPanelActions(
     val onBodyStateChanged: (RequestBodyState) -> Unit = {},
-    val onBodyPayloadChanged: (String) -> Unit = {},
     val onGraphQlStateChanged: ((GraphQlState) -> Unit)? = null,
-    val onQueryParamsChanged: (List<Pair<String, String>>) -> Unit = {},
-    val onHeadersChanged: (List<Pair<String, String>>) -> Unit = {},
-    val onCookiesChanged: (List<Pair<String, String>>) -> Unit = {},
+    val onQueryParamsChanged: (List<KeyValueEntry>) -> Unit = {},
+    val onHeadersChanged: (List<KeyValueEntry>) -> Unit = {},
+    val onCookiesChanged: (List<KeyValueEntry>) -> Unit = {},
     val onAuthStateChanged: (AuthState) -> Unit = {},
     val onPreRequestScriptChanged: (String) -> Unit = {},
     val onTestScriptChanged: (String) -> Unit = {},
@@ -39,15 +39,15 @@ data class RequestEditorPanelActions(
  * Unified interactive HTTP request editor facade composable shared across API Studio payload authoring
  * and Breakpoint in-flight request modification.
  *
- * Renders standardized edge-to-edge sub-tabs, header key-value editors, body authoring,
+ * Renders standardized inset sub-tabs, request key-value editors, body authoring,
  * auth state configuration, and pre/post-request scripting views.
  */
 @Composable
 fun RequestEditorPanel(
     bodyState: RequestBodyState = RequestBodyState(),
-    queryParams: List<Pair<String, String>> = emptyList(),
-    headers: List<Pair<String, String>> = emptyList(),
-    cookies: List<Pair<String, String>> = emptyList(),
+    queryParams: List<KeyValueEntry> = emptyList(),
+    headers: List<KeyValueEntry> = emptyList(),
+    cookies: List<KeyValueEntry> = emptyList(),
     authState: AuthState = AuthState(),
     preRequestScript: String = "",
     testScript: String = "",
@@ -60,20 +60,13 @@ fun RequestEditorPanel(
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
     val spacing = KNetTheme.spacing
+    val shapes = KNetTheme.shapes
+    val requestKeyValueEditorModifier = Modifier
+        .fillMaxSize()
+        .padding(horizontal = spacing.md, vertical = spacing.sm)
+        .clip(shapes.medium)
 
     var localActiveTab by remember(activeSubTab) { mutableStateOf(activeSubTab) }
-
-    val headerEntries = remember(headers) {
-        headers.mapIndexed { idx, (k, v) -> KeyValueEntry(id = "header_$idx", key = k, value = v) }
-    }
-
-    val paramEntries = remember(queryParams) {
-        queryParams.mapIndexed { idx, (k, v) -> KeyValueEntry(id = "param_$idx", key = k, value = v) }
-    }
-
-    val cookieEntries = remember(cookies) {
-        cookies.mapIndexed { idx, (k, v) -> KeyValueEntry(id = "cookie_$idx", key = k, value = v) }
-    }
 
     Column(modifier = modifier.fillMaxSize()) {
         // 1. Sub-Tabs Header Navigation Bar
@@ -86,10 +79,9 @@ fun RequestEditorPanel(
             },
             headerCount = headers.size,
             paramCount = queryParams.size,
-            cookieCount = cookies.size
+            cookieCount = cookies.size,
+            modifier = Modifier.padding(horizontal = spacing.md)
         )
-
-        HorizontalDivider(color = themeColors.border)
 
         // 2. Active Tab Content
         Box(
@@ -101,10 +93,7 @@ fun RequestEditorPanel(
                 InspectorSubTab.BODY -> {
                     RequestBodyEditor(
                         state = bodyState,
-                        onStateChange = { updatedBodyState ->
-                            actions.onBodyStateChanged(updatedBodyState)
-                            actions.onBodyPayloadChanged(updatedBodyState.payloadText)
-                        },
+                        onStateChange = actions.onBodyStateChanged,
                         onGraphQlStateChange = actions.onGraphQlStateChanged,
                         modifier = Modifier.fillMaxSize()
                     )
@@ -112,47 +101,47 @@ fun RequestEditorPanel(
 
                 InspectorSubTab.HEADERS -> {
                     KNetKeyValueEditor(
-                        entries = headerEntries,
+                        entries = headers,
                         keyHeader = "HEADER NAME",
                         valueHeader = "VALUE",
                         emptyMessage = "No HTTP headers configured. Click '+ Add Header' to start.",
                         addLabel = "Add Header",
                         onEntryChange = { entryIndex, updatedEntry ->
-                            val updatedEntries = headerEntries.toMutableList().apply { set(entryIndex, updatedEntry) }
-                            actions.onHeadersChanged(updatedEntries.map { it.key to it.value })
+                            val updatedEntries = headers.toMutableList().apply { set(entryIndex, updatedEntry) }
+                            actions.onHeadersChanged(updatedEntries)
                         },
                         onAddEntry = {
-                            val updatedList = headers + ("" to "")
+                            val updatedList = headers + newEntry("header")
                             actions.onHeadersChanged(updatedList)
                         },
                         onRemoveEntry = { targetIndex ->
                             val updatedList = headers.toMutableList().apply { removeAt(targetIndex) }
                             actions.onHeadersChanged(updatedList)
                         },
-                        modifier = Modifier.fillMaxSize()
+                        modifier = requestKeyValueEditorModifier
                     )
                 }
 
                 InspectorSubTab.PARAMS -> {
                     KNetKeyValueEditor(
-                        entries = paramEntries,
+                        entries = queryParams,
                         keyHeader = "PARAMETER NAME",
                         valueHeader = "VALUE",
                         emptyMessage = "No query parameters defined. Click '+ Add Param' to start.",
                         addLabel = "Add Param",
                         onEntryChange = { entryIndex, updatedEntry ->
-                            val updatedEntries = paramEntries.toMutableList().apply { set(entryIndex, updatedEntry) }
-                            actions.onQueryParamsChanged(updatedEntries.map { it.key to it.value })
+                            val updatedEntries = queryParams.toMutableList().apply { set(entryIndex, updatedEntry) }
+                            actions.onQueryParamsChanged(updatedEntries)
                         },
                         onAddEntry = {
-                            val updatedList = queryParams + ("" to "")
+                            val updatedList = queryParams + newEntry("query")
                             actions.onQueryParamsChanged(updatedList)
                         },
                         onRemoveEntry = { targetIndex ->
                             val updatedList = queryParams.toMutableList().apply { removeAt(targetIndex) }
                             actions.onQueryParamsChanged(updatedList)
                         },
-                        modifier = Modifier.fillMaxSize()
+                        modifier = requestKeyValueEditorModifier
                     )
                 }
 
@@ -176,24 +165,24 @@ fun RequestEditorPanel(
                         }
 
                         KNetKeyValueEditor(
-                            entries = cookieEntries,
+                            entries = cookies,
                             keyHeader = "COOKIE NAME",
                             valueHeader = "VALUE",
                             emptyMessage = "No cookies configured. Click '+ Add Cookie' to start.",
                             addLabel = "Add Cookie",
                             onEntryChange = { entryIndex, updatedEntry ->
-                                val updatedEntries = cookieEntries.toMutableList().apply { set(entryIndex, updatedEntry) }
-                                actions.onCookiesChanged(updatedEntries.map { it.key to it.value })
+                                val updatedEntries = cookies.toMutableList().apply { set(entryIndex, updatedEntry) }
+                                actions.onCookiesChanged(updatedEntries)
                             },
                             onAddEntry = {
-                                val updatedList = cookies + ("" to "")
+                                val updatedList = cookies + newEntry("cookie")
                                 actions.onCookiesChanged(updatedList)
                             },
                             onRemoveEntry = { targetIndex ->
                                 val updatedList = cookies.toMutableList().apply { removeAt(targetIndex) }
                                 actions.onCookiesChanged(updatedList)
                             },
-                            modifier = Modifier.fillMaxSize()
+                            modifier = requestKeyValueEditorModifier
                         )
                     }
                 }
@@ -227,3 +216,9 @@ fun RequestEditorPanel(
         }
     }
 }
+
+private fun newEntry(kind: String): KeyValueEntry = KeyValueEntry(
+    id = "$kind-${Uuid.random()}",
+    key = "",
+    value = ""
+)

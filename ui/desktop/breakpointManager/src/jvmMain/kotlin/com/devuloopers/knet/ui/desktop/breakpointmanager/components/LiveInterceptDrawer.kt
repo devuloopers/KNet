@@ -33,6 +33,7 @@ import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
 import com.devuloopers.knet.ui.core.components.drawer.KNetSideDrawer
 import com.devuloopers.knet.ui.core.components.drawer.KNetSideDrawerSize
+import com.devuloopers.knet.ui.core.components.keyvalue.KeyValueEntry
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.httppanel.components.EndpointCard
 import com.devuloopers.knet.ui.desktop.httppanel.editor.RequestEditorPanel
@@ -107,7 +108,9 @@ fun LiveInterceptDrawer(
         val response = candidate.response
 
         var editedReqHeaders by remember(eventToRender.id) {
-            mutableStateOf(request.head.headers.map { it.name.value to it.value })
+            mutableStateOf(request.head.headers.mapIndexed { index, header ->
+                KeyValueEntry("intercept-header-$index", header.name.value, header.value)
+            })
         }
         var reqBodyState by remember(eventToRender.id) {
             val spec = preResolved?.requestPayloadSpec
@@ -306,14 +309,14 @@ fun LiveInterceptDrawer(
                         KNetButton(
                             onClick = {
                                 if (isRequestPhase) {
-                                    val headersToForward = editedReqHeaders.filterNot {
-                                        it.first.equals("Content-Encoding", ignoreCase = true)
+                                    val headersToForward = editedReqHeaders.filter {
+                                        it.enabled && !it.key.equals("Content-Encoding", ignoreCase = true)
                                     }
                                     val modifiedReq = BreakpointRequestEdit(
                                         request = request.copy(
                                             head = request.head.copy(
-                                                headers = headersToForward.map { (name, value) ->
-                                                    HeaderField(HeaderName(name), value)
+                                                headers = headersToForward.map { entry ->
+                                                    HeaderField(HeaderName(entry.key), entry.value)
                                                 }
                                             )
                                         ),
@@ -394,9 +397,7 @@ fun LiveInterceptDrawer(
                                 activeSubTab = activeReqSubTab,
                                 actions = RequestEditorPanelActions(
                                     onBodyStateChanged = { reqBodyState = it },
-                                    onHeadersChanged = { pairs ->
-                                        editedReqHeaders = pairs
-                                    },
+                                    onHeadersChanged = { editedReqHeaders = it },
                                     onSubTabSelected = { activeReqSubTab = it }
                                 ),
                                 modifier = Modifier.fillMaxSize()

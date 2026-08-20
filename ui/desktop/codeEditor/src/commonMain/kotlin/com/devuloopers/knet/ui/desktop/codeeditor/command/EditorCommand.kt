@@ -72,6 +72,9 @@ sealed interface EditorCommand {
     /** Selects the complete current document. */
     data object SelectAll : EditorCommand
 
+    /** Deletes the session's current selection as one undoable deletion. */
+    data object DeleteSelection : EditorCommand
+
     /** Reverts the newest undo group. */
     data object Undo : EditorCommand
 
@@ -169,6 +172,7 @@ class EditorCommandDispatcher(
                 )
                 true
             }
+            EditorCommand.DeleteSelection -> session.deleteSelection() != null
             EditorCommand.Undo -> session.undo()
             EditorCommand.Redo -> session.redo()
             is EditorCommand.Custom -> extensionHandlers.any { it.handle(command, session) }

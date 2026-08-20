@@ -27,6 +27,8 @@ Owns JVM desktop application use cases and UI-neutral ports that coordinate KNet
 - Application-level commands, results, and lifecycle policies.
 - One captured-request conversion use case that produces the shared API Studio/replay
   `NetworkRequestSpec` without duplicating URL, ordered-header, repeated-query, or body-decoding behavior in UI.
+- API Studio request execution orchestration from the canonical `SavedApiRequest`, including scripts,
+  outbound execution, response formatting, and canonical direct-traffic recording.
 
 ## Does not own
 
@@ -55,3 +57,5 @@ Proxy runtime and capture state are intentionally separate: a running listener c
 `Paused`, and only full product/configuration lifecycle commands stop the listener.
 Traffic page queries use optional session scope, typed method/status/scheme/application-protocol criteria,
 and an opaque keyset cursor. A null session deliberately means all retained history rather than "latest."
+API Studio execution accepts one complete domain document; it has no dependency on Compose editor state and
+can therefore be reused by another desktop surface, automation entry point, or remote-control adapter.

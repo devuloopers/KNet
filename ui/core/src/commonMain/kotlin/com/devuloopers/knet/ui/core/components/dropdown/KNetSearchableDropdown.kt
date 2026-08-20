@@ -40,6 +40,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.button.KNetIconButton
 import com.devuloopers.knet.ui.core.foundation.pointer.textCursor
@@ -75,7 +76,7 @@ fun <T> KNetSearchableDropdown(
     val focusRequester = remember { FocusRequester() }
     val focused by interactionSource.collectIsFocusedAsState()
     var expanded by remember { mutableStateOf(false) }
-    var anchorWidthPx by remember { mutableStateOf(0) }
+    var anchorSizePx by remember { mutableStateOf(IntSize.Zero) }
     var query by remember { mutableStateOf("") }
     var highlightedIndex by remember { mutableStateOf(-1) }
 
@@ -94,8 +95,8 @@ fun <T> KNetSearchableDropdown(
 
     Box(
         modifier = modifier
-            .width(KNetDropdownDefaults.DefaultWidth)
-            .onSizeChanged { anchorWidthPx = it.width }
+            .width(KNetDropdownDefaults.SearchableWidth)
+            .onSizeChanged { anchorSizePx = it }
     ) {
         BasicTextField(
             value = visibleText,
@@ -197,7 +198,7 @@ fun <T> KNetSearchableDropdown(
         KNetDropdownPopup(
             expanded = expanded,
             onDismissRequest = ::close,
-            anchorWidthPx = anchorWidthPx,
+            anchorSizePx = anchorSizePx,
             focusable = false
         ) {
             if (filteredItems.isEmpty()) {

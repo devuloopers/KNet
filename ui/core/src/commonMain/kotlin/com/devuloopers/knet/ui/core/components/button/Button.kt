@@ -49,7 +49,8 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * @param variant Visual button variant (Primary, Secondary, Tertiary, Ghost, Danger).
  * @param size Button height and density size.
  * @param enabled Interactivity toggle.
- * @param loading Asynchronous loading toggle (disables click interaction and shows spinner).
+ * @param loading Asynchronous loading toggle that shows a spinner and disables interaction by default.
+ * @param clickableWhileLoading Explicit opt-in for loading controls that expose a valid cancellation action.
  * @param colors Custom button colors override.
  * @param role Accessibility role exposed by the click target.
  * @param content Slot layout for button text and icons.
@@ -62,6 +63,7 @@ fun KNetButton(
     size: ButtonSize = ButtonSize.Standard,
     enabled: Boolean = true,
     loading: Boolean = false,
+    clickableWhileLoading: Boolean = false,
     colors: ButtonColors = ButtonDefaults.colors(variant),
     role: Role = Role.Button,
     content: @Composable () -> Unit
@@ -75,7 +77,11 @@ fun KNetButton(
     val focused by interactionSource.collectIsFocusedAsState()
     val hovered by interactionSource.collectIsHoveredAsState()
 
-    val isClickable = enabled && !loading
+    val isClickable = isKNetButtonClickable(
+        enabled = enabled,
+        loading = loading,
+        clickableWhileLoading = clickableWhileLoading
+    )
     val animatedContainer by animateColorAsState(
         targetValue = when {
             !enabled -> colors.disabledContainerColor
@@ -146,6 +152,13 @@ fun KNetButton(
         }
     }
 }
+
+/** Resolves pointer and keyboard interaction without changing the button's visual loading state. */
+internal fun isKNetButtonClickable(
+    enabled: Boolean,
+    loading: Boolean,
+    clickableWhileLoading: Boolean
+): Boolean = enabled && (!loading || clickableWhileLoading)
 
 /**
  * Text button primitive without surface container styling.

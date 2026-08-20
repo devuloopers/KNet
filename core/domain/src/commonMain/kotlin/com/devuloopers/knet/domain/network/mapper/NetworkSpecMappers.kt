@@ -1,8 +1,11 @@
 package com.devuloopers.knet.domain.network.mapper
 
+import com.devuloopers.knet.domain.apistudio.naming.RequestNameOrigin
 import com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType
 import com.devuloopers.knet.domain.collection.model.ApiRequestBody
 import com.devuloopers.knet.domain.collection.model.RequestHeader
+import com.devuloopers.knet.domain.collection.model.RequestCookie
+import com.devuloopers.knet.domain.collection.model.RequestQueryParameter
 import com.devuloopers.knet.domain.collection.model.SavedApiRequest
 import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
 import com.devuloopers.knet.domain.util.UrlQueryStringParser
@@ -20,18 +23,15 @@ object NetworkSpecMappers {
      */
     fun SavedApiRequest.toNetworkRequestSpec(): NetworkRequestSpec {
         val headerPairs = this.headers.filter { it.isEnabled }.map { it.key to it.value }
-        val queryParamsList = UrlQueryStringParser.parseQueryParams(this.url)
-        val cookiesList = extractCookiesFromHeaders(headerPairs)
-
-        val parsedBodyType = when (this.body.type.lowercase()) {
-            "json" -> RequestBodyType.JSON
-            "xml" -> RequestBodyType.XML
-            "form-data", "form" -> RequestBodyType.FORM_DATA
-            "x-www-form-urlencoded" -> RequestBodyType.X_WWW_FORM_URLENCODED
-            "multipart" -> RequestBodyType.MULTIPART
-            "graphql" -> RequestBodyType.GRAPHQL
-            "raw-text", "text" -> RequestBodyType.RAW_TEXT
-            else -> RequestBodyType.NONE
+        val queryParamsList = if (queryParameters.isNotEmpty()) {
+            queryParameters.filter { it.isEnabled }.map { it.name to it.value }
+        } else {
+            UrlQueryStringParser.parseQueryParams(this.url)
+        }
+        val cookiesList = if (cookies.isNotEmpty()) {
+            cookies.filter { it.isEnabled }.map { it.name to it.value }
+        } else {
+            extractCookiesFromHeaders(headerPairs)
         }
 
         return NetworkRequestSpec(
@@ -41,7 +41,7 @@ object NetworkSpecMappers {
             queryParams = queryParamsList,
             cookies = cookiesList,
             bodyPayload = this.body.content,
-            bodyType = parsedBodyType,
+            bodyType = this.body.type,
             auth = this.auth
         )
     }
@@ -51,28 +51,27 @@ object NetworkSpecMappers {
      *
      * @param id Target request identifier string.
      * @param name Target request title name string.
+     * @param nameOrigin Whether the supplied title is generated or explicitly user-owned.
      * @return Formatted domain [SavedApiRequest] entity.
      */
-    fun NetworkRequestSpec.toSavedApiRequest(id: String, name: String): SavedApiRequest {
+    fun NetworkRequestSpec.toSavedApiRequest(
+        id: String,
+        name: String,
+        nameOrigin: RequestNameOrigin = RequestNameOrigin.USER_DEFINED
+    ): SavedApiRequest {
         val requestHeaders = this.headers.map { RequestHeader(key = it.first, value = it.second, isEnabled = true) }
-        val bodyTypeName = when (this.bodyType) {
-            RequestBodyType.JSON -> "json"
-            RequestBodyType.XML -> "xml"
-            RequestBodyType.FORM_DATA -> "form-data"
-            RequestBodyType.X_WWW_FORM_URLENCODED -> "x-www-form-urlencoded"
-            RequestBodyType.MULTIPART -> "multipart"
-            RequestBodyType.GRAPHQL -> "graphql"
-            RequestBodyType.RAW_TEXT -> "raw-text"
-            RequestBodyType.NONE -> "none"
-        }
-
         return SavedApiRequest(
             id = id,
             name = name,
+            nameOrigin = nameOrigin,
             method = this.method,
             url = this.url,
+            queryParameters = queryParams.map { (name, value) ->
+                RequestQueryParameter(name = name, value = value)
+            },
             headers = requestHeaders,
-            body = ApiRequestBody(content = this.bodyPayload, type = bodyTypeName),
+            cookies = cookies.map { RequestCookie(name = it.first, value = it.second) },
+            body = ApiRequestBody(content = this.bodyPayload, type = this.bodyType),
             auth = this.auth
         )
     }
@@ -120,34 +119,6 @@ object NetworkSpecMappers {
      */
     fun Map<String, String>.sanitizeTransportHeaders(): Map<String, String> {
         return this.filterKeys { key -> key.trim().lowercase() !in restrictedTransportHeaders }
-    }
-
-    /**
-     * Converts a [RequestBodyType] enum into a UI-compatible body mode string.
-     */
-    fun RequestBodyType.toEditorBodyMode(): String = when (this) {
-        RequestBodyType.JSON -> "JSON"
-        RequestBodyType.XML -> "XML"
-        RequestBodyType.FORM_DATA -> "FORM_DATA"
-        RequestBodyType.X_WWW_FORM_URLENCODED -> "X_WWW_FORM_URLENCODED"
-        RequestBodyType.MULTIPART -> "FORM_DATA"
-        RequestBodyType.GRAPHQL -> "GRAPHQL"
-        RequestBodyType.RAW_TEXT -> "RAW"
-        RequestBodyType.NONE -> "NONE"
-    }
-
-    /**
-     * Converts a string representation of body mode into a strongly-typed [RequestBodyType] enum.
-     */
-    fun String.toRequestBodyType(): RequestBodyType = when (this.uppercase().trim()) {
-        "JSON" -> RequestBodyType.JSON
-        "XML" -> RequestBodyType.XML
-        "FORM", "FORM_DATA", "FORM-DATA" -> RequestBodyType.FORM_DATA
-        "X-WWW-FORM-URLENCODED", "X_WWW_FORM_URLENCODED", "URLENCODED" -> RequestBodyType.X_WWW_FORM_URLENCODED
-        "MULTIPART" -> RequestBodyType.MULTIPART
-        "GRAPHQL" -> RequestBodyType.GRAPHQL
-        "RAW", "RAW_TEXT", "TEXT" -> RequestBodyType.RAW_TEXT
-        else -> RequestBodyType.NONE
     }
 
 }

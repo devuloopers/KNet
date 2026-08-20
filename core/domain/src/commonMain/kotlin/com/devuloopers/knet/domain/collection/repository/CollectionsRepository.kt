@@ -21,6 +21,11 @@ interface CollectionsRepository {
     suspend fun getCollectionById(id: String): ApiCollection?
 
     /**
+     * Fetches a request directly by its stable identifier, regardless of whether it is saved or a draft.
+     */
+    suspend fun getRequestById(id: String): SavedApiRequest?
+
+    /**
      * Saves or updates an API collection entity.
      */
     suspend fun saveCollection(collection: ApiCollection)
@@ -71,6 +76,16 @@ interface CollectionsRepository {
     suspend fun saveUnsavedToNewCollectionTx(
         collection: ApiCollection,
         folder: CollectionFolder,
+        request: SavedApiRequest,
+        unsavedRequestIdToDelete: String
+    )
+
+    /**
+     * Atomically inserts a request into an existing collection and removes its prior draft record.
+     */
+    suspend fun saveUnsavedToExistingCollectionTx(
+        collectionId: String,
+        folderId: String,
         request: SavedApiRequest,
         unsavedRequestIdToDelete: String
     )

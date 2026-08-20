@@ -1,8 +1,11 @@
 package com.devuloopers.knet.domain.collection.model
 
+import com.devuloopers.knet.domain.apistudio.naming.RequestNameOrigin
+import com.devuloopers.knet.domain.clientNetwork.model.RawBodyFormat
+import com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType
+import com.devuloopers.knet.domain.validation.UrlValidator
 import com.devuloopers.knet.scripting.model.ScriptAssertion
 import com.devuloopers.knet.scripting.model.ScriptLanguage
-import com.devuloopers.knet.domain.validation.UrlValidator
 import com.devuloopers.knet.traffic.model.http.HttpMethod
 
 /**
@@ -16,11 +19,57 @@ data class RequestHeader(
 )
 
 /**
+ * Represents one persisted query-parameter row authored in API Studio.
+ *
+ * Disabled rows are retained separately from the URL so toggling a row does not destroy authored data.
+ *
+ * @property name Parameter name exactly as entered by the user.
+ * @property value Parameter value exactly as entered by the user.
+ * @property isEnabled Whether the parameter participates in request execution and URL rendering.
+ */
+data class RequestQueryParameter(
+    val name: String,
+    val value: String,
+    val isEnabled: Boolean = true
+)
+
+/**
+ * Represents one persisted request cookie authored in API Studio.
+ *
+ * @property name Cookie name exactly as entered by the user.
+ * @property value Cookie value exactly as entered by the user.
+ * @property isEnabled Whether the cookie participates in request execution.
+ */
+data class RequestCookie(
+    val name: String,
+    val value: String,
+    val isEnabled: Boolean = true
+)
+
+/**
+ * Represents one persisted structured body field used by form-data and URL-encoded editors.
+ *
+ * @property id Stable presentation identifier retained across save and restore operations.
+ * @property key Field name exactly as authored.
+ * @property value Field value exactly as authored.
+ * @property isEnabled Whether the field participates in request execution.
+ */
+data class ApiRequestBodyField(
+    val id: String,
+    val key: String,
+    val value: String,
+    val isEnabled: Boolean = true
+)
+
+/**
  * Groups properties related to request body configuration.
  */
 data class ApiRequestBody(
     val content: String = "",
-    val type: String = "json" // e.g. "none", "json", "form-data", "raw-text"
+    val type: RequestBodyType = RequestBodyType.NONE,
+    val rawFormat: RawBodyFormat = RawBodyFormat.TEXT,
+    val formDataFields: List<ApiRequestBodyField> = emptyList(),
+    val urlEncodedFields: List<ApiRequestBodyField> = emptyList()
 )
 
 /**
@@ -45,10 +94,12 @@ sealed interface ApiRequestAuth {
         val value: String = "",
         val location: String = "Header" // Header or Query Params
     ) : ApiRequestAuth
+
     data class OAuth2(
         val token: String = "",
         val headerPrefix: String = "Bearer"
     ) : ApiRequestAuth
+
     data class AwsSignature(
         val accessKey: String = "",
         val secretKey: String = "",
@@ -74,9 +125,12 @@ sealed interface ApiRequestAuth {
 data class SavedApiRequest(
     val id: String,
     val name: String,
+    val nameOrigin: RequestNameOrigin = RequestNameOrigin.USER_DEFINED,
     val method: HttpMethod,
     val url: String,
+    val queryParameters: List<RequestQueryParameter> = emptyList(),
     val headers: List<RequestHeader> = defaultHeaders(),
+    val cookies: List<RequestCookie> = emptyList(),
     val body: ApiRequestBody = ApiRequestBody(),
     val auth: ApiRequestAuth = ApiRequestAuth.None,
     val scripts: ApiRequestScripts = ApiRequestScripts(),
@@ -91,12 +145,12 @@ data class SavedApiRequest(
  * Returns the 6 universal HTTP client default headers pre-seeded for every new [SavedApiRequest].
  */
 fun defaultHeaders(): List<RequestHeader> = listOf(
-    RequestHeader(key = "User-Agent",      value = "KNet-Desktop/2.4.0",   isEnabled = true,  isAuto = true),
-    RequestHeader(key = "Accept",          value = "*/*",                  isEnabled = true,  isAuto = true),
-    RequestHeader(key = "Accept-Encoding", value = "gzip, deflate, br",    isEnabled = true,  isAuto = true),
-    RequestHeader(key = "Connection",      value = "keep-alive",           isEnabled = true,  isAuto = true),
-    RequestHeader(key = "Host",            value = "",                     isEnabled = true,  isAuto = true),
-    RequestHeader(key = "KNet-Token",      value = "",                     isEnabled = true,  isAuto = true)
+    RequestHeader(key = "User-Agent", value = "KNet-Desktop/2.4.0", isEnabled = true, isAuto = true),
+    RequestHeader(key = "Accept", value = "*/*", isEnabled = true, isAuto = true),
+    RequestHeader(key = "Accept-Encoding", value = "gzip, deflate, br", isEnabled = true, isAuto = true),
+    RequestHeader(key = "Connection", value = "keep-alive", isEnabled = true, isAuto = true),
+    RequestHeader(key = "Host", value = "", isEnabled = true, isAuto = true),
+    RequestHeader(key = "KNet-Token", value = "", isEnabled = true, isAuto = true)
 )
 
 /**

@@ -84,10 +84,11 @@ internal fun LazyCodeBody(
     onCaretChange: (EditorPosition) -> Unit,
     selection: EditorSelection?,
     onSelectionChange: (EditorSelection?) -> Unit,
-    onDeleteSelection: () -> Unit,
+    onDeleteSelection: () -> Boolean,
     onDeleteCurrentLine: () -> Unit,
     onPaste: (String) -> Unit,
     onSelectAll: () -> Unit,
+    onSelectionTextInput: (String) -> Unit,
     onLineChanged: (lineIndex: Int, newText: String) -> Unit,
     onLineSplit: (lineIndex: Int, colIndex: Int) -> Unit,
     onLineMerge: (lineIndex: Int) -> Unit,
@@ -111,6 +112,8 @@ internal fun LazyCodeBody(
     }
 
     LaunchedEffect(caret.line, visualLineMap) {
+        val documentEnd = EditorPosition(snapshot.lineCount - 1, snapshot.line(snapshot.lineCount - 1).length)
+        if (!shouldRevealCaretForSelection(selection, documentEnd)) return@LaunchedEffect
         val targetVisualLine = visualLineMap.toVisibleLine(caret.line) ?: return@LaunchedEffect
         val isVisible = lazyListState.layoutInfo.visibleItemsInfo.any { it.index == targetVisualLine }
         if (!isVisible) lazyListState.animateScrollToItem(targetVisualLine)
@@ -150,6 +153,7 @@ internal fun LazyCodeBody(
     val selectionGestureHandler = rememberSelectionGestureHandler()
     val isSelectionGestureActive = selectionGestureHandler.isGestureActive
     val focusRequester = remember { FocusRequester() }
+    var selectionInputOwnsFocus by remember { mutableStateOf(false) }
     var containerHeightPixels by remember { mutableStateOf(0f) }
     var containerWidthPixels by remember { mutableStateOf(0f) }
     val currentSelection by rememberUpdatedState(selection)
@@ -161,6 +165,19 @@ internal fun LazyCodeBody(
     val selectedText = remember(snapshot, selection) {
         selection?.takeUnless { it.isEmpty }?.let { snapshot.text(it.range) }.orEmpty()
     }
+    val selectAllAction = {
+        onSelectAll()
+        runCatching { focusRequester.requestFocus() }
+        Unit
+    }
+
+    LaunchedEffect(mode, selection, isSelectionGestureActive) {
+        when {
+            mode != LazyCodeBodyMode.Editable -> selectionInputOwnsFocus = false
+            isSelectionGestureActive -> selectionInputOwnsFocus = false
+            selection != null -> selectionInputOwnsFocus = true
+        }
+    }
     val contextMenuItems = rememberEditorContextMenuItems(
         snapshot = snapshot,
         selection = selection,
@@ -168,9 +185,9 @@ internal fun LazyCodeBody(
         strings = strings,
         copyAction = copyAction,
         pasteAction = pasteAction,
-        onDeleteSelection = onDeleteSelection,
+        onDeleteSelection = { onDeleteSelection() },
         onPaste = onPaste,
-        onSelectAll = onSelectAll
+        onSelectAll = selectAllAction
     )
 
     CompositionLocalProvider(LocalTextContextMenu provides EmptyTextContextMenu) {
@@ -213,7 +230,7 @@ internal fun LazyCodeBody(
                         if (commandModifier) {
                             when (event.key) {
                                 Key.A -> {
-                                    onSelectAll()
+                                    selectAllAction()
                                     true
                                 }
                                 Key.C -> {
@@ -257,11 +274,9 @@ internal fun LazyCodeBody(
                             }
                         } else if (
                             mode == LazyCodeBodyMode.Editable &&
-                            selectedText.isNotEmpty() &&
                             (event.key == Key.Backspace || event.key == Key.Delete)
                         ) {
                             onDeleteSelection()
-                            true
                         } else if (event.key == Key.Escape && onCloseSearch != null) {
                             onCloseSearch()
                             true
@@ -270,6 +285,12 @@ internal fun LazyCodeBody(
                         }
                     }
             ) {
+                SelectionTextInputBridge(
+                    active = selectionInputOwnsFocus,
+                    onCommittedText = onSelectionTextInput,
+                    modifier = Modifier.align(Alignment.TopStart)
+                )
+
                 LazyCodeBodyContent(
                     snapshot = snapshot,
                     visualLineMap = visualLineMap,
@@ -290,6 +311,8 @@ internal fun LazyCodeBody(
                     onCaretChange = onCaretChange,
                     selection = selection,
                     isSelectionGestureActive = isSelectionGestureActive,
+                    isSelectionGestureActiveNow = { selectionGestureHandler.isGestureActive },
+                    onLineInputFocused = { selectionInputOwnsFocus = false },
                     shouldRequestEditorFocus = shouldRequestEditorFocus,
                     onToggleFold = onToggleFold,
                     onLineChanged = onLineChanged,
@@ -322,4 +345,23 @@ internal fun LazyCodeBody(
             }
         }
     }
+}
+
+/**
+ * Resolves whether a selection-driven caret change should move the editor viewport.
+ *
+ * A whole-document selection keeps the current viewport because Ctrl/Cmd+A is a range operation rather than a
+ * navigation request. Partial selections still reveal their active endpoint, preserving search-result and
+ * ordinary keyboard-selection behavior.
+ *
+ * @param selection Current directional selection, or `null` when only the caret is active.
+ * @param documentEnd Position immediately after the document's final character.
+ * @return `true` when the viewport should reveal the active caret.
+ */
+internal fun shouldRevealCaretForSelection(
+    selection: EditorSelection?,
+    documentEnd: EditorPosition
+): Boolean {
+    val range = selection?.range ?: return true
+    return range.start != EditorPosition(0, 0) || range.end != documentEnd
 }

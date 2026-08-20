@@ -1,10 +1,13 @@
 package com.devuloopers.knet.ui.desktop.codeeditor.command
 
+import com.devuloopers.knet.ui.desktop.codeeditor.document.EditorEditKind
 import com.devuloopers.knet.ui.desktop.codeeditor.document.EditorPosition
+import com.devuloopers.knet.ui.desktop.codeeditor.document.EditorSelection
 import com.devuloopers.knet.ui.desktop.codeeditor.session.EditorSession
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class EditorCommandDispatcherTest {
@@ -42,5 +45,45 @@ class EditorCommandDispatcherTest {
         assertTrue(dispatcher.dispatch(EditorCommand.Custom(commandId), session))
         assertEquals("custom", session.snapshot.text())
         assertFalse(dispatcher.dispatch(EditorCommand.Custom(EditorCommandId.Custom("test.unknown")), session))
+    }
+
+    @Test
+    fun deleteSelectionCommandReportsWhetherLiveSessionSelectionWasDeleted() {
+        val session = EditorSession("alpha\nbeta")
+        val dispatcher = EditorCommandDispatcher()
+        dispatcher.dispatch(EditorCommand.SelectAll, session)
+
+        assertTrue(dispatcher.dispatch(EditorCommand.DeleteSelection, session))
+        assertEquals("", session.snapshot.text())
+        assertFalse(dispatcher.dispatch(EditorCommand.DeleteSelection, session))
+
+        session.select(EditorSelection(EditorPosition(0, 0), EditorPosition(0, 0)))
+        assertFalse(dispatcher.dispatch(EditorCommand.DeleteSelection, session))
+    }
+
+    @Test
+    fun typedInputCommandReplacesReverseMultilineSelectionAsOneUndoableEdit() {
+        val originalText = "alpha\nbeta\ngamma"
+        val session = EditorSession(originalText)
+        val dispatcher = EditorCommandDispatcher()
+        session.select(
+            EditorSelection(
+                anchor = EditorPosition(2, 2),
+                active = EditorPosition(0, 2)
+            )
+        )
+
+        assertTrue(
+            dispatcher.dispatch(
+                EditorCommand.InsertText("X", EditorEditKind.Replacement),
+                session
+            )
+        )
+
+        assertEquals("alXmma", session.snapshot.text())
+        assertEquals(EditorPosition(0, 3), session.caret)
+        assertNull(session.selection)
+        assertTrue(dispatcher.dispatch(EditorCommand.Undo, session))
+        assertEquals(originalText, session.snapshot.text())
     }
 }

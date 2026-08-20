@@ -1,11 +1,13 @@
 package com.devuloopers.knet.ui.desktop.apistudio.usecase
 
+import com.devuloopers.knet.domain.apistudio.naming.RequestNameOrigin
 import com.devuloopers.knet.domain.collection.model.ApiCollection
 import com.devuloopers.knet.domain.collection.model.CollectionFolder
 import com.devuloopers.knet.domain.collection.model.SavedApiRequest
 import com.devuloopers.knet.domain.collection.repository.CollectionsRepository
 import com.devuloopers.knet.domain.collection.usecase.SaveUnsavedRequestUseCase
 import com.devuloopers.knet.domain.collection.usecase.UpdateRequestInCollectionUseCase
+import com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType
 import com.devuloopers.knet.domain.payload.StructuredPayloadState
 import com.devuloopers.knet.ui.desktop.apistudio.model.RequestEditorState
 import com.devuloopers.knet.ui.desktop.apistudio.model.SessionContext
@@ -27,6 +29,7 @@ class AutoSaveApiSessionUseCaseTest {
 
         override fun observeCollections(): Flow<List<ApiCollection>> = emptyFlow()
         override suspend fun getCollectionById(id: String): ApiCollection? = null
+        override suspend fun getRequestById(id: String): SavedApiRequest? = null
         override suspend fun saveCollection(collection: ApiCollection) {}
         override suspend fun deleteCollection(collectionId: String) {}
         override suspend fun saveFolder(collectionId: String, folder: CollectionFolder) {}
@@ -43,6 +46,12 @@ class AutoSaveApiSessionUseCaseTest {
         override suspend fun saveUnsavedToNewCollectionTx(
             collection: ApiCollection,
             folder: CollectionFolder,
+            request: SavedApiRequest,
+            unsavedRequestIdToDelete: String
+        ) {}
+        override suspend fun saveUnsavedToExistingCollectionTx(
+            collectionId: String,
+            folderId: String,
             request: SavedApiRequest,
             unsavedRequestIdToDelete: String
         ) {}
@@ -73,20 +82,22 @@ class AutoSaveApiSessionUseCaseTest {
         )
         val editorState = RequestEditorState(
             url = "https://api.example.com/graphql",
-            method = "POST",
-            bodyState = bodyState,
-            linkedUnsavedId = "draft_100"
+            method = com.devuloopers.knet.traffic.model.http.HttpMethod.POST,
+            bodyState = bodyState
         )
 
         useCase.execute(
             sessionContext = SessionContext.UnsavedDraft("draft_100"),
+            documentTitle = "GraphQL request",
+            nameOrigin = RequestNameOrigin.GENERATED,
             editorState = editorState
         )
 
         assertEquals(1, repository.savedUnsavedRequests.size)
         val savedReq = repository.savedUnsavedRequests.first()
         assertEquals("draft_100", savedReq.id)
-        assertEquals("GRAPHQL", savedReq.body.type)
+        assertEquals(RequestNameOrigin.GENERATED, savedReq.nameOrigin)
+        assertEquals(RequestBodyType.GRAPHQL, savedReq.body.type)
         assertTrue(savedReq.body.content.contains("query GetUser"))
     }
 
@@ -103,11 +114,13 @@ class AutoSaveApiSessionUseCaseTest {
 
         val editorState = RequestEditorState(
             url = "https://api.example.com/users",
-            method = "GET"
+            method = com.devuloopers.knet.traffic.model.http.HttpMethod.GET
         )
 
         useCase.execute(
             sessionContext = SessionContext.SavedRequest(requestId = "req_1", collectionId = "coll_1", folderId = "fld_1"),
+            documentTitle = "Get users",
+            nameOrigin = RequestNameOrigin.USER_DEFINED,
             editorState = editorState
         )
 
@@ -117,5 +130,6 @@ class AutoSaveApiSessionUseCaseTest {
         assertEquals("coll_1", collId)
         assertEquals("fld_1", fldId)
         assertEquals("req_1", req.id)
+        assertEquals("Get users", req.name)
     }
 }

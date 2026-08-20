@@ -1,21 +1,31 @@
 package com.devuloopers.knet.ui.desktop.apistudio
 
+import com.devuloopers.knet.domain.apistudio.descriptor.HttpRequestDescriptorStrategy
+import com.devuloopers.knet.domain.apistudio.descriptor.RequestDescriptorContribution
+import com.devuloopers.knet.domain.apistudio.descriptor.RequestDescriptorStrategy
+import com.devuloopers.knet.domain.apistudio.descriptor.RequestKindId
+import com.devuloopers.knet.domain.apistudio.naming.RequestNameOrigin
+import com.devuloopers.knet.domain.apistudio.usecase.DescribeRequestUseCase
+import com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType
 import com.devuloopers.knet.domain.collection.model.ApiCollection
+import com.devuloopers.knet.domain.collection.model.ApiRequestBody
 import com.devuloopers.knet.domain.collection.model.CollectionFolder
-import com.devuloopers.knet.traffic.model.http.HttpMethod
 import com.devuloopers.knet.domain.collection.model.SavedApiRequest
 import com.devuloopers.knet.domain.collection.repository.CollectionsRepository
+import com.devuloopers.knet.domain.collection.usecase.CreateCollectionUseCase
+import com.devuloopers.knet.domain.collection.usecase.DeleteCollectionUseCase
+import com.devuloopers.knet.domain.collection.usecase.DeleteSavedSessionUseCase
+import com.devuloopers.knet.domain.collection.usecase.DeleteUnsavedRequestUseCase
 import com.devuloopers.knet.domain.collection.usecase.ObserveCollectionsUseCase
+import com.devuloopers.knet.domain.collection.usecase.ObserveUnsavedRequestsUseCase
+import com.devuloopers.knet.domain.collection.usecase.RenameCollectionUseCase
 import com.devuloopers.knet.domain.collection.usecase.UpdateRequestInCollectionUseCase
-import com.devuloopers.knet.ui.desktop.apistudio.dialog.CollectionSaveMode
-import com.devuloopers.knet.ui.desktop.apistudio.model.CollectionsState
-import com.devuloopers.knet.ui.desktop.apistudio.model.RequestEditorState
+import com.devuloopers.knet.traffic.model.http.HttpMethod
 import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.CollectionsViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -25,6 +35,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -43,276 +54,226 @@ class CollectionsViewModelTest {
     }
 
     @Test
-    fun `CollectionsState default values are set correctly`() {
-        val state = CollectionsState()
-        assertTrue(state.collections.isEmpty())
-        assertTrue(state.unsavedRequests.isEmpty())
-        assertFalse(state.isSaveDialogOpen)
-    }
+    fun `combined Room streams publish one loaded sidebar state`() = runTest {
+        val repository = SidebarRepository()
+        val viewModel = createViewModel(repository)
+        assertTrue(viewModel.uiState.value.isLoading)
 
-    @Test
-    fun `openSaveDialog and closeSaveDialog update isSaveDialogOpen toggle`() {
-        val viewModel = CollectionsViewModel(ioDispatcher = testDispatcher)
-        assertFalse(viewModel.uiState.value.isSaveDialogOpen)
-
-        viewModel.openSaveDialog()
-        assertTrue(viewModel.uiState.value.isSaveDialogOpen)
-
-        viewModel.closeSaveDialog()
-        assertFalse(viewModel.uiState.value.isSaveDialogOpen)
-    }
-
-    @Test
-    fun `triggerUnsavedAutoSave generates linked ID on initial draft save`() = runTest {
-        val viewModel = CollectionsViewModel(ioDispatcher = testDispatcher)
-        val editorState = RequestEditorState(url = "https://api.knet.dev/v1/ping", method = "GET")
-
-        var assignedId: String? = null
-        var assignedTitle: String? = null
-
-        viewModel.triggerUnsavedAutoSave(
-            editorState = editorState,
-            onLinkedIdAssigned = { id, title ->
-                assignedId = id
-                assignedTitle = title
-            }
-        )
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertTrue(assignedId?.isNotBlank() == true)
-        assertEquals("Untitled Request", assignedTitle)
-    }
-
-    @Test
-    fun `saveRequestToCollection closes dialog and triggers onSaved callback`() = runTest {
-        val viewModel = CollectionsViewModel(ioDispatcher = testDispatcher)
-        viewModel.openSaveDialog()
-        assertTrue(viewModel.uiState.value.isSaveDialogOpen)
-
-        var savedRequestId: String? = null
-        val editorState = RequestEditorState(url = "https://api.knet.dev/v1/users", method = "POST")
-
-        viewModel.saveRequestToCollection(
-            requestName = "Create User",
-            mode = CollectionSaveMode.NEW_COLLECTION,
-            selectedCollectionId = null,
-            newCollectionName = "User API Suite",
-            currentEditor = editorState,
-            onSaved = { id -> savedRequestId = id }
-        )
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        assertFalse(viewModel.uiState.value.isSaveDialogOpen)
-        assertTrue(savedRequestId?.startsWith("req_") == true)
-    }
-
-    @Test
-    fun `triggerSavedRequestAutoSave preserves existing saved request name`() = runTest {
-        var updatedRequest: SavedApiRequest? = null
-        val fakeRepo = object : CollectionsRepository {
-            override fun observeCollections(): Flow<List<ApiCollection>> = flowOf(
-                listOf(
-                    ApiCollection(
-                        id = "col_1",
-                        name = "My Collection",
-                        folders = listOf(
-                            CollectionFolder(
-                                id = "fld_1",
-                                name = "Requests",
-                                requests = listOf(
-                                    SavedApiRequest(
-                                        id = "req_100",
-                                        name = "Unsaved Session 1",
-                                        method = HttpMethod.GET,
-                                        url = "https://api.knet.dev/v1/ping"
-                                    )
-                                )
+        repository.collections.value = listOf(
+            ApiCollection(
+                id = "collection-1",
+                name = "Users",
+                folders = listOf(
+                    CollectionFolder(
+                        id = "folder-1",
+                        name = "Requests",
+                        requests = listOf(
+                            SavedApiRequest(
+                                id = "request-1",
+                                name = "Get user",
+                                method = HttpMethod.GET,
+                                url = "https://api.example.com/users/1"
                             )
                         )
                     )
                 )
             )
-            override suspend fun getCollectionById(id: String): ApiCollection? = null
-            override suspend fun saveCollection(collection: ApiCollection) {}
-            override suspend fun deleteCollection(collectionId: String) {}
-            override suspend fun saveFolder(collectionId: String, folder: CollectionFolder) {}
-            override suspend fun deleteFolder(folderId: String) {}
-            override suspend fun saveRequest(collectionId: String, folderId: String, request: SavedApiRequest) {
-                updatedRequest = request
-            }
-            override suspend fun deleteRequest(requestId: String) {}
-            override fun observeUnsavedRequests(): Flow<List<SavedApiRequest>> = emptyFlow()
-            override suspend fun saveUnsavedRequest(request: SavedApiRequest) {}
-            override suspend fun deleteUnsavedRequest(requestId: String) {}
-            override suspend fun saveUnsavedToNewCollectionTx(
-                collection: ApiCollection,
-                folder: CollectionFolder,
-                request: SavedApiRequest,
-                unsavedRequestIdToDelete: String
-            ) {}
-        }
-
-        val observeCollectionsUseCase = ObserveCollectionsUseCase(fakeRepo)
-        val updateRequestInCollectionUseCase = UpdateRequestInCollectionUseCase(fakeRepo)
-
-        val viewModel = CollectionsViewModel(
-            observeCollectionsUseCase = observeCollectionsUseCase,
-            updateRequestInCollectionUseCase = updateRequestInCollectionUseCase,
-            ioDispatcher = testDispatcher
+        )
+        repository.drafts.value = listOf(
+            SavedApiRequest(
+                id = "draft-1",
+                name = "Draft",
+                method = HttpMethod.POST,
+                url = "https://api.example.com/users"
+            )
         )
         testDispatcher.scheduler.advanceUntilIdle()
 
-        // Verify initial state has the collection request with name "Unsaved Session 1"
-        assertEquals("Unsaved Session 1", viewModel.uiState.value.collections.first().requests.first().name)
-
-        // Trigger auto save with edited URL and method
-        val editorState = RequestEditorState(url = "https://api.knet.dev/v1/updated", method = "POST")
-        viewModel.triggerSavedRequestAutoSave(
-            requestId = "req_100",
-            collectionId = "col_1",
-            folderId = "fld_1",
-            editorState = editorState
-        )
-        testDispatcher.scheduler.advanceUntilIdle()
-
-        // Verify updatedRequest retained original name "Unsaved Session 1" instead of "req_100"
-        assertEquals("req_100", updatedRequest?.id)
-        assertEquals("Unsaved Session 1", updatedRequest?.name)
-        assertEquals("https://api.knet.dev/v1/updated", updatedRequest?.url)
-        assertEquals(HttpMethod.POST, updatedRequest?.method)
+        val state = viewModel.uiState.value
+        assertFalse(state.isLoading)
+        assertNull(state.errorMessage)
+        assertEquals("Get user", state.collections.single().requests.single().name)
+        assertEquals("GET", state.collections.single().requests.single().descriptor.badgeLabel)
+        assertEquals("Draft", state.unsavedRequests.single().name)
+        assertEquals("POST", state.unsavedRequests.single().descriptor.badgeLabel)
     }
 
     @Test
-    fun `observeCollections maps collection name directly without slash concatenation`() = runTest {
-        val fakeRepo = object : CollectionsRepository {
-            override fun observeCollections(): Flow<List<ApiCollection>> = flowOf(
-                listOf(
-                    ApiCollection(
-                        id = "col_test",
-                        name = "Test 1",
-                        folders = listOf(
-                            CollectionFolder(
-                                id = "col_test",
-                                name = "Test 1",
-                                requests = emptyList()
-                            )
-                        )
-                    )
+    fun `protocol descriptor controls badge while retaining transport method`() = runTest {
+        val repository = SidebarRepository()
+        repository.drafts.value = listOf(
+            SavedApiRequest(
+                id = "graphql-draft",
+                name = "Viewer",
+                method = HttpMethod.POST,
+                url = "https://api.example.com/graphql",
+                body = ApiRequestBody(
+                    content = "query Viewer { viewer { id } }",
+                    type = RequestBodyType.GRAPHQL
                 )
             )
-            override suspend fun getCollectionById(id: String): ApiCollection? = null
-            override suspend fun saveCollection(collection: ApiCollection) {}
-            override suspend fun deleteCollection(collectionId: String) {}
-            override suspend fun saveFolder(collectionId: String, folder: CollectionFolder) {}
-            override suspend fun deleteFolder(folderId: String) {}
-            override suspend fun saveRequest(collectionId: String, folderId: String, request: SavedApiRequest) {}
-            override suspend fun deleteRequest(requestId: String) {}
-            override fun observeUnsavedRequests(): Flow<List<SavedApiRequest>> = emptyFlow()
-            override suspend fun saveUnsavedRequest(request: SavedApiRequest) {}
-            override suspend fun deleteUnsavedRequest(requestId: String) {}
-            override suspend fun saveUnsavedToNewCollectionTx(
-                collection: ApiCollection,
-                folder: CollectionFolder,
-                request: SavedApiRequest,
-                unsavedRequestIdToDelete: String
-            ) {}
+        )
+        val graphQlStrategy = RequestDescriptorStrategy { request ->
+            if (request.body.type == RequestBodyType.GRAPHQL) {
+                RequestDescriptorContribution(
+                    kind = RequestKindId.GRAPHQL,
+                    badgeLabel = "GQL",
+                    suggestedName = "Viewer"
+                )
+            } else {
+                null
+            }
         }
-
-        val viewModel = CollectionsViewModel(
-            observeCollectionsUseCase = ObserveCollectionsUseCase(fakeRepo),
-            ioDispatcher = testDispatcher
+        val viewModel = createViewModel(
+            repository = repository,
+            describeRequestUseCase = DescribeRequestUseCase(
+                listOf(graphQlStrategy, HttpRequestDescriptorStrategy())
+            )
         )
         testDispatcher.scheduler.advanceUntilIdle()
 
-        val folderItem = viewModel.uiState.value.collections.first()
-        assertEquals("Test 1", folderItem.name)
+        val descriptor = viewModel.uiState.value.unsavedRequests.single().descriptor
+        assertEquals(RequestKindId.GRAPHQL, descriptor.kind)
+        assertEquals("GQL", descriptor.badgeLabel)
+        assertEquals(HttpMethod.POST, descriptor.transportMethod)
     }
 
     @Test
-    fun `renameSavedRequest updates request name in persistent collection`() = runTest {
-        var updatedReq: SavedApiRequest? = null
-        val fakeRepo = object : CollectionsRepository {
-            override fun observeCollections(): Flow<List<ApiCollection>> = emptyFlow()
-            override suspend fun getCollectionById(id: String): ApiCollection? = null
-            override suspend fun saveCollection(collection: ApiCollection) {}
-            override suspend fun deleteCollection(collectionId: String) {}
-            override suspend fun saveFolder(collectionId: String, folder: CollectionFolder) {}
-            override suspend fun deleteFolder(folderId: String) {}
-            override suspend fun saveRequest(collectionId: String, folderId: String, request: SavedApiRequest) {
-                updatedReq = request
-            }
-            override suspend fun deleteRequest(requestId: String) {}
-            override fun observeUnsavedRequests(): Flow<List<SavedApiRequest>> = emptyFlow()
-            override suspend fun saveUnsavedRequest(request: SavedApiRequest) {}
-            override suspend fun deleteUnsavedRequest(requestId: String) {}
-            override suspend fun saveUnsavedToNewCollectionTx(
-                collection: ApiCollection,
-                folder: CollectionFolder,
-                request: SavedApiRequest,
-                unsavedRequestIdToDelete: String
-            ) {}
-        }
+    fun `collection dialog state and creation are owned by sidebar ViewModel`() = runTest {
+        val repository = SidebarRepository()
+        val viewModel = createViewModel(repository)
 
-        val updateUseCase = UpdateRequestInCollectionUseCase(fakeRepo)
-        val viewModel = CollectionsViewModel(
-            updateRequestInCollectionUseCase = updateUseCase,
-            ioDispatcher = testDispatcher
-        )
-
-        val requestItem = com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarRequestItem(
-            id = "req_123",
-            name = "Old Name",
-            method = "GET",
-            collectionId = "col_1",
-            folderId = "fld_1"
-        )
-
-        viewModel.openRenameRequestDialog(requestItem)
-        assertTrue(viewModel.uiState.value.isRenameRequestDialogOpen)
-        assertEquals("Old Name", viewModel.uiState.value.renamingRequestItem?.name)
-
-        viewModel.renameSavedRequest(requestItem, "New Request Name")
+        viewModel.openCreateCollectionDialog()
+        assertTrue(viewModel.uiState.value.isCreateCollectionDialogOpen)
+        viewModel.createCollection("Payments")
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertFalse(viewModel.uiState.value.isRenameRequestDialogOpen)
-        assertEquals("New Request Name", updatedReq?.name)
-        assertEquals("req_123", updatedReq?.id)
+        assertFalse(viewModel.uiState.value.isCreateCollectionDialogOpen)
+        assertEquals("Payments", repository.lastSavedCollection?.name)
     }
 
     @Test
-    fun `deleteSavedRequest triggers deletion via DeleteSavedSessionUseCase`() = runTest {
-        var deletedReqId: String? = null
-        val fakeRepo = object : CollectionsRepository {
-            override fun observeCollections(): Flow<List<ApiCollection>> = emptyFlow()
-            override suspend fun getCollectionById(id: String): ApiCollection? = null
-            override suspend fun saveCollection(collection: ApiCollection) {}
-            override suspend fun deleteCollection(collectionId: String) {}
-            override suspend fun saveFolder(collectionId: String, folder: CollectionFolder) {}
-            override suspend fun deleteFolder(folderId: String) {}
-            override suspend fun saveRequest(collectionId: String, folderId: String, request: SavedApiRequest) {}
-            override suspend fun deleteRequest(requestId: String) {
-                deletedReqId = requestId
-            }
-            override fun observeUnsavedRequests(): Flow<List<SavedApiRequest>> = emptyFlow()
-            override suspend fun saveUnsavedRequest(request: SavedApiRequest) {}
-            override suspend fun deleteUnsavedRequest(requestId: String) {}
-            override suspend fun saveUnsavedToNewCollectionTx(
-                collection: ApiCollection,
-                folder: CollectionFolder,
-                request: SavedApiRequest,
-                unsavedRequestIdToDelete: String
-            ) {}
-        }
-
-        val deleteUseCase = com.devuloopers.knet.domain.collection.usecase.DeleteSavedSessionUseCase(fakeRepo)
-        val viewModel = CollectionsViewModel(
-            deleteSavedSessionUseCase = deleteUseCase,
-            ioDispatcher = testDispatcher
+    fun `saved request rename uses complete document and retains its fields`() = runTest {
+        val repository = SidebarRepository()
+        val document = SavedApiRequest(
+            id = "request-1",
+            name = "Old name",
+            method = HttpMethod.POST,
+            url = "https://api.example.com/users",
+            expectedStatus = 201
         )
+        repository.collections.value = listOf(
+            ApiCollection(
+                id = "collection-1",
+                name = "Users",
+                folders = listOf(CollectionFolder("folder-1", "Requests", requests = listOf(document)))
+            )
+        )
+        val viewModel = createViewModel(repository)
+        testDispatcher.scheduler.advanceUntilIdle()
+        val request = viewModel.uiState.value.collections.single().requests.single()
 
-        viewModel.deleteSavedRequest("req_999")
+        viewModel.renameSavedRequest(request, "Create user")
         testDispatcher.scheduler.advanceUntilIdle()
 
-        assertEquals("req_999", deletedReqId)
+        assertEquals("Create user", repository.lastSavedRequest?.name)
+        assertEquals(RequestNameOrigin.USER_DEFINED, repository.lastSavedRequest?.nameOrigin)
+        assertEquals(201, repository.lastSavedRequest?.expectedStatus)
+        assertEquals("https://api.example.com/users", repository.lastSavedRequest?.url)
+    }
+
+    @Test
+    fun `deletion intents target only their requested records`() = runTest {
+        val repository = SidebarRepository()
+        val viewModel = createViewModel(repository)
+
+        viewModel.deleteUnsavedRequest("draft-9")
+        viewModel.deleteSavedRequest("request-9")
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals("draft-9", repository.deletedDraftId)
+        assertEquals("request-9", repository.deletedSavedId)
+    }
+
+    @Test
+    fun `failed deletion exposes error and does not publish success callback`() = runTest {
+        val repository = SidebarRepository().apply {
+            deletionFailure = IllegalStateException("Database is unavailable")
+        }
+        val viewModel = createViewModel(repository)
+        var deletionConfirmed = false
+
+        viewModel.deleteUnsavedRequest("draft-9") { deletionConfirmed = true }
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertFalse(deletionConfirmed)
+        assertEquals("Database is unavailable", viewModel.uiState.value.errorMessage)
+    }
+
+    private fun createViewModel(
+        repository: SidebarRepository,
+        describeRequestUseCase: DescribeRequestUseCase = DescribeRequestUseCase(
+            listOf(HttpRequestDescriptorStrategy())
+        )
+    ): CollectionsViewModel = CollectionsViewModel(
+        observeCollectionsUseCase = ObserveCollectionsUseCase(repository),
+        observeUnsavedRequestsUseCase = ObserveUnsavedRequestsUseCase(repository),
+        describeRequestUseCase = describeRequestUseCase,
+        deleteUnsavedRequestUseCase = DeleteUnsavedRequestUseCase(repository),
+        createCollectionUseCase = CreateCollectionUseCase(repository),
+        deleteCollectionUseCase = DeleteCollectionUseCase(repository),
+        renameCollectionUseCase = RenameCollectionUseCase(repository),
+        updateRequestInCollectionUseCase = UpdateRequestInCollectionUseCase(repository),
+        deleteSavedSessionUseCase = DeleteSavedSessionUseCase(repository),
+        ioDispatcher = testDispatcher
+    )
+
+    private class SidebarRepository : CollectionsRepository {
+        val collections = MutableStateFlow<List<ApiCollection>>(emptyList())
+        val drafts = MutableStateFlow<List<SavedApiRequest>>(emptyList())
+        var lastSavedCollection: ApiCollection? = null
+        var lastSavedRequest: SavedApiRequest? = null
+        var deletedDraftId: String? = null
+        var deletedSavedId: String? = null
+        var deletionFailure: Exception? = null
+
+        override fun observeCollections(): Flow<List<ApiCollection>> = collections
+        override suspend fun getCollectionById(id: String): ApiCollection? =
+            collections.value.firstOrNull { it.id == id }
+        override suspend fun getRequestById(id: String): SavedApiRequest? =
+            drafts.value.firstOrNull { it.id == id } ?: collections.value
+                .flatMap(ApiCollection::folders)
+                .flatMap(CollectionFolder::requests)
+                .firstOrNull { it.id == id }
+        override suspend fun saveCollection(collection: ApiCollection) {
+            lastSavedCollection = collection
+        }
+        override suspend fun deleteCollection(collectionId: String) = Unit
+        override suspend fun saveFolder(collectionId: String, folder: CollectionFolder) = Unit
+        override suspend fun deleteFolder(folderId: String) = Unit
+        override suspend fun saveRequest(collectionId: String, folderId: String, request: SavedApiRequest) {
+            lastSavedRequest = request
+        }
+        override suspend fun deleteRequest(requestId: String) {
+            deletedSavedId = requestId
+        }
+        override fun observeUnsavedRequests(): Flow<List<SavedApiRequest>> = drafts
+        override suspend fun saveUnsavedRequest(request: SavedApiRequest) = Unit
+        override suspend fun deleteUnsavedRequest(requestId: String) {
+            deletionFailure?.let { throw it }
+            deletedDraftId = requestId
+        }
+        override suspend fun saveUnsavedToNewCollectionTx(
+            collection: ApiCollection,
+            folder: CollectionFolder,
+            request: SavedApiRequest,
+            unsavedRequestIdToDelete: String
+        ) = Unit
+        override suspend fun saveUnsavedToExistingCollectionTx(
+            collectionId: String,
+            folderId: String,
+            request: SavedApiRequest,
+            unsavedRequestIdToDelete: String
+        ) = Unit
     }
 }

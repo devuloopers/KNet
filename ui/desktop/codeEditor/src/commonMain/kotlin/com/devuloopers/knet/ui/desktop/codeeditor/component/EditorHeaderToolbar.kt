@@ -14,6 +14,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -22,7 +23,9 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
+import com.devuloopers.knet.ui.desktop.codeeditor.api.CodeEditorHeaderAction
 import com.devuloopers.knet.ui.desktop.codeeditor.api.CodeEditorStrings
+import com.devuloopers.knet.ui.desktop.codeeditor.command.EditorCommand
 import com.devuloopers.knet.ui.desktop.codeeditor.theme.CodeEditorTokens
 import com.devuloopers.knet.ui.desktop.codeeditor.theme.EditorColors
 
@@ -34,10 +37,11 @@ import com.devuloopers.knet.ui.desktop.codeeditor.theme.EditorColors
  *
  * @param totalLines Total line count in the full document.
  * @param showLineCountHeader True if line count indicator is displayed.
- * @param showFoldActionsHeader True if [Expand All | Collapse All] controls are displayed.
- * @param hasFoldRegions True if document has fold regions.
+ * @param showFoldActionsHeader True if the stable Expand All/Collapse All action slot is displayed.
+ * @param foldActionsEnabled True when the current document contains fold regions that the actions can modify.
+ * @param headerActions Ordered consumer-contributed action declarations.
  * @param strings Localizable action labels.
- * @param onCopyAll Callback to asynchronously copy full un-truncated text to system clipboard.
+ * @param onCommand Optional generic consumer command dispatcher.
  * @param onExpandAll Callback to expand all folded blocks.
  * @param onCollapseAll Callback to collapse all top-level blocks.
  */
@@ -46,16 +50,17 @@ internal fun EditorHeaderToolbar(
     totalLines: Int,
     showLineCountHeader: Boolean,
     showFoldActionsHeader: Boolean,
-    hasFoldRegions: Boolean,
+    foldActionsEnabled: Boolean,
+    headerActions: List<CodeEditorHeaderAction>,
     strings: CodeEditorStrings,
-    onCopyAll: (() -> Unit)? = null,
-    onPrettify: (() -> Unit)? = null,
+    onCommand: ((EditorCommand.Custom) -> Unit)?,
     onExpandAll: () -> Unit,
     onCollapseAll: () -> Unit
 ) {
-    if (!showLineCountHeader && (!showFoldActionsHeader || !hasFoldRegions) && onPrettify == null) return
+    if (!showLineCountHeader && !showFoldActionsHeader && headerActions.isEmpty()) return
 
     val scrollState = rememberScrollState()
+    val foldActionColor = if (foldActionsEnabled) EditorColors.ActiveBlue else EditorColors.TextSecondary
 
     Row(
         modifier = Modifier
@@ -89,40 +94,16 @@ internal fun EditorHeaderToolbar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(CodeEditorTokens.HeaderActionSpacing)
         ) {
-            if (onPrettify != null) {
-                Row(
-                    modifier = Modifier
-                        .background(
-                            Color.White.copy(alpha = 0.05f),
-                            RoundedCornerShape(CodeEditorTokens.HeaderActionCornerRadius)
-                        )
-                        .border(
-                            CodeEditorTokens.BorderWidth,
-                            EditorColors.BorderDark,
-                            RoundedCornerShape(CodeEditorTokens.HeaderActionCornerRadius)
-                        )
-                        .clip(RoundedCornerShape(CodeEditorTokens.HeaderActionCornerRadius))
-                        .clickable(onClick = onPrettify)
-                        .handCursor()
-                        .padding(
-                            horizontal = CodeEditorTokens.HeaderActionHorizontalPadding,
-                            vertical = CodeEditorTokens.HeaderActionVerticalPadding
-                        ),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = strings.prettify,
-                        color = EditorColors.ActiveBlue,
-                        fontSize = CodeEditorTokens.HeaderFontSize,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Clip
+            headerActions.forEach { action ->
+                key(action.commandId) {
+                    ConsumerHeaderAction(
+                        action = action,
+                        dispatcher = onCommand
                     )
                 }
             }
 
-            if (showFoldActionsHeader && hasFoldRegions) {
+            if (showFoldActionsHeader) {
                 Row(
                     modifier = Modifier
                         .background(
@@ -143,7 +124,7 @@ internal fun EditorHeaderToolbar(
                 ) {
                     Text(
                         text = strings.expandAll,
-                        color = EditorColors.ActiveBlue,
+                        color = foldActionColor,
                         fontSize = CodeEditorTokens.HeaderFontSize,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -151,8 +132,8 @@ internal fun EditorHeaderToolbar(
                         overflow = TextOverflow.Clip,
                         modifier = Modifier
                             .clip(RoundedCornerShape(CodeEditorTokens.HeaderActionCornerRadius))
-                            .clickable(onClick = onExpandAll)
-                            .handCursor()
+                            .clickable(enabled = foldActionsEnabled, onClick = onExpandAll)
+                            .handCursor(foldActionsEnabled)
                     )
                     Text(
                         text = "|",
@@ -163,7 +144,7 @@ internal fun EditorHeaderToolbar(
                     )
                     Text(
                         text = strings.collapseAll,
-                        color = EditorColors.ActiveBlue,
+                        color = foldActionColor,
                         fontSize = CodeEditorTokens.HeaderFontSize,
                         fontWeight = FontWeight.Bold,
                         maxLines = 1,
@@ -171,11 +152,68 @@ internal fun EditorHeaderToolbar(
                         overflow = TextOverflow.Clip,
                         modifier = Modifier
                             .clip(RoundedCornerShape(CodeEditorTokens.HeaderActionCornerRadius))
-                            .clickable(onClick = onCollapseAll)
-                            .handCursor()
+                            .clickable(enabled = foldActionsEnabled, onClick = onCollapseAll)
+                            .handCursor(foldActionsEnabled)
                     )
                 }
             }
         }
     }
+}
+
+/**
+ * Renders one stable consumer-contributed header action without knowing its format semantics.
+ */
+@Composable
+private fun ConsumerHeaderAction(
+    action: CodeEditorHeaderAction,
+    dispatcher: ((EditorCommand.Custom) -> Unit)?
+) {
+    val isEnabled = action.enabled && dispatcher != null
+    Row(
+        modifier = Modifier
+            .background(
+                Color.White.copy(alpha = 0.05f),
+                RoundedCornerShape(CodeEditorTokens.HeaderActionCornerRadius)
+            )
+            .border(
+                CodeEditorTokens.BorderWidth,
+                EditorColors.BorderDark,
+                RoundedCornerShape(CodeEditorTokens.HeaderActionCornerRadius)
+            )
+            .clip(RoundedCornerShape(CodeEditorTokens.HeaderActionCornerRadius))
+            .clickable(enabled = isEnabled) {
+                dispatcher?.invoke(EditorCommand.Custom(action.commandId))
+            }
+            .handCursor(isEnabled)
+            .padding(
+                horizontal = CodeEditorTokens.HeaderActionHorizontalPadding,
+                vertical = CodeEditorTokens.HeaderActionVerticalPadding
+            ),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = action.label,
+            color = if (isEnabled) EditorColors.ActiveBlue else EditorColors.TextSecondary,
+            fontSize = CodeEditorTokens.HeaderFontSize,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Clip
+        )
+    }
+}
+
+/**
+ * Resolves stable fold-action slot visibility from editor configuration and language capability.
+ *
+ * Runtime fold results deliberately do not participate because asynchronous analysis must not add or remove
+ * toolbar structure.
+ *
+ * @param configured Whether the consumer enabled fold actions in the header configuration.
+ * @param foldingSupported Whether the selected language contributes a folding provider.
+ * @return `true` when the toolbar should reserve the fold-action slot.
+ */
+internal fun shouldShowFoldActionSlot(configured: Boolean, foldingSupported: Boolean): Boolean {
+    return configured && foldingSupported
 }
