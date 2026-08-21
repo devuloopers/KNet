@@ -63,10 +63,10 @@ class CanonicalTrafficScaleBaselineTest {
 
             assertEquals(PAGE_SIZE, firstPage.items.size)
             assertNotNull(firstPage.nextCursor)
-            assertTrue(firstPage.items.all { snapshot -> snapshot.request.head.method.token == "POST" })
-            assertTrue(firstPage.items.all { snapshot -> snapshot.response?.head?.status?.code == 201 })
-            assertTrue(firstPage.items.all { snapshot ->
-                assertIs<RequestTarget.Absolute>(snapshot.request.head.target).authority.host == "target.example"
+            assertTrue(firstPage.items.all { item -> item.exchange.request.head.method.token == "POST" })
+            assertTrue(firstPage.items.all { item -> item.exchange.response?.head?.status?.code == 201 })
+            assertTrue(firstPage.items.all { item ->
+                assertIs<RequestTarget.Absolute>(item.exchange.request.head.target).authority.host == "target.example"
             })
             assertTrue(
                 queryMillis <= MAX_FILTERED_QUERY_MILLIS,

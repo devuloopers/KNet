@@ -65,7 +65,10 @@ internal class WifiLanProxyGateway(
         if (!running.compareAndSet(false, true)) return
         try {
             val socket = ServerSocket()
-            socket.reuseAddress = false
+            // Allows a new KNet process to reclaim an exact listener after the previous process has
+            // terminated while accepted connections are still completing TCP teardown. This does not
+            // enable SO_REUSEPORT and therefore cannot steal an actively owned listener.
+            socket.reuseAddress = true
             socket.bind(InetSocketAddress(bindHost, bindPort), ACCEPT_BACKLOG)
             listener = socket
             scope.launch { acceptLoop(socket) }

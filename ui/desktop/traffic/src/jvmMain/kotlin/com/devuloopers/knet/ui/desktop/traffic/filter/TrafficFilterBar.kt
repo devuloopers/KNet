@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -26,6 +27,8 @@ import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdown
 import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdownDefaults
 import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdownSize
 import com.devuloopers.knet.ui.core.components.dropdown.KNetMultiSelectDropdown
+import com.devuloopers.knet.ui.core.components.dropdown.KNetMultiSelectAction
+import com.devuloopers.knet.ui.core.components.input.KNetSearchField
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.desktop.httppanel.theme.HttpMethodColors
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
@@ -36,10 +39,11 @@ import com.devuloopers.knet.ui.desktop.traffic.model.TrafficColumn
  * Immutable State DTO for TrafficFilterBar.
  */
 data class TrafficFilterBarState(
+    val searchQuery: String = "",
     val selectedProtocol: ProtocolFilter = ProtocolFilter.ALL,
     val selectedMethod: MethodFilter = MethodFilter.ALL,
     val selectedStatus: StatusFilter = StatusFilter.ALL,
-    val totalCount: Int = 0,
+    val totalCount: Long = 0L,
     val httpCount: Int = 0,
     val httpsCount: Int = 0,
     val http2Count: Int = 0,
@@ -47,13 +51,22 @@ data class TrafficFilterBarState(
 )
 
 /**
- * Action Callbacks DTO for TrafficFilterBar.
+ * Interaction callbacks for [TrafficFilterBar].
+ *
+ * @property onSearchChange Updates the retained-traffic search query.
+ * @property onProtocolSelected Selects the scheme or application-protocol filter.
+ * @property onMethodSelected Selects the canonical HTTP method filter.
+ * @property onStatusSelected Selects the HTTP status-family filter.
+ * @property onToggleColumn Toggles one optional typed Traffic column.
+ * @property onResetColumnWidths Restores every Traffic column to its default sizing mode.
  */
 data class TrafficFilterBarActions(
+    val onSearchChange: (String) -> Unit = {},
     val onProtocolSelected: (ProtocolFilter) -> Unit = {},
     val onMethodSelected: (MethodFilter) -> Unit = {},
     val onStatusSelected: (StatusFilter) -> Unit = {},
-    val onToggleColumn: (TrafficColumn) -> Unit = {}
+    val onToggleColumn: (TrafficColumn) -> Unit = {},
+    val onResetColumnWidths: () -> Unit = {},
 )
 
 /**
@@ -80,7 +93,7 @@ fun TrafficFilterBar(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        // Left Group (Count Chips + Dropdowns - Horizontal Scrollable on Window Shrink)
+        // Search and filters share one horizontally scrollable group on constrained windows.
         Row(
             modifier = Modifier
                 .weight(1f)
@@ -88,6 +101,20 @@ fun TrafficFilterBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(spacing.sm)
         ) {
+            KNetSearchField(
+                query = state.searchQuery,
+                onQueryChange = actions.onSearchChange,
+                placeholder = "Search path, host, method...",
+                modifier = Modifier.width(240.dp),
+            )
+
+            VerticalDivider(
+                modifier = Modifier
+                    .height(20.dp)
+                    .padding(horizontal = spacing.xs),
+                color = themeColors.border,
+            )
+
             FilterCountChip(
                 label = "All",
                 count = state.totalCount,
@@ -103,7 +130,7 @@ fun TrafficFilterBar(
             // "HTTP" Chip
             FilterCountChip(
                 label = "HTTP",
-                count = state.httpCount,
+                count = state.httpCount.toLong(),
                 countColor = themeColors.semantic.success,
                 isSelected = state.selectedProtocol == ProtocolFilter.HTTP,
                 onClick = { actions.onProtocolSelected(ProtocolFilter.HTTP) }
@@ -112,7 +139,7 @@ fun TrafficFilterBar(
             // "HTTPS" Chip
             FilterCountChip(
                 label = "HTTPS",
-                count = state.httpsCount,
+                count = state.httpsCount.toLong(),
                 countColor = themeColors.semantic.info,
                 isSelected = state.selectedProtocol == ProtocolFilter.HTTPS,
                 onClick = { actions.onProtocolSelected(ProtocolFilter.HTTPS) }
@@ -121,7 +148,7 @@ fun TrafficFilterBar(
             // HTTP/2 is an application-protocol filter and intentionally separate from HTTPS.
             FilterCountChip(
                 label = "HTTP/2",
-                count = state.http2Count,
+                count = state.http2Count.toLong(),
                 countColor = themeColors.semantic.warning,
                 isSelected = state.selectedProtocol == ProtocolFilter.HTTP_2,
                 onClick = { actions.onProtocolSelected(ProtocolFilter.HTTP_2) }
@@ -169,7 +196,11 @@ fun TrafficFilterBar(
             isItemSelected = state.columnVisibility::isVisible,
             onItemToggle = actions.onToggleColumn,
             size = KNetDropdownSize.Compact,
-            itemText = TrafficColumn::displayName
+            itemText = TrafficColumn::displayName,
+            footerAction = KNetMultiSelectAction(
+                label = "Reset column widths",
+                onClick = actions.onResetColumnWidths,
+            ),
         )
     }
 }
@@ -177,7 +208,7 @@ fun TrafficFilterBar(
 @Composable
 private fun FilterCountChip(
     label: String,
-    count: Int,
+    count: Long,
     countColor: Color,
     isSelected: Boolean,
     onClick: () -> Unit

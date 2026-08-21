@@ -129,7 +129,9 @@ class CanonicalSessionWriterTest {
                     statuses = setOf(HttpStatus(201)),
                 )
             )
-            assertEquals(listOf(EXCHANGE_ID), page.items.map { item -> item.id })
+            assertEquals(listOf(EXCHANGE_ID), page.items.map { item -> item.exchange.id })
+            assertEquals(listOf(1L), page.items.map { item -> item.captureSequence.value })
+            assertEquals(1L, page.totalCount)
             assertNotNull(queryAdapter.getExchange(EXCHANGE_ID))
 
             writer.close()

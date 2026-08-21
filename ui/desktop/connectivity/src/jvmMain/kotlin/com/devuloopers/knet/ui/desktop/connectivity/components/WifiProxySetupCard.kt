@@ -119,10 +119,13 @@ internal fun WifiProxySetupCard(
 @Composable
 private fun WifiSetupStatus(state: ConnectDeviceUiState) {
     val colors = KNetTheme.colors
-    val (label, color) = when (val sharing = state.sharingState) {
+    val (label, color) = if (state.failureCode != null) {
+        "Setup needs attention" to colors.semantic.error
+    } else when (val sharing = state.sharingState) {
         is WifiSharingState.Active ->
             "Ready at ${sharing.session.proxyEndpoint.host}:${sharing.session.proxyEndpoint.port}" to colors.semantic.success
         WifiSharingState.Enabling -> "Preparing Wi-Fi access" to colors.semantic.info
+        is WifiSharingState.Recovering -> "Reconnecting Wi-Fi access" to colors.semantic.info
         WifiSharingState.Disabling -> "Closing Wi-Fi access" to colors.textMuted
         is WifiSharingState.Failed -> "Setup needs attention" to colors.semantic.warning
         is WifiSharingState.Disabled -> if (state.isProxyRunning) {

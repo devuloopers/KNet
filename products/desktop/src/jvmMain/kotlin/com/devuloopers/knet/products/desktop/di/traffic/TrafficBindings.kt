@@ -71,6 +71,8 @@ internal val trafficBindings: Module = module {
             prepareBreakpointRuleDraftUseCase = get(),
             observeRulesUseCase = get(),
             observePendingBreakpointsUseCase = get(),
+            getWorkspaceLayoutUseCase = get(),
+            updateWorkspaceLayoutUseCase = get(),
         )
     }
 }

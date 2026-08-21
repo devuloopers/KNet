@@ -19,6 +19,8 @@ koin = "4.0.2"
 jackson = "2.18.2"
 jackson-msgpack = "0.9.12"
 protobuf = "3.25.3"
+protobuf-plugin = "0.9.5"
+grpc = "1.83.1"
 datastore = "1.2.1"
 ktor = "3.5.1"
 spring-boot = "3.4.1"
@@ -72,6 +74,10 @@ jackson-dataformat-cbor = { module = "com.fasterxml.jackson.dataformat:jackson-d
 jackson-dataformat-msgpack = { module = "org.msgpack:jackson-dataformat-msgpack", version.ref = "jackson-msgpack" }
 protobuf-java = { module = "com.google.protobuf:protobuf-java", version.ref = "protobuf" }
 protobuf-java-util = { module = "com.google.protobuf:protobuf-java-util", version.ref = "protobuf" }
+grpc-netty-shaded = { module = "io.grpc:grpc-netty-shaded", version.ref = "grpc" }
+grpc-protobuf = { module = "io.grpc:grpc-protobuf", version.ref = "grpc" }
+grpc-services = { module = "io.grpc:grpc-services", version.ref = "grpc" }
+grpc-stub = { module = "io.grpc:grpc-stub", version.ref = "grpc" }
 graalvm-js = { module = "org.graalvm.js:js", version.ref = "graalvm" }
 graalvm-js-scriptengine = { module = "org.graalvm.js:js-scriptengine", version.ref = "graalvm" }
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
@@ -88,3 +94,4 @@ kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", versio
 springBoot = { id = "org.springframework.boot", version.ref = "spring-boot" }
 springDependencyManagement = { id = "io.spring.dependency-management", version.ref = "spring-dependency-management" }
 kotlinSpring = { id = "org.jetbrains.kotlin.plugin.spring", version.ref = "kotlin" }
+protobuf = { id = "com.google.protobuf", version.ref = "protobuf-plugin" }

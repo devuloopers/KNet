@@ -11,6 +11,8 @@ Owns JVM desktop application use cases and UI-neutral ports that coordinate KNet
   and technology-neutral runtime policy values.
 - Bounded body-access/write, finalized-object maintenance, pre-allocation capture ingress, explicit
   streaming-body completion, cross-session canonical traffic query, and traffic-detail ports/use cases.
+- Paged traffic results pair the shared canonical exchange snapshot with a durable capture sequence
+  and an exact filtered total; presentation modules never derive row identity from a loaded window.
 - Traffic-clear orchestration that rotates capture ownership before terminal metadata/body deletion without disconnecting proxy clients.
 - A capture-availability boundary that bypasses and releases breakpoints while no Traffic row can
   be created, without changing engine aggregation requirements or closing connections.
@@ -71,7 +73,8 @@ plus generic field values, so neither Traffic nor the breakpoint editor imports 
 Proxy runtime and capture state are intentionally separate: a running listener can be `Capturing` or
 `Paused`, and only full product/configuration lifecycle commands stop the listener.
 Traffic page queries use optional session scope, typed method/status/scheme/application-protocol criteria,
-and an opaque keyset cursor. A null session deliberately means all retained history rather than "latest."
+an opaque keyset cursor, storage-owned capture ordering, and an exact first-page match count carried through
+the cursor snapshot. A null session deliberately means all retained history rather than "latest."
 API Studio execution accepts one complete domain document; it has no dependency on Compose editor state and
 can therefore be reused by another desktop surface, automation entry point, or remote-control adapter.
 It also has no traffic-recording port: direct execution returns its response only to the caller, while a

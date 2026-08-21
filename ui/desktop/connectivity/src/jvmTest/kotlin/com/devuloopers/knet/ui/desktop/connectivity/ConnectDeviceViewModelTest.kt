@@ -90,6 +90,21 @@ class ConnectDeviceViewModelTest {
     }
 
     @Test
+    fun `proxy start failure remains available for inline presentation`() = runTest(dispatcher) {
+        val viewModel = createViewModel(
+            proxy = FakeProxyRuntime(startFailureCode = "proxy_bind_failed"),
+            wifi = FakeWifiSharingPort(),
+        )
+        runCurrent()
+
+        viewModel.processIntent(ConnectDeviceIntent.StartProxy)
+        runCurrent()
+
+        assertEquals("proxy_bind_failed", viewModel.uiState.value.failureCode)
+        assertFalse(viewModel.uiState.value.isBusy)
+    }
+
+    @Test
     fun `active automatic Wi-Fi state reaches presentation unchanged`() = runTest(dispatcher) {
         val wifi = FakeWifiSharingPort()
         val viewModel = createViewModel(FakeProxyRuntime(runningPort = 8_080), wifi)
@@ -114,7 +129,10 @@ class ConnectDeviceViewModelTest {
         observeApplicationSettings = ObserveApplicationSettingsUseCase(FakeApplicationSettingsRepository(proxyPort)),
     )
 
-    private class FakeProxyRuntime(runningPort: Int? = null) : ProxyRuntimePort {
+    private class FakeProxyRuntime(
+        runningPort: Int? = null,
+        private val startFailureCode: String? = null,
+    ) : ProxyRuntimePort {
         private val mutableState = MutableStateFlow<ProxyRuntimeState>(
             runningPort?.let(::runningState) ?: ProxyRuntimeState.Stopped,
         )
@@ -123,6 +141,7 @@ class ConnectDeviceViewModelTest {
 
         override suspend fun start(configuration: ProxyRuntimeConfiguration): ProxyStartResult {
             startedPort = configuration.bindings.single().port
+            startFailureCode?.let { code -> return ProxyStartResult.Failed(code) }
             val running = runningState(requireNotNull(startedPort))
             mutableState.value = running
             return ProxyStartResult.Running(running.handle)

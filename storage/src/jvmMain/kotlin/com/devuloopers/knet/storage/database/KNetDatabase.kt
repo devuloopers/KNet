@@ -44,7 +44,7 @@ import com.devuloopers.knet.storage.rules.entity.BreakpointRuleEntity
         TrustedDeviceCredentialEntity::class,
         PairingInvitationEntity::class,
     ],
-    version = 18,
+    version = 19,
     autoMigrations = [
         AutoMigration(from = 14, to = 15),
         AutoMigration(from = 15, to = 16),

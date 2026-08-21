@@ -9,18 +9,6 @@ enum class ConnectDeviceOperation {
     STARTING_PROXY,
 }
 
-/** Semantic style for transient connectivity feedback. */
-enum class ConnectDeviceMessageTone {
-    INFO,
-    ERROR,
-}
-
-/** Transient user-facing connectivity feedback. */
-data class ConnectDeviceMessage(
-    val text: String,
-    val tone: ConnectDeviceMessageTone,
-)
-
 /** Presentation state for the single-card Wi-Fi proxy setup workflow. */
 data class ConnectDeviceUiState(
     val proxyState: ProxyRuntimeState = ProxyRuntimeState.Stopped,
@@ -28,7 +16,7 @@ data class ConnectDeviceUiState(
     val preferredProxyPort: Int = 8_080,
     val isSetupDrawerVisible: Boolean = false,
     val operation: ConnectDeviceOperation? = null,
-    val message: ConnectDeviceMessage? = null,
+    val failureCode: String? = null,
 ) {
     val activeSharing: WifiSharingState.Active?
         get() = sharingState as? WifiSharingState.Active
@@ -53,5 +41,4 @@ sealed interface ConnectDeviceIntent {
     data object OpenSetup : ConnectDeviceIntent
     data object CloseSetup : ConnectDeviceIntent
     data object StartProxy : ConnectDeviceIntent
-    data object DismissMessage : ConnectDeviceIntent
 }

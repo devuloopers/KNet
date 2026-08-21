@@ -21,13 +21,18 @@ Implements desktop connectivity mechanisms against `:core:connectivity` and `:ap
 
 ## Dependency rule
 
-May depend on `:application`, `:core:connectivity`, `:core:traffic`, and `:core:pairing`. It must not depend on UI modules or proxy implementation internals.
+May depend on `:application`, `:core:connectivity`, `:core:traffic`, and `:core:pairing`. It must not depend on
+UI modules, logging implementations, or proxy implementation internals. Typed diagnostic callbacks are supplied
+by the product composition root.
 
 ## Current state
 
 Manual, PAC, Apple profile, ADB reverse, the setup listeners, desktop network monitoring, pairing security,
 authenticated companion gateway, and open Wi-Fi gateway are isolated here. Wi-Fi sharing follows proxy
-lifecycle automatically, binds one preferred exact IPv4 interface, and retries recoverable listener failures.
+lifecycle automatically, binds one preferred exact IPv4 interface, and publishes listeners transactionally.
+Transient process-handover conflicts use safe TCP rebinding, bounded fast retries, generation-based lifecycle
+cancellation, and an ordered setup-portal port fallback before settling into slow background recovery. Actual
+platform exceptions remain in logs while only typed, presentation-safe failures cross the module boundary.
 The responsive setup page and Apple root-certificate profile are packaged resources with strict placeholder
 validation. Network changes republish descriptors without restarting the proxy or rotating traffic sessions.
 The authenticated gateway uses one owned coroutine scope, suspend authentication, bounded admission, and socket closure for deterministic cancellation; it contains no blocking coroutine bridge or private executor lifecycle.

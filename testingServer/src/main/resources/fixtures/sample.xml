@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<protocolLab>
+    <message>KNet XML payload</message>
+    <enabled>true</enabled>
+    <tags>
+        <tag>capture</tag>
+        <tag>format</tag>
+    </tags>
+</protocolLab>

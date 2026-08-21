@@ -24,6 +24,8 @@ Provides reusable HTTP request/response inspection and editing panels for Traffi
   key-value table surfaces to the same medium spacing and corner tokens as the primary tabs.
 - Reusable typed request-editor rows; query, header, cookie, and structured-body entries retain identity and
   enabled state instead of being projected through lossy `Pair` lists.
+- Packaged default response-editor documents, including the HTML template loaded from module resources rather
+  than embedded in Kotlin presentation models.
 
 ## Does not own
 

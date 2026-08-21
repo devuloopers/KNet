@@ -75,8 +75,7 @@ class ProxyEngineStreamingCaptureTest {
             val sessionId = fixture.database.canonicalCaptureDao().observeLatestSessionId().first()
             val stored = assertNotNull(fixture.database.canonicalCaptureDao().getNewestExchangePage(
                 sessionId = requireNotNull(sessionId),
-                cursorTimestamp = null,
-                cursorId = null,
+                cursorSequence = null,
                 searchPattern = null,
                 filterMethods = 0,
                 methods = emptyList(),
@@ -146,8 +145,7 @@ class ProxyEngineStreamingCaptureTest {
             val sessionId = assertNotNull(fixture.database.canonicalCaptureDao().observeLatestSessionId().first())
             val stored = fixture.database.canonicalCaptureDao().getNewestExchangePage(
                 sessionId = sessionId,
-                cursorTimestamp = null,
-                cursorId = null,
+                cursorSequence = null,
                 searchPattern = null,
                 filterMethods = 0,
                 methods = emptyList(),

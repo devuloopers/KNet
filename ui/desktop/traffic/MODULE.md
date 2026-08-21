@@ -9,8 +9,18 @@ Owns the live traffic table, filtering, selection, inspector coordination, and t
 - Traffic ViewModel, table/toolbar UI, selection, presentation-owned filters, bounded rolling keyset-page
   window, generic semantic annotation presentation, typed live-interception projection, and lean
   body-free `TrafficRowUiState` values.
+- Stable storage-owned serial numbers, separate loaded-versus-available counts, and auto-scroll policy that
+  reacts to a genuinely newer sequence rather than a page-size change.
 - Separate transport and semantic method presentation: filters retain the canonical HTTP method while the
   table renders the shared request descriptor label such as `POST` or `GQL`.
+- Protocol-aware Host-column presentation omits redundant HTTP `:80` and HTTPS `:443` ports while retaining
+  non-default ports and the complete canonical authority outside the compact table label.
+- One typed column-width layout shared by headers and rows. Path fills remaining viewport space until explicitly
+  resized; every column has practical bounds, overflow uses synchronized horizontal scrolling, drag completion
+  persists through workspace use cases, and individual or complete resets restore defaults. Header labels and row
+  values share design-token-derived content insets, preserving alignment while clearing resize affordances. The
+  final visible column keeps an invisible idle resize target that reveals its accent affordance on hover or drag,
+  avoiding a redundant terminal divider without removing last-column sizing.
 - Asynchronous breakpoint-draft requests by `ExchangeId`, retaining only the application-prepared canonical
   rule and generic protocol field values while the existing editor is visible.
 
@@ -44,14 +54,20 @@ future format-specific defaults do not add branches or parser dependencies to th
 
 The filter toolbar passes typed filter values directly to the shared dropdown component. Count chips and filter
 anchors use the same compact height, while each dropdown keeps a stable finite width across placeholder and
-selected labels. Column visibility uses the generic KNet multi-select dropdown; Traffic supplies typed
+selected labels. The existing search state is rendered first in this filter hierarchy, immediately before the
+protocol count pills, and shares the horizontally scrollable constrained-width group without duplicating filter
+logic. Column visibility uses the generic KNet multi-select dropdown; Traffic supplies typed
 `TrafficColumn` values and visibility callbacks while UI core owns its checkbox presentation, popup, motion,
 and dismissal behavior.
 
 The rolling list holds at most 1,000 metadata-only rows while keyset cursors continue through larger stored
-history. Live invalidations are conflated with a bounded refresh interval instead of debounced indefinitely.
+history. Loading a page never renumbers retained rows; the footer distinguishes the loaded window from the
+exact matching total. Live invalidations are conflated with a bounded refresh interval instead of debounced indefinitely.
 The virtualized table overlays the shared theme-aware vertical scrollbar only while its measured rows overflow the
-viewport; the scrollbar owns the same lazy-list state and does not alter table column sizing.
+viewport. Header separators use the UI-core resize handle while this feature owns typed widths and constraints.
+Header and rows resolve one layout and share a finite horizontal scroll state, whose scrollbar appears only when
+the constrained columns exceed the viewport. Live drag state remains presentation-only; DataStore is updated once
+when the gesture completes. The Columns menu and separator double-click provide complete and individual resets.
 Rows keep only table metadata and one content-type value; ordered headers, repeated query pairs, response
 heads, annotations, and bodies come from the selected canonical exchange. Clear is serialized, affects only
 stored traffic, and leaves the forwarding listener available. Assembly lives in `:products:desktop` under

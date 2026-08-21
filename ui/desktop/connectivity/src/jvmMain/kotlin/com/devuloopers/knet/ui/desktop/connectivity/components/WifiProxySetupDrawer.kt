@@ -5,10 +5,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -22,7 +24,6 @@ import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -31,10 +32,14 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.devuloopers.knet.connectivity.model.WifiSharingFailure
+import com.devuloopers.knet.connectivity.model.WifiSharingListenerFailureReason
+import com.devuloopers.knet.connectivity.model.WifiSharingListenerKind
 import com.devuloopers.knet.connectivity.model.WifiSharingState
 import com.devuloopers.knet.ui.core.components.button.ButtonSize
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
+import com.devuloopers.knet.ui.core.components.button.KNetIconButton
 import com.devuloopers.knet.ui.core.components.drawer.KNetSideDrawer
 import com.devuloopers.knet.ui.core.components.drawer.KNetSideDrawerSize
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
@@ -64,12 +69,18 @@ internal fun WifiProxySetupDrawer(
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
             DrawerHeader(onClose = { onIntent(ConnectDeviceIntent.CloseSetup) })
-            when (val sharing = state.sharingState) {
-                is WifiSharingState.Active -> ActiveSetupContent(sharing, onCopy)
-                WifiSharingState.Enabling -> WaitingPanel("Preparing the Wi-Fi proxy and mobile setup page.")
-                WifiSharingState.Disabling -> WaitingPanel("The Wi-Fi proxy is closing with the desktop proxy.")
-                is WifiSharingState.Failed -> FailurePanel(sharing.code)
-                is WifiSharingState.Disabled -> InactivePanel(state, onIntent)
+            val operationFailureCode = state.failureCode
+            if (operationFailureCode != null) {
+                OperationFailurePanel(operationFailureCode)
+            } else {
+                when (val sharing = state.sharingState) {
+                    is WifiSharingState.Active -> ActiveSetupContent(sharing, onCopy)
+                    WifiSharingState.Enabling -> WaitingPanel("Preparing the Wi-Fi proxy and mobile setup page.")
+                    is WifiSharingState.Recovering -> RecoveryPanel(sharing)
+                    WifiSharingState.Disabling -> WaitingPanel("The Wi-Fi proxy is closing with the desktop proxy.")
+                    is WifiSharingState.Failed -> WifiFailurePanel(sharing)
+                    is WifiSharingState.Disabled -> InactivePanel(state, onIntent)
+                }
             }
         }
     }
@@ -95,16 +106,21 @@ private fun DrawerHeader(onClose: () -> Unit) {
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                "Scan once, install the certificate, then configure the phone Wi-Fi proxy.",
+                "Connect, trust the KNet certificate, configure the proxy, then verify traffic.",
                 style = KNetTheme.typography.bodySmall.copy(color = colors.textSecondary),
                 maxLines = 1,
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        IconButton(onClick = onClose) {
-            Icon(Icons.Default.Close, contentDescription = "Close setup", tint = colors.textSecondary)
-        }
+        KNetIconButton(
+            onClick = onClose,
+            icon = Icons.Default.Close,
+            contentDescription = "Close setup",
+            size = 40.dp,
+            iconSize = 24.dp,
+            tint = colors.textSecondary,
+        )
     }
 }
 
@@ -134,11 +150,8 @@ private fun ActiveSetupContent(
                 port = session.proxyEndpoint.port,
             )
             Text(
-                "Scan the QR code with the phone camera. The page detects neither the device nor its platform; it simply offers both safe download formats.",
+                "Scan the QR code with the phone camera, then choose the download for Android or Apple on the setup page.",
                 style = KNetTheme.typography.bodySmall.copy(color = colors.textSecondary),
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Ellipsis,
             )
             SelectionContainer {
                 Text(
@@ -155,20 +168,23 @@ private fun ActiveSetupContent(
                 size = ButtonSize.Compact,
             ) {
                 Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(14.dp))
+                Spacer(Modifier.width(6.dp))
                 Text("Copy setup URL")
             }
         }
     }
+
+    SetupPrerequisites()
 
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         PlatformSteps(
             title = "Android",
             icon = { Icon(Icons.Default.PhoneAndroid, contentDescription = null, modifier = Modifier.size(20.dp)) },
             steps = listOf(
-                "Scan the QR and download the Android certificate.",
-                "Install it under Security as a CA certificate.",
-                "Edit this Wi-Fi network and choose Manual proxy.",
-                "Enter ${session.proxyEndpoint.host} and port ${session.proxyEndpoint.port}.",
+                "Scan the QR code and choose Download Android certificate.",
+                "In Settings, search for Install CA certificate and install the downloaded KNet certificate.",
+                "Open this Wi-Fi network's advanced settings and set Proxy to Manual.",
+                "Enter ${session.proxyEndpoint.host} as the hostname and ${session.proxyEndpoint.port} as the port, without http://, then save.",
             ),
             modifier = Modifier.weight(1f),
         )
@@ -176,14 +192,16 @@ private fun ActiveSetupContent(
             title = "iPhone and iPad",
             icon = { Icon(Icons.Default.PhoneIphone, contentDescription = null, modifier = Modifier.size(20.dp)) },
             steps = listOf(
-                "Scan the QR and download the Apple profile.",
-                "Install it from Settings, Profile Downloaded.",
-                "Enable full trust in Certificate Trust Settings.",
-                "Set Configure Proxy to Manual with the endpoint shown.",
+                "Scan the QR code and choose Download Apple profile.",
+                "Open Settings, select Profile Downloaded, and install the KNet profile.",
+                "In Certificate Trust Settings, enable full trust for the KNet Root CA.",
+                "Open this Wi-Fi network, set Configure Proxy to Manual, enter ${session.proxyEndpoint.host} and ${session.proxyEndpoint.port}, leave authentication off, then save.",
             ),
             modifier = Modifier.weight(1f),
         )
     }
+
+    SetupVerification()
 
     Text(
         "Any device that can reach this exact desktop network address may use the proxy while it is running.",
@@ -233,6 +251,66 @@ private fun EndpointPanel(host: String, port: Int) {
 }
 
 @Composable
+private fun SetupPrerequisites() {
+    val colors = KNetTheme.colors
+    KNetSurface(
+        modifier = Modifier.fillMaxWidth(),
+        color = colors.surfaceVariant,
+        border = BorderStroke(1.dp, colors.border),
+        shape = KNetTheme.shapes.large,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            Text(
+                "Before you begin",
+                style = KNetTheme.typography.titleSmall.copy(
+                    color = colors.textPrimary,
+                    fontWeight = FontWeight.SemiBold,
+                ),
+            )
+            Text(
+                "• Connect the phone to the same reachable local network as this computer (usually the same Wi-Fi).\n" +
+                    "• Keep the KNet proxy running while configuring and testing the phone.",
+                style = KNetTheme.typography.caption.copy(color = colors.textSecondary),
+            )
+        }
+    }
+}
+
+@Composable
+private fun SetupVerification() {
+    val colors = KNetTheme.colors
+    KNetSurface(
+        modifier = Modifier.fillMaxWidth(),
+        color = colors.semantic.successContainer,
+        shape = KNetTheme.shapes.large,
+    ) {
+        Column(
+            modifier = Modifier.fillMaxWidth().padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(7.dp),
+        ) {
+            Text(
+                "Verify the connection",
+                style = KNetTheme.typography.titleSmall.copy(
+                    color = colors.semantic.success,
+                    fontWeight = FontWeight.SemiBold,
+                ),
+            )
+            Text(
+                "Open a website on the phone and confirm that a new request appears in KNet Traffic. If it does not, recheck the network, proxy endpoint, and certificate trust.",
+                style = KNetTheme.typography.caption.copy(color = colors.textSecondary),
+            )
+            Text(
+                "Some apps reject user-installed certificates or use certificate pinning. Browser traffic can work even when those apps cannot be inspected.",
+                style = KNetTheme.typography.caption.copy(color = colors.textSecondary),
+            )
+        }
+    }
+}
+
+@Composable
 private fun PlatformSteps(
     title: String,
     icon: @Composable () -> Unit,
@@ -258,19 +336,18 @@ private fun PlatformSteps(
                 )
             }
             steps.forEachIndexed { index, step ->
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
                         "${index + 1}",
+                        modifier = Modifier.alignByBaseline(),
                         style = KNetTheme.typography.labelMedium.copy(color = colors.accent, fontWeight = FontWeight.Bold),
                         maxLines = 1,
                         softWrap = false,
                     )
                     Text(
                         step,
+                        modifier = Modifier.weight(1f).alignByBaseline(),
                         style = KNetTheme.typography.caption.copy(color = colors.textSecondary),
-                        maxLines = 1,
-                        softWrap = false,
-                        overflow = TextOverflow.Ellipsis,
                     )
                 }
             }
@@ -327,22 +404,72 @@ private fun WaitingPanel(message: String) {
 }
 
 @Composable
-private fun FailurePanel(code: String) {
+private fun OperationFailurePanel(code: String) {
     val colors = KNetTheme.colors
     val text = when (code) {
-        "wifi_address_unavailable" -> "No supported local IPv4 address is available. Connect this computer to Wi-Fi and try again."
         "certificate_unavailable" -> "The KNet root certificate is unavailable."
-        "wifi_bind_failed" -> "The Wi-Fi proxy or setup-page port is already in use. KNet will retry automatically."
-        else -> "Wi-Fi setup is unavailable ($code). KNet will retry automatically."
+        else -> "The proxy operation failed ($code)."
     }
+    MessagePanel(text, error = true)
+}
+
+@Composable
+private fun RecoveryPanel(state: WifiSharingState.Recovering) {
+    val text = "${state.failure.message(recovering = true)} KNet is retrying automatically (attempt ${state.attempt})."
+    MessagePanel(text, error = false)
+}
+
+@Composable
+private fun WifiFailurePanel(state: WifiSharingState.Failed) {
+    val retryNote = if (state.recoverable) " KNet will keep retrying in the background." else ""
+    MessagePanel(state.failure.message(recovering = false) + retryNote, error = true)
+}
+
+@Composable
+private fun MessagePanel(text: String, error: Boolean) {
+    val colors = KNetTheme.colors
     Text(
         text,
-        modifier = Modifier.fillMaxWidth().background(colors.semantic.errorContainer, KNetTheme.shapes.small).padding(14.dp),
-        style = KNetTheme.typography.bodySmall.copy(color = colors.semantic.error),
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                if (error) colors.semantic.errorContainer else colors.semantic.infoContainer,
+                KNetTheme.shapes.small,
+            )
+            .padding(14.dp),
+        style = KNetTheme.typography.bodySmall.copy(
+            color = if (error) colors.semantic.error else colors.semantic.info,
+        ),
         maxLines = 1,
         softWrap = false,
         overflow = TextOverflow.Ellipsis,
     )
+}
+
+private fun WifiSharingFailure.message(recovering: Boolean): String = when (this) {
+    WifiSharingFailure.NetworkAddressUnavailable ->
+        "No supported local IPv4 address is available. Connect this computer to a local network."
+    WifiSharingFailure.CertificateUnavailable -> "The KNet root certificate is unavailable."
+    WifiSharingFailure.Unexpected -> "Wi-Fi setup could not be activated."
+    is WifiSharingFailure.ListenerUnavailable -> {
+        val listenerName = when (listener) {
+            WifiSharingListenerKind.LAN_PROXY_GATEWAY -> "Wi-Fi proxy"
+            WifiSharingListenerKind.SETUP_PORTAL -> "Setup page"
+        }
+        when (reason) {
+            WifiSharingListenerFailureReason.ADDRESS_IN_USE -> if (recovering) {
+                "$listenerName endpoint ${endpoint.host}:${endpoint.port} is still being released."
+            } else {
+                "$listenerName endpoint ${endpoint.host}:${endpoint.port} is still in use."
+            }
+            WifiSharingListenerFailureReason.ADDRESS_UNAVAILABLE ->
+                "The selected network address ${endpoint.host} is no longer available."
+            WifiSharingListenerFailureReason.PERMISSION_DENIED ->
+                "The operating system denied access to $listenerName endpoint ${endpoint.host}:${endpoint.port}."
+            WifiSharingListenerFailureReason.UNKNOWN ->
+                "$listenerName could not listen on ${endpoint.host}:${endpoint.port}."
+        }
+    }
 }
 
 @Composable

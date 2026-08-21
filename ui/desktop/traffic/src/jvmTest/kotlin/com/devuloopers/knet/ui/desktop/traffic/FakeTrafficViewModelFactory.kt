@@ -48,6 +48,10 @@ import com.devuloopers.knet.domain.rules.usecase.ObserveRulesUseCase
 import com.devuloopers.knet.domain.settings.model.ApplicationSettings
 import com.devuloopers.knet.domain.settings.repository.ApplicationSettingsRepository
 import com.devuloopers.knet.domain.settings.usecase.ObserveApplicationSettingsUseCase
+import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
+import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
+import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
+import com.devuloopers.knet.domain.workspace.usecase.UpdateWorkspaceLayoutUseCase
 import com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficViewModel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -73,6 +77,7 @@ object FakeTrafficViewModelFactory {
         customProxyRuntime: ProxyRuntimePort? = null,
         customCaptureSessionControl: CaptureSessionControlPort? = null,
         customInspectionAnnotationPort: InspectionAnnotationPort? = null,
+        customWorkspacePreferencesRepository: WidgetPreferencesRepository? = null,
         pendingBreakpointFlow: StateFlow<List<PendingBreakpoint>> = MutableStateFlow(emptyList()),
     ): TrafficViewModel {
         val fakeProxyRuntime = customProxyRuntime ?: object : ProxyRuntimePort {
@@ -95,6 +100,7 @@ object FakeTrafficViewModelFactory {
             override suspend fun query(query: TrafficPageQuery): TrafficPage = TrafficPage(
                 items = emptyList(),
                 nextCursor = null,
+                totalCount = 0L,
                 generation = 0L,
             )
 
@@ -136,6 +142,17 @@ object FakeTrafficViewModelFactory {
             override suspend fun deleteRule(ruleId: String) {}
             override suspend fun toggleRule(ruleId: String, enabled: Boolean) {}
             override suspend fun toggleGlobalInterception(enabled: Boolean) {}
+        }
+        val workspaceSettings = MutableStateFlow(WorkspaceLayoutSettings())
+        val workspacePreferencesRepository = customWorkspacePreferencesRepository ?: object :
+            WidgetPreferencesRepository {
+            override val settingsFlow: Flow<WorkspaceLayoutSettings> = workspaceSettings
+
+            override suspend fun updateSettings(
+                transform: (WorkspaceLayoutSettings) -> WorkspaceLayoutSettings,
+            ) {
+                workspaceSettings.value = transform(workspaceSettings.value)
+            }
         }
         val loadTrafficExchangeDetailsUseCase = LoadTrafficExchangeDetailsUseCase(fakeTrafficQueryPort)
 
@@ -196,6 +213,8 @@ object FakeTrafficViewModelFactory {
                     override suspend fun clear(): Int = 0
                 },
             ),
+            getWorkspaceLayoutUseCase = GetWorkspaceLayoutUseCase(workspacePreferencesRepository),
+            updateWorkspaceLayoutUseCase = UpdateWorkspaceLayoutUseCase(workspacePreferencesRepository),
             backgroundDispatcher = Dispatchers.Main,
         )
     }

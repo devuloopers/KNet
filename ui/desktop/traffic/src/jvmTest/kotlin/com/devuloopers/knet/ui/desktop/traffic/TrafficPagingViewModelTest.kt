@@ -5,8 +5,10 @@ import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
 import com.devuloopers.knet.application.port.traffic.BodyChunk
 import com.devuloopers.knet.application.port.traffic.BodyRange
 import com.devuloopers.knet.application.port.traffic.TrafficGeneration
+import com.devuloopers.knet.application.port.traffic.TrafficCaptureSequence
 import com.devuloopers.knet.application.port.traffic.TrafficPage
 import com.devuloopers.knet.application.port.traffic.TrafficPageCursor
+import com.devuloopers.knet.application.port.traffic.TrafficPageItem
 import com.devuloopers.knet.application.port.traffic.TrafficPageQuery
 import com.devuloopers.knet.application.port.traffic.TrafficQueryPort
 import com.devuloopers.knet.application.port.traffic.TrafficSessionCatalogPort
@@ -71,6 +73,8 @@ class TrafficPagingViewModelTest {
         val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = port)
         advanceUntilIdle()
         assertEquals(200, viewModel.uiState.value.transactions.size)
+        assertEquals(1_250L, viewModel.uiState.value.totalAvailableCount)
+        assertEquals(1_250L, viewModel.uiState.value.transactions.first().sequenceNumber)
 
         repeat(4) {
             viewModel.processIntent(TrafficIntent.LoadNextPage)
@@ -113,7 +117,7 @@ class TrafficPagingViewModelTest {
             listOf("third", "second", "first"),
             viewModel.uiState.value.transactions.map { it.transactionId },
         )
-        assertEquals(listOf(3, 2, 1), viewModel.uiState.value.transactions.map { it.sequenceNumber })
+        assertEquals(listOf(3L, 2L, 1L), viewModel.uiState.value.transactions.map { it.sequenceNumber })
 
         port.record(snapshot("fourth", 4_000L))
         advanceUntilIdle()
@@ -122,7 +126,30 @@ class TrafficPagingViewModelTest {
             listOf("fourth", "third", "second", "first"),
             viewModel.uiState.value.transactions.map { it.transactionId },
         )
-        assertEquals(listOf(4, 3, 2, 1), viewModel.uiState.value.transactions.map { it.sequenceNumber })
+        assertEquals(listOf(4L, 3L, 2L, 1L), viewModel.uiState.value.transactions.map { it.sequenceNumber })
+
+    }
+
+    @Test
+    fun `loading a 625 row history preserves the newest identity and exact total`() = runTest(dispatcher) {
+        val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = FakePagedPort(625))
+        advanceUntilIdle()
+
+        val newestId = viewModel.uiState.value.transactions.first().transactionId
+        assertEquals(625L, viewModel.uiState.value.transactions.first().sequenceNumber)
+        assertEquals(625L, viewModel.uiState.value.totalAvailableCount)
+
+        repeat(3) {
+            viewModel.processIntent(TrafficIntent.LoadNextPage)
+            advanceUntilIdle()
+        }
+
+        val state = viewModel.uiState.value
+        assertEquals(625, state.transactions.size)
+        assertEquals(newestId, state.transactions.first().transactionId)
+        assertEquals(625L, state.transactions.first().sequenceNumber)
+        assertEquals(1L, state.transactions.last().sequenceNumber)
+        assertEquals(625L, state.totalAvailableCount)
     }
 
     @Test
@@ -383,8 +410,14 @@ class TrafficPagingViewModelTest {
             val page = snapshots.drop(offset).take(query.limit)
             val nextOffset = offset + page.size
             return TrafficPage(
-                items = page,
+                items = page.mapIndexed { index, snapshot ->
+                    TrafficPageItem(
+                        captureSequence = TrafficCaptureSequence((snapshots.size - offset - index).toLong()),
+                        exchange = snapshot,
+                    )
+                },
                 nextCursor = nextOffset.takeIf { it < snapshots.size }?.let { TrafficPageCursor(it.toString()) },
+                totalCount = snapshots.size.toLong(),
                 generation = 1L,
             )
         }
@@ -410,9 +443,16 @@ class TrafficPagingViewModelTest {
 
         override suspend fun query(query: TrafficPageQuery): TrafficPage {
             queryCalls += 1
+            val sequenceById = snapshots.mapIndexed { index, snapshot ->
+                snapshot.id to TrafficCaptureSequence(index + 1L)
+            }.toMap()
+            val orderedSnapshots = snapshots.sortedByDescending { it.startedAtEpochMillis }
             return TrafficPage(
-                items = snapshots.sortedByDescending { it.startedAtEpochMillis },
+                items = orderedSnapshots.map { snapshot ->
+                    TrafficPageItem(sequenceById.getValue(snapshot.id), snapshot)
+                },
                 nextCursor = null,
+                totalCount = snapshots.size.toLong(),
                 generation = generation,
             )
         }
@@ -435,13 +475,22 @@ class TrafficPagingViewModelTest {
     ) : TrafficQueryPort {
         override val generations: Flow<TrafficGeneration> = emptyFlow()
 
-        override suspend fun query(query: TrafficPageQuery): TrafficPage = TrafficPage(
-            items = query.sessionId
+        override suspend fun query(query: TrafficPageQuery): TrafficPage {
+            val snapshots = query.sessionId
                 ?.let { sessionId -> snapshotsBySession[sessionId].orEmpty() }
-                ?: snapshotsBySession.values.flatten().sortedByDescending { it.startedAtEpochMillis },
-            nextCursor = null,
-            generation = 1L,
-        )
+                ?: snapshotsBySession.values.flatten().sortedByDescending { it.startedAtEpochMillis }
+            return TrafficPage(
+                items = snapshots.mapIndexed { index, snapshot ->
+                    TrafficPageItem(
+                        captureSequence = TrafficCaptureSequence((snapshots.size - index).toLong()),
+                        exchange = snapshot,
+                    )
+                },
+                nextCursor = null,
+                totalCount = snapshots.size.toLong(),
+                generation = 1L,
+            )
+        }
 
         override suspend fun getExchange(exchangeId: ExchangeId): HttpExchangeSnapshot? =
             snapshotsBySession.values.flatten().firstOrNull { it.id == exchangeId }

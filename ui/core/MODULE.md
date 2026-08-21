@@ -30,6 +30,9 @@ Provides the KMP-safe Compose design system, foundations, themes, layouts, and r
   measured content overflows its viewport; single-select, multi-select, and searchable dropdowns reuse it instead
   of owning separate scrollbar styling or visibility rules.
 - One theme-aware horizontal scrollbar primitive for finite scroll state, sharing the same metrics and hover styling as the vertical primitive and rendering only for real overflow.
+- A reusable table-header resize handle with a wide desktop hit target, horizontal-resize cursor, hover/drag
+  feedback, absolute density-independent width callbacks, gesture-completion notification, and double-click reset.
+  Column identity, limits, layout calculation, and persistence remain feature-owned.
 - Constraint-stable, horizontally scrollable tab rows whose shared surface uses the design-system medium corner
   shape and whose single-line labels retain their measured width under unbounded scroll constraints, truncating
   only at the design-system maximum.

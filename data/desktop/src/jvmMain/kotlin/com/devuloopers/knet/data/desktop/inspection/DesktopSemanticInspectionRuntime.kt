@@ -59,7 +59,7 @@ class DesktopSemanticInspectionRuntime(
                     val page = trafficQuery.query(
                         TrafficPageQuery(sessionId = sessionId, cursor = cursor, limit = PAGE_SIZE),
                     )
-                    addAll(page.items)
+                    addAll(page.items.map { item -> item.exchange })
                     cursor = page.nextCursor
                     if (cursor == null) break
                 }

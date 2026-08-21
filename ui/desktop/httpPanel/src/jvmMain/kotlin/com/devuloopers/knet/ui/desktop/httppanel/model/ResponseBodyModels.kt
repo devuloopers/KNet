@@ -38,7 +38,7 @@ enum class ResponseBodyMode(
     HTML(
         "html",
         CodeLanguage.HTML,
-        "<!-- Enter HTML response body -->\n<!DOCTYPE html>\n<html>\n<body>\n  <h1>200 OK</h1>\n</body>\n</html>",
+        ResponseBodyTemplateResources.html,
         isPrettifiable = true
     ),
     TEXT("text", CodeLanguage.PLAIN, "// Enter plain text response body...", isPrettifiable = false), RAW(

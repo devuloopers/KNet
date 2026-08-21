@@ -10,6 +10,10 @@ Composes and launches the desktop product. This is the desktop composition root 
   shutdown of connectivity, gateway, setup portal, inspector, proxy/capture, and Room resources.
 - All Koin binding declarations, organized under `di/<feature>/` so each feature's adapters, use cases, and ViewModels have one visible assembly location.
 - Wiring concrete adapters to application ports.
+- Routing typed connectivity diagnostics into the product logging backend without making reusable connectivity
+  adapters depend on that backend.
+- The product-owned dedicated setup-portal index as packaged HTML, injected into the connectivity adapter through
+  its renderer contract rather than embedded in DI code.
 - Desktop shell implementations, including settings data-directory actions, behind feature-owned contracts.
 - Process-owned application-settings synchronization that applies persisted API Studio and live-interception
   timeouts to runtime collaborators without coupling persistence or Settings UI to those implementations.

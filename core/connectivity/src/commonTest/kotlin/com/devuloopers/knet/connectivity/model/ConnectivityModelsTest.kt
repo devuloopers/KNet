@@ -71,4 +71,29 @@ class ConnectivityModelsTest {
             )
         }
     }
+
+    @Test
+    fun `Wi-Fi listener failure endpoint validates host and port`() {
+        assertFailsWith<IllegalArgumentException> {
+            WifiSharingListenerEndpoint(host = "", port = 8_080)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            WifiSharingListenerEndpoint(host = "192.0.2.10", port = 0)
+        }
+    }
+
+    @Test
+    fun `Wi-Fi recovery state requires a positive attempt and delay`() {
+        val failure = WifiSharingFailure.ListenerUnavailable(
+            listener = WifiSharingListenerKind.LAN_PROXY_GATEWAY,
+            endpoint = WifiSharingListenerEndpoint("192.0.2.10", 8_080),
+            reason = WifiSharingListenerFailureReason.ADDRESS_IN_USE,
+        )
+        assertFailsWith<IllegalArgumentException> {
+            WifiSharingState.Recovering(failure, attempt = 0, retryInMillis = 100L, availableAddresses = emptyList())
+        }
+        assertFailsWith<IllegalArgumentException> {
+            WifiSharingState.Recovering(failure, attempt = 1, retryInMillis = 0L, availableAddresses = emptyList())
+        }
+    }
 }

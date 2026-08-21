@@ -3,6 +3,7 @@ package com.devuloopers.knet.ui.core.components.dropdown
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
@@ -35,6 +36,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.checkbox.KNetCheckboxIndicator
+import com.devuloopers.knet.ui.core.components.divider.HorizontalDivider
 import com.devuloopers.knet.ui.core.components.scrollbar.KNetVerticalScrollbar
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
@@ -53,6 +55,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * @param enabled Whether the field accepts pointer and keyboard input.
  * @param size Fixed anchor density.
  * @param itemText Converts a value into visible option text.
+ * @param footerAction Optional non-toggle command rendered after the values.
  */
 @Composable
 fun <T> KNetMultiSelectDropdown(
@@ -63,7 +66,8 @@ fun <T> KNetMultiSelectDropdown(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     size: KNetDropdownSize = KNetDropdownSize.Standard,
-    itemText: (T) -> String = { it.toString() }
+    itemText: (T) -> String = { it.toString() },
+    footerAction: KNetMultiSelectAction? = null,
 ) {
     val colors = KNetTheme.colors
     val expansionState = rememberDropdownExpansionState()
@@ -112,6 +116,10 @@ fun <T> KNetMultiSelectDropdown(
                             onToggle = { onItemToggle(item) }
                         )
                     }
+                    if (footerAction != null) {
+                        HorizontalDivider()
+                        KNetMultiSelectActionItem(action = footerAction)
+                    }
                 }
                 KNetVerticalScrollbar(
                     scrollState = menuScrollState,
@@ -121,6 +129,46 @@ fun <T> KNetMultiSelectDropdown(
                 )
             }
         }
+    }
+}
+
+/** Command row rendered after the toggleable values in [KNetMultiSelectDropdown]. */
+@Composable
+private fun KNetMultiSelectActionItem(
+    action: KNetMultiSelectAction,
+    modifier: Modifier = Modifier,
+) {
+    val colors = KNetTheme.colors
+    val typography = KNetTheme.typography
+    val interactionSource = remember { MutableInteractionSource() }
+    val hovered by interactionSource.collectIsHoveredAsState()
+
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .height(KNetDropdownDefaults.ItemHeight)
+            .background(if (hovered && action.enabled) colors.interaction.hoverOverlay else colors.surfaceVariant)
+            .hoverable(interactionSource)
+            .clickable(
+                enabled = action.enabled,
+                interactionSource = interactionSource,
+                indication = null,
+                role = Role.Button,
+                onClick = action.onClick,
+            )
+            .handCursor(action.enabled)
+            .padding(horizontal = KNetDropdownDefaults.HorizontalPadding),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = action.label,
+            color = if (action.enabled) colors.textSecondary else colors.textMuted,
+            style = typography.bodySmall,
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            softWrap = false,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -179,3 +227,15 @@ private fun KNetMultiSelectDropdownItem(
         )
     }
 }
+/**
+ * Optional command rendered below a multi-select dropdown's toggleable values.
+ *
+ * @property label Visible command label.
+ * @property onClick Command invoked once when the row is activated.
+ * @property enabled Whether the command accepts interaction.
+ */
+data class KNetMultiSelectAction(
+    val label: String,
+    val onClick: () -> Unit,
+    val enabled: Boolean = true,
+)

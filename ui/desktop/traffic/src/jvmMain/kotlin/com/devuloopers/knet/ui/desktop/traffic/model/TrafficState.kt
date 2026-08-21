@@ -5,6 +5,7 @@ import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
 import com.devuloopers.knet.application.port.traffic.TrafficPageCursor
 import com.devuloopers.knet.traffic.id.CaptureSessionId
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
+import com.devuloopers.knet.domain.workspace.model.TrafficTableColumnWidths
 import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import com.devuloopers.knet.traffic.model.http.HttpScheme
@@ -36,6 +37,7 @@ enum class InspectorTab {
  *
  * @property transactions Full live list of captured transactions.
  * @property filteredTransactions Filtered subset of transactions based on query & protocol/method/status filters.
+ * @property totalAvailableCount Exact storage count for the active paged query.
  * @property selectedTransactionId Currently selected transaction ID, or null.
  * @property captureState Current proxy capture lifecycle state.
  * @property engineState Current application-owned proxy runtime state.
@@ -48,10 +50,12 @@ enum class InspectorTab {
  * @property activeRequestSubTab Currently selected request sub-tab (Headers, Query, Body).
  * @property activeResponseSubTab Currently selected response sub-tab (Headers, Body).
  * @property prefilledBreakpointProtocolValues Generic extension-owned values for a captured rule draft.
+ * @property columnWidths Shared persisted widths used by both Traffic table headers and rows.
  */
 data class TrafficState(
     val transactions: List<TrafficRowUiState> = emptyList(),
     val filteredTransactions: List<TrafficRowUiState> = emptyList(),
+    val totalAvailableCount: Long = 0L,
     val sessionId: CaptureSessionId? = null,
     val nextPageCursor: TrafficPageCursor? = null,
     val pageGeneration: Long = 0L,
@@ -71,6 +75,7 @@ data class TrafficState(
     val activeRequestSubTab: InspectorSubTab = InspectorSubTab.BODY,
     val activeResponseSubTab: InspectorSubTab = InspectorSubTab.BODY,
     val columnVisibility: ColumnVisibilityState = ColumnVisibilityState(),
+    val columnWidths: TrafficTableColumnWidths = TrafficTableColumnWidths(),
     val preparedState: InspectorPreparedState = InspectorPreparedState(),
     val localIpAddress: String = "127.0.0.1",
     val activeBreakpointRules: List<BreakpointRule> = emptyList(),

@@ -8,6 +8,8 @@ Holds non-traffic feature business models, repository contracts, and use cases u
 
 - API Studio outbound request bodies/results/authentication, collections, authored breakpoint rules,
   workspace, validated process-level application settings, and structured payload-policy contracts.
+- Compose-independent persisted Traffic column-width values, including a nullable Path width that represents
+  automatic viewport fill without leaking desktop layout calculations into the domain model.
 - `ApplicationSettings`, validated `ProxyPort` and Kotlin `Duration` values, plus the atomic
   `ApplicationSettingsRepository` update contract. Workspace layout remains a separate snapshot and cannot
   overwrite process-level preferences.

@@ -57,7 +57,7 @@ class PrepareTrafficRequestUseCaseTest {
         override val generations: Flow<TrafficGeneration> = emptyFlow()
 
         override suspend fun query(query: TrafficPageQuery): TrafficPage =
-            TrafficPage(emptyList(), null, 0L)
+            TrafficPage(items = emptyList(), nextCursor = null, totalCount = 0L, generation = 0L)
 
         override suspend fun getExchange(exchangeId: ExchangeId): HttpExchangeSnapshot? =
             HttpExchangeSnapshot(

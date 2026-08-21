@@ -12,6 +12,7 @@ import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 
 class CanonicalTrafficHistoryQueryTest {
     @Test
@@ -41,15 +42,24 @@ class CanonicalTrafficHistoryQueryTest {
                 bodyStore = FileBodyStore(root.resolve("bodies")),
             )
 
+            val newestPage = query.query(TrafficPageQuery(limit = 1))
+            assertEquals(2L, newestPage.totalCount)
+            assertEquals(listOf(2L), newestPage.items.map { item -> item.captureSequence.value })
+            val olderPage = query.query(
+                TrafficPageQuery(limit = 1, cursor = assertNotNull(newestPage.nextCursor)),
+            )
+            assertEquals(2L, olderPage.totalCount)
+            assertEquals(listOf(1L), olderPage.items.map { item -> item.captureSequence.value })
+
             assertEquals(
                 listOf("new", "old"),
-                query.query(TrafficPageQuery(limit = 20)).items.map { snapshot -> snapshot.id.value },
+                query.query(TrafficPageQuery(limit = 20)).items.map { item -> item.exchange.id.value },
             )
             assertEquals(
                 listOf("old"),
                 query.query(TrafficPageQuery(limit = 20, searchContains = "find-me"))
                     .items
-                    .map { snapshot -> snapshot.id.value },
+                    .map { item -> item.exchange.id.value },
             )
             assertEquals(
                 listOf("new"),
@@ -59,7 +69,7 @@ class CanonicalTrafficHistoryQueryTest {
                         schemes = setOf(HttpScheme.fromToken("https")),
                         protocols = setOf(ApplicationProtocol.fromToken("HTTP/2")),
                     ),
-                ).items.map { snapshot -> snapshot.id.value },
+                ).items.map { item -> item.exchange.id.value },
             )
         } finally {
             database.close()

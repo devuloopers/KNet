@@ -26,6 +26,8 @@ Adapts desktop engines and storage to existing domain and application-facing rep
 - Lossless API Studio request mapping and transactional draft promotion through the collection DAO.
 - Independent DataStore adapters for process-level application settings and workspace presentation state. Each
   adapter owns only its keys and applies transformations to the latest stored value inside one atomic edit.
+- Workspace persistence for Traffic column widths; an absent Path-width key preserves automatic fill mode, while
+  malformed non-positive or non-finite values fall back to safe defaults at the adapter boundary.
 
 ## Does not own
 
@@ -40,7 +42,9 @@ May depend on application/core contracts and concrete desktop engines/storage. I
 Traffic paging/detail, proxy control, traffic clear, certificates, scripts, inspection, and
 device registration use application boundaries. The canonical query adapter supports one-session and
 all-retained-session keyset pages, carries the process generation into every result, and delegates search plus
-typed method/status/scheme/protocol filtering to Room. Only admitted proxy connections publish bounded
+typed method/status/scheme/protocol filtering to Room. It returns SQLite-owned capture sequences and an exact
+filtered total, storing that count inside the opaque continuation cursor so later pages do not repeat the count
+scan or change the page snapshot. Only admitted proxy connections publish bounded
 canonical events into the current Room schema. API Studio has no separate writer: it appears in Traffic only
 when its outbound request is routed through the active proxy while capture is attached. A stable switchable capture sink lets traffic clear
 or Traffic Stop detach stored capture state without closing client transport channels. Detached writers drain

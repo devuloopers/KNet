@@ -24,4 +24,16 @@ sealed interface TrafficIntent {
     data class SelectRequestSubTab(val subTab: InspectorSubTab) : TrafficIntent
     data class SelectResponseSubTab(val subTab: InspectorSubTab) : TrafficIntent
     data class ToggleColumn(val column: TrafficColumn) : TrafficIntent
+
+    /** Applies one constrained, presentation-only column width during a drag gesture. */
+    data class ResizeColumn(val column: TrafficColumn, val widthDp: Float) : TrafficIntent
+
+    /** Persists the current column-width snapshot after a resize gesture finishes. */
+    data object CommitColumnWidths : TrafficIntent
+
+    /** Restores and persists one column's default sizing mode. */
+    data class ResetColumnWidth(val column: TrafficColumn) : TrafficIntent
+
+    /** Restores and persists all Traffic column defaults. */
+    data object ResetColumnWidths : TrafficIntent
 }

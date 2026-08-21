@@ -26,6 +26,7 @@ import com.devuloopers.knet.connectivity.desktop.provider.PacSetupProvider
 import com.devuloopers.knet.connectivity.desktop.wifi.DesktopWifiSharingRuntime
 import com.devuloopers.knet.connectivity.spi.ManagedConnectivityMechanism
 import com.devuloopers.knet.connectivity.spi.SetupDescriptorProvider
+import com.devuloopers.knet.core.logger.KNetLogger
 import com.devuloopers.knet.data.desktop.network.repository.NetworkRepositoryImpl
 import com.devuloopers.knet.data.desktop.pairing.RoomRegisteredDeviceStore
 import com.devuloopers.knet.data.desktop.runtime.CertificateRuntimeRepository
@@ -33,6 +34,7 @@ import com.devuloopers.knet.domain.network.repository.NetworkRepository
 import com.devuloopers.knet.domain.network.usecase.GetLocalIpUseCase
 import com.devuloopers.knet.domain.network.usecase.ObserveLocalIpUseCase
 import com.devuloopers.knet.engine.proxy.network.LocalIpResolver
+import com.devuloopers.knet.products.desktop.connectivity.DesktopSetupPortalIndex
 import com.devuloopers.knet.storage.database.KNetDatabase
 import com.devuloopers.knet.traffic.model.IngressAttributionLookup
 import com.devuloopers.knet.traffic.model.IngressAttributionRegistration
@@ -85,6 +87,16 @@ internal val connectivityBindings: Module = module {
             connectivityRuntime = get(),
             attributions = get<IngressAttributionRegistration>(),
             certificateDer = certificates::rootCertificateDer,
+            onActivationFailure = { failure, cause ->
+                KNetLogger.error(tag = "WifiSharing", throwable = cause) {
+                    "Wi-Fi sharing activation failed: $failure. Automatic recovery remains enabled."
+                }
+            },
+            onRecovery = { endpoint ->
+                KNetLogger.info(tag = "WifiSharing") {
+                    "Wi-Fi sharing recovered on ${endpoint.host}:${endpoint.port}."
+                }
+            },
         )
     }
     single<WifiSharingPort> { get<DesktopWifiSharingRuntime>() }
@@ -111,9 +123,7 @@ internal val connectivityBindings: Module = module {
             allowedAuthorities = setOf("knet.local"),
             artifacts = get(),
             content = SetupPortalContent(
-                renderIndex = { _, _ ->
-                    """<!doctype html><html><head><meta charset="utf-8"><title>KNet Setup</title></head><body><h1>KNet Setup</h1><p>Choose a registered connectivity mechanism in KNet.</p><a href="/knet-ca.crt">Install KNet CA</a></body></html>"""
-                },
+                renderIndex = { _, _ -> DesktopSetupPortalIndex.render() },
                 certificateDer = certificates::rootCertificateDer,
             ),
         )

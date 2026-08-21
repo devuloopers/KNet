@@ -11,6 +11,7 @@ import com.devuloopers.knet.traffic.model.body.MessageBodyRef
 import com.devuloopers.knet.traffic.model.http.RequestTarget
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import com.devuloopers.knet.traffic.model.http.HttpScheme
+import com.devuloopers.knet.traffic.model.http.StandardHttpScheme
 import com.devuloopers.knet.ui.core.foundation.time.KNetDateTime
 import kotlin.math.roundToLong
 
@@ -44,14 +45,14 @@ sealed interface TrafficInterceptionUiState {
  * Payload bytes and storage paths are intentionally absent. Selection loads canonical details
  * through the application layer under a separate preview budget.
  *
- * @property sequenceNumber One-based visible capture sequence, where the oldest retained row is
- * `1` and the newest retained row has the highest number.
+ * @property sequenceNumber Storage-owned one-based capture sequence. Zero is reserved for a
+ * provisional breakpoint row that has not reached canonical storage yet.
  * @property method Actual HTTP transport method retained for filters and request behavior.
  * @property displayMethod Protocol-aware method identity rendered in the table, such as `POST` or `GQL`.
  * @property requestKind Semantic request kind used for stable presentation styling.
  */
 data class TrafficRowUiState(
-    val sequenceNumber: Int,
+    val sequenceNumber: Long,
     val transactionId: String,
     val method: String,
     val displayMethod: String = method,
@@ -120,7 +121,7 @@ internal fun PendingBreakpoint.toTrafficExchangeSnapshot(): HttpExchangeSnapshot
     )
 
 /** Maps one canonical exchange metadata snapshot into a body-free Traffic row. */
-internal fun HttpExchangeSnapshot.toTrafficRowUiState(): TrafficRowUiState {
+internal fun HttpExchangeSnapshot.toTrafficRowUiState(sequenceNumber: Long = 0L): TrafficRowUiState {
     val targetParts = request.head.target.toDisplayTarget(request.head.headers.firstValue("Host"))
     val requestBytes = request.body.observedBytes()
     val responseBytes = response?.body?.observedBytes() ?: 0L
@@ -128,7 +129,7 @@ internal fun HttpExchangeSnapshot.toTrafficRowUiState(): TrafficRowUiState {
     val totalMillis = timings.totalMillis
     val responseHead = response?.head
     return TrafficRowUiState(
-        sequenceNumber = 0,
+        sequenceNumber = sequenceNumber,
         transactionId = id.value,
         method = request.head.method.token,
         scheme = targetParts.scheme,
@@ -188,8 +189,32 @@ private fun parseCustomTarget(value: String, hostHeader: String?): DisplayTarget
     )
 }
 
-private fun com.devuloopers.knet.traffic.model.http.Authority.displayHost(): String =
-    if (port == null) host else "$host:$port"
+private fun com.devuloopers.knet.traffic.model.http.Authority.displayHost(): String {
+    val formattedHost = if (host.contains(':')) "[$host]" else host
+    return port?.let { value -> "$formattedHost:$value" } ?: formattedHost
+}
+
+/**
+ * Returns the compact authority label used by the Traffic table's Host column.
+ *
+ * Protocol-default ports are redundant in the table and are omitted. Non-default ports and the
+ * complete canonical authority remain available everywhere else.
+ */
+internal fun String.toTrafficHostLabel(scheme: HttpScheme): String {
+    val defaultPort = when (scheme) {
+        is HttpScheme.Standard -> when (scheme.value) {
+            StandardHttpScheme.HTTP -> 80
+            StandardHttpScheme.HTTPS -> 443
+        }
+        is HttpScheme.Custom -> return this
+    }
+    val portSuffix = ":$defaultPort"
+    return when {
+        startsWith('[') && endsWith("]$portSuffix") -> removeSuffix(portSuffix)
+        count { character -> character == ':' } == 1 && endsWith(portSuffix) -> removeSuffix(portSuffix)
+        else -> this
+    }
+}
 
 private fun List<com.devuloopers.knet.traffic.model.http.HeaderField>.firstValue(name: String): String? =
     firstOrNull { it.name.value.equals(name, ignoreCase = true) }?.value

@@ -1,6 +1,30 @@
 server:
+  address: 0.0.0.0
   port: 9090
+  http2:
+    enabled: true
+  compression:
+    enabled: true
+    mime-types:
+      - application/json
+      - application/x-ndjson
+      - application/xml
+      - text/event-stream
+      - text/plain
+    min-response-size: 256B
 
 spring:
   main:
     banner-mode: "off"
+  graphql:
+    path: /lab/v1/graphql
+    websocket:
+      path: /lab/v1/graphql/ws
+    graphiql:
+      enabled: true
+      path: /lab/graphiql
+
+knet:
+  testing-server:
+    grpc:
+      port: ${KNET_TEST_GRPC_PORT:9091}

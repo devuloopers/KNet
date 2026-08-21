@@ -3,6 +3,7 @@ package com.devuloopers.knet.data.desktop.settings
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.devuloopers.knet.data.desktop.workspace.repository.WidgetPreferencesRepositoryImpl
 import com.devuloopers.knet.domain.settings.model.ProxyPort
+import com.devuloopers.knet.domain.workspace.model.TrafficTableColumnWidths
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
@@ -16,6 +17,7 @@ import okio.Path.Companion.toPath
 import kotlin.io.path.createTempDirectory
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.time.Duration.Companion.minutes
 
 /** Verifies that application preferences and workspace layout have independent atomic ownership. */
@@ -70,6 +72,25 @@ class DataStoreSettingsIsolationTest {
             assertEquals(ProxyPort(9090), applicationRepository.settings.first().proxyPort)
             assertEquals(720f, workspaceRepository.settingsFlow.first().trafficFeedWidthDp)
             assertEquals(false, workspaceRepository.settingsFlow.first().isInspectorVisible)
+
+            val resizedColumns = TrafficTableColumnWidths(
+                hostDp = 312f,
+                pathDp = 480f,
+            )
+            workspaceRepository.updateSettings { current ->
+                current.copy(trafficTableColumnWidths = resizedColumns)
+            }
+            assertEquals(
+                resizedColumns,
+                workspaceRepository.settingsFlow.first().trafficTableColumnWidths,
+            )
+
+            workspaceRepository.updateSettings { current ->
+                current.copy(
+                    trafficTableColumnWidths = current.trafficTableColumnWidths.copy(pathDp = null),
+                )
+            }
+            assertNull(workspaceRepository.settingsFlow.first().trafficTableColumnWidths.pathDp)
         } finally {
             dataStoreScope.cancel()
             directory.toFile().deleteRecursively()

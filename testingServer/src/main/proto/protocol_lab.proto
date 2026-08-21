@@ -1,0 +1,39 @@
+syntax = "proto3";
+
+package knet.testing.v1;
+
+option java_multiple_files = true;
+option java_package = "com.devuloopers.knet.testingserver.grpc.v1";
+option java_outer_classname = "ProtocolLabSchema";
+
+// Deterministic native gRPC service used to validate KNet HTTP/2 framing and stream capture.
+service ProtocolLab {
+  rpc UnaryEcho(EchoRequest) returns (EchoReply);
+  rpc ServerStream(StreamRequest) returns (stream EchoReply);
+  rpc ClientStream(stream EchoRequest) returns (StreamSummary);
+  rpc BidirectionalEcho(stream EchoRequest) returns (stream EchoReply);
+  rpc Fail(FailureRequest) returns (EchoReply);
+}
+
+message EchoRequest {
+  string message = 1;
+}
+
+message EchoReply {
+  string message = 1;
+  int32 sequence = 2;
+}
+
+message StreamRequest {
+  string message = 1;
+  int32 count = 2;
+}
+
+message StreamSummary {
+  int32 received_count = 1;
+  repeated string messages = 2;
+}
+
+message FailureRequest {
+  string description = 1;
+}

@@ -126,6 +126,7 @@ class PrepareBreakpointRuleDraftUseCaseTest {
         override suspend fun query(query: TrafficPageQuery): TrafficPage = TrafficPage(
             items = emptyList(),
             nextCursor = null,
+            totalCount = 0L,
             generation = 0L,
         )
 

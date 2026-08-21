@@ -37,6 +37,9 @@ import com.devuloopers.knet.domain.request.descriptor.RequestKindId
 import com.devuloopers.knet.domain.request.usecase.DescribeRequestUseCase
 import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
 import com.devuloopers.knet.domain.settings.usecase.ObserveApplicationSettingsUseCase
+import com.devuloopers.knet.domain.workspace.model.TrafficTableColumnWidths
+import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
+import com.devuloopers.knet.domain.workspace.usecase.UpdateWorkspaceLayoutUseCase
 
 import com.devuloopers.knet.ui.desktop.traffic.model.*
 import kotlinx.coroutines.*
@@ -76,6 +79,8 @@ class TrafficViewModel(
     private val prepareBreakpointRuleDraftUseCase: PrepareBreakpointRuleDraftUseCase,
     observeRulesUseCase: ObserveRulesUseCase,
     observePendingBreakpointsUseCase: ObservePendingBreakpointsUseCase,
+    getWorkspaceLayoutUseCase: GetWorkspaceLayoutUseCase,
+    private val updateWorkspaceLayoutUseCase: UpdateWorkspaceLayoutUseCase,
     private val backgroundDispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : ViewModel() {
 
@@ -146,6 +151,14 @@ class TrafficViewModel(
     }
 
     init {
+        getWorkspaceLayoutUseCase.execute()
+            .map { settings -> settings.trafficTableColumnWidths }
+            .distinctUntilChanged()
+            .onEach { widths ->
+                _uiState.update { current -> current.copy(columnWidths = widths) }
+            }
+            .launchIn(viewModelScope)
+
         // Reactively observe active breakpoint rules from domain UseCase
         observeRulesUseCase()
             .onEach { rules ->
@@ -333,6 +346,7 @@ class TrafficViewModel(
                         current.copy(
                             sessionId = sessionId,
                             nextPageCursor = null,
+                            totalAvailableCount = 0L,
                             pageGeneration = 0L,
                         )
                     }
@@ -381,6 +395,7 @@ class TrafficViewModel(
                                     state.copy(
                                         transactions = emptyList(),
                                         filteredTransactions = emptyList(),
+                                        totalAvailableCount = 0L,
                                         selectedTransactionId = null,
                                         preparedState = InspectorPreparedState(),
                                         nextPageCursor = null,
@@ -469,6 +484,36 @@ class TrafficViewModel(
                     current.copy(columnVisibility = current.columnVisibility.toggle(intent.column))
                 }
             }
+
+            is TrafficIntent.ResizeColumn -> {
+                _uiState.update { current ->
+                    current.copy(
+                        columnWidths = current.columnWidths.withColumnWidth(intent.column, intent.widthDp),
+                    )
+                }
+            }
+
+            TrafficIntent.CommitColumnWidths -> persistColumnWidths(_uiState.value.columnWidths)
+
+            is TrafficIntent.ResetColumnWidth -> {
+                val widths = _uiState.value.columnWidths.resetColumn(intent.column)
+                _uiState.update { current -> current.copy(columnWidths = widths) }
+                persistColumnWidths(widths)
+            }
+
+            TrafficIntent.ResetColumnWidths -> {
+                val widths = TrafficTableColumnWidths()
+                _uiState.update { current -> current.copy(columnWidths = widths) }
+                persistColumnWidths(widths)
+            }
+        }
+    }
+
+    private fun persistColumnWidths(widths: TrafficTableColumnWidths) {
+        viewModelScope.launch {
+            updateWorkspaceLayoutUseCase.execute { settings ->
+                settings.copy(trafficTableColumnWidths = widths)
+            }
         }
     }
 
@@ -514,6 +559,17 @@ class TrafficViewModel(
     private fun publishTrafficProjection() {
         val pendingByExchange = pendingBreakpoints.associateBy { event -> event.candidate.exchangeId.value }
         val durableByExchange = durableTransactions.associateBy(TrafficRowUiState::transactionId)
+        val maximumDurableSequence = durableTransactions.maxOfOrNull(TrafficRowUiState::sequenceNumber) ?: 0L
+        val provisionalSequences = pendingBreakpoints
+            .filterNot { event -> event.candidate.exchangeId.value in durableByExchange }
+            .sortedWith(
+                compareBy<PendingBreakpoint> { event -> event.candidate.startedAtEpochMillis }
+                    .thenBy { event -> event.candidate.exchangeId.value },
+            )
+            .mapIndexed { index, event ->
+                event.candidate.exchangeId.value to maximumDurableSequence + index + 1L
+            }
+            .toMap()
         val projectedDurable = durableTransactions.map { row ->
             val historical = interceptionHistory[row.transactionId]
             if (historical == null) row else row.copy(interception = historical)
@@ -531,18 +587,19 @@ class TrafficViewModel(
                 interception = paused,
             )?.let { row ->
                 pendingRequestDescriptors[event.id]?.let(row::withDescriptor) ?: row
-            } ?: event.toTrafficRowUiState(pendingRequestDescriptors[event.id])
+            } ?: event.toTrafficRowUiState(pendingRequestDescriptors[event.id]).copy(
+                sequenceNumber = provisionalSequences.getValue(exchangeId),
+            )
         }
         val pendingIds = pendingByExchange.keys
         val sortedRows = (pendingRows + projectedDurable.filterNot { row -> row.transactionId in pendingIds })
             .sortedWith(
-                compareByDescending<TrafficRowUiState> { row -> row.timestamp }
+                compareByDescending<TrafficRowUiState> { row -> row.sequenceNumber }
+                    .thenByDescending { row -> row.timestamp }
                     .thenByDescending(TrafficRowUiState::transactionId),
             )
             .take(MAX_TRAFFIC_ROWS)
-        val rows = sortedRows.mapIndexed { index, row ->
-            row.copy(sequenceNumber = sortedRows.size - index)
-        }
+        val rows = sortedRows
         val current = _uiState.value
         val ordinarilyFiltered = applyFilters(
             transactions = rows,
@@ -555,7 +612,8 @@ class TrafficViewModel(
         val visibleRows = (activeRows + ordinarilyFiltered)
             .distinctBy(TrafficRowUiState::transactionId)
             .sortedWith(
-                compareByDescending<TrafficRowUiState> { row -> row.timestamp }
+                compareByDescending<TrafficRowUiState> { row -> row.sequenceNumber }
+                    .thenByDescending { row -> row.timestamp }
                     .thenByDescending(TrafficRowUiState::transactionId),
             )
         val selectedId = current.selectedTransactionId
@@ -600,8 +658,10 @@ class TrafficViewModel(
                 )
                 val latestState = _uiState.value
                 if (latestState.sessionId != sessionId) return
-                val refreshedRows = page.items.map { snapshot ->
-                    snapshot.toTrafficRowUiState().withDescriptor(describeRequestUseCase.execute(snapshot.request))
+                val refreshedRows = page.items.map { item ->
+                    item.exchange
+                        .toTrafficRowUiState(item.captureSequence.value)
+                        .withDescriptor(describeRequestUseCase.execute(item.exchange.request))
                 }
                 val sortedRows = mergePageRows(mode, refreshedRows)
                 val filtersStillMatch = latestState.searchQuery == before.searchQuery &&
@@ -617,6 +677,11 @@ class TrafficViewModel(
                             TrafficPageLoadMode.REFRESH_NEWEST -> current.nextPageCursor ?: page.nextCursor
                             TrafficPageLoadMode.REPLACE,
                             TrafficPageLoadMode.LOAD_OLDER -> page.nextCursor
+                        },
+                        totalAvailableCount = when (mode) {
+                            TrafficPageLoadMode.REPLACE,
+                            TrafficPageLoadMode.REFRESH_NEWEST -> page.totalCount
+                            TrafficPageLoadMode.LOAD_OLDER -> current.totalAvailableCount
                         },
                         pageGeneration = maxOf(current.pageGeneration, page.generation),
                     )
@@ -643,7 +708,8 @@ class TrafficViewModel(
         val pageIds = pageRows.asSequence().map(TrafficRowUiState::transactionId).toHashSet()
         val sorted = (pageRows + durableTransactions.filterNot { row -> row.transactionId in pageIds })
             .sortedWith(
-                compareByDescending<TrafficRowUiState> { row -> row.timestamp }
+                compareByDescending<TrafficRowUiState> { row -> row.sequenceNumber }
+                    .thenByDescending { row -> row.timestamp }
                     .thenByDescending(TrafficRowUiState::transactionId),
             )
         return when (mode) {

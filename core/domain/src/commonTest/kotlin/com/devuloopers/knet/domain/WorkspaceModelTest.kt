@@ -1,9 +1,11 @@
 package com.devuloopers.knet.domain
 
 import com.devuloopers.knet.domain.workspace.model.EnvironmentStore
+import com.devuloopers.knet.domain.workspace.model.TrafficTableColumnWidths
 import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -54,5 +56,24 @@ class WorkspaceModelTest {
         assertEquals(false, updatedSettings.isTrafficFeedVisible)
         assertEquals(500f, updatedSettings.trafficFeedWidthDp)
         assertEquals(300f, updatedSettings.sidebarWidthDp)
+    }
+
+    @Test
+    fun `traffic table widths keep path in auto fill mode by default`() {
+        val widths = TrafficTableColumnWidths()
+
+        assertEquals(180f, widths.hostDp)
+        assertNull(widths.pathDp)
+        assertEquals(widths, WorkspaceLayoutSettings().trafficTableColumnWidths)
+    }
+
+    @Test
+    fun `traffic table widths reject invalid persisted values`() {
+        assertFailsWith<IllegalArgumentException> {
+            TrafficTableColumnWidths(hostDp = 0f)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            TrafficTableColumnWidths(pathDp = Float.NaN)
+        }
     }
 }

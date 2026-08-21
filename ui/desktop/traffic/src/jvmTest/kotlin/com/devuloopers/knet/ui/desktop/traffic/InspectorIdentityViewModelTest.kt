@@ -3,7 +3,9 @@ package com.devuloopers.knet.ui.desktop.traffic
 import com.devuloopers.knet.application.port.traffic.BodyChunk
 import com.devuloopers.knet.application.port.traffic.BodyRange
 import com.devuloopers.knet.application.port.traffic.TrafficGeneration
+import com.devuloopers.knet.application.port.traffic.TrafficCaptureSequence
 import com.devuloopers.knet.application.port.traffic.TrafficPage
+import com.devuloopers.knet.application.port.traffic.TrafficPageItem
 import com.devuloopers.knet.application.port.traffic.TrafficPageQuery
 import com.devuloopers.knet.application.port.traffic.TrafficQueryPort
 import com.devuloopers.knet.traffic.id.BodyId
@@ -94,8 +96,14 @@ class InspectorIdentityViewModelTest {
         val detailReads = mutableMapOf<String, Int>()
 
         override suspend fun query(query: TrafficPageQuery): TrafficPage = TrafficPage(
-            items = snapshots,
+            items = snapshots.mapIndexed { index, snapshot ->
+                TrafficPageItem(
+                    captureSequence = TrafficCaptureSequence((snapshots.size - index).toLong()),
+                    exchange = snapshot,
+                )
+            },
             nextCursor = null,
+            totalCount = snapshots.size.toLong(),
             generation = 1L,
         )
 

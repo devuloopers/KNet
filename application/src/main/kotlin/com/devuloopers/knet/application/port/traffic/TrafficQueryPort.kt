@@ -60,18 +60,48 @@ public data class TrafficPageQuery(
 }
 
 /**
- * One bounded page of canonical exchange snapshots.
+ * Durable one-based capture order assigned by canonical storage.
  *
- * @property items Returned snapshots.
+ * The value belongs to an exchange rather than to a loaded UI window, so loading another page
+ * cannot renumber rows that are already visible.
+ *
+ * @property value Positive storage-owned capture sequence.
+ */
+@JvmInline
+public value class TrafficCaptureSequence(public val value: Long) {
+    init {
+        require(value > 0L) { "Traffic capture sequence must be positive." }
+    }
+}
+
+/**
+ * One canonical page item with its stable storage ordering metadata.
+ *
+ * @property captureSequence Durable capture order used for paging and presentation identity.
+ * @property exchange Shared canonical request/response snapshot used by Traffic, API Studio,
+ * breakpoints, and protocol inspectors.
+ */
+public data class TrafficPageItem(
+    public val captureSequence: TrafficCaptureSequence,
+    public val exchange: HttpExchangeSnapshot,
+)
+
+/**
+ * One bounded page of canonical exchange snapshots and storage-owned paging metadata.
+ *
+ * @property items Returned canonical page items.
  * @property nextCursor Cursor for the following page, or null at the end.
+ * @property totalCount Exact number of records matching the query at first-page evaluation.
  * @property generation Store generation used to detect a stale live page.
  */
 public data class TrafficPage(
-    public val items: List<HttpExchangeSnapshot>,
+    public val items: List<TrafficPageItem>,
     public val nextCursor: TrafficPageCursor?,
+    public val totalCount: Long,
     public val generation: Long,
 ) {
     init {
+        require(totalCount >= 0L) { "Traffic page total count must not be negative." }
         require(generation >= 0L) { "Traffic page generation must not be negative." }
     }
 }

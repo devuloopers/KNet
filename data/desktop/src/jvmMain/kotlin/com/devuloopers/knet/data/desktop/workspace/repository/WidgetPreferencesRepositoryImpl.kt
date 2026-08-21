@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
+import com.devuloopers.knet.domain.workspace.model.TrafficTableColumnWidths
 import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -31,6 +32,15 @@ class WidgetPreferencesRepositoryImpl(
         private val keyTrafficWidth = floatPreferencesKey("traffic_feed_width_dp")
         private val keySidebarWidth = floatPreferencesKey("sidebar_width_dp")
         private val keyTrayHeight = floatPreferencesKey("bottom_tray_height_dp")
+        private val keyTrafficSerialWidth = floatPreferencesKey("traffic_column_serial_width_dp")
+        private val keyTrafficTimestampWidth = floatPreferencesKey("traffic_column_timestamp_width_dp")
+        private val keyTrafficMethodWidth = floatPreferencesKey("traffic_column_method_width_dp")
+        private val keyTrafficHostWidth = floatPreferencesKey("traffic_column_host_width_dp")
+        private val keyTrafficPathWidth = floatPreferencesKey("traffic_column_path_width_dp")
+        private val keyTrafficStatusWidth = floatPreferencesKey("traffic_column_status_width_dp")
+        private val keyTrafficSizeWidth = floatPreferencesKey("traffic_column_size_width_dp")
+        private val keyTrafficDurationWidth = floatPreferencesKey("traffic_column_duration_width_dp")
+        private val keyTrafficTypeWidth = floatPreferencesKey("traffic_column_type_width_dp")
         private val keyRequestSubTab = stringPreferencesKey("active_request_sub_tab")
         private val keyScriptPhase = stringPreferencesKey("active_script_phase")
         private val keyResponseSubTab = stringPreferencesKey("active_response_sub_tab")
@@ -52,6 +62,21 @@ class WidgetPreferencesRepositoryImpl(
             preferences[keyTrafficWidth] = settings.trafficFeedWidthDp
             preferences[keySidebarWidth] = settings.sidebarWidthDp
             preferences[keyTrayHeight] = settings.bottomTrayHeightDp
+            val columnWidths = settings.trafficTableColumnWidths
+            preferences[keyTrafficSerialWidth] = columnWidths.serialNumberDp
+            preferences[keyTrafficTimestampWidth] = columnWidths.timestampDp
+            preferences[keyTrafficMethodWidth] = columnWidths.methodDp
+            preferences[keyTrafficHostWidth] = columnWidths.hostDp
+            val pathWidthDp = columnWidths.pathDp
+            if (pathWidthDp == null) {
+                preferences.remove(keyTrafficPathWidth)
+            } else {
+                preferences[keyTrafficPathWidth] = pathWidthDp
+            }
+            preferences[keyTrafficStatusWidth] = columnWidths.statusDp
+            preferences[keyTrafficSizeWidth] = columnWidths.sizeDp
+            preferences[keyTrafficDurationWidth] = columnWidths.durationDp
+            preferences[keyTrafficTypeWidth] = columnWidths.typeDp
             preferences[keyRequestSubTab] = settings.activeRequestSubTab
             preferences[keyScriptPhase] = settings.activeScriptPhase
             preferences[keyResponseSubTab] = settings.activeResponseSubTab
@@ -59,8 +84,9 @@ class WidgetPreferencesRepositoryImpl(
         }
     }
 
-    private fun readWorkspaceLayout(preferences: Preferences): WorkspaceLayoutSettings =
-        WorkspaceLayoutSettings(
+    private fun readWorkspaceLayout(preferences: Preferences): WorkspaceLayoutSettings {
+        val defaultColumnWidths = TrafficTableColumnWidths()
+        return WorkspaceLayoutSettings(
             isTrafficFeedVisible = preferences[keyTrafficFeed] ?: true,
             isInspectorVisible = preferences[keyInspector] ?: true,
             isRulesConsoleVisible = preferences[keyRulesConsole] ?: false,
@@ -69,9 +95,36 @@ class WidgetPreferencesRepositoryImpl(
             trafficFeedWidthDp = preferences[keyTrafficWidth] ?: 600f,
             sidebarWidthDp = preferences[keySidebarWidth] ?: 260f,
             bottomTrayHeightDp = preferences[keyTrayHeight] ?: 180f,
+            trafficTableColumnWidths = TrafficTableColumnWidths(
+                serialNumberDp = preferences.positiveWidthOrDefault(
+                    keyTrafficSerialWidth,
+                    defaultColumnWidths.serialNumberDp,
+                ),
+                timestampDp = preferences.positiveWidthOrDefault(
+                    keyTrafficTimestampWidth,
+                    defaultColumnWidths.timestampDp,
+                ),
+                methodDp = preferences.positiveWidthOrDefault(
+                    keyTrafficMethodWidth,
+                    defaultColumnWidths.methodDp,
+                ),
+                hostDp = preferences.positiveWidthOrDefault(keyTrafficHostWidth, defaultColumnWidths.hostDp),
+                pathDp = preferences[keyTrafficPathWidth]?.takeIf { width -> width.isFinite() && width > 0f },
+                statusDp = preferences.positiveWidthOrDefault(keyTrafficStatusWidth, defaultColumnWidths.statusDp),
+                sizeDp = preferences.positiveWidthOrDefault(keyTrafficSizeWidth, defaultColumnWidths.sizeDp),
+                durationDp = preferences.positiveWidthOrDefault(
+                    keyTrafficDurationWidth,
+                    defaultColumnWidths.durationDp,
+                ),
+                typeDp = preferences.positiveWidthOrDefault(keyTrafficTypeWidth, defaultColumnWidths.typeDp),
+            ),
             activeRequestSubTab = preferences[keyRequestSubTab] ?: "BODY",
             activeScriptPhase = preferences[keyScriptPhase] ?: "PRE_REQUEST",
             activeResponseSubTab = preferences[keyResponseSubTab] ?: "BODY",
             activeSessionId = preferences[keyActiveSessionId] ?: "",
         )
+    }
+
+    private fun Preferences.positiveWidthOrDefault(key: Preferences.Key<Float>, default: Float): Float =
+        get(key)?.takeIf { width -> width.isFinite() && width > 0f } ?: default
 }

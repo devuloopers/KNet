@@ -1799,3 +1799,317 @@ fails closed. Desktop composition injects the active process-owned Root CA throu
 strict. Deterministic trust-chain regression tests cover proxy-scoped acceptance, direct-client rejection,
 invalid DER rejection, and defensive memory ownership. `:core:http:jvmTest`, desktop compilation and tests,
 `verifyArchitectureFoundation`, and `git diff --check` pass. KNet was not launched, stopped, or restarted.
+
+## Phase 85: Traffic Filter Search Hierarchy [COMPLETED]
+
+Started on 2026-08-21 to move the existing traffic search field from the runtime-control toolbar into the traffic
+filter bar, immediately before the protocol count pills. Search state and filtering remain owned by the existing
+traffic state/view-model pipeline; this phase changes only composable responsibility and layout hierarchy. The
+search field will participate in the filter bar's constrained-width horizontal scrolling, while capture controls,
+runtime status, clear, and auto-scroll remain in the top toolbar. Focused traffic compilation/tests, architecture
+checks, and `git diff --check` will run without launching KNet.
+
+Completed on 2026-08-21. `TrafficFilterBar` now owns the existing search presentation and renders it before a
+visual divider and the `All`, `HTTP`, `HTTPS`, and `HTTP/2` count pills. Search continues to dispatch the same
+typed `TrafficIntent.Search` through `TrafficViewModel`; no filtering or persistence behavior was duplicated.
+The field uses the shared `KNetSearchField`, has a stable 240 dp width, and participates in the existing
+horizontally scrollable filter group when the window is constrained. `TrafficToolbar` is again limited to
+capture/runtime controls, clear, and auto-scroll. The traffic module documentation records this ownership.
+`:ui:desktop:traffic:jvmTest`, desktop compilation and tests, `verifyArchitectureFoundation`, and
+`git diff --check` pass. KNet was not launched, stopped, or restarted.
+
+## Phase 86: Wi-Fi Setup Instruction Wrapping [COMPLETED]
+
+Started on 2026-08-21 after the Wi-Fi setup drawer's QR explanation was observed truncating most of its content
+with an ellipsis. The explanatory prose will wrap inside its existing weighted column while the QR code,
+endpoint, URL, and copy action retain their current layout. Focused connectivity compilation/tests and
+`git diff --check` will run without launching KNet.
+
+Completed on 2026-08-21. The QR explanation now uses Compose's natural wrapping inside the existing weighted
+content column instead of forcing one line with `TextOverflow.Ellipsis`. The surrounding QR code, endpoint,
+selectable setup URL, and copy action are unchanged. The connectivity module documentation records wrapping
+setup guidance. `:ui:desktop:connectivity:jvmTest`, desktop compilation, `verifyArchitectureFoundation`, and
+`git diff --check` pass. KNet was not launched, stopped, or restarted.
+
+## Phase 87: Wi-Fi Drawer Close Interaction [COMPLETED]
+
+Started on 2026-08-21 to align the Wi-Fi setup drawer's close action with the shared desktop interaction model.
+The plain Material icon button will be replaced by the reusable KNet icon button so the existing close intent
+gains theme-aware hover feedback, keyboard focus treatment, button semantics, and a hand cursor. Focused
+connectivity compilation/tests and `git diff --check` will run without launching KNet.
+
+Completed on 2026-08-21. The drawer header now uses `KNetIconButton` for its close action, preserving the same
+intent while adding the shared theme-aware hover surface, hand cursor, keyboard focus ring, accessibility target,
+and button semantics. Connectivity tests, desktop compilation, and `git diff --check` pass. KNet was not
+launched, stopped, or restarted.
+
+## Phase 88: Connect Device Screen Message Banner Removal [COMPLETED]
+
+Started on 2026-08-21 after the intended target was clarified as the bottom `MessageBanner` rendered by
+`ConnectDeviceScreen`. The screen-level banner and its transient success-message model will be removed. Existing
+card/runtime state will continue to communicate success, while operation failures will be retained as typed error
+state and shown inline by the Wi-Fi card/setup drawer rather than silently discarded. The drawer's local-network
+guidance remains unchanged. Focused connectivity compilation/tests, architecture checks, and `git diff --check`
+will run without launching KNet.
+
+Completed on 2026-08-21. `ConnectDeviceScreen` no longer renders the bottom `MessageBanner`, and the obsolete
+message tone/value models plus dismiss intent were removed. Successful startup is communicated by the existing
+proxy/Wi-Fi runtime projection on the setup card. Operation failures remain typed as `failureCode` and are shown
+inline by both the card and setup drawer, with regression coverage for failed proxy startup. The drawer's
+local-network guidance remains intact. Connectivity tests, desktop compilation, `verifyArchitectureFoundation`,
+and `git diff --check` pass. KNet was not launched, stopped, or restarted.
+
+## Phase 89: Wi-Fi Setup Copy Action Spacing [COMPLETED]
+
+Started on 2026-08-21 to add explicit visual separation between the copy icon and `Copy setup URL` label without
+changing the shared button layout or other button call sites. The current platform instructions will be assessed
+separately for first-time-user clarity. Focused connectivity compilation/tests and `git diff --check` will run
+without launching KNet.
+
+Completed on 2026-08-21. The copy action now places an explicit 6 dp spacer between its icon and label at the
+feature call site, avoiding behavioral or visual changes to other shared `KNetButton` consumers. Connectivity
+tests, desktop compilation, and `git diff --check` pass. KNet was not launched, stopped, or restarted.
+
+## Phase 90: Self-Contained Wi-Fi Setup Guidance [COMPLETED]
+
+Started on 2026-08-21 to make the Wi-Fi setup drawer understandable without external documentation. The change
+will remain isolated to private composables in the desktop connectivity feature: a prerequisite checklist,
+platform-specific certificate and manual-proxy instructions, a verification step, and a concise certificate
+compatibility note. Shared drawers, banners, and other connectivity mechanisms will remain unchanged. Focused
+connectivity tests, desktop compilation, and `git diff --check` will run without launching KNet.
+
+Completed on 2026-08-21. The active Wi-Fi drawer now explains the complete setup path in place: same-network and
+proxy-running prerequisites, explicit Android and Apple certificate installation, manual proxy fields using the
+live endpoint, and a browser-based verification step. It also explains that user-CA rejection or certificate
+pinning can prevent individual apps from being inspected even when browser capture works. Long platform steps
+wrap instead of truncating. The new panels and their copy are private to `WifiProxySetupDrawer`; no shared drawer,
+banner, connectivity core, or other setup mechanism changed. Connectivity tests and desktop compilation pass.
+KNet was not launched, stopped, or restarted.
+
+## Phase 91: Wi-Fi Instruction Baseline Alignment [COMPLETED]
+
+Started on 2026-08-21 after the differently styled instruction number and body text were observed sitting at
+slightly different vertical positions. The two texts will align by their first typographic baseline inside the
+feature-private platform step row, preserving multiline wrapping and leaving shared list components unchanged.
+Focused connectivity tests, desktop compilation, and `git diff --check` will run without launching KNet.
+
+Completed on 2026-08-21. Each step number and the first line of its wrapping instruction now use Compose first-
+baseline alignment, eliminating the vertical offset caused by their different typography styles while preserving
+natural multiline layout. The change is private to the Wi-Fi platform-step rows. Connectivity tests and desktop
+compilation pass. KNet was not launched, stopped, or restarted.
+
+## Phase 92: Wi-Fi Listener Restart Recovery [COMPLETED]
+
+Started on 2026-08-21 after an IntelliJ rerun exposed a transient handover conflict between the terminated KNet
+process and the new process's LAN proxy/setup listeners. This phase keeps the loopback proxy engine unchanged
+and strengthens only the connectivity boundary: typed activation failures, an observable recovery state, safe
+LAN listener rebinding, bounded fast retry with lifecycle cancellation, setup-portal fallback, transactional
+resource publication, and precise UI messaging. Regression tests will cover transient release, persistent
+conflict, alternate setup port selection, rapid lifecycle restart, and stop/close during recovery. Focused module
+tests, desktop compilation, architecture verification, and `git diff --check` will run without launching KNet.
+
+Completed on 2026-08-21. Wi-Fi listener startup now publishes a typed `Recovering` state for transient bind
+ownership, attempts bounded fast recovery at 100/250/500/1000/2000 ms, then keeps a precise typed failure visible
+while slower background recovery remains active. Recovery generations are cancelled by proxy stop, network
+replacement, and runtime close, preventing stale listeners from publishing after lifecycle changes. The LAN
+gateway enables safe address reuse for TCP teardown handover without enabling shared-port ownership. Setup-page
+startup tries an ordered, validated port list and publishes the actual fallback URL while the phone proxy endpoint
+stays stable. Gateway and portal publication is transactional and rolls back partial ownership on failure.
+
+The reusable connectivity adapter remains independent from the logging backend: typed failure plus the original
+platform exception are delivered to product-owned diagnostic callbacks, and the desktop composition root routes
+them to `KNetLogger`. The Connect Device card/drawer distinguish active recovery from terminal attention and
+identify the exact failing listener and endpoint without parsing error strings. Regression coverage now verifies
+transient release, persistent ownership, setup-port fallback, ordinary proxy stop/restart, proxy stop during
+recovery, runtime close during recovery, and typed-model validation. `:core:connectivity:jvmTest`,
+`:connectivity:desktop:jvmTest` (nine Wi-Fi backend tests), `:ui:desktop:connectivity:jvmTest`,
+`:products:desktop:test`, desktop product compilation, `verifyArchitectureFoundation`, and `git diff --check`
+pass. KNet was not launched, stopped, or restarted by this phase.
+
+## Phase 93: Resource-Backed HTML Templates [COMPLETED]
+
+Started on 2026-08-21 after the desktop composition root was found embedding its setup-portal HTML document in
+a Kotlin lambda. This phase audits all production source sets for inline HTML documents, moves runtime templates
+into the owning module's `src/jvmMain/resources/templates` directory, and loads them through focused,
+resource-backed Kotlin components with missing/empty-resource validation. The existing resource-backed Wi-Fi
+setup portal remains unchanged. Test-only HTML parser fixtures are classified separately because they are input
+data rather than shipped page templates. Focused product and HTTP-panel tests, product compilation,
+`verifyArchitectureFoundation`, a production inline-HTML scan, and `git diff --check` will run without launching
+KNet.
+
+Completed on 2026-08-21. The repository audit found two inline HTML documents in production Kotlin: the desktop
+composition root's dedicated setup-portal index and the HTTP panel's default HTML response-editor document. Both
+now live under the owning module's `src/jvmMain/resources/templates` directory and are loaded through focused,
+lazy resource components that fail clearly when a required resource is missing or empty. Product composition now
+injects the setup page through the existing `SetupPortalContent.renderIndex` contract, and the response body model
+references its module-owned packaged template. The already resource-backed Wi-Fi setup portal remains unchanged.
+
+The follow-up production scan finds zero inline HTML documents. Seven short HTML values remain only in JVM test
+sources as formatter/detection inputs; MIME constants, `text/html` response headers, and formatter signature
+tokens are not document templates and remain in Kotlin where they belong. Module responsibility documents now
+record ownership of the new resources. Focused resource tests, `:products:desktop:test`,
+`:ui:desktop:httpPanel:jvmTest`, desktop product compilation, `verifyArchitectureFoundation`, and
+`git diff --check` pass. KNet was not launched, stopped, or restarted.
+
+## Phase 94: Protocol-Aware Traffic Host Display [COMPLETED]
+
+Started on 2026-08-21 to remove redundant protocol-default ports from the Traffic table's `Host` presentation.
+HTTP `:80` and HTTPS `:443` will be hidden, while non-default ports remain visible. Canonical authority, routing,
+persistence, full-URL construction, inspection, and export remain unchanged. Focused Traffic presentation tests,
+module tests, desktop compilation, architecture verification, and `git diff --check` will run without launching
+KNet.
+
+Completed on 2026-08-21. The Traffic table now derives a dedicated host label from the typed `HttpScheme`: HTTP
+`:80` and HTTPS `:443` are omitted, while non-default and scheme-mismatched ports remain visible. The underlying
+row authority remains unchanged, so search, full URLs, inspection, export, persistence, and proxy routing retain
+the resolved port. Canonical IPv6 authorities are bracketed before presentation/full-URL construction, and the
+compact label safely removes only a matching default port. Tests cover both defaults, non-default ports,
+scheme mismatches, and bracketed IPv6. `:ui:desktop:traffic:jvmTest`, desktop product compilation,
+`verifyArchitectureFoundation`, and `git diff --check` pass. KNet was not launched, stopped, or restarted.
+
+## Phase 95: Stable Traffic Pagination Identity [COMPLETED]
+
+Started on 2026-08-21 after a 200-row first page was observed renumbering its newest row to 625 and jumping to
+the top when older pages loaded. This phase adds exact filtered totals and durable capture-order metadata at the
+storage/application paging boundary, separates loaded and available counts in Traffic state, keeps row numbers
+stable across pagination and filtering, and makes auto-scroll react only to a genuinely new newest transaction.
+Regression coverage will reproduce the multi-page numbering and load-older viewport trigger. Storage, data,
+application, Traffic, desktop compilation, architecture verification, and `git diff --check` will run without
+launching KNet.
+
+Completed on 2026-08-21. Canonical exchange rows now receive an immutable SQLite-generated capture sequence,
+and `ExchangeId` remains uniquely indexed for lifecycle updates and cross-feature identity. Room schema v19
+uses that sequence for newest/oldest keyset queries and adds an exact filtered-count query. The application
+page contract wraps the existing shared `HttpExchangeSnapshot` with typed capture-order metadata and carries
+the exact first-page total through its opaque continuation cursor, so API Studio, breakpoints, inspectors, and
+Traffic continue sharing the same request/response model rather than copying it.
+
+Traffic now stores loaded and available counts separately, maps the durable sequence directly into each row,
+and never derives numbering from the current list size. A provisional breakpoint row receives only a temporary
+next number until its canonical row arrives. Page/filter merges sort by durable sequence, and the footer reports
+`loaded of total` while more matching rows remain. Auto-scroll is no longer keyed to list size: older-page loads
+and bounded-window eviction do not jump to the top, while a genuinely newer capture or explicit auto-scroll
+enablement still does.
+
+Regression coverage verifies a 625-record history remains numbered 625 through 1 after all four pages load,
+exact totals survive continuation cursors, SQLite sequences remain stable, and older-page viewport changes do
+not request auto-scroll. The affected application, storage, data, and Traffic suites pass; the 100,000-row
+filtered-query baseline remains within its declared limit. Desktop product compilation and the full
+`check verifyArchitectureFoundation` gate pass with 270 actionable tasks. `git diff --check` passes, and KNet
+was not launched, stopped, or restarted.
+
+## Phase 96: Local Protocol Testing Lab [COMPLETED]
+
+Started on 2026-08-21 to replace the shallow and partially duplicated `:testingServer` routes with one
+deterministic local protocol lab. The existing WebFlux application remains the launcher, but responsibilities
+will be grouped by protocol rather than one handler per HTTP verb. The lab will expose a versioned discovery
+manifest, HTTP diagnostics and representative payloads, SSE, raw WebSocket echo, GraphQL HTTP/subscription
+operations, HTTP/2 clear-text negotiation, and a native grpc-java listener for unary and streaming RPCs.
+Unsupported transports such as HTTP/3 and WebTransport will not be represented by fake WebFlux endpoints.
+
+The duplicate authentication implementation and obsolete `/api` route surface will be removed because KNet is
+still in development and no compatibility contract is required. Module and usage documentation plus real
+WebFlux, GraphQL, WebSocket, and gRPC integration tests will define the supported fixture contract. Verification
+will compile and test `:testingServer` without launching the KNet desktop product.
+
+Completed on 2026-08-21. The duplicated handler/router tree and obsolete `/api` surface were removed and replaced
+with a versioned `/lab/v1` protocol contract organized by capability. Spring WebFlux now provides cohesive HTTP,
+payload, streaming, and raw WebSocket fixtures; Spring GraphQL provides named queries, mutations, and real
+WebSocket subscriptions; a lifecycle-managed grpc-java listener provides unary, server-streaming,
+client-streaming, bidirectional, health, reflection, typed-status, and trailer scenarios. XML, SOAP, GraphQL,
+Protobuf, and the browser dashboard are resource- or schema-backed rather than embedded Kotlin strings.
+
+The discovery manifest distinguishes executable capabilities from `PLANNED` gRPC-Web, HTTP/3, and WebTransport
+work, so unsupported transports are not simulated or misrepresented. `testingServer/MODULE.md` documents module
+ownership and dependency direction, while `docs/testing_server_protocol_lab.md` is the endpoint and extension
+guide for desktop, API Studio, proxy, and phone testing.
+
+The real-listener integration suite passes nine scenarios covering HTTP metadata, H2C negotiation, NDJSON, SSE,
+named GraphQL HTTP operations, GraphQL subscriptions, raw WebSocket, all native gRPC cardinalities, typed gRPC
+failure status, and trailers. `:testingServer:test`, `:testingServer:bootJar`, `verifyArchitectureFoundation`, and
+`git diff --check` pass. The KNet desktop application was not launched.
+
+## Phase 97: Resizable Traffic Table Columns [COMPLETED]
+
+Started on 2026-08-21 to replace Traffic's duplicated hardcoded header/row widths with one typed column-layout
+state. Header separators will provide constrained drag resizing, resize cursors, per-column reset, synchronized
+header/row horizontal overflow, and persistence only after a gesture completes. `:ui:core` will own only the
+reusable resize handle while `:ui:desktop:traffic` retains its column identities, defaults, constraints, and
+layout policy. Width persistence will use the existing workspace preference use cases rather than writing to
+DataStore from Compose or the ViewModel.
+
+Completed on 2026-08-21. Traffic headers and virtualized rows now resolve one typed
+`TrafficTableColumnWidths` snapshot, so column edges cannot drift between the two render paths. Path remains in
+automatic fill mode until explicitly resized. Practical per-column bounds prevent unusable widths; once the
+resolved table exceeds its viewport, header and rows share one horizontal position and the existing UI-core
+horizontal scrollbar appears. The reusable UI-core separator provides a wide drag target, horizontal-resize
+cursor, hover/drag feedback, and double-click reset without knowing Traffic column identities.
+
+Drag updates are immediate in ViewModel presentation state, while the existing workspace update use case writes
+DataStore only after the gesture finishes. A separator double-click persists one-column reset, and the Columns
+menu exposes a full-width reset command. An absent Path key is preserved as automatic-fill state across restart;
+invalid persisted widths fall back at the adapter boundary. No Compose or DataStore type crosses the domain
+contract.
+
+Regression coverage verifies default Path fill, explicit-width overflow, column-specific min/max constraints,
+individual reset, full reset, commit-only persistence, DataStore round-trip, and invalid domain values.
+`:core:domain:jvmTest`, `:data:desktop:jvmTest`, `:ui:desktop:traffic:jvmTest`, desktop product compilation, and
+`verifyArchitectureFoundation` pass. KNet was not launched, stopped, or restarted.
+
+## Phase 98: Traffic Column Separator Contrast [COMPLETED]
+
+Started on 2026-08-21 to improve the reusable table resize separator's visibility without changing table layout.
+The idle indicator will use a stronger theme-derived neutral color, while hover and drag use the accent color and
+slightly greater visual thickness. The existing eight-density-independent-pixel interaction target and caller-owned
+resize behavior remain unchanged. UI-core and Traffic compilation plus architecture verification will run without
+launching KNet.
+
+Completed on 2026-08-21. The resize separator now uses the theme's muted-text color at stronger opacity while
+idle, making it distinguishable from passive panel borders in both palettes. Hover and active drag states use the
+accent color and a two-density-independent-pixel indicator; the indicator remains centered inside the unchanged
+eight-density-independent-pixel interaction target, so table measurements and column widths do not move.
+`:ui:core:compileKotlinJvm`, `:ui:desktop:traffic:compileKotlinJvm`, and `verifyArchitectureFoundation` pass.
+KNet was not launched.
+
+## Phase 100: Traffic Column Content Insets [COMPLETED]
+
+Started on 2026-08-21 to add breathing room between the centered resize tick and adjacent Traffic header text.
+One design-token-derived asymmetric cell inset will be shared by header labels and row values so alignment remains
+exact. Column widths, separator geometry, hit targets, scrolling, and persistence will remain unchanged. Traffic
+compilation and architecture verification will run without launching KNet.
+
+Completed on 2026-08-21. Every Traffic header label and corresponding row value now uses the same asymmetric
+design-system spacing: 4 dp before content and 12 dp after it. The larger trailing inset keeps text away from the
+resize tick, while the smaller leading inset prevents the next column from feeling detached. Insets are applied
+inside the existing fixed column widths, so separator positions, drag calculations, persisted widths, synchronized
+scrolling, and header-to-row alignment remain unchanged. Traffic and desktop product compilation plus
+`verifyArchitectureFoundation` pass. KNet was not launched.
+
+## Phase 101: Last Traffic Column Boundary Treatment [COMPLETED]
+
+Started on 2026-08-21 to remove the redundant idle divider after the final visible Traffic column without
+removing that column's resize capability. The reusable resize handle will gain an explicit idle-visibility option;
+Traffic will disable only the final visible handle's idle indicator while preserving its full hit target, resize
+cursor, hover/drag accent treatment, double-click reset, and persisted sizing. Interior boundaries and other
+consumers remain unchanged. UI-core and Traffic compilation plus architecture verification will run without
+launching KNet.
+
+Completed on 2026-08-21. Traffic derives the terminal boundary from its current visible-column list and disables
+only that handle's neutral idle indicator. The reusable handle keeps its existing eight-density-independent-pixel
+hit target and now reveals the same animated accent tick on hover or drag, retaining last-column resizing and
+double-click reset. All interior boundaries remain visible at rest, and optional-column visibility changes
+automatically move the terminal treatment to the new last column. UI-core, Traffic, and desktop product
+compilation plus `verifyArchitectureFoundation` pass. KNet was not launched.
+
+## Phase 99: Refined Traffic Resize Affordance [COMPLETED]
+
+Started on 2026-08-21 after the stronger full-height header separators proved visually too similar to a rigid
+spreadsheet grid. The full-height interaction target will remain, but its visible indicator will become a short,
+centered, rounded tick with restrained idle contrast and accent expansion during hover or drag. UI-core and
+Traffic compilation plus architecture verification will run without launching KNet.
+
+Completed on 2026-08-21. The visible separator is now a centered, rounded 1-by-14 dp neutral tick rather than a
+full-height rule. Hover or drag animates it to a 2-by-22 dp accent tick using the design system's fast motion and
+reduced-motion policy. Its surrounding 8 dp full-height hit target, resize cursor, drag calculation, double-click
+reset, and table measurements are unchanged. UI-core and Traffic JVM compilation plus
+`verifyArchitectureFoundation` pass. KNet was not launched.

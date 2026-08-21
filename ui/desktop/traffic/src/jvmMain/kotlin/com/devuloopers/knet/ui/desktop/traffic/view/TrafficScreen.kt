@@ -20,6 +20,7 @@ import com.devuloopers.knet.ui.desktop.traffic.filter.TrafficFilterBarState
 import com.devuloopers.knet.ui.desktop.traffic.inspector.TrafficInspectorPanel
 import com.devuloopers.knet.ui.desktop.traffic.model.TrafficIntent
 import com.devuloopers.knet.ui.desktop.traffic.table.TrafficTable
+import com.devuloopers.knet.ui.desktop.traffic.table.TrafficTableColumnResizeActions
 import com.devuloopers.knet.ui.desktop.traffic.toolbar.TrafficToolbar
 import com.devuloopers.knet.ui.desktop.traffic.toolbar.TrafficToolbarActions
 import com.devuloopers.knet.ui.desktop.traffic.toolbar.TrafficToolbarState
@@ -43,7 +44,6 @@ fun TrafficScreen(
             state.captureState,
             state.engineState,
             state.autoScroll,
-            state.searchQuery,
             state.localIpAddress,
             state.isClearingHistory,
         ) {
@@ -51,7 +51,6 @@ fun TrafficScreen(
                 captureState = state.captureState,
                 engineState = state.engineState,
                 autoScroll = state.autoScroll,
-                searchQuery = state.searchQuery,
                 localIpAddress = state.localIpAddress,
                 isClearingHistory = state.isClearingHistory,
             )
@@ -62,26 +61,27 @@ fun TrafficScreen(
             onStartCapture = { viewModel.processIntent(TrafficIntent.StartCapture) },
             onStopCapture = { viewModel.processIntent(TrafficIntent.StopCapture) },
             onClearFeed = { viewModel.processIntent(TrafficIntent.ClearFeed) },
-            onSearchChange = { viewModel.processIntent(TrafficIntent.Search(it)) },
             onAutoScrollToggle = { viewModel.processIntent(TrafficIntent.ToggleAutoScroll) }
         )
     }
 
     val filterBarState = remember(
+        state.searchQuery,
         state.selectedProtocolFilter,
         state.selectedMethodFilter,
         state.selectedStatusFilter,
-        state.transactions.size,
+        state.totalAvailableCount,
         state.httpCount,
         state.httpsCount,
         state.http2Count,
         state.columnVisibility
     ) {
         TrafficFilterBarState(
+            searchQuery = state.searchQuery,
             selectedProtocol = state.selectedProtocolFilter,
             selectedMethod = state.selectedMethodFilter,
             selectedStatus = state.selectedStatusFilter,
-            totalCount = state.transactions.size,
+            totalCount = state.totalAvailableCount,
             httpCount = state.httpCount,
             httpsCount = state.httpsCount,
             http2Count = state.http2Count,
@@ -91,10 +91,12 @@ fun TrafficScreen(
 
     val filterBarActions = remember(viewModel) {
         TrafficFilterBarActions(
+            onSearchChange = { viewModel.processIntent(TrafficIntent.Search(it)) },
             onProtocolSelected = { viewModel.processIntent(TrafficIntent.FilterByProtocol(it)) },
             onMethodSelected = { viewModel.processIntent(TrafficIntent.FilterByMethod(it)) },
             onStatusSelected = { viewModel.processIntent(TrafficIntent.FilterByStatus(it)) },
-            onToggleColumn = { viewModel.processIntent(TrafficIntent.ToggleColumn(it)) }
+            onToggleColumn = { viewModel.processIntent(TrafficIntent.ToggleColumn(it)) },
+            onResetColumnWidths = { viewModel.processIntent(TrafficIntent.ResetColumnWidths) },
         )
     }
 
@@ -104,6 +106,20 @@ fun TrafficScreen(
                 onSendToApiStudio(spec)
             }
         }
+    }
+
+    val columnResizeActions = remember(viewModel) {
+        TrafficTableColumnResizeActions(
+            onResize = { column, widthDp ->
+                viewModel.processIntent(TrafficIntent.ResizeColumn(column, widthDp))
+            },
+            onResizeFinished = {
+                viewModel.processIntent(TrafficIntent.CommitColumnWidths)
+            },
+            onReset = { column ->
+                viewModel.processIntent(TrafficIntent.ResetColumnWidth(column))
+            },
+        )
     }
 
     KNetSurface(
@@ -139,8 +155,11 @@ fun TrafficScreen(
                         selectedId = state.selectedTransactionId,
                         autoScroll = state.autoScroll,
                         columnVisibility = state.columnVisibility,
+                        columnWidths = state.columnWidths,
+                        columnResizeActions = columnResizeActions,
                         onSelectTransaction = { viewModel.processIntent(TrafficIntent.SelectTransaction(it)) },
                         formattedVisibleSize = state.formattedVisibleSize,
+                        totalAvailableCount = state.totalAvailableCount,
                         onSendToApiStudio = handleExportToStudio,
                         onAddBreakpointRule = viewModel::createBreakpointFromTransaction,
                         activeRules = state.activeBreakpointRules,

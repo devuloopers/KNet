@@ -1,0 +1,21 @@
+type Query {
+    echo(message: String!): EchoPayload!
+}
+
+type Mutation {
+    reverse(message: String!): EchoPayload!
+}
+
+type Subscription {
+    ticker(message: String! = "tick", count: Int! = 5, delayMillis: Int! = 250): StreamEvent!
+}
+
+type EchoPayload {
+    message: String!
+    operation: String!
+}
+
+type StreamEvent {
+    sequence: Int!
+    message: String!
+}

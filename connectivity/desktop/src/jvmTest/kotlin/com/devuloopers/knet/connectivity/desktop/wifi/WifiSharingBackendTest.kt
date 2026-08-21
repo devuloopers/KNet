@@ -19,6 +19,9 @@ import com.devuloopers.knet.connectivity.model.ProxyEndpoint
 import com.devuloopers.knet.connectivity.model.ProxyEndpointScope
 import com.devuloopers.knet.connectivity.model.ProxyEndpointSnapshot
 import com.devuloopers.knet.connectivity.model.ProxyEndpointVersion
+import com.devuloopers.knet.connectivity.model.WifiSharingFailure
+import com.devuloopers.knet.connectivity.model.WifiSharingListenerFailureReason
+import com.devuloopers.knet.connectivity.model.WifiSharingListenerKind
 import com.devuloopers.knet.connectivity.model.WifiSharingState
 import com.devuloopers.knet.traffic.model.IngressKind
 import com.devuloopers.knet.traffic.model.TrafficEndpoint
@@ -30,6 +33,7 @@ import java.net.Socket
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -136,49 +140,153 @@ class WifiSharingBackendTest {
     fun `desktop runtime automatically follows proxy lifecycle`() = runBlocking {
         val address = localLanAddress()
         val proxyPort = freePort(address.address)
-        val monitor = DesktopNetworkSnapshotMonitor(
-            scanner = DesktopNetworkScanner {
-                DesktopNetworkObservation(listOf(address), defaultRouteAvailable = true, vpnActive = false)
-            },
-            pollIntervalMillis = 60_000L,
-            dispatcher = Dispatchers.Unconfined,
-        )
-        val proxy = RunningProxyRuntime(proxyPort)
-        val connectivity = DesktopConnectivityRuntime(proxy, monitor, Dispatchers.Unconfined)
-        val runtime = DesktopWifiSharingRuntime(
-            proxyRuntime = proxy,
-            connectivityRuntime = connectivity,
-            attributions = IngressAttributionRegistry(),
-            certificateDer = { byteArrayOf(1, 2, 3) },
-            dispatcher = Dispatchers.Unconfined,
-        )
+        val fixture = wifiRuntimeFixture(address, proxyPort)
         try {
-            val active = withTimeout(5_000L) { runtime.state.first { it is WifiSharingState.Active } }
+            val active = withTimeout(5_000L) { fixture.runtime.state.first { it is WifiSharingState.Active } }
             assertEquals(proxyPort, (active as WifiSharingState.Active).session.proxyEndpoint.port)
             assertTrue(active.session.setupUrl.endsWith("/setup"))
             assertTrue(
-                connectivity.context.value.proxyEndpoints.endpoints.any { endpoint ->
+                fixture.connectivity.context.value.proxyEndpoints.endpoints.any { endpoint ->
                     endpoint.scope == ProxyEndpointScope.LAN &&
                         endpoint.accessRequirement == ProxyAccessRequirement.OPEN_LAN_CLIENT
                 },
             )
 
-            proxy.stop(ProxyStopReason.USER_REQUEST)
-            withTimeout(5_000L) { runtime.state.first { it is WifiSharingState.Disabled } }
+            fixture.proxy.stop(ProxyStopReason.USER_REQUEST)
+            withTimeout(5_000L) { fixture.runtime.state.first { it is WifiSharingState.Disabled } }
             withTimeout(5_000L) {
-                connectivity.context.first { context ->
+                fixture.connectivity.context.first { context ->
                     context.proxyEndpoints.endpoints.none { endpoint -> endpoint.scope == ProxyEndpointScope.LAN }
                 }
             }
 
-            proxy.restart()
-            val restarted = withTimeout(5_000L) { runtime.state.first { it is WifiSharingState.Active } }
+            fixture.proxy.restart()
+            val restarted = withTimeout(5_000L) { fixture.runtime.state.first { it is WifiSharingState.Active } }
             assertEquals(proxyPort, (restarted as WifiSharingState.Active).session.proxyEndpoint.port)
         } finally {
-            runtime.close()
-            connectivity.close()
+            fixture.close()
         }
         Unit
+    }
+
+    @Test
+    fun `transient gateway ownership recovers without proxy restart`() = runBlocking {
+        val address = localLanAddress()
+        val blocker = boundServer(address.address)
+        val fixture = wifiRuntimeFixture(address, blocker.localPort)
+        try {
+            val recovering = assertIs<WifiSharingState.Recovering>(
+                withTimeout(2_000L) { fixture.runtime.state.first { it is WifiSharingState.Recovering } },
+            )
+            val failure = assertIs<WifiSharingFailure.ListenerUnavailable>(recovering.failure)
+            assertEquals(WifiSharingListenerKind.LAN_PROXY_GATEWAY, failure.listener)
+            assertEquals(WifiSharingListenerFailureReason.ADDRESS_IN_USE, failure.reason)
+            assertEquals(blocker.localPort, failure.endpoint.port)
+
+            blocker.close()
+
+            val active = assertIs<WifiSharingState.Active>(
+                withTimeout(5_000L) { fixture.runtime.state.first { it is WifiSharingState.Active } },
+            )
+            assertEquals(failure.endpoint.port, active.session.proxyEndpoint.port)
+        } finally {
+            runCatching(blocker::close)
+            fixture.close()
+        }
+    }
+
+    @Test
+    fun `persistent gateway ownership becomes precise failure after fast retries`() = runBlocking {
+        val address = localLanAddress()
+        val blocker = boundServer(address.address)
+        val fixture = wifiRuntimeFixture(address, blocker.localPort)
+        try {
+            withTimeout(2_000L) { fixture.runtime.state.first { it is WifiSharingState.Recovering } }
+            val failed = assertIs<WifiSharingState.Failed>(
+                withTimeout(8_000L) { fixture.runtime.state.first { it is WifiSharingState.Failed } },
+            )
+            val failure = assertIs<WifiSharingFailure.ListenerUnavailable>(failed.failure)
+            assertEquals(WifiSharingListenerKind.LAN_PROXY_GATEWAY, failure.listener)
+            assertEquals(WifiSharingListenerFailureReason.ADDRESS_IN_USE, failure.reason)
+            assertEquals(InetSocketAddress(address.address, blocker.localPort), failure.endpoint.toSocketAddress())
+            assertTrue(failed.recoverable)
+        } finally {
+            blocker.close()
+            fixture.close()
+        }
+    }
+
+    @Test
+    fun `setup portal conflict selects next configured port`() = runBlocking {
+        val address = localLanAddress()
+        val blockedPortal = boundServer(address.address)
+        val availablePorts = freePorts(address.address, count = 2)
+        val fallbackPortalPort = availablePorts[0]
+        val proxyPort = availablePorts[1]
+        val fixture = wifiRuntimeFixture(
+            address = address,
+            proxyPort = proxyPort,
+            setupPortalPorts = listOf(blockedPortal.localPort, fallbackPortalPort),
+        )
+        try {
+            val active = assertIs<WifiSharingState.Active>(
+                withTimeout(5_000L) { fixture.runtime.state.first { it is WifiSharingState.Active } },
+            )
+            assertEquals("http://${address.address}:$fallbackPortalPort/setup", active.session.setupUrl)
+            assertContains(rawGet(address.address, fallbackPortalPort, "/setup", address.address), "200 OK")
+        } finally {
+            blockedPortal.close()
+            fixture.close()
+        }
+    }
+
+    @Test
+    fun `stopping proxy cancels pending Wi-Fi recovery`() = runBlocking {
+        val address = localLanAddress()
+        val blocker = boundServer(address.address)
+        val fixture = wifiRuntimeFixture(address, blocker.localPort)
+        try {
+            withTimeout(2_000L) { fixture.runtime.state.first { it is WifiSharingState.Recovering } }
+
+            fixture.proxy.stop(ProxyStopReason.USER_REQUEST)
+            withTimeout(2_000L) { fixture.runtime.state.first { it is WifiSharingState.Disabled } }
+            blocker.close()
+            delay(500L)
+
+            assertIs<WifiSharingState.Disabled>(fixture.runtime.state.value)
+            assertTrue(
+                fixture.connectivity.context.value.proxyEndpoints.endpoints.none { endpoint ->
+                    endpoint.scope == ProxyEndpointScope.LAN
+                },
+            )
+        } finally {
+            runCatching(blocker::close)
+            fixture.close()
+        }
+    }
+
+    @Test
+    fun `closing Wi-Fi runtime cancels pending recovery`() = runBlocking {
+        val address = localLanAddress()
+        val blocker = boundServer(address.address)
+        val fixture = wifiRuntimeFixture(address, blocker.localPort)
+        try {
+            withTimeout(2_000L) { fixture.runtime.state.first { it is WifiSharingState.Recovering } }
+
+            fixture.runtime.close()
+            blocker.close()
+            delay(500L)
+
+            assertIs<WifiSharingState.Disabled>(fixture.runtime.state.value)
+            assertTrue(
+                fixture.connectivity.context.value.proxyEndpoints.endpoints.none { endpoint ->
+                    endpoint.scope == ProxyEndpointScope.LAN
+                },
+            )
+        } finally {
+            runCatching(blocker::close)
+            fixture.close()
+        }
     }
 
     private class RunningProxyRuntime(port: Int) : ProxyRuntimePort {
@@ -218,6 +326,42 @@ class WifiSharingBackendTest {
         )
     }
 
+    private data class WifiRuntimeFixture(
+        val proxy: RunningProxyRuntime,
+        val connectivity: DesktopConnectivityRuntime,
+        val runtime: DesktopWifiSharingRuntime,
+    ) : AutoCloseable {
+        override fun close() {
+            runtime.close()
+            connectivity.close()
+        }
+    }
+
+    private fun wifiRuntimeFixture(
+        address: NetworkAddress,
+        proxyPort: Int,
+        setupPortalPorts: List<Int> = freePorts(address.address, count = 2),
+    ): WifiRuntimeFixture {
+        val monitor = DesktopNetworkSnapshotMonitor(
+            scanner = DesktopNetworkScanner {
+                DesktopNetworkObservation(listOf(address), defaultRouteAvailable = true, vpnActive = false)
+            },
+            pollIntervalMillis = 60_000L,
+            dispatcher = Dispatchers.Unconfined,
+        )
+        val proxy = RunningProxyRuntime(proxyPort)
+        val connectivity = DesktopConnectivityRuntime(proxy, monitor, Dispatchers.Unconfined)
+        val runtime = DesktopWifiSharingRuntime(
+            proxyRuntime = proxy,
+            connectivityRuntime = connectivity,
+            attributions = IngressAttributionRegistry(),
+            certificateDer = { byteArrayOf(1, 2, 3) },
+            dispatcher = Dispatchers.Unconfined,
+            setupPortalPorts = setupPortalPorts,
+        )
+        return WifiRuntimeFixture(proxy, connectivity, runtime)
+    }
+
     private fun localLanAddress(): NetworkAddress {
         val match = NetworkInterface.getNetworkInterfaces().toList()
             .filter { it.isUp && !it.isLoopback }
@@ -238,6 +382,23 @@ class WifiSharingBackendTest {
         socket.bind(InetSocketAddress(host, 0))
         socket.localPort
     }
+
+    private fun freePorts(host: String, count: Int): List<Int> {
+        val reservations = List(count) { boundServer(host) }
+        return try {
+            reservations.map(ServerSocket::getLocalPort)
+        } finally {
+            reservations.forEach(ServerSocket::close)
+        }
+    }
+
+    private fun boundServer(host: String): ServerSocket = ServerSocket().apply {
+        reuseAddress = false
+        bind(InetSocketAddress(host, 0))
+    }
+
+    private fun com.devuloopers.knet.connectivity.model.WifiSharingListenerEndpoint.toSocketAddress(): InetSocketAddress =
+        InetSocketAddress(host, port)
 
     private fun rawGet(host: String, port: Int, path: String, authority: String): String =
         Socket(host, port).use { socket ->

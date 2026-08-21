@@ -6,12 +6,14 @@ Owns KNet's desktop persistence implementation and schema.
 
 ## Owns
 
-- Room database, schema-v18 entities, DAOs, and storage data sources.
+- Room database, schema-v19 entities, DAOs, and storage data sources.
 - The current 14-to-15, 15-to-16, 16-to-17, and 17-to-18 migrations; unsupported older development schemas may
   still be reset.
 - Durable metadata records and references to externally stored bodies.
 - Canonical session/connection/exchange/body/message/annotation/gap/deletion-outbox records and indexed
   single-session or global keyset queries.
+- SQLite-generated immutable exchange capture sequences, exact filtered-count queries, and sequence-keyed
+  paging indexes that keep ordering stable as pages are loaded.
 - Single-exchange detail and bounded multi-exchange `Flow` queries for semantic annotations, allowing list
   presentation to react to post-capture inspection without reading message bodies.
 - Bounded exchange batches used by import and the 100,000-row indexed-query regression fixture.
@@ -44,4 +46,7 @@ structured form fields. Draft promotion uses one DAO transaction so the saved ro
 be observed partially.
 Schema v18 adds request-title ownership. Existing rows default to `USER_DEFINED`, preventing generated naming
 from changing any request title created before this capability.
+Schema v19 makes the generated capture sequence the exchange row key and keeps canonical `ExchangeId` under
+a unique index. KNet is still in development, so the existing destructive-development fallback recreates an
+unsupported v18 database instead of carrying a compatibility migration; the exported v19 schema is canonical.
 Breakpoint queries return priority then ID order so persistence and live rule evaluation share one stable order.

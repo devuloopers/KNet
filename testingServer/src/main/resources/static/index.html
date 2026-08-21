@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>KNet Local Protocol Lab</title>
+    <style>
+        :root { color-scheme: dark; font-family: Inter, system-ui, sans-serif; }
+        body { margin: 0; background: #090f17; color: #e7edf7; }
+        main { max-width: 960px; margin: 0 auto; padding: 48px 24px; }
+        h1 { margin-bottom: 8px; }
+        p { color: #9ea9ba; line-height: 1.5; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px; margin: 28px 0; }
+        button { border: 1px solid #263650; border-radius: 8px; padding: 12px 14px; background: #121d2f; color: #e7edf7; cursor: pointer; text-align: left; }
+        button:hover { border-color: #4388ff; background: #172640; }
+        pre { min-height: 240px; overflow: auto; border: 1px solid #263650; border-radius: 10px; padding: 16px; background: #070c12; color: #b9d5ff; white-space: pre-wrap; }
+        code { color: #79adff; }
+    </style>
+</head>
+<body>
+<main>
+    <h1>KNet Local Protocol Lab</h1>
+    <p>Route this browser through KNet, then run the deterministic scenarios below. The JSON discovery contract is available at <code>/lab/v1</code>.</p>
+    <div class="grid">
+        <button data-test="manifest">Load capability manifest</button>
+        <button data-test="json">Request JSON</button>
+        <button data-test="ndjson">Stream NDJSON</button>
+        <button data-test="graphql">Run named GraphQL query</button>
+        <button data-test="sse">Receive SSE events</button>
+        <button data-test="websocket">Echo WebSocket frame</button>
+    </div>
+    <pre id="output">Select a scenario to begin.</pre>
+</main>
+<script>
+    const output = document.querySelector('#output');
+    const show = value => { output.textContent = typeof value === 'string' ? value : JSON.stringify(value, null, 2); };
+    const requestJson = async path => show(await (await fetch(path)).json());
+
+    document.querySelector('[data-test="manifest"]').onclick = () => requestJson('/lab/v1');
+    document.querySelector('[data-test="json"]').onclick = () => requestJson('/lab/v1/payload/json');
+    document.querySelector('[data-test="ndjson"]').onclick = async () => show(await (await fetch('/lab/v1/payload/ndjson?count=3&delayMillis=100')).text());
+    document.querySelector('[data-test="graphql"]').onclick = async () => {
+        const response = await fetch('/lab/v1/graphql', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                query: 'query BrowserNamedEcho($message: String!) { echo(message: $message) { message operation } }',
+                operationName: 'BrowserNamedEcho',
+                variables: { message: 'graphql-through-knet' }
+            })
+        });
+        show(await response.json());
+    };
+    document.querySelector('[data-test="sse"]').onclick = () => {
+        output.textContent = '';
+        const source = new EventSource('/lab/v1/streams/sse?count=5&delayMillis=250');
+        source.addEventListener('protocol-lab-event', event => { output.textContent += `${event.data}\n`; });
+        source.onerror = () => source.close();
+    };
+    document.querySelector('[data-test="websocket"]').onclick = () => {
+        const scheme = location.protocol === 'https:' ? 'wss' : 'ws';
+        const socket = new WebSocket(`${scheme}://${location.host}/lab/v1/websocket/echo`);
+        socket.onopen = () => socket.send('websocket-through-knet');
+        socket.onmessage = event => { show(event.data); socket.close(); };
+        socket.onerror = () => show('WebSocket connection failed.');
+    };
+</script>
+</body>
+</html>

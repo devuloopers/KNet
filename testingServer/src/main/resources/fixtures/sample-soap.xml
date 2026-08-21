@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://www.w3.org/2003/05/soap-envelope">
+    <soap:Header/>
+    <soap:Body>
+        <lab:Echo xmlns:lab="https://knet.devuloopers.com/testing/v1">
+            <lab:message>KNet SOAP payload</lab:message>
+        </lab:Echo>
+    </soap:Body>
+</soap:Envelope>

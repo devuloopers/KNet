@@ -75,22 +75,24 @@ data class TrafficConnectionEntity(
  * Durable canonical request/response metadata for one logical exchange.
  *
  * Request/response heads use indexed scalar columns plus versioned ordered-header encodings;
- * body columns contain opaque IDs, never paths. Lifecycle writes are conditional on [version].
+ * body columns contain opaque IDs, never paths. [captureSequence] is generated once by SQLite and
+ * remains stable while lifecycle writes advance [version].
  */
 @Entity(
     tableName = "traffic_exchanges",
     indices = [
-        Index(value = ["startedAtEpochMillis", "id"], name = "index_exchange_started_id"),
-        Index(value = ["sessionId", "startedAtEpochMillis", "id"], name = "index_exchange_session_started_id"),
-        Index(value = ["sessionId", "host", "startedAtEpochMillis"], name = "index_exchange_session_host_started"),
-        Index(value = ["sessionId", "method", "startedAtEpochMillis"], name = "index_exchange_session_method_started"),
-        Index(value = ["sessionId", "responseStatusCode", "startedAtEpochMillis"], name = "index_exchange_session_status_started"),
-        Index(value = ["sessionId", "protocol", "startedAtEpochMillis"], name = "index_exchange_session_protocol_started"),
+        Index(value = ["id"], unique = true, name = "index_exchange_id"),
+        Index(value = ["sessionId", "captureSequence"], name = "index_exchange_session_sequence"),
+        Index(value = ["sessionId", "host", "captureSequence"], name = "index_exchange_session_host_sequence"),
+        Index(value = ["sessionId", "method", "captureSequence"], name = "index_exchange_session_method_sequence"),
+        Index(value = ["sessionId", "responseStatusCode", "captureSequence"], name = "index_exchange_session_status_sequence"),
+        Index(value = ["sessionId", "protocol", "captureSequence"], name = "index_exchange_session_protocol_sequence"),
         Index(value = ["connectionId", "connectionSequence"], name = "index_exchange_connection_sequence"),
     ],
 )
 data class CanonicalExchangeEntity(
-    @PrimaryKey val id: String,
+    @PrimaryKey(autoGenerate = true) val captureSequence: Long = 0L,
+    val id: String,
     val sessionId: String,
     val connectionId: String,
     val streamId: Long?,

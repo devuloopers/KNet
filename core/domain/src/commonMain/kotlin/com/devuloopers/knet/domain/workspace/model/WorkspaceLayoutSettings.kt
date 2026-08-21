@@ -11,6 +11,7 @@ package com.devuloopers.knet.domain.workspace.model
  * @property trafficFeedWidthDp Width of traffic feed panel in Dp.
  * @property sidebarWidthDp Width of right sidebar panel in Dp.
  * @property bottomTrayHeightDp Height of bottom tray panel in Dp.
+ * @property trafficTableColumnWidths Persisted Traffic table widths and Path auto-fill preference.
  */
 data class WorkspaceLayoutSettings(
     val isTrafficFeedVisible: Boolean = true,
@@ -21,6 +22,7 @@ data class WorkspaceLayoutSettings(
     val trafficFeedWidthDp: Float = 600f,
     val sidebarWidthDp: Float = 260f,
     val bottomTrayHeightDp: Float = 180f,
+    val trafficTableColumnWidths: TrafficTableColumnWidths = TrafficTableColumnWidths(),
     val activeRequestSubTab: String = "BODY",
     val activeScriptPhase: String = "PRE_REQUEST",
     val activeResponseSubTab: String = "BODY",

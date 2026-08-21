@@ -16,8 +16,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
-import com.devuloopers.knet.ui.core.components.divider.VerticalDivider
-import com.devuloopers.knet.ui.core.components.input.KNetSearchField
 import com.devuloopers.knet.ui.core.components.switch.KNetSwitch
 import com.devuloopers.knet.ui.core.components.toolbar.KNetToolbar
 import com.devuloopers.knet.ui.core.components.toolbar.ToolbarGroup
@@ -32,7 +30,6 @@ data class TrafficToolbarState(
     val captureState: CaptureState = CaptureState.STOPPED,
     val engineState: ProxyRuntimeState = ProxyRuntimeState.Stopped,
     val autoScroll: Boolean = true,
-    val searchQuery: String = "",
     val localIpAddress: String = "127.0.0.1",
     val isClearingHistory: Boolean = false,
 )
@@ -44,7 +41,6 @@ data class TrafficToolbarActions(
     val onStartCapture: () -> Unit = {},
     val onStopCapture: () -> Unit = {},
     val onClearFeed: () -> Unit = {},
-    val onSearchChange: (String) -> Unit = {},
     val onAutoScrollToggle: () -> Unit = {}
 )
 
@@ -199,21 +195,7 @@ fun TrafficToolbar(
             }
         },
         trailing = {
-            ToolbarGroup(horizontalArrangement = Arrangement.spacedBy(spacing.md)) {
-                // Search Input
-                KNetSearchField(
-                    query = state.searchQuery,
-                    onQueryChange = actions.onSearchChange,
-                    placeholder = "Search path, host, method...",
-                    modifier = Modifier.width(280.dp)
-                )
-
-                VerticalDivider(
-                    modifier = Modifier.height(20.dp),
-                    color = themeColors.border
-                )
-
-                // Auto Scroll Toggle
+            ToolbarGroup {
                 KNetSwitch(
                     checked = state.autoScroll,
                     onCheckedChange = { actions.onAutoScrollToggle() },

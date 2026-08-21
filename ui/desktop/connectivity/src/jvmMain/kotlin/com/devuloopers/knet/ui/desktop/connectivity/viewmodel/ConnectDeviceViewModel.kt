@@ -8,8 +8,6 @@ import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUs
 import com.devuloopers.knet.application.usecase.proxy.StartLoopbackProxyUseCase
 import com.devuloopers.knet.domain.settings.usecase.ObserveApplicationSettingsUseCase
 import com.devuloopers.knet.ui.desktop.connectivity.model.ConnectDeviceIntent
-import com.devuloopers.knet.ui.desktop.connectivity.model.ConnectDeviceMessage
-import com.devuloopers.knet.ui.desktop.connectivity.model.ConnectDeviceMessageTone
 import com.devuloopers.knet.ui.desktop.connectivity.model.ConnectDeviceOperation
 import com.devuloopers.knet.ui.desktop.connectivity.model.ConnectDeviceUiState
 import kotlinx.coroutines.CancellationException
@@ -66,7 +64,6 @@ class ConnectDeviceViewModel(
         when (intent) {
             ConnectDeviceIntent.OpenSetup -> mutableUiState.update { it.copy(isSetupDrawerVisible = true) }
             ConnectDeviceIntent.CloseSetup -> mutableUiState.update { it.copy(isSetupDrawerVisible = false) }
-            ConnectDeviceIntent.DismissMessage -> mutableUiState.update { it.copy(message = null) }
             ConnectDeviceIntent.StartProxy -> runOperation(ConnectDeviceOperation.STARTING_PROXY, ::startProxy)
         }
     }
@@ -76,7 +73,7 @@ class ConnectDeviceViewModel(
         action: suspend () -> Unit,
     ) {
         if (!operationMutex.tryLock()) return
-        mutableUiState.update { it.copy(operation = operation, message = null) }
+        mutableUiState.update { it.copy(operation = operation, failureCode = null) }
         viewModelScope.launch {
             try {
                 action()
@@ -93,29 +90,12 @@ class ConnectDeviceViewModel(
 
     private suspend fun startProxy() {
         when (val result = startLoopbackProxy.execute(mutableUiState.value.preferredProxyPort)) {
-            is ProxyStartResult.Running -> showInfo(
-                "Proxy started. Wi-Fi access will become ready automatically.",
-            )
+            is ProxyStartResult.Running -> Unit
             is ProxyStartResult.Failed -> showFailure(result.code)
         }
     }
 
-    private fun showInfo(text: String) {
-        mutableUiState.update {
-            it.copy(message = ConnectDeviceMessage(text, ConnectDeviceMessageTone.INFO))
-        }
-    }
-
     private fun showFailure(code: String) {
-        val message = when (code) {
-            "wifi_address_unavailable" -> "No supported local Wi-Fi address is currently available."
-            "wifi_bind_failed" -> "KNet could not open the Wi-Fi proxy or setup page on this network."
-            "certificate_unavailable" -> "The KNet certificate authority is unavailable."
-            "unexpected_connectivity_failure" -> "The connectivity operation failed unexpectedly."
-            else -> "Connectivity operation failed ($code)."
-        }
-        mutableUiState.update {
-            it.copy(message = ConnectDeviceMessage(message, ConnectDeviceMessageTone.ERROR))
-        }
+        mutableUiState.update { it.copy(failureCode = code) }
     }
 }

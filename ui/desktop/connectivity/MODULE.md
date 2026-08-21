@@ -8,8 +8,12 @@ Owns the desktop **Connect Device** presentation for the automatically managed W
 
 - Immutable presentation state and focused intents for opening the setup drawer and starting the proxy.
 - A top-left wrapping connectivity-method card grid whose first entry is Wi-Fi Proxy Setup.
-- Feature-owned Wi-Fi drawer content using the shared `:ui:core` shell, stable QR rendering, manual
-  endpoint, Android/iPhone instructions, and lifecycle feedback.
+- Feature-owned Wi-Fi drawer content using the shared `:ui:core` shell, stable QR rendering, manual endpoint,
+  prerequisite guidance, Android/iPhone instructions, connection verification, certificate compatibility notes,
+  hover-aware close interaction, and lifecycle feedback. Setup-specific guidance stays private to this feature.
+- Inline card/drawer failure feedback derived from typed operation state and typed Wi-Fi runtime failures,
+  including a non-terminal listener recovery presentation. The feature does not render a separate screen-level
+  notification banner for successful proxy startup.
 - Mapping application/core connectivity state into user-facing labels and recoverable actions.
 
 ## Does not own
