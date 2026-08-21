@@ -9,7 +9,6 @@ import com.devuloopers.knet.traffic.model.http.HeaderField
 import com.devuloopers.knet.traffic.model.http.HeaderName
 import com.devuloopers.knet.traffic.model.http.HttpStatus
 import com.devuloopers.knet.traffic.model.http.ResponseHead
-import com.devuloopers.knet.traffic.model.http.StandardApplicationProtocol
 import com.devuloopers.knet.ui.desktop.apistudio.model.ExecutionState
 import com.devuloopers.knet.ui.desktop.apistudio.model.ResponseInspectorState
 import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
@@ -86,10 +85,10 @@ fun ResponseInspectorView(
     val cookiePairs = remember(state.cookies) { state.cookies.map { it.key to it.value } }
     val isExecuting = state.executionState == ExecutionState.EXECUTING
 
-    val responseHead = remember(state.statusCode, state.statusText, headerPairs) {
+    val responseHead = remember(state.statusCode, state.statusText, state.protocol, headerPairs) {
         state.statusCode.takeIf { it in 100..999 }?.let { statusCode ->
             ResponseHead(
-                protocol = ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_1_1),
+                protocol = state.protocol ?: ApplicationProtocol.fromToken("HTTP/1.1"),
                 status = HttpStatus(statusCode),
                 reasonPhrase = state.statusText.takeIf(String::isNotBlank),
                 headers = headerPairs

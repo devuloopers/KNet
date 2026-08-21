@@ -22,26 +22,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
 import com.devuloopers.knet.ui.core.components.input.InputFieldConfig
 import com.devuloopers.knet.ui.core.components.input.KNetTextField
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
-/**
- * Dialog component for entering a new collection suite name.
- *
- * @param onDismiss Callback executed when the dialog is dismissed or cancelled.
- * @param onConfirm Callback executed with the new collection name when submitted.
- */
+/** Dialog for creating an empty saved collection. */
 @Composable
 fun CreateCollectionDialog(
     onDismiss: () -> Unit,
@@ -50,7 +45,6 @@ fun CreateCollectionDialog(
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
     val spacing = KNetTheme.spacing
-
     var collectionName by remember { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
 
@@ -79,7 +73,10 @@ fun CreateCollectionDialog(
                 Column(verticalArrangement = Arrangement.spacedBy(spacing.xs)) {
                     Text(
                         text = "Collection Name",
-                        style = typography.caption.copy(color = themeColors.textSecondary, fontWeight = FontWeight.Medium)
+                        style = typography.caption.copy(
+                            color = themeColors.textSecondary,
+                            fontWeight = FontWeight.Medium
+                        )
                     )
                     KNetTextField(
                         value = collectionName,
@@ -88,13 +85,15 @@ fun CreateCollectionDialog(
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(focusRequester)
-                            .onKeyEvent { keyEvent ->
-                                if (keyEvent.type == KeyEventType.KeyDown && (keyEvent.key == Key.Enter || keyEvent.key == Key.NumPadEnter)) {
-                                    if (collectionName.isNotBlank()) {
-                                        onConfirm(collectionName)
-                                        true
-                                    } else false
-                                } else false
+                            .onKeyEvent { event ->
+                                val submits = event.type == KeyEventType.KeyDown &&
+                                    (event.key == Key.Enter || event.key == Key.NumPadEnter)
+                                if (submits && collectionName.isNotBlank()) {
+                                    onConfirm(collectionName.trim())
+                                    true
+                                } else {
+                                    false
+                                }
                             }
                     )
                 }
@@ -112,12 +111,7 @@ fun CreateCollectionDialog(
                         Text("Cancel")
                     }
                     KNetButton(
-                        onClick = {
-                            if (collectionName.isNotBlank()) {
-                                onConfirm(collectionName.trim())
-                            }
-                        },
-                        variant = ButtonVariant.Primary,
+                        onClick = { onConfirm(collectionName.trim()) },
                         enabled = collectionName.isNotBlank()
                     ) {
                         Text("Create")

@@ -1,6 +1,7 @@
 package com.devuloopers.knet.domain
 
 import com.devuloopers.knet.domain.apistudio.naming.RequestNameOrigin
+import com.devuloopers.knet.domain.clientNetwork.model.HttpVersionPreference
 import com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType
 import com.devuloopers.knet.domain.collection.model.ApiRequestBody
 import com.devuloopers.knet.domain.collection.model.RequestHeader
@@ -20,6 +21,7 @@ class NetworkSpecMappersTest {
             name = "Update item",
             nameOrigin = RequestNameOrigin.GENERATED,
             method = HttpMethod.PUT,
+            httpVersionPreference = HttpVersionPreference.HTTP_1_0,
             url = "https://api.knet.dev/v1/items?page=1",
             headers = listOf(RequestHeader("Authorization", "Bearer token")),
             body = ApiRequestBody(content = "{\"item\":\"test\"}", type = RequestBodyType.JSON),
@@ -33,11 +35,13 @@ class NetworkSpecMappersTest {
         )
 
         assertEquals(HttpMethod.PUT, spec.method)
+        assertEquals(HttpVersionPreference.HTTP_1_0, spec.httpVersionPreference)
         assertEquals(RequestBodyType.JSON, spec.bodyType)
         assertEquals(listOf("page" to "1"), spec.queryParams)
         assertEquals(savedRequest.url, roundTripped.url)
         assertEquals(savedRequest.headers.first().key, roundTripped.headers.first().key)
         assertEquals(savedRequest.body.content, roundTripped.body.content)
         assertEquals(RequestNameOrigin.GENERATED, roundTripped.nameOrigin)
+        assertEquals(HttpVersionPreference.HTTP_1_0, roundTripped.httpVersionPreference)
     }
 }

@@ -2,6 +2,7 @@ package com.devuloopers.knet.domain.clientNetwork.usecase
 
 import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor
 import com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult
+import com.devuloopers.knet.domain.clientNetwork.model.HttpVersionPreference
 import com.devuloopers.knet.domain.clientNetwork.model.OutboundRequestBody
 import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
 import com.devuloopers.knet.traffic.model.ExchangeTimings
@@ -19,6 +20,7 @@ class FakeHttpExecutor : HttpExecutor {
     var lastExecutedMethod: HttpMethod = HttpMethod.GET
     var lastHeaders: Map<String, String> = emptyMap()
     var lastProxyPort: Int? = null
+    var lastHttpVersionPreference: HttpVersionPreference = HttpVersionPreference.AUTO
     var shouldFail: Boolean = false
 
     override suspend fun execute(
@@ -27,12 +29,14 @@ class FakeHttpExecutor : HttpExecutor {
         headers: Map<String, String>,
         body: OutboundRequestBody,
         auth: ApiRequestAuth,
-        proxyPort: Int?
+        proxyPort: Int?,
+        httpVersionPreference: HttpVersionPreference,
     ): ExecutionResult {
         lastExecutedUrl = url
         lastExecutedMethod = method
         lastHeaders = headers
         lastProxyPort = proxyPort
+        lastHttpVersionPreference = httpVersionPreference
 
         if (shouldFail) {
             throw RuntimeException("Network connection failed")
@@ -54,6 +58,18 @@ class FakeHttpExecutor : HttpExecutor {
 }
 
 class ExecuteClientApiRequestUseCaseTest {
+
+    @Test
+    fun `HTTP version preference reaches the executor unchanged`() = runTest {
+        val fakeExecutor = FakeHttpExecutor()
+
+        ExecuteClientApiRequestUseCase(fakeExecutor)(
+            url = "http://legacy.example.test/resource",
+            httpVersionPreference = HttpVersionPreference.HTTP_1_0,
+        )
+
+        assertEquals(HttpVersionPreference.HTTP_1_0, fakeExecutor.lastHttpVersionPreference)
+    }
 
     @Test
     fun testExecuteClientApiRequestSuccess() = runTest {
@@ -168,6 +184,7 @@ class ExecuteClientApiRequestUseCaseTest {
                 body: OutboundRequestBody,
                 auth: ApiRequestAuth,
                 proxyPort: Int?,
+                httpVersionPreference: HttpVersionPreference,
             ): ExecutionResult = throw CancellationException("cancelled")
 
             override fun close() = Unit

@@ -3,6 +3,8 @@ package com.devuloopers.knet.engine.proxy.mapper
 import com.devuloopers.knet.engine.proxy.http.ProxyRequestContext
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
+import com.devuloopers.knet.traffic.model.TrafficAttributionHeader
+import com.devuloopers.knet.traffic.model.TrafficOrigin
 import com.devuloopers.knet.traffic.model.body.MessageBodyRef
 import io.netty.handler.codec.http.HttpHeaders
 import io.netty.handler.codec.http.HttpRequest as NettyHttpRequest
@@ -39,6 +41,11 @@ object HttpMapper {
             body = MessageBodyRef.Empty,
         ),
         startedAtEpochMillis = Clock.System.now().toEpochMilliseconds(),
+        origin = nettyReq.headers()
+            .get(TrafficAttributionHeader.NAME)
+            ?.takeIf(String::isNotBlank)
+            ?.let { token -> runCatching { TrafficOrigin.fromToken(token) }.getOrNull() }
+            ?: TrafficOrigin.ProxyClient,
     )
 
     /** Maps transport request metadata into the shared canonical request head. */
@@ -75,11 +82,18 @@ object HttpMapper {
         ?.takeIf(String::isNotBlank)
         ?.let(ContentEncoding::fromToken)
 
+    /** Removes local attribution metadata before forwarding a request to an upstream server. */
+    fun removeCaptureAttribution(request: NettyHttpRequest) {
+        request.headers().remove(TrafficAttributionHeader.NAME)
+    }
+
     /** Allocates the transport-owned stable exchange ID. */
     @OptIn(kotlin.uuid.ExperimentalUuidApi::class)
     private fun newExchangeId(): String = kotlin.uuid.Uuid.random().toString()
 
-    private fun mapCanonicalHeaders(headers: HttpHeaders): List<HeaderField> = headers.map { header ->
-        HeaderField(HeaderName(header.key), header.value)
-    }
+    private fun mapCanonicalHeaders(headers: HttpHeaders): List<HeaderField> = headers
+        .asSequence()
+        .filterNot { header -> header.key.equals(TrafficAttributionHeader.NAME, ignoreCase = true) }
+        .map { header -> HeaderField(HeaderName(header.key), header.value) }
+        .toList()
 }

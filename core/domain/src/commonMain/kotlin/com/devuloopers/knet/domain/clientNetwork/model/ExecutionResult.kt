@@ -1,6 +1,7 @@
 package com.devuloopers.knet.domain.clientNetwork.model
 
 import com.devuloopers.knet.traffic.model.ExchangeTimings
+import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 
 /**
  * Domain result representation returned after executing a client HTTP/HTTPS API request.
@@ -15,6 +16,7 @@ import com.devuloopers.knet.traffic.model.ExchangeTimings
  * @property isSuccess True if status code is in 2xx range; false otherwise.
  * @property errorMessage Optional failure description if execution throws an exception.
  * @property failureReason Strongly-typed network execution failure category, or null on success.
+ * @property protocol Actual response protocol reported by the transport, or null before a response exists.
  */
 data class ExecutionResult(
     val statusCode: Int,
@@ -26,7 +28,8 @@ data class ExecutionResult(
     val responseSizeBytes: Long = 0L,
     val isSuccess: Boolean = statusCode in 200..299,
     val errorMessage: String? = null,
-    val failureReason: NetworkFailureReason? = null
+    val failureReason: NetworkFailureReason? = null,
+    val protocol: ApplicationProtocol? = null,
 ) {
     /** Compatibility-free convenience derived from the canonical total timing. */
     val latencyMs: Long

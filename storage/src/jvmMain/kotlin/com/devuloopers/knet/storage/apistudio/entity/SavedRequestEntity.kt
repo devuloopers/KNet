@@ -16,6 +16,8 @@ data class SavedRequestEntity(
     @ColumnInfo(defaultValue = "'USER_DEFINED'")
     val nameOrigin: String = "USER_DEFINED",
     val method: String,
+    @ColumnInfo(defaultValue = "'AUTO'")
+    val httpVersionPreference: String = "AUTO",
     val url: String,
     @ColumnInfo(defaultValue = "'[]'")
     val queryParamsJson: String = "[]",

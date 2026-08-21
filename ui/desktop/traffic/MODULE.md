@@ -13,6 +13,8 @@ Owns the live traffic table, filtering, selection, inspector coordination, and t
   reacts to a genuinely newer sequence rather than a page-size change.
 - Separate transport and semantic method presentation: filters retain the canonical HTTP method while the
   table renders the shared request descriptor label such as `POST` or `GQL`.
+- Optional Protocol and Source columns backed by canonical exchange data; Source distinguishes API Studio from
+  ordinary proxy clients, while Protocol prefers the observed upstream response and falls back to the client request.
 - Protocol-aware Host-column presentation omits redundant HTTP `:80` and HTTPS `:443` ports while retaining
   non-default ports and the complete canonical authority outside the compact table label.
 - One typed column-width layout shared by headers and rows. Path fills remaining viewport space until explicitly
@@ -72,3 +74,6 @@ Rows keep only table metadata and one content-type value; ordered headers, repea
 heads, annotations, and bodies come from the selected canonical exchange. Clear is serialized, affects only
 stored traffic, and leaves the forwarding listener available. Assembly lives in `:products:desktop` under
 `di/traffic`.
+The Overview panel always exposes client protocol, upstream protocol, and source independently, so HTTP/1
+translation is not misreported as one ambiguous value. Protocol and Source remain hidden table columns by
+default and can be enabled through the existing generic column menu.

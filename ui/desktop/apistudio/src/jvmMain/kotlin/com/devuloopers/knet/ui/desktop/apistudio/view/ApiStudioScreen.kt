@@ -29,6 +29,7 @@ import com.devuloopers.knet.ui.desktop.apistudio.dialog.SaveRequestDialog
 import com.devuloopers.knet.ui.desktop.apistudio.editor.RequestUrlBar
 import com.devuloopers.knet.ui.desktop.apistudio.model.ExecutionState
 import com.devuloopers.knet.ui.desktop.apistudio.model.ResponseInspectorState
+import com.devuloopers.knet.ui.desktop.apistudio.model.SessionContext
 import com.devuloopers.knet.ui.desktop.apistudio.response.ResponseInspectorActions
 import com.devuloopers.knet.ui.desktop.apistudio.response.ResponseInspectorView
 import com.devuloopers.knet.ui.desktop.apistudio.sidebar.CollectionsSidebar
@@ -64,6 +65,7 @@ fun ApiStudioScreen(
             CollectionsSidebar(
                 state = collectionsState,
                 selectedRequestId = uiState.selectedRequestId,
+                canSaveActiveRequest = uiState.sessionContext is SessionContext.UnsavedDraft,
                 actions = CollectionsSidebarActions(
                     onRequestSelected = viewModel::openRequest,
                     onSaveUnsavedRequest = { item ->
@@ -92,6 +94,7 @@ fun ApiStudioScreen(
                             viewModel.closeTab(item.id)
                         }
                     },
+                    onSaveActiveRequest = viewModel::openSaveDialog,
                     onNewCollectionClicked = collectionsViewModel::openCreateCollectionDialog
                 )
             )
@@ -108,11 +111,12 @@ fun ApiStudioScreen(
                         RequestUrlBar(
                             method = uiState.editorState.method,
                             url = uiState.editorState.url,
+                            httpVersionPreference = uiState.editorState.httpVersionPreference,
                             onMethodChanged = viewModel::updateMethod,
+                            onHttpVersionPreferenceChanged = viewModel::updateHttpVersionPreference,
                             onUrlChanged = viewModel::updateUrl,
                             onSendClicked = viewModel::executeRequest,
                             onCancelClicked = viewModel::cancelExecution,
-                            onSaveClicked = viewModel::openSaveDialog,
                             isExecuting = uiState.executionState == ExecutionState.EXECUTING
                         )
 

@@ -5,6 +5,7 @@ import com.devuloopers.knet.application.port.script.ScriptExecutionPort
 import com.devuloopers.knet.application.port.script.UnavailableScriptExecutionPort
 import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor
 import com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult
+import com.devuloopers.knet.domain.clientNetwork.model.HttpVersionPreference
 import com.devuloopers.knet.domain.clientNetwork.model.OutboundRequestBody
 import com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType
 import com.devuloopers.knet.domain.clientNetwork.usecase.ExecuteClientApiRequestUseCase
@@ -46,6 +47,7 @@ class ExecuteApiStudioRequestUseCaseTest {
             id = "request-1",
             name = "Create item",
             method = HttpMethod.POST,
+            httpVersionPreference = HttpVersionPreference.HTTP_1_0,
             url = "https://api.example.test/items",
             queryParameters = listOf(
                 RequestQueryParameter("limit", "2"),
@@ -75,6 +77,7 @@ class ExecuteApiStudioRequestUseCaseTest {
         assertFalse("X-Draft" in executor.headers)
         assertEquals("session=abc", executor.headers["Cookie"])
         assertEquals(null, executor.proxyPort)
+        assertEquals(HttpVersionPreference.HTTP_1_0, executor.httpVersionPreference)
         val body = assertIs<OutboundRequestBody.Multipart>(executor.body)
         assertEquals(listOf("name"), body.fields.map { it.name })
 
@@ -141,6 +144,7 @@ class ExecuteApiStudioRequestUseCaseTest {
         var headers: Map<String, String> = emptyMap()
         var body: OutboundRequestBody = OutboundRequestBody.None
         var proxyPort: Int? = null
+        var httpVersionPreference: HttpVersionPreference = HttpVersionPreference.AUTO
 
         override suspend fun execute(
             url: String,
@@ -148,12 +152,14 @@ class ExecuteApiStudioRequestUseCaseTest {
             headers: Map<String, String>,
             body: OutboundRequestBody,
             auth: ApiRequestAuth,
-            proxyPort: Int?
+            proxyPort: Int?,
+            httpVersionPreference: HttpVersionPreference,
         ): ExecutionResult {
             this.url = url
             this.headers = headers
             this.body = body
             this.proxyPort = proxyPort
+            this.httpVersionPreference = httpVersionPreference
             return ExecutionResult(
                 statusCode = 200,
                 statusText = "OK",

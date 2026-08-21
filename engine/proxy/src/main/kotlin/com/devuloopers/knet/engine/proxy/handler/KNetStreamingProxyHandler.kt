@@ -9,6 +9,9 @@ import com.devuloopers.knet.engine.proxy.capture.ProxyExchangeCapture
 import com.devuloopers.knet.engine.proxy.dns.NettyDnsResolver
 import com.devuloopers.knet.engine.proxy.http.AuthorityParseResult
 import com.devuloopers.knet.engine.proxy.http.AuthorityParser
+import com.devuloopers.knet.engine.proxy.http.HttpOneDownstreamPolicy
+import com.devuloopers.knet.engine.proxy.http.HttpOneRequestViolation
+import com.devuloopers.knet.engine.proxy.http.HttpOneSemantics
 import com.devuloopers.knet.engine.proxy.mapper.HttpMapper
 import com.devuloopers.knet.engine.proxy.pipeline.ProxyChannelAttributes
 import com.devuloopers.knet.engine.proxy.pipeline.PipelineHandlerNames
@@ -36,6 +39,7 @@ import io.netty.handler.codec.http.FullHttpRequest
 import io.netty.handler.codec.http.HttpClientCodec
 import io.netty.handler.codec.http.HttpContent
 import io.netty.handler.codec.http.HttpHeaderNames
+import io.netty.handler.codec.http.HttpHeaderValues
 import io.netty.handler.codec.http.HttpMethod
 import io.netty.handler.codec.http.HttpObject
 import io.netty.handler.codec.http.HttpRequest
@@ -176,6 +180,19 @@ internal class KNetStreamingProxyHandler(
 
     /** Parses the target, publishes request metadata, pauses reads, and starts the upstream dial. */
     private fun beginRequest(context: ChannelHandlerContext, request: HttpRequest) {
+        val downstreamPolicy = HttpOneSemantics.downstreamPolicy(request)
+        when (HttpOneSemantics.validateRequest(request)) {
+            HttpOneRequestViolation.HTTP_1_0_TRANSFER_ENCODING -> {
+                writeBadRequest(
+                    context = context,
+                    reason = "HTTP/1.0 does not support Transfer-Encoding",
+                    requestVersion = request.protocolVersion(),
+                )
+                return
+            }
+
+            null -> Unit
+        }
         val target = resolveTarget(context, request) ?: return
         val preparedRequest = context.channel().attr(ProxyChannelAttributes.REQUEST_CONTEXT).getAndSet(null)
         val preparedExchange = context.channel().attr(ProxyChannelAttributes.PREPARED_EXCHANGE).getAndSet(null)
@@ -186,6 +203,7 @@ internal class KNetStreamingProxyHandler(
             port = target.port,
             relativeUri = target.relativeUri,
         )
+        HttpMapper.removeCaptureAttribution(request)
         check(preparedExchange == null || preparedExchange.exchangeId == mappedRequest.exchangeId) {
             "Prepared capture identity does not match the streamed request."
         }
@@ -193,6 +211,7 @@ internal class KNetStreamingProxyHandler(
             exchangeId = mappedRequest.exchangeId,
             request = mappedRequest.request.head,
             occurredAtEpochMillis = mappedRequest.startedAtEpochMillis,
+            origin = mappedRequest.origin,
         )
         val outboundHead = DefaultHttpRequest(
             request.protocolVersion(),
@@ -200,7 +219,7 @@ internal class KNetStreamingProxyHandler(
             target.relativeUri,
         )
         outboundHead.headers().set(request.headers())
-        outboundHead.headers().remove("Proxy-Connection")
+        HttpOneSemantics.prepareUpstreamRequest(outboundHead, downstreamPolicy)
         outboundHead.headers().set(
             HttpHeaderNames.HOST,
             if (target.port == 80 || target.port == 443) target.host else "${target.host}:${target.port}",
@@ -211,6 +230,7 @@ internal class KNetStreamingProxyHandler(
             mappedRequest = mappedRequest,
             target = target,
             outboundHead = outboundHead,
+            downstreamPolicy = downstreamPolicy,
             capture = capture,
             contentEncoding = HttpMapper.contentEncoding(request.headers()),
             timings = timings,
@@ -400,6 +420,7 @@ internal class KNetStreamingProxyHandler(
                 request = active.outboundHead,
                 timingCollector = active.timings,
                 capture = active.capture,
+                downstreamPolicy = active.downstreamPolicy,
                 onRequestHeadWritten = { upstream ->
                     downstreamContext.executor().execute {
                         if (activeRequest === active) {
@@ -414,7 +435,9 @@ internal class KNetStreamingProxyHandler(
                         if (activeRequest === active) pumpRequestBody(downstreamContext, active)
                     }
                 },
-                onExchangeComplete = { completeExchange(downstreamContext, active) },
+                onExchangeComplete = { keepDownstreamAlive ->
+                    completeExchange(downstreamContext, active, keepDownstreamAlive)
+                },
             ),
         )
     }
@@ -423,7 +446,7 @@ internal class KNetStreamingProxyHandler(
     private fun handleConnect(context: ChannelHandlerContext, request: HttpRequest) {
         val parsedAuthority = AuthorityParser.parse(request.uri(), defaultPort = 443)
         if (parsedAuthority !is AuthorityParseResult.Valid) {
-            writeBadRequest(context, "Invalid CONNECT authority")
+            writeBadRequest(context, "Invalid CONNECT authority", request.protocolVersion())
             return
         }
         val host = parsedAuthority.authority.host
@@ -433,7 +456,7 @@ internal class KNetStreamingProxyHandler(
         context.channel().attr(ProxyChannelAttributes.IS_SSL).set(true)
 
         val response = DefaultFullHttpResponse(
-            HttpVersion.HTTP_1_1,
+            HttpOneSemantics.generatedResponseVersion(request.protocolVersion()),
             HttpResponseStatus(200, "Connection Established"),
         )
         response.headers().set("Proxy-Agent", "KNet")
@@ -505,19 +528,19 @@ internal class KNetStreamingProxyHandler(
                     targetPort = authority.authority.port
                 }
                 else -> {
-                    writeBadRequest(context, "Missing or invalid Host authority")
+                    writeBadRequest(context, "Missing or invalid Host authority", request.protocolVersion())
                     return null
                 }
             }
         }
 
         if (targetHost == null) {
-            writeBadRequest(context, "Missing target authority")
+            writeBadRequest(context, "Missing target authority", request.protocolVersion())
             return null
         }
         val localPort = (context.channel().localAddress() as? InetSocketAddress)?.port ?: -1
         if (isSelfTarget(targetHost, targetPort, localPort)) {
-            writeBadRequest(context, "Recursive self-proxy connection")
+            writeBadRequest(context, "Recursive self-proxy connection", request.protocolVersion())
             return null
         }
 
@@ -538,13 +561,17 @@ internal class KNetStreamingProxyHandler(
             pendingRequestHeads + addedHeads > MAX_PIPELINED_REQUESTS ||
             pendingContentBytes + addedBytes > MAX_ALREADY_DECODED_PIPELINE_BYTES
         ) {
+            val requestVersion = activeRequest?.downstreamPolicy?.version ?: (message as? HttpRequest)
+                ?.protocolVersion()
+                ?: HttpVersion.HTTP_1_1
             ReferenceCountUtil.release(message)
             releasePendingObjects()
             val response = DefaultFullHttpResponse(
-                HttpVersion.HTTP_1_1,
+                HttpOneSemantics.generatedResponseVersion(requestVersion),
                 HttpResponseStatus.TOO_MANY_REQUESTS,
             )
             response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 0)
+            response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE)
             context.writeAndFlush(response).addListener { context.close() }
             return
         }
@@ -554,9 +581,13 @@ internal class KNetStreamingProxyHandler(
     }
 
     /** Completes current ownership, then starts the next already-decoded pipelined request in order. */
-    private fun completeExchange(context: ChannelHandlerContext, active: ActiveStreamingRequest) {
+    private fun completeExchange(
+        context: ChannelHandlerContext,
+        active: ActiveStreamingRequest,
+        keepDownstreamAlive: Boolean,
+    ) {
         if (!context.executor().inEventLoop()) {
-            context.executor().execute { completeExchange(context, active) }
+            context.executor().execute { completeExchange(context, active, keepDownstreamAlive) }
             return
         }
         if (!active.exchangeCompleted.compareAndSet(false, true)) return
@@ -564,7 +595,8 @@ internal class KNetStreamingProxyHandler(
         active.upstreamChannel?.close()
         releaseBodyQueue(active)
 
-        if (!active.requestEndReceived || !context.channel().isActive) {
+        if (!keepDownstreamAlive || !active.requestEndReceived || !context.channel().isActive) {
+            releasePendingObjects()
             context.close()
             return
         }
@@ -614,11 +646,12 @@ internal class KNetStreamingProxyHandler(
             ?.toByteArray(Charsets.UTF_8)
             ?: ByteArray(0)
         val response = DefaultFullHttpResponse(
-            HttpVersion.HTTP_1_1,
+            HttpOneSemantics.generatedResponseVersion(active.downstreamPolicy.version),
             status,
             Unpooled.wrappedBuffer(bodyBytes),
         )
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, bodyBytes.size)
+        response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE)
         val now = Clock.System.now().toEpochMilliseconds()
         active.capture?.observeResponse(HttpMapper.mapResponseHead(response), now)
         active.capture?.terminate(
@@ -678,10 +711,18 @@ internal class KNetStreamingProxyHandler(
     }
 
     /** Writes a bounded invalid-request response and closes the connection. */
-    private fun writeBadRequest(context: ChannelHandlerContext, reason: String) {
+    private fun writeBadRequest(
+        context: ChannelHandlerContext,
+        reason: String,
+        requestVersion: HttpVersion,
+    ) {
         KNetLogger.warn(STREAMING_TAG) { "Rejected streaming proxy request: $reason" }
-        val response = DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.BAD_REQUEST)
+        val response = DefaultFullHttpResponse(
+            HttpOneSemantics.generatedResponseVersion(requestVersion),
+            HttpResponseStatus.BAD_REQUEST,
+        )
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 0)
+        response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE)
         context.writeAndFlush(response).addListener { context.close() }
     }
 
@@ -720,6 +761,7 @@ internal class KNetStreamingProxyHandler(
         val mappedRequest: ProxyRequestContext,
         val target: ResolvedTarget,
         val outboundHead: HttpRequest,
+        val downstreamPolicy: HttpOneDownstreamPolicy,
         val capture: ProxyExchangeCapture?,
         val contentEncoding: ContentEncoding?,
         val timings: NetworkTimingCollector,

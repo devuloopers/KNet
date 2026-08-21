@@ -75,6 +75,28 @@ fun ResponseSummaryHeader(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Actual response protocol observed by the API Studio transport.
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Text(
+                    text = "Protocol:",
+                    style = typography.caption.copy(color = themeColors.textMuted),
+                    maxLines = 1,
+                    softWrap = false,
+                )
+                Text(
+                    text = head.protocol.token,
+                    style = typography.bodySmall.copy(
+                        color = themeColors.textPrimary,
+                        fontWeight = FontWeight.Medium,
+                    ),
+                    maxLines = 1,
+                    softWrap = false,
+                )
+            }
+
             // Latency Metric
             Row(
                 verticalAlignment = Alignment.CenterVertically,

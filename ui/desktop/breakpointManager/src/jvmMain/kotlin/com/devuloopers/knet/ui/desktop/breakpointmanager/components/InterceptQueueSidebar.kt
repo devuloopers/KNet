@@ -288,13 +288,24 @@ private fun InterceptQueueItemCard(
                 overflow = TextOverflow.Ellipsis
             )
 
-            // Row 3: Timestamp
+            // Row 3: Transport protocol and source attribution remain visible in the queue.
+            val effectiveProtocol = item.candidate.response?.head?.protocol
+                ?: item.candidate.request.head.protocol
             Text(
-                text = formatTimestamp(item.candidate.startedAtEpochMillis),
+                text = buildString {
+                    append(formatTimestamp(item.candidate.startedAtEpochMillis))
+                    append("  ·  ")
+                    append(effectiveProtocol.token)
+                    append("  ·  ")
+                    append(item.candidate.origin.displayName)
+                },
                 style = typography.caption.copy(
                     color = themeColors.textSecondary.copy(alpha = 0.7f),
                     fontSize = 9.sp
-                )
+                ),
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }

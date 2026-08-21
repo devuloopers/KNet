@@ -36,6 +36,7 @@ object NetworkSpecMappers {
 
         return NetworkRequestSpec(
             method = this.method,
+            httpVersionPreference = this.httpVersionPreference,
             url = this.url,
             headers = headerPairs,
             queryParams = queryParamsList,
@@ -65,6 +66,7 @@ object NetworkSpecMappers {
             name = name,
             nameOrigin = nameOrigin,
             method = this.method,
+            httpVersionPreference = this.httpVersionPreference,
             url = this.url,
             queryParameters = queryParams.map { (name, value) ->
                 RequestQueryParameter(name = name, value = value)

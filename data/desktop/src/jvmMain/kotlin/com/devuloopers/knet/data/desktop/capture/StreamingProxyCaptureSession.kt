@@ -17,6 +17,7 @@ import com.devuloopers.knet.traffic.model.CaptureEvent
 import com.devuloopers.knet.traffic.model.ExchangeState
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.TrafficDirection
+import com.devuloopers.knet.traffic.model.TrafficOrigin
 import com.devuloopers.knet.traffic.model.body.BodyCaptureOutcome
 import com.devuloopers.knet.traffic.model.body.BodyFailure
 import com.devuloopers.knet.traffic.model.body.ContentEncoding
@@ -135,6 +136,7 @@ private class StreamingConnectionCapture(
         exchangeId: ExchangeId,
         request: RequestHead,
         occurredAtEpochMillis: Long,
+        origin: TrafficOrigin,
     ): ProxyExchangeCapture? {
         if (closed.get()) return null
         val exchange = StreamingExchangeCapture(
@@ -156,6 +158,7 @@ private class StreamingConnectionCapture(
                 exchangeId = exchangeId,
                 exchangeVersion = 0L,
                 request = request,
+                origin = origin,
             )
         )
         if (!admitted) return null

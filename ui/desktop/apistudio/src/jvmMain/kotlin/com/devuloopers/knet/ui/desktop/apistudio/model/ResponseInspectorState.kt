@@ -2,6 +2,7 @@ package com.devuloopers.knet.ui.desktop.apistudio.model
 
 import com.devuloopers.knet.domain.clientNetwork.model.NetworkFailureReason
 import com.devuloopers.knet.scripting.model.ScriptAssertion
+import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 
 /**
  * Single API Studio response-inspection state.
@@ -17,6 +18,7 @@ import com.devuloopers.knet.scripting.model.ScriptAssertion
  * @property testResults List of post-response assertion results.
  * @property consoleLogs List of console log output messages generated during script execution.
  * @property failureReason Diagnostic network failure reason if transport error occurred.
+ * @property protocol Actual response protocol reported by the outbound transport.
  */
 data class ResponseInspectorState(
     val statusCode: Int = 0,
@@ -29,6 +31,7 @@ data class ResponseInspectorState(
     val testResults: List<ScriptAssertion> = emptyList(),
     val consoleLogs: List<String> = emptyList(),
     val failureReason: NetworkFailureReason? = null,
+    val protocol: ApplicationProtocol? = null,
     val errorMessage: String? = null,
     val executionState: ExecutionState = ExecutionState.IDLE,
 ) {

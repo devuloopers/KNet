@@ -6,6 +6,7 @@ import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.IngressContext
 import com.devuloopers.knet.traffic.model.TrafficDirection
 import com.devuloopers.knet.traffic.model.TrafficEndpoint
+import com.devuloopers.knet.traffic.model.TrafficOrigin
 import com.devuloopers.knet.traffic.model.body.ContentEncoding
 import com.devuloopers.knet.traffic.model.http.RequestHead
 import com.devuloopers.knet.traffic.model.http.ResponseHead
@@ -36,6 +37,7 @@ interface ProxyConnectionCapture : AutoCloseable {
         exchangeId: ExchangeId,
         request: RequestHead,
         occurredAtEpochMillis: Long,
+        origin: TrafficOrigin = TrafficOrigin.ProxyClient,
     ): ProxyExchangeCapture?
 
     /** Closes the capture side output without closing the transport. */

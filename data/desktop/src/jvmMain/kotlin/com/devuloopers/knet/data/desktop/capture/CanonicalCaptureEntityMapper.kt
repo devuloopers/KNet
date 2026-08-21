@@ -15,6 +15,7 @@ import com.devuloopers.knet.traffic.model.HttpExchangeSnapshot
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.HttpResponseSnapshot
 import com.devuloopers.knet.traffic.model.IngressKind
+import com.devuloopers.knet.traffic.model.TrafficOrigin
 import com.devuloopers.knet.traffic.model.body.BodyCaptureOutcome
 import com.devuloopers.knet.traffic.model.body.BodyDigest
 import com.devuloopers.knet.traffic.model.body.BodyDigestAlgorithm
@@ -75,6 +76,7 @@ internal object CanonicalCaptureEntityMapper {
             port = target.port,
             pathAndQuery = target.pathAndQuery,
             protocol = event.request.protocol.token,
+            origin = event.origin.token,
             requestHeadersEncoded = encodeHeaders(event.request.headers),
             requestBodyId = null,
             responseProtocol = null,
@@ -156,6 +158,7 @@ internal object CanonicalCaptureEntityMapper {
             streamId = exchange.streamId?.let(::StreamId),
             request = request,
             response = response,
+            origin = TrafficOrigin.fromToken(exchange.origin),
             state = runCatching { ExchangeState.valueOf(exchange.state) }.getOrDefault(ExchangeState.FAILED),
             timings = ExchangeTimings(
                 dnsMillis = exchange.timingDnsMillis,

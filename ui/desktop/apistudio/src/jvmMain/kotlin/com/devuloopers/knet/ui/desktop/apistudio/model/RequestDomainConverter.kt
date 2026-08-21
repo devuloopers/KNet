@@ -40,6 +40,7 @@ object RequestDomainConverter {
             name = name,
             nameOrigin = nameOrigin,
             method = method,
+            httpVersionPreference = httpVersionPreference,
             url = this.url,
             queryParameters = queryParams.map {
                 RequestQueryParameter(it.key, it.value, it.enabled)
@@ -81,6 +82,7 @@ object RequestDomainConverter {
         return RequestEditorState(
             url = url,
             method = method,
+            httpVersionPreference = httpVersionPreference,
             queryParams = (queryParameters.ifEmpty {
                 com.devuloopers.knet.domain.util.UrlQueryStringParser.parseQueryParams(url).map { (name, value) ->
                     RequestQueryParameter(name, value)

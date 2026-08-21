@@ -29,9 +29,9 @@ internal val inspectionBindings: Module = module {
             listOf(
                 RuntimeCapability(
                     "http1-proxy",
-                    "HTTP/1.1 proxy",
+                    "HTTP/1.0 and HTTP/1.1 proxy",
                     CapabilityMaturity.SUPPORTED,
-                    "HttpOneStreamingSemanticsIntegrationTest"
+                    "HttpOneZeroIntegrationTest and HttpOneStreamingSemanticsIntegrationTest"
                 ),
                 RuntimeCapability(
                     "graphql-inspector",

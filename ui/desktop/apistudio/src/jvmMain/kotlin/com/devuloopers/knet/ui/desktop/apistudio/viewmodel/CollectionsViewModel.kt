@@ -30,7 +30,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
- * Owns collection-sidebar projections and collection CRUD dialogs.
+ * Owns collection-sidebar projections plus saved collection/request rename and deletion dialogs.
  *
  * Active request hydration, editor auto-save, execution, and draft promotion intentionally belong to
  * [ApiStudioViewModel], leaving this ViewModel unable to write partial editor snapshots.
@@ -112,7 +112,7 @@ class CollectionsViewModel(
     fun createCollection(collectionName: String) = launchPersistence(
         onSuccess = { _uiState.update { it.copy(isCreateCollectionDialogOpen = false) } }
     ) {
-            createCollectionUseCase.execute(collectionName)
+        createCollectionUseCase.execute(collectionName)
     }
 
     /** Deletes a collection and invokes [onDeleted] only after persistence succeeds. */

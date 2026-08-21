@@ -4,7 +4,7 @@ import com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarFolderItem
 import com.devuloopers.knet.ui.desktop.apistudio.sidebar.SidebarRequestItem
 
 /**
- * Top-level UI state DTO for API Studio Collections Sidebar and Save Request dialog.
+ * Top-level UI state DTO for the API Studio Collections sidebar and its rename dialogs.
  *
  * @property collections List of saved collection folder items observed from Room DB.
  * @property unsavedRequests List of active unsaved scratch session request items.

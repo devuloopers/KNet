@@ -1,6 +1,7 @@
 package com.devuloopers.knet.domain.clientNetwork.executor
 
 import com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult
+import com.devuloopers.knet.domain.clientNetwork.model.HttpVersionPreference
 import com.devuloopers.knet.domain.clientNetwork.model.OutboundRequestBody
 import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
 import com.devuloopers.knet.traffic.model.http.HttpMethod
@@ -20,6 +21,7 @@ interface HttpExecutor : AutoCloseable {
      * @param body Self-contained strongly typed request body.
      * @param auth Strongly-typed polymorphic authorization configuration (None, Bearer, Basic, ApiKey).
      * @param proxyPort Optional proxy port (routes through proxy when non-null; direct when null).
+     * @param httpVersionPreference Requested wire-version policy for this execution.
      * @return [ExecutionResult] containing response details.
      */
     suspend fun execute(
@@ -28,6 +30,7 @@ interface HttpExecutor : AutoCloseable {
         headers: Map<String, String> = emptyMap(),
         body: OutboundRequestBody = OutboundRequestBody.None,
         auth: ApiRequestAuth = ApiRequestAuth.None,
-        proxyPort: Int? = null
+        proxyPort: Int? = null,
+        httpVersionPreference: HttpVersionPreference = HttpVersionPreference.AUTO,
     ): ExecutionResult
 }

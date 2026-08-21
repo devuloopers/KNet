@@ -129,7 +129,8 @@ public class ExecuteApiStudioRequestUseCase(
             cookies = cookies,
             body = outboundBody,
             auth = request.auth,
-            proxyPort = proxyPort
+            proxyPort = proxyPort,
+            httpVersionPreference = request.httpVersionPreference,
         )
 
         val mimeType = MimeTypeUtils.extractFromHeaders(result.headers)

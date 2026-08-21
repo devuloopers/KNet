@@ -2101,6 +2101,39 @@ double-click reset. All interior boundaries remain visible at rest, and optional
 automatically move the terminal treatment to the new last column. UI-core, Traffic, and desktop product
 compilation plus `verifyArchitectureFoundation` pass. KNet was not launched.
 
+## Phase 102: Qualified HTTP/1.0 Proxy Support [COMPLETED]
+
+Started on 2026-08-21 to qualify HTTP/1.0 as a real proxy capability rather than relying on incidental Netty codec
+compatibility. The work remains localized to `:engine:proxy`: version-aware generated responses, downstream
+persistence rules, safe HTTP/1.1-to-HTTP/1.0 response framing, version-specific hop-by-hop header normalization,
+and deterministic failure behavior. Real socket-level integration coverage will exercise absolute-form requests
+without `Host`, content-length uploads, default close, explicit keep-alive, chunked upstream translation, HTTPS
+`CONNECT`, canonical capture identity, and generated errors. Shared traffic models, Room schema, application use
+cases, inspectors, breakpoints, connectivity mechanisms, and UI contracts remain unchanged. The runtime capability
+catalog and module documentation will be updated only after the qualification suite passes. KNet will not be
+launched.
+
+Completed on 2026-08-21. `:engine:proxy` now derives one downstream HTTP/1 policy at request admission and uses
+it consistently for origin forwarding, generated errors, CONNECT establishment, response framing, connection
+reuse, capture, and queued-request ownership. HTTP/1.0 defaults to close, supports explicit `Connection` and
+legacy `Proxy-Connection` keep-alive, removes proxy-only headers before forwarding, and rejects unsupported
+transfer-encoded HTTP/1.0 request bodies deterministically. Absolute-form requests remain routable without a
+`Host` field while KNet supplies the resolved authority to the origin.
+
+Origin responses are translated without buffering ordinary streams: HTTP/1.1 chunk markers and trailers are
+removed for HTTP/1.0, self-delimiting responses may retain explicit keep-alive, and otherwise EOF provides the
+message boundary. Complete aggregated responses receive a content length when safe. KNet-generated 400, 429,
+502, and CONNECT responses use the downstream request version, and terminal close decisions release rather than
+drain already-decoded requests.
+
+Focused semantics and real-listener tests qualify absolute-form GET, content-length POST, default close,
+explicit and legacy keep-alive, chunked translation, trailer removal, canonical HTTP/1.0 capture metadata,
+generated failures, and a real CONNECT plus TLS handshake and inner HTTPS request through KNet. The desktop
+runtime capability catalog now truthfully advertises qualified HTTP/1.0 and HTTP/1.1 support, and
+`:engine:proxy/MODULE.md` records the ownership boundary. The proxy module's unused testing-server and WebFlux
+test dependencies were removed so its qualification classpath remains focused and independently resolvable.
+KNet was not launched, stopped, or restarted.
+
 ## Phase 99: Refined Traffic Resize Affordance [COMPLETED]
 
 Started on 2026-08-21 after the stronger full-height header separators proved visually too similar to a rigid
@@ -2113,3 +2146,22 @@ full-height rule. Hover or drag animates it to a 2-by-22 dp accent tick using th
 reduced-motion policy. Its surrounding 8 dp full-height hit target, resize cursor, drag calculation, double-click
 reset, and table measurements are unchanged. UI-core and Traffic JVM compilation plus
 `verifyArchitectureFoundation` pass. KNet was not launched.
+
+## Phase 103: API Studio Exact HTTP-Version Execution [COMPLETED]
+
+Completed on 2026-08-21. API Studio now stores one strongly typed per-request version preference: `Auto`, exact
+`HTTP/1.0`, or exact `HTTP/1.1`. The value belongs to the canonical `SavedApiRequest`, crosses the shared
+`NetworkRequestSpec`, survives Room schema v20 and editor auto-save/restore, and reaches the existing execution use
+case without a UI-specific transport model. Captured HTTP/1.0 and HTTP/1.1 requests preserve their version when
+opened in API Studio; unsupported future captured protocols use `Auto` rather than pretending they can be forced.
+
+`Auto` and HTTP/1.1 retain the Ktor client. Exact HTTP/1.0 is isolated behind the `:core:http` platform transport
+boundary because CIO emits HTTP/1.1 request lines. Its JVM adapter supports origin-form direct requests,
+absolute-form HTTP proxy requests, HTTPS CONNECT plus TLS, content-length and close-delimited responses, chunked
+response decoding, informational responses, bounded bodies/headers, existing auth/body/cookie policies, redirects,
+timeouts, retries, cancellation, and direct fallback when the local proxy is unavailable. API Studio response
+inspection reports the actual response protocol independently of the requested preference.
+
+Wire-level tests assert the literal HTTP/1.0 request line, direct POST framing, proxy absolute-form routing,
+close-delimited response handling, and observed response version. Domain, application, mapper, ViewModel, restore,
+proxy semantics, real-listener HTTP/1.0, and real CONNECT/TLS tests cover the complete path. KNet was not launched.

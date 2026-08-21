@@ -9,6 +9,8 @@ package com.devuloopers.knet.domain.workspace.model
  * @property serialNumberDp Serial-number column width.
  * @property timestampDp Timestamp column width.
  * @property methodDp semantic method column width.
+ * @property protocolDp Effective wire-protocol column width.
+ * @property sourceDp Capture-origin column width.
  * @property hostDp Host column width.
  * @property pathDp Explicit Path width, or null to fill the remaining viewport width.
  * @property statusDp Status column width.
@@ -21,6 +23,8 @@ data class TrafficTableColumnWidths(
     val serialNumberDp: Float = 48f,
     val timestampDp: Float = 130f,
     val methodDp: Float = 76f,
+    val protocolDp: Float = 92f,
+    val sourceDp: Float = 112f,
     val hostDp: Float = 180f,
     val pathDp: Float? = null,
     val statusDp: Float = 84f,
@@ -33,6 +37,8 @@ data class TrafficTableColumnWidths(
             serialNumberDp,
             timestampDp,
             methodDp,
+            protocolDp,
+            sourceDp,
             hostDp,
             pathDp,
             statusDp,

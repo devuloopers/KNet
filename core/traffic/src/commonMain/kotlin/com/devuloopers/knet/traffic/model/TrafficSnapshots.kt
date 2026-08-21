@@ -104,6 +104,7 @@ public data class HttpResponseSnapshot(
  * @property streamId Optional multiplexed protocol stream identifier.
  * @property request Canonical request snapshot.
  * @property response Canonical response snapshot once observed.
+ * @property origin Feature or client that initiated the captured exchange.
  * @property state Monotonic exchange lifecycle state.
  * @property timings Observed exchange timing values.
  * @property startedAtEpochMillis Wall-clock start time used for display and persistence ordering.
@@ -114,6 +115,7 @@ public data class HttpExchangeSnapshot(
     public val streamId: StreamId? = null,
     public val request: HttpRequestSnapshot,
     public val response: HttpResponseSnapshot? = null,
+    public val origin: TrafficOrigin = TrafficOrigin.ProxyClient,
     public val state: ExchangeState,
     public val timings: ExchangeTimings = ExchangeTimings(),
     public val startedAtEpochMillis: Long,

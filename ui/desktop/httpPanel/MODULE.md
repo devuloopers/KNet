@@ -9,6 +9,8 @@ Provides reusable HTTP request/response inspection and editing panels for Traffi
 - Header, body, overview, timeline, GraphQL, and smart body presentation components.
 - HTTP-specific method colors and response-status badges shared by desktop HTTP consumers.
 - UI-level mapping from shared traffic data to bounded viewer state.
+- Response-summary presentation of the actual `ApplicationProtocol` observed by API Studio's transport, plus
+  Traffic Overview presentation of separate client/upstream protocol legs and canonical source attribution.
 - A single inspection-text projection that joins formatted `BodyFormat.JsonStream` records with visible
   boundaries before passing them to the existing read-only JSON editor.
 - The HTTP-panel Prettify header contribution and its custom-command routing. Request, response, and GraphQL

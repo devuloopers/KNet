@@ -32,6 +32,9 @@ import com.devuloopers.knet.domain.request.descriptor.RequestDescriptor
 import com.devuloopers.knet.domain.request.descriptor.RequestKindId
 import com.devuloopers.knet.domain.collection.model.SavedApiRequest
 import com.devuloopers.knet.ui.core.components.badge.KNetBadge
+import com.devuloopers.knet.ui.core.components.button.ButtonSize
+import com.devuloopers.knet.ui.core.components.button.ButtonVariant
+import com.devuloopers.knet.ui.core.components.button.KNetButton
 import com.devuloopers.knet.ui.core.components.button.KNetIconButton
 import com.devuloopers.knet.ui.core.components.divider.HorizontalDivider
 import com.devuloopers.knet.ui.core.components.input.InputFieldConfig
@@ -77,6 +80,7 @@ data class CollectionsSidebarActions(
     val onDeleteCollection: (SidebarFolderItem) -> Unit = {},
     val onRenameSavedRequest: (SidebarRequestItem) -> Unit = {},
     val onDeleteSavedRequest: (SidebarRequestItem) -> Unit = {},
+    val onSaveActiveRequest: () -> Unit = {},
     val onNewCollectionClicked: () -> Unit = {}
 )
 
@@ -88,6 +92,7 @@ fun CollectionsSidebar(
     state: com.devuloopers.knet.ui.desktop.apistudio.model.CollectionsState,
     actions: CollectionsSidebarActions = CollectionsSidebarActions(),
     selectedRequestId: String?,
+    canSaveActiveRequest: Boolean,
     modifier: Modifier = Modifier.width(256.dp)
 ) {
     val themeColors = KNetTheme.colors
@@ -104,7 +109,9 @@ fun CollectionsSidebar(
             onDeleteCollection = actions.onDeleteCollection,
             onRenameSavedRequest = actions.onRenameSavedRequest,
             onDeleteSavedRequest = actions.onDeleteSavedRequest,
+            onSaveActiveRequest = actions.onSaveActiveRequest,
             onNewCollectionClicked = actions.onNewCollectionClicked,
+            canSaveActiveRequest = canSaveActiveRequest,
             modifier = Modifier.fillMaxSize()
         )
         if (state.isLoading) {
@@ -144,7 +151,9 @@ private fun CollectionsSidebarContent(
     onDeleteCollection: (SidebarFolderItem) -> Unit = {},
     onRenameSavedRequest: (SidebarRequestItem) -> Unit = {},
     onDeleteSavedRequest: (SidebarRequestItem) -> Unit = {},
+    onSaveActiveRequest: () -> Unit = {},
     onNewCollectionClicked: () -> Unit = {},
+    canSaveActiveRequest: Boolean,
     modifier: Modifier = Modifier.width(256.dp)
 ) {
     val themeColors = KNetTheme.colors
@@ -180,12 +189,15 @@ private fun CollectionsSidebarContent(
                 style = typography.titleSmall.copy(color = themeColors.textPrimary, fontWeight = FontWeight.SemiBold)
             )
 
-            Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-                KNetIconButton(
-                    onClick = onNewCollectionClicked,
-                    icon = KNetIcons.Add,
-                    contentDescription = "New Collection",
-                    tint = themeColors.textSecondary
+            KNetButton(
+                onClick = onSaveActiveRequest,
+                variant = ButtonVariant.Secondary,
+                size = ButtonSize.Compact,
+                enabled = canSaveActiveRequest
+            ) {
+                Text(
+                    text = "Save",
+                    style = typography.labelMedium.copy(fontWeight = FontWeight.SemiBold)
                 )
             }
         }

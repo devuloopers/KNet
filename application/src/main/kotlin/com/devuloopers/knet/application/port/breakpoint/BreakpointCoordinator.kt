@@ -7,6 +7,7 @@ import com.devuloopers.knet.domain.rules.model.BreakpointTransportMatcher
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.HttpResponseSnapshot
+import com.devuloopers.knet.traffic.model.TrafficOrigin
 import com.devuloopers.knet.traffic.model.absoluteUrl
 import com.devuloopers.knet.traffic.model.http.HeaderField
 import kotlinx.coroutines.CompletableDeferred
@@ -66,6 +67,7 @@ public data class BreakpointCandidate(
     public val responseBody: BreakpointBody? = null,
     public val responseObservedBodyBytes: Long = responseBody?.size?.toLong() ?: 0L,
     public val retainedTransportBytes: Long = 0L,
+    public val origin: TrafficOrigin = TrafficOrigin.ProxyClient,
     public val startedAtEpochMillis: Long,
 ) {
     init {

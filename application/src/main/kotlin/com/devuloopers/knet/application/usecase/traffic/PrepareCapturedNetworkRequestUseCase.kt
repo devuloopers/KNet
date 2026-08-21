@@ -1,6 +1,7 @@
 package com.devuloopers.knet.application.usecase.traffic
 
 import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
+import com.devuloopers.knet.domain.clientNetwork.model.HttpVersionPreference
 import com.devuloopers.knet.domain.util.UrlQueryStringParser
 import com.devuloopers.knet.domain.util.decodeBodyToText
 import com.devuloopers.knet.traffic.id.ExchangeId
@@ -75,6 +76,7 @@ public class PrepareCapturedNetworkRequestUseCase(
         return PrepareCapturedNetworkRequestResult.Found(
             NetworkRequestSpec(
                 method = request.head.method,
+                httpVersionPreference = HttpVersionPreference.fromProtocol(request.head.protocol),
                 url = url,
                 headers = headers,
                 queryParams = UrlQueryStringParser.parseQueryParams(url),

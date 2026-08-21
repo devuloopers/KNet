@@ -10,6 +10,7 @@ import com.devuloopers.knet.domain.collection.model.RequestHeader
 import com.devuloopers.knet.domain.collection.model.RequestQueryParameter
 import com.devuloopers.knet.domain.collection.model.SavedApiRequest
 import com.devuloopers.knet.domain.clientNetwork.model.RawBodyFormat
+import com.devuloopers.knet.domain.clientNetwork.model.HttpVersionPreference
 import com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType
 import com.devuloopers.knet.scripting.model.ScriptLanguage
 import com.devuloopers.knet.storage.apistudio.entity.SavedRequestEntity
@@ -45,6 +46,7 @@ object RequestMapper {
         name = entity.name,
         nameOrigin = RequestNameOrigin.fromToken(entity.nameOrigin),
         method = HttpMethod.fromToken(entity.method),
+        httpVersionPreference = HttpVersionPreference.fromToken(entity.httpVersionPreference),
         url = entity.url,
         queryParameters = decodeQueryParameters(entity.queryParamsJson),
         headers = decodeHeaders(entity.headersJson),
@@ -88,6 +90,7 @@ object RequestMapper {
             name = request.name,
             nameOrigin = request.nameOrigin.name,
             method = request.method.token,
+            httpVersionPreference = request.httpVersionPreference.token,
             url = request.url,
             queryParamsJson = encodeQueryParameters(request.queryParameters),
             headersJson = encodeHeaders(request.headers),

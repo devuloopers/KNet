@@ -1,6 +1,7 @@
 package com.devuloopers.knet.domain.network.model
 
 import com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType
+import com.devuloopers.knet.domain.clientNetwork.model.HttpVersionPreference
 import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
 import com.devuloopers.knet.traffic.model.http.HttpMethod
 
@@ -22,6 +23,7 @@ import com.devuloopers.knet.traffic.model.http.HttpMethod
  */
 data class NetworkRequestSpec(
     val method: HttpMethod = HttpMethod.GET,
+    val httpVersionPreference: HttpVersionPreference = HttpVersionPreference.AUTO,
     val url: String = "",
     val headers: List<Pair<String, String>> = emptyList(),
     val queryParams: List<Pair<String, String>> = emptyList(),

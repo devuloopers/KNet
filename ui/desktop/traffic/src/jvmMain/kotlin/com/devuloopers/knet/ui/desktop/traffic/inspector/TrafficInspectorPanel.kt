@@ -15,6 +15,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.devuloopers.knet.domain.clientNetwork.model.HttpVersionPreference
 import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
 import com.devuloopers.knet.domain.util.UrlQueryStringParser
 import com.devuloopers.knet.traffic.model.absoluteUrl
@@ -117,7 +118,11 @@ fun TrafficInspectorPanel(
                                 url = targetUrl,
                                 statusCode = selectedTransaction.status,
                                 statusText = selectedTransaction.statusText,
-                                protocol = selectedTransaction.protocol.token,
+                                clientProtocol = exchange?.request?.head?.protocol?.token
+                                    ?: selectedTransaction.clientProtocol.token,
+                                upstreamProtocol = exchange?.response?.head?.protocol?.token
+                                    ?: selectedTransaction.upstreamProtocol?.token,
+                                origin = exchange?.origin?.displayName ?: selectedTransaction.origin.displayName,
                                 remoteIp = "",
                                 timestamp = selectedTransaction.formattedTimestamp,
                                 durationMs = selectedTransaction.formattedTime,
@@ -152,6 +157,9 @@ fun TrafficInspectorPanel(
                             NetworkRequestSpec(
                                 method = canonicalRequest?.head?.method
                                     ?: com.devuloopers.knet.traffic.model.http.HttpMethod.fromToken(selectedTransaction.method),
+                                httpVersionPreference = canonicalRequest?.head?.protocol
+                                    ?.let(HttpVersionPreference::fromProtocol)
+                                    ?: HttpVersionPreference.AUTO,
                                 url = targetUrl,
                                 headers = headerPairs,
                                 queryParams = UrlQueryStringParser.parseQueryParams(targetUrl),

@@ -3,6 +3,8 @@ package com.devuloopers.knet.core.http
 import com.devuloopers.knet.core.http.client.KNetApiClient
 import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor
 import com.devuloopers.knet.domain.clientNetwork.model.OutboundRequestBody
+import com.devuloopers.knet.traffic.model.TrafficAttributionHeader
+import com.devuloopers.knet.traffic.model.TrafficOrigin
 import com.devuloopers.knet.traffic.model.http.HttpMethod
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -94,5 +96,31 @@ class KNetApiClientTest {
         )
 
         assertEquals("customMethod", receivedMethod)
+    }
+
+    @Test
+    fun `API Studio attribution exists only on the local proxy hop`() = runTest {
+        val observedOrigins = mutableListOf<String?>()
+        val mockEngine = MockEngine { request ->
+            observedOrigins += request.headers[TrafficAttributionHeader.NAME]
+            respond(content = "ok", status = HttpStatusCode.OK, headers = headersOf())
+        }
+        val client = KNetApiClient(
+            captureOrigin = TrafficOrigin.ApiStudio,
+            customEngine = mockEngine,
+        )
+
+        client.executeDetailed(
+            url = "https://api.knet.dev/proxied",
+            headers = mapOf(TrafficAttributionHeader.NAME.lowercase() to "spoofed"),
+            proxyPort = 8080,
+        )
+        client.executeDetailed(
+            url = "https://api.knet.dev/direct",
+            headers = mapOf(TrafficAttributionHeader.NAME to "spoofed"),
+        )
+
+        assertEquals(listOf(TrafficOrigin.ApiStudio.token, null), observedOrigins)
+        client.close()
     }
 }

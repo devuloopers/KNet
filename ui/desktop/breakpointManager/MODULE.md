@@ -16,6 +16,8 @@ Owns breakpoint rule management and live intercepted-request/response presentati
   body; resolved-payload memory is bounded to one active transaction.
 - Off-main protocol-aware queue descriptors resolved from the same shared request pipeline as API Studio and
   Traffic; the queue retains the HTTP method only as transport truth and renders the semantic badge separately.
+- Explicit interception metadata for semantic type, client protocol, observed upstream response protocol,
+  payload format, and canonical source attribution; queue rows retain compact protocol/source context.
 - Explicit unchanged forwarding that avoids rebuilding wire bodies when no metadata/body edit occurred.
 
 ## Does not own
@@ -39,3 +41,6 @@ The live drawer exposes cohesive immutable state and action parameter objects. I
 candidate is published, shows preparation state without blocking metadata actions, and never decodes or
 formats payload bytes during Compose rendering. Queue descriptor preparation owns at most a one-mebibyte
 defensive body prefix per active request during resolution and retains only descriptor metadata afterward.
+The drawer never infers wire protocol from GraphQL, JSON, or another semantic format. It reads client and
+upstream protocol directly from canonical heads and source directly from `TrafficOrigin`, keeping future
+request kinds additive.

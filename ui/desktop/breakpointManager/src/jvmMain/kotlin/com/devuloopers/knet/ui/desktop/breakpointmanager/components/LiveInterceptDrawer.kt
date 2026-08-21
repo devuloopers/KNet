@@ -252,6 +252,26 @@ fun LiveInterceptDrawer(
                                     )
                                 }
 
+                                val descriptor = state.requestDescriptors[eventToRender.id]
+                                InterceptMetadataBadge(
+                                    label = "TYPE ${descriptor?.badgeLabel ?: request.head.method.token}",
+                                    color = themeColors.semantic.info,
+                                )
+                                InterceptMetadataBadge(
+                                    label = "CLIENT ${request.head.protocol.token}",
+                                    color = themeColors.textSecondary,
+                                )
+                                response?.head?.protocol?.let { upstreamProtocol ->
+                                    InterceptMetadataBadge(
+                                        label = "UPSTREAM ${upstreamProtocol.token}",
+                                        color = themeColors.textSecondary,
+                                    )
+                                }
+                                InterceptMetadataBadge(
+                                    label = "SOURCE ${candidate.origin.displayName}",
+                                    color = themeColors.semantic.success,
+                                )
+
                                 // Protocol / Payload Badge
                                 val contentTypeHeader = response?.head?.headers
                                     ?.firstOrNull { it.name.value.equals("Content-Type", ignoreCase = true) }?.value
@@ -266,23 +286,10 @@ fun LiveInterceptDrawer(
                                 }
 
                                 if (protocolHeaderLabel != null) {
-                                    Box(
-                                        modifier = Modifier
-                                            .background(protocolHeaderColor.copy(alpha = 0.18f), RoundedCornerShape(4.dp))
-                                            .border(1.dp, protocolHeaderColor.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
-                                            .padding(horizontal = 8.dp, vertical = 4.dp)
-                                    ) {
-                                        Text(
-                                            text = protocolHeaderLabel,
-                                            style = typography.codeSmall.copy(
-                                                color = protocolHeaderColor,
-                                                fontWeight = FontWeight.Bold,
-                                                fontSize = 10.sp
-                                            ),
-                                            maxLines = 1,
-                                            softWrap = false
-                                        )
-                                    }
+                                    InterceptMetadataBadge(
+                                        label = "PAYLOAD $protocolHeaderLabel",
+                                        color = protocolHeaderColor,
+                                    )
                                 }
                             }
 
@@ -487,5 +494,28 @@ fun LiveInterceptDrawer(
                     }
                 }
         }
+    }
+}
+
+/** Compact typed metadata chip used by the horizontally scrollable interception header. */
+@Composable
+private fun InterceptMetadataBadge(label: String, color: Color) {
+    val typography = KNetTheme.typography
+    Box(
+        modifier = Modifier
+            .background(color.copy(alpha = 0.18f), RoundedCornerShape(4.dp))
+            .border(1.dp, color.copy(alpha = 0.8f), RoundedCornerShape(4.dp))
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+    ) {
+        Text(
+            text = label,
+            style = typography.codeSmall.copy(
+                color = color,
+                fontWeight = FontWeight.Bold,
+                fontSize = 10.sp,
+            ),
+            maxLines = 1,
+            softWrap = false,
+        )
     }
 }

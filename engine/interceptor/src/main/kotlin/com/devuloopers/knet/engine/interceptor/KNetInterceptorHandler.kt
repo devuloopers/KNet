@@ -54,6 +54,7 @@ class KNetInterceptorHandler(
             return
         }
         val requestContext = mapBreakpointRequest(context, msg)
+        HttpMapper.removeCaptureAttribution(msg)
         context.channel().attr(ProxyChannelAttributes.REQUEST_CONTEXT).set(requestContext)
         if (msg !is FullHttpRequest) {
             // Keep every forwarded request in the response-order queue. Tracking only requests
@@ -72,6 +73,7 @@ class KNetInterceptorHandler(
                 exchangeId = requestContext.exchangeId,
                 request = requestContext.request.head,
                 occurredAtEpochMillis = requestContext.startedAtEpochMillis,
+                origin = requestContext.origin,
             )
         }.getOrNull()
         context.channel().attr(ProxyChannelAttributes.PREPARED_EXCHANGE).set(
@@ -90,6 +92,7 @@ class KNetInterceptorHandler(
                     requestBody = boundedBody(readableBodyBytes) { copyContent(msg) },
                     requestObservedBodyBytes = readableBodyBytes.toLong(),
                     retainedTransportBytes = readableBodyBytes.toLong(),
+                    origin = requestContext.origin,
                     startedAtEpochMillis = requestContext.startedAtEpochMillis,
                 )
             },
@@ -158,6 +161,7 @@ class KNetInterceptorHandler(
                         responseBody = boundedBody(readableBodyBytes) { copyContent(msg) },
                         responseObservedBodyBytes = readableBodyBytes.toLong(),
                         retainedTransportBytes = readableBodyBytes.toLong(),
+                        origin = requestContext.origin,
                         startedAtEpochMillis = requestContext.startedAtEpochMillis,
                     )
                 },

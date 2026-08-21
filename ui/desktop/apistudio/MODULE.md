@@ -18,8 +18,15 @@ inspection projection.
   continues to edit the real HTTP transport method.
 - A standalone, selection-stable method selector whose label and chevron form a centered compact group, plus a
   flexible URL authoring field in the request bar.
+- A per-document HTTP-version selector bound directly to the canonical authored request. It does not infer the
+  response version; response inspection displays the transport's observed `ApplicationProtocol`.
 - An execution action that changes from Send to an interactive loading Cancel control without weakening the
   shared button's default duplicate-submit protection.
+- Product-configured API Studio capture attribution emitted only when execution routes through the active KNet
+  proxy; direct execution remains private to API Studio and carries no attribution metadata.
+- One explicit Collections-header Save action for promoting the active draft, plus an independent Saved Collections
+  add action for creating an empty collection. Saved request edits continue to auto-save and do not expose a
+  redundant request-bar Save action.
 
 ## Does not own
 
@@ -34,7 +41,9 @@ the screen never coordinates hydration or persistence.
 ## Current state
 
 `ApiStudioViewModel` is the sole active-document owner. `CollectionsViewModel` observes sidebar data and performs
-collection CRUD only. Startup restoration loads one request directly; editor changes enter one serialized,
+saved collection creation/rename/delete operations. Draft promotion may also create a destination collection
+transactionally. Startup restoration loads one request directly; editor changes enter one
+serialized,
 latest-state auto-save actor; draft promotion is transactional and changes UI identity only after success.
 Generated titles are recomputed from immutable canonical request snapshots off the UI dispatcher and persisted
 with their ownership. Manual save-dialog or sidebar renames disable future automatic replacement.
@@ -42,5 +51,11 @@ Saved and unsaved sidebar rows derive their badge from the same canonical descri
 uses its actual method, GraphQL uses `GQL`, and unknown future kinds use the neutral feature accent without a
 sidebar code change.
 Execution is delegated to `:application` with cancellation revision checks so superseded results cannot publish.
+The response summary reports the protocol actually observed by the API Studio transport. When proxy routing is
+active, the captured Traffic exchange is additionally marked `API Studio`; ordinary phone/browser traffic remains
+`Proxy client`, and both use the same canonical capture path.
+The authored HTTP-version preference follows the same editor-to-domain, auto-save, restore, and execution path as
+method and URL; Traffic handoff preserves exact HTTP/1.0 or HTTP/1.1 captures and falls back to `AUTO` for protocols
+the current outbound client cannot force.
 The old phantom tab/environment models and feature-local execution/recording workflows have been removed.
 Assembly lives in `:products:desktop` under `di/apistudio`.

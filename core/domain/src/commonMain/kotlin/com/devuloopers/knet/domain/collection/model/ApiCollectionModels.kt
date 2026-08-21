@@ -3,6 +3,7 @@ package com.devuloopers.knet.domain.collection.model
 import com.devuloopers.knet.domain.apistudio.naming.RequestNameOrigin
 import com.devuloopers.knet.domain.clientNetwork.model.RawBodyFormat
 import com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType
+import com.devuloopers.knet.domain.clientNetwork.model.HttpVersionPreference
 import com.devuloopers.knet.domain.validation.UrlValidator
 import com.devuloopers.knet.scripting.model.ScriptAssertion
 import com.devuloopers.knet.scripting.model.ScriptLanguage
@@ -127,6 +128,7 @@ data class SavedApiRequest(
     val name: String,
     val nameOrigin: RequestNameOrigin = RequestNameOrigin.USER_DEFINED,
     val method: HttpMethod,
+    val httpVersionPreference: HttpVersionPreference = HttpVersionPreference.AUTO,
     val url: String,
     val queryParameters: List<RequestQueryParameter> = emptyList(),
     val headers: List<RequestHeader> = defaultHeaders(),

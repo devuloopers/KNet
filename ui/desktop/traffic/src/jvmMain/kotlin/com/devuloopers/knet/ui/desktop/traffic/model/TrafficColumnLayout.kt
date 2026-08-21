@@ -43,6 +43,8 @@ internal fun TrafficTableColumnWidths.withColumnWidth(
         TrafficColumn.SERIAL_NUMBER -> copy(serialNumberDp = width)
         TrafficColumn.TIMESTAMP -> copy(timestampDp = width)
         TrafficColumn.METHOD -> copy(methodDp = width)
+        TrafficColumn.PROTOCOL -> copy(protocolDp = width)
+        TrafficColumn.SOURCE -> copy(sourceDp = width)
         TrafficColumn.HOST -> copy(hostDp = width)
         TrafficColumn.PATH -> copy(pathDp = width)
         TrafficColumn.STATUS -> copy(statusDp = width)
@@ -59,6 +61,8 @@ internal fun TrafficTableColumnWidths.resetColumn(column: TrafficColumn): Traffi
         TrafficColumn.SERIAL_NUMBER -> copy(serialNumberDp = defaults.serialNumberDp)
         TrafficColumn.TIMESTAMP -> copy(timestampDp = defaults.timestampDp)
         TrafficColumn.METHOD -> copy(methodDp = defaults.methodDp)
+        TrafficColumn.PROTOCOL -> copy(protocolDp = defaults.protocolDp)
+        TrafficColumn.SOURCE -> copy(sourceDp = defaults.sourceDp)
         TrafficColumn.HOST -> copy(hostDp = defaults.hostDp)
         TrafficColumn.PATH -> copy(pathDp = null)
         TrafficColumn.STATUS -> copy(statusDp = defaults.statusDp)
@@ -106,6 +110,8 @@ private fun TrafficTableColumnWidths.storedWidthDp(column: TrafficColumn): Float
     TrafficColumn.SERIAL_NUMBER -> serialNumberDp
     TrafficColumn.TIMESTAMP -> timestampDp
     TrafficColumn.METHOD -> methodDp
+    TrafficColumn.PROTOCOL -> protocolDp
+    TrafficColumn.SOURCE -> sourceDp
     TrafficColumn.HOST -> hostDp
     TrafficColumn.PATH -> pathDp ?: TrafficColumn.PATH.widthLimits.minimumDp
     TrafficColumn.STATUS -> statusDp
@@ -119,6 +125,8 @@ private val TrafficColumn.widthLimits: TrafficColumnWidthLimits
         TrafficColumn.SERIAL_NUMBER -> TrafficColumnWidthLimits(40f, 120f)
         TrafficColumn.TIMESTAMP -> TrafficColumnWidthLimits(96f, 240f)
         TrafficColumn.METHOD -> TrafficColumnWidthLimits(64f, 160f)
+        TrafficColumn.PROTOCOL -> TrafficColumnWidthLimits(76f, 180f)
+        TrafficColumn.SOURCE -> TrafficColumnWidthLimits(88f, 240f)
         TrafficColumn.HOST -> TrafficColumnWidthLimits(120f, 520f)
         TrafficColumn.PATH -> TrafficColumnWidthLimits(160f, 1_200f)
         TrafficColumn.STATUS -> TrafficColumnWidthLimits(72f, 180f)

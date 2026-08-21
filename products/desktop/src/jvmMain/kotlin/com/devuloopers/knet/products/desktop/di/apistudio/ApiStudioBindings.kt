@@ -24,6 +24,7 @@ import com.devuloopers.knet.domain.collection.usecase.SaveRequestToCollectionUse
 import com.devuloopers.knet.domain.collection.usecase.SaveUnsavedRequestUseCase
 import com.devuloopers.knet.domain.collection.usecase.UpdateRequestInCollectionUseCase
 import com.devuloopers.knet.storage.database.KNetDatabase
+import com.devuloopers.knet.traffic.model.TrafficOrigin
 import com.devuloopers.knet.ui.desktop.apistudio.usecase.AutoSaveApiSessionUseCase
 import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.ApiStudioViewModel
 import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.CollectionsViewModel
@@ -38,6 +39,7 @@ internal val apiStudioBindings: Module = module {
         val certificates: CertificateRuntimeRepository = get()
         KNetApiClient(
             localProxyTlsTrust = LocalProxyTlsTrust(certificates.rootCertificateDer()),
+            captureOrigin = TrafficOrigin.ApiStudio,
         )
     }
     single<HttpExecutor> { get<KNetApiClient>() }

@@ -5,19 +5,11 @@ import com.devuloopers.knet.domain.collection.repository.CollectionsRepository
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-/**
- * Use case to create a new API collection suite.
- *
- * @param repository The repository managing collection data.
- */
+/** Creates an empty API collection that can receive saved requests later. */
 class CreateCollectionUseCase(
     private val repository: CollectionsRepository
 ) {
-    /**
-     * Executes creation of a new collection with the given name.
-     *
-     * @param collectionName The name of the collection to create.
-     */
+    /** Creates and persists a collection using a stable generated identifier. */
     @OptIn(ExperimentalUuidApi::class)
     suspend fun execute(collectionName: String) {
         val newCollection = ApiCollection(

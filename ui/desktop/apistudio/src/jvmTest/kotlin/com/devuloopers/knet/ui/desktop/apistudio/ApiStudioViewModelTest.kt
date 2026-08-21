@@ -21,6 +21,7 @@ import com.devuloopers.knet.connectivity.model.ProxyEndpointSnapshot
 import com.devuloopers.knet.connectivity.model.ProxyEndpointVersion
 import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor
 import com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult
+import com.devuloopers.knet.domain.clientNetwork.model.HttpVersionPreference
 import com.devuloopers.knet.domain.clientNetwork.model.OutboundRequestBody
 import com.devuloopers.knet.domain.clientNetwork.usecase.ExecuteClientApiRequestUseCase
 import com.devuloopers.knet.domain.clientNetwork.usecase.FormatResponseBodyUseCase
@@ -37,7 +38,9 @@ import com.devuloopers.knet.domain.collection.usecase.SaveRequestToCollectionUse
 import com.devuloopers.knet.domain.collection.usecase.SaveUnsavedRequestUseCase
 import com.devuloopers.knet.domain.collection.usecase.UpdateRequestInCollectionUseCase
 import com.devuloopers.knet.domain.payload.PayloadStrategyRegistry
+import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import com.devuloopers.knet.traffic.model.http.HttpMethod
+import com.devuloopers.knet.traffic.model.http.StandardApplicationProtocol
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.settings.model.ApplicationSettings
@@ -92,6 +95,7 @@ class TestHttpExecutor : HttpExecutor {
     var lastMethod: HttpMethod = HttpMethod.GET
     var lastHeaders: Map<String, String> = emptyMap()
     var lastAuth: ApiRequestAuth = ApiRequestAuth.None
+    var lastHttpVersionPreference: HttpVersionPreference = HttpVersionPreference.AUTO
 
     override suspend fun execute(
         url: String,
@@ -99,12 +103,14 @@ class TestHttpExecutor : HttpExecutor {
         headers: Map<String, String>,
         body: OutboundRequestBody,
         auth: ApiRequestAuth,
-        proxyPort: Int?
+        proxyPort: Int?,
+        httpVersionPreference: HttpVersionPreference,
     ): ExecutionResult {
         lastExecutedUrl = url
         lastMethod = method
         lastHeaders = headers
         lastAuth = auth
+        lastHttpVersionPreference = httpVersionPreference
 
         return ExecutionResult(
             statusCode = 200,
@@ -114,7 +120,8 @@ class TestHttpExecutor : HttpExecutor {
             responseBody = "{\"status\":\"success\"}",
             timings = ExchangeTimings(totalMillis = 42L),
             responseSizeBytes = 20L,
-            isSuccess = true
+            isSuccess = true,
+            protocol = ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_1_0),
         )
     }
 
@@ -334,16 +341,22 @@ class ApiStudioViewModelTest {
 
         viewModel.updateUrl("https://api.example.com/v1/users")
         viewModel.updateMethod(HttpMethod.POST)
+        viewModel.updateHttpVersionPreference(HttpVersionPreference.HTTP_1_0)
         viewModel.executeRequest()
         testDispatcher.scheduler.advanceUntilIdle()
 
         val state = viewModel.uiState.value
         assertEquals(ExecutionState.SUCCESS, state.executionState)
+        assertEquals(HttpVersionPreference.HTTP_1_0, testExecutor.lastHttpVersionPreference)
         val response = assertNotNull(state.responseInspection)
         assertEquals(200, response.statusCode)
         assertEquals("OK", response.statusText)
         assertEquals("application/json", response.headers["content-type"])
         assertTrue(response.responseBody.contains("\"status\": \"success\""))
+        assertEquals(
+            ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_1_0),
+            response.protocol,
+        )
     }
 
     @Test
@@ -507,7 +520,8 @@ class ApiStudioViewModelTest {
                 headers: Map<String, String>,
                 body: OutboundRequestBody,
                 auth: ApiRequestAuth,
-                proxyPort: Int?
+                proxyPort: Int?,
+                httpVersionPreference: HttpVersionPreference,
             ): ExecutionResult {
                 val reason = com.devuloopers.knet.domain.clientNetwork.model.NetworkFailureReason.HostNotFound(
                     host = "api.example.com",
@@ -751,7 +765,8 @@ class ApiStudioViewModelTest {
                 headers: Map<String, String>,
                 body: OutboundRequestBody,
                 auth: ApiRequestAuth,
-                proxyPort: Int?
+                proxyPort: Int?,
+                httpVersionPreference: HttpVersionPreference,
             ): ExecutionResult {
                 return ExecutionResult(
                     statusCode = 0,
@@ -792,6 +807,7 @@ class ApiStudioViewModelTest {
             id = "draft-restore",
             name = "Restored request",
             method = HttpMethod.POST,
+            httpVersionPreference = HttpVersionPreference.HTTP_1_0,
             url = "https://api.example.com/restored",
             cookies = listOf(com.devuloopers.knet.domain.collection.model.RequestCookie("session", "abc")),
             auth = ApiRequestAuth.Basic("user", "password"),
@@ -816,6 +832,7 @@ class ApiStudioViewModelTest {
         assertEquals(SessionContext.UnsavedDraft("draft-restore"), state.sessionContext)
         assertEquals("Restored request", state.activeDocumentTitle)
         assertEquals("https://api.example.com/restored", state.editorState.url)
+        assertEquals(HttpVersionPreference.HTTP_1_0, state.editorState.httpVersionPreference)
         assertEquals("abc", state.editorState.cookies.single().value)
         assertEquals("user", state.editorState.authState.basicUsername)
         assertEquals(com.devuloopers.knet.scripting.model.ScriptLanguage.KOTLIN, state.editorState.scriptLanguage)
@@ -953,7 +970,8 @@ class ApiStudioViewModelTest {
                 headers: Map<String, String>,
                 body: OutboundRequestBody,
                 auth: ApiRequestAuth,
-                proxyPort: Int?
+                proxyPort: Int?,
+                httpVersionPreference: HttpVersionPreference,
             ): ExecutionResult {
                 if (url.endsWith("/first")) {
                     try {

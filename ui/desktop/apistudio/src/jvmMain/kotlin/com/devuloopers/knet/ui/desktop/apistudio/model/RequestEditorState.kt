@@ -1,6 +1,7 @@
 package com.devuloopers.knet.ui.desktop.apistudio.model
 
 import com.devuloopers.knet.scripting.model.ScriptLanguage
+import com.devuloopers.knet.domain.clientNetwork.model.HttpVersionPreference
 import com.devuloopers.knet.scripting.model.ScriptPhase
 import com.devuloopers.knet.ui.desktop.apistudio.response.ResponseSubTab
 import com.devuloopers.knet.ui.desktop.httppanel.model.AuthState
@@ -27,6 +28,7 @@ object RequestEditorDefaults {
  *
  * @property url Current request target URL string.
  * @property method Strongly typed HTTP method.
+ * @property httpVersionPreference Requested HTTP wire-version policy.
  * @property queryParams Ordered request query-parameter rows including disabled rows.
  * @property headers Ordered request header rows including disabled rows.
  * @property cookies Ordered request cookie rows including disabled rows.
@@ -43,6 +45,7 @@ object RequestEditorDefaults {
 data class RequestEditorState(
     val url: String = "",
     val method: HttpMethod = HttpMethod.GET,
+    val httpVersionPreference: HttpVersionPreference = HttpVersionPreference.AUTO,
     val queryParams: List<KeyValueEntry> = emptyList(),
     val headers: List<KeyValueEntry> = RequestEditorDefaults.DEFAULT_HEADERS,
     val cookies: List<KeyValueEntry> = emptyList(),

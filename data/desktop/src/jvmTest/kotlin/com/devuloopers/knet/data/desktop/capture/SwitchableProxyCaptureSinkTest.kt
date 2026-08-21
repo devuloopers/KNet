@@ -99,6 +99,7 @@ class SwitchableProxyCaptureSinkTest {
             exchangeId: ExchangeId,
             request: RequestHead,
             occurredAtEpochMillis: Long,
+            origin: com.devuloopers.knet.traffic.model.TrafficOrigin,
         ): ProxyExchangeCapture {
             exchangeIds += exchangeId.value
             return RecordingExchange(exchangeId, responseExchangeIds)

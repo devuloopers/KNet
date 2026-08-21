@@ -3,6 +3,7 @@ package com.devuloopers.knet.storage.capture.entity
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import androidx.room.ColumnInfo
 
 /**
  * Durable metadata for one bounded canonical capture session.
@@ -107,6 +108,8 @@ data class CanonicalExchangeEntity(
     val port: Int?,
     val pathAndQuery: String,
     val protocol: String,
+    @ColumnInfo(defaultValue = "'proxy-client'")
+    val origin: String = "proxy-client",
     val requestHeadersEncoded: String,
     val requestBodyId: String?,
     val responseProtocol: String?,

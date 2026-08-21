@@ -80,6 +80,7 @@ public sealed interface CaptureEvent {
      * @property exchangeVersion First monotonic exchange version.
      * @property streamId Optional multiplexed stream identifier.
      * @property request Canonical request metadata without body bytes.
+     * @property origin Feature or client that initiated the exchange.
      */
     public data class ExchangeStarted(
         override val sessionId: CaptureSessionId,
@@ -90,6 +91,7 @@ public sealed interface CaptureEvent {
         public val exchangeVersion: Long,
         public val streamId: StreamId? = null,
         public val request: RequestHead,
+        public val origin: TrafficOrigin = TrafficOrigin.ProxyClient,
     ) : CaptureEvent {
         init {
             validateEventCoordinates(sequence, occurredAtEpochMillis)

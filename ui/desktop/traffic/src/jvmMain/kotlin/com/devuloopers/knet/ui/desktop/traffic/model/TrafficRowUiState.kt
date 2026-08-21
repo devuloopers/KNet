@@ -7,6 +7,7 @@ import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.traffic.model.ExchangeState
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.HttpExchangeSnapshot
+import com.devuloopers.knet.traffic.model.TrafficOrigin
 import com.devuloopers.knet.traffic.model.body.MessageBodyRef
 import com.devuloopers.knet.traffic.model.http.RequestTarget
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
@@ -63,6 +64,9 @@ data class TrafficRowUiState(
     val status: Int,
     val statusText: String,
     val protocol: ApplicationProtocol,
+    val clientProtocol: ApplicationProtocol = protocol,
+    val upstreamProtocol: ApplicationProtocol? = null,
+    val origin: TrafficOrigin = TrafficOrigin.ProxyClient,
     val timestamp: Long,
     val formattedTimestamp: String,
     val formattedTime: String,
@@ -112,6 +116,7 @@ internal fun PendingBreakpoint.toTrafficExchangeSnapshot(): HttpExchangeSnapshot
         id = candidate.exchangeId,
         request = candidate.request,
         response = candidate.response,
+        origin = candidate.origin,
         state = when (candidate.phase) {
             BreakpointPhase.REQUEST -> ExchangeState.REQUEST_COMPLETE
             BreakpointPhase.RESPONSE -> ExchangeState.RESPONSE_COMPLETE
@@ -145,6 +150,9 @@ internal fun HttpExchangeSnapshot.toTrafficRowUiState(sequenceNumber: Long = 0L)
                 else -> "Pending"
             },
         protocol = responseHead?.protocol ?: request.head.protocol,
+        clientProtocol = request.head.protocol,
+        upstreamProtocol = responseHead?.protocol,
+        origin = origin,
         timestamp = startedAtEpochMillis,
         formattedTimestamp = KNetDateTime.time(startedAtEpochMillis, includeMilliseconds = true),
         formattedTime = totalMillis?.let { "$it ms" } ?: "-",

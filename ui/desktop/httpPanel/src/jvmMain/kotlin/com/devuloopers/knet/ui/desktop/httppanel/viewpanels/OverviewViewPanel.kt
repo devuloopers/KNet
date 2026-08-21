@@ -83,7 +83,15 @@ fun OverviewViewPanel(
                     valueColor = themeColors.semantic.error
                 )
             }
-            OverviewGridRow(label = "Protocol", value = spec.protocol.ifEmpty { "HTTP/1.1" })
+            OverviewGridRow(
+                label = "Client Protocol",
+                value = spec.clientProtocol.ifEmpty { "Unknown" },
+            )
+            OverviewGridRow(
+                label = "Upstream Protocol",
+                value = spec.upstreamProtocol?.takeIf(String::isNotBlank) ?: "Pending",
+            )
+            OverviewGridRow(label = "Source", value = spec.origin.ifEmpty { "Proxy client" })
             if (spec.remoteIp.isNotBlank()) {
                 OverviewGridRow(label = "Remote IP", value = spec.remoteIp, isMono = true)
             }

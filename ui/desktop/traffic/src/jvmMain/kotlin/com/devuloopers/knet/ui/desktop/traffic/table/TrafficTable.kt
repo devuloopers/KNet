@@ -515,6 +515,28 @@ private fun TableRowItem(
             )
         }
 
+        // Effective response protocol, falling back to the client request protocol while pending.
+        if (columnVisibility.isVisible(TrafficColumn.PROTOCOL)) {
+            KNetCell(
+                text = item.upstreamProtocol?.token ?: item.clientProtocol.token,
+                modifier = Modifier
+                    .width(columnLayout.widthDp(TrafficColumn.PROTOCOL).dp)
+                    .padding(start = spacing.xs, end = spacing.md),
+                color = themeColors.textSecondary,
+            )
+        }
+
+        // Capture origin is independent from protocol and connectivity ingress.
+        if (columnVisibility.isVisible(TrafficColumn.SOURCE)) {
+            KNetCell(
+                text = item.origin.displayName,
+                modifier = Modifier
+                    .width(columnLayout.widthDp(TrafficColumn.SOURCE).dp)
+                    .padding(start = spacing.xs, end = spacing.md),
+                color = themeColors.textSecondary,
+            )
+        }
+
         // Host (Mandatory)
         Box(
             modifier = Modifier

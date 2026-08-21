@@ -13,6 +13,7 @@ import com.devuloopers.knet.domain.collection.model.RequestHeader
 import com.devuloopers.knet.domain.collection.model.RequestQueryParameter
 import com.devuloopers.knet.domain.collection.model.SavedApiRequest
 import com.devuloopers.knet.domain.clientNetwork.model.RawBodyFormat
+import com.devuloopers.knet.domain.clientNetwork.model.HttpVersionPreference
 import com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType
 import com.devuloopers.knet.scripting.model.ScriptLanguage
 import com.devuloopers.knet.traffic.model.http.HttpMethod
@@ -73,6 +74,7 @@ class MapperTest {
             name = "Create user",
             nameOrigin = RequestNameOrigin.GENERATED,
             method = HttpMethod.POST,
+            httpVersionPreference = HttpVersionPreference.HTTP_1_0,
             url = "https://api.knet.dev/users",
             queryParameters = listOf(
                 RequestQueryParameter("include", "profile;activity", isEnabled = false)

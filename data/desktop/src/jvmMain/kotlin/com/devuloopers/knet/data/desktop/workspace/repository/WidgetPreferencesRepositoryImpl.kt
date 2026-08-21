@@ -35,6 +35,8 @@ class WidgetPreferencesRepositoryImpl(
         private val keyTrafficSerialWidth = floatPreferencesKey("traffic_column_serial_width_dp")
         private val keyTrafficTimestampWidth = floatPreferencesKey("traffic_column_timestamp_width_dp")
         private val keyTrafficMethodWidth = floatPreferencesKey("traffic_column_method_width_dp")
+        private val keyTrafficProtocolWidth = floatPreferencesKey("traffic_column_protocol_width_dp")
+        private val keyTrafficSourceWidth = floatPreferencesKey("traffic_column_source_width_dp")
         private val keyTrafficHostWidth = floatPreferencesKey("traffic_column_host_width_dp")
         private val keyTrafficPathWidth = floatPreferencesKey("traffic_column_path_width_dp")
         private val keyTrafficStatusWidth = floatPreferencesKey("traffic_column_status_width_dp")
@@ -66,6 +68,8 @@ class WidgetPreferencesRepositoryImpl(
             preferences[keyTrafficSerialWidth] = columnWidths.serialNumberDp
             preferences[keyTrafficTimestampWidth] = columnWidths.timestampDp
             preferences[keyTrafficMethodWidth] = columnWidths.methodDp
+            preferences[keyTrafficProtocolWidth] = columnWidths.protocolDp
+            preferences[keyTrafficSourceWidth] = columnWidths.sourceDp
             preferences[keyTrafficHostWidth] = columnWidths.hostDp
             val pathWidthDp = columnWidths.pathDp
             if (pathWidthDp == null) {
@@ -107,6 +111,14 @@ class WidgetPreferencesRepositoryImpl(
                 methodDp = preferences.positiveWidthOrDefault(
                     keyTrafficMethodWidth,
                     defaultColumnWidths.methodDp,
+                ),
+                protocolDp = preferences.positiveWidthOrDefault(
+                    keyTrafficProtocolWidth,
+                    defaultColumnWidths.protocolDp,
+                ),
+                sourceDp = preferences.positiveWidthOrDefault(
+                    keyTrafficSourceWidth,
+                    defaultColumnWidths.sourceDp,
                 ),
                 hostDp = preferences.positiveWidthOrDefault(keyTrafficHostWidth, defaultColumnWidths.hostDp),
                 pathDp = preferences[keyTrafficPathWidth]?.takeIf { width -> width.isFinite() && width > 0f },

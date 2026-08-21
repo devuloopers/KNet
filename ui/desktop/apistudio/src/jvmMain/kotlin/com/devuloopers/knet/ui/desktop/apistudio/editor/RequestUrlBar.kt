@@ -28,6 +28,7 @@ import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.httppanel.theme.HttpMethodColors
 import com.devuloopers.knet.traffic.model.http.HttpMethod
+import com.devuloopers.knet.domain.clientNetwork.model.HttpVersionPreference
 
 private val httpMethods = listOf(
     HttpMethod.GET,
@@ -39,16 +40,18 @@ private val httpMethods = listOf(
     HttpMethod.OPTIONS
 )
 
+private val httpVersionPreferences = HttpVersionPreference.entries
+
 /**
  * High-density request authoring bar with a standalone method selector, flexible URL field, and request actions.
  *
  * @param method Active strongly typed HTTP method.
  * @param url Target request URL string.
+ * @param httpVersionPreference Requested HTTP wire-version policy.
  * @param onMethodChanged Callback when HTTP method selection changes.
  * @param onUrlChanged Callback when URL text input changes.
  * @param onSendClicked Callback when Send button is clicked.
  * @param onCancelClicked Callback when Cancel button is clicked during in-flight execution.
- * @param onSaveClicked Callback when Save button is clicked.
  * @param isExecuting Reactive execution loading toggle (renders inline spinner on Send button).
  * @param modifier Layout modifier.
  */
@@ -56,11 +59,12 @@ private val httpMethods = listOf(
 fun RequestUrlBar(
     method: HttpMethod,
     url: String,
+    httpVersionPreference: HttpVersionPreference,
     onMethodChanged: (HttpMethod) -> Unit,
+    onHttpVersionPreferenceChanged: (HttpVersionPreference) -> Unit,
     onUrlChanged: (String) -> Unit,
     onSendClicked: () -> Unit,
     onCancelClicked: (() -> Unit)? = null,
-    onSaveClicked: () -> Unit = {},
     isExecuting: Boolean = false,
     modifier: Modifier = Modifier
 ) {
@@ -111,27 +115,16 @@ fun RequestUrlBar(
             )
         )
 
-        // Action Save Button
-        KNetButton(
-            onClick = onSaveClicked,
-            variant = ButtonVariant.Secondary,
-            modifier = Modifier.height(40.dp)
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 8.dp)
-            ) {
-                Text(
-                    text = "Save",
-                    style = typography.titleMedium.copy(
-                        fontWeight = FontWeight.SemiBold
-                    ),
-                    maxLines = 1,
-                    softWrap = false
-                )
-            }
-        }
+        KNetDropdown(
+            selectedItem = httpVersionPreference,
+            items = httpVersionPreferences,
+            onItemSelected = onHttpVersionPreferenceChanged,
+            defaultItem = HttpVersionPreference.AUTO,
+            placeholder = HttpVersionPreference.AUTO.displayName,
+            size = KNetDropdownSize.Large,
+            centeredAnchorContent = true,
+            itemText = HttpVersionPreference::displayName,
+        )
 
         // Modern Action Send / Cancel Button using KNetButton with native loading state support
         KNetButton(

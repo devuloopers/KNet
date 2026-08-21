@@ -1,5 +1,15 @@
 package com.devuloopers.knet.engine.proxy.handler
 
+import com.devuloopers.knet.engine.proxy.capture.ProxyBodyReservation
+import com.devuloopers.knet.engine.proxy.capture.ProxyExchangeCapture
+import com.devuloopers.knet.traffic.id.ExchangeId
+import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTimings
+import com.devuloopers.knet.traffic.model.TrafficDirection
+import com.devuloopers.knet.traffic.model.body.ContentEncoding
+import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
+import com.devuloopers.knet.traffic.model.http.ResponseHead
+import com.devuloopers.knet.traffic.model.http.StandardApplicationProtocol
 import io.netty.channel.embedded.EmbeddedChannel
 import io.netty.handler.codec.http.DefaultFullHttpRequest
 import io.netty.handler.codec.http.DefaultFullHttpResponse
@@ -41,7 +51,7 @@ class KNetOutboundHandlerTest {
             KNetOutboundHandler(
                 clientChannel = clientChannel,
                 request = DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"),
-                onExchangeComplete = { completionCount += 1 },
+                onExchangeComplete = { _ -> completionCount += 1 },
             ),
         )
 
@@ -54,5 +64,67 @@ class KNetOutboundHandlerTest {
         response.release()
         clientChannel.finishAndReleaseAll()
         serverChannel.finishAndReleaseAll()
+    }
+
+    @Test
+    fun `captures upstream response protocol before adapting it for an HTTP 1_0 client`() {
+        val clientChannel = EmbeddedChannel()
+        val capture = RecordingExchangeCapture()
+        val serverChannel = EmbeddedChannel(
+            KNetOutboundHandler(
+                clientChannel = clientChannel,
+                request = DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/"),
+                capture = capture,
+            ),
+        )
+
+        serverChannel.writeInbound(
+            DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK),
+        )
+
+        val relayedResponse = clientChannel.readOutbound<DefaultFullHttpResponse>()
+        assertEquals(HttpVersion.HTTP_1_0, relayedResponse.protocolVersion())
+        assertEquals(
+            ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_1_1),
+            capture.response?.protocol,
+        )
+        relayedResponse.release()
+        clientChannel.finishAndReleaseAll()
+        serverChannel.finishAndReleaseAll()
+    }
+
+    private class RecordingExchangeCapture : ProxyExchangeCapture {
+        override val exchangeId: ExchangeId = ExchangeId("test-exchange")
+        var response: ResponseHead? = null
+
+        override fun tryReserveBody(
+            direction: TrafficDirection,
+            contentEncoding: ContentEncoding?,
+            requestedBytes: Int,
+        ): ProxyBodyReservation? = null
+
+        override fun completeBody(
+            direction: TrafficDirection,
+            observedBytes: Long,
+            occurredAtEpochMillis: Long,
+        ) = Unit
+
+        override fun cancelBody(
+            direction: TrafficDirection,
+            observedBytes: Long,
+            occurredAtEpochMillis: Long,
+            errorCode: String,
+        ) = Unit
+
+        override fun observeResponse(response: ResponseHead, occurredAtEpochMillis: Long) {
+            this.response = response
+        }
+
+        override fun terminate(
+            state: ExchangeState,
+            timings: ExchangeTimings,
+            occurredAtEpochMillis: Long,
+            errorCode: String?,
+        ) = Unit
     }
 }

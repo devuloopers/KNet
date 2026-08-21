@@ -1,5 +1,7 @@
 package com.devuloopers.knet.engine.proxy.mapper
 
+import com.devuloopers.knet.traffic.model.TrafficAttributionHeader
+import com.devuloopers.knet.traffic.model.TrafficOrigin
 import io.netty.buffer.Unpooled
 import io.netty.handler.codec.http.DefaultFullHttpRequest
 import io.netty.handler.codec.http.DefaultFullHttpResponse
@@ -49,5 +51,34 @@ class HttpMapperTest {
         assertEquals(200, responseHead.status.code)
         assertEquals("OK", responseHead.reasonPhrase)
         assertEquals("HTTP/1.1", responseHead.protocol.token)
+    }
+
+    @Test
+    fun `consumes API Studio attribution without exposing it as captured or upstream metadata`() {
+        val request = DefaultFullHttpRequest(
+            HttpVersion.HTTP_1_1,
+            HttpMethod.GET,
+            "/graphql",
+            Unpooled.EMPTY_BUFFER,
+        )
+        request.headers().set(TrafficAttributionHeader.NAME, TrafficOrigin.ApiStudio.token)
+
+        val context = HttpMapper.mapRequestContext(
+            nettyReq = request,
+            isSsl = true,
+            host = "api.knet.dev",
+            port = 443,
+            relativeUri = "/graphql",
+        )
+        HttpMapper.removeCaptureAttribution(request)
+
+        assertEquals(TrafficOrigin.ApiStudio, context.origin)
+        assertEquals(
+            false,
+            context.request.head.headers.any {
+                it.name.value.equals(TrafficAttributionHeader.NAME, ignoreCase = true)
+            },
+        )
+        assertEquals(false, request.headers().contains(TrafficAttributionHeader.NAME))
     }
 }

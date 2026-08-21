@@ -17,6 +17,8 @@ enum class TrafficColumn(
     SERIAL_NUMBER("Serial Number (#)", "#", isMandatory = false, isDefaultVisible = true),
     TIMESTAMP("Timestamp", "Timestamp", isMandatory = false, isDefaultVisible = true),
     METHOD("Method", "Method", isMandatory = true, isDefaultVisible = true),
+    PROTOCOL("Protocol", "Protocol", isMandatory = false, isDefaultVisible = false),
+    SOURCE("Source", "Source", isMandatory = false, isDefaultVisible = false),
     HOST("Host", "Host", isMandatory = true, isDefaultVisible = true),
     PATH("Path", "Path", isMandatory = true, isDefaultVisible = true),
     STATUS("Status", "Status", isMandatory = false, isDefaultVisible = true),

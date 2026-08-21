@@ -15,9 +15,9 @@ val grpcVersion: String = dependencyVersions.findVersion("grpc").get().requiredV
 dependencies {
     implementation(kotlin("reflect"))
     implementation(libs.spring.boot.starter.webflux)
-    implementation("org.springframework.boot:spring-boot-starter-graphql")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core")
+    implementation(libs.spring.boot.starter.graphql)
+    implementation(libs.kotlinx.coroutines.reactor)
+    implementation(libs.kotlinx.coroutines.core)
     implementation(libs.jackson.databind)
     implementation(libs.jackson.dataformat.cbor)
     implementation(libs.jackson.dataformat.msgpack)
@@ -28,8 +28,8 @@ dependencies {
     compileOnly("javax.annotation:javax.annotation-api:1.3.2")
 
     testImplementation(kotlin("test"))
-    testImplementation("org.springframework.boot:spring-boot-starter-test")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
+    testImplementation(libs.spring.boot.starter.test)
+    testImplementation(libs.kotlinx.coroutines.test)
 }
 
 protobuf {

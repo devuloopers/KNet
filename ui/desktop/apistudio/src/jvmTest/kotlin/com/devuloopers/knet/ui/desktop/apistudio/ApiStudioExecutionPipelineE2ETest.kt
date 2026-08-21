@@ -4,6 +4,7 @@ import com.devuloopers.knet.domain.request.descriptor.HttpRequestDescriptorStrat
 import com.devuloopers.knet.domain.request.usecase.DescribeRequestUseCase
 import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor
 import com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult
+import com.devuloopers.knet.domain.clientNetwork.model.HttpVersionPreference
 import com.devuloopers.knet.domain.clientNetwork.model.OutboundRequestBody
 import com.devuloopers.knet.domain.clientNetwork.usecase.ExecuteClientApiRequestUseCase
 import com.devuloopers.knet.domain.clientNetwork.usecase.FormatResponseBodyUseCase
@@ -48,7 +49,8 @@ class PipelineSpyHttpExecutor : HttpExecutor {
         headers: Map<String, String>,
         body: OutboundRequestBody,
         auth: ApiRequestAuth,
-        proxyPort: Int?
+        proxyPort: Int?,
+        httpVersionPreference: HttpVersionPreference,
     ): ExecutionResult {
         lastExecutedUrl = url
         lastProxyPort = proxyPort

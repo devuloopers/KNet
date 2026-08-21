@@ -7,6 +7,7 @@ import com.devuloopers.knet.application.usecase.apistudio.ExecuteApiStudioReques
 import com.devuloopers.knet.application.usecase.breakpoint.DropMatchingBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUseCase
 import com.devuloopers.knet.domain.apistudio.naming.RequestNameOrigin
+import com.devuloopers.knet.domain.clientNetwork.model.HttpVersionPreference
 import com.devuloopers.knet.domain.request.usecase.DescribeRequestUseCase
 import com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCase
 import com.devuloopers.knet.domain.collection.model.ApiCollection
@@ -188,6 +189,11 @@ class ApiStudioViewModel(
 
     /** Updates the active HTTP method. */
     fun updateMethod(method: HttpMethod) = mutateEditor { editor -> editor.copy(method = method) }
+
+    /** Updates the requested HTTP wire-version policy for this document. */
+    fun updateHttpVersionPreference(
+        preference: HttpVersionPreference,
+    ) = mutateEditor { editor -> editor.copy(httpVersionPreference = preference) }
 
     /** Updates request headers. */
     fun updateHeaders(headers: List<KeyValueEntry>) = mutateEditor { editor ->
@@ -515,6 +521,7 @@ class ApiStudioViewModel(
                             testResults = result.testResults,
                             consoleLogs = result.consoleLogs,
                             failureReason = result.result.failureReason,
+                            protocol = result.result.protocol,
                             errorMessage = result.result.errorMessage,
                             executionState = if (result.result.isSuccess) ExecutionState.SUCCESS else ExecutionState.ERROR
                         ),
