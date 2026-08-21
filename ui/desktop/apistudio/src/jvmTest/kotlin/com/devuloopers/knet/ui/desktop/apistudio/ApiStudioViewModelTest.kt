@@ -7,7 +7,13 @@ import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
 import com.devuloopers.knet.application.port.proxy.ProxyStartResult
 import com.devuloopers.knet.application.port.proxy.ProxyStopReason
 import com.devuloopers.knet.application.port.proxy.ProxyStopResult
+import com.devuloopers.knet.application.port.traffic.CaptureClearPreparation
+import com.devuloopers.knet.application.port.traffic.CapturePauseResult
+import com.devuloopers.knet.application.port.traffic.CaptureResumeResult
+import com.devuloopers.knet.application.port.traffic.CaptureSessionControlPort
+import com.devuloopers.knet.application.port.traffic.CaptureSessionState
 import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUseCase
+import com.devuloopers.knet.application.usecase.traffic.ObserveTrafficCaptureStateUseCase
 import com.devuloopers.knet.application.port.breakpoint.BreakpointControlPort
 import com.devuloopers.knet.application.port.breakpoint.BreakpointDecision
 import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
@@ -38,6 +44,7 @@ import com.devuloopers.knet.domain.collection.usecase.SaveRequestToCollectionUse
 import com.devuloopers.knet.domain.collection.usecase.SaveUnsavedRequestUseCase
 import com.devuloopers.knet.domain.collection.usecase.UpdateRequestInCollectionUseCase
 import com.devuloopers.knet.domain.payload.PayloadStrategyRegistry
+import com.devuloopers.knet.traffic.id.CaptureSessionId
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import com.devuloopers.knet.traffic.model.http.HttpMethod
 import com.devuloopers.knet.traffic.model.http.StandardApplicationProtocol
@@ -136,6 +143,35 @@ class TestHttpExecutor : HttpExecutor {
 fun createTestObserveProxyRuntimeStateUseCase(
     initialState: ProxyRuntimeState = ProxyRuntimeState.Stopped
 ): ObserveProxyRuntimeStateUseCase = ObserveProxyRuntimeStateUseCase(TestProxyRuntime(initialState))
+
+fun createTestObserveTrafficCaptureStateUseCase(
+    initialState: CaptureSessionState = CaptureSessionState.Inactive,
+): ObserveTrafficCaptureStateUseCase = ObserveTrafficCaptureStateUseCase(TestCaptureSessionControl(initialState))
+
+class TestCaptureSessionControl(
+    initialState: CaptureSessionState = CaptureSessionState.Inactive,
+) : CaptureSessionControlPort {
+    private val mutableState = MutableStateFlow(initialState)
+    override val captureState: StateFlow<CaptureSessionState> = mutableState
+
+    fun publish(state: CaptureSessionState) {
+        mutableState.value = state
+    }
+
+    override suspend fun pause(): CapturePauseResult {
+        mutableState.value = CaptureSessionState.Paused
+        return CapturePauseResult.PAUSED
+    }
+
+    override suspend fun resume(): CaptureResumeResult {
+        val sessionId = CaptureSessionId("test-capture-session")
+        mutableState.value = CaptureSessionState.Capturing(sessionId)
+        return CaptureResumeResult.Capturing(sessionId)
+    }
+
+    override suspend fun rotateForTrafficClear(): CaptureClearPreparation =
+        CaptureClearPreparation.CANONICAL_SESSION_INACTIVE
+}
 
 class TestProxyRuntime(
     initialState: ProxyRuntimeState = ProxyRuntimeState.Stopped,
@@ -295,6 +331,7 @@ class ApiStudioViewModelTest {
                 ioDispatcher = testDispatcher
             ),
             observeProxyRuntimeStateUseCase = createTestObserveProxyRuntimeStateUseCase(),
+            observeTrafficCaptureStateUseCase = createTestObserveTrafficCaptureStateUseCase(),
             getWorkspaceLayoutUseCase = getLayoutUseCase,
             updateWorkspaceLayoutUseCase = updateLayoutUseCase,
             observeApplicationSettingsUseCase = observeApplicationSettings,

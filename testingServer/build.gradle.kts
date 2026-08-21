@@ -11,6 +11,11 @@ plugins {
 val dependencyVersions = versionCatalogs.named("libs")
 val protobufVersion: String = dependencyVersions.findVersion("protobuf").get().requiredVersion
 val grpcVersion: String = dependencyVersions.findVersion("grpc").get().requiredVersion
+val coroutinesVersion: String = dependencyVersions.findVersion("kotlinx-coroutines").get().requiredVersion
+
+// Spring Boot manages coroutines transitively. Override its older BOM value so core, Reactor, and test artifacts
+// resolve to the repository's single version instead of producing binary-incompatible runtime combinations.
+extra["kotlin-coroutines.version"] = coroutinesVersion
 
 dependencies {
     implementation(kotlin("reflect"))
@@ -21,6 +26,9 @@ dependencies {
     implementation(libs.jackson.databind)
     implementation(libs.jackson.dataformat.cbor)
     implementation(libs.jackson.dataformat.msgpack)
+    implementation(libs.netty.all)
+    implementation(libs.bouncycastle.prov)
+    implementation(libs.bouncycastle.pkix)
     implementation(libs.grpc.netty.shaded)
     implementation(libs.grpc.protobuf)
     implementation(libs.grpc.services)

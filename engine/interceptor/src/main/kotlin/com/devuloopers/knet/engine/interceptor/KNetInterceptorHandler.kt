@@ -15,12 +15,15 @@ import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.HttpResponseSnapshot
 import com.devuloopers.knet.traffic.model.body.MessageBodyRef
 import io.netty.channel.ChannelDuplexHandler
+import io.netty.channel.ChannelFutureListener
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelPromise
 import io.netty.handler.codec.http.FullHttpRequest
 import io.netty.handler.codec.http.FullHttpResponse
 import io.netty.handler.codec.http.HttpMethod
 import io.netty.handler.codec.http.HttpRequest
+import io.netty.handler.codec.http2.DefaultHttp2ResetFrame
+import io.netty.handler.codec.http2.Http2Error
 import io.netty.util.ReferenceCountUtil
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -74,6 +77,7 @@ class KNetInterceptorHandler(
                 request = requestContext.request.head,
                 occurredAtEpochMillis = requestContext.startedAtEpochMillis,
                 origin = requestContext.origin,
+                streamId = context.channel().attr(ProxyChannelAttributes.STREAM_ID).get(),
             )
         }.getOrNull()
         context.channel().attr(ProxyChannelAttributes.PREPARED_EXCHANGE).set(
@@ -104,7 +108,7 @@ class KNetInterceptorHandler(
                     breakpointGate.releaseExchange(requestContext.exchangeId)
                     cancelPreparedCapture(context, REQUEST_REJECTED_ERROR)
                     ReferenceCountUtil.release(msg)
-                    context.close()
+                    rejectSelectedTransport(context)
                 }
 
                 BreakpointDecision.ContinueUnchanged -> {
@@ -144,7 +148,10 @@ class KNetInterceptorHandler(
                 return
             }
             val responseSnapshot = HttpResponseSnapshot(
-                head = HttpMapper.mapResponseHead(msg),
+                head = HttpMapper.mapResponseHead(
+                    msg,
+                    context.channel().attr(ProxyChannelAttributes.UPSTREAM_APPLICATION_PROTOCOL).get(),
+                ),
                 body = MessageBodyRef.Empty,
             )
             val readableBodyBytes = msg.content().readableBytes()
@@ -173,7 +180,7 @@ class KNetInterceptorHandler(
                     BreakpointDecision.Drop -> {
                         ReferenceCountUtil.release(msg)
                         promise.tryFailure(BreakpointResponseRejectedException())
-                        context.close()
+                        rejectSelectedTransport(context)
                     }
 
                     BreakpointDecision.ContinueUnchanged -> {
@@ -282,6 +289,16 @@ class KNetInterceptorHandler(
     private fun resumeReads(context: ChannelHandlerContext) {
         context.channel().config().isAutoRead = true
         context.read()
+    }
+
+    /** Rejects one HTTP/2 stream without terminating siblings; HTTP/1 retains connection-close semantics. */
+    private fun rejectSelectedTransport(context: ChannelHandlerContext) {
+        if (context.channel().attr(ProxyChannelAttributes.STREAM_ID).get() != null) {
+            context.writeAndFlush(DefaultHttp2ResetFrame(Http2Error.CANCEL))
+                .addListener(ChannelFutureListener.CLOSE)
+        } else {
+            context.close()
+        }
     }
 
     /** Cancels a capture that has not yet transferred to the forwarding handler. */

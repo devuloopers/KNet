@@ -21,6 +21,7 @@ import com.devuloopers.knet.traffic.model.absoluteUrl
 import com.devuloopers.knet.traffic.model.body.ContentEncoding
 import com.devuloopers.knet.traffic.model.http.RequestHead
 import com.devuloopers.knet.traffic.model.http.ResponseHead
+import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import io.netty.channel.embedded.EmbeddedChannel
 import io.netty.handler.codec.http.DefaultFullHttpResponse
 import io.netty.handler.codec.http.DefaultHttpRequest
@@ -132,6 +133,26 @@ class ApplicationBreakpointGateIntegrationTest {
         assertEquals(1, forwardedResponse.refCnt())
         forwardedResponse.release()
         assertEquals(0, response.refCnt())
+        channel.finishAndReleaseAll()
+    }
+
+    @Test
+    fun `response breakpoint exposes negotiated upstream application protocol`() {
+        val coordinator = coordinator(BreakpointPhase.RESPONSE)
+        val channel = EmbeddedChannel(KNetInterceptorHandler(coordinator))
+        val httpTwo = ApplicationProtocol.fromToken("h2")
+        channel.attr(ProxyChannelAttributes.UPSTREAM_APPLICATION_PROTOCOL).set(httpTwo)
+        channel.writeInbound(TestFixtures.createFullHttpRequest("https://api.example.com/v1/data"))
+        awaitCondition(channel) { channel.config().isAutoRead }
+        channel.readInbound<FullHttpRequest>().release()
+
+        channel.writeOutbound(DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK))
+        val pending = awaitPending(coordinator, channel)
+
+        assertEquals(httpTwo, pending.candidate.response?.head?.protocol)
+        runBlocking { coordinator.resolve(pending.id, BreakpointDecision.ContinueUnchanged) }
+        awaitCondition(channel) { channel.config().isAutoRead }
+        channel.readOutbound<FullHttpResponse>().release()
         channel.finishAndReleaseAll()
     }
 
@@ -308,6 +329,7 @@ class ApplicationBreakpointGateIntegrationTest {
             request: RequestHead,
             occurredAtEpochMillis: Long,
             origin: com.devuloopers.knet.traffic.model.TrafficOrigin,
+            streamId: com.devuloopers.knet.traffic.id.StreamId?,
         ): ProxyExchangeCapture {
             startedExchangeIds += exchangeId
             exchange.exchangeId = exchangeId

@@ -823,6 +823,7 @@ class ProxyCapacityBaselineTest {
                     request: RequestHead,
                     occurredAtEpochMillis: Long,
                     origin: com.devuloopers.knet.traffic.model.TrafficOrigin,
+                    streamId: com.devuloopers.knet.traffic.id.StreamId?,
                 ): ProxyExchangeCapture = object : ProxyExchangeCapture {
                     override val exchangeId: ExchangeId = exchangeId
 

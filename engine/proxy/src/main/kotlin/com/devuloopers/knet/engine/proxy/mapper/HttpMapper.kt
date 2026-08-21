@@ -34,10 +34,11 @@ object HttpMapper {
         host: String,
         port: Int,
         relativeUri: String,
+        protocolOverride: ApplicationProtocol? = null,
     ): ProxyRequestContext = ProxyRequestContext(
         exchangeId = ExchangeId(newExchangeId()),
         request = HttpRequestSnapshot(
-            head = mapRequestHead(nettyReq, isSsl, host, port, relativeUri),
+            head = mapRequestHead(nettyReq, isSsl, host, port, relativeUri, protocolOverride),
             body = MessageBodyRef.Empty,
         ),
         startedAtEpochMillis = Clock.System.now().toEpochMilliseconds(),
@@ -55,6 +56,7 @@ object HttpMapper {
         host: String,
         port: Int,
         relativeUri: String,
+        protocolOverride: ApplicationProtocol? = null,
     ): RequestHead = RequestHead(
         method = CanonicalHttpMethod.fromToken(nettyRequest.method().name()),
         target = RequestTarget.Absolute(
@@ -62,16 +64,19 @@ object HttpMapper {
             authority = Authority(host = host, port = port),
             pathAndQuery = relativeUri.takeIf { value -> value.startsWith('/') } ?: "/",
         ),
-        protocol = ApplicationProtocol.fromToken(nettyRequest.protocolVersion().text()),
-        headers = mapCanonicalHeaders(nettyRequest.headers()),
+        protocol = protocolOverride ?: ApplicationProtocol.fromToken(nettyRequest.protocolVersion().text()),
+        headers = mapHeaders(nettyRequest.headers()),
     )
 
     /** Maps transport response metadata into the shared canonical response head. */
-    fun mapResponseHead(nettyResponse: nHttpResponse): ResponseHead = ResponseHead(
-        protocol = ApplicationProtocol.fromToken(nettyResponse.protocolVersion().text()),
+    fun mapResponseHead(
+        nettyResponse: nHttpResponse,
+        protocolOverride: ApplicationProtocol? = null,
+    ): ResponseHead = ResponseHead(
+        protocol = protocolOverride ?: ApplicationProtocol.fromToken(nettyResponse.protocolVersion().text()),
         status = HttpStatus(nettyResponse.status().code()),
         reasonPhrase = nettyResponse.status().reasonPhrase().takeIf(String::isNotBlank),
-        headers = mapCanonicalHeaders(nettyResponse.headers()),
+        headers = mapHeaders(nettyResponse.headers()),
     )
 
     /** Returns the observed representation encoding without decoding body bytes. */
@@ -91,7 +96,8 @@ object HttpMapper {
     @OptIn(kotlin.uuid.ExperimentalUuidApi::class)
     private fun newExchangeId(): String = kotlin.uuid.Uuid.random().toString()
 
-    private fun mapCanonicalHeaders(headers: HttpHeaders): List<HeaderField> = headers
+    /** Maps an ordered Netty header block while removing KNet's private attribution field. */
+    fun mapHeaders(headers: HttpHeaders): List<HeaderField> = headers
         .asSequence()
         .filterNot { header -> header.key.equals(TrafficAttributionHeader.NAME, ignoreCase = true) }
         .map { header -> HeaderField(HeaderName(header.key), header.value) }

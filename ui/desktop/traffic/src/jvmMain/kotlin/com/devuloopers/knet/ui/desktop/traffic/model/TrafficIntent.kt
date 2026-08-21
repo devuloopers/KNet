@@ -8,7 +8,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
  */
 sealed interface TrafficIntent {
     data object StartCapture : TrafficIntent
-    data object StopCapture : TrafficIntent
+    data object PauseCapture : TrafficIntent
     data object ClearFeed : TrafficIntent
     data object ToggleAutoScroll : TrafficIntent
     data object DismissEngineError : TrafficIntent

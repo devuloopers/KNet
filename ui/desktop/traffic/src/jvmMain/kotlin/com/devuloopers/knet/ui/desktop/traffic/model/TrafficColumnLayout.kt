@@ -44,6 +44,7 @@ internal fun TrafficTableColumnWidths.withColumnWidth(
         TrafficColumn.TIMESTAMP -> copy(timestampDp = width)
         TrafficColumn.METHOD -> copy(methodDp = width)
         TrafficColumn.PROTOCOL -> copy(protocolDp = width)
+        TrafficColumn.STREAM -> copy(streamDp = width)
         TrafficColumn.SOURCE -> copy(sourceDp = width)
         TrafficColumn.HOST -> copy(hostDp = width)
         TrafficColumn.PATH -> copy(pathDp = width)
@@ -62,6 +63,7 @@ internal fun TrafficTableColumnWidths.resetColumn(column: TrafficColumn): Traffi
         TrafficColumn.TIMESTAMP -> copy(timestampDp = defaults.timestampDp)
         TrafficColumn.METHOD -> copy(methodDp = defaults.methodDp)
         TrafficColumn.PROTOCOL -> copy(protocolDp = defaults.protocolDp)
+        TrafficColumn.STREAM -> copy(streamDp = defaults.streamDp)
         TrafficColumn.SOURCE -> copy(sourceDp = defaults.sourceDp)
         TrafficColumn.HOST -> copy(hostDp = defaults.hostDp)
         TrafficColumn.PATH -> copy(pathDp = null)
@@ -111,6 +113,7 @@ private fun TrafficTableColumnWidths.storedWidthDp(column: TrafficColumn): Float
     TrafficColumn.TIMESTAMP -> timestampDp
     TrafficColumn.METHOD -> methodDp
     TrafficColumn.PROTOCOL -> protocolDp
+    TrafficColumn.STREAM -> streamDp
     TrafficColumn.SOURCE -> sourceDp
     TrafficColumn.HOST -> hostDp
     TrafficColumn.PATH -> pathDp ?: TrafficColumn.PATH.widthLimits.minimumDp
@@ -126,6 +129,7 @@ private val TrafficColumn.widthLimits: TrafficColumnWidthLimits
         TrafficColumn.TIMESTAMP -> TrafficColumnWidthLimits(96f, 240f)
         TrafficColumn.METHOD -> TrafficColumnWidthLimits(64f, 160f)
         TrafficColumn.PROTOCOL -> TrafficColumnWidthLimits(76f, 180f)
+        TrafficColumn.STREAM -> TrafficColumnWidthLimits(64f, 180f)
         TrafficColumn.SOURCE -> TrafficColumnWidthLimits(88f, 240f)
         TrafficColumn.HOST -> TrafficColumnWidthLimits(120f, 520f)
         TrafficColumn.PATH -> TrafficColumnWidthLimits(160f, 1_200f)

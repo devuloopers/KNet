@@ -18,6 +18,7 @@ enum class TrafficColumn(
     TIMESTAMP("Timestamp", "Timestamp", isMandatory = false, isDefaultVisible = true),
     METHOD("Method", "Method", isMandatory = true, isDefaultVisible = true),
     PROTOCOL("Protocol", "Protocol", isMandatory = false, isDefaultVisible = false),
+    STREAM("Stream ID", "Stream", isMandatory = false, isDefaultVisible = false),
     SOURCE("Source", "Source", isMandatory = false, isDefaultVisible = false),
     HOST("Host", "Host", isMandatory = true, isDefaultVisible = true),
     PATH("Path", "Path", isMandatory = true, isDefaultVisible = true),

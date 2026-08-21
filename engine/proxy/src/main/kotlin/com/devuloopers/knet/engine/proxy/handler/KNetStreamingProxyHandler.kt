@@ -18,11 +18,16 @@ import com.devuloopers.knet.engine.proxy.pipeline.PipelineHandlerNames
 import com.devuloopers.knet.engine.proxy.pipeline.SelectiveHttpObjectAggregator
 import com.devuloopers.knet.engine.proxy.ssl.ProxyTrustManager
 import com.devuloopers.knet.engine.proxy.timing.NetworkTimingCollector
+import com.devuloopers.knet.engine.proxy.upstream.HttpTwoNegotiationUnavailableException
+import com.devuloopers.knet.engine.proxy.upstream.HttpTwoUpstreamConnectionPool
+import com.devuloopers.knet.engine.proxy.upstream.HttpTwoUpstreamRoute
 import com.devuloopers.knet.traffic.id.ExchangeId
+import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.model.ExchangeState
 import com.devuloopers.knet.traffic.model.TrafficDirection
 import com.devuloopers.knet.traffic.model.body.ContentEncoding
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
+import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import io.netty.bootstrap.Bootstrap
 import io.netty.buffer.Unpooled
 import io.netty.channel.Channel
@@ -47,6 +52,8 @@ import io.netty.handler.codec.http.HttpResponseStatus
 import io.netty.handler.codec.http.HttpServerCodec
 import io.netty.handler.codec.http.HttpVersion
 import io.netty.handler.codec.http.LastHttpContent
+import io.netty.handler.codec.http2.Http2StreamFrameToHttpObjectCodec
+import io.netty.handler.codec.http2.HttpConversionUtil
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.timeout.ReadTimeoutHandler
 import io.netty.handler.timeout.WriteTimeoutHandler
@@ -59,6 +66,7 @@ import java.net.InetSocketAddress
 import java.net.URI
 import java.util.concurrent.Executor
 import java.util.concurrent.ForkJoinPool
+import java.util.concurrent.CompletionException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import com.devuloopers.knet.engine.proxy.tls.ServerTlsContextProvider
@@ -85,6 +93,10 @@ internal class KNetStreamingProxyHandler(
     private val certificateExecutor: Executor = ForkJoinPool.commonPool(),
     private val connectionCapture: ProxyConnectionCapture? = null,
     private val requiresFullResponseAggregation: (HttpRequestSnapshot) -> Boolean = { false },
+    private val streamId: StreamId? = null,
+    private val downstreamProtocol: ApplicationProtocol? = null,
+    private val httpTwoUpstreamPool: HttpTwoUpstreamConnectionPool? = null,
+    private val installTlsApplicationProtocol: ((io.netty.channel.ChannelPipeline) -> Unit)? = null,
 ) : ChannelInboundHandlerAdapter() {
 
     companion object {
@@ -202,6 +214,7 @@ internal class KNetStreamingProxyHandler(
             host = target.host,
             port = target.port,
             relativeUri = target.relativeUri,
+            protocolOverride = downstreamProtocol,
         )
         HttpMapper.removeCaptureAttribution(request)
         check(preparedExchange == null || preparedExchange.exchangeId == mappedRequest.exchangeId) {
@@ -212,6 +225,7 @@ internal class KNetStreamingProxyHandler(
             request = mappedRequest.request.head,
             occurredAtEpochMillis = mappedRequest.startedAtEpochMillis,
             origin = mappedRequest.origin,
+            streamId = streamId,
         )
         val outboundHead = DefaultHttpRequest(
             request.protocolVersion(),
@@ -257,6 +271,14 @@ internal class KNetStreamingProxyHandler(
         active.bodyQueue.addLast(content)
         if (content is LastHttpContent) {
             active.requestEndReceived = true
+            val trailers = HttpMapper.mapHeaders(content.trailingHeaders())
+            if (trailers.isNotEmpty()) {
+                active.capture?.observeTrailers(
+                    direction = TrafficDirection.CLIENT_TO_SERVER,
+                    trailers = trailers,
+                    occurredAtEpochMillis = Clock.System.now().toEpochMilliseconds(),
+                )
+            }
             active.capture?.completeBody(
                 direction = TrafficDirection.CLIENT_TO_SERVER,
                 observedBytes = active.observedRequestBytes,
@@ -299,7 +321,7 @@ internal class KNetStreamingProxyHandler(
         }
     }
 
-    /** Resolves DNS away from the event loop, then builds the one-shot upstream channel. */
+    /** Resolves DNS away from the event loop, then selects pooled HTTP/2 or one-shot HTTP/1. */
     private fun connectUpstream(context: ChannelHandlerContext, active: ActiveStreamingRequest) {
         proxyScope.launch {
             val resolvedHost = try {
@@ -311,60 +333,143 @@ internal class KNetStreamingProxyHandler(
 
             context.executor().execute {
                 if (activeRequest !== active || !context.channel().isActive) return@execute
-                active.timings.markTcpStart()
-                val upstreamLease = admissionController.tryAcquireUpstream()
-                if (upstreamLease == null) {
-                    failExchange(
-                        context,
-                        active,
-                        HttpResponseStatus.SERVICE_UNAVAILABLE,
-                        UPSTREAM_LIMIT_ERROR,
+                if (active.target.isSsl && httpTwoUpstreamPool != null) {
+                    connectHttpTwo(context, active, resolvedHost)
+                } else {
+                    connectHttpOne(context, active, resolvedHost)
+                }
+            }
+        }
+    }
+
+    /** Opens an isolated stream on a pooled TLS HTTP/2 parent. */
+    private fun connectHttpTwo(
+        context: ChannelHandlerContext,
+        active: ActiveStreamingRequest,
+        resolvedHost: String,
+    ) {
+        val pool = checkNotNull(httpTwoUpstreamPool)
+        active.timings.markTcpStart()
+        active.timings.markTlsStart()
+        val httpTwoRequest = createHttpTwoUpstreamRequest(active.outboundHead)
+        pool.openStream(
+            eventLoop = context.channel().eventLoop(),
+            route = HttpTwoUpstreamRoute(
+                host = active.target.host,
+                resolvedHost = resolvedHost,
+                port = active.target.port,
+            ),
+            streamInitializer = object : ChannelInitializer<Channel>() {
+                override fun initChannel(channel: Channel) {
+                    channel.pipeline().addLast(
+                        PipelineHandlerNames.READ_TIMEOUT,
+                        ReadTimeoutHandler(runtimePolicy.readIdleTimeoutMillis, TimeUnit.MILLISECONDS),
                     )
+                    channel.pipeline().addLast(
+                        PipelineHandlerNames.WRITE_TIMEOUT,
+                        WriteTimeoutHandler(runtimePolicy.writeIdleTimeoutMillis, TimeUnit.MILLISECONDS),
+                    )
+                    channel.pipeline().addLast(
+                        PipelineHandlerNames.HTTP2_STREAM_CODEC,
+                        Http2StreamFrameToHttpObjectCodec(false),
+                    )
+                    configureUpstreamResponsePipeline(
+                        downstreamContext = context,
+                        active = active,
+                        channel = channel,
+                        request = httpTwoRequest,
+                        upstreamProtocol = ApplicationProtocol.fromToken("HTTP/2"),
+                    )
+                }
+            },
+        ).whenComplete { stream, failure ->
+            context.executor().execute {
+                if (activeRequest !== active || !context.channel().isActive) {
+                    stream?.close()
+                    return@execute
+                }
+                active.timings.markTcpEnd()
+                active.timings.markTlsEnd()
+                if (failure == null && stream != null) {
+                    active.upstreamChannel = stream
+                    pumpRequestBody(context, active)
                     return@execute
                 }
 
-                val bootstrap = Bootstrap()
-                    .group(context.channel().eventLoop())
-                    .channel(NioSocketChannel::class.java)
-                    .option(ChannelOption.AUTO_READ, false)
-                    .option(ChannelOption.ALLOW_HALF_CLOSURE, true)
-                    .option(
-                        ChannelOption.CONNECT_TIMEOUT_MILLIS,
-                        runtimePolicy.connectTimeoutMillis.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+                val cause = unwrapCompletionFailure(failure)
+                if (cause is HttpTwoNegotiationUnavailableException) {
+                    connectHttpOne(context, active, resolvedHost)
+                } else {
+                    failExchange(
+                        context = context,
+                        active = active,
+                        status = HttpResponseStatus.BAD_GATEWAY,
+                        errorCode = UPSTREAM_CONNECT_ERROR,
+                        causeMessage = cause?.message,
                     )
-                    .resolver(NettyDnsResolver.resolverGroup)
-                    .handler(object : ChannelInitializer<SocketChannel>() {
-                        override fun initChannel(channel: SocketChannel) {
-                            configureUpstreamPipeline(context, active, channel)
-                        }
-                    })
+                }
+            }
+        }
+    }
 
-                val connectFuture = bootstrap.connect(resolvedHost, active.target.port)
-                connectFuture.addListener { future ->
-                    context.executor().execute {
-                        active.timings.markTcpEnd()
-                        if (future.isSuccess) {
-                            active.upstreamChannel = connectFuture.channel()
-                            connectFuture.channel().closeFuture().addListener { upstreamLease.close() }
-                            pumpRequestBody(context, active)
-                        } else {
-                            upstreamLease.close()
-                            failExchange(
-                                context = context,
-                                active = active,
-                                status = HttpResponseStatus.BAD_GATEWAY,
-                                errorCode = UPSTREAM_CONNECT_ERROR,
-                                causeMessage = future.cause()?.message,
-                            )
-                        }
-                    }
+    /** Creates the existing one-exchange HTTP/1 upstream channel. */
+    private fun connectHttpOne(
+        context: ChannelHandlerContext,
+        active: ActiveStreamingRequest,
+        resolvedHost: String,
+    ) {
+        active.timings.markTcpStart()
+        val upstreamLease = admissionController.tryAcquireUpstream()
+        if (upstreamLease == null) {
+            failExchange(
+                context,
+                active,
+                HttpResponseStatus.SERVICE_UNAVAILABLE,
+                UPSTREAM_LIMIT_ERROR,
+            )
+            return
+        }
+
+        val bootstrap = Bootstrap()
+            .group(context.channel().eventLoop())
+            .channel(NioSocketChannel::class.java)
+            .option(ChannelOption.AUTO_READ, false)
+            .option(ChannelOption.ALLOW_HALF_CLOSURE, true)
+            .option(
+                ChannelOption.CONNECT_TIMEOUT_MILLIS,
+                runtimePolicy.connectTimeoutMillis.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+            )
+            .resolver(NettyDnsResolver.resolverGroup)
+            .handler(object : ChannelInitializer<SocketChannel>() {
+                override fun initChannel(channel: SocketChannel) {
+                    configureHttpOneUpstreamPipeline(context, active, channel)
+                }
+            })
+
+        val connectFuture = bootstrap.connect(resolvedHost, active.target.port)
+        connectFuture.addListener { future ->
+            context.executor().execute {
+                active.timings.markTcpEnd()
+                if (future.isSuccess) {
+                    active.upstreamChannel = connectFuture.channel()
+                    connectFuture.channel().closeFuture().addListener { upstreamLease.close() }
+                    pumpRequestBody(context, active)
+                } else {
+                    upstreamLease.close()
+                    failExchange(
+                        context = context,
+                        active = active,
+                        status = HttpResponseStatus.BAD_GATEWAY,
+                        errorCode = UPSTREAM_CONNECT_ERROR,
+                        causeMessage = future.cause()?.message,
+                    )
                 }
             }
         }
     }
 
     /** Installs TLS, codecs, optional response-breakpoint aggregation, and response streaming. */
-    private fun configureUpstreamPipeline(
+    private fun configureHttpOneUpstreamPipeline(
         downstreamContext: ChannelHandlerContext,
         active: ActiveStreamingRequest,
         channel: SocketChannel,
@@ -404,6 +509,24 @@ internal class KNetStreamingProxyHandler(
             pipeline.addLast(PipelineHandlerNames.SSL, sslHandler)
         }
         pipeline.addLast(PipelineHandlerNames.HTTP_CODEC, HttpClientCodec())
+        configureUpstreamResponsePipeline(
+            downstreamContext = downstreamContext,
+            active = active,
+            channel = channel,
+            request = active.outboundHead,
+            upstreamProtocol = null,
+        )
+    }
+
+    /** Installs response aggregation/capture after either the HTTP/1 or HTTP/2 object bridge. */
+    private fun configureUpstreamResponsePipeline(
+        downstreamContext: ChannelHandlerContext,
+        active: ActiveStreamingRequest,
+        channel: Channel,
+        request: HttpRequest,
+        upstreamProtocol: ApplicationProtocol?,
+    ) {
+        val pipeline = channel.pipeline()
         if (requiresFullResponseAggregation(active.mappedRequest.request)) {
             pipeline.addLast(
                 PipelineHandlerNames.HTTP_AGGREGATOR,
@@ -417,10 +540,11 @@ internal class KNetStreamingProxyHandler(
             PipelineHandlerNames.OUTBOUND_HANDLER,
             KNetOutboundHandler(
                 clientChannel = downstreamContext.channel(),
-                request = active.outboundHead,
+                request = request,
                 timingCollector = active.timings,
                 capture = active.capture,
                 downstreamPolicy = active.downstreamPolicy,
+                upstreamProtocol = upstreamProtocol,
                 onRequestHeadWritten = { upstream ->
                     downstreamContext.executor().execute {
                         if (activeRequest === active) {
@@ -440,6 +564,42 @@ internal class KNetStreamingProxyHandler(
                 },
             ),
         )
+    }
+
+    /**
+     * Builds an HTTP/2-safe object-bridge request without mutating the HTTP/1 fallback head.
+     *
+     * Netty deliberately represents one HTTP/2 stream with HTTP/1-shaped objects. The extension
+     * scheme header supplies `:scheme`; connection-specific fields are removed before HPACK.
+     */
+    private fun createHttpTwoUpstreamRequest(source: HttpRequest): HttpRequest {
+        val request = DefaultHttpRequest(HttpVersion.HTTP_1_1, source.method(), source.uri())
+        request.headers().set(source.headers())
+        val nominatedConnectionHeaders = request.headers()
+            .getAll(HttpHeaderNames.CONNECTION)
+            .asSequence()
+            .flatMap { value -> value.split(',').asSequence() }
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .toList()
+        nominatedConnectionHeaders.forEach(request.headers()::remove)
+        request.headers().remove(HttpHeaderNames.CONNECTION)
+        request.headers().remove("Proxy-Connection")
+        request.headers().remove("Keep-Alive")
+        request.headers().remove(HttpHeaderNames.TRANSFER_ENCODING)
+        request.headers().remove(HttpHeaderNames.UPGRADE)
+        val teValue = request.headers().get(HttpHeaderNames.TE)
+        if (teValue != null && !teValue.equals(HttpHeaderValues.TRAILERS.toString(), ignoreCase = true)) {
+            request.headers().remove(HttpHeaderNames.TE)
+        }
+        request.headers().set(HttpConversionUtil.ExtensionHeaderNames.SCHEME.text(), "https")
+        return request
+    }
+
+    /** Unwraps only asynchronous completion wrappers while preserving the typed transport cause. */
+    private tailrec fun unwrapCompletionFailure(failure: Throwable?): Throwable? = when (failure) {
+        is CompletionException -> unwrapCompletionFailure(failure.cause)
+        else -> failure
     }
 
     /** Handles CONNECT without blocking certificate generation on the event loop. */
@@ -475,17 +635,22 @@ internal class KNetStreamingProxyHandler(
                         }
                         try {
                             val pipeline = context.pipeline()
-                            pipeline.remove(PipelineHandlerNames.HTTP_CODEC)
+                            pipeline.get(HttpServerCodec::class.java)?.let(pipeline::remove)
                             pipeline.get(PipelineHandlerNames.HTTP_AGGREGATOR)?.let { pipeline.remove(it) }
                             val sslHandler = sslContext.newHandler(context.alloc()).apply {
                                 setHandshakeTimeoutMillis(runtimePolicy.tlsHandshakeTimeoutMillis)
                             }
                             pipeline.addFirst(PipelineHandlerNames.SSL, sslHandler)
-                            pipeline.addAfter(
-                                PipelineHandlerNames.SSL,
-                                PipelineHandlerNames.HTTP_CODEC,
-                                HttpServerCodec(),
-                            )
+                            val tlsProtocolInstaller = installTlsApplicationProtocol
+                            if (tlsProtocolInstaller == null) {
+                                pipeline.addAfter(
+                                    PipelineHandlerNames.SSL,
+                                    PipelineHandlerNames.HTTP_CODEC,
+                                    HttpServerCodec(),
+                                )
+                            } else {
+                                tlsProtocolInstaller(pipeline)
+                            }
                             context.channel().config().isAutoRead = true
                         } catch (pipelineFailure: Exception) {
                             KNetLogger.error(STREAMING_TAG, pipelineFailure) {

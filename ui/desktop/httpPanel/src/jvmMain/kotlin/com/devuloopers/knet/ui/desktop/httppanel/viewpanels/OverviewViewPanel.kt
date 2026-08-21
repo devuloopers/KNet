@@ -92,6 +92,12 @@ fun OverviewViewPanel(
                 value = spec.upstreamProtocol?.takeIf(String::isNotBlank) ?: "Pending",
             )
             OverviewGridRow(label = "Source", value = spec.origin.ifEmpty { "Proxy client" })
+            spec.connectionId?.takeIf(String::isNotBlank)?.let { connectionId ->
+                OverviewGridRow(label = "Connection ID", value = connectionId, isMono = true)
+            }
+            spec.streamId?.let { streamId ->
+                OverviewGridRow(label = "Stream ID", value = streamId.toString(), isMono = true)
+            }
             if (spec.remoteIp.isNotBlank()) {
                 OverviewGridRow(label = "Remote IP", value = spec.remoteIp, isMono = true)
             }

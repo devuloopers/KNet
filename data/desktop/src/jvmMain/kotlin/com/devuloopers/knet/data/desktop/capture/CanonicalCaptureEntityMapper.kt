@@ -78,11 +78,13 @@ internal object CanonicalCaptureEntityMapper {
             protocol = event.request.protocol.token,
             origin = event.origin.token,
             requestHeadersEncoded = encodeHeaders(event.request.headers),
+            requestTrailersEncoded = null,
             requestBodyId = null,
             responseProtocol = null,
             responseStatusCode = null,
             responseReasonPhrase = null,
             responseHeadersEncoded = null,
+            responseTrailersEncoded = null,
             responseBodyId = null,
             timingDnsMillis = null,
             timingConnectMillis = null,
@@ -140,6 +142,7 @@ internal object CanonicalCaptureEntityMapper {
                 headers = decodeHeaders(exchange.requestHeadersEncoded),
             ),
             body = messageBody(exchange.requestBodyId, bodies),
+            trailers = decodeOptionalHeaders(exchange.requestTrailersEncoded),
         )
         val response = exchange.responseStatusCode?.let { statusCode ->
             HttpResponseSnapshot(
@@ -150,6 +153,7 @@ internal object CanonicalCaptureEntityMapper {
                     headers = decodeHeaders(exchange.responseHeadersEncoded ?: EMPTY_HEADERS),
                 ),
                 body = messageBody(exchange.responseBodyId, bodies),
+                trailers = decodeOptionalHeaders(exchange.responseTrailersEncoded),
             )
         }
         return HttpExchangeSnapshot(
@@ -200,6 +204,9 @@ internal object CanonicalCaptureEntityMapper {
         require(index == encoded.length) { "Canonical header encoding has trailing data." }
         return headers
     }
+
+    private fun decodeOptionalHeaders(encoded: String?): List<HeaderField> =
+        encoded?.let(::decodeHeaders).orEmpty()
 
     /** Converts a typed body outcome to a stable persistence token. */
     private fun outcomeToken(outcome: BodyCaptureOutcome): String = when (outcome) {

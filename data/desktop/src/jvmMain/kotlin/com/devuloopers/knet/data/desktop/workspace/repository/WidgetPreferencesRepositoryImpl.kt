@@ -36,6 +36,7 @@ class WidgetPreferencesRepositoryImpl(
         private val keyTrafficTimestampWidth = floatPreferencesKey("traffic_column_timestamp_width_dp")
         private val keyTrafficMethodWidth = floatPreferencesKey("traffic_column_method_width_dp")
         private val keyTrafficProtocolWidth = floatPreferencesKey("traffic_column_protocol_width_dp")
+        private val keyTrafficStreamWidth = floatPreferencesKey("traffic_column_stream_width_dp")
         private val keyTrafficSourceWidth = floatPreferencesKey("traffic_column_source_width_dp")
         private val keyTrafficHostWidth = floatPreferencesKey("traffic_column_host_width_dp")
         private val keyTrafficPathWidth = floatPreferencesKey("traffic_column_path_width_dp")
@@ -69,6 +70,7 @@ class WidgetPreferencesRepositoryImpl(
             preferences[keyTrafficTimestampWidth] = columnWidths.timestampDp
             preferences[keyTrafficMethodWidth] = columnWidths.methodDp
             preferences[keyTrafficProtocolWidth] = columnWidths.protocolDp
+            preferences[keyTrafficStreamWidth] = columnWidths.streamDp
             preferences[keyTrafficSourceWidth] = columnWidths.sourceDp
             preferences[keyTrafficHostWidth] = columnWidths.hostDp
             val pathWidthDp = columnWidths.pathDp
@@ -115,6 +117,10 @@ class WidgetPreferencesRepositoryImpl(
                 protocolDp = preferences.positiveWidthOrDefault(
                     keyTrafficProtocolWidth,
                     defaultColumnWidths.protocolDp,
+                ),
+                streamDp = preferences.positiveWidthOrDefault(
+                    keyTrafficStreamWidth,
+                    defaultColumnWidths.streamDp,
                 ),
                 sourceDp = preferences.positiveWidthOrDefault(
                     keyTrafficSourceWidth,

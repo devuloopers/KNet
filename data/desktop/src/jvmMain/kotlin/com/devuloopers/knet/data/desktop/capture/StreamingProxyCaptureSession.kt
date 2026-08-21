@@ -13,6 +13,7 @@ import com.devuloopers.knet.traffic.id.BodyId
 import com.devuloopers.knet.traffic.id.CaptureSessionId
 import com.devuloopers.knet.traffic.id.ConnectionId
 import com.devuloopers.knet.traffic.id.ExchangeId
+import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.model.CaptureEvent
 import com.devuloopers.knet.traffic.model.ExchangeState
 import com.devuloopers.knet.traffic.model.ExchangeTimings
@@ -23,6 +24,7 @@ import com.devuloopers.knet.traffic.model.body.BodyFailure
 import com.devuloopers.knet.traffic.model.body.ContentEncoding
 import com.devuloopers.knet.traffic.model.http.RequestHead
 import com.devuloopers.knet.traffic.model.http.ResponseHead
+import com.devuloopers.knet.traffic.model.http.HeaderField
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -137,6 +139,7 @@ private class StreamingConnectionCapture(
         request: RequestHead,
         occurredAtEpochMillis: Long,
         origin: TrafficOrigin,
+        streamId: StreamId?,
     ): ProxyExchangeCapture? {
         if (closed.get()) return null
         val exchange = StreamingExchangeCapture(
@@ -157,6 +160,7 @@ private class StreamingConnectionCapture(
                 occurredAtEpochMillis = occurredAtEpochMillis,
                 exchangeId = exchangeId,
                 exchangeVersion = 0L,
+                streamId = streamId,
                 request = request,
                 origin = origin,
             )
@@ -336,6 +340,30 @@ private class StreamingExchangeCapture(
                 exchangeId = exchangeId,
                 exchangeVersion = responseVersion,
                 response = response,
+            )
+        )
+    }
+
+    override fun observeTrailers(
+        direction: TrafficDirection,
+        trailers: List<HeaderField>,
+        occurredAtEpochMillis: Long,
+    ) {
+        if (trailers.isEmpty()) return
+        val trailerVersion = synchronized(lock) {
+            if (terminal) return
+            ++version
+        }
+        ingress.tryPublish(
+            CaptureEvent.TrailersObserved(
+                sessionId = sessionId,
+                connectionId = connectionId,
+                sequence = nextSequence(),
+                occurredAtEpochMillis = occurredAtEpochMillis,
+                exchangeId = exchangeId,
+                exchangeVersion = trailerVersion,
+                direction = direction,
+                trailers = trailers,
             )
         )
     }

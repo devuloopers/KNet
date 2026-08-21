@@ -39,7 +39,7 @@ data class TrafficToolbarState(
  */
 data class TrafficToolbarActions(
     val onStartCapture: () -> Unit = {},
-    val onStopCapture: () -> Unit = {},
+    val onPauseCapture: () -> Unit = {},
     val onClearFeed: () -> Unit = {},
     val onAutoScrollToggle: () -> Unit = {}
 )
@@ -82,12 +82,12 @@ fun TrafficToolbar(
                 ) {
                     Icon(
                         imageVector = Icons.Default.PlayArrow,
-                        contentDescription = "Start",
+                        contentDescription = "Start Capture",
                         tint = if (canStartCapture) themeColors.textPrimary else themeColors.textMuted,
                         modifier = Modifier.size(dimensions.iconSizeSmall)
                     )
                     Text(
-                        text = "Start",
+                        text = "Start Capture",
                         style = typography.titleSmall.copy(
                             color = if (canStartCapture) themeColors.textPrimary else themeColors.textMuted,
                             fontWeight = FontWeight.Medium
@@ -97,12 +97,12 @@ fun TrafficToolbar(
                     )
                 }
 
-                // Stop Button
+                // Pause Capture Button
                 Row(
                     modifier = Modifier
                         .clip(shapes.small)
                         .background(if (isCapturing) themeColors.semantic.errorContainer else themeColors.border)
-                        .clickable(enabled = isCapturing) { actions.onStopCapture() }
+                        .clickable(enabled = isCapturing) { actions.onPauseCapture() }
                         .padding(horizontal = spacing.md, vertical = spacing.xs)
                         .handCursor(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -117,7 +117,7 @@ fun TrafficToolbar(
                             )
                     )
                     Text(
-                        text = "Stop",
+                        text = "Pause Capture",
                         style = typography.titleSmall.copy(
                             color = if (isCapturing) themeColors.semantic.error else themeColors.textMuted,
                             fontWeight = FontWeight.Medium

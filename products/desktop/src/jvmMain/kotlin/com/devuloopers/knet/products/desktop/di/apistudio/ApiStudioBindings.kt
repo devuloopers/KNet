@@ -68,6 +68,7 @@ internal val apiStudioBindings: Module = module {
         ApiStudioViewModel(
             executeApiStudioRequestUseCase = get(),
             observeProxyRuntimeStateUseCase = get(),
+            observeTrafficCaptureStateUseCase = get(),
             getWorkspaceLayoutUseCase = get(),
             updateWorkspaceLayoutUseCase = get(),
             observeApplicationSettingsUseCase = get(),

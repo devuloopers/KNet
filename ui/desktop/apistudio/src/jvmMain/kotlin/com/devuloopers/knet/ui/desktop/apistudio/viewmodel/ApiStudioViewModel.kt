@@ -3,9 +3,11 @@ package com.devuloopers.knet.ui.desktop.apistudio.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
+import com.devuloopers.knet.application.port.traffic.CaptureSessionState
 import com.devuloopers.knet.application.usecase.apistudio.ExecuteApiStudioRequestUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.DropMatchingBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUseCase
+import com.devuloopers.knet.application.usecase.traffic.ObserveTrafficCaptureStateUseCase
 import com.devuloopers.knet.domain.apistudio.naming.RequestNameOrigin
 import com.devuloopers.knet.domain.clientNetwork.model.HttpVersionPreference
 import com.devuloopers.knet.domain.request.usecase.DescribeRequestUseCase
@@ -53,12 +55,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -77,6 +77,7 @@ import kotlin.uuid.Uuid
  *
  * @param executeApiStudioRequestUseCase Executes the authored request including scripts and response formatting.
  * @param observeProxyRuntimeStateUseCase Observes the currently routable local proxy endpoint.
+ * @param observeTrafficCaptureStateUseCase Observes whether API Studio requests should enter capture.
  * @param getWorkspaceLayoutUseCase Reads persisted API Studio workspace selection and view preferences.
  * @param updateWorkspaceLayoutUseCase Atomically updates API Studio workspace selection and view preferences.
  * @param observeApplicationSettingsUseCase Reads process-level defaults used for new request documents.
@@ -93,6 +94,7 @@ import kotlin.uuid.Uuid
 class ApiStudioViewModel(
     private val executeApiStudioRequestUseCase: ExecuteApiStudioRequestUseCase,
     observeProxyRuntimeStateUseCase: ObserveProxyRuntimeStateUseCase,
+    observeTrafficCaptureStateUseCase: ObserveTrafficCaptureStateUseCase,
     private val getWorkspaceLayoutUseCase: GetWorkspaceLayoutUseCase,
     updateWorkspaceLayoutUseCase: UpdateWorkspaceLayoutUseCase,
     private val observeApplicationSettingsUseCase: ObserveApplicationSettingsUseCase,
@@ -151,16 +153,8 @@ class ApiStudioViewModel(
         onFailure = ::publishPersistenceFailure,
     )
 
-    private val activeProxyPort: StateFlow<Int?> = observeProxyRuntimeStateUseCase.execute()
-        .map { runtimeState ->
-            (runtimeState as? ProxyRuntimeState.Running)
-                ?.handle
-                ?.endpoints
-                ?.endpoints
-                ?.firstOrNull()
-                ?.port
-        }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+    private val proxyRuntimeState = observeProxyRuntimeStateUseCase.execute()
+    private val captureSessionState = observeTrafficCaptureStateUseCase.execute()
 
     init {
         restoreWorkspaceDocument()
@@ -496,7 +490,7 @@ class ApiStudioViewModel(
 
         executionJob = viewModelScope.launch {
             try {
-                val result = executeApiStudioRequestUseCase.execute(executionDocument, activeProxyPort.value)
+                val result = executeApiStudioRequestUseCase.execute(executionDocument, activeProxyPort())
                 coroutineContext.ensureActive()
                 if (requestExecutionRevision != executionRevision) return@launch
 
@@ -547,6 +541,13 @@ class ApiStudioViewModel(
                 }
             }
         }
+    }
+
+    /** Returns a local route only for a synchronously observed active capture session. */
+    private fun activeProxyPort(): Int? {
+        if (captureSessionState.value !is CaptureSessionState.Capturing) return null
+        return (proxyRuntimeState.value as? ProxyRuntimeState.Running)
+            ?.handle?.endpoints?.endpoints?.firstOrNull()?.port
     }
 
     /** Cancels only the currently active execution and prevents it from publishing a stale result. */

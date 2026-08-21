@@ -12,5 +12,6 @@ dependencies {
 
     testImplementation(kotlin("test-junit"))
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(project(":core:http"))
     testImplementation(project(":engine:certificate"))
 }

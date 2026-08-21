@@ -5,6 +5,7 @@ import com.devuloopers.knet.application.port.traffic.CaptureSessionControlPort
 import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUseCase
 import com.devuloopers.knet.application.usecase.proxy.StartLoopbackProxyUseCase
 import com.devuloopers.knet.application.usecase.proxy.StopProxyRuntimeUseCase
+import com.devuloopers.knet.application.usecase.traffic.ObserveTrafficCaptureStateUseCase
 import com.devuloopers.knet.data.desktop.capture.CanonicalCaptureSessionFactory
 import com.devuloopers.knet.data.desktop.proxy.repository.DesktopProxyRuntimeAdapter
 import com.devuloopers.knet.data.desktop.runtime.CertificateRuntimeRepository
@@ -45,4 +46,5 @@ internal val proxyBindings: Module = module {
     factory { StartLoopbackProxyUseCase(get()) }
     factory { StopProxyRuntimeUseCase(get()) }
     factory { ObserveProxyRuntimeStateUseCase(get()) }
+    factory { ObserveTrafficCaptureStateUseCase(get()) }
 }

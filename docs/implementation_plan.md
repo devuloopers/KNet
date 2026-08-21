@@ -237,7 +237,7 @@ Exit criteria: direct and relay paths pass the same proxy conformance suite; rev
 
 No Android/iOS application, VPN packet adapter, direct tunnel, or relay carrier is added without a real platform target and product/security requirements. The shared traffic model, pairing identity, authenticated gateway, application ports, and connectivity registry are complete, so activating this phase is additive. Runtime capability status remains `UNAVAILABLE` for Mobile Companion, VPN, and Relay.
 
-## Phase 17: Protocol Transports and Inspectors [OPTIONAL INCREMENTS — SSE COMPLETED]
+## Phase 17: Protocol Transports and Inspectors [OPTIONAL INCREMENTS — SSE COMPLETE, HTTP/2 EXPERIMENTAL]
 
 Deliver independently after Phases 11 and 13 establish the transport and inspector seams:
 
@@ -249,7 +249,11 @@ Deliver independently after Phases 11 and 13 establish the transport and inspect
 
 Each increment must satisfy conformance, failure, backpressure, body-limit, lifecycle, and long-run tests before being marked Supported.
 
-The SSE semantic-inspection increment is complete with an end-to-end test. GraphQL was completed in Phase 13. WebSocket transport, HTTP/2, gRPC, and HTTP/3 are deliberately not marked complete or Supported; each remains an independent future increment requiring its real transport and conformance suite.
+The SSE semantic-inspection increment is complete with an end-to-end test. GraphQL was completed in Phase 13.
+HTTP/2 is implemented end to end as an `EXPERIMENTAL` capability with local real-socket tests; its remaining
+cross-platform/device and release-soak gates are tracked in `docs/http2_target_and_implementation_plan.md`.
+WebSocket transport, gRPC semantic inspection, and HTTP/3 remain independent future increments. HTTP/2 is not
+marked `SUPPORTED` until its external qualification matrix passes.
 
 ## Phase 18: Performance, Soak, Security, and Release Gates [STANDARD GATE COMPLETED]
 

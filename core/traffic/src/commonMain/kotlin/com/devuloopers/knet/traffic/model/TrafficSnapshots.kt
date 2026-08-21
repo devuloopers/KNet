@@ -7,6 +7,7 @@ import com.devuloopers.knet.traffic.model.body.MessageBodyRef
 import com.devuloopers.knet.traffic.model.http.RequestHead
 import com.devuloopers.knet.traffic.model.http.RequestTarget
 import com.devuloopers.knet.traffic.model.http.ResponseHead
+import com.devuloopers.knet.traffic.model.http.HeaderField
 
 /**
  * Monotonic lifecycle state of one logical request/response exchange.
@@ -60,10 +61,12 @@ public data class ExchangeTimings(
  *
  * @property head Request method, target, protocol, and ordered headers.
  * @property body Body relationship represented without embedded payload bytes.
+ * @property trailers Ordered request trailers observed after the body.
  */
 public data class HttpRequestSnapshot(
     public val head: RequestHead,
     public val body: MessageBodyRef = MessageBodyRef.Empty,
+    public val trailers: List<HeaderField> = emptyList(),
 )
 
 /** Renders the request target as the most complete URL/authority form available. */
@@ -87,10 +90,12 @@ public fun HttpRequestSnapshot.absoluteUrl(): String = when (val target = head.t
  *
  * @property head Response protocol, status, reason, and ordered headers.
  * @property body Body relationship represented without embedded payload bytes.
+ * @property trailers Ordered response trailers observed after the body.
  */
 public data class HttpResponseSnapshot(
     public val head: ResponseHead,
     public val body: MessageBodyRef = MessageBodyRef.Empty,
+    public val trailers: List<HeaderField> = emptyList(),
 )
 
 /**

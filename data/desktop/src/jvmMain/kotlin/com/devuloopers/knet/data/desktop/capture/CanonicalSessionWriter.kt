@@ -250,6 +250,21 @@ class CanonicalSessionWriter private constructor(
                 reasonPhrase = event.response.reasonPhrase,
                 headersEncoded = CanonicalCaptureEntityMapper.encodeHeaders(event.response.headers),
             )
+            is CaptureEvent.TrailersObserved -> {
+                val encoded = CanonicalCaptureEntityMapper.encodeHeaders(event.trailers)
+                when (event.direction) {
+                    TrafficDirection.CLIENT_TO_SERVER -> dao.updateRequestTrailers(
+                        event.exchangeId.value,
+                        event.exchangeVersion,
+                        encoded,
+                    )
+                    TrafficDirection.SERVER_TO_CLIENT -> dao.updateResponseTrailers(
+                        event.exchangeId.value,
+                        event.exchangeVersion,
+                        encoded,
+                    )
+                }
+            }
             is CaptureEvent.BodyCaptured -> persistBody(event)
             is CaptureEvent.ExchangeTerminated -> dao.terminateExchange(
                 exchangeId = event.exchangeId.value,

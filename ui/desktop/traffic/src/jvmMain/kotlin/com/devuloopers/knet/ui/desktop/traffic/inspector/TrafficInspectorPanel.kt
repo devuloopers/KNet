@@ -123,6 +123,8 @@ fun TrafficInspectorPanel(
                                 upstreamProtocol = exchange?.response?.head?.protocol?.token
                                     ?: selectedTransaction.upstreamProtocol?.token,
                                 origin = exchange?.origin?.displayName ?: selectedTransaction.origin.displayName,
+                                connectionId = exchange?.connectionId?.value ?: selectedTransaction.connectionId,
+                                streamId = exchange?.streamId?.value ?: selectedTransaction.streamId,
                                 remoteIp = "",
                                 timestamp = selectedTransaction.formattedTimestamp,
                                 durationMs = selectedTransaction.formattedTime,

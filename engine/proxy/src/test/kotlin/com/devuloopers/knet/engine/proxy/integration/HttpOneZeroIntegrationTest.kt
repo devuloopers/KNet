@@ -386,6 +386,7 @@ class HttpOneZeroIntegrationTest {
                     request: RequestHead,
                     occurredAtEpochMillis: Long,
                     origin: com.devuloopers.knet.traffic.model.TrafficOrigin,
+                    streamId: com.devuloopers.knet.traffic.id.StreamId?,
                 ): ProxyExchangeCapture {
                     this@RecordingCaptureSink.request = request
                     return object : ProxyExchangeCapture {

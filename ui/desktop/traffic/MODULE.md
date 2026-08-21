@@ -13,7 +13,7 @@ Owns the live traffic table, filtering, selection, inspector coordination, and t
   reacts to a genuinely newer sequence rather than a page-size change.
 - Separate transport and semantic method presentation: filters retain the canonical HTTP method while the
   table renders the shared request descriptor label such as `POST` or `GQL`.
-- Optional Protocol and Source columns backed by canonical exchange data; Source distinguishes API Studio from
+- Optional Protocol, Stream, and Source columns backed by canonical exchange data; Source distinguishes API Studio from
   ordinary proxy clients, while Protocol prefers the observed upstream response and falls back to the client request.
 - Protocol-aware Host-column presentation omits redundant HTTP `:80` and HTTPS `:443` ports while retaining
   non-default ports and the complete canonical authority outside the compact table label.
@@ -40,8 +40,9 @@ an eight-entry/16 MiB byte-weighted presentation cache.
 ## Current state
 
 Traffic list/detail, capture control, proxy lifecycle observation, semantic annotations, pending breakpoints,
-and clear orchestration use application use cases. Start/Stop changes capture attachment while the running
-listener continues forwarding; only a proxy-port change performs a full configuration rebind. Active breakpoint
+and clear orchestration use application use cases. Start Capture/Pause Capture changes capture attachment while the
+running listener continues forwarding external clients; API Studio treats the paused state as direct execution.
+Only a proxy-port change performs a full configuration rebind. Active breakpoint
 candidates are joined to durable rows only by canonical `ExchangeId`; a body-free provisional row is used until
 capture metadata arrives, remains visible despite ordinary filters, and is replaced without duplication. Paused
 rows display `In Progress`, a warning highlight, and a typed phase/rule marker. Room queries all retained
@@ -77,3 +78,5 @@ stored traffic, and leaves the forwarding listener available. Assembly lives in 
 The Overview panel always exposes client protocol, upstream protocol, and source independently, so HTTP/1
 translation is not misreported as one ambiguous value. Protocol and Source remain hidden table columns by
 default and can be enabled through the existing generic column menu.
+HTTP/2 filtering matches either observed protocol leg, and the optional Stream column plus Overview stream field
+read only the stored canonical `StreamId`; presentation never infers a stream from row order or connection state.

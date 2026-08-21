@@ -5,6 +5,11 @@
 - **Method:** static dependency reconstruction, end-to-end runtime tracing, ownership and failure-mode analysis, and a clean `check`/desktop assembly verification
 - **Production code changed:** none
 
+> Historical baseline: this document records the repository as audited on 2026-08-18. It is intentionally not
+> rewritten as implementation work lands. Current capability and migration status live in
+> `docs/target_architecture_and_implementation_plan.md`, `docs/implementation_plan.md`, and the protocol-specific
+> rollout documents; HTTP/2 is now `EXPERIMENTAL` rather than absent.
+
 ## A. Executive summary
 
 ### Is the current KNet architecture scalable?

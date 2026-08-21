@@ -6,7 +6,7 @@ Owns KNet's desktop persistence implementation and schema.
 
 ## Owns
 
-- Room database, schema-v21 entities, DAOs, and storage data sources.
+- Room database, schema-v22 entities, DAOs, and storage data sources.
 - The current 14-to-15, 15-to-16, 16-to-17, and 17-to-18 migrations; unsupported older development schemas may
   still be reset.
 - Durable metadata records and references to externally stored bodies.
@@ -53,4 +53,6 @@ Schema v20 adds the API Studio request's HTTP-version preference. Existing v19 a
 `AUTO`; future unknown stored tokens are also interpreted as `AUTO` by the data adapter.
 Schema v21 adds canonical traffic-origin attribution to exchanges. Existing captures migrate to
 `proxy-client`; request and response protocol columns continue to preserve the two observed protocol legs.
+Schema v22 adds independently encoded request and response trailer columns. Existing captures default to empty
+trailers; the already-canonical stream ID and two protocol-leg columns require no compatibility model.
 Breakpoint queries return priority then ID order so persistence and live rule evaluation share one stable order.

@@ -56,6 +56,7 @@ open class KNetApiClient(
 ) : DomainHttpExecutor {
 
     private var currentConfiguration: HttpClientConfiguration = configuration
+    private val httpTwoTransport = HttpTwoTransport()
     private val proxyHttpClients = PlatformHttpClientCache(::createHttpClient)
 
     private val directHttpClient: HttpClient by lazy {
@@ -190,7 +191,35 @@ open class KNetApiClient(
                     auth = auth,
                     targetProxyPort = targetProxyPort,
                 )
-                HttpVersionPreference.AUTO,
+                HttpVersionPreference.HTTP_2 -> dispatchHttpTwo(
+                    url = currentUrl,
+                    method = method,
+                    headers = attributedHeaders,
+                    body = currentBody,
+                    auth = auth,
+                    targetProxyPort = targetProxyPort,
+                    requireHttpTwo = true,
+                )
+                HttpVersionPreference.AUTO -> if (customEngine == null) {
+                    dispatchHttpTwo(
+                        url = currentUrl,
+                        method = method,
+                        headers = attributedHeaders,
+                        body = currentBody,
+                        auth = auth,
+                        targetProxyPort = targetProxyPort,
+                        requireHttpTwo = false,
+                    )
+                } else {
+                    dispatchWithClient(
+                        client = targetProxyPort?.let(::getProxyHttpClient) ?: directHttpClient,
+                        url = currentUrl,
+                        method = method,
+                        headers = attributedHeaders,
+                        body = currentBody,
+                        auth = auth,
+                    )
+                }
                 HttpVersionPreference.HTTP_1_1 -> dispatchWithClient(
                     client = targetProxyPort?.let(::getProxyHttpClient) ?: directHttpClient,
                     url = currentUrl,
@@ -217,6 +246,7 @@ open class KNetApiClient(
                 try {
                     dispatch(null)
                 } catch (fallbackException: Exception) {
+                    currentCoroutineContext().ensureActive()
                     failureResult(fallbackException, currentUrl)
                 }
             } else {
@@ -230,6 +260,35 @@ open class KNetApiClient(
         }
 
         return finalResult
+    }
+
+    private suspend fun dispatchHttpTwo(
+        url: String,
+        method: KNetHttpMethod,
+        headers: Map<String, String>,
+        body: OutboundRequestBody,
+        auth: ApiRequestAuth,
+        targetProxyPort: Int?,
+        requireHttpTwo: Boolean,
+    ): ExecutionResult {
+        val elapsedTime = TimeSource.Monotonic.markNow()
+        val prepared = prepareExactTransportRequest(url, headers, auth)
+        val response = httpTwoTransport.execute(
+            HttpTwoTransportRequest(
+                url = prepared.url,
+                method = method,
+                headers = prepared.headers,
+                body = body,
+                proxyPort = targetProxyPort,
+                configuration = currentConfiguration,
+                localProxyTlsTrust = localProxyTlsTrust.takeIf { targetProxyPort != null },
+                requireHttpTwo = requireHttpTwo,
+            ),
+        )
+        return response.toExecutionResult(
+            requestUrl = prepared.url,
+            latencyMillis = elapsedTime.elapsedNow().inWholeMilliseconds,
+        )
     }
 
     /** Adds attribution only to the local proxy hop; direct requests can never leak this field. */
@@ -252,7 +311,7 @@ open class KNetApiClient(
         targetProxyPort: Int?,
     ): ExecutionResult {
         val elapsedTime = TimeSource.Monotonic.markNow()
-        val prepared = prepareHttpOneZeroRequest(url, headers, auth)
+        val prepared = prepareExactTransportRequest(url, headers, auth)
         val response = executeHttpOneZero(
             HttpOneZeroTransportRequest(
                 url = prepared.url,
@@ -444,11 +503,11 @@ open class KNetApiClient(
         )
     }
 
-    private fun prepareHttpOneZeroRequest(
+    private fun prepareExactTransportRequest(
         url: String,
         headers: Map<String, String>,
         auth: ApiRequestAuth,
-    ): PreparedHttpOneZeroRequest {
+    ): PreparedExactTransportRequest {
         val preparedHeaders = headers.sanitizeTransportHeaders().toMutableMap()
         var preparedUrl = url
         val host = runCatching { Url(url).host }.getOrDefault("")
@@ -486,7 +545,7 @@ open class KNetApiClient(
             ApiRequestAuth.Inherit,
             ApiRequestAuth.None -> Unit
         }
-        return PreparedHttpOneZeroRequest(preparedUrl, preparedHeaders)
+        return PreparedExactTransportRequest(preparedUrl, preparedHeaders)
     }
 
     private fun decodeResponseBody(
@@ -516,7 +575,7 @@ open class KNetApiClient(
         )
     }
 
-    private data class PreparedHttpOneZeroRequest(
+    private data class PreparedExactTransportRequest(
         val url: String,
         val headers: Map<String, String>,
     )
@@ -589,6 +648,7 @@ open class KNetApiClient(
     }
 
     override fun close() {
+        httpTwoTransport.close()
         if (customEngine == null) {
             directHttpClient.close()
             proxyHttpClients.close()

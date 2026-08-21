@@ -5,6 +5,7 @@ import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureSink
 import com.devuloopers.knet.engine.proxy.capture.ProxyConnectionCapture
 import com.devuloopers.knet.engine.proxy.capture.ProxyExchangeCapture
 import com.devuloopers.knet.traffic.id.ExchangeId
+import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.model.TrafficOrigin
 import com.devuloopers.knet.traffic.model.http.RequestHead
 
@@ -57,8 +58,9 @@ internal class SwitchableProxyCaptureSink(initialTarget: ProxyCaptureSink) : Pro
             request: RequestHead,
             occurredAtEpochMillis: Long,
             origin: TrafficOrigin,
+            streamId: StreamId?,
         ): ProxyExchangeCapture? = synchronized(lock) {
-            bindCurrentTarget()?.startExchange(exchangeId, request, occurredAtEpochMillis, origin)
+            bindCurrentTarget()?.startExchange(exchangeId, request, occurredAtEpochMillis, origin, streamId)
         }
 
         override fun close(errorCode: String?) {

@@ -10,7 +10,7 @@
 
 This document remains the boundary source of truth. Optional product/transports are not treated as implemented merely because their foundations exist.
 
-As of 2026-08-18:
+As of 2026-08-22:
 
 - the four original foundation modules, the evidence-driven `:core:scripting` contract module, and
   module responsibility contracts are present;
@@ -30,7 +30,10 @@ As of 2026-08-18:
   Connect Device UI without changing the proxy; real-device gates remain tracked in
   `docs/wifi_connectivity_implementation_plan.md`;
 - the standard Phase 18 architecture/test/package gate is implemented; extended-duration soak is a parameterized release operation;
-- Mobile Companion apps, relay, VPN, HTTP/2, HTTP/3, WebSocket transport, and gRPC remain additive and explicitly `UNAVAILABLE` until their own implementations pass conformance gates.
+- HTTP/2 is now an additive `EXPERIMENTAL` implementation with downstream H2C/TLS ALPN, upstream pooling,
+  stream-scoped capture/breakpoints, API Studio, persistence, and Traffic presentation; Windows/Linux and
+  Android/iOS Wi-Fi qualification still gate `SUPPORTED`. Mobile Companion apps, relay, VPN, HTTP/3,
+  WebSocket transport, and gRPC remain additive and explicitly `UNAVAILABLE` until their own gates pass.
 
 The accepted boundary decisions are recorded in `docs/adr/`. Reproducible correctness commands and the distinction between current tests and pending measured capacity gates are recorded in `docs/proxy_test_strategy_and_baselines.md`.
 
@@ -1170,7 +1173,11 @@ Add upgrade and bidirectional frame transport inside the proxy transport package
 
 #### HTTP/2
 
-Add ALPN negotiation and a transport provider with H2 connection/stream flow control. Each stream gets `ExchangeId + StreamId`; connection attributes are never used as a single current request. HPACK/pseudo-headers map into typed request/response heads while preserving protocol-specific observations. Capture, body store, storage, queries, breakpoints, and UI already understand stream IDs, so their stable contracts do not change.
+The experimental transport now provides H2C prior knowledge/upgrade, TLS ALPN, bounded upstream pooling, and H2
+connection/stream flow control. Each stream gets `ExchangeId + StreamId`; connection attributes are never used
+as a single current request. Netty owns HPACK and control frames while pseudo-headers map into typed request/
+response heads. Capture, body store, storage, queries, stream-scoped breakpoints, API Studio, and Traffic reuse
+the stable contracts. Platform/device qualification, rather than a redesign, remains before `SUPPORTED`.
 
 #### gRPC
 
@@ -2205,4 +2212,9 @@ This design can realistically scale KNet toward a Charles/mitmproxy-class tool w
 
 The design also gives Mobile Companion, VPN, ADB, PAC, manual setup, Apple profiles, and relay independent additive boundaries. A companion changes how authenticated proxy streams reach the desktop; it does not create a second proxy/capture architecture. Protocol growth is similarly separated into transport adapters and semantic inspectors over stable connection/exchange/body contracts.
 
-The qualification is product capability, not architecture: KNet is not yet Charles/mitmproxy-class in protocol breadth. HTTP/2, HTTP/3, WebSocket transport, gRPC, VPN, relay, and companion applications still require real implementations and conformance/release evidence. Those additions can now reuse the stable proxy ingress, canonical traffic/body/session, application, connectivity, pairing, and inspector seams rather than migrating them.
+The qualification is product capability, not architecture: KNet is not yet Charles/mitmproxy-class in protocol
+breadth. HTTP/2 now has a real experimental implementation and local real-socket evidence, but still requires
+Windows/Linux, Android/iOS Wi-Fi, and release-soak evidence before `SUPPORTED`. HTTP/3, WebSocket transport,
+gRPC, VPN, relay, and companion applications still require real implementations. Those additions can reuse the
+stable proxy ingress, canonical traffic/body/session, application, connectivity, pairing, and inspector seams
+rather than migrating them.

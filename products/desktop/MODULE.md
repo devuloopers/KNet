@@ -37,8 +37,9 @@ The same product lifecycle starts one application-settings runtime synchronizer.
 pure, while timeout changes reach the shared API client and breakpoint coordinator once per distinct value.
 API Studio assembly is isolated in `di/apistudio`: it binds the canonical authored-request execution workflow,
 Room collection adapter, script port, explicit dispatchers, and the two narrowly scoped feature ViewModels.
-That assembly does not bind a traffic recorder. `di/proxy` owns the only production canonical capture source,
-so a direct API Studio call cannot create a Room session or Traffic row.
+That assembly does not bind a traffic recorder. `di/proxy` owns the only production canonical capture source and
+the shared capture-state observer used by Traffic and API Studio. API Studio receives the local proxy route only
+while canonical capture is active, so a direct or capture-paused call cannot create a Room session or Traffic row.
 The same assembly injects a defensive DER copy of the process-owned KNet Root CA into the API client as
 local-proxy-only trust material. It does not weaken direct or proxy-to-origin TLS verification.
 Cross-feature request presentation lives in `di/request`, where descriptor strategies are Koin multi-bindings

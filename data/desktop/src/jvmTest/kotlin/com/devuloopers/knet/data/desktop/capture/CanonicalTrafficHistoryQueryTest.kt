@@ -34,7 +34,17 @@ class CanonicalTrafficHistoryQueryTest {
                 dao.insertConnection(connection(sessionId))
             }
             dao.insertExchange(exchange("old", "old-session", 1_000L, "http", "HTTP/1.1", "/legacy/find-me"))
-            dao.insertExchange(exchange("new", "new-session", 2_000L, "https", "HTTP/2", "/current"))
+            dao.insertExchange(
+                exchange(
+                    id = "new",
+                    sessionId = "new-session",
+                    timestamp = 2_000L,
+                    scheme = "https",
+                    protocol = "HTTP/1.1",
+                    path = "/current",
+                    responseProtocol = "HTTP/2",
+                ),
+            )
 
             val query = CanonicalTrafficQueryAdapter(
                 sessionId = null,
@@ -103,6 +113,7 @@ class CanonicalTrafficHistoryQueryTest {
         scheme: String,
         protocol: String,
         path: String,
+        responseProtocol: String = protocol,
     ): CanonicalExchangeEntity = CanonicalExchangeEntity(
         id = id,
         sessionId = sessionId,
@@ -121,7 +132,7 @@ class CanonicalTrafficHistoryQueryTest {
         protocol = protocol,
         requestHeadersEncoded = "H1:0:",
         requestBodyId = null,
-        responseProtocol = protocol,
+        responseProtocol = responseProtocol,
         responseStatusCode = 200,
         responseReasonPhrase = "OK",
         responseHeadersEncoded = "H1:0:",

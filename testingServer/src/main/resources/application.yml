@@ -28,3 +28,6 @@ knet:
   testing-server:
     grpc:
       port: ${KNET_TEST_GRPC_PORT:9091}
+    http2-tls:
+      host: ${KNET_TEST_HTTP2_TLS_HOST:0.0.0.0}
+      port: ${KNET_TEST_HTTP2_TLS_PORT:9443}

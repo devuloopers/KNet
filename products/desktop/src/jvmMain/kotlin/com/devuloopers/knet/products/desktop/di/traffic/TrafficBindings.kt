@@ -12,7 +12,6 @@ import com.devuloopers.knet.application.usecase.traffic.PrepareCapturedNetworkRe
 import com.devuloopers.knet.application.usecase.traffic.PauseTrafficCaptureUseCase
 import com.devuloopers.knet.application.usecase.traffic.QueryTrafficPageUseCase
 import com.devuloopers.knet.application.usecase.traffic.ResumeTrafficCaptureUseCase
-import com.devuloopers.knet.application.usecase.traffic.ObserveTrafficCaptureStateUseCase
 import com.devuloopers.knet.data.desktop.traffic.repository.DesktopTrafficMaintenanceAdapter
 import com.devuloopers.knet.data.desktop.traffic.repository.DesktopTrafficQueryAdapter
 import com.devuloopers.knet.storage.database.KNetDatabase
@@ -48,7 +47,6 @@ internal val trafficBindings: Module = module {
     factory { PrepareCapturedNetworkRequestUseCase(get()) }
     factory { PauseTrafficCaptureUseCase(get()) }
     factory { ResumeTrafficCaptureUseCase(get()) }
-    factory { ObserveTrafficCaptureStateUseCase(get()) }
 
     viewModel {
         TrafficViewModel(

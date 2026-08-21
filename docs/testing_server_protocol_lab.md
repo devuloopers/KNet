@@ -23,9 +23,11 @@ Default addresses:
 - Machine-readable manifest: `http://127.0.0.1:9090/lab/v1`
 - GraphiQL: `http://127.0.0.1:9090/lab/graphiql`
 - Native gRPC: `127.0.0.1:9091`
+- TLS/ALPN HTTP/2: `https://localhost:9443/lab/v1/http2/echo`
 
-Set `KNET_TEST_GRPC_PORT` to override the native gRPC port. The HTTP listener binds to all local interfaces so a
-phone on the same trusted network can use `http://<desktop-lan-ip>:9090/`.
+Set `KNET_TEST_GRPC_PORT` or `KNET_TEST_HTTP2_TLS_PORT` to override the independent listener ports. The HTTP
+listeners bind to all local interfaces so a phone on the same trusted network can use the corresponding desktop
+LAN address.
 
 To capture dashboard traffic, enable the KNet proxy and configure the browser or phone to use KNet before
 opening the dashboard. API Studio can call the same HTTP and GraphQL addresses directly.
@@ -130,6 +132,23 @@ work. gRPC-Web is separately marked `PLANNED` because it requires a standards-co
 The HTTP listener accepts clear-text HTTP/2 negotiation (H2C) as well as HTTP/1.1. The integration suite uses an
 H2C-only client and asserts the negotiated protocol is `HTTP/2.0`; an HTTP/1.1 response cannot satisfy that test.
 
+The independent listener on port `9443` speaks HTTP/2 over TLS only and requires ALPN `h2`. It generates a local
+self-signed certificate for each server process. Automated tests trust that certificate only inside their test
+client. For a deliberate manual strict-TLS experiment, the public certificate is available from the ordinary
+HTTP listener at `http://127.0.0.1:9090/lab/v1/http2/certificate.pem`; the private key is never exposed.
+
+| Method | TLS HTTP/2 route | Wire behavior |
+|---|---|---|
+| Any | `/lab/v1/http2/echo` | Echo the negotiated protocol, method, path, and bounded body |
+| GET | `/lab/v1/http2/trailers` | Body followed by a trailing `x-knet-trailer` HEADERS frame |
+| GET | `/lab/v1/http2/slow-stream?label=a&chunks=3&delayMillis=25` | Bounded delayed DATA frames for multiplexing and backpressure tests |
+| GET | `/lab/v1/http2/reset-stream` | Reset only the current stream with `CANCEL` |
+| GET | `/lab/v1/http2/goaway` | Complete the active response, emit GOAWAY, and close the drained connection |
+| GET | `/lab/v1/http2/large-headers?bytes=4096` | Bounded large response header block for HPACK and limit tests |
+
+Every ordinary response also includes `x-knet-connection-id`, allowing tests to prove that concurrent streams
+shared one parent connection rather than merely completing in parallel on separate sockets.
+
 HTTP/3 and WebTransport require a QUIC/UDP listener and are not emulated by ordinary WebFlux routes. They appear
 as `PLANNED` in `/lab/v1` until a real listener, certificate profile, and wire-level tests are added.
 
@@ -141,9 +160,10 @@ Run:
 ./gradlew :testingServer:test
 ```
 
-The integration suite starts real ephemeral HTTP and gRPC listeners and verifies discovery, HTTP metadata,
-H2C negotiation, NDJSON, SSE, named GraphQL HTTP operations, GraphQL WebSocket subscriptions, raw WebSocket,
-all native gRPC cardinalities, typed gRPC failures, and trailers. It does not launch the KNet desktop app.
+The integration suite starts real ephemeral HTTP, TLS/ALPN HTTP/2, and gRPC listeners. It verifies discovery,
+HTTP metadata, H2C and TLS `h2` negotiation, multiplexed streams, trailing headers, large header blocks, reset and
+GOAWAY handling, NDJSON, SSE, named GraphQL HTTP operations, GraphQL WebSocket subscriptions, raw WebSocket, all
+native gRPC cardinalities, typed gRPC failures, and trailers. It does not launch the KNet desktop app.
 
 ## Adding another protocol
 

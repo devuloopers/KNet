@@ -1,6 +1,7 @@
 package com.devuloopers.knet.testingserver.catalog
 
 import com.devuloopers.knet.testingserver.grpc.GrpcServerLifecycle
+import com.devuloopers.knet.testingserver.http2.Http2TlsLabServer
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
@@ -15,6 +16,7 @@ enum class LabCapabilityMaturity {
 enum class LabProtocol {
     HTTP_1_1,
     HTTP_2_H2C,
+    HTTP_2_TLS,
     GRAPHQL_HTTP,
     GRAPHQL_WEBSOCKET,
     SERVER_SENT_EVENTS,
@@ -47,11 +49,13 @@ data class LabCapability(
  *
  * @property apiVersion Version of the test contract rather than the application release.
  * @property grpcPort Actual native gRPC listener port, including an ephemeral test port.
+ * @property http2TlsPort Actual TLS/ALPN HTTP/2 listener port, including an ephemeral test port.
  * @property capabilities Supported and deliberately deferred protocol capabilities.
  */
 data class LabManifest(
     val apiVersion: String,
     val grpcPort: Int,
+    val http2TlsPort: Int,
     val capabilities: List<LabCapability>,
 )
 
@@ -60,6 +64,7 @@ data class LabManifest(
 @RequestMapping("/lab/v1")
 class LabCatalogController(
     private val grpcServer: GrpcServerLifecycle,
+    private val http2TlsServer: Http2TlsLabServer,
 ) {
     /**
      * Returns every executable fixture and the intentionally unavailable future transports.
@@ -70,9 +75,16 @@ class LabCatalogController(
     fun manifest(): LabManifest = LabManifest(
         apiVersion = "1",
         grpcPort = grpcServer.boundPort,
+        http2TlsPort = http2TlsServer.boundPort,
         capabilities = listOf(
             available("http", LabProtocol.HTTP_1_1, "/lab/v1/http/echo", "HTTP methods and metadata echo"),
             available("http2", LabProtocol.HTTP_2_H2C, "/lab/v1/http/echo", "HTTP/2 clear-text negotiation"),
+            available(
+                "http2-tls",
+                LabProtocol.HTTP_2_TLS,
+                "https://localhost:${http2TlsServer.boundPort}/lab/v1/http2/echo",
+                "HTTP/2 TLS, ALPN, multiplexing, trailers, and frame faults",
+            ),
             available("payloads", LabProtocol.HTTP_1_1, "/lab/v1/payload", "Structured and binary payload fixtures"),
             available("sse", LabProtocol.SERVER_SENT_EVENTS, "/lab/v1/streams/sse", "Bounded SSE stream"),
             available("websocket", LabProtocol.WEBSOCKET, "/lab/v1/websocket/echo", "Text and binary frame echo"),

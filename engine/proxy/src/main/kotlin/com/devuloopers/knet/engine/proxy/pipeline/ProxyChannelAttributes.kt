@@ -4,6 +4,8 @@ import com.devuloopers.knet.engine.proxy.capture.ProxyConnectionCapture
 import com.devuloopers.knet.engine.proxy.capture.ProxyExchangeCapture
 import com.devuloopers.knet.engine.proxy.http.ProxyRequestContext
 import com.devuloopers.knet.traffic.id.ExchangeId
+import com.devuloopers.knet.traffic.id.StreamId
+import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import io.netty.util.AttributeKey
 
 /** Capture handle admitted before an optional forwarding gate suspends the exchange. */
@@ -33,4 +35,14 @@ object ProxyChannelAttributes {
 
     /** One-shot exchange capture handoff consumed by the forwarding handler. */
     val PREPARED_EXCHANGE: AttributeKey<PreparedProxyExchange> = AttributeKey.valueOf("knet.preparedExchange")
+
+    /** Native multiplexed stream identity; absent for connection-ordered HTTP/1 traffic. */
+    val STREAM_ID: AttributeKey<StreamId> = AttributeKey.valueOf("knet.streamId")
+
+    /** Negotiated downstream application protocol when an object bridge hides the wire version. */
+    val APPLICATION_PROTOCOL: AttributeKey<ApplicationProtocol> = AttributeKey.valueOf("knet.applicationProtocol")
+
+    /** Observed upstream response protocol when an object bridge hides the wire version. */
+    val UPSTREAM_APPLICATION_PROTOCOL: AttributeKey<ApplicationProtocol> =
+        AttributeKey.valueOf("knet.upstreamApplicationProtocol")
 }

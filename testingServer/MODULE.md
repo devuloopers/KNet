@@ -12,6 +12,8 @@ routes is intentionally not retained.
 ## Runtime ownership
 
 - Spring WebFlux owns HTTP/1.1, clear-text HTTP/2, ordinary payloads, chunked responses, SSE, and raw WebSocket.
+- A dedicated Netty listener owns TLS/ALPN HTTP/2 and frame-level fault fixtures. It is isolated from WebFlux so
+  trailing headers, stream resets, GOAWAY, and multiplexing tests remain truthful.
 - Spring GraphQL owns GraphQL queries, mutations, and WebSocket subscriptions.
 - grpc-java owns native gRPC on a separate listener because gRPC is not an ordinary annotated WebFlux route.
 - `static/index.html` owns the browser test dashboard; HTML is not embedded in Kotlin source.
@@ -21,8 +23,9 @@ Default listeners:
 
 - Web and GraphQL: `0.0.0.0:9090`
 - Native gRPC: `0.0.0.0:9091`
+- TLS/ALPN HTTP/2: `0.0.0.0:9443`
 
-Automated tests replace both ports with operating-system-selected ephemeral ports.
+Automated tests replace all listener ports with operating-system-selected ephemeral ports.
 
 ## Package and resource structure
 
@@ -35,6 +38,7 @@ testingServer/
 │   ├── stream/        # SSE and ordinary chunked response fixtures
 │   ├── websocket/     # Raw text/binary WebSocket echo
 │   ├── graphql/       # Query, mutation, and subscription resolvers
+│   ├── http2/         # TLS/ALPN listener and bounded HTTP/2 frame/fault fixtures
 │   └── grpc/          # Native gRPC service and independent server lifecycle
 ├── src/main/proto/    # Native gRPC service contract
 ├── src/main/resources/
@@ -61,7 +65,8 @@ implementations, or label a simulated HTTP response as a transport the server do
 
 ## Supported and deferred transports
 
-Currently executable: HTTP/1.1, H2C, JSON, NDJSON, XML, SOAP, form data, multipart, CBOR, MessagePack, Protobuf
+Currently executable: HTTP/1.1, H2C, TLS/ALPN HTTP/2, HTTP/2 multiplexing, trailing headers, bounded large header
+blocks, RST_STREAM and GOAWAY faults, JSON, NDJSON, XML, SOAP, form data, multipart, CBOR, MessagePack, Protobuf
 payloads, SSE, chunked text, raw WebSocket, GraphQL HTTP, GraphQL subscriptions, and all four native gRPC RPC
 cardinalities.
 

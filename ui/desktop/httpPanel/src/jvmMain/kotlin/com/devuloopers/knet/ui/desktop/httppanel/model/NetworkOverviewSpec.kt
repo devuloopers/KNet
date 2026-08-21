@@ -10,6 +10,8 @@ package com.devuloopers.knet.ui.desktop.httppanel.model
  * @param clientProtocol Protocol observed on the inspected client-to-KNet request leg.
  * @param upstreamProtocol Protocol observed on the upstream response leg, when available.
  * @param origin Human-readable feature or client that initiated the exchange.
+ * @param connectionId Stable transport connection identifier, when captured.
+ * @param streamId Multiplexed stream identifier, when captured.
  * @param remoteIp Remote host IP address and port (e.g. "127.0.0.1:443").
  * @param timestamp Transaction timestamp string.
  * @param durationMs Formatted duration string (e.g. "45 ms").
@@ -24,6 +26,8 @@ data class NetworkOverviewSpec(
     val clientProtocol: String = "HTTP/1.1",
     val upstreamProtocol: String? = null,
     val origin: String = "Proxy client",
+    val connectionId: String? = null,
+    val streamId: Long? = null,
     val remoteIp: String = "",
     val timestamp: String = "",
     val durationMs: String = "",

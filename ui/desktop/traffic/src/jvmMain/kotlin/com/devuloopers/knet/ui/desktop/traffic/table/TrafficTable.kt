@@ -526,6 +526,16 @@ private fun TableRowItem(
             )
         }
 
+        if (columnVisibility.isVisible(TrafficColumn.STREAM)) {
+            KNetCell(
+                text = item.streamId?.toString() ?: "-",
+                modifier = Modifier
+                    .width(columnLayout.widthDp(TrafficColumn.STREAM).dp)
+                    .padding(start = spacing.xs, end = spacing.md),
+                color = themeColors.textSecondary,
+            )
+        }
+
         // Capture origin is independent from protocol and connectivity ingress.
         if (columnVisibility.isVisible(TrafficColumn.SOURCE)) {
             KNetCell(

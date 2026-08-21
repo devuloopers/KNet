@@ -7,6 +7,7 @@ import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.model.body.BodyRef
 import com.devuloopers.knet.traffic.model.http.RequestHead
 import com.devuloopers.knet.traffic.model.http.ResponseHead
+import com.devuloopers.knet.traffic.model.http.HeaderField
 
 /** Direction of body or duplex content relative to the inspected client. */
 public enum class TrafficDirection {
@@ -142,6 +143,29 @@ public sealed interface CaptureEvent {
         init {
             validateEventCoordinates(sequence, occurredAtEpochMillis)
             require(exchangeVersion >= 0L) { "Exchange version must not be negative." }
+        }
+    }
+
+    /**
+     * Records the ordered trailers that terminate one request or response body.
+     *
+     * HTTP/1 chunked messages and HTTP/2 trailing HEADERS share this semantic event. An empty
+     * trailer block is not published; end-of-body remains owned by the body lifecycle.
+     */
+    public data class TrailersObserved(
+        override val sessionId: CaptureSessionId,
+        override val connectionId: ConnectionId,
+        override val sequence: Long,
+        override val occurredAtEpochMillis: Long,
+        public val exchangeId: ExchangeId,
+        public val exchangeVersion: Long,
+        public val direction: TrafficDirection,
+        public val trailers: List<HeaderField>,
+    ) : CaptureEvent {
+        init {
+            validateEventCoordinates(sequence, occurredAtEpochMillis)
+            require(exchangeVersion >= 0L) { "Exchange version must not be negative." }
+            require(trailers.isNotEmpty()) { "A trailer event must contain at least one field." }
         }
     }
 

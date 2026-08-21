@@ -8,6 +8,10 @@ Implements the high-throughput proxy transport: listeners, channels, TLS interce
 
 - Netty proxy server and channel pipeline lifecycle.
 - Connection-scoped resources, enforced timeout/admission limits, bounded HTTP/1 exchange ordering, transport backpressure, and mapping at transport boundaries.
+- HTTP/2 downstream negotiation through TLS ALPN, H2C prior knowledge, and H2C Upgrade, with one isolated Netty
+  child channel and canonical stream identity per logical exchange.
+- A bounded, origin-keyed upstream HTTP/2 pool with TLS ALPN, independent stream leases, global admission,
+  connections-per-origin and streams-per-connection limits, server-push refusal, and GOAWAY replacement.
 - Instance-owned extension points, a persistence-neutral streaming capture sink, and protocol transport adapters.
 - Streaming requests and responses with bidirectional writability coupling, bounded capture reservations, typed cancellation, and constant-time event-loop lag metrics.
 - Qualified HTTP/1.0 and HTTP/1.1 wire semantics: version-correct generated responses, explicit downstream
@@ -49,3 +53,11 @@ before any downstream HTTP/1 compatibility rewrite. The local attribution header
 `TrafficOrigin` and is then removed, so it never appears in captured headers or on the origin-server wire.
 Strict upstream TLS uses the host JVM trust roots. KNet's interception CA is downstream identity material and is
 never added to upstream trust; insecure upstream validation remains an explicit runtime policy.
+HTTP/2 streams reuse the canonical HTTP object/capture/breakpoint boundary after Netty's frame codec maps
+pseudo-headers, DATA, and trailers. Each child has its own forwarding state, body queue, capture handle, timeout,
+and breakpoint gate; no multiplexed connection shares an HTTP/1 response deque. TLS origins prefer pooled HTTP/2
+and fall back to the existing HTTP/1.1 connector only when ALPN explicitly reports that HTTP/2 is unavailable.
+Transport, saturation, TLS, reset, and pool failures remain failures rather than silent downgrades. Request and
+response protocols are recorded independently, connection-specific headers are removed before HPACK encoding,
+and request/response trailers are captured separately from initial headers. Netty owns SETTINGS, PING,
+WINDOW_UPDATE, CONTINUATION, HPACK, RST_STREAM, and GOAWAY wire conformance at this boundary.

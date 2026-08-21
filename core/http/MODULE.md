@@ -7,8 +7,8 @@ Provides reusable outbound HTTP-client capabilities used by API Studio and relat
 ## Owns
 
 - Request execution, authentication, TLS client configuration, multipart, SSE, and WebSocket client helpers.
-- Per-request HTTP wire-version dispatch: Ktor remains the default HTTP/1.1 transport, while the JVM adapter owns
-  exact HTTP/1.0 request-line emission, response framing, redirects, proxy absolute-form requests, and CONNECT/TLS.
+- Per-request HTTP wire-version dispatch: Ktor remains the exact HTTP/1.1 transport, while narrow JVM adapters
+  own exact HTTP/1.0 wire semantics and HTTP/2-preferred ALPN execution.
 - Ktor encoding of the canonical `OutboundRequestBody`, `ApiRequestAuth`, and `ExecutionResult`
   contracts owned by `:core:domain`.
 - Ktor adaptation of the canonical, extension-safe `:core:traffic` `HttpMethod`; raw strings are accepted only before this module boundary.
@@ -33,11 +33,16 @@ May consume stable domain/core contracts but must remain independent of desktop 
 ## Current state
 
 Outbound execution accepts one strongly typed body and authentication value plus the shared
-`:core:traffic` method type and the domain-owned `HttpVersionPreference`. Ktor request/body/auth values are created
-only at the final transport boundary; the module no longer owns parallel request-kind, authentication, metrics, or
-execution-result models. `AUTO` and exact HTTP/1.1 use the normal Ktor path. Exact HTTP/1.0 uses a bounded,
+`:core:traffic` method type and the domain-owned `HttpVersionPreference`. Transport request/body/auth values are
+created only at the final boundary; the module no longer owns parallel request-kind, authentication, metrics, or
+execution-result models. Exact HTTP/1.1 uses Ktor. Exact HTTP/1.0 uses a bounded,
 cancellation-aware JVM socket adapter because CIO serializes HTTP/1.1 request lines; Java sockets and TLS are kept
 inside that required platform boundary and do not leak into common code.
+`AUTO` uses the cancellation-aware JVM ALPN client, prefers HTTP/2, accepts HTTP/1.1 fallback, and reports the
+observed response protocol. Exact HTTP/2 uses the same adapter but fails closed if the peer or proxy path does not
+negotiate HTTP/2. A bounded configuration/trust-keyed client cache preserves HTTP/2 connection reuse without
+unbounded variants. Both modes share authentication, cookie, response decoding, redirect, timeout, proxy routing,
+and scoped local-proxy trust preparation. JDK HTTP/TLS types remain private implementation details of `jvmMain`.
 It does not generate, locate, persist, or rotate KNet's interception CA and does not depend on
 `:engine:certificate`. The product may supply the active CA as typed DER trust material. API Studio supplies
 `TrafficOrigin.ApiStudio` at product composition; user-authored and interceptor-authored reserved attribution

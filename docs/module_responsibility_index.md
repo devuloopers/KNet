@@ -81,4 +81,11 @@ Production consumers include paged Traffic list/detail, API Studio direct record
 
 ## Current target ownership
 
-The proxy defaults to loopback and strict upstream TLS, enforces timeout/connection policy, orders HTTP/1 exchanges, streams both directions, and owns deterministic startup/shutdown. Application services independently own proxy lifecycle, capture attachment, breakpoints, connectivity, pairing, certificates, inspection, script execution, traffic paging, clear, and recording. The dedicated setup listeners, authenticated companion-ready gateway, and automatically managed open-client Wi-Fi gateway live in `:connectivity:desktop`; none is inserted into the proxy pipeline. HTTP/2, HTTP/3, WebSocket transport, gRPC, VPN, relay, and mobile applications remain explicitly unavailable rather than represented by dormant stubs.
+The proxy defaults to loopback and strict upstream TLS, enforces timeout/connection policy, orders HTTP/1
+exchanges, multiplexes isolated experimental HTTP/2 streams, streams both directions, and owns deterministic
+startup/shutdown. Application services independently own proxy lifecycle, capture attachment, breakpoints,
+connectivity, pairing, certificates, inspection, script execution, traffic paging, clear, and recording. The
+dedicated setup listeners, authenticated companion-ready gateway, and automatically managed open-client Wi-Fi
+gateway live in `:connectivity:desktop`; none is inserted into the proxy pipeline. HTTP/2 remains
+`EXPERIMENTAL` pending external platform/device qualification. HTTP/3, WebSocket transport, gRPC, VPN, relay,
+and mobile applications remain explicitly unavailable rather than represented by dormant stubs.

@@ -143,6 +143,7 @@ class ProxyRuntimeBreakpointRefreshTest {
                     request: RequestHead,
                     occurredAtEpochMillis: Long,
                     origin: com.devuloopers.knet.traffic.model.TrafficOrigin,
+                    streamId: com.devuloopers.knet.traffic.id.StreamId?,
                 ): ProxyExchangeCapture {
                     starts.computeIfAbsent(exchangeId) { AtomicInteger() }.incrementAndGet()
                     return NoOpExchangeCapture(exchangeId)

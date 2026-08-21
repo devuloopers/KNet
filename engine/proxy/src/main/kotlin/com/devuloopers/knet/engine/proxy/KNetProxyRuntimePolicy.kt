@@ -13,6 +13,10 @@ import java.util.concurrent.atomic.AtomicBoolean
  * @property maximumDownstreamConnections Total admitted client connections.
  * @property maximumConnectionsPerClient Admitted connections for one remote address.
  * @property maximumUpstreamConnections Total concurrent origin connections.
+ * @property maximumHttp2ConnectionsPerOrigin Maximum pooled HTTP/2 parent connections for one origin.
+ * @property maximumHttp2ConcurrentStreams Maximum independently active streams per HTTP/2 connection.
+ * @property maximumHttp2HeaderListBytes Maximum decoded header-list size accepted per stream.
+ * @property http2InitialWindowBytes Initial per-stream receive window advertised to peers.
  */
 data class KNetProxyRuntimePolicy(
     val connectTimeoutMillis: Long = 10_000L,
@@ -23,6 +27,10 @@ data class KNetProxyRuntimePolicy(
     val maximumDownstreamConnections: Int = 1_024,
     val maximumConnectionsPerClient: Int = 128,
     val maximumUpstreamConnections: Int = 1_024,
+    val maximumHttp2ConnectionsPerOrigin: Int = 2,
+    val maximumHttp2ConcurrentStreams: Long = 100L,
+    val maximumHttp2HeaderListBytes: Long = 64L * 1024L,
+    val http2InitialWindowBytes: Int = 65_535,
 ) {
     init {
         require(connectTimeoutMillis > 0L) { "Connect timeout must be positive." }
@@ -36,6 +44,15 @@ data class KNetProxyRuntimePolicy(
             "Per-client connection limit cannot exceed the total downstream limit."
         }
         require(maximumUpstreamConnections > 0) { "Upstream connection limit must be positive." }
+        require(maximumHttp2ConnectionsPerOrigin > 0) {
+            "HTTP/2 connections-per-origin limit must be positive."
+        }
+        require(maximumHttp2ConnectionsPerOrigin <= maximumUpstreamConnections) {
+            "HTTP/2 connections-per-origin limit cannot exceed the total upstream limit."
+        }
+        require(maximumHttp2ConcurrentStreams > 0L) { "HTTP/2 concurrent-stream limit must be positive." }
+        require(maximumHttp2HeaderListBytes > 0L) { "HTTP/2 header-list limit must be positive." }
+        require(http2InitialWindowBytes in 1..Int.MAX_VALUE) { "HTTP/2 initial window must be positive." }
     }
 }
 

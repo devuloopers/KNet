@@ -5,11 +5,13 @@ import com.devuloopers.knet.engine.proxy.capture.ProxyExchangeCapture
 import com.devuloopers.knet.engine.proxy.http.HttpOneDownstreamPolicy
 import com.devuloopers.knet.engine.proxy.http.HttpOneSemantics
 import com.devuloopers.knet.engine.proxy.mapper.HttpMapper
+import com.devuloopers.knet.engine.proxy.pipeline.ProxyChannelAttributes
 import com.devuloopers.knet.engine.proxy.timing.NetworkTimingCollector
 import com.devuloopers.knet.traffic.model.ExchangeState
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.TrafficDirection
 import com.devuloopers.knet.traffic.model.body.ContentEncoding
+import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.Unpooled
 import io.netty.channel.Channel
@@ -33,7 +35,7 @@ import kotlin.time.Clock
 private const val OUTBOUND_TAG = "ProxyEngine"
 
 /**
- * Streams one upstream HTTP/1 response to its downstream client with explicit backpressure.
+ * Streams one upstream response to its downstream client with explicit backpressure.
  *
  * The handler owns the upstream response objects delivered to [channelRead0], retains exactly one
  * reference for each downstream write, and advances upstream reads only after the previous decoded
@@ -49,6 +51,8 @@ private const val OUTBOUND_TAG = "ProxyEngine"
  * @param capture Optional persistence-neutral capture side output.
  * @param onRequestHeadWritten Callback providing the active upstream channel after head delivery.
  * @param onUpstreamWritable Callback used by the request pump when upstream writability returns.
+ * @param upstreamProtocol Protocol negotiated by a transport adapter when Netty's HTTP-object bridge
+ * represents that protocol using HTTP/1-shaped objects.
  */
 internal class KNetOutboundHandler(
     private val clientChannel: Channel,
@@ -59,6 +63,7 @@ internal class KNetOutboundHandler(
     private val capture: ProxyExchangeCapture? = null,
     private val onRequestHeadWritten: (Channel) -> Unit = {},
     private val onUpstreamWritable: () -> Unit = {},
+    private val upstreamProtocol: ApplicationProtocol? = null,
 ) : SimpleChannelInboundHandler<HttpObject>() {
     private var responseStarted: Boolean = false
     private var isKeepAlive: Boolean = true
@@ -97,6 +102,7 @@ internal class KNetOutboundHandler(
     }
 
     private fun acceptFullResponse(context: ChannelHandlerContext, response: FullHttpResponse) {
+        publishUpstreamProtocol(response)
         if (response.status().code() in 100..199 && response.status().code() != 101) {
             HttpOneSemantics.prepareProvisionalResponse(response, downstreamPolicy)
             KNetLogger.debug(OUTBOUND_TAG) { "KNet Proxy Provisional Full Response: ${response.status()}" }
@@ -106,7 +112,7 @@ internal class KNetOutboundHandler(
         timingCollector.markFirstByteReceived()
         timingCollector.markLastByteReceived()
         responseStarted = true
-        val upstreamResponseHead = HttpMapper.mapResponseHead(response)
+        val upstreamResponseHead = HttpMapper.mapResponseHead(response, upstreamProtocol)
         isKeepAlive = HttpOneSemantics.prepareFinalResponse(
             response = response,
             requestMethod = request.method(),
@@ -116,6 +122,14 @@ internal class KNetOutboundHandler(
 
         val completedAt = Clock.System.now().toEpochMilliseconds()
         capture?.observeResponse(upstreamResponseHead, completedAt)
+        val trailers = HttpMapper.mapHeaders(response.trailingHeaders())
+        if (trailers.isNotEmpty()) {
+            capture?.observeTrailers(
+                direction = TrafficDirection.SERVER_TO_CLIENT,
+                trailers = trailers,
+                occurredAtEpochMillis = completedAt,
+            )
+        }
         captureBodyChunk(
             exchange = capture,
             direction = TrafficDirection.SERVER_TO_CLIENT,
@@ -138,6 +152,7 @@ internal class KNetOutboundHandler(
     }
 
     private fun acceptResponseHead(response: HttpResponse) {
+        publishUpstreamProtocol(response)
         provisionalResponseInProgress = response.status().code() in 100..199 && response.status().code() != 101
         if (provisionalResponseInProgress) {
             HttpOneSemantics.prepareProvisionalResponse(response, downstreamPolicy)
@@ -149,7 +164,7 @@ internal class KNetOutboundHandler(
         timingCollector.markFirstByteReceived()
         responseStarted = true
         responseContentEncoding = HttpMapper.contentEncoding(response.headers())
-        val upstreamResponseHead = HttpMapper.mapResponseHead(response)
+        val upstreamResponseHead = HttpMapper.mapResponseHead(response, upstreamProtocol)
         isKeepAlive = HttpOneSemantics.prepareFinalResponse(
             response = response,
             requestMethod = request.method(),
@@ -176,7 +191,17 @@ internal class KNetOutboundHandler(
             content = content.content(),
             contentEncoding = responseContentEncoding,
         )
-        if (content is LastHttpContent) HttpOneSemantics.prepareFinalContent(content, downstreamPolicy)
+        if (content is LastHttpContent) {
+            val trailers = HttpMapper.mapHeaders(content.trailingHeaders())
+            if (trailers.isNotEmpty()) {
+                capture?.observeTrailers(
+                    direction = TrafficDirection.SERVER_TO_CLIENT,
+                    trailers = trailers,
+                    occurredAtEpochMillis = Clock.System.now().toEpochMilliseconds(),
+                )
+            }
+            HttpOneSemantics.prepareFinalContent(content, downstreamPolicy)
+        }
         val clientWrite = clientChannel.writeAndFlush(ReferenceCountUtil.retain(content))
         lastClientWrite = clientWrite
         if (content !is LastHttpContent) return
@@ -194,8 +219,8 @@ internal class KNetOutboundHandler(
             terminateAfterDownstreamWrite(future.isSuccess, timings, completedAt)
             publishCompletion(isKeepAlive)
             if (!isKeepAlive) clientChannel.close()
-            // Upstream channels are deliberately one exchange at a time until a bounded reuse pool
-            // is introduced behind this ownership point.
+            // This closes the exchange channel. For HTTP/1 it is the dedicated upstream socket;
+            // for HTTP/2 it is only the leased stream child, leaving the pooled parent reusable.
             context.close()
         }
     }
@@ -322,6 +347,13 @@ internal class KNetOutboundHandler(
     /** Publishes one terminal callback even when write, close, and exception events race. */
     private fun publishCompletion(keepDownstreamAlive: Boolean) {
         if (completionPublished.compareAndSet(false, true)) onExchangeComplete(keepDownstreamAlive)
+    }
+
+    /** Makes the true upstream leg visible to an optional downstream breakpoint adapter. */
+    private fun publishUpstreamProtocol(response: HttpResponse) {
+        clientChannel.attr(ProxyChannelAttributes.UPSTREAM_APPLICATION_PROTOCOL).set(
+            upstreamProtocol ?: ApplicationProtocol.fromToken(response.protocolVersion().text()),
+        )
     }
 
     private companion object {

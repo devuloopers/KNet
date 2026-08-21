@@ -40,5 +40,6 @@ class ProxyConnectionAdmissionControllerTest {
         maximumDownstreamConnections = 2,
         maximumConnectionsPerClient = 1,
         maximumUpstreamConnections = 1,
+        maximumHttp2ConnectionsPerOrigin = 1,
     )
 }

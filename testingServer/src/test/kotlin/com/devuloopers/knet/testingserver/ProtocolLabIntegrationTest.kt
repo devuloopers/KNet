@@ -7,6 +7,7 @@ import com.devuloopers.knet.testingserver.grpc.v1.FailureRequest
 import com.devuloopers.knet.testingserver.grpc.v1.ProtocolLabGrpc
 import com.devuloopers.knet.testingserver.grpc.v1.StreamRequest
 import com.devuloopers.knet.testingserver.grpc.v1.StreamSummary
+import com.devuloopers.knet.testingserver.http2.Http2TlsLabServer
 import com.devuloopers.knet.testingserver.payload.NdjsonRecord
 import com.devuloopers.knet.testingserver.stream.StreamEvent
 import io.grpc.ManagedChannelBuilder
@@ -41,7 +42,10 @@ import kotlin.time.Duration.Companion.seconds
 /** Verifies every advertised protocol family through a real bound local server. */
 @SpringBootTest(
     webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
-    properties = ["knet.testing-server.grpc.port=0"],
+    properties = [
+        "knet.testing-server.grpc.port=0",
+        "knet.testing-server.http2-tls.port=0",
+    ],
 )
 class ProtocolLabIntegrationTest {
     @Autowired
@@ -49,6 +53,9 @@ class ProtocolLabIntegrationTest {
 
     @Autowired
     private lateinit var grpcServer: GrpcServerLifecycle
+
+    @Autowired
+    private lateinit var http2TlsServer: Http2TlsLabServer
 
     @LocalServerPort
     private var httpPort: Int = 0
@@ -72,8 +79,24 @@ class ProtocolLabIntegrationTest {
             .expectBody()
             .jsonPath("$.apiVersion").isEqualTo("1")
             .jsonPath("$.grpcPort").isEqualTo(grpcServer.boundPort)
+            .jsonPath("$.http2TlsPort").isEqualTo(http2TlsServer.boundPort)
             .jsonPath("$.capabilities[?(@.id == 'websocket')].maturity").isEqualTo("AVAILABLE")
+            .jsonPath("$.capabilities[?(@.id == 'http2-tls')].maturity").isEqualTo("AVAILABLE")
             .jsonPath("$.capabilities[?(@.id == 'http3')].maturity").isEqualTo("PLANNED")
+    }
+
+    /** Ensures manual strict-TLS tests can retrieve only the listener's public certificate. */
+    @Test
+    fun `http2 public certificate is downloadable`() {
+        webClient.get()
+            .uri("/lab/v1/http2/certificate.pem")
+            .exchange()
+            .expectStatus().isOk
+            .expectHeader().contentType("application/x-pem-file")
+            .expectBody(String::class.java)
+            .consumeWith { result ->
+                assertTrue(result.responseBody?.contains("BEGIN CERTIFICATE") == true)
+            }
     }
 
     /** Ensures HTTP request bodies and repeated metadata reach the echo endpoint intact. */

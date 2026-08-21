@@ -5,11 +5,14 @@ import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureConnectionMetadata
 import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureSink
 import com.devuloopers.knet.engine.proxy.pipeline.PipelineHandlerNames
 import com.devuloopers.knet.engine.proxy.pipeline.ProxyChannelAttributes
+import com.devuloopers.knet.engine.proxy.upstream.HttpTwoUpstreamConnectionPool
 import com.devuloopers.knet.traffic.model.IngressContext
 import com.devuloopers.knet.traffic.model.IngressKind
 import com.devuloopers.knet.traffic.model.TrafficEndpoint
 import com.devuloopers.knet.traffic.model.IngressAttributionLookup
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
+import com.devuloopers.knet.traffic.id.StreamId
+import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import io.netty.bootstrap.ServerBootstrap
 import io.netty.channel.Channel
 import io.netty.channel.ChannelInitializer
@@ -21,11 +24,24 @@ import io.netty.channel.nio.NioEventLoopGroup
 import io.netty.channel.socket.SocketChannel
 import io.netty.channel.socket.nio.NioServerSocketChannel
 import io.netty.handler.codec.http.HttpServerCodec
+import io.netty.handler.codec.http.HttpServerUpgradeHandler
+import io.netty.handler.codec.http2.CleartextHttp2ServerUpgradeHandler
+import io.netty.handler.codec.http2.Http2CodecUtil
+import io.netty.handler.codec.http2.Http2FrameCodec
+import io.netty.handler.codec.http2.Http2FrameCodecBuilder
+import io.netty.handler.codec.http2.Http2MultiplexHandler
+import io.netty.handler.codec.http2.Http2ServerUpgradeCodec
+import io.netty.handler.codec.http2.Http2Settings
+import io.netty.handler.codec.http2.Http2StreamChannel
+import io.netty.handler.codec.http2.Http2StreamFrameToHttpObjectCodec
 import io.netty.handler.logging.LogLevel
 import io.netty.handler.logging.LoggingHandler
+import io.netty.handler.ssl.ApplicationProtocolNames
+import io.netty.handler.ssl.ApplicationProtocolNegotiationHandler
 import io.netty.handler.timeout.ReadTimeoutHandler
 import io.netty.handler.timeout.WriteTimeoutHandler
 import io.netty.util.ResourceLeakDetector
+import io.netty.util.AsciiString
 import io.netty.util.concurrent.GlobalEventExecutor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -88,6 +104,7 @@ class KNetProxyServer(
     private var serverScope: kotlinx.coroutines.CoroutineScope? = null
     private var certificateExecutor: ThreadPoolExecutor? = null
     private var eventLoopLagTask: ScheduledFuture<*>? = null
+    private var httpTwoUpstreamPool: HttpTwoUpstreamConnectionPool? = null
     private val activeChannels: ChannelGroup = DefaultChannelGroup(GlobalEventExecutor.INSTANCE)
     private val admissionController = ProxyConnectionAdmissionController(runtimePolicy)
 
@@ -118,6 +135,12 @@ class KNetProxyServer(
 
             bossGroup = NioEventLoopGroup(1)
             workerGroup = NioEventLoopGroup()
+            httpTwoUpstreamPool = HttpTwoUpstreamConnectionPool(
+                runtimePolicy = runtimePolicy,
+                admissionController = admissionController,
+                keyManagerProvider = keyManagerProvider,
+                verifyUpstreamTls = verifyUpstreamTls,
+            )
             startEventLoopLagMonitor(workerGroup!!)
 
             val bootstrap = ServerBootstrap()
@@ -162,21 +185,12 @@ class KNetProxyServer(
                             PipelineHandlerNames.WRITE_TIMEOUT,
                             WriteTimeoutHandler(runtimePolicy.writeIdleTimeoutMillis, TimeUnit.MILLISECONDS),
                         )
-                        pipeline.addLast(PipelineHandlerNames.HTTP_CODEC, HttpServerCodec())
-                        pipelineInitializers.forEach { it(pipeline) }
-
-                        val proxyHandler = KNetStreamingProxyHandler(
-                            serverTlsContextProvider = serverTlsContextProvider,
-                            keyManagerProvider = keyManagerProvider,
-                            strictSsl = verifyUpstreamTls,
-                            proxyScope = scope,
-                            runtimePolicy = runtimePolicy,
-                            admissionController = admissionController,
-                            certificateExecutor = cryptoExecutor,
+                        installCleartextApplicationPipeline(
+                            channel = channel,
+                            scope = scope,
+                            cryptoExecutor = cryptoExecutor,
                             connectionCapture = connectionCapture,
-                            requiresFullResponseAggregation = requiresFullResponseAggregation,
                         )
-                        pipeline.addLast(PipelineHandlerNames.PROXY_HANDLER, proxyHandler)
                     }
                 })
 
@@ -216,6 +230,8 @@ class KNetProxyServer(
         eventLoopLagTask?.cancel(false)
         eventLoopLagTask = null
         closeActiveConnections()
+        httpTwoUpstreamPool?.close()
+        httpTwoUpstreamPool = null
         serverChannel?.close()?.syncUninterruptibly()
         serverChannel = null
 
@@ -268,6 +284,213 @@ class KNetProxyServer(
      * @return Active listener address, or `null` while stopped.
      */
     fun boundAddress(): InetSocketAddress? = serverChannel?.localAddress() as? InetSocketAddress
+
+    /** Installs HTTP/1 fallback plus h2c prior-knowledge and Upgrade selection on one socket. */
+    private fun installCleartextApplicationPipeline(
+        channel: SocketChannel,
+        scope: CoroutineScope,
+        cryptoExecutor: ThreadPoolExecutor,
+        connectionCapture: com.devuloopers.knet.engine.proxy.capture.ProxyConnectionCapture?,
+    ) {
+        val pipeline = channel.pipeline()
+        val sourceCodec = HttpServerCodec()
+        val upgradeHttp2 = createHttp2Components(channel, scope, cryptoExecutor, connectionCapture)
+        val upgradeHandler = HttpServerUpgradeHandler(
+            sourceCodec,
+            HttpServerUpgradeHandler.UpgradeCodecFactory { protocol ->
+                if (AsciiString.contentEquals(Http2CodecUtil.HTTP_UPGRADE_PROTOCOL_NAME, protocol)) {
+                    Http2ServerUpgradeCodec(upgradeHttp2.frameCodec, upgradeHttp2.multiplexHandler)
+                } else {
+                    null
+                }
+            },
+        )
+        pipeline.addLast(
+            PipelineHandlerNames.HTTP_CODEC,
+            CleartextHttp2ServerUpgradeHandler(
+                sourceCodec,
+                upgradeHandler,
+                createPriorKnowledgeHttp2Initializer(channel, scope, cryptoExecutor, connectionCapture),
+            ),
+        )
+        installHttpOneTail(channel, scope, cryptoExecutor, connectionCapture)
+    }
+
+    /** Installs one HTTP/1 request path; the same path remains the fallback after TLS ALPN. */
+    private fun installHttpOneTail(
+        channel: Channel,
+        scope: CoroutineScope,
+        cryptoExecutor: ThreadPoolExecutor,
+        connectionCapture: com.devuloopers.knet.engine.proxy.capture.ProxyConnectionCapture?,
+        streamId: StreamId? = null,
+        downstreamProtocol: ApplicationProtocol? = null,
+    ) {
+        pipelineInitializers.forEach { initializer -> initializer(channel.pipeline()) }
+        channel.pipeline().addLast(
+            PipelineHandlerNames.PROXY_HANDLER,
+            createProxyHandler(
+                channel = channel,
+                scope = scope,
+                cryptoExecutor = cryptoExecutor,
+                connectionCapture = connectionCapture,
+                streamId = streamId,
+                downstreamProtocol = downstreamProtocol,
+            ),
+        )
+    }
+
+    /** Creates an independent child pipeline for one multiplexed HTTP/2 stream. */
+    private fun createHttp2StreamInitializer(
+        parentChannel: Channel,
+        scope: CoroutineScope,
+        cryptoExecutor: ThreadPoolExecutor,
+        connectionCapture: com.devuloopers.knet.engine.proxy.capture.ProxyConnectionCapture?,
+    ): ChannelInitializer<Channel> = object : ChannelInitializer<Channel>() {
+        override fun initChannel(channel: Channel) {
+            channel.attr(ProxyChannelAttributes.CONNECTION_CAPTURE).set(connectionCapture)
+            channel.attr(ProxyChannelAttributes.HOST).set(parentChannel.attr(ProxyChannelAttributes.HOST).get())
+            channel.attr(ProxyChannelAttributes.PORT).set(parentChannel.attr(ProxyChannelAttributes.PORT).get())
+            channel.attr(ProxyChannelAttributes.IS_SSL).set(parentChannel.attr(ProxyChannelAttributes.IS_SSL).get())
+            channel.pipeline().addLast(
+                PipelineHandlerNames.HTTP2_STREAM_CODEC,
+                Http2StreamFrameToHttpObjectCodec(true),
+            )
+            val nativeStreamId = (channel as? Http2StreamChannel)
+                ?.stream()
+                ?.id()
+                ?.takeIf { value -> value >= 0 }
+                ?.toLong()
+                ?.let(::StreamId)
+            channel.attr(ProxyChannelAttributes.STREAM_ID).set(nativeStreamId)
+            channel.attr(ProxyChannelAttributes.APPLICATION_PROTOCOL).set(
+                ApplicationProtocol.fromToken(ApplicationProtocolNames.HTTP_2),
+            )
+            installHttpOneTail(
+                channel = channel,
+                scope = scope,
+                cryptoExecutor = cryptoExecutor,
+                connectionCapture = connectionCapture,
+                streamId = nativeStreamId,
+                downstreamProtocol = ApplicationProtocol.fromToken(ApplicationProtocolNames.HTTP_2),
+            )
+        }
+    }
+
+    /** Installs the modern frame-codec plus multiplexer pair selected by an h2c preface. */
+    private fun createPriorKnowledgeHttp2Initializer(
+        parentChannel: Channel,
+        scope: CoroutineScope,
+        cryptoExecutor: ThreadPoolExecutor,
+        connectionCapture: com.devuloopers.knet.engine.proxy.capture.ProxyConnectionCapture?,
+    ): ChannelInitializer<Channel> = object : ChannelInitializer<Channel>() {
+        override fun initChannel(channel: Channel) {
+            val components = createHttp2Components(parentChannel, scope, cryptoExecutor, connectionCapture)
+            channel.pipeline().addAfter(
+                PipelineHandlerNames.HTTP_CODEC,
+                PipelineHandlerNames.HTTP2_CODEC,
+                components.frameCodec,
+            )
+            channel.pipeline().addAfter(
+                PipelineHandlerNames.HTTP2_CODEC,
+                PipelineHandlerNames.HTTP2_MULTIPLEX,
+                components.multiplexHandler,
+            )
+        }
+    }
+
+    /** Builds bounded connection-scoped HTTP/2 handlers with one isolated child per stream. */
+    private fun createHttp2Components(
+        parentChannel: Channel,
+        scope: CoroutineScope,
+        cryptoExecutor: ThreadPoolExecutor,
+        connectionCapture: com.devuloopers.knet.engine.proxy.capture.ProxyConnectionCapture?,
+    ): Http2Components {
+        val childInitializer = createHttp2StreamInitializer(
+            parentChannel,
+            scope,
+            cryptoExecutor,
+            connectionCapture,
+        )
+        val settings = Http2Settings()
+            .maxConcurrentStreams(runtimePolicy.maximumHttp2ConcurrentStreams)
+            .maxHeaderListSize(runtimePolicy.maximumHttp2HeaderListBytes)
+            .initialWindowSize(runtimePolicy.http2InitialWindowBytes)
+        val frameCodec = Http2FrameCodecBuilder.forServer()
+            .initialSettings(settings)
+            .gracefulShutdownTimeoutMillis(runtimePolicy.gracefulShutdownTimeoutMillis)
+            .build()
+        return Http2Components(
+            frameCodec = frameCodec,
+            multiplexHandler = Http2MultiplexHandler(
+                childInitializer,
+                createHttp2StreamInitializer(parentChannel, scope, cryptoExecutor, connectionCapture),
+            ),
+        )
+    }
+
+    /** Creates the shared HTTP-object bridge for either a socket or an HTTP/2 stream child. */
+    private fun createProxyHandler(
+        channel: Channel,
+        scope: CoroutineScope,
+        cryptoExecutor: ThreadPoolExecutor,
+        connectionCapture: com.devuloopers.knet.engine.proxy.capture.ProxyConnectionCapture?,
+        streamId: StreamId?,
+        downstreamProtocol: ApplicationProtocol?,
+    ): KNetStreamingProxyHandler = KNetStreamingProxyHandler(
+        serverTlsContextProvider = serverTlsContextProvider,
+        keyManagerProvider = keyManagerProvider,
+        strictSsl = verifyUpstreamTls,
+        proxyScope = scope,
+        runtimePolicy = runtimePolicy,
+        admissionController = admissionController,
+        certificateExecutor = cryptoExecutor,
+        connectionCapture = connectionCapture,
+        requiresFullResponseAggregation = requiresFullResponseAggregation,
+        streamId = streamId,
+        downstreamProtocol = downstreamProtocol,
+        httpTwoUpstreamPool = httpTwoUpstreamPool,
+        installTlsApplicationProtocol = { pipeline ->
+            pipeline.addAfter(
+                PipelineHandlerNames.SSL,
+                PipelineHandlerNames.ALPN,
+                object : ApplicationProtocolNegotiationHandler(ApplicationProtocolNames.HTTP_1_1) {
+                    override fun configurePipeline(context: io.netty.channel.ChannelHandlerContext, protocol: String) {
+                        when (protocol) {
+                            ApplicationProtocolNames.HTTP_2 -> {
+                                val components = createHttp2Components(
+                                    channel,
+                                    scope,
+                                    cryptoExecutor,
+                                    connectionCapture,
+                                )
+                                context.pipeline().addAfter(
+                                    PipelineHandlerNames.ALPN,
+                                    PipelineHandlerNames.HTTP2_CODEC,
+                                    components.frameCodec,
+                                )
+                                context.pipeline().addAfter(
+                                    PipelineHandlerNames.HTTP2_CODEC,
+                                    PipelineHandlerNames.HTTP2_MULTIPLEX,
+                                    components.multiplexHandler,
+                                )
+                            }
+                            ApplicationProtocolNames.HTTP_1_1, "" -> context.pipeline().addAfter(
+                                PipelineHandlerNames.ALPN,
+                                PipelineHandlerNames.HTTP_CODEC,
+                                HttpServerCodec(),
+                            )
+                            else -> throw IllegalStateException("Unsupported negotiated protocol: $protocol")
+                        }
+                    }
+                },
+            )
+        },
+    )
+
+    private data class Http2Components(
+        val frameCodec: Http2FrameCodec,
+        val multiplexHandler: Http2MultiplexHandler,
+    )
 
     /** Creates the runtime-owned bounded worker used for leaf generation and TLS context assembly. */
     private fun createCertificateExecutor(): ThreadPoolExecutor {

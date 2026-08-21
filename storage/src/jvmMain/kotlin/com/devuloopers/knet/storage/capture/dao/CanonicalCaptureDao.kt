@@ -140,7 +140,7 @@ interface CanonicalCaptureDao {
             "AND (:filterMethods = 0 OR method IN (:methods)) " +
             "AND (:filterStatuses = 0 OR responseStatusCode IN (:statuses)) " +
             "AND (:filterSchemes = 0 OR scheme IN (:schemes)) " +
-            "AND (:filterProtocols = 0 OR COALESCE(responseProtocol, protocol) IN (:protocols))",
+            "AND (:filterProtocols = 0 OR protocol IN (:protocols) OR responseProtocol IN (:protocols))",
     )
     suspend fun countExchangePageMatches(
         sessionId: String?,
@@ -166,7 +166,7 @@ interface CanonicalCaptureDao {
             "AND (:filterMethods = 0 OR method IN (:methods)) " +
             "AND (:filterStatuses = 0 OR responseStatusCode IN (:statuses)) " +
             "AND (:filterSchemes = 0 OR scheme IN (:schemes)) " +
-            "AND (:filterProtocols = 0 OR COALESCE(responseProtocol, protocol) IN (:protocols)) " +
+            "AND (:filterProtocols = 0 OR protocol IN (:protocols) OR responseProtocol IN (:protocols)) " +
             "ORDER BY captureSequence DESC LIMIT :limit",
     )
     suspend fun getNewestExchangePage(
@@ -195,7 +195,7 @@ interface CanonicalCaptureDao {
             "AND (:filterMethods = 0 OR method IN (:methods)) " +
             "AND (:filterStatuses = 0 OR responseStatusCode IN (:statuses)) " +
             "AND (:filterSchemes = 0 OR scheme IN (:schemes)) " +
-            "AND (:filterProtocols = 0 OR COALESCE(responseProtocol, protocol) IN (:protocols)) " +
+            "AND (:filterProtocols = 0 OR protocol IN (:protocols) OR responseProtocol IN (:protocols)) " +
             "ORDER BY captureSequence ASC LIMIT :limit",
     )
     suspend fun getOldestExchangePage(
@@ -229,6 +229,22 @@ interface CanonicalCaptureDao {
         reasonPhrase: String?,
         headersEncoded: String,
     ): Int
+
+    /** Attaches ordered trailers to the selected message direction when the version advances. */
+    @Query(
+        "UPDATE traffic_exchanges SET version = :version, requestTrailersEncoded = :trailersEncoded " +
+            "WHERE id = :exchangeId AND version < :version " +
+            "AND state NOT IN ('COMPLETED', 'FAILED', 'DROPPED', 'CANCELLED')",
+    )
+    suspend fun updateRequestTrailers(exchangeId: String, version: Long, trailersEncoded: String): Int
+
+    /** Attaches ordered response trailers when the exchange version advances. */
+    @Query(
+        "UPDATE traffic_exchanges SET version = :version, responseTrailersEncoded = :trailersEncoded " +
+            "WHERE id = :exchangeId AND version < :version " +
+            "AND state NOT IN ('COMPLETED', 'FAILED', 'DROPPED', 'CANCELLED')",
+    )
+    suspend fun updateResponseTrailers(exchangeId: String, version: Long, trailersEncoded: String): Int
 
     /** Attaches a request body only when the exchange lifecycle advances. */
     @Query(

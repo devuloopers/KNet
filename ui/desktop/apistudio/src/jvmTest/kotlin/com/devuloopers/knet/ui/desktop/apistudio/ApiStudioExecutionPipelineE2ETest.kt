@@ -11,9 +11,12 @@ import com.devuloopers.knet.domain.clientNetwork.usecase.FormatResponseBodyUseCa
 import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
 import com.devuloopers.knet.traffic.model.http.HttpMethod
 import com.devuloopers.knet.traffic.model.ExchangeTimings
+import com.devuloopers.knet.traffic.id.CaptureSessionId
 import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
+import com.devuloopers.knet.application.port.traffic.CaptureSessionState
 import com.devuloopers.knet.application.usecase.breakpoint.DropMatchingBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUseCase
+import com.devuloopers.knet.application.usecase.traffic.ObserveTrafficCaptureStateUseCase
 import com.devuloopers.knet.ui.desktop.apistudio.model.ExecutionState
 import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.ApiStudioViewModel
 import com.devuloopers.knet.domain.collection.usecase.GetSavedRequestUseCase
@@ -86,6 +89,7 @@ class ApiStudioExecutionPipelineE2ETest {
 
     private val testDispatcher = StandardTestDispatcher()
     private val proxyRuntime = TestProxyRuntime()
+    private val captureControl = TestCaptureSessionControl()
 
     @BeforeTest
     fun setUp() {
@@ -112,6 +116,7 @@ class ApiStudioExecutionPipelineE2ETest {
                 ioDispatcher = testDispatcher
             ),
             observeProxyRuntimeStateUseCase = ObserveProxyRuntimeStateUseCase(proxyRuntime),
+            observeTrafficCaptureStateUseCase = ObserveTrafficCaptureStateUseCase(captureControl),
             getWorkspaceLayoutUseCase = getLayoutUseCase,
             updateWorkspaceLayoutUseCase = updateLayoutUseCase,
             observeApplicationSettingsUseCase = observeApplicationSettings,
@@ -162,6 +167,7 @@ class ApiStudioExecutionPipelineE2ETest {
 
         // 1. Ensure proxy is ON and running on port 8080
         proxyRuntime.publish(runningProxyRuntimeState(port = 8080))
+        captureControl.publish(CaptureSessionState.Capturing(CaptureSessionId("capturing")))
 
         // 2. Configure request
         viewModel.updateUrl("https://api.example.com/secure")
@@ -176,5 +182,30 @@ class ApiStudioExecutionPipelineE2ETest {
         // 5. Verify the pipeline correctly intercepted the proxy port and passed it down
         assertEquals("https://api.example.com/secure", spyExecutor.lastExecutedUrl)
         assertEquals(8080, spyExecutor.lastProxyPort)
+    }
+
+    @Test
+    fun `pausing capture switches a running proxy route back to direct execution`() = runTest {
+        val spyExecutor = PipelineSpyHttpExecutor()
+        val viewModel = createPipelineViewModel(spyExecutor)
+
+        proxyRuntime.publish(runningProxyRuntimeState(port = 8080))
+        captureControl.publish(CaptureSessionState.Capturing(CaptureSessionId("capturing-before-pause")))
+        viewModel.updateUrl("https://api.example.com/through-proxy")
+
+        viewModel.executeRequest()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(ExecutionState.SUCCESS, viewModel.uiState.value.executionState)
+        assertEquals(8080, spyExecutor.lastProxyPort)
+
+        captureControl.publish(CaptureSessionState.Paused)
+        viewModel.updateUrl("https://api.example.com/direct-while-paused")
+
+        viewModel.executeRequest()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(ExecutionState.SUCCESS, viewModel.uiState.value.executionState)
+        assertEquals(null, spyExecutor.lastProxyPort)
     }
 }

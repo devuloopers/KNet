@@ -53,7 +53,7 @@ The envelope below is an enforced regression contract on the reference machine/J
 
 | Dimension | Supported/enforced gate |
 |---|---|
-| HTTP transport | HTTP/1.1 forward proxy and CONNECT/TLS interception; HTTP/2, HTTP/3, and WebSocket transport are unavailable |
+| HTTP transport | HTTP/1.0/1.1 plus experimental H2C/TLS-ALPN HTTP/2 with bounded multiplexing; HTTP/3 and WebSocket transport are unavailable |
 | Large response | 500 MiB streamed without body-sized test allocation; capture limited to 10 MiB |
 | Large upload | 128 MiB streamed; capture limited to 10 MiB |
 | Concurrent bodies | 100 clients × 10 MiB responses with bounded heap/direct-memory thresholds |
@@ -66,7 +66,9 @@ The envelope below is an enforced regression contract on the reference machine/J
 | Breakpoints | Explicit rule/pending-byte/pending-connection/deadline limits; only matched response bodies aggregate under a bound |
 | Connectivity | Manual, PAC, Apple profile, ADB reverse, isolated setup listener, paired standard-proxy gateway |
 
-No unavailable protocol/connectivity feature is counted in this envelope.
+Experimental HTTP/2 is counted only against its dedicated local real-socket gates; it is not a `SUPPORTED`
+cross-platform product claim until the qualification matrix in `docs/http2_target_and_implementation_plan.md`
+passes. No unavailable protocol/connectivity feature is counted in this envelope.
 
 ## Extended release soak
 

@@ -16,6 +16,7 @@ import com.devuloopers.knet.traffic.id.BodyId
 import com.devuloopers.knet.traffic.id.CaptureSessionId
 import com.devuloopers.knet.traffic.id.ConnectionId
 import com.devuloopers.knet.traffic.id.ExchangeId
+import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.model.CaptureEvent
 import com.devuloopers.knet.traffic.model.ExchangeState
 import com.devuloopers.knet.traffic.model.IngressContext
@@ -44,6 +45,56 @@ import kotlin.test.assertTrue
 
 /** Tests the inactive canonical writer's monotonic persistence, body ownership, and saturation behavior. */
 class CanonicalSessionWriterTest {
+
+    @Test
+    fun `canonical writer preserves request and response trailers independently`() = runTest {
+        val fixture = Fixture.create()
+        try {
+            val writer = fixture.openWriter(CaptureIngressLimits(16, 16L, 16L, 16))
+            writer.tryPublish(connectionOpened(sequence = 0L))
+            writer.tryPublish(exchangeStarted(sequence = 1L, version = 1L, streamId = StreamId(3L)))
+            writer.tryPublish(
+                CaptureEvent.TrailersObserved(
+                    sessionId = SESSION_ID,
+                    connectionId = CONNECTION_ID,
+                    sequence = 2L,
+                    occurredAtEpochMillis = 1_002L,
+                    exchangeId = EXCHANGE_ID,
+                    exchangeVersion = 2L,
+                    direction = TrafficDirection.CLIENT_TO_SERVER,
+                    trailers = listOf(HeaderField(HeaderName("Request-Checksum"), "request-value")),
+                )
+            )
+            writer.tryPublish(responseObserved(sequence = 3L, version = 3L, status = 200))
+            writer.tryPublish(
+                CaptureEvent.TrailersObserved(
+                    sessionId = SESSION_ID,
+                    connectionId = CONNECTION_ID,
+                    sequence = 4L,
+                    occurredAtEpochMillis = 1_004L,
+                    exchangeId = EXCHANGE_ID,
+                    exchangeVersion = 4L,
+                    direction = TrafficDirection.SERVER_TO_CLIENT,
+                    trailers = listOf(
+                        HeaderField(HeaderName("Response-Checksum"), "first"),
+                        HeaderField(HeaderName("Response-Checksum"), "second"),
+                    ),
+                )
+            )
+            writer.flush()
+
+            val snapshot = assertNotNull(
+                CanonicalTrafficQueryAdapter(SESSION_ID, fixture.dao, fixture.bodyStore)
+                    .getExchange(EXCHANGE_ID)
+            )
+            assertEquals("request-value", snapshot.request.trailers.single().value)
+            assertEquals(listOf("first", "second"), snapshot.response?.trailers?.map(HeaderField::value))
+            assertEquals(StreamId(3L), snapshot.streamId)
+            writer.close()
+        } finally {
+            fixture.close()
+        }
+    }
 
     /** Verifies one ordered writer persists request, response, bodies, and terminal state without regression. */
     @Test
@@ -330,7 +381,11 @@ class CanonicalSessionWriterTest {
     )
 
     /** Creates a deterministic canonical request event. */
-    private fun exchangeStarted(sequence: Long, version: Long): CaptureEvent.ExchangeStarted =
+    private fun exchangeStarted(
+        sequence: Long,
+        version: Long,
+        streamId: StreamId? = null,
+    ): CaptureEvent.ExchangeStarted =
         CaptureEvent.ExchangeStarted(
             sessionId = SESSION_ID,
             connectionId = CONNECTION_ID,
@@ -338,6 +393,7 @@ class CanonicalSessionWriterTest {
             occurredAtEpochMillis = 1_000L + sequence,
             exchangeId = EXCHANGE_ID,
             exchangeVersion = version,
+            streamId = streamId,
             request = RequestHead(
                 method = HttpMethod.fromToken("GET"),
                 target = RequestTarget.Absolute(

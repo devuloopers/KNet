@@ -10,6 +10,7 @@ package com.devuloopers.knet.domain.workspace.model
  * @property timestampDp Timestamp column width.
  * @property methodDp semantic method column width.
  * @property protocolDp Effective wire-protocol column width.
+ * @property streamDp Multiplexed stream identifier column width.
  * @property sourceDp Capture-origin column width.
  * @property hostDp Host column width.
  * @property pathDp Explicit Path width, or null to fill the remaining viewport width.
@@ -24,6 +25,7 @@ data class TrafficTableColumnWidths(
     val timestampDp: Float = 130f,
     val methodDp: Float = 76f,
     val protocolDp: Float = 92f,
+    val streamDp: Float = 76f,
     val sourceDp: Float = 112f,
     val hostDp: Float = 180f,
     val pathDp: Float? = null,
@@ -38,6 +40,7 @@ data class TrafficTableColumnWidths(
             timestampDp,
             methodDp,
             protocolDp,
+            streamDp,
             sourceDp,
             hostDp,
             pathDp,

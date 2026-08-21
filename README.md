@@ -1,6 +1,6 @@
 # KNet
 
-KNet is a Kotlin desktop network-inspection tool under active development. Its current product captures and inspects HTTP/1 traffic through a Netty proxy, persists bounded canonical sessions, supports TLS interception, breakpoints, API Studio, and independently registered desktop connectivity mechanisms.
+KNet is a Kotlin desktop network-inspection tool under active development. Its current product captures and inspects HTTP/1 traffic and experimental HTTP/2 traffic through a Netty proxy, persists bounded canonical sessions, supports TLS interception, breakpoints, API Studio, and independently registered desktop connectivity mechanisms.
 
 The architecture is intentionally split into stable contracts, application orchestration, replaceable desktop adapters, engines, feature UI, and one product composition root.
 
@@ -38,15 +38,15 @@ Every Gradle module has a `MODULE.md` at its root. The complete index is [docs/m
 
 ## Persistence policy during development
 
-The current canonical Room schema is version 13. KNet intentionally provides no upgrade path for earlier development schemas or old certificate formats. Room uses destructive migration, so an existing pre-v13 local database is reset when opened. New traffic is stored only in canonical session, connection, exchange, message, body-object, gap, annotation, and deletion-outbox records.
+The current canonical Room schema is version 22. KNet intentionally provides no upgrade path for earlier development schemas or old certificate formats. Room uses destructive migration, so an existing pre-v22 local database is reset when opened. New traffic is stored only in canonical session, connection, exchange, message, body-object, gap, annotation, and deletion-outbox records.
 
 Starting or stopping the proxy does not clear traffic. Traffic is removed only through the explicit Clear action, which rotates an active capture session before deleting terminal sessions and their bodies.
 
 ## Supported versus planned
 
-The implemented foundation includes HTTP/1 streaming, bounded capture/storage, TLS interception, canonical traffic queries, breakpoints, GraphQL/SSE semantic inspection, PAC/manual/Apple/ADB desktop connectivity, pairing, and authenticated ingress foundations.
+The implemented foundation includes HTTP/1 streaming, experimental HTTP/2 transport, bounded capture/storage, TLS interception, canonical traffic queries, breakpoints, GraphQL/SSE semantic inspection, PAC/manual/Apple/ADB desktop connectivity, pairing, and authenticated ingress foundations.
 
-Mobile companion apps, VPN capture, relay, HTTP/2, HTTP/3, WebSocket transport, and gRPC transport/inspection remain future additive capabilities. They are not presented as supported until their implementation and conformance gates pass.
+HTTP/2 has completed local JVM qualification but remains `EXPERIMENTAL` until its external platform/device and release-soak gates pass. Mobile companion apps, VPN capture, relay, HTTP/3, WebSocket transport, and gRPC transport/inspection remain future additive capabilities. They are not presented as supported until their implementation and conformance gates pass.
 
 ## Build and verification
 

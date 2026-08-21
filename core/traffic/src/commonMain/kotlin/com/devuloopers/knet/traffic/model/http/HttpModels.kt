@@ -153,10 +153,15 @@ public sealed interface ApplicationProtocol {
          */
         public fun fromToken(token: String): ApplicationProtocol {
             require(token.isNotBlank()) { "Application protocol must not be blank." }
-            val standard = StandardApplicationProtocol.entries.firstOrNull {
-                it.token.equals(token, ignoreCase = true)
+            val normalized = when (token.trim().lowercase()) {
+                "h2", "h2c", "http/2.0" -> StandardApplicationProtocol.HTTP_2.token
+                "h3", "http/3.0" -> StandardApplicationProtocol.HTTP_3.token
+                else -> token.trim()
             }
-            return standard?.let(::Standard) ?: Custom(token)
+            val standard = StandardApplicationProtocol.entries.firstOrNull {
+                it.token.equals(normalized, ignoreCase = true)
+            }
+            return standard?.let(::Standard) ?: Custom(normalized)
         }
     }
 }

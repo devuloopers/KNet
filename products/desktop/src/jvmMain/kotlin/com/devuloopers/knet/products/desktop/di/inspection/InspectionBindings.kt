@@ -46,7 +46,13 @@ internal val inspectionBindings: Module = module {
                     CapabilityMaturity.SUPPORTED,
                     "SseSemanticInspectionEndToEndTest"
                 ),
-                RuntimeCapability("http2", "HTTP/2", CapabilityMaturity.UNAVAILABLE),
+                RuntimeCapability(
+                    "http2",
+                    "HTTP/2",
+                    CapabilityMaturity.EXPERIMENTAL,
+                    "HttpTwoDownstreamIntegrationTest, HttpTwoUpstreamIntegrationTest, " +
+                        "HttpTwoBreakpointIsolationTest, and HttpTwoExecutionTest",
+                ),
                 RuntimeCapability("grpc", "gRPC", CapabilityMaturity.UNAVAILABLE),
                 RuntimeCapability("http3", "HTTP/3", CapabilityMaturity.UNAVAILABLE),
                 RuntimeCapability(

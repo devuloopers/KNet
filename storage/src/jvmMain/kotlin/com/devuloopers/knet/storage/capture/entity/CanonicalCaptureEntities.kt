@@ -111,11 +111,13 @@ data class CanonicalExchangeEntity(
     @ColumnInfo(defaultValue = "'proxy-client'")
     val origin: String = "proxy-client",
     val requestHeadersEncoded: String,
+    val requestTrailersEncoded: String? = null,
     val requestBodyId: String?,
     val responseProtocol: String?,
     val responseStatusCode: Int?,
     val responseReasonPhrase: String?,
     val responseHeadersEncoded: String?,
+    val responseTrailersEncoded: String? = null,
     val responseBodyId: String?,
     val timingDnsMillis: Long?,
     val timingConnectMillis: Long?,

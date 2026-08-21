@@ -29,5 +29,6 @@ capture completes; that extension receives only the bounded candidate owned by t
 When a breakpoint is created from captured traffic, the same extension reuses the shared parser to select
 GraphQL and prefill a single operation name. Anonymous, batched, or body-incomplete GraphQL requests remain
 endpoint-scoped rather than guessing one operation.
-Dormant WebSocket/protobuf stubs were removed. WebSocket transport, HTTP/2, gRPC, and HTTP/3 remain
-explicitly unavailable until real transport implementations pass conformance gates.
+Dormant WebSocket/protobuf stubs were removed. Experimental HTTP/2 transport lives in `:engine:proxy` and does
+not change this semantic-inspection boundary. WebSocket transport, gRPC inspection, and HTTP/3 remain explicitly
+unavailable until real implementations pass their conformance gates.

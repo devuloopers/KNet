@@ -1,6 +1,7 @@
 package com.devuloopers.knet.engine.proxy.capture
 
 import com.devuloopers.knet.traffic.id.ExchangeId
+import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.model.ExchangeState
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.IngressContext
@@ -10,6 +11,7 @@ import com.devuloopers.knet.traffic.model.TrafficOrigin
 import com.devuloopers.knet.traffic.model.body.ContentEncoding
 import com.devuloopers.knet.traffic.model.http.RequestHead
 import com.devuloopers.knet.traffic.model.http.ResponseHead
+import com.devuloopers.knet.traffic.model.http.HeaderField
 
 /** Metadata supplied when one downstream transport connection is admitted. */
 data class ProxyCaptureConnectionMetadata(
@@ -38,6 +40,7 @@ interface ProxyConnectionCapture : AutoCloseable {
         request: RequestHead,
         occurredAtEpochMillis: Long,
         origin: TrafficOrigin = TrafficOrigin.ProxyClient,
+        streamId: StreamId? = null,
     ): ProxyExchangeCapture?
 
     /** Closes the capture side output without closing the transport. */
@@ -75,6 +78,13 @@ interface ProxyExchangeCapture {
 
     /** Publishes response metadata without body bytes. */
     fun observeResponse(response: ResponseHead, occurredAtEpochMillis: Long)
+
+    /** Publishes ordered request or response trailers without treating them as ordinary headers. */
+    fun observeTrailers(
+        direction: TrafficDirection,
+        trailers: List<HeaderField>,
+        occurredAtEpochMillis: Long,
+    ) = Unit
 
     /** Publishes exactly one terminal exchange state. */
     fun terminate(

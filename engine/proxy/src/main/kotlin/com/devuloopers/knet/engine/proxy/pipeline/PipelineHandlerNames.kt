@@ -19,6 +19,18 @@ object PipelineHandlerNames {
      */
     const val SSL = "ssl"
 
+    /** TLS application-protocol negotiation handler selecting HTTP/1 or HTTP/2. */
+    const val ALPN = "alpn"
+
+    /** Connection-scoped HTTP/2 frame codec and stream multiplexer. */
+    const val HTTP2_CODEC = "http2Codec"
+
+    /** Connection-scoped dispatcher that creates one child channel per HTTP/2 stream. */
+    const val HTTP2_MULTIPLEX = "http2Multiplex"
+
+    /** Stream-scoped adapter between HTTP/2 frames and canonical Netty HTTP objects. */
+    const val HTTP2_STREAM_CODEC = "http2StreamCodec"
+
     /**
      * HTTP protocol encoder/decoder (`io.netty.handler.codec.http.HttpServerCodec` for server channels,
      * or `io.netty.handler.codec.http.HttpClientCodec` for outbound client channels).

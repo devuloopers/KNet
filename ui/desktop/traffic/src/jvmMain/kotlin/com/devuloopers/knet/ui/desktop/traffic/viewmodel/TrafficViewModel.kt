@@ -373,7 +373,7 @@ class TrafficViewModel(
                 }
             }
 
-            is TrafficIntent.StopCapture -> {
+            is TrafficIntent.PauseCapture -> {
                 captureControlIntent.update { current ->
                     CaptureControlIntent(shouldCapture = false, revision = current.revision + 1L)
                 }
@@ -956,6 +956,8 @@ private fun ProtocolFilter.matches(row: TrafficRowUiState): Boolean = when (this
     ProtocolFilter.ALL -> true
     ProtocolFilter.HTTP -> row.scheme == HttpScheme.Standard(StandardHttpScheme.HTTP)
     ProtocolFilter.HTTPS -> row.scheme == HttpScheme.Standard(StandardHttpScheme.HTTPS)
-    ProtocolFilter.HTTP_2 -> row.protocol == ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_2)
-    ProtocolFilter.HTTP_3 -> row.protocol == ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_3)
+    ProtocolFilter.HTTP_2 -> row.clientProtocol == ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_2) ||
+        row.upstreamProtocol == ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_2)
+    ProtocolFilter.HTTP_3 -> row.clientProtocol == ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_3) ||
+        row.upstreamProtocol == ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_3)
 }

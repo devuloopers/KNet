@@ -16,7 +16,7 @@ Holds non-traffic feature business models, repository contracts, and use cases u
 - The complete authored API Studio request document, including ordered query/header/cookie rows with enabled
   flags, typed body and raw-format values, structured form fields, authentication, scripts, and generated-versus-
   user-defined request-name ownership.
-- The per-request `HttpVersionPreference` (`AUTO`, exact HTTP/1.0, or exact HTTP/1.1), kept separate from the
+- The per-request `HttpVersionPreference` (`AUTO`, exact HTTP/1.0, exact HTTP/1.1, or exact HTTP/2), kept separate from the
   actual `ApplicationProtocol` observed on a response or captured exchange.
 - The ordered cross-feature request-descriptor contribution contract, HTTP path/host fallback, semantic
   kind/badge metadata, bounded immutable descriptor body, and stable resolver use case under `domain.request`.

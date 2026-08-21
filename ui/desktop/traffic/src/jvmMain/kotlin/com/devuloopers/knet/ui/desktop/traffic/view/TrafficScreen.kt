@@ -59,7 +59,7 @@ fun TrafficScreen(
     val toolbarActions = remember(viewModel) {
         TrafficToolbarActions(
             onStartCapture = { viewModel.processIntent(TrafficIntent.StartCapture) },
-            onStopCapture = { viewModel.processIntent(TrafficIntent.StopCapture) },
+            onPauseCapture = { viewModel.processIntent(TrafficIntent.PauseCapture) },
             onClearFeed = { viewModel.processIntent(TrafficIntent.ClearFeed) },
             onAutoScrollToggle = { viewModel.processIntent(TrafficIntent.ToggleAutoScroll) }
         )

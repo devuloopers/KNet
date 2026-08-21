@@ -60,7 +60,7 @@ class TrafficCaptureLifecycleTest {
         assertIs<ProxyRuntimeState.Running>(runtime.state.value)
         assertIs<CaptureSessionState.Capturing>(runtime.captureState.value)
 
-        viewModel.processIntent(TrafficIntent.StopCapture)
+        viewModel.processIntent(TrafficIntent.PauseCapture)
         advanceUntilIdle()
         assertEquals(initialPauseCalls + 1, runtime.pauseCalls)
         assertEquals(0, runtime.stopCalls)

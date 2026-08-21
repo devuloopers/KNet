@@ -78,6 +78,22 @@ class TrafficSnapshotsTest {
     }
 
     @Test
+    fun `wire aliases normalize to canonical http two and three protocols`() {
+        assertEquals(
+            ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_2),
+            ApplicationProtocol.fromToken("h2"),
+        )
+        assertEquals(
+            ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_2),
+            ApplicationProtocol.fromToken("h2c"),
+        )
+        assertEquals(
+            ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_3),
+            ApplicationProtocol.fromToken("h3"),
+        )
+    }
+
+    @Test
     fun `custom request target rejects header injection characters`() {
         assertFailsWith<IllegalArgumentException> {
             RequestTarget.Custom("/safe\r\nInjected: true")

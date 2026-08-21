@@ -33,6 +33,7 @@ internal fun mapBreakpointRequest(
         host = authority.first,
         port = authority.second,
         relativeUri = relativeRequestTarget(request.uri()),
+        protocolOverride = context.channel().attr(ProxyChannelAttributes.APPLICATION_PROTOCOL).get(),
     )
 }
 

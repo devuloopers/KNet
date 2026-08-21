@@ -101,7 +101,10 @@ data class TrafficState(
         get() = transactions.count { row -> row.scheme.isStandard(StandardHttpScheme.HTTPS) }
 
     val http2Count: Int
-        get() = transactions.count { row -> row.protocol.isStandard(StandardApplicationProtocol.HTTP_2) }
+        get() = transactions.count { row ->
+            row.clientProtocol.isStandard(StandardApplicationProtocol.HTTP_2) ||
+                row.upstreamProtocol?.isStandard(StandardApplicationProtocol.HTTP_2) == true
+        }
 
     /**
      * Calculated total transferred payload size string.

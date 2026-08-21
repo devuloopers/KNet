@@ -29,6 +29,8 @@ Adapts desktop engines and storage to existing domain and application-facing rep
 - Workspace persistence for Traffic column widths; an absent Path-width key preserves automatic fill mode, while
   malformed non-positive or non-finite values fall back to safe defaults at the adapter boundary.
 - Durable mapping of canonical traffic origin plus separate client-request and upstream-response protocol values.
+- Lossless mapping of native stream identity and independently ordered request/response trailers through Room
+  schema v22, paging, restart restoration, and selected-exchange detail.
 
 ## Does not own
 
