@@ -2169,3 +2169,36 @@ inspection reports the actual response protocol independently of the requested p
 Wire-level tests assert the literal HTTP/1.0 request line, direct POST framing, proxy absolute-form routing,
 close-delimited response handling, and observed response version. Domain, application, mapper, ViewModel, restore,
 proxy semantics, real-listener HTTP/1.0, and real CONNECT/TLS tests cover the complete path. KNet was not launched.
+
+## Phase 104: Automated HTTP/2 Qualification Gate [COMPLETED]
+
+Completed on 2026-08-24. The proxy integration suite now covers three previously deferred connection-resilience
+cases through real sockets: malformed HTTP/2 traffic receives GOAWAY while the shared listener remains usable,
+PING receives an acknowledgement and the same parent accepts a subsequent application stream, and 40 repeated
+HTTP/2 parent create/request/close cycles are followed by healthy forwarding. These tests extend the existing
+negotiation, multiplexing, translation, HPACK, reset, GOAWAY, breakpoint, persistence, API Studio, and Traffic
+coverage without introducing a second proxy path.
+
+The root `http2Qualification` verification task is now the single cross-module gate for architecture rules,
+canonical HTTP and traffic contracts, proxy transport, desktop capture/Room persistence, the protocol lab, API
+Studio, Traffic, and desktop composition. CI invokes exactly this task on macOS, Windows, and Linux; the stale
+desktop assemble path in the general CI job was corrected to `:products:desktop:assemble`. The local macOS gate
+passed all 167 Gradle tasks in 2 minutes 45 seconds. Remote CI results, Android/iOS real-device Wi-Fi smoke tests,
+and release soak remain future evidence, so HTTP/2 correctly stays `EXPERIMENTAL`. KNet was not launched.
+
+## Phase 105: Native gRPC Target Architecture Planning [COMPLETED]
+
+Completed on 2026-08-24 without production-code changes. `docs/grpc_target_and_implementation_plan.md` now defines
+the repository-specific path from KNet's qualified HTTP/2 transport and existing local grpc-java protocol lab to
+native gRPC capture, durable message timelines, message-aware breakpoints, and API Studio execution. Canonical
+`HttpRequestSnapshot`, `HttpResponseSnapshot`, and `HttpExchangeSnapshot` remain the single request/response
+models; ordered gRPC payloads become additive children through a protocol-neutral message contract and the
+existing dormant `duplex_messages` persistence direction.
+
+The plan adds one justified JVM `:engine:grpc` boundary so protobuf descriptors, reflection, compression,
+framing, and grpc-java client execution do not leak into `:engine:proxy`, `:core:http`, application contracts,
+storage, or Compose. It preserves the current HTTP/GraphQL interceptor path, evolves the global breakpoint queue
+and drawer around stable HTTP-exchange and protocol-message units, and makes Traffic/API Studio presentation
+extension-driven. Delivery phases G0 through G9 remain pending and must progress through real through-proxy
+cardinality, backpressure, persistence, UI, security, cross-platform, and device gates before any gRPC capability
+is marked supported. KNet was not launched, stopped, or restarted.

@@ -1,6 +1,7 @@
 package com.devuloopers.knet.ui.desktop.traffic.model
 
 import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
+import com.devuloopers.knet.traffic.id.ProtocolMessageId
 
 
 /**
@@ -21,6 +22,8 @@ sealed interface TrafficIntent {
 
     data class SelectTransaction(val id: String?) : TrafficIntent
     data class SelectInspectorTab(val tab: InspectorTab) : TrafficIntent
+    data class SelectProtocolMessage(val id: ProtocolMessageId) : TrafficIntent
+    data object LoadNextProtocolMessagePage : TrafficIntent
     data class SelectRequestSubTab(val subTab: InspectorSubTab) : TrafficIntent
     data class SelectResponseSubTab(val subTab: InspectorSubTab) : TrafficIntent
     data class ToggleColumn(val column: TrafficColumn) : TrafficIntent

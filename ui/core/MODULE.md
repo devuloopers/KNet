@@ -41,6 +41,8 @@ Provides the KMP-safe Compose design system, foundations, themes, layouts, and r
   override the density default without forcing padding into the content measurement. Loading buttons disable
   interaction by default, with an explicit opt-in for cancellable operations that must retain click and hand-
   cursor behavior while showing progress.
+- One reusable accessible switch whose fixed track geometry and shared thumb inset keep the thumb centered in
+  every enabled, disabled, checked, and unchecked feature usage.
 - Cohesive text-input APIs that preserve selection, validation/supporting text, password visibility, and focus state.
 - One measured text-overflow preview host shared by standard text fields and compact editable key/value cells. It
   owns stationary-hover timing, bounded above/below placement, and display-only popup styling; consumers retain

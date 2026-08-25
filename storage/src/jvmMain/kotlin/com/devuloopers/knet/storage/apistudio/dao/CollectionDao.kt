@@ -34,11 +34,15 @@ interface CollectionDao {
     @Query("DELETE FROM saved_requests WHERE collectionId = :collectionId")
     suspend fun deleteRequestsForCollection(collectionId: String)
 
+    @Query("DELETE FROM api_studio_workspace_documents WHERE collectionId = :collectionId")
+    suspend fun deleteWorkspaceDocumentsForCollection(collectionId: String)
+
     @Transaction
     suspend fun deleteCollectionCascadeTx(id: String) {
         deleteCollection(id)
         deleteFoldersForCollection(id)
         deleteRequestsForCollection(id)
+        deleteWorkspaceDocumentsForCollection(id)
     }
 
     @Query("SELECT * FROM collection_folders ORDER BY orderIndex ASC")
@@ -57,7 +61,16 @@ interface CollectionDao {
     suspend fun insertFolder(folder: CollectionFolderEntity)
 
     @Query("DELETE FROM collection_folders WHERE id = :id")
-    suspend fun deleteFolder(id: String)
+    suspend fun deleteFolderEntity(id: String)
+
+    @Query("DELETE FROM api_studio_workspace_documents WHERE folderId = :folderId")
+    suspend fun deleteWorkspaceDocumentsForFolder(folderId: String)
+
+    @Transaction
+    suspend fun deleteFolder(id: String) {
+        deleteWorkspaceDocumentsForFolder(id)
+        deleteFolderEntity(id)
+    }
 
     @Query("SELECT * FROM saved_requests WHERE folderId = :folderId ORDER BY id ASC")
     suspend fun getRequestsForFolder(folderId: String): List<SavedRequestEntity>

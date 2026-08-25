@@ -169,22 +169,34 @@ data class BodyObjectEntity(
 @Entity(
     tableName = "duplex_messages",
     indices = [
-        Index(value = ["connectionId", "sequence"], name = "index_duplex_connection_sequence"),
-        Index(value = ["exchangeId", "sequence"], name = "index_duplex_exchange_sequence"),
+        Index(value = ["connectionId", "captureSequence"], name = "index_duplex_connection_sequence"),
+        Index(
+            value = ["exchangeId", "direction", "messageSequence"],
+            unique = true,
+            name = "index_duplex_exchange_direction_message_sequence",
+        ),
+        Index(value = ["sessionId", "occurredAtEpochMillis"], name = "index_duplex_session_occurred"),
     ],
 )
 data class DuplexMessageEntity(
     @PrimaryKey val id: String,
     val sessionId: String,
     val connectionId: String,
-    val exchangeId: String?,
+    val exchangeId: String,
     val streamId: Long?,
-    val sequence: Long,
+    val captureSequence: Long,
+    val messageSequence: Long,
     val direction: String,
+    val protocol: String,
     val messageKind: String,
     val occurredAtEpochMillis: Long,
+    val declaredBytes: Long?,
+    val observedBytes: Long,
+    val compressed: Boolean,
+    val compressionEncoding: String?,
     val bodyId: String?,
-    val terminal: Boolean,
+    val state: String,
+    val errorCode: String?,
 )
 
 /**

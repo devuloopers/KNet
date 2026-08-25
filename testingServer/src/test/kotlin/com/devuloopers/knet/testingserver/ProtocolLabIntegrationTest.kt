@@ -14,9 +14,13 @@ import io.grpc.ManagedChannelBuilder
 import io.grpc.Metadata
 import io.grpc.Status
 import io.grpc.StatusRuntimeException
+import io.grpc.stub.ClientCallStreamObserver
 import io.grpc.stub.StreamObserver
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.reactor.awaitSingle
 import kotlinx.coroutines.reactor.awaitSingleOrNull
 import kotlinx.coroutines.test.runTest
@@ -37,6 +41,7 @@ import reactor.core.publisher.Mono
 import reactor.netty.http.HttpProtocol
 import reactor.netty.http.client.HttpClient
 import java.net.URI
+import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.seconds
 
 /** Verifies every advertised protocol family through a real bound local server. */
@@ -301,6 +306,62 @@ class ProtocolLabIntegrationTest {
         }
     }
 
+    /** Qualifies bounded large messages, gzip requests, deadlines, cancellation, and sibling-call isolation. */
+    @Test
+    fun `grpc endpoint supports transport pressure and lifecycle scenarios`() = runTest {
+        val channel = ManagedChannelBuilder.forAddress("127.0.0.1", grpcServer.boundPort)
+            .usePlaintext()
+            .build()
+            .also(channels::add)
+        val blockingStub = ProtocolLabGrpc.newBlockingStub(channel)
+
+        val largeMessage = "k".repeat(512 * 1_024)
+        val compressedReply = withContext(Dispatchers.IO) {
+            blockingStub.withCompression("gzip")
+                .unaryEcho(EchoRequest.newBuilder().setMessage(largeMessage).build())
+        }
+        assertEquals(largeMessage.length, compressedReply.message.length)
+
+        val replies = coroutineScope {
+            (1..20).map { sequence ->
+                async(Dispatchers.IO) {
+                    blockingStub.unaryEcho(
+                        EchoRequest.newBuilder().setMessage("parallel-$sequence").build(),
+                    )
+                }
+            }.awaitAll()
+        }
+        assertEquals((1..20).map { "parallel-$it" }, replies.map(EchoReply::getMessage))
+
+        val deadlineFailure = CompletableDeferred<Throwable>()
+        ProtocolLabGrpc.newStub(channel)
+            .withDeadlineAfter(25, TimeUnit.MILLISECONDS)
+            .clientStream(failureObserver(deadlineFailure))
+        val deadlineStatus = withContext(Dispatchers.Default.limitedParallelism(1)) {
+            withTimeout(5.seconds) { Status.fromThrowable(deadlineFailure.await()) }
+        }
+        assertEquals(Status.Code.DEADLINE_EXCEEDED, deadlineStatus.code)
+
+        val cancellationFailure = CompletableDeferred<Throwable>()
+        val cancellationCall = ProtocolLabGrpc.newStub(channel).bidirectionalEcho(
+            object : StreamObserver<EchoReply> {
+                override fun onNext(value: EchoReply) = Unit
+
+                override fun onError(throwable: Throwable) {
+                    cancellationFailure.complete(throwable)
+                }
+
+                override fun onCompleted() = Unit
+            },
+        )
+        (cancellationCall as ClientCallStreamObserver<EchoRequest>)
+            .cancel("protocol-lab cancellation", null)
+        val cancellationStatus = withContext(Dispatchers.Default.limitedParallelism(1)) {
+            withTimeout(5.seconds) { Status.fromThrowable(cancellationFailure.await()) }
+        }
+        assertEquals(Status.Code.CANCELLED, cancellationStatus.code)
+    }
+
     private fun <Value> deferredObserver(result: CompletableDeferred<Value>): StreamObserver<Value> =
         object : StreamObserver<Value> {
             override fun onNext(value: Value) {
@@ -312,6 +373,19 @@ class ProtocolLabIntegrationTest {
             }
 
             override fun onCompleted() = Unit
+        }
+
+    private fun <Value> failureObserver(result: CompletableDeferred<Throwable>): StreamObserver<Value> =
+        object : StreamObserver<Value> {
+            override fun onNext(value: Value) = Unit
+
+            override fun onError(throwable: Throwable) {
+                result.complete(throwable)
+            }
+
+            override fun onCompleted() {
+                result.complete(AssertionError("Expected the gRPC call to fail."))
+            }
         }
 
     private companion object {

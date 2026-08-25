@@ -61,3 +61,8 @@ Transport, saturation, TLS, reset, and pool failures remain failures rather than
 response protocols are recorded independently, connection-specific headers are removed before HPACK encoding,
 and request/response trailers are captured separately from initial headers. Netty owns SETTINGS, PING,
 WINDOW_UPDATE, CONTINUATION, HPACK, RST_STREAM, and GOAWAY wire conformance at this boundary.
+Real-socket HTTP/2 resilience tests prove malformed connection traffic receives GOAWAY without terminating the
+listener, PING acknowledgement preserves stream admission, and repeated parent-connection churn leaves forwarding
+healthy. The root `http2Qualification` task composes these transport tests with canonical model, persistence,
+protocol-lab, API Studio, Traffic, and desktop composition gates; real-device Wi-Fi and release-soak evidence
+remain future maturity work.

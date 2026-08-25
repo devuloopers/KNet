@@ -11,6 +11,10 @@ import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import com.devuloopers.knet.traffic.model.http.HttpScheme
 import com.devuloopers.knet.traffic.model.http.StandardApplicationProtocol
 import com.devuloopers.knet.traffic.model.http.StandardHttpScheme
+import com.devuloopers.knet.application.port.traffic.ProtocolMessagePageCursor
+import com.devuloopers.knet.application.port.traffic.ProtocolMessagePresentation
+import com.devuloopers.knet.traffic.id.ProtocolMessageId
+import com.devuloopers.knet.traffic.model.message.ProtocolMessageSnapshot
 
 /**
  * Capture execution state enum.
@@ -29,7 +33,63 @@ enum class InspectorTab {
     OVERVIEW,
     REQUEST,
     RESPONSE,
+    MESSAGES,
     TIMELINE
+}
+
+/** Bounded presentation state for framed child messages belonging to the selected exchange. */
+data class ProtocolMessagesUiState(
+    val exchangeId: String = "",
+    val items: List<ProtocolMessageSnapshot> = emptyList(),
+    val totalCount: Long = 0L,
+    val nextCursor: ProtocolMessagePageCursor? = null,
+    val selectedMessageId: ProtocolMessageId? = null,
+    val selectedBodyBytes: ByteArray? = null,
+    val selectedBodyPresentation: ProtocolMessagePresentation? = null,
+    val selectedBodyUnavailable: Boolean = false,
+    val selectedBodyTruncated: Boolean = false,
+    val isLoading: Boolean = false,
+    val isBodyLoading: Boolean = false,
+) {
+    val selectedMessage: ProtocolMessageSnapshot?
+        get() = items.firstOrNull { message -> message.id == selectedMessageId }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is ProtocolMessagesUiState) return false
+        return exchangeId == other.exchangeId &&
+            items == other.items &&
+            totalCount == other.totalCount &&
+            nextCursor == other.nextCursor &&
+            selectedMessageId == other.selectedMessageId &&
+            selectedBodyBytes.contentEqualsNullable(other.selectedBodyBytes) &&
+            selectedBodyPresentation == other.selectedBodyPresentation &&
+            selectedBodyUnavailable == other.selectedBodyUnavailable &&
+            selectedBodyTruncated == other.selectedBodyTruncated &&
+            isLoading == other.isLoading &&
+            isBodyLoading == other.isBodyLoading
+    }
+
+    override fun hashCode(): Int {
+        var result = exchangeId.hashCode()
+        result = 31 * result + items.hashCode()
+        result = 31 * result + totalCount.hashCode()
+        result = 31 * result + (nextCursor?.hashCode() ?: 0)
+        result = 31 * result + (selectedMessageId?.hashCode() ?: 0)
+        result = 31 * result + (selectedBodyBytes?.contentHashCode() ?: 0)
+        result = 31 * result + (selectedBodyPresentation?.hashCode() ?: 0)
+        result = 31 * result + selectedBodyUnavailable.hashCode()
+        result = 31 * result + selectedBodyTruncated.hashCode()
+        result = 31 * result + isLoading.hashCode()
+        result = 31 * result + isBodyLoading.hashCode()
+        return result
+    }
+}
+
+private fun ByteArray?.contentEqualsNullable(other: ByteArray?): Boolean = when {
+    this === other -> true
+    this == null || other == null -> false
+    else -> contentEquals(other)
 }
 
 /**
@@ -77,9 +137,10 @@ data class TrafficState(
     val columnVisibility: ColumnVisibilityState = ColumnVisibilityState(),
     val columnWidths: TrafficTableColumnWidths = TrafficTableColumnWidths(),
     val preparedState: InspectorPreparedState = InspectorPreparedState(),
+    val protocolMessages: ProtocolMessagesUiState = ProtocolMessagesUiState(),
     val localIpAddress: String = "127.0.0.1",
     val activeBreakpointRules: List<BreakpointRule> = emptyList(),
-    val isBreakpointDialogVisible: Boolean = false,
+    val isBreakpointDrawerVisible: Boolean = false,
     val prefilledBreakpointRule: BreakpointRule? = null,
     val prefilledBreakpointProtocolValues: List<ProtocolCriteriaValue> = emptyList(),
 ) {

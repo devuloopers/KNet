@@ -21,6 +21,12 @@ import com.devuloopers.knet.engine.proxy.timing.NetworkTimingCollector
 import com.devuloopers.knet.engine.proxy.upstream.HttpTwoNegotiationUnavailableException
 import com.devuloopers.knet.engine.proxy.upstream.HttpTwoUpstreamConnectionPool
 import com.devuloopers.knet.engine.proxy.upstream.HttpTwoUpstreamRoute
+import com.devuloopers.knet.engine.proxy.inspection.NettyPayloadSlice
+import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamInspector
+import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamInspectorFactory
+import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamTransformer
+import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamTransformerFactory
+import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamTransformResult
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.model.ExchangeState
@@ -38,6 +44,7 @@ import io.netty.channel.ChannelOption
 import io.netty.channel.socket.SocketChannel
 import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.handler.codec.http.DefaultFullHttpResponse
+import io.netty.handler.codec.http.DefaultHttpContent
 import io.netty.handler.codec.http.DefaultHttpRequest
 import io.netty.handler.codec.http.DefaultLastHttpContent
 import io.netty.handler.codec.http.FullHttpRequest
@@ -97,6 +104,8 @@ internal class KNetStreamingProxyHandler(
     private val downstreamProtocol: ApplicationProtocol? = null,
     private val httpTwoUpstreamPool: HttpTwoUpstreamConnectionPool? = null,
     private val installTlsApplicationProtocol: ((io.netty.channel.ChannelPipeline) -> Unit)? = null,
+    private val streamInspectorFactories: List<ProxyStreamInspectorFactory> = emptyList(),
+    private val streamTransformerFactories: List<ProxyStreamTransformerFactory> = emptyList(),
 ) : ChannelInboundHandlerAdapter() {
 
     companion object {
@@ -107,6 +116,7 @@ internal class KNetStreamingProxyHandler(
         private const val UPSTREAM_CONNECT_ERROR: String = "upstream_connect_failed"
         private const val UPSTREAM_WRITE_ERROR: String = "upstream_request_write_failed"
         private const val DOWNSTREAM_CANCELLED: String = "downstream_cancelled"
+        private const val TRANSFORM_ERROR: String = "protocol_stream_transform_failed"
 
     }
 
@@ -227,6 +237,24 @@ internal class KNetStreamingProxyHandler(
             origin = mappedRequest.origin,
             streamId = streamId,
         )
+        val streamInspectors = streamInspectorFactories.mapNotNull { factory ->
+            runCatching { factory.create(mappedRequest.request.head, streamId, capture) }
+                .onFailure { failure ->
+                    KNetLogger.warn(STREAMING_TAG) {
+                        "Protocol stream inspector rejected request setup: ${failure::class.simpleName}"
+                    }
+                }
+                .getOrNull()
+        }
+        val streamTransformer = streamTransformerFactories.firstNotNullOfOrNull { factory ->
+            runCatching { factory.create(mappedRequest.request, streamId, capture) }
+                .onFailure { failure ->
+                    KNetLogger.warn(STREAMING_TAG) {
+                        "Protocol stream transformer rejected request setup: ${failure::class.simpleName}"
+                    }
+                }
+                .getOrNull()
+        }
         val outboundHead = DefaultHttpRequest(
             request.protocolVersion(),
             request.method(),
@@ -238,6 +266,11 @@ internal class KNetStreamingProxyHandler(
             HttpHeaderNames.HOST,
             if (target.port == 80 || target.port == 443) target.host else "${target.host}:${target.port}",
         )
+        if (streamTransformer != null) {
+            // A message edit may change the framed byte length. HTTP/2 does not require this field,
+            // so removing it prevents stale framing metadata without buffering the whole RPC.
+            outboundHead.headers().remove(HttpHeaderNames.CONTENT_LENGTH)
+        }
 
         val timings = NetworkTimingCollector().apply { markDnsStart() }
         val active = ActiveStreamingRequest(
@@ -246,6 +279,8 @@ internal class KNetStreamingProxyHandler(
             outboundHead = outboundHead,
             downstreamPolicy = downstreamPolicy,
             capture = capture,
+            streamInspectors = streamInspectors,
+            streamTransformer = streamTransformer,
             contentEncoding = HttpMapper.contentEncoding(request.headers()),
             timings = timings,
         )
@@ -260,8 +295,98 @@ internal class KNetStreamingProxyHandler(
         active: ActiveStreamingRequest,
         content: HttpContent,
     ) {
+        val transformer = active.streamTransformer
+        if (transformer != null) {
+            val payload = ByteArray(content.content().readableBytes())
+            content.content().getBytes(content.content().readerIndex(), payload)
+            val isLast = content is LastHttpContent
+            val trailers = if (content is LastHttpContent) {
+                HttpMapper.mapHeaders(content.trailingHeaders())
+            } else {
+                emptyList()
+            }
+            ReferenceCountUtil.release(content)
+            active.transformQueue.addLast(TransformInput(payload, isLast, trailers))
+            processNextRequestTransform(context, active)
+            return
+        }
+        acceptPreparedRequestContent(context, active, content)
+    }
+
+    /** Applies an asynchronous protocol transform while preserving downstream read backpressure. */
+    private fun processNextRequestTransform(
+        context: ChannelHandlerContext,
+        active: ActiveStreamingRequest,
+    ) {
+        if (activeRequest !== active || active.transformInProgress) return
+        val input = active.transformQueue.removeFirstOrNull() ?: run {
+            pumpRequestBody(context, active)
+            return
+        }
+        val transformer = active.streamTransformer ?: return
+        active.transformInProgress = true
+        val now = Clock.System.now().toEpochMilliseconds()
+        if (input.trailers.isNotEmpty()) {
+            transformer.onTrailers(TrafficDirection.CLIENT_TO_SERVER, input.trailers, now)
+        }
+        transformer.transform(
+            direction = TrafficDirection.CLIENT_TO_SERVER,
+            payload = input.payload,
+            endOfDirection = input.isLast,
+            occurredAtEpochMillis = now,
+        ).whenComplete { result, failure ->
+            context.executor().execute {
+                active.transformInProgress = false
+                if (activeRequest !== active) return@execute
+                if (failure != null || result is ProxyStreamTransformResult.DropStream) {
+                    failExchange(
+                        context = context,
+                        active = active,
+                        status = HttpResponseStatus.BAD_GATEWAY,
+                        errorCode = (result as? ProxyStreamTransformResult.DropStream)?.errorCode
+                            ?: TRANSFORM_ERROR,
+                        causeMessage = failure?.message,
+                    )
+                    return@execute
+                }
+                val forwarded = (result as ProxyStreamTransformResult.Forward).payload
+                if (input.isLast || forwarded.isNotEmpty()) {
+                    val prepared = if (input.isLast) {
+                        DefaultLastHttpContent(Unpooled.wrappedBuffer(forwarded)).also { last ->
+                            input.trailers.forEach { header ->
+                                last.trailingHeaders().add(header.name.value, header.value)
+                            }
+                        }
+                    } else {
+                        DefaultHttpContent(Unpooled.wrappedBuffer(forwarded))
+                    }
+                    acceptPreparedRequestContent(context, active, prepared)
+                }
+                processNextRequestTransform(context, active)
+            }
+        }
+    }
+
+    /** Captures and queues one post-transform content object owned by this handler. */
+    private fun acceptPreparedRequestContent(
+        context: ChannelHandlerContext,
+        active: ActiveStreamingRequest,
+        content: HttpContent,
+    ) {
         val readableBytes = content.content().readableBytes()
         active.observedRequestBytes += readableBytes.toLong()
+        if (readableBytes > 0) {
+            val payload = NettyPayloadSlice(content.content())
+            active.streamInspectors.forEach { inspector ->
+                runCatching {
+                    inspector.onPayload(
+                        direction = TrafficDirection.CLIENT_TO_SERVER,
+                        payload = payload,
+                        occurredAtEpochMillis = Clock.System.now().toEpochMilliseconds(),
+                    )
+                }
+            }
+        }
         captureBodyChunk(
             exchange = active.capture,
             direction = TrafficDirection.CLIENT_TO_SERVER,
@@ -273,6 +398,15 @@ internal class KNetStreamingProxyHandler(
             active.requestEndReceived = true
             val trailers = HttpMapper.mapHeaders(content.trailingHeaders())
             if (trailers.isNotEmpty()) {
+                active.streamInspectors.forEach { inspector ->
+                    runCatching {
+                        inspector.onTrailers(
+                            direction = TrafficDirection.CLIENT_TO_SERVER,
+                            trailers = trailers,
+                            occurredAtEpochMillis = Clock.System.now().toEpochMilliseconds(),
+                        )
+                    }
+                }
                 active.capture?.observeTrailers(
                     direction = TrafficDirection.CLIENT_TO_SERVER,
                     trailers = trailers,
@@ -284,6 +418,14 @@ internal class KNetStreamingProxyHandler(
                 observedBytes = active.observedRequestBytes,
                 occurredAtEpochMillis = Clock.System.now().toEpochMilliseconds(),
             )
+            active.streamInspectors.forEach { inspector ->
+                runCatching {
+                    inspector.onDirectionEnd(
+                        TrafficDirection.CLIENT_TO_SERVER,
+                        Clock.System.now().toEpochMilliseconds(),
+                    )
+                }
+            }
         }
         pumpRequestBody(context, active)
     }
@@ -543,6 +685,8 @@ internal class KNetStreamingProxyHandler(
                 request = request,
                 timingCollector = active.timings,
                 capture = active.capture,
+                streamInspectors = active.streamInspectors,
+                streamTransformer = active.streamTransformer,
                 downstreamPolicy = active.downstreamPolicy,
                 upstreamProtocol = upstreamProtocol,
                 onRequestHeadWritten = { upstream ->
@@ -758,7 +902,9 @@ internal class KNetStreamingProxyHandler(
         if (!active.exchangeCompleted.compareAndSet(false, true)) return
         if (activeRequest === active) activeRequest = null
         active.upstreamChannel?.close()
+        active.streamTransformer?.cancel(null)
         releaseBodyQueue(active)
+        active.transformQueue.clear()
 
         if (!keepDownstreamAlive || !active.requestEndReceived || !context.channel().isActive) {
             releasePendingObjects()
@@ -796,7 +942,9 @@ internal class KNetStreamingProxyHandler(
         if (activeRequest !== active || !active.exchangeCompleted.compareAndSet(false, true)) return
         activeRequest = null
         active.upstreamChannel?.close()
+        active.streamTransformer?.cancel(errorCode)
         releaseBodyQueue(active)
+        active.transformQueue.clear()
         if (!active.requestEndReceived) {
             active.capture?.cancelBody(
                 direction = TrafficDirection.CLIENT_TO_SERVER,
@@ -825,6 +973,11 @@ internal class KNetStreamingProxyHandler(
             occurredAtEpochMillis = now,
             errorCode = errorCode,
         )
+        active.streamInspectors.forEach { inspector ->
+            runCatching {
+                inspector.onExchangeTerminated(ExchangeState.FAILED, now, errorCode)
+            }
+        }
         context.writeAndFlush(response).addListener { context.close() }
     }
 
@@ -845,6 +998,8 @@ internal class KNetStreamingProxyHandler(
     override fun channelInactive(context: ChannelHandlerContext) {
         activeRequest?.let { active ->
             releaseBodyQueue(active)
+            active.transformQueue.clear()
+            active.streamTransformer?.cancel(DOWNSTREAM_CANCELLED)
             active.upstreamChannel?.close()
             if (active.exchangeCompleted.compareAndSet(false, true)) {
                 active.capture?.cancelBody(
@@ -859,6 +1014,15 @@ internal class KNetStreamingProxyHandler(
                     occurredAtEpochMillis = Clock.System.now().toEpochMilliseconds(),
                     errorCode = DOWNSTREAM_CANCELLED,
                 )
+                active.streamInspectors.forEach { inspector ->
+                    runCatching {
+                        inspector.onExchangeTerminated(
+                            ExchangeState.CANCELLED,
+                            Clock.System.now().toEpochMilliseconds(),
+                            DOWNSTREAM_CANCELLED,
+                        )
+                    }
+                }
             }
         }
         activeRequest = null
@@ -928,15 +1092,26 @@ internal class KNetStreamingProxyHandler(
         val outboundHead: HttpRequest,
         val downstreamPolicy: HttpOneDownstreamPolicy,
         val capture: ProxyExchangeCapture?,
+        val streamInspectors: List<ProxyStreamInspector>,
+        val streamTransformer: ProxyStreamTransformer?,
         val contentEncoding: ContentEncoding?,
         val timings: NetworkTimingCollector,
         val bodyQueue: ArrayDeque<HttpContent> = ArrayDeque(),
+        val transformQueue: ArrayDeque<TransformInput> = ArrayDeque(),
         val exchangeCompleted: AtomicBoolean = AtomicBoolean(false),
         var upstreamChannel: Channel? = null,
         var requestHeadWritten: Boolean = false,
         var writeInProgress: Boolean = false,
+        var transformInProgress: Boolean = false,
         var requestEndReceived: Boolean = false,
         var requestEndWritten: Boolean = false,
         var observedRequestBytes: Long = 0L,
+    )
+
+    /** Heap-owned input retained only by an active protocol transformer. */
+    private data class TransformInput(
+        val payload: ByteArray,
+        val isLast: Boolean,
+        val trailers: List<com.devuloopers.knet.traffic.model.http.HeaderField>,
     )
 }

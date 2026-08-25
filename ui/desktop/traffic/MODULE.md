@@ -51,7 +51,7 @@ scheme, and application-protocol filters execute in storage; HTTP/HTTPS are type
 HTTP/3 are typed application protocols. Traffic contains no GraphQL, SSE, gRPC, or WebSocket branch: the shared
 descriptor strategy pipeline can use canonical metadata immediately, then persisted semantic annotation kinds
 refine retained rows through one bounded batch observation without rereading bodies.
-Creating a breakpoint from a Traffic row delegates semantic detection to the application use case. The dialog
+Creating a breakpoint from a Traffic row delegates semantic detection to the application use case. The shared side drawer
 opens only after one immutable draft is ready and receives protocol-neutral definitions/values, so GraphQL and
 future format-specific defaults do not add branches or parser dependencies to this module.
 

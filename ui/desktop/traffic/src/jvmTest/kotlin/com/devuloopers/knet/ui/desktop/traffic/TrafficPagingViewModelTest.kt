@@ -390,7 +390,7 @@ class TrafficPagingViewModelTest {
         advanceUntilIdle()
 
         val state = viewModel.uiState.value
-        assertTrue(state.isBreakpointDialogVisible)
+        assertTrue(state.isBreakpointDrawerVisible)
         assertEquals("https://api.example.com/items/draft-source", state.prefilledBreakpointRule?.urlPattern)
         assertEquals(
             ProtocolMatchCriteria.HttpDefault,

@@ -19,6 +19,9 @@ value class RequestKindId(val value: String) {
 
         /** GraphQL request kind carried over an HTTP transport. */
         val GRAPHQL: RequestKindId = RequestKindId("graphql")
+
+        /** Native gRPC request kind carried over an HTTP/2 transport. */
+        val GRPC: RequestKindId = RequestKindId("grpc")
     }
 }
 

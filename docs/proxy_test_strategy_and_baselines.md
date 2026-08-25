@@ -1,7 +1,7 @@
 # Proxy Test Strategy and Baselines
 
 - Status: Active; Phase 18 standard release gate and supported capacity envelope present
-- Date: 2026-08-18
+- Date: 2026-08-24
 
 ## Purpose
 
@@ -12,7 +12,7 @@ This document records reproducible evidence for proxy correctness and scalabilit
 Run the focused containment suite with:
 
 ```shell
-./gradlew :engine:proxy:test :engine:interceptor:test :engine:certificate:test :engine:session:test :engine:protocol:test :storage:jvmTest :data:desktop:jvmTest :application:test :connectivity:desktop:jvmTest :ui:desktop:traffic:jvmTest :ui:desktop:apistudio:jvmTest
+./gradlew :engine:proxy:test :engine:interceptor:test :engine:certificate:test :engine:session:test :engine:protocol:test :storage:jvmTest :data:desktop:jvmTest :application:test :connectivity:desktop:jvmTest :ui:desktop:traffic:jvmTest :ui:desktop:apiStudio:jvmTest
 ```
 
 The suite covers loopback binding, failed-bind rollback/retry, strict authority rejection, setup-listener isolation, HTTP/1 ordering/streaming semantics, breakpoint terminal paths, trust and file security, canonical writer non-regression, saturation gaps, disk-exhaustion degradation, corrupt-body marking, active-session clear rotation, deletion convergence, retention/recovery, finalized-orphan inventory, schema-v13 persistence, semantic inspector isolation, connectivity transitions, pairing, gateway admission/revocation/attribution, and application lifecycle shutdown.
@@ -24,6 +24,25 @@ Run the repository and packaged-runtime gate with:
 ```
 
 The completed 2026-08-18 gate passed all 254 actionable tasks and produced the desktop distributable under `products/desktop/build/compose/binaries/main/app`.
+
+## HTTP/2 qualification gate
+
+Run the complete cross-module HTTP/2 gate with:
+
+```shell
+./gradlew http2Qualification
+```
+
+The gate covers architecture boundaries, canonical HTTP/traffic contracts, proxy transport, capture and Room
+persistence, the protocol test server, API Studio, Traffic, and desktop composition. The proxy portion includes
+H2C prior knowledge and upgrade, TLS ALPN, multiplexing, translation, trailers, resets, GOAWAY replacement,
+breakpoint isolation, HPACK/header limits, slow-stream fairness, malformed-frame listener recovery, PING/ACK, and
+HTTP/2 parent-connection churn. The 2026-08-24 local macOS run passed all 167 Gradle tasks in 2 minutes 45 seconds.
+
+`.github/workflows/ci.yml` invokes the same task on macOS, Windows, and Linux. That configuration is not itself
+evidence that the remote jobs passed; their results must be retained by CI. Android/iOS Wi-Fi smoke tests and a
+multi-hour release soak are deferred future qualification and continue to prevent promotion from `EXPERIMENTAL`
+to `SUPPORTED`.
 
 ## Measured Phase 9 baselines
 

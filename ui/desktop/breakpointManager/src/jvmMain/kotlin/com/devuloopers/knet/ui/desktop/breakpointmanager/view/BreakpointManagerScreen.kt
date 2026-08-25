@@ -29,7 +29,7 @@ import com.devuloopers.knet.ui.core.components.input.KNetTextField
 import com.devuloopers.knet.ui.core.components.switch.KNetSwitch
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
-import com.devuloopers.knet.ui.desktop.breakpointmanager.components.AddEditBreakpointRuleDialog
+import com.devuloopers.knet.ui.desktop.breakpointmanager.components.AddEditBreakpointRuleDrawer
 import com.devuloopers.knet.ui.desktop.breakpointmanager.components.BreakpointRulesTable
 import com.devuloopers.knet.ui.desktop.breakpointmanager.viewmodel.BreakpointManagerViewModel
 
@@ -50,10 +50,9 @@ fun BreakpointManagerScreen(
         modifier = modifier
             .fillMaxSize()
             .background(themeColors.background)
-            .padding(24.dp)
     ) {
         Column(
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().padding(24.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
         ) {
             // Header Bar & Global Switch Container
@@ -137,7 +136,7 @@ fun BreakpointManagerScreen(
                 )
 
                 KNetButton(
-                    onClick = { viewModel.openAddDialog() },
+                    onClick = { viewModel.openAddDrawer() },
                     variant = ButtonVariant.Primary
                 ) {
                     Text(
@@ -152,30 +151,28 @@ fun BreakpointManagerScreen(
             BreakpointRulesTable(
                 rules = state.filteredRules,
                 onToggleStatus = { viewModel.toggleRuleStatus(it) },
-                onEditRule = { viewModel.openEditDialog(it) },
+                onEditRule = { viewModel.openEditDrawer(it) },
                 onDeleteRule = { viewModel.deleteRule(it) },
                 modifier = Modifier.weight(1f).fillMaxWidth()
             )
         }
 
-        // Add / Edit Modal Dialog
-        if (state.isAddEditDialogVisible) {
-            AddEditBreakpointRuleDialog(
-                rule = state.editingRule,
-                protocolDefinitions = state.protocolDefinitions,
-                initialProtocolValues = state.editingProtocolValues,
-                onDismiss = { viewModel.closeDialog() },
-                onSave = { urlPattern, method, phase, enabled, protocolId, protocolValues ->
-                    viewModel.saveRule(
-                        urlPattern,
-                        method,
-                        phase,
-                        enabled,
-                        protocolId,
-                        protocolValues,
-                    )
-                }
-            )
-        }
+        AddEditBreakpointRuleDrawer(
+            visible = state.isAddEditDrawerVisible,
+            rule = state.editingRule,
+            protocolDefinitions = state.protocolDefinitions,
+            initialProtocolValues = state.editingProtocolValues,
+            onDismiss = viewModel::closeDrawer,
+            onSave = { urlPattern, method, phase, enabled, protocolId, protocolValues ->
+                viewModel.saveRule(
+                    urlPattern,
+                    method,
+                    phase,
+                    enabled,
+                    protocolId,
+                    protocolValues,
+                )
+            },
+        )
     }
 }

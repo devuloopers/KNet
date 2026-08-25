@@ -8,9 +8,14 @@ import com.devuloopers.knet.application.port.breakpoint.BreakpointRequestEdit
 import com.devuloopers.knet.application.port.breakpoint.BreakpointResponseEdit
 import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolRegistry
 import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
+import com.devuloopers.knet.application.port.breakpoint.PendingProtocolMessageBreakpoint
+import com.devuloopers.knet.application.port.breakpoint.ProtocolMessageBreakpointControlPort
+import com.devuloopers.knet.application.port.breakpoint.ProtocolMessageBreakpointDecision
 import com.devuloopers.knet.application.usecase.breakpoint.ClearPendingBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.ObservePendingBreakpointsUseCase
+import com.devuloopers.knet.application.usecase.breakpoint.ObservePendingProtocolMessageBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.ResolveBreakpointUseCase
+import com.devuloopers.knet.application.usecase.breakpoint.ResolveProtocolMessageBreakpointUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.BreakpointProtocolRuleUseCase
 import com.devuloopers.knet.traffic.model.http.HttpMethod
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
@@ -108,10 +113,21 @@ private class FakeBreakpointControl : BreakpointControlPort {
     override suspend fun clear(): Int = pending.value.size.also { pending.value = emptyList() }
 }
 
+private class FakeProtocolMessageBreakpointControl : ProtocolMessageBreakpointControlPort {
+    override val pendingProtocolMessages =
+        MutableStateFlow<List<PendingProtocolMessageBreakpoint>>(emptyList())
+
+    override suspend fun resolveProtocolMessage(
+        pendingId: String,
+        decision: ProtocolMessageBreakpointDecision,
+    ): Boolean = true
+}
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class BreakpointManagerViewModelTest {
     private val rules = FakeRulesRepository()
     private val breakpoints = FakeBreakpointControl()
+    private val protocolMessages = FakeProtocolMessageBreakpointControl()
 
     @BeforeTest
     fun setUp() {
@@ -132,12 +148,16 @@ class BreakpointManagerViewModelTest {
         getRulesUseCase = GetRulesUseCase(rules),
         observeGlobalInterceptionUseCase = ObserveGlobalInterceptionUseCase(rules),
         observePendingBreakpointsUseCase = ObservePendingBreakpointsUseCase(breakpoints),
+        observePendingProtocolMessageBreakpointsUseCase =
+            ObservePendingProtocolMessageBreakpointsUseCase(protocolMessages),
         saveRuleUseCase = SaveRuleUseCase(rules),
         toggleRuleUseCase = ToggleRuleUseCase(rules),
         deleteRuleUseCase = DeleteRuleUseCase(rules),
         toggleGlobalInterceptionUseCase = ToggleGlobalInterceptionUseCase(rules),
         resolveBreakpointUseCase = ResolveBreakpointUseCase(breakpoints),
         clearPendingBreakpointsUseCase = ClearPendingBreakpointsUseCase(breakpoints),
+        resolveProtocolMessageBreakpointUseCase =
+            ResolveProtocolMessageBreakpointUseCase(protocolMessages),
         breakpointProtocolRuleUseCase = BreakpointProtocolRuleUseCase(BreakpointProtocolRegistry()),
         describeRequestUseCase = describeRequestUseCase,
         ioDispatcher = ioDispatcher,

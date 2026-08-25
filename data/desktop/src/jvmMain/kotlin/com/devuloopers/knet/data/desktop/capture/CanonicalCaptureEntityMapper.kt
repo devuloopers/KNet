@@ -3,11 +3,13 @@ package com.devuloopers.knet.data.desktop.capture
 import com.devuloopers.knet.application.port.traffic.BodyStorageKey
 import com.devuloopers.knet.storage.capture.entity.BodyObjectEntity
 import com.devuloopers.knet.storage.capture.entity.CanonicalExchangeEntity
+import com.devuloopers.knet.storage.capture.entity.DuplexMessageEntity
 import com.devuloopers.knet.storage.capture.entity.TrafficConnectionEntity
 import com.devuloopers.knet.traffic.id.BodyId
 import com.devuloopers.knet.traffic.id.ConnectionId
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.id.StreamId
+import com.devuloopers.knet.traffic.id.ProtocolMessageId
 import com.devuloopers.knet.traffic.model.CaptureEvent
 import com.devuloopers.knet.traffic.model.ExchangeState
 import com.devuloopers.knet.traffic.model.ExchangeTimings
@@ -15,6 +17,7 @@ import com.devuloopers.knet.traffic.model.HttpExchangeSnapshot
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.HttpResponseSnapshot
 import com.devuloopers.knet.traffic.model.IngressKind
+import com.devuloopers.knet.traffic.model.TrafficDirection
 import com.devuloopers.knet.traffic.model.TrafficOrigin
 import com.devuloopers.knet.traffic.model.body.BodyCaptureOutcome
 import com.devuloopers.knet.traffic.model.body.BodyDigest
@@ -34,6 +37,10 @@ import com.devuloopers.knet.traffic.model.http.HttpStatus
 import com.devuloopers.knet.traffic.model.http.RequestHead
 import com.devuloopers.knet.traffic.model.http.RequestTarget
 import com.devuloopers.knet.traffic.model.http.ResponseHead
+import com.devuloopers.knet.traffic.model.message.MessageProtocolId
+import com.devuloopers.knet.traffic.model.message.ProtocolMessageKind
+import com.devuloopers.knet.traffic.model.message.ProtocolMessageSnapshot
+import com.devuloopers.knet.traffic.model.message.ProtocolMessageState
 
 /** Maps portable canonical capture values into Room-owned entities and encodings. */
 internal object CanonicalCaptureEntityMapper {
@@ -112,6 +119,75 @@ internal object CanonicalCaptureEntityMapper {
         createdAtEpochMillis = event.occurredAtEpochMillis,
         finalizedAtEpochMillis = event.occurredAtEpochMillis,
         storageKey = storageKey.value,
+    )
+
+    /** Maps one message-start event to its initial durable row. */
+    fun message(event: CaptureEvent.ProtocolMessageStarted): DuplexMessageEntity = DuplexMessageEntity(
+        id = event.messageId.value,
+        sessionId = event.sessionId.value,
+        connectionId = event.connectionId.value,
+        exchangeId = event.exchangeId.value,
+        streamId = event.streamId?.value,
+        captureSequence = event.sequence,
+        messageSequence = event.messageSequence,
+        direction = event.direction.name,
+        protocol = event.protocol.value,
+        messageKind = event.kind.value,
+        occurredAtEpochMillis = event.occurredAtEpochMillis,
+        declaredBytes = event.declaredBytes,
+        observedBytes = 0L,
+        compressed = event.compressed,
+        compressionEncoding = event.compressionEncoding,
+        bodyId = null,
+        state = ProtocolMessageState.IN_PROGRESS.name,
+        errorCode = null,
+    )
+
+    /** Maps a finalized child-message payload to the shared body-object store. */
+    fun messageBody(
+        event: CaptureEvent.ProtocolMessageStarted,
+        body: BodyRef,
+        occurredAtEpochMillis: Long,
+        storageKey: BodyStorageKey,
+    ): BodyObjectEntity = BodyObjectEntity(
+        id = body.id.value,
+        sessionId = event.sessionId.value,
+        exchangeId = event.exchangeId.value,
+        direction = event.direction.name,
+        observedBytes = body.observedBytes,
+        storedBytes = body.storedBytes,
+        digestAlgorithm = body.digest?.algorithm?.name,
+        digestValue = body.digest?.value,
+        contentEncoding = body.contentEncoding?.token,
+        outcome = outcomeToken(body.outcome),
+        state = BODY_STATE_FINALIZED,
+        createdAtEpochMillis = event.occurredAtEpochMillis,
+        finalizedAtEpochMillis = occurredAtEpochMillis,
+        storageKey = storageKey.value,
+    )
+
+    /** Maps a stored framed-message row and page-loaded payload metadata to the shared snapshot. */
+    fun messageSnapshot(
+        message: DuplexMessageEntity,
+        bodies: Map<String, BodyObjectEntity>,
+    ): ProtocolMessageSnapshot = ProtocolMessageSnapshot(
+        id = ProtocolMessageId(message.id),
+        connectionId = ConnectionId(message.connectionId),
+        exchangeId = ExchangeId(message.exchangeId),
+        streamId = message.streamId?.let(::StreamId),
+        protocol = MessageProtocolId(message.protocol),
+        kind = ProtocolMessageKind(message.messageKind),
+        direction = TrafficDirection.valueOf(message.direction),
+        sequence = message.messageSequence,
+        occurredAtEpochMillis = message.occurredAtEpochMillis,
+        declaredBytes = message.declaredBytes,
+        observedBytes = message.observedBytes,
+        compressed = message.compressed,
+        compressionEncoding = message.compressionEncoding,
+        body = messageBody(message.bodyId, bodies),
+        state = runCatching { ProtocolMessageState.valueOf(message.state) }
+            .getOrDefault(ProtocolMessageState.FAILED),
+        errorCode = message.errorCode,
     )
 
     /** Encodes ordered duplicate-preserving headers using a versioned length-prefix format. */

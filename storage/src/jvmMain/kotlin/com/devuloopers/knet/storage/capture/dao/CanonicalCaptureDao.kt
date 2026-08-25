@@ -10,6 +10,7 @@ import com.devuloopers.knet.storage.capture.entity.CanonicalExchangeEntity
 import com.devuloopers.knet.storage.capture.entity.CaptureGapEntity
 import com.devuloopers.knet.storage.capture.entity.CaptureSessionEntity
 import com.devuloopers.knet.storage.capture.entity.DeletionOutboxEntity
+import com.devuloopers.knet.storage.capture.entity.DuplexMessageEntity
 import com.devuloopers.knet.storage.capture.entity.InspectionAnnotationEntity
 import com.devuloopers.knet.storage.capture.entity.TrafficConnectionEntity
 import com.devuloopers.knet.storage.capture.model.CanonicalSessionStorageSummary
@@ -63,6 +64,13 @@ interface CanonicalCaptureDao {
             "WHERE state NOT IN ('COMPLETED', 'FAILED', 'DROPPED', 'CANCELLED')",
     )
     suspend fun recoverInterruptedExchanges(completedAt: Long): Int
+
+    /** Fails framed messages left in progress by a previous process. */
+    @Query(
+        "UPDATE duplex_messages SET state = 'FAILED', errorCode = 'process-interrupted' " +
+            "WHERE state = 'IN_PROGRESS'",
+    )
+    suspend fun recoverInterruptedDuplexMessages(): Int
 
     /** Counts terminal sessions for global retention policy evaluation. */
     @Query("SELECT COUNT(*) FROM capture_sessions WHERE state != 'ACTIVE'")
@@ -273,6 +281,64 @@ interface CanonicalCaptureDao {
     /** Loads body metadata for a bounded page without per-row queries. */
     @Query("SELECT * FROM body_objects WHERE id IN (:bodyIds)")
     suspend fun getBodies(bodyIds: List<String>): List<BodyObjectEntity>
+
+    /** Creates one framed child message without replacing an existing lifecycle. */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertDuplexMessage(message: DuplexMessageEntity): Long
+
+    /** Returns one framed child message for lifecycle verification and direct inspection. */
+    @Query("SELECT * FROM duplex_messages WHERE id = :messageId")
+    suspend fun getDuplexMessage(messageId: String): DuplexMessageEntity?
+
+    /** Emits a compact invalidation scalar for the messages of one selected exchange. */
+    @Query(
+        "SELECT COUNT(*) + COALESCE(MAX(captureSequence), 0) FROM duplex_messages " +
+            "WHERE exchangeId = :exchangeId",
+    )
+    fun observeDuplexMessageChangeScalar(exchangeId: String): Flow<Long>
+
+    /** Counts all framed messages belonging to one canonical HTTP exchange. */
+    @Query("SELECT COUNT(*) FROM duplex_messages WHERE exchangeId = :exchangeId")
+    suspend fun countDuplexMessages(exchangeId: String): Long
+
+    /** Loads one oldest-first keyset page of framed messages for one exchange. */
+    @Query(
+        "SELECT * FROM duplex_messages WHERE exchangeId = :exchangeId " +
+            "AND (:afterCaptureSequence IS NULL OR captureSequence > :afterCaptureSequence) " +
+            "ORDER BY captureSequence ASC LIMIT :limit",
+    )
+    suspend fun getDuplexMessagePage(
+        exchangeId: String,
+        afterCaptureSequence: Long?,
+        limit: Int,
+    ): List<DuplexMessageEntity>
+
+    /** Attaches a finalized payload body to its owning framed message. */
+    @Query("UPDATE duplex_messages SET bodyId = :bodyId WHERE id = :messageId AND bodyId IS NULL")
+    suspend fun updateDuplexMessageBody(messageId: String, bodyId: String): Int
+
+    /** Terminates one framed message without reopening an already terminal lifecycle. */
+    @Query(
+        "UPDATE duplex_messages SET observedBytes = :observedBytes, state = :state, errorCode = :errorCode " +
+            "WHERE id = :messageId AND state = 'IN_PROGRESS'",
+    )
+    suspend fun terminateDuplexMessage(
+        messageId: String,
+        observedBytes: Long,
+        state: String,
+        errorCode: String?,
+    ): Int
+
+    /** Atomically attaches finalized message payload metadata or leaves no orphan metadata. */
+    @Transaction
+    suspend fun attachDuplexMessageBody(
+        messageId: String,
+        body: BodyObjectEntity,
+    ): Boolean {
+        if (updateDuplexMessageBody(messageId, body.id) == 0) return false
+        insertBody(body)
+        return true
+    }
 
     /** Returns the subset of an inventory page that still has a metadata owner. */
     @Query("SELECT storageKey FROM body_objects WHERE storageKey IN (:storageKeys)")

@@ -175,9 +175,16 @@ fun TrafficScreen(
                         activeRequestSubTab = state.activeRequestSubTab,
                         activeResponseSubTab = state.activeResponseSubTab,
                         preparedState = state.preparedState,
+                        protocolMessages = state.protocolMessages,
                         onTabSelected = { viewModel.processIntent(TrafficIntent.SelectInspectorTab(it)) },
                         onRequestSubTabSelected = { viewModel.processIntent(TrafficIntent.SelectRequestSubTab(it)) },
                         onResponseSubTabSelected = { viewModel.processIntent(TrafficIntent.SelectResponseSubTab(it)) },
+                        onProtocolMessageSelected = {
+                            viewModel.processIntent(TrafficIntent.SelectProtocolMessage(it))
+                        },
+                        onLoadMoreProtocolMessages = {
+                            viewModel.processIntent(TrafficIntent.LoadNextProtocolMessagePage)
+                        },
                         onSendToApiStudio = handleExportToStudio,
                         modifier = paneModifier
                     )

@@ -1,6 +1,7 @@
 package com.devuloopers.knet.ui.desktop.traffic.model
 
 import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
+import com.devuloopers.knet.application.port.breakpoint.PendingProtocolMessageBreakpoint
 import com.devuloopers.knet.domain.request.descriptor.RequestDescriptor
 import com.devuloopers.knet.domain.request.descriptor.RequestKindId
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
@@ -126,6 +127,33 @@ internal fun PendingBreakpoint.toTrafficExchangeSnapshot(): HttpExchangeSnapshot
         },
         startedAtEpochMillis = candidate.startedAtEpochMillis,
     )
+
+/** Builds the canonical parent metadata available while one framed message is suspended. */
+internal fun PendingProtocolMessageBreakpoint.toTrafficExchangeSnapshot(): HttpExchangeSnapshot =
+    HttpExchangeSnapshot(
+        id = candidate.exchangeId,
+        request = candidate.request,
+        origin = TrafficOrigin.ProxyClient,
+        state = ExchangeState.REQUEST_COMPLETE,
+        startedAtEpochMillis = candidate.startedAtEpochMillis,
+    )
+
+/** Builds an immediate body-free parent row for a suspended framed protocol message. */
+internal fun PendingProtocolMessageBreakpoint.toTrafficRowUiState(
+    descriptor: RequestDescriptor,
+): TrafficRowUiState = toTrafficExchangeSnapshot()
+    .toTrafficRowUiState()
+    .copy(
+        status = 0,
+        statusText = "In Progress",
+        formattedTime = "-",
+        interception = TrafficInterceptionUiState.Paused(
+            pendingId = id,
+            ruleId = ruleId,
+            phase = candidate.phase,
+        ),
+    )
+    .withDescriptor(descriptor)
 
 /** Maps one canonical exchange metadata snapshot into a body-free Traffic row. */
 internal fun HttpExchangeSnapshot.toTrafficRowUiState(sequenceNumber: Long = 0L): TrafficRowUiState {

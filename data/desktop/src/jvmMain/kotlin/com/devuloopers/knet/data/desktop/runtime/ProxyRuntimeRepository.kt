@@ -16,6 +16,8 @@ import com.devuloopers.knet.engine.proxy.tls.KeyManagerProvider
 import com.devuloopers.knet.engine.proxy.tls.ServerTlsContextProvider
 import com.devuloopers.knet.data.desktop.certificate.DesktopServerTlsContextProvider
 import com.devuloopers.knet.traffic.model.IngressAttributionLookup
+import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamInspectorFactory
+import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamTransformerFactory
 
 /**
  * Desktop runtime coordinator managing Netty proxy server lifecycle.
@@ -25,6 +27,8 @@ class ProxyRuntimeRepository(
     private val keyManagerProvider: KeyManagerProvider? = null,
     private val breakpointGate: BreakpointGate,
     private val ingressAttribution: IngressAttributionLookup? = null,
+    private val streamInspectorFactories: List<ProxyStreamInspectorFactory> = emptyList(),
+    private val streamTransformerFactories: List<ProxyStreamTransformerFactory> = emptyList(),
 ) {
     constructor(
         certificateAuthority: CertificateAuthority,
@@ -32,11 +36,15 @@ class ProxyRuntimeRepository(
         keyManagerProvider: KeyManagerProvider? = null,
         breakpointGate: BreakpointGate,
         ingressAttribution: IngressAttributionLookup? = null,
+        streamInspectorFactories: List<ProxyStreamInspectorFactory> = emptyList(),
+        streamTransformerFactories: List<ProxyStreamTransformerFactory> = emptyList(),
     ) : this(
         serverTlsContextProvider = DesktopServerTlsContextProvider(certificateAuthority, certificateCache),
         keyManagerProvider = keyManagerProvider,
         breakpointGate = breakpointGate,
         ingressAttribution = ingressAttribution,
+        streamInspectorFactories = streamInspectorFactories,
+        streamTransformerFactories = streamTransformerFactories,
     )
 
     private val lifecycleLock = Any()
@@ -88,6 +96,8 @@ class ProxyRuntimeRepository(
                 requiresFullResponseAggregation = { request ->
                     breakpointGate.mayIntercept(request, BreakpointPhase.RESPONSE)
                 },
+                streamInspectorFactories = streamInspectorFactories,
+                streamTransformerFactories = streamTransformerFactories,
             )
             server.start()
             proxyServer = server

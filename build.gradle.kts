@@ -474,6 +474,45 @@ val verifyArchitectureFoundation by tasks.registering {
     )
 }
 
+/** Cross-module HTTP/2 qualification gate used locally and by the desktop operating-system CI matrix. */
+tasks.register("http2Qualification") {
+    group = "verification"
+    description = "Runs HTTP/2 transport, capture, persistence, API Studio, Traffic, and protocol-lab tests."
+    dependsOn(
+        verifyArchitectureFoundation,
+        ":core:http:jvmTest",
+        ":core:traffic:jvmTest",
+        ":engine:proxy:test",
+        ":data:desktop:jvmTest",
+        ":storage:jvmTest",
+        ":testingServer:test",
+        ":ui:desktop:apiStudio:jvmTest",
+        ":ui:desktop:traffic:jvmTest",
+        ":products:desktop:test",
+    )
+}
+
+/** Cross-module gRPC qualification gate. It never launches the desktop application. */
+tasks.register("grpcQualification") {
+    group = "verification"
+    description = "Runs gRPC framing, persistence, breakpoints, API Studio, Traffic, and protocol-lab tests."
+    dependsOn(
+        verifyArchitectureFoundation,
+        ":application:test",
+        ":core:traffic:jvmTest",
+        ":engine:grpc:test",
+        ":engine:proxy:test",
+        ":data:desktop:jvmTest",
+        ":storage:jvmTest",
+        ":testingServer:test",
+        ":ui:desktop:apiStudio:jvmTest",
+        ":ui:desktop:breakpointManager:jvmTest",
+        ":ui:desktop:apiStudio:grpc:jvmTest",
+        ":ui:desktop:traffic:jvmTest",
+        ":products:desktop:test",
+    )
+}
+
 /** Standard Phase 18 release gate; extended soak is invoked separately with its configured duration. */
 tasks.register("phase18ReleaseGate") {
     group = "verification"

@@ -44,9 +44,12 @@ fun TrafficInspectorPanel(
     activeRequestSubTab: InspectorSubTab = InspectorSubTab.BODY,
     activeResponseSubTab: InspectorSubTab = InspectorSubTab.BODY,
     preparedState: InspectorPreparedState = InspectorPreparedState(),
+    protocolMessages: ProtocolMessagesUiState = ProtocolMessagesUiState(),
     onTabSelected: (InspectorTab) -> Unit,
     onRequestSubTabSelected: (InspectorSubTab) -> Unit = {},
     onResponseSubTabSelected: (InspectorSubTab) -> Unit = {},
+    onProtocolMessageSelected: (com.devuloopers.knet.traffic.id.ProtocolMessageId) -> Unit = {},
+    onLoadMoreProtocolMessages: () -> Unit = {},
     onSendToApiStudio: (String) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -79,6 +82,13 @@ fun TrafficInspectorPanel(
                     selected = activeTab == InspectorTab.RESPONSE,
                     onClick = { onTabSelected(InspectorTab.RESPONSE) }
                 )
+                if (protocolMessages.totalCount > 0L || activeTab == InspectorTab.MESSAGES) {
+                    KNetTab(
+                        title = "Messages (${protocolMessages.totalCount})",
+                        selected = activeTab == InspectorTab.MESSAGES,
+                        onClick = { onTabSelected(InspectorTab.MESSAGES) },
+                    )
+                }
                 KNetTab(
                     title = "Timeline",
                     selected = activeTab == InspectorTab.TIMELINE,
@@ -194,6 +204,15 @@ fun TrafficInspectorPanel(
                             activeSubTab = activeResponseSubTab,
                             onSubTabSelected = onResponseSubTabSelected,
                             modifier = Modifier.fillMaxSize()
+                        )
+                    }
+
+                    InspectorTab.MESSAGES -> {
+                        ProtocolMessagesPanel(
+                            state = protocolMessages,
+                            onMessageSelected = onProtocolMessageSelected,
+                            onLoadMore = onLoadMoreProtocolMessages,
+                            modifier = Modifier.fillMaxSize(),
                         )
                     }
 

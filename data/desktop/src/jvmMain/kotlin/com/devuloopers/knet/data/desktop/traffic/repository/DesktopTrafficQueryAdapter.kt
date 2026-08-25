@@ -4,11 +4,16 @@ import com.devuloopers.knet.application.port.traffic.BodyChunk
 import com.devuloopers.knet.application.port.traffic.BodyRange
 import com.devuloopers.knet.application.port.traffic.BodyStorePort
 import com.devuloopers.knet.application.port.traffic.TrafficGeneration
+import com.devuloopers.knet.application.port.traffic.ProtocolMessagePage
+import com.devuloopers.knet.application.port.traffic.ProtocolMessagePageCursor
+import com.devuloopers.knet.application.port.traffic.ProtocolMessagePageQuery
+import com.devuloopers.knet.application.port.traffic.ProtocolMessageQueryPort
 import com.devuloopers.knet.application.port.traffic.TrafficPage
 import com.devuloopers.knet.application.port.traffic.TrafficPageQuery
 import com.devuloopers.knet.application.port.traffic.TrafficQueryPort
 import com.devuloopers.knet.application.port.traffic.TrafficSessionCatalogPort
 import com.devuloopers.knet.data.desktop.capture.CanonicalTrafficQueryAdapter
+import com.devuloopers.knet.data.desktop.capture.CanonicalCaptureEntityMapper
 import com.devuloopers.knet.storage.capture.dao.CanonicalCaptureDao
 import com.devuloopers.knet.traffic.id.BodyId
 import com.devuloopers.knet.traffic.id.CaptureSessionId
@@ -28,7 +33,7 @@ import kotlinx.coroutines.flow.updateAndGet
 class DesktopTrafficQueryAdapter(
     private val dao: CanonicalCaptureDao,
     private val bodyStore: BodyStorePort,
-) : TrafficQueryPort, TrafficSessionCatalogPort {
+) : TrafficQueryPort, TrafficSessionCatalogPort, ProtocolMessageQueryPort {
     private val generation = MutableStateFlow(0L)
 
     override val generations: Flow<TrafficGeneration> = dao.observeLatestSessionId()
@@ -57,6 +62,39 @@ class DesktopTrafficQueryAdapter(
 
     override suspend fun readBody(bodyId: BodyId, range: BodyRange): BodyChunk =
         bodyStore.readBody(bodyId, range)
+
+    override fun observeChanges(exchangeId: ExchangeId): Flow<Long> =
+        dao.observeDuplexMessageChangeScalar(exchangeId.value).distinctUntilChanged()
+
+    override suspend fun queryMessages(query: ProtocolMessagePageQuery): ProtocolMessagePage {
+        val cursorValue = query.cursor?.value
+        val cursorSequence = cursorValue?.substringBefore(':')?.toLongOrNull()?.also {
+            require(it > 0L) { "Protocol message cursor must be positive." }
+        }
+        require(cursorValue == null || cursorSequence != null) { "Invalid protocol message cursor." }
+        val totalCount = if (cursorValue == null) {
+            dao.countDuplexMessages(query.exchangeId.value)
+        } else {
+            cursorValue.substringAfter(':', missingDelimiterValue = "").toLongOrNull()
+                ?: dao.countDuplexMessages(query.exchangeId.value)
+        }
+        val entities = dao.getDuplexMessagePage(
+            exchangeId = query.exchangeId.value,
+            afterCaptureSequence = cursorSequence,
+            limit = query.limit + 1,
+        )
+        val pageEntities = entities.take(query.limit)
+        val bodies = pageEntities.mapNotNull { it.bodyId }.distinct().takeIf { it.isNotEmpty() }
+            ?.let { dao.getBodies(it).associateBy { body -> body.id } }
+            ?: emptyMap()
+        return ProtocolMessagePage(
+            items = pageEntities.map { CanonicalCaptureEntityMapper.messageSnapshot(it, bodies) },
+            nextCursor = pageEntities.lastOrNull()?.takeIf { entities.size > query.limit }?.let {
+                ProtocolMessagePageCursor("${it.captureSequence}:$totalCount")
+            },
+            totalCount = totalCount,
+        )
+    }
 
     private fun adapter(sessionId: CaptureSessionId?): CanonicalTrafficQueryAdapter =
         CanonicalTrafficQueryAdapter(

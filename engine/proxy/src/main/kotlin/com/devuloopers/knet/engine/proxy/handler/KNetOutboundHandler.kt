@@ -7,6 +7,10 @@ import com.devuloopers.knet.engine.proxy.http.HttpOneSemantics
 import com.devuloopers.knet.engine.proxy.mapper.HttpMapper
 import com.devuloopers.knet.engine.proxy.pipeline.ProxyChannelAttributes
 import com.devuloopers.knet.engine.proxy.timing.NetworkTimingCollector
+import com.devuloopers.knet.engine.proxy.inspection.NettyPayloadSlice
+import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamInspector
+import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamTransformer
+import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamTransformResult
 import com.devuloopers.knet.traffic.model.ExchangeState
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.TrafficDirection
@@ -18,6 +22,9 @@ import io.netty.channel.Channel
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.SimpleChannelInboundHandler
 import io.netty.handler.codec.http.DefaultFullHttpResponse
+import io.netty.handler.codec.http.DefaultHttpContent
+import io.netty.handler.codec.http.DefaultHttpResponse
+import io.netty.handler.codec.http.DefaultLastHttpContent
 import io.netty.handler.codec.http.FullHttpResponse
 import io.netty.handler.codec.http.HttpContent
 import io.netty.handler.codec.http.HttpHeaderNames
@@ -64,6 +71,8 @@ internal class KNetOutboundHandler(
     private val onRequestHeadWritten: (Channel) -> Unit = {},
     private val onUpstreamWritable: () -> Unit = {},
     private val upstreamProtocol: ApplicationProtocol? = null,
+    private val streamInspectors: List<ProxyStreamInspector> = emptyList(),
+    private val streamTransformer: ProxyStreamTransformer? = null,
 ) : SimpleChannelInboundHandler<HttpObject>() {
     private var responseStarted: Boolean = false
     private var isKeepAlive: Boolean = true
@@ -73,6 +82,8 @@ internal class KNetOutboundHandler(
     private var provisionalResponseInProgress: Boolean = false
     private var responseObservedBytes: Long = 0L
     private var responseContentEncoding: ContentEncoding? = null
+    private val transformQueue = ArrayDeque<TransformInput>()
+    private var transformInProgress: Boolean = false
 
     override fun channelActive(context: ChannelHandlerContext) {
         context.writeAndFlush(request).addListener { writeFuture ->
@@ -96,7 +107,7 @@ internal class KNetOutboundHandler(
     override fun channelRead0(context: ChannelHandlerContext, message: HttpObject) {
         when (message) {
             is FullHttpResponse -> acceptFullResponse(context, message)
-            is HttpResponse -> acceptResponseHead(message)
+            is HttpResponse -> acceptResponseHead(message, retainForWrite = true)
             is HttpContent -> acceptResponseContent(context, message)
         }
     }
@@ -107,6 +118,20 @@ internal class KNetOutboundHandler(
             HttpOneSemantics.prepareProvisionalResponse(response, downstreamPolicy)
             KNetLogger.debug(OUTBOUND_TAG) { "KNet Proxy Provisional Full Response: ${response.status()}" }
             lastClientWrite = clientChannel.writeAndFlush(ReferenceCountUtil.retain(response))
+            return
+        }
+        if (streamTransformer != null) {
+            val head = DefaultHttpResponse(response.protocolVersion(), response.status())
+            head.headers().set(response.headers())
+            acceptResponseHead(head, retainForWrite = false)
+            enqueueTransformedResponse(
+                context = context,
+                payload = ByteArray(response.content().readableBytes()).also { bytes ->
+                    response.content().getBytes(response.content().readerIndex(), bytes)
+                },
+                isLast = true,
+                trailers = HttpMapper.mapHeaders(response.trailingHeaders()),
+            )
             return
         }
         timingCollector.markFirstByteReceived()
@@ -122,8 +147,14 @@ internal class KNetOutboundHandler(
 
         val completedAt = Clock.System.now().toEpochMilliseconds()
         capture?.observeResponse(upstreamResponseHead, completedAt)
+        streamInspectors.forEach { inspector -> runCatching { inspector.onResponse(upstreamResponseHead, completedAt) } }
         val trailers = HttpMapper.mapHeaders(response.trailingHeaders())
         if (trailers.isNotEmpty()) {
+            streamInspectors.forEach { inspector ->
+                runCatching {
+                    inspector.onTrailers(TrafficDirection.SERVER_TO_CLIENT, trailers, completedAt)
+                }
+            }
             capture?.observeTrailers(
                 direction = TrafficDirection.SERVER_TO_CLIENT,
                 trailers = trailers,
@@ -136,11 +167,13 @@ internal class KNetOutboundHandler(
             content = response.content(),
             contentEncoding = HttpMapper.contentEncoding(response.headers()),
         )
+        observePayload(response.content(), completedAt)
         capture?.completeBody(
             direction = TrafficDirection.SERVER_TO_CLIENT,
             observedBytes = response.content().readableBytes().toLong(),
             occurredAtEpochMillis = completedAt,
         )
+        observeDirectionEnd(completedAt)
         responseComplete = true
         val timings = timingCollector.getTimings()
         lastClientWrite = clientChannel.writeAndFlush(ReferenceCountUtil.retain(response)).addListener { future ->
@@ -151,7 +184,7 @@ internal class KNetOutboundHandler(
         }
     }
 
-    private fun acceptResponseHead(response: HttpResponse) {
+    private fun acceptResponseHead(response: HttpResponse, retainForWrite: Boolean) {
         publishUpstreamProtocol(response)
         provisionalResponseInProgress = response.status().code() in 100..199 && response.status().code() != 101
         if (provisionalResponseInProgress) {
@@ -164,15 +197,24 @@ internal class KNetOutboundHandler(
         timingCollector.markFirstByteReceived()
         responseStarted = true
         responseContentEncoding = HttpMapper.contentEncoding(response.headers())
+        if (streamTransformer != null) {
+            // A message replacement can change the framed payload length without buffering the RPC.
+            response.headers().remove(HttpHeaderNames.CONTENT_LENGTH)
+        }
         val upstreamResponseHead = HttpMapper.mapResponseHead(response, upstreamProtocol)
         isKeepAlive = HttpOneSemantics.prepareFinalResponse(
             response = response,
             requestMethod = request.method(),
             policy = downstreamPolicy,
         )
-        capture?.observeResponse(upstreamResponseHead, Clock.System.now().toEpochMilliseconds())
+        val observedAt = Clock.System.now().toEpochMilliseconds()
+        capture?.observeResponse(upstreamResponseHead, observedAt)
+        streamInspectors.forEach { inspector -> runCatching { inspector.onResponse(upstreamResponseHead, observedAt) } }
+        streamTransformer?.onResponse(upstreamResponseHead, observedAt)
         KNetLogger.info(OUTBOUND_TAG) { "KNet Proxy Response Headers: ${response.status()}" }
-        lastClientWrite = clientChannel.writeAndFlush(ReferenceCountUtil.retain(response))
+        lastClientWrite = clientChannel.writeAndFlush(
+            if (retainForWrite) ReferenceCountUtil.retain(response) else response,
+        )
     }
 
     private fun acceptResponseContent(context: ChannelHandlerContext, content: HttpContent) {
@@ -182,6 +224,108 @@ internal class KNetOutboundHandler(
             if (content is LastHttpContent) provisionalResponseInProgress = false
             return
         }
+        val transformer = streamTransformer
+        if (transformer != null) {
+            val payload = ByteArray(content.content().readableBytes())
+            content.content().getBytes(content.content().readerIndex(), payload)
+            enqueueTransformedResponse(
+                context = context,
+                payload = payload,
+                isLast = content is LastHttpContent,
+                trailers = if (content is LastHttpContent) {
+                    HttpMapper.mapHeaders(content.trailingHeaders())
+                } else {
+                    emptyList()
+                },
+            )
+            return
+        }
+        acceptPreparedResponseContent(context, content, retainForWrite = true)
+    }
+
+    /** Queues a heap-owned response slice and pauses upstream reads until its decision completes. */
+    private fun enqueueTransformedResponse(
+        context: ChannelHandlerContext,
+        payload: ByteArray,
+        isLast: Boolean,
+        trailers: List<com.devuloopers.knet.traffic.model.http.HeaderField>,
+    ) {
+        transformQueue.addLast(TransformInput(payload, isLast, trailers))
+        processNextResponseTransform(context)
+    }
+
+    private fun processNextResponseTransform(context: ChannelHandlerContext) {
+        if (transformInProgress || responseComplete) return
+        val input = transformQueue.removeFirstOrNull() ?: run {
+            if (context.channel().isActive) context.read()
+            return
+        }
+        val transformer = streamTransformer ?: return
+        transformInProgress = true
+        val now = Clock.System.now().toEpochMilliseconds()
+        if (input.trailers.isNotEmpty()) {
+            transformer.onTrailers(TrafficDirection.SERVER_TO_CLIENT, input.trailers, now)
+        }
+        transformer.transform(
+            direction = TrafficDirection.SERVER_TO_CLIENT,
+            payload = input.payload,
+            endOfDirection = input.isLast,
+            occurredAtEpochMillis = now,
+        ).whenComplete { result, failure ->
+            context.executor().execute {
+                transformInProgress = false
+                if (responseComplete) return@execute
+                if (failure != null || result is ProxyStreamTransformResult.DropStream) {
+                    terminateTransformedResponse(
+                        context,
+                        (result as? ProxyStreamTransformResult.DropStream)?.errorCode
+                            ?: TRANSFORM_ERROR,
+                    )
+                    return@execute
+                }
+                val forwarded = (result as ProxyStreamTransformResult.Forward).payload
+                if (input.isLast || forwarded.isNotEmpty()) {
+                    val prepared = if (input.isLast) {
+                        DefaultLastHttpContent(Unpooled.wrappedBuffer(forwarded)).also { last ->
+                            input.trailers.forEach { header ->
+                                last.trailingHeaders().add(header.name.value, header.value)
+                            }
+                        }
+                    } else {
+                        DefaultHttpContent(Unpooled.wrappedBuffer(forwarded))
+                    }
+                    acceptPreparedResponseContent(context, prepared, retainForWrite = false)
+                }
+                if (!responseComplete) advanceTransformedResponse(context)
+            }
+        }
+    }
+
+    /** Preserves the ordinary downstream-write-to-upstream-read backpressure contract. */
+    private fun advanceTransformedResponse(context: ChannelHandlerContext) {
+        val downstreamWrite = lastClientWrite
+        lastClientWrite = null
+        if (downstreamWrite == null) {
+            processNextResponseTransform(context)
+            return
+        }
+        downstreamWrite.addListener { future ->
+            context.executor().execute {
+                if (future.isSuccess && context.channel().isActive && !responseComplete) {
+                    processNextResponseTransform(context)
+                } else if (!future.isSuccess) {
+                    terminateTransformedResponse(context, DOWNSTREAM_RESPONSE_REJECTED)
+                }
+            }
+        }
+    }
+
+    /** Captures and forwards one post-transform response object. */
+    private fun acceptPreparedResponseContent(
+        context: ChannelHandlerContext,
+        content: HttpContent,
+        retainForWrite: Boolean,
+    ) {
 
         val readableBytes = content.content().readableBytes()
         responseObservedBytes += readableBytes.toLong()
@@ -191,9 +335,19 @@ internal class KNetOutboundHandler(
             content = content.content(),
             contentEncoding = responseContentEncoding,
         )
+        observePayload(content.content(), Clock.System.now().toEpochMilliseconds())
         if (content is LastHttpContent) {
             val trailers = HttpMapper.mapHeaders(content.trailingHeaders())
             if (trailers.isNotEmpty()) {
+                streamInspectors.forEach { inspector ->
+                    runCatching {
+                        inspector.onTrailers(
+                            TrafficDirection.SERVER_TO_CLIENT,
+                            trailers,
+                            Clock.System.now().toEpochMilliseconds(),
+                        )
+                    }
+                }
                 capture?.observeTrailers(
                     direction = TrafficDirection.SERVER_TO_CLIENT,
                     trailers = trailers,
@@ -202,7 +356,9 @@ internal class KNetOutboundHandler(
             }
             HttpOneSemantics.prepareFinalContent(content, downstreamPolicy)
         }
-        val clientWrite = clientChannel.writeAndFlush(ReferenceCountUtil.retain(content))
+        val clientWrite = clientChannel.writeAndFlush(
+            if (retainForWrite) ReferenceCountUtil.retain(content) else content,
+        )
         lastClientWrite = clientWrite
         if (content !is LastHttpContent) return
 
@@ -214,6 +370,7 @@ internal class KNetOutboundHandler(
             observedBytes = responseObservedBytes,
             occurredAtEpochMillis = completedAt,
         )
+        observeDirectionEnd(completedAt)
         responseComplete = true
         clientWrite.addListener { future ->
             terminateAfterDownstreamWrite(future.isSuccess, timings, completedAt)
@@ -230,6 +387,10 @@ internal class KNetOutboundHandler(
         val downstreamWrite = lastClientWrite
         lastClientWrite = null
         if (!responseComplete) {
+            if (transformInProgress || transformQueue.isNotEmpty()) {
+                super.channelReadComplete(context)
+                return
+            }
             if (downstreamWrite == null) {
                 context.read()
             } else {
@@ -251,6 +412,7 @@ internal class KNetOutboundHandler(
         } else {
             KNetLogger.error(OUTBOUND_TAG, cause) { "KNet Outbound Exception: ${cause.message}" }
         }
+        streamTransformer?.cancel(OUTBOUND_FAILURE)
 
         if (!responseStarted) {
             sendSyntheticBadGateway("Outbound Proxy Exception: ${cause.message ?: cause::class.simpleName}")
@@ -261,6 +423,8 @@ internal class KNetOutboundHandler(
     }
 
     override fun channelInactive(context: ChannelHandlerContext) {
+        streamTransformer?.cancel(OUTBOUND_FAILURE)
+        transformQueue.clear()
         if (!responseComplete && !completionPublished.get()) {
             if (responseStarted) {
                 terminatePartialResponse()
@@ -305,6 +469,11 @@ internal class KNetOutboundHandler(
                 occurredAtEpochMillis = failedAt,
                 errorCode = if (future.isSuccess) OUTBOUND_FAILURE else DOWNSTREAM_RESPONSE_REJECTED,
             )
+            notifyTermination(
+                state = if (future.isSuccess) ExchangeState.FAILED else ExchangeState.CANCELLED,
+                occurredAtEpochMillis = failedAt,
+                errorCode = if (future.isSuccess) OUTBOUND_FAILURE else DOWNSTREAM_RESPONSE_REJECTED,
+            )
             publishCompletion(false)
             clientChannel.close()
         }
@@ -326,8 +495,34 @@ internal class KNetOutboundHandler(
             occurredAtEpochMillis = failedAt,
             errorCode = OUTBOUND_FAILURE,
         )
+        notifyTermination(ExchangeState.FAILED, failedAt, OUTBOUND_FAILURE)
         publishCompletion(false)
         clientChannel.close()
+    }
+
+    /** Terminates only the active exchange/HTTP/2 child stream after a protocol decision drops it. */
+    private fun terminateTransformedResponse(context: ChannelHandlerContext, errorCode: String) {
+        if (responseComplete || completionPublished.get()) return
+        val failedAt = Clock.System.now().toEpochMilliseconds()
+        responseComplete = true
+        transformQueue.clear()
+        streamTransformer?.cancel(errorCode)
+        capture?.cancelBody(
+            direction = TrafficDirection.SERVER_TO_CLIENT,
+            observedBytes = responseObservedBytes,
+            occurredAtEpochMillis = failedAt,
+            errorCode = errorCode,
+        )
+        capture?.terminate(
+            state = ExchangeState.CANCELLED,
+            timings = timingCollector.getTimings(),
+            occurredAtEpochMillis = failedAt,
+            errorCode = errorCode,
+        )
+        notifyTermination(ExchangeState.CANCELLED, failedAt, errorCode)
+        publishCompletion(false)
+        clientChannel.close()
+        context.close()
     }
 
     /** Records completion only after the downstream channel accepts the final response write. */
@@ -342,6 +537,38 @@ internal class KNetOutboundHandler(
             occurredAtEpochMillis = occurredAtEpochMillis,
             errorCode = if (delivered) null else DOWNSTREAM_RESPONSE_REJECTED,
         )
+        notifyTermination(
+            state = if (delivered) ExchangeState.COMPLETED else ExchangeState.CANCELLED,
+            occurredAtEpochMillis = occurredAtEpochMillis,
+            errorCode = if (delivered) null else DOWNSTREAM_RESPONSE_REJECTED,
+        )
+    }
+
+    /** Delivers a borrowed response slice to additive protocol inspectors. */
+    private fun observePayload(content: ByteBuf, occurredAtEpochMillis: Long) {
+        if (!content.isReadable) return
+        val payload = NettyPayloadSlice(content)
+        streamInspectors.forEach { inspector ->
+            runCatching {
+                inspector.onPayload(TrafficDirection.SERVER_TO_CLIENT, payload, occurredAtEpochMillis)
+            }
+        }
+    }
+
+    private fun observeDirectionEnd(occurredAtEpochMillis: Long) {
+        streamInspectors.forEach { inspector ->
+            runCatching { inspector.onDirectionEnd(TrafficDirection.SERVER_TO_CLIENT, occurredAtEpochMillis) }
+        }
+    }
+
+    private fun notifyTermination(
+        state: ExchangeState,
+        occurredAtEpochMillis: Long,
+        errorCode: String?,
+    ) {
+        streamInspectors.forEach { inspector ->
+            runCatching { inspector.onExchangeTerminated(state, occurredAtEpochMillis, errorCode) }
+        }
     }
 
     /** Publishes one terminal callback even when write, close, and exception events race. */
@@ -359,7 +586,14 @@ internal class KNetOutboundHandler(
     private companion object {
         const val OUTBOUND_FAILURE: String = "upstream_response_failed"
         const val DOWNSTREAM_RESPONSE_REJECTED: String = "downstream_response_rejected"
+        const val TRANSFORM_ERROR: String = "protocol_stream_transform_failed"
     }
+
+    private data class TransformInput(
+        val payload: ByteArray,
+        val isLast: Boolean,
+        val trailers: List<com.devuloopers.knet.traffic.model.http.HeaderField>,
+    )
 }
 
 /** Copies only bytes admitted by the capture sink and never changes the source buffer indices. */

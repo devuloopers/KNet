@@ -123,7 +123,7 @@ There are no detected Gradle dependency cycles. The problem is direction and abs
 | `:ui:desktop:app` | Shell, workspace routing, cross-feature coordination | domain, interceptor, UI features | desktop app | **SUSPICIOUS:** shell coordinates feature ViewModels and engine-backed breakpoint state |
 | `:ui:desktop:workspace` | Workspace layout feature | domain/UI core | app/desktop | **ACCEPTABLE**, with overlap in app shell |
 | `:ui:desktop:traffic` | Traffic list, filtering, selection, body inspection, proxy controls | domain, formatter, UI core | app | **Functional but oversized state/ViewModel and direct engine dependency** |
-| `:ui:desktop:apistudio` | API request authoring, collections, execution | domain, HTTP, script, UI core/editor/panel | app | **Feature-cohesive**, but has large ViewModel and overlapping models |
+| `:ui:desktop:apiStudio` | API request authoring, collections, execution | domain, HTTP, script, UI core/editor/panel | app | **Feature-cohesive**, but has large ViewModel and overlapping models |
 | `:ui:desktop:httpPanel` | Request/response editors and viewers | domain, formatter, script, UI core/editor | API Studio/traffic | **ACCEPTABLE presentation component with implementation leakage** |
 | `:ui:desktop:breakpointManager` | Breakpoint rules and live interception drawer | domain, interceptor, UI core/panel | app | **Boundary violation:** presentation directly understands engine/global sessions |
 | `:ui:desktop:certificate` | CA/imported certificate management and onboarding | domain, certificate, portal, UI core | app | **Boundary violation:** presentation directly depends on concrete engines |
@@ -160,7 +160,7 @@ There are no detected Gradle dependency cycles. The problem is direction and abs
 :ui:desktop:traffic            -> :core:domain + :engine:formatter
 :ui:desktop:certificate        -> :core:domain + :engine:certificate + :engine:portal
 :ui:desktop:settings           -> :core:domain + :engine:certificate
-:ui:desktop:apistudio          -> :core:domain + :core:http + :engine:script
+:ui:desktop:apiStudio          -> :core:domain + :core:http + :engine:script
 :ui:desktop:httpPanel          -> :core:domain + :engine:formatter + :engine:script
 :ui:desktop:breakpointManager  -> :core:domain + :engine:interceptor
 ```

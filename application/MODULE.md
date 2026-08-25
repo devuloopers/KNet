@@ -25,6 +25,8 @@ Owns JVM desktop application use cases and UI-neutral ports that coordinate KNet
   or exposing protocol-specific matching to the proxy.
 - Global interception disablement immediately continues existing pauses unchanged and prevents candidates
   that raced with the toggle from entering the pending queue.
+- Protocol-neutral framed-message breakpoint candidates, decisions, and gates. A protocol engine may pause,
+  replace, or drop one message stream without exposing its wire types to the coordinator or drawer shell.
 - UI-neutral protocol criteria field schemas, extension-owned criteria compilation, fail-closed
   matching, and bounded compact request observations correlated to response phases by `ExchangeId`.
 - Protocol-aware breakpoint draft preparation from one canonical exchange: semantic extensions receive
@@ -32,6 +34,9 @@ Owns JVM desktop application use cases and UI-neutral ports that coordinate KNet
   parameters are excluded from the endpoint pattern, and unrecognized traffic falls back to HTTP criteria.
 - Asynchronous semantic-inspection scheduling, generic annotation persistence/query, bounded multi-exchange
   annotation observation for list presentation, and capability truth.
+- Protocol-neutral API Studio authoring, explicit reflection, batch execution, and interactive streaming-session
+  contracts. It also owns the opaque, versioned workspace-document boundary used to persist incomplete drafts
+  without teaching the application layer a protocol's editor fields. Concrete codecs and clients remain outer-owned.
 - Connectivity provider/mechanism coordination, canonical certificate-management summaries/rules,
   pairing, durable companion-device coordination, read-only stock-phone Wi-Fi lifecycle observation, and
   sandboxed script-execution ports.
@@ -79,3 +84,7 @@ API Studio execution accepts one complete domain document; it has no dependency 
 can therefore be reused by another desktop surface, automation entry point, or remote-control adapter.
 It also has no traffic-recording port: direct execution returns its response only to the caller, while a
 proxy-routed execution can appear in Traffic exclusively through the active proxy capture ingress.
+Strict authoring/execution adapters are selected by `RequestKindId`. Persisted workspace documents separately carry
+an open `ApiStudioEditorId`, semantic request kind, placement, generated/user-defined name ownership, badge, payload
+version, and defensively copied opaque bytes. Adding gRPC, WebSocket, or another future editor adds its codec,
+contribution, runtime adapter, and product binding without adding a protocol branch to these use cases.

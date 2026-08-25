@@ -2,11 +2,15 @@ package com.devuloopers.knet.products.desktop.di.traffic
 
 import com.devuloopers.knet.application.port.traffic.TrafficMaintenancePort
 import com.devuloopers.knet.application.port.traffic.TrafficQueryPort
+import com.devuloopers.knet.application.port.traffic.ProtocolMessageQueryPort
 import com.devuloopers.knet.application.port.traffic.TrafficSessionCatalogPort
 import com.devuloopers.knet.application.usecase.traffic.ClearTrafficHistoryUseCase
 import com.devuloopers.knet.application.usecase.traffic.LoadTrafficExchangeDetailsUseCase
 import com.devuloopers.knet.application.usecase.traffic.ObserveLatestTrafficSessionUseCase
 import com.devuloopers.knet.application.usecase.traffic.ObserveTrafficGenerationsUseCase
+import com.devuloopers.knet.application.usecase.traffic.ObserveProtocolMessageChangesUseCase
+import com.devuloopers.knet.application.usecase.traffic.QueryProtocolMessagesUseCase
+import com.devuloopers.knet.application.usecase.traffic.LoadProtocolMessageBodyUseCase
 import com.devuloopers.knet.application.usecase.traffic.PrepareTrafficRequestUseCase
 import com.devuloopers.knet.application.usecase.traffic.PrepareCapturedNetworkRequestUseCase
 import com.devuloopers.knet.application.usecase.traffic.PauseTrafficCaptureUseCase
@@ -36,6 +40,7 @@ internal val trafficBindings: Module = module {
         )
     }
     single<TrafficQueryPort> { get<DesktopTrafficQueryAdapter>() }
+    single<ProtocolMessageQueryPort> { get<DesktopTrafficQueryAdapter>() }
     single<TrafficSessionCatalogPort> { get<DesktopTrafficQueryAdapter>() }
 
     single { ClearTrafficHistoryUseCase(get(), get()) }
@@ -43,6 +48,9 @@ internal val trafficBindings: Module = module {
     factory { ObserveLatestTrafficSessionUseCase(get()) }
     factory { QueryTrafficPageUseCase(get()) }
     factory { ObserveTrafficGenerationsUseCase(get()) }
+    factory { ObserveProtocolMessageChangesUseCase(get()) }
+    factory { QueryProtocolMessagesUseCase(get()) }
+    factory { LoadProtocolMessageBodyUseCase(get(), get()) }
     factory { PrepareTrafficRequestUseCase(get()) }
     factory { PrepareCapturedNetworkRequestUseCase(get()) }
     factory { PauseTrafficCaptureUseCase(get()) }
@@ -53,6 +61,9 @@ internal val trafficBindings: Module = module {
             observeLatestTrafficSessionUseCase = get(),
             queryTrafficPageUseCase = get(),
             observeTrafficGenerationsUseCase = get(),
+            observeProtocolMessageChangesUseCase = get(),
+            queryProtocolMessagesUseCase = get(),
+            loadProtocolMessageBodyUseCase = get(),
             clearTrafficHistoryUseCase = get(),
             startLoopbackProxyUseCase = get(),
             stopProxyRuntimeUseCase = get(),
@@ -69,6 +80,7 @@ internal val trafficBindings: Module = module {
             prepareBreakpointRuleDraftUseCase = get(),
             observeRulesUseCase = get(),
             observePendingBreakpointsUseCase = get(),
+            observePendingProtocolMessageBreakpointsUseCase = get(),
             getWorkspaceLayoutUseCase = get(),
             updateWorkspaceLayoutUseCase = get(),
         )

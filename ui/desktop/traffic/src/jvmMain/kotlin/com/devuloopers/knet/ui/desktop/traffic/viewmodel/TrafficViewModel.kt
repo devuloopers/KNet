@@ -7,6 +7,10 @@ import com.devuloopers.knet.application.usecase.traffic.LoadTrafficExchangeDetai
 import com.devuloopers.knet.application.usecase.traffic.ClearTrafficHistoryUseCase
 import com.devuloopers.knet.application.usecase.traffic.ObserveLatestTrafficSessionUseCase
 import com.devuloopers.knet.application.usecase.traffic.ObserveTrafficGenerationsUseCase
+import com.devuloopers.knet.application.usecase.traffic.ObserveProtocolMessageChangesUseCase
+import com.devuloopers.knet.application.usecase.traffic.QueryProtocolMessagesUseCase
+import com.devuloopers.knet.application.usecase.traffic.LoadProtocolMessageBodyUseCase
+import com.devuloopers.knet.application.usecase.traffic.LoadProtocolMessageBodyResult
 import com.devuloopers.knet.application.usecase.traffic.PrepareCapturedNetworkRequestResult
 import com.devuloopers.knet.application.usecase.traffic.PrepareCapturedNetworkRequestUseCase
 import com.devuloopers.knet.application.usecase.traffic.QueryTrafficPageUseCase
@@ -15,11 +19,14 @@ import com.devuloopers.knet.application.usecase.traffic.PauseTrafficCaptureUseCa
 import com.devuloopers.knet.application.usecase.traffic.ResumeTrafficCaptureUseCase
 import com.devuloopers.knet.application.usecase.traffic.ObserveTrafficCaptureStateUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.ObservePendingBreakpointsUseCase
+import com.devuloopers.knet.application.usecase.breakpoint.ObservePendingProtocolMessageBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.PrepareBreakpointRuleDraftResult
 import com.devuloopers.knet.application.usecase.breakpoint.PrepareBreakpointRuleDraftUseCase
 import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
+import com.devuloopers.knet.application.port.breakpoint.PendingProtocolMessageBreakpoint
 import com.devuloopers.knet.application.port.inspection.ObserveInspectionAnnotationsUseCase
 import com.devuloopers.knet.application.port.traffic.TrafficPageQuery
+import com.devuloopers.knet.application.port.traffic.ProtocolMessagePageQuery
 import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
 import com.devuloopers.knet.application.port.proxy.ProxyStopReason
 import com.devuloopers.knet.application.port.traffic.CaptureSessionState
@@ -63,6 +70,9 @@ class TrafficViewModel(
     private val observeLatestTrafficSessionUseCase: ObserveLatestTrafficSessionUseCase,
     private val queryTrafficPageUseCase: QueryTrafficPageUseCase,
     private val observeTrafficGenerationsUseCase: ObserveTrafficGenerationsUseCase,
+    private val observeProtocolMessageChangesUseCase: ObserveProtocolMessageChangesUseCase,
+    private val queryProtocolMessagesUseCase: QueryProtocolMessagesUseCase,
+    private val loadProtocolMessageBodyUseCase: LoadProtocolMessageBodyUseCase,
     private val clearTrafficHistoryUseCase: ClearTrafficHistoryUseCase,
     private val startLoopbackProxyUseCase: StartLoopbackProxyUseCase,
     private val stopProxyRuntimeUseCase: StopProxyRuntimeUseCase,
@@ -79,6 +89,7 @@ class TrafficViewModel(
     private val prepareBreakpointRuleDraftUseCase: PrepareBreakpointRuleDraftUseCase,
     observeRulesUseCase: ObserveRulesUseCase,
     observePendingBreakpointsUseCase: ObservePendingBreakpointsUseCase,
+    observePendingProtocolMessageBreakpointsUseCase: ObservePendingProtocolMessageBreakpointsUseCase,
     getWorkspaceLayoutUseCase: GetWorkspaceLayoutUseCase,
     private val updateWorkspaceLayoutUseCase: UpdateWorkspaceLayoutUseCase,
     private val backgroundDispatcher: CoroutineDispatcher = Dispatchers.Default,
@@ -101,6 +112,7 @@ class TrafficViewModel(
         ),
     )
     private val pageLoadMutex = Mutex()
+    private val messagePageLoadMutex = Mutex()
     private val clearPresentationMutex = Mutex()
     private var filterRefreshJob: Job? = null
     private var breakpointDraftJob: Job? = null
@@ -108,6 +120,7 @@ class TrafficViewModel(
     private var durableAnnotationJob: Job? = null
     private var durableTransactions: List<TrafficRowUiState> = emptyList()
     private var pendingBreakpoints: List<PendingBreakpoint> = emptyList()
+    private var pendingProtocolMessages: List<PendingProtocolMessageBreakpoint> = emptyList()
     private var pendingRequestDescriptors: Map<String, RequestDescriptor> = emptyMap()
     private val interceptionHistory = object :
         LinkedHashMap<String, TrafficInterceptionUiState.Matched>(64, 0.75f, true) {
@@ -179,6 +192,16 @@ class TrafficViewModel(
             }
             .launchIn(viewModelScope)
 
+        // Framed protocol-message pauses decorate the same canonical parent exchange. They do not
+        // create a second traffic row or own another copy of the HTTP body.
+        observePendingProtocolMessageBreakpointsUseCase.execute()
+            .onEach { events ->
+                pendingProtocolMessages = events
+                events.forEach(::rememberInterception)
+                publishTrafficProjection()
+            }
+            .launchIn(viewModelScope)
+
         // Serialize desired capture state and dynamic port changes without cancelling lifecycle work.
         viewModelScope.launch {
             val proxyPorts = observeApplicationSettingsUseCase.execute()
@@ -222,6 +245,9 @@ class TrafficViewModel(
                         val pendingExchange = pendingBreakpoints
                             .firstOrNull { event -> event.candidate.exchangeId.value == tx.transactionId }
                             ?.toTrafficExchangeSnapshot()
+                            ?: pendingProtocolMessages
+                                .firstOrNull { event -> event.candidate.exchangeId.value == tx.transactionId }
+                                ?.toTrafficExchangeSnapshot()
 
                         val prepared = withContext(backgroundDispatcher) {
                             val detailResult = loadTrafficExchangeDetailsUseCase.execute(
@@ -283,6 +309,113 @@ class TrafficViewModel(
                 }
                 .collect { prepared ->
                     _uiState.update { it.copy(preparedState = prepared) }
+                }
+        }
+
+        // Framed protocol messages are queried only for the selected canonical exchange. Storage
+        // emits a compact generation, while every refresh remains a bounded indexed page query.
+        viewModelScope.launch {
+            _uiState
+                .map { state -> state.selectedTransactionId }
+                .distinctUntilChanged()
+                .flatMapLatest { transactionId ->
+                    if (transactionId == null) {
+                        flowOf(ProtocolMessagesUiState())
+                    } else {
+                        val exchangeId = ExchangeId(transactionId)
+                        observeProtocolMessageChangesUseCase.execute(exchangeId)
+                            .onStart { emit(0L) }
+                            .conflate()
+                            .mapLatest {
+                                val page = withContext(backgroundDispatcher) {
+                                    queryProtocolMessagesUseCase.execute(
+                                        ProtocolMessagePageQuery(
+                                            exchangeId = exchangeId,
+                                            limit = PROTOCOL_MESSAGE_PAGE_SIZE,
+                                        ),
+                                    )
+                                }
+                                val selected = _uiState.value.protocolMessages.selectedMessageId
+                                    ?.takeIf { messageId -> page.items.any { it.id == messageId } }
+                                    ?: page.items.firstOrNull()?.id
+                                ProtocolMessagesUiState(
+                                    exchangeId = transactionId,
+                                    items = page.items,
+                                    totalCount = page.totalCount,
+                                    nextCursor = page.nextCursor,
+                                    selectedMessageId = selected,
+                                )
+                            }
+                            .catch { error ->
+                                if (error is CancellationException) throw error
+                                KNetLogger.error("TrafficViewModel", error) {
+                                    "Protocol message query failed for exchange=$transactionId"
+                                }
+                                emit(ProtocolMessagesUiState(exchangeId = transactionId))
+                            }
+                    }
+                }
+                .collect { messages ->
+                    _uiState.update { current -> current.copy(protocolMessages = messages) }
+                }
+        }
+
+        // A payload is loaded only for the selected child message and is capped by the application
+        // use case. Scrolling a large stream therefore never hydrates every protobuf message.
+        viewModelScope.launch {
+            _uiState
+                .map { state -> Triple(
+                    state.protocolMessages.exchangeId,
+                    state.protocolMessages.selectedMessage,
+                    state.preparedState.exchange,
+                ) }
+                .distinctUntilChanged()
+                .flatMapLatest { (_, message, parentExchange) ->
+                    if (message == null) {
+                        flowOf<LoadProtocolMessageBodyResult?>(null)
+                    } else {
+                        flow {
+                            emit(withContext(backgroundDispatcher) {
+                                loadProtocolMessageBodyUseCase.execute(message, parentExchange)
+                            })
+                        }
+                    }
+                }
+                .collect { result ->
+                    _uiState.update { current ->
+                        val messages = current.protocolMessages
+                        val updated = when (result) {
+                            null -> messages.copy(
+                                selectedBodyBytes = null,
+                                selectedBodyPresentation = null,
+                                selectedBodyUnavailable = false,
+                                selectedBodyTruncated = false,
+                                isBodyLoading = false,
+                            )
+                            LoadProtocolMessageBodyResult.Empty -> messages.copy(
+                                selectedBodyBytes = ByteArray(0),
+                                selectedBodyPresentation = null,
+                                selectedBodyUnavailable = false,
+                                selectedBodyTruncated = false,
+                                isBodyLoading = false,
+                            )
+                            LoadProtocolMessageBodyResult.Unavailable -> messages.copy(
+                                selectedBodyBytes = null,
+                                selectedBodyPresentation = null,
+                                selectedBodyUnavailable = true,
+                                selectedBodyTruncated = false,
+                                isBodyLoading = false,
+                            )
+                            is LoadProtocolMessageBodyResult.Available -> messages.copy(
+                                selectedBodyBytes = result.bytes,
+                                selectedBodyPresentation = result.presentation,
+                                selectedBodyUnavailable = false,
+                                selectedBodyTruncated = result.truncated,
+                                isBodyLoading = false,
+                            )
+                        }
+                        current.copy(protocolMessages = updated)
+                    }
                 }
         }
 
@@ -471,6 +604,25 @@ class TrafficViewModel(
                 _uiState.update { it.copy(activeInspectorTab = intent.tab) }
             }
 
+            is TrafficIntent.SelectProtocolMessage -> {
+                _uiState.update { current ->
+                    current.copy(
+                        protocolMessages = current.protocolMessages.copy(
+                            selectedMessageId = intent.id,
+                            selectedBodyBytes = null,
+                            selectedBodyPresentation = null,
+                            selectedBodyUnavailable = false,
+                            selectedBodyTruncated = false,
+                            isBodyLoading = true,
+                        ),
+                    )
+                }
+            }
+
+            TrafficIntent.LoadNextProtocolMessagePage -> {
+                viewModelScope.launch { loadNextProtocolMessagePage() }
+            }
+
             is TrafficIntent.SelectRequestSubTab -> {
                 _uiState.update { it.copy(activeRequestSubTab = intent.subTab) }
             }
@@ -517,6 +669,50 @@ class TrafficViewModel(
         }
     }
 
+    private suspend fun loadNextProtocolMessagePage() {
+        messagePageLoadMutex.withLock {
+            val before = _uiState.value.protocolMessages
+            val cursor = before.nextCursor ?: return
+            val exchangeId = before.exchangeId.takeIf(String::isNotBlank)?.let(::ExchangeId) ?: return
+            _uiState.update { current ->
+                current.copy(protocolMessages = current.protocolMessages.copy(isLoading = true))
+            }
+            try {
+                val page = withContext(backgroundDispatcher) {
+                    queryProtocolMessagesUseCase.execute(
+                        ProtocolMessagePageQuery(
+                            exchangeId = exchangeId,
+                            cursor = cursor,
+                            limit = PROTOCOL_MESSAGE_PAGE_SIZE,
+                        ),
+                    )
+                }
+                _uiState.update { current ->
+                    val messages = current.protocolMessages
+                    if (messages.exchangeId != exchangeId.value) return@update current
+                    val existingIds = messages.items.asSequence().map { it.id }.toHashSet()
+                    current.copy(
+                        protocolMessages = messages.copy(
+                            items = messages.items + page.items.filterNot { it.id in existingIds },
+                            totalCount = page.totalCount,
+                            nextCursor = page.nextCursor,
+                            isLoading = false,
+                        ),
+                    )
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                KNetLogger.error("TrafficViewModel", error) {
+                    "Protocol message page query failed for exchange=${exchangeId.value}"
+                }
+                _uiState.update { current ->
+                    current.copy(protocolMessages = current.protocolMessages.copy(isLoading = false))
+                }
+            }
+        }
+    }
+
     /** Reconciles capture intent while preserving the listener unless its configured port changed. */
     private suspend fun startOrResumeCapture(port: Int) {
         val runtimeState = proxyRuntimeStates.value
@@ -549,6 +745,15 @@ class TrafficViewModel(
         )
     }
 
+    private fun rememberInterception(event: PendingProtocolMessageBreakpoint) {
+        val exchangeId = event.candidate.exchangeId.value
+        val previous = interceptionHistory[exchangeId]
+        interceptionHistory[exchangeId] = TrafficInterceptionUiState.Matched(
+            ruleIds = previous?.ruleIds.orEmpty() + event.ruleId,
+            phases = previous?.phases.orEmpty() + event.candidate.phase,
+        )
+    }
+
     /**
      * Joins durable page metadata with the bounded pending-breakpoint projection by ExchangeId.
      *
@@ -558,16 +763,25 @@ class TrafficViewModel(
      */
     private fun publishTrafficProjection() {
         val pendingByExchange = pendingBreakpoints.associateBy { event -> event.candidate.exchangeId.value }
+        val pendingMessagesByExchange = pendingProtocolMessages
+            .groupBy { event -> event.candidate.exchangeId.value }
+            .mapValues { (_, events) -> events.first() }
         val durableByExchange = durableTransactions.associateBy(TrafficRowUiState::transactionId)
         val maximumDurableSequence = durableTransactions.maxOfOrNull(TrafficRowUiState::sequenceNumber) ?: 0L
-        val provisionalSequences = pendingBreakpoints
-            .filterNot { event -> event.candidate.exchangeId.value in durableByExchange }
-            .sortedWith(
-                compareBy<PendingBreakpoint> { event -> event.candidate.startedAtEpochMillis }
-                    .thenBy { event -> event.candidate.exchangeId.value },
-            )
-            .mapIndexed { index, event ->
-                event.candidate.exchangeId.value to maximumDurableSequence + index + 1L
+        val provisionalCandidates = buildList {
+            pendingBreakpoints.forEach { event ->
+                add(Triple(event.candidate.exchangeId.value, event.candidate.startedAtEpochMillis, event.id))
+            }
+            pendingProtocolMessages.forEach { event ->
+                add(Triple(event.candidate.exchangeId.value, event.candidate.startedAtEpochMillis, event.id))
+            }
+        }
+            .filterNot { (exchangeId) -> exchangeId in durableByExchange }
+            .distinctBy { (exchangeId) -> exchangeId }
+            .sortedWith(compareBy<Triple<String, Long, String>> { it.second }.thenBy { it.first })
+        val provisionalSequences = provisionalCandidates
+            .mapIndexed { index, (exchangeId) ->
+                exchangeId to maximumDurableSequence + index + 1L
             }
             .toMap()
         val projectedDurable = durableTransactions.map { row ->
@@ -591,8 +805,25 @@ class TrafficViewModel(
                 sequenceNumber = provisionalSequences.getValue(exchangeId),
             )
         }
-        val pendingIds = pendingByExchange.keys
-        val sortedRows = (pendingRows + projectedDurable.filterNot { row -> row.transactionId in pendingIds })
+        val messagePendingRows = pendingMessagesByExchange
+            .filterKeys { exchangeId -> exchangeId !in pendingByExchange }
+            .map { (exchangeId, event) ->
+                val paused = TrafficInterceptionUiState.Paused(
+                    pendingId = event.id,
+                    ruleId = event.ruleId,
+                    phase = event.candidate.phase,
+                )
+                durableByExchange[exchangeId]?.copy(
+                    status = 0,
+                    statusText = "In Progress",
+                    formattedTime = "-",
+                    interception = paused,
+                ) ?: event.toTrafficRowUiState(
+                    describeRequestUseCase.execute(event.candidate.request),
+                ).copy(sequenceNumber = provisionalSequences.getValue(exchangeId))
+            }
+        val pendingIds = pendingByExchange.keys + pendingMessagesByExchange.keys
+        val sortedRows = (pendingRows + messagePendingRows + projectedDurable.filterNot { row -> row.transactionId in pendingIds })
             .sortedWith(
                 compareByDescending<TrafficRowUiState> { row -> row.sequenceNumber }
                     .thenByDescending { row -> row.timestamp }
@@ -838,7 +1069,7 @@ class TrafficViewModel(
      * Prepares a protocol-aware breakpoint rule draft from a captured transaction.
      *
      * Semantic detection runs off the presentation thread through the application use case. The
-     * dialog opens only after one complete immutable draft is available, avoiding an HTTP-to-protocol
+     * drawer opens only after one complete immutable draft is available, avoiding an HTTP-to-protocol
      * visual transition while body inspection finishes.
      *
      * @param transactionId Target transaction UUID.
@@ -859,7 +1090,7 @@ class TrafficViewModel(
             val draft = (result as? PrepareBreakpointRuleDraftResult.Found)?.draft ?: return@launch
             _uiState.update { state ->
                 state.copy(
-                    isBreakpointDialogVisible = true,
+                    isBreakpointDrawerVisible = true,
                     prefilledBreakpointRule = draft.rule,
                     prefilledBreakpointProtocolValues = draft.protocolValues,
                 )
@@ -868,12 +1099,12 @@ class TrafficViewModel(
     }
 
     /**
-     * Closes the traffic workspace breakpoint rule dialog.
+     * Closes the traffic workspace breakpoint rule drawer.
      */
-    fun closeBreakpointDialog() {
+    fun closeBreakpointDrawer() {
         _uiState.update {
             it.copy(
-                isBreakpointDialogVisible = false,
+                isBreakpointDrawerVisible = false,
                 prefilledBreakpointRule = null,
                 prefilledBreakpointProtocolValues = emptyList(),
             )
@@ -898,6 +1129,7 @@ class TrafficViewModel(
 
     private companion object {
         private const val TRAFFIC_PAGE_SIZE = 200
+        private const val PROTOCOL_MESSAGE_PAGE_SIZE = 100
         private const val MAX_TRAFFIC_ROWS = 1_000
         private const val MAX_PREPARED_INSPECTOR_ENTRIES = 8
         private const val MAX_PREPARED_INSPECTOR_BYTES = 16L * 1_024L * 1_024L

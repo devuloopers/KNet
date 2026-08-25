@@ -16,7 +16,7 @@ kotlin {
                 implementation(project(":core:logger"))
                 api(project(":ui:desktop:traffic"))
                 api(project(":ui:desktop:connectivity"))
-                api(project(":ui:desktop:apistudio"))
+                api(project(":ui:desktop:apiStudio"))
                 api(project(":ui:desktop:certificate"))
                 api(project(":ui:desktop:breakpointManager"))
                 api(project(":ui:desktop:settings"))

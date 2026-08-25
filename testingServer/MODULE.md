@@ -15,7 +15,8 @@ routes is intentionally not retained.
 - A dedicated Netty listener owns TLS/ALPN HTTP/2 and frame-level fault fixtures. It is isolated from WebFlux so
   trailing headers, stream resets, GOAWAY, and multiplexing tests remain truthful.
 - Spring GraphQL owns GraphQL queries, mutations, and WebSocket subscriptions.
-- grpc-java owns native gRPC on a separate listener because gRPC is not an ordinary annotated WebFlux route.
+- grpc-java owns native gRPC, health, and reflection on a separate listener because gRPC is not an ordinary
+  annotated WebFlux route.
 - `static/index.html` owns the browser test dashboard; HTML is not embedded in Kotlin source.
 - `catalog/LabCatalogController` publishes supported and planned capabilities without claiming fake endpoints.
 
@@ -69,6 +70,10 @@ Currently executable: HTTP/1.1, H2C, TLS/ALPN HTTP/2, HTTP/2 multiplexing, trail
 blocks, RST_STREAM and GOAWAY faults, JSON, NDJSON, XML, SOAP, form data, multipart, CBOR, MessagePack, Protobuf
 payloads, SSE, chunked text, raw WebSocket, GraphQL HTTP, GraphQL subscriptions, and all four native gRPC RPC
 cardinalities.
+
+The gRPC fixture also exposes deterministic typed failure/trailer behavior and server reflection so descriptor
+import, operation discovery, unary/server streaming, and interactive client/bidirectional execution share one
+local contract.
 
 Explicitly deferred: gRPC-Web, HTTP/3, and WebTransport. These remain `PLANNED` in the manifest until a real
 standards-compatible listener and wire-level integration test exist.

@@ -1,0 +1,1625 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 25,
+    "identityHash": "cc9c83fbb6ba0113d50fdff3bc8d97b6",
+    "entities": [
+      {
+        "tableName": "api_collections",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAt",
+            "columnName": "createdAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "collection_folders",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `collectionId` TEXT NOT NULL, `parentId` TEXT, `name` TEXT NOT NULL, `isExpanded` INTEGER NOT NULL, `orderIndex` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "collectionId",
+            "columnName": "collectionId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "parentId",
+            "columnName": "parentId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isExpanded",
+            "columnName": "isExpanded",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "orderIndex",
+            "columnName": "orderIndex",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "saved_requests",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `folderId` TEXT NOT NULL, `collectionId` TEXT NOT NULL, `name` TEXT NOT NULL, `nameOrigin` TEXT NOT NULL DEFAULT 'USER_DEFINED', `method` TEXT NOT NULL, `httpVersionPreference` TEXT NOT NULL DEFAULT 'AUTO', `url` TEXT NOT NULL, `queryParamsJson` TEXT NOT NULL DEFAULT '[]', `headersJson` TEXT NOT NULL, `cookiesJson` TEXT NOT NULL DEFAULT '[]', `bodyType` TEXT NOT NULL, `bodyContent` TEXT NOT NULL, `bodyRawSubType` TEXT NOT NULL DEFAULT 'TEXT', `bodyFormDataJson` TEXT NOT NULL DEFAULT '[]', `bodyUrlEncodedJson` TEXT NOT NULL DEFAULT '[]', `authType` TEXT NOT NULL, `authToken` TEXT NOT NULL, `expectedStatus` INTEGER NOT NULL, `authUsername` TEXT NOT NULL, `authPassword` TEXT NOT NULL, `apiKeyName` TEXT NOT NULL, `apiKeyValue` TEXT NOT NULL, `apiKeyLocation` TEXT NOT NULL, `oauthHeaderPrefix` TEXT NOT NULL, `awsAccessKey` TEXT NOT NULL, `awsSecretKey` TEXT NOT NULL, `awsRegion` TEXT NOT NULL, `awsService` TEXT NOT NULL, `preRequestScript` TEXT NOT NULL, `testScript` TEXT NOT NULL, `scriptLanguage` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "folderId",
+            "columnName": "folderId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "collectionId",
+            "columnName": "collectionId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nameOrigin",
+            "columnName": "nameOrigin",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'USER_DEFINED'"
+          },
+          {
+            "fieldPath": "method",
+            "columnName": "method",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "httpVersionPreference",
+            "columnName": "httpVersionPreference",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'AUTO'"
+          },
+          {
+            "fieldPath": "url",
+            "columnName": "url",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "queryParamsJson",
+            "columnName": "queryParamsJson",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'[]'"
+          },
+          {
+            "fieldPath": "headersJson",
+            "columnName": "headersJson",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "cookiesJson",
+            "columnName": "cookiesJson",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'[]'"
+          },
+          {
+            "fieldPath": "bodyType",
+            "columnName": "bodyType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bodyContent",
+            "columnName": "bodyContent",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bodyRawSubType",
+            "columnName": "bodyRawSubType",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'TEXT'"
+          },
+          {
+            "fieldPath": "bodyFormDataJson",
+            "columnName": "bodyFormDataJson",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'[]'"
+          },
+          {
+            "fieldPath": "bodyUrlEncodedJson",
+            "columnName": "bodyUrlEncodedJson",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'[]'"
+          },
+          {
+            "fieldPath": "authType",
+            "columnName": "authType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "authToken",
+            "columnName": "authToken",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "expectedStatus",
+            "columnName": "expectedStatus",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "authUsername",
+            "columnName": "authUsername",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "authPassword",
+            "columnName": "authPassword",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "apiKeyName",
+            "columnName": "apiKeyName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "apiKeyValue",
+            "columnName": "apiKeyValue",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "apiKeyLocation",
+            "columnName": "apiKeyLocation",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "oauthHeaderPrefix",
+            "columnName": "oauthHeaderPrefix",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "awsAccessKey",
+            "columnName": "awsAccessKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "awsSecretKey",
+            "columnName": "awsSecretKey",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "awsRegion",
+            "columnName": "awsRegion",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "awsService",
+            "columnName": "awsService",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "preRequestScript",
+            "columnName": "preRequestScript",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "testScript",
+            "columnName": "testScript",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "scriptLanguage",
+            "columnName": "scriptLanguage",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "breakpoint_rules",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `urlPattern` TEXT NOT NULL, `method` TEXT, `phase` TEXT NOT NULL, `enabled` INTEGER NOT NULL, `priority` INTEGER NOT NULL, `protocolCriteriaType` TEXT NOT NULL, `protocolCriteriaData` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "urlPattern",
+            "columnName": "urlPattern",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "method",
+            "columnName": "method",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "phase",
+            "columnName": "phase",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "enabled",
+            "columnName": "enabled",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "priority",
+            "columnName": "priority",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "protocolCriteriaType",
+            "columnName": "protocolCriteriaType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "protocolCriteriaData",
+            "columnName": "protocolCriteriaData",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "capture_sessions",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `startedAtEpochMillis` INTEGER NOT NULL, `endedAtEpochMillis` INTEGER, `state` TEXT NOT NULL, `version` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedAtEpochMillis",
+            "columnName": "startedAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "endedAtEpochMillis",
+            "columnName": "endedAtEpochMillis",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "state",
+            "columnName": "state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "version",
+            "columnName": "version",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_capture_session_state_started",
+            "unique": false,
+            "columnNames": [
+              "state",
+              "startedAtEpochMillis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_capture_session_state_started` ON `${TABLE_NAME}` (`state`, `startedAtEpochMillis`)"
+          }
+        ]
+      },
+      {
+        "tableName": "traffic_connections",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `sessionId` TEXT NOT NULL, `sequenceVersion` INTEGER NOT NULL, `openedAtEpochMillis` INTEGER NOT NULL, `closedAtEpochMillis` INTEGER, `ingressKind` TEXT NOT NULL, `clientIdentity` TEXT, `downstreamHost` TEXT, `downstreamPort` INTEGER, `listenerHost` TEXT NOT NULL, `listenerPort` INTEGER, `transportProtocol` TEXT NOT NULL, `receivedBytes` INTEGER NOT NULL, `sentBytes` INTEGER NOT NULL, `state` TEXT NOT NULL, `terminalErrorCode` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "sessionId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sequenceVersion",
+            "columnName": "sequenceVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "openedAtEpochMillis",
+            "columnName": "openedAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "closedAtEpochMillis",
+            "columnName": "closedAtEpochMillis",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "ingressKind",
+            "columnName": "ingressKind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "clientIdentity",
+            "columnName": "clientIdentity",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "downstreamHost",
+            "columnName": "downstreamHost",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "downstreamPort",
+            "columnName": "downstreamPort",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "listenerHost",
+            "columnName": "listenerHost",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "listenerPort",
+            "columnName": "listenerPort",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "transportProtocol",
+            "columnName": "transportProtocol",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "receivedBytes",
+            "columnName": "receivedBytes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sentBytes",
+            "columnName": "sentBytes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "state",
+            "columnName": "state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "terminalErrorCode",
+            "columnName": "terminalErrorCode",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_connection_session_opened_id",
+            "unique": false,
+            "columnNames": [
+              "sessionId",
+              "openedAtEpochMillis",
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_connection_session_opened_id` ON `${TABLE_NAME}` (`sessionId`, `openedAtEpochMillis`, `id`)"
+          },
+          {
+            "name": "index_connection_session_state",
+            "unique": false,
+            "columnNames": [
+              "sessionId",
+              "state"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_connection_session_state` ON `${TABLE_NAME}` (`sessionId`, `state`)"
+          }
+        ]
+      },
+      {
+        "tableName": "traffic_exchanges",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`captureSequence` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `id` TEXT NOT NULL, `sessionId` TEXT NOT NULL, `connectionId` TEXT NOT NULL, `streamId` INTEGER, `connectionSequence` INTEGER NOT NULL, `version` INTEGER NOT NULL, `state` TEXT NOT NULL, `startedAtEpochMillis` INTEGER NOT NULL, `completedAtEpochMillis` INTEGER, `method` TEXT NOT NULL, `scheme` TEXT, `host` TEXT, `port` INTEGER, `pathAndQuery` TEXT NOT NULL, `protocol` TEXT NOT NULL, `origin` TEXT NOT NULL DEFAULT 'proxy-client', `requestHeadersEncoded` TEXT NOT NULL, `requestTrailersEncoded` TEXT, `requestBodyId` TEXT, `responseProtocol` TEXT, `responseStatusCode` INTEGER, `responseReasonPhrase` TEXT, `responseHeadersEncoded` TEXT, `responseTrailersEncoded` TEXT, `responseBodyId` TEXT, `timingDnsMillis` INTEGER, `timingConnectMillis` INTEGER, `timingTlsMillis` INTEGER, `timingFirstByteMillis` INTEGER, `timingDownloadMillis` INTEGER, `timingTotalMillis` INTEGER, `terminalErrorCode` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "captureSequence",
+            "columnName": "captureSequence",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "sessionId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "connectionId",
+            "columnName": "connectionId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "streamId",
+            "columnName": "streamId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "connectionSequence",
+            "columnName": "connectionSequence",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "version",
+            "columnName": "version",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "state",
+            "columnName": "state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startedAtEpochMillis",
+            "columnName": "startedAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "completedAtEpochMillis",
+            "columnName": "completedAtEpochMillis",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "method",
+            "columnName": "method",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "scheme",
+            "columnName": "scheme",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "host",
+            "columnName": "host",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "port",
+            "columnName": "port",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "pathAndQuery",
+            "columnName": "pathAndQuery",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "protocol",
+            "columnName": "protocol",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "origin",
+            "columnName": "origin",
+            "affinity": "TEXT",
+            "notNull": true,
+            "defaultValue": "'proxy-client'"
+          },
+          {
+            "fieldPath": "requestHeadersEncoded",
+            "columnName": "requestHeadersEncoded",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "requestTrailersEncoded",
+            "columnName": "requestTrailersEncoded",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "requestBodyId",
+            "columnName": "requestBodyId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "responseProtocol",
+            "columnName": "responseProtocol",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "responseStatusCode",
+            "columnName": "responseStatusCode",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "responseReasonPhrase",
+            "columnName": "responseReasonPhrase",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "responseHeadersEncoded",
+            "columnName": "responseHeadersEncoded",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "responseTrailersEncoded",
+            "columnName": "responseTrailersEncoded",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "responseBodyId",
+            "columnName": "responseBodyId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "timingDnsMillis",
+            "columnName": "timingDnsMillis",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "timingConnectMillis",
+            "columnName": "timingConnectMillis",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "timingTlsMillis",
+            "columnName": "timingTlsMillis",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "timingFirstByteMillis",
+            "columnName": "timingFirstByteMillis",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "timingDownloadMillis",
+            "columnName": "timingDownloadMillis",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "timingTotalMillis",
+            "columnName": "timingTotalMillis",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "terminalErrorCode",
+            "columnName": "terminalErrorCode",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "captureSequence"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_exchange_id",
+            "unique": true,
+            "columnNames": [
+              "id"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_exchange_id` ON `${TABLE_NAME}` (`id`)"
+          },
+          {
+            "name": "index_exchange_session_sequence",
+            "unique": false,
+            "columnNames": [
+              "sessionId",
+              "captureSequence"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_exchange_session_sequence` ON `${TABLE_NAME}` (`sessionId`, `captureSequence`)"
+          },
+          {
+            "name": "index_exchange_session_host_sequence",
+            "unique": false,
+            "columnNames": [
+              "sessionId",
+              "host",
+              "captureSequence"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_exchange_session_host_sequence` ON `${TABLE_NAME}` (`sessionId`, `host`, `captureSequence`)"
+          },
+          {
+            "name": "index_exchange_session_method_sequence",
+            "unique": false,
+            "columnNames": [
+              "sessionId",
+              "method",
+              "captureSequence"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_exchange_session_method_sequence` ON `${TABLE_NAME}` (`sessionId`, `method`, `captureSequence`)"
+          },
+          {
+            "name": "index_exchange_session_status_sequence",
+            "unique": false,
+            "columnNames": [
+              "sessionId",
+              "responseStatusCode",
+              "captureSequence"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_exchange_session_status_sequence` ON `${TABLE_NAME}` (`sessionId`, `responseStatusCode`, `captureSequence`)"
+          },
+          {
+            "name": "index_exchange_session_protocol_sequence",
+            "unique": false,
+            "columnNames": [
+              "sessionId",
+              "protocol",
+              "captureSequence"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_exchange_session_protocol_sequence` ON `${TABLE_NAME}` (`sessionId`, `protocol`, `captureSequence`)"
+          },
+          {
+            "name": "index_exchange_connection_sequence",
+            "unique": false,
+            "columnNames": [
+              "connectionId",
+              "connectionSequence"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_exchange_connection_sequence` ON `${TABLE_NAME}` (`connectionId`, `connectionSequence`)"
+          }
+        ]
+      },
+      {
+        "tableName": "body_objects",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `sessionId` TEXT NOT NULL, `exchangeId` TEXT NOT NULL, `direction` TEXT NOT NULL, `observedBytes` INTEGER NOT NULL, `storedBytes` INTEGER NOT NULL, `digestAlgorithm` TEXT, `digestValue` TEXT, `contentEncoding` TEXT, `outcome` TEXT NOT NULL, `state` TEXT NOT NULL, `createdAtEpochMillis` INTEGER NOT NULL, `finalizedAtEpochMillis` INTEGER NOT NULL, `storageKey` TEXT NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "sessionId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "exchangeId",
+            "columnName": "exchangeId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "direction",
+            "columnName": "direction",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "observedBytes",
+            "columnName": "observedBytes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "storedBytes",
+            "columnName": "storedBytes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "digestAlgorithm",
+            "columnName": "digestAlgorithm",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "digestValue",
+            "columnName": "digestValue",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "contentEncoding",
+            "columnName": "contentEncoding",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "outcome",
+            "columnName": "outcome",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "state",
+            "columnName": "state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAtEpochMillis",
+            "columnName": "createdAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "finalizedAtEpochMillis",
+            "columnName": "finalizedAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "storageKey",
+            "columnName": "storageKey",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_body_session_created",
+            "unique": false,
+            "columnNames": [
+              "sessionId",
+              "createdAtEpochMillis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_body_session_created` ON `${TABLE_NAME}` (`sessionId`, `createdAtEpochMillis`)"
+          },
+          {
+            "name": "index_body_exchange_direction",
+            "unique": false,
+            "columnNames": [
+              "exchangeId",
+              "direction"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_body_exchange_direction` ON `${TABLE_NAME}` (`exchangeId`, `direction`)"
+          },
+          {
+            "name": "index_body_state",
+            "unique": false,
+            "columnNames": [
+              "state"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_body_state` ON `${TABLE_NAME}` (`state`)"
+          },
+          {
+            "name": "index_body_storage_key",
+            "unique": true,
+            "columnNames": [
+              "storageKey"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_body_storage_key` ON `${TABLE_NAME}` (`storageKey`)"
+          }
+        ]
+      },
+      {
+        "tableName": "duplex_messages",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `sessionId` TEXT NOT NULL, `connectionId` TEXT NOT NULL, `exchangeId` TEXT NOT NULL, `streamId` INTEGER, `captureSequence` INTEGER NOT NULL, `messageSequence` INTEGER NOT NULL, `direction` TEXT NOT NULL, `protocol` TEXT NOT NULL, `messageKind` TEXT NOT NULL, `occurredAtEpochMillis` INTEGER NOT NULL, `declaredBytes` INTEGER, `observedBytes` INTEGER NOT NULL, `compressed` INTEGER NOT NULL, `compressionEncoding` TEXT, `bodyId` TEXT, `state` TEXT NOT NULL, `errorCode` TEXT, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "sessionId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "connectionId",
+            "columnName": "connectionId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "exchangeId",
+            "columnName": "exchangeId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "streamId",
+            "columnName": "streamId",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "captureSequence",
+            "columnName": "captureSequence",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "messageSequence",
+            "columnName": "messageSequence",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "direction",
+            "columnName": "direction",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "protocol",
+            "columnName": "protocol",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "messageKind",
+            "columnName": "messageKind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "occurredAtEpochMillis",
+            "columnName": "occurredAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "declaredBytes",
+            "columnName": "declaredBytes",
+            "affinity": "INTEGER"
+          },
+          {
+            "fieldPath": "observedBytes",
+            "columnName": "observedBytes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "compressed",
+            "columnName": "compressed",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "compressionEncoding",
+            "columnName": "compressionEncoding",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "bodyId",
+            "columnName": "bodyId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "state",
+            "columnName": "state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "errorCode",
+            "columnName": "errorCode",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_duplex_connection_sequence",
+            "unique": false,
+            "columnNames": [
+              "connectionId",
+              "captureSequence"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_duplex_connection_sequence` ON `${TABLE_NAME}` (`connectionId`, `captureSequence`)"
+          },
+          {
+            "name": "index_duplex_exchange_direction_message_sequence",
+            "unique": true,
+            "columnNames": [
+              "exchangeId",
+              "direction",
+              "messageSequence"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_duplex_exchange_direction_message_sequence` ON `${TABLE_NAME}` (`exchangeId`, `direction`, `messageSequence`)"
+          },
+          {
+            "name": "index_duplex_session_occurred",
+            "unique": false,
+            "columnNames": [
+              "sessionId",
+              "occurredAtEpochMillis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_duplex_session_occurred` ON `${TABLE_NAME}` (`sessionId`, `occurredAtEpochMillis`)"
+          }
+        ]
+      },
+      {
+        "tableName": "inspection_annotations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `sessionId` TEXT NOT NULL, `exchangeId` TEXT NOT NULL, `inspectorId` TEXT NOT NULL, `version` INTEGER NOT NULL, `state` TEXT NOT NULL, `payloadEncoded` TEXT, `errorCode` TEXT, `createdAtEpochMillis` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "sessionId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "exchangeId",
+            "columnName": "exchangeId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "inspectorId",
+            "columnName": "inspectorId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "version",
+            "columnName": "version",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "state",
+            "columnName": "state",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "payloadEncoded",
+            "columnName": "payloadEncoded",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "errorCode",
+            "columnName": "errorCode",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "createdAtEpochMillis",
+            "columnName": "createdAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_annotation_exchange_inspector_version",
+            "unique": true,
+            "columnNames": [
+              "exchangeId",
+              "inspectorId",
+              "version"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_annotation_exchange_inspector_version` ON `${TABLE_NAME}` (`exchangeId`, `inspectorId`, `version`)"
+          },
+          {
+            "name": "index_annotation_session_created",
+            "unique": false,
+            "columnNames": [
+              "sessionId",
+              "createdAtEpochMillis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_annotation_session_created` ON `${TABLE_NAME}` (`sessionId`, `createdAtEpochMillis`)"
+          }
+        ]
+      },
+      {
+        "tableName": "capture_gaps",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `sessionId` TEXT NOT NULL, `connectionId` TEXT NOT NULL, `sequence` INTEGER NOT NULL, `occurredAtEpochMillis` INTEGER NOT NULL, `droppedEvents` INTEGER NOT NULL, `droppedBodyBytes` INTEGER NOT NULL, `reasonCode` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "sessionId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "connectionId",
+            "columnName": "connectionId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sequence",
+            "columnName": "sequence",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "occurredAtEpochMillis",
+            "columnName": "occurredAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "droppedEvents",
+            "columnName": "droppedEvents",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "droppedBodyBytes",
+            "columnName": "droppedBodyBytes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "reasonCode",
+            "columnName": "reasonCode",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_gap_session_occurred",
+            "unique": false,
+            "columnNames": [
+              "sessionId",
+              "occurredAtEpochMillis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_gap_session_occurred` ON `${TABLE_NAME}` (`sessionId`, `occurredAtEpochMillis`)"
+          }
+        ]
+      },
+      {
+        "tableName": "deletion_outbox",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `sessionId` TEXT NOT NULL, `bodyId` TEXT NOT NULL, `operation` TEXT NOT NULL, `createdAtEpochMillis` INTEGER NOT NULL, `attemptCount` INTEGER NOT NULL, `lastErrorCode` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "sessionId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "bodyId",
+            "columnName": "bodyId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "operation",
+            "columnName": "operation",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAtEpochMillis",
+            "columnName": "createdAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "attemptCount",
+            "columnName": "attemptCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastErrorCode",
+            "columnName": "lastErrorCode",
+            "affinity": "TEXT"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_deletion_session_created",
+            "unique": false,
+            "columnNames": [
+              "sessionId",
+              "createdAtEpochMillis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_deletion_session_created` ON `${TABLE_NAME}` (`sessionId`, `createdAtEpochMillis`)"
+          },
+          {
+            "name": "index_deletion_body",
+            "unique": true,
+            "columnNames": [
+              "bodyId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_deletion_body` ON `${TABLE_NAME}` (`bodyId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "registered_devices",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `displayName` TEXT NOT NULL, `registrationKind` TEXT NOT NULL, `registeredAtEpochMillis` INTEGER NOT NULL, `lastSeenAtEpochMillis` INTEGER NOT NULL, `revokedAtEpochMillis` INTEGER, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "displayName",
+            "columnName": "displayName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "registrationKind",
+            "columnName": "registrationKind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "registeredAtEpochMillis",
+            "columnName": "registeredAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastSeenAtEpochMillis",
+            "columnName": "lastSeenAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "revokedAtEpochMillis",
+            "columnName": "revokedAtEpochMillis",
+            "affinity": "INTEGER"
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "trusted_device_credentials",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`deviceId` TEXT NOT NULL, `publicKeyEncoded` TEXT NOT NULL, `credentialDigest` TEXT NOT NULL, `scopesMask` INTEGER NOT NULL, `pairedAtEpochMillis` INTEGER NOT NULL, `credentialExpiresAtEpochMillis` INTEGER NOT NULL, PRIMARY KEY(`deviceId`), FOREIGN KEY(`deviceId`) REFERENCES `registered_devices`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE )",
+        "fields": [
+          {
+            "fieldPath": "deviceId",
+            "columnName": "deviceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "publicKeyEncoded",
+            "columnName": "publicKeyEncoded",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "credentialDigest",
+            "columnName": "credentialDigest",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "scopesMask",
+            "columnName": "scopesMask",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pairedAtEpochMillis",
+            "columnName": "pairedAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "credentialExpiresAtEpochMillis",
+            "columnName": "credentialExpiresAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "deviceId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_trusted_device_credentials_deviceId",
+            "unique": true,
+            "columnNames": [
+              "deviceId"
+            ],
+            "orders": [],
+            "createSql": "CREATE UNIQUE INDEX IF NOT EXISTS `index_trusted_device_credentials_deviceId` ON `${TABLE_NAME}` (`deviceId`)"
+          }
+        ],
+        "foreignKeys": [
+          {
+            "table": "registered_devices",
+            "onDelete": "CASCADE",
+            "onUpdate": "NO ACTION",
+            "columns": [
+              "deviceId"
+            ],
+            "referencedColumns": [
+              "id"
+            ]
+          }
+        ]
+      },
+      {
+        "tableName": "pairing_invitations",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `secretDigest` TEXT NOT NULL, `expiresAtEpochMillis` INTEGER NOT NULL, `scopesMask` INTEGER NOT NULL, `createdAtEpochMillis` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "secretDigest",
+            "columnName": "secretDigest",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "expiresAtEpochMillis",
+            "columnName": "expiresAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "scopesMask",
+            "columnName": "scopesMask",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "createdAtEpochMillis",
+            "columnName": "createdAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "api_studio_workspace_documents",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` TEXT NOT NULL, `editorId` TEXT NOT NULL, `requestKind` TEXT NOT NULL, `name` TEXT NOT NULL, `nameOrigin` TEXT NOT NULL, `badgeLabel` TEXT NOT NULL, `payloadVersion` INTEGER NOT NULL, `payload` BLOB NOT NULL, `collectionId` TEXT, `folderId` TEXT, `createdAtEpochMillis` INTEGER NOT NULL, `updatedAtEpochMillis` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "editorId",
+            "columnName": "editorId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "requestKind",
+            "columnName": "requestKind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "nameOrigin",
+            "columnName": "nameOrigin",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "badgeLabel",
+            "columnName": "badgeLabel",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "payloadVersion",
+            "columnName": "payloadVersion",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "payload",
+            "columnName": "payload",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "collectionId",
+            "columnName": "collectionId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "folderId",
+            "columnName": "folderId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "createdAtEpochMillis",
+            "columnName": "createdAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtEpochMillis",
+            "columnName": "updatedAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_api_studio_workspace_documents_editorId_updatedAtEpochMillis",
+            "unique": false,
+            "columnNames": [
+              "editorId",
+              "updatedAtEpochMillis"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_api_studio_workspace_documents_editorId_updatedAtEpochMillis` ON `${TABLE_NAME}` (`editorId`, `updatedAtEpochMillis`)"
+          },
+          {
+            "name": "index_api_studio_workspace_documents_collectionId_folderId",
+            "unique": false,
+            "columnNames": [
+              "collectionId",
+              "folderId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_api_studio_workspace_documents_collectionId_folderId` ON `${TABLE_NAME}` (`collectionId`, `folderId`)"
+          }
+        ]
+      },
+      {
+        "tableName": "api_studio_protocol_schemas",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`kind` TEXT NOT NULL, `sourceId` TEXT NOT NULL, `payload` BLOB NOT NULL, `updatedAtEpochMillis` INTEGER NOT NULL, PRIMARY KEY(`kind`, `sourceId`))",
+        "fields": [
+          {
+            "fieldPath": "kind",
+            "columnName": "kind",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sourceId",
+            "columnName": "sourceId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "payload",
+            "columnName": "payload",
+            "affinity": "BLOB",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAtEpochMillis",
+            "columnName": "updatedAtEpochMillis",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "kind",
+            "sourceId"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'cc9c83fbb6ba0113d50fdff3bc8d97b6')"
+    ]
+  }
+}

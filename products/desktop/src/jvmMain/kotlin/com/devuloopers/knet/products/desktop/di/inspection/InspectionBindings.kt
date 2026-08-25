@@ -8,6 +8,11 @@ import com.devuloopers.knet.engine.protocol.inspector.graphql.GraphQLBreakpointE
 import com.devuloopers.knet.engine.protocol.inspector.graphql.GraphQLDocumentParser
 import com.devuloopers.knet.engine.protocol.inspector.graphql.GraphQLSemanticInspector
 import com.devuloopers.knet.engine.protocol.inspector.sse.SseSemanticInspector
+import com.devuloopers.knet.engine.grpc.GrpcDescriptorRegistry
+import com.devuloopers.knet.engine.grpc.GrpcProtocolMessageDecoder
+import com.devuloopers.knet.engine.grpc.GrpcBreakpointExtension
+import com.devuloopers.knet.application.port.traffic.ProtocolMessagePayloadDecoder
+import com.devuloopers.knet.application.port.traffic.ProtocolMessagePresentationRegistry
 import com.devuloopers.knet.storage.database.KNetDatabase
 import org.koin.core.module.Module
 import org.koin.dsl.bind
@@ -15,8 +20,12 @@ import org.koin.dsl.module
 
 /** Semantic inspectors, persisted annotations, capability truth, and bounded scheduling. */
 internal val inspectionBindings: Module = module {
+    single { GrpcDescriptorRegistry() }
+    single { GrpcProtocolMessageDecoder(get()) } bind ProtocolMessagePayloadDecoder::class
+    single { ProtocolMessagePresentationRegistry(getAll<ProtocolMessagePayloadDecoder>()) }
     single { GraphQLDocumentParser() }
     single { GraphQLBreakpointExtension(get()) } bind BreakpointProtocolExtension::class
+    single { GrpcBreakpointExtension() } bind BreakpointProtocolExtension::class
     single { GraphQLSemanticInspector(get()) } bind SemanticInspector::class
     single { SseSemanticInspector() } bind SemanticInspector::class
     single<InspectionAnnotationPort> {
@@ -53,7 +62,25 @@ internal val inspectionBindings: Module = module {
                     "HttpTwoDownstreamIntegrationTest, HttpTwoUpstreamIntegrationTest, " +
                         "HttpTwoBreakpointIsolationTest, and HttpTwoExecutionTest",
                 ),
-                RuntimeCapability("grpc", "gRPC", CapabilityMaturity.UNAVAILABLE),
+                RuntimeCapability(
+                    "grpc.capture",
+                    "gRPC capture and inspection",
+                    CapabilityMaturity.EXPERIMENTAL,
+                    "GrpcStreamInspectorTest, CanonicalMaintenanceTest, and ProtocolLabIntegrationTest",
+                ),
+                RuntimeCapability(
+                    "grpc.breakpoints",
+                    "gRPC message breakpoints",
+                    CapabilityMaturity.EXPERIMENTAL,
+                    "GrpcBreakpointRuntimeTest and BreakpointManagerViewModelTest",
+                ),
+                RuntimeCapability(
+                    "grpc.apistudio",
+                    "gRPC API Studio",
+                    CapabilityMaturity.EXPERIMENTAL,
+                    "GrpcApiStudioExecutorTest, GrpcApiStudioReflectionAdapterTest, and " +
+                        "RoomApiStudioWorkspaceDocumentStoreTest",
+                ),
                 RuntimeCapability("http3", "HTTP/3", CapabilityMaturity.UNAVAILABLE),
                 RuntimeCapability(
                     "manual-proxy",

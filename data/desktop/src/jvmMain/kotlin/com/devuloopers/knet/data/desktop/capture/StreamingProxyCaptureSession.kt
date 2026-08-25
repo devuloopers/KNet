@@ -9,10 +9,13 @@ import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureConnectionMetadata
 import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureSink
 import com.devuloopers.knet.engine.proxy.capture.ProxyConnectionCapture
 import com.devuloopers.knet.engine.proxy.capture.ProxyExchangeCapture
+import com.devuloopers.knet.engine.proxy.capture.ProxyMessageCapture
+import com.devuloopers.knet.engine.proxy.capture.ProxyMessageCaptureMetadata
 import com.devuloopers.knet.traffic.id.BodyId
 import com.devuloopers.knet.traffic.id.CaptureSessionId
 import com.devuloopers.knet.traffic.id.ConnectionId
 import com.devuloopers.knet.traffic.id.ExchangeId
+import com.devuloopers.knet.traffic.id.ProtocolMessageId
 import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.model.CaptureEvent
 import com.devuloopers.knet.traffic.model.ExchangeState
@@ -25,6 +28,7 @@ import com.devuloopers.knet.traffic.model.body.ContentEncoding
 import com.devuloopers.knet.traffic.model.http.RequestHead
 import com.devuloopers.knet.traffic.model.http.ResponseHead
 import com.devuloopers.knet.traffic.model.http.HeaderField
+import com.devuloopers.knet.traffic.model.message.ProtocolMessageState
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -146,6 +150,7 @@ private class StreamingConnectionCapture(
             sessionId = sessionId,
             connectionId = connectionId,
             exchangeId = exchangeId,
+            streamId = streamId,
             ingress = ingress,
             limits = limits,
             nextSequence = ::nextSequence,
@@ -205,6 +210,7 @@ private class StreamingExchangeCapture(
     private val sessionId: CaptureSessionId,
     private val connectionId: ConnectionId,
     override val exchangeId: ExchangeId,
+    private val streamId: StreamId?,
     private val ingress: CaptureIngressPort,
     private val limits: CaptureIngressLimits,
     private val nextSequence: () -> Long,
@@ -216,6 +222,41 @@ private class StreamingExchangeCapture(
     private val completedBodies = mutableSetOf<TrafficDirection>()
     private var version: Long = 0L
     private var terminal: Boolean = false
+
+    override fun startMessage(metadata: ProxyMessageCaptureMetadata): ProxyMessageCapture? {
+        val admitted = synchronized(lock) {
+            if (terminal) return null
+            ingress.tryPublish(
+                CaptureEvent.ProtocolMessageStarted(
+                    sessionId = sessionId,
+                    connectionId = connectionId,
+                    sequence = nextSequence(),
+                    occurredAtEpochMillis = metadata.occurredAtEpochMillis,
+                    messageId = metadata.messageId,
+                    exchangeId = exchangeId,
+                    streamId = metadata.streamId ?: streamId,
+                    protocol = metadata.protocol,
+                    kind = metadata.kind,
+                    direction = metadata.direction,
+                    messageSequence = metadata.messageSequence,
+                    declaredBytes = metadata.declaredBytes,
+                    compressed = metadata.compressed,
+                    compressionEncoding = metadata.compressionEncoding,
+                )
+            ) is CapturePublishResult.Accepted
+        }
+        if (!admitted) return null
+        return StreamingMessageCapture(
+            sessionId = sessionId,
+            connectionId = connectionId,
+            exchangeId = exchangeId,
+            metadata = metadata,
+            ingress = ingress,
+            limits = limits,
+            nextSequence = nextSequence,
+            publishGap = ::publishGap,
+        )
+    }
 
     override fun tryReserveBody(
         direction: TrafficDirection,
@@ -431,6 +472,123 @@ private class StreamingExchangeCapture(
     private companion object {
         const val CONNECTION_CLOSED: String = "downstream_connection_closed"
         const val BODY_CAPTURE_TRUNCATED: String = "stream_body_capture_truncated"
+    }
+}
+
+/** One independently bounded framed-message payload owned by a parent exchange. */
+private class StreamingMessageCapture(
+    private val sessionId: CaptureSessionId,
+    private val connectionId: ConnectionId,
+    private val exchangeId: ExchangeId,
+    private val metadata: ProxyMessageCaptureMetadata,
+    private val ingress: CaptureIngressPort,
+    private val limits: CaptureIngressLimits,
+    private val nextSequence: () -> Long,
+    private val publishGap: (Long, Long) -> Unit,
+) : ProxyMessageCapture {
+    override val messageId: ProtocolMessageId = metadata.messageId
+    private val lock = Any()
+    private val bodyId = BodyId(Uuid.random().toString())
+    private var acceptedBytes: Long = 0L
+    private var rejectedReservationBytes: Long = 0L
+    private var captureStopped: Boolean = false
+    private var terminal: Boolean = false
+
+    override fun tryReservePayload(requestedBytes: Int): ProxyBodyReservation? = synchronized(lock) {
+        if (terminal || captureStopped || requestedBytes <= 0) return@synchronized null
+        val remaining = (limits.perBodyStoredBytes - acceptedBytes).coerceAtLeast(0L)
+        if (remaining == 0L) {
+            captureStopped = true
+            return@synchronized null
+        }
+        val reservedBytes = minOf(
+            requestedBytes,
+            limits.maximumChunkBytes,
+            remaining.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+        )
+        val reservation = ingress.tryReserveMessageBody(
+            connectionId = connectionId,
+            exchangeId = exchangeId,
+            messageId = messageId,
+            direction = metadata.direction,
+            bodyId = bodyId,
+            contentEncoding = metadata.compressionEncoding?.let(ContentEncoding::fromToken),
+            requestedBytes = reservedBytes,
+        )
+        if (reservation == null) {
+            rejectedReservationBytes += reservedBytes
+            captureStopped = true
+            return@synchronized null
+        }
+        StreamingReservation(reservation, nextSequence) { accepted ->
+            synchronized(lock) {
+                if (accepted) {
+                    acceptedBytes += reservedBytes
+                } else {
+                    rejectedReservationBytes += reservedBytes
+                    captureStopped = true
+                }
+            }
+        }
+    }
+
+    override fun complete(observedBytes: Long, occurredAtEpochMillis: Long) = terminate(
+        observedBytes = observedBytes,
+        state = if (acceptedBytes == observedBytes) {
+            ProtocolMessageState.COMPLETE
+        } else {
+            ProtocolMessageState.TRUNCATED
+        },
+        occurredAtEpochMillis = occurredAtEpochMillis,
+    )
+
+    override fun terminate(
+        observedBytes: Long,
+        state: ProtocolMessageState,
+        occurredAtEpochMillis: Long,
+        errorCode: String?,
+    ) {
+        require(observedBytes >= 0L) { "Observed protocol-message bytes must not be negative." }
+        require(state != ProtocolMessageState.IN_PROGRESS) { "Protocol-message termination must be terminal." }
+        val captured = synchronized(lock) {
+            if (terminal) return
+            terminal = true
+            acceptedBytes
+        }
+        if (captured > 0L) {
+            val outcome = when (state) {
+                ProtocolMessageState.COMPLETE -> BodyCaptureOutcome.Complete
+                ProtocolMessageState.TRUNCATED -> BodyCaptureOutcome.Truncated(captured)
+                ProtocolMessageState.FAILED, ProtocolMessageState.CANCELLED ->
+                    BodyCaptureOutcome.Failed(BodyFailure.Custom(errorCode ?: state.name.lowercase()))
+                ProtocolMessageState.IN_PROGRESS -> error("Unreachable in-progress termination.")
+            }
+            ingress.tryCompleteMessageBody(
+                connectionId = connectionId,
+                exchangeId = exchangeId,
+                messageId = messageId,
+                direction = metadata.direction,
+                bodyId = bodyId,
+                observedBytes = observedBytes,
+                outcome = outcome,
+                sequence = nextSequence(),
+                occurredAtEpochMillis = occurredAtEpochMillis,
+            )
+        }
+        val uncounted = (observedBytes - captured - rejectedReservationBytes).coerceAtLeast(0L)
+        publishGap(uncounted, occurredAtEpochMillis)
+        ingress.tryPublish(
+            CaptureEvent.ProtocolMessageTerminated(
+                sessionId = sessionId,
+                connectionId = connectionId,
+                sequence = nextSequence(),
+                occurredAtEpochMillis = occurredAtEpochMillis,
+                messageId = messageId,
+                observedBytes = observedBytes,
+                state = state,
+                errorCode = errorCode,
+            )
+        )
     }
 }
 

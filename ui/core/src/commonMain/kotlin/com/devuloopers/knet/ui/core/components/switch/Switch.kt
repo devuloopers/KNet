@@ -7,6 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -50,7 +51,11 @@ fun KNetSwitch(
         label = "switchTrack"
     )
     val knobOffset by animateDpAsState(
-        targetValue = if (checked) 16.dp else 2.dp,
+        targetValue = if (checked) {
+            SwitchTrackWidth - SwitchThumbSize - SwitchThumbInset
+        } else {
+            SwitchThumbInset
+        },
         animationSpec = tween(duration),
         label = "switchKnob"
     )
@@ -69,17 +74,17 @@ fun KNetSwitch(
     ) {
         Box(
             modifier = Modifier
-                .width(32.dp)
-                .heightIn(min = 18.dp)
+                .width(SwitchTrackWidth)
+                .height(SwitchTrackHeight)
                 .clip(shapes.pill)
                 .background(trackColor)
-                .border(1.dp, if (checked && enabled) colors.accent else colors.border, shapes.pill)
+                .border(1.dp, if (checked && enabled) colors.accent else colors.border, shapes.pill),
+            contentAlignment = Alignment.CenterStart,
         ) {
             Box(
                 modifier = Modifier
-                    .padding(top = 1.dp)
                     .offset(x = knobOffset)
-                    .size(14.dp)
+                    .size(SwitchThumbSize)
                     .clip(CircleShape)
                     .background(if (enabled) Color.White else colors.textMuted)
             )
@@ -93,3 +98,8 @@ fun KNetSwitch(
         }
     }
 }
+
+private val SwitchTrackWidth = 32.dp
+private val SwitchTrackHeight = 18.dp
+private val SwitchThumbSize = 14.dp
+private val SwitchThumbInset = (SwitchTrackHeight - SwitchThumbSize) / 2

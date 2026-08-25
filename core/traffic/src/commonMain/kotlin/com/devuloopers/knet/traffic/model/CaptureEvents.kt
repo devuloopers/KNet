@@ -4,10 +4,14 @@ import com.devuloopers.knet.traffic.id.CaptureSessionId
 import com.devuloopers.knet.traffic.id.ConnectionId
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.id.StreamId
+import com.devuloopers.knet.traffic.id.ProtocolMessageId
 import com.devuloopers.knet.traffic.model.body.BodyRef
 import com.devuloopers.knet.traffic.model.http.RequestHead
 import com.devuloopers.knet.traffic.model.http.ResponseHead
 import com.devuloopers.knet.traffic.model.http.HeaderField
+import com.devuloopers.knet.traffic.model.message.MessageProtocolId
+import com.devuloopers.knet.traffic.model.message.ProtocolMessageKind
+import com.devuloopers.knet.traffic.model.message.ProtocolMessageState
 
 /** Direction of body or duplex content relative to the inspected client. */
 public enum class TrafficDirection {
@@ -166,6 +170,52 @@ public sealed interface CaptureEvent {
             validateEventCoordinates(sequence, occurredAtEpochMillis)
             require(exchangeVersion >= 0L) { "Exchange version must not be negative." }
             require(trailers.isNotEmpty()) { "A trailer event must contain at least one field." }
+        }
+    }
+
+    /** Starts one framed child message without changing the parent HTTP exchange lifecycle. */
+    public data class ProtocolMessageStarted(
+        override val sessionId: CaptureSessionId,
+        override val connectionId: ConnectionId,
+        override val sequence: Long,
+        override val occurredAtEpochMillis: Long,
+        public val messageId: ProtocolMessageId,
+        public val exchangeId: ExchangeId,
+        public val streamId: StreamId?,
+        public val protocol: MessageProtocolId,
+        public val kind: ProtocolMessageKind,
+        public val direction: TrafficDirection,
+        public val messageSequence: Long,
+        public val declaredBytes: Long?,
+        public val compressed: Boolean,
+        public val compressionEncoding: String?,
+    ) : CaptureEvent {
+        init {
+            validateEventCoordinates(sequence, occurredAtEpochMillis)
+            require(messageSequence >= 0L) { "Protocol message sequence must not be negative." }
+            require(declaredBytes == null || declaredBytes >= 0L) { "Declared message bytes must not be negative." }
+            require(compressionEncoding == null || compressionEncoding.isNotBlank()) {
+                "Compression encoding must not be blank."
+            }
+        }
+    }
+
+    /** Moves one framed child message to a terminal state. */
+    public data class ProtocolMessageTerminated(
+        override val sessionId: CaptureSessionId,
+        override val connectionId: ConnectionId,
+        override val sequence: Long,
+        override val occurredAtEpochMillis: Long,
+        public val messageId: ProtocolMessageId,
+        public val observedBytes: Long,
+        public val state: ProtocolMessageState,
+        public val errorCode: String? = null,
+    ) : CaptureEvent {
+        init {
+            validateEventCoordinates(sequence, occurredAtEpochMillis)
+            require(observedBytes >= 0L) { "Observed message bytes must not be negative." }
+            require(state != ProtocolMessageState.IN_PROGRESS) { "Message termination requires a terminal state." }
+            require(errorCode == null || errorCode.isNotBlank()) { "Message error code must not be blank." }
         }
     }
 

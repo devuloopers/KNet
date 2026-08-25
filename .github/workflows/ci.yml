@@ -34,4 +34,70 @@ jobs:
         run: chmod +x gradlew
 
       - name: Run Multi-Module Tests & Assemble
-        run: ./gradlew check :apps:desktop:assemble --no-daemon
+        run: ./gradlew check :products:desktop:assemble --no-daemon
+
+  http2-qualification:
+    name: HTTP/2 Qualification (${{ matrix.os_name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            os_name: macOS
+          - os: windows-latest
+            os_name: Windows
+          - os: ubuntu-latest
+            os_name: Linux
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew
+        shell: bash
+        run: chmod +x gradlew
+
+      - name: Run HTTP/2 qualification gate
+        shell: bash
+        run: ./gradlew http2Qualification --no-daemon
+
+  grpc-qualification:
+    name: gRPC Qualification (${{ matrix.os_name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            os_name: macOS
+          - os: windows-latest
+            os_name: Windows
+          - os: ubuntu-latest
+            os_name: Linux
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew
+        shell: bash
+        run: chmod +x gradlew
+
+      - name: Run gRPC qualification gate
+        shell: bash
+        run: ./gradlew grpcQualification --no-daemon

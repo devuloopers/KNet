@@ -8,6 +8,8 @@ import com.devuloopers.knet.application.port.breakpoint.ProtocolCriteriaValue
 import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
 import com.devuloopers.knet.application.usecase.breakpoint.ClearPendingBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.ObservePendingBreakpointsUseCase
+import com.devuloopers.knet.application.usecase.breakpoint.ObservePendingProtocolMessageBreakpointsUseCase
+import com.devuloopers.knet.application.usecase.breakpoint.ResolveProtocolMessageBreakpointUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.ResolveBreakpointUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.BreakpointProtocolRuleUseCase
 import com.devuloopers.knet.domain.rules.model.BreakpointProtocolId
@@ -35,12 +37,14 @@ class BreakpointManagerViewModel(
     getRulesUseCase: GetRulesUseCase,
     observeGlobalInterceptionUseCase: ObserveGlobalInterceptionUseCase,
     observePendingBreakpointsUseCase: ObservePendingBreakpointsUseCase,
+    observePendingProtocolMessageBreakpointsUseCase: ObservePendingProtocolMessageBreakpointsUseCase,
     private val saveRuleUseCase: SaveRuleUseCase,
     private val toggleRuleUseCase: ToggleRuleUseCase,
     private val deleteRuleUseCase: DeleteRuleUseCase,
     private val toggleGlobalInterceptionUseCase: ToggleGlobalInterceptionUseCase,
     private val resolveBreakpointUseCase: ResolveBreakpointUseCase,
     private val clearPendingBreakpointsUseCase: ClearPendingBreakpointsUseCase,
+    private val resolveProtocolMessageBreakpointUseCase: ResolveProtocolMessageBreakpointUseCase,
     private val breakpointProtocolRuleUseCase: BreakpointProtocolRuleUseCase,
     private val describeRequestUseCase: DescribeRequestUseCase,
     private val ioDispatcher: CoroutineDispatcher,
@@ -88,6 +92,18 @@ class BreakpointManagerViewModel(
             }
             .launchIn(viewModelScope)
 
+        observePendingProtocolMessageBreakpointsUseCase.execute()
+            .onEach { events ->
+                _uiState.update { current ->
+                    current.copy(
+                        activeMessageEvents = events,
+                        activeMessageEvent = events.find { it.id == current.activeMessageEvent?.id }
+                            ?: events.firstOrNull(),
+                    )
+                }
+            }
+            .launchIn(viewModelScope)
+
         // Resolve only the selected payload. mapLatest cancels obsolete work when the user moves
         // through the queue, while a one-entry cache keeps presentation memory strictly bounded.
         viewModelScope.launch {
@@ -122,6 +138,33 @@ class BreakpointManagerViewModel(
             } else {
                 current
             }
+        }
+    }
+
+    fun selectActiveMessageEvent(eventId: String) {
+        _uiState.update { current ->
+            current.copy(
+                activeMessageEvent = current.activeMessageEvents.find { it.id == eventId }
+                    ?: current.activeMessageEvent,
+            )
+        }
+    }
+
+    fun continueProtocolMessage(pendingId: String) {
+        viewModelScope.launch {
+            resolveProtocolMessageBreakpointUseCase.continueUnchanged(pendingId)
+        }
+    }
+
+    fun replaceProtocolMessage(pendingId: String, body: ByteArray) {
+        viewModelScope.launch {
+            resolveProtocolMessageBreakpointUseCase.replace(pendingId, body)
+        }
+    }
+
+    fun dropProtocolMessageStream(pendingId: String) {
+        viewModelScope.launch {
+            resolveProtocolMessageBreakpointUseCase.dropStream(pendingId)
         }
     }
 
@@ -202,30 +245,30 @@ class BreakpointManagerViewModel(
         }
     }
 
-    fun openAddDialog() {
+    fun openAddDrawer() {
         _uiState.update {
             it.copy(
-                isAddEditDialogVisible = true,
+                isAddEditDrawerVisible = true,
                 editingRule = null,
                 editingProtocolValues = emptyList(),
             )
         }
     }
 
-    fun openEditDialog(rule: BreakpointRule) {
+    fun openEditDrawer(rule: BreakpointRule) {
         _uiState.update {
             it.copy(
-                isAddEditDialogVisible = true,
+                isAddEditDrawerVisible = true,
                 editingRule = rule,
                 editingProtocolValues = breakpointProtocolRuleUseCase.editorValues(rule.protocolCriteria),
             )
         }
     }
 
-    fun closeDialog() {
+    fun closeDrawer() {
         _uiState.update {
             it.copy(
-                isAddEditDialogVisible = false,
+                isAddEditDrawerVisible = false,
                 editingRule = null,
                 editingProtocolValues = emptyList(),
             )
@@ -267,7 +310,7 @@ class BreakpointManagerViewModel(
                 }
                 state.copy(
                     rules = newRules,
-                    isAddEditDialogVisible = false,
+                    isAddEditDrawerVisible = false,
                     editingRule = null,
                     editingProtocolValues = emptyList(),
                 )

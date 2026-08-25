@@ -9,8 +9,12 @@ Owns breakpoint rule management and live intercepted-request/response presentati
 - Breakpoint Manager ViewModel, rules table, intercept queue, editors, and edit-only presentation state.
 - Live Intercept drawer content and exit-state retention, hosted in the shared `:ui:core` drawer shell.
 - Canonical `HttpMethod` selection and token mapping for method-specific rules.
+- Add/Edit rule drawer content hosted in the shared `:ui:core` drawer shell, with a pinned action area and a
+  vertically scrollable, responsive form and theme-aware scrollbars that appear only when content overflows.
 - Schema-driven protocol selection and standard text/choice criteria fields supplied through the
-  application protocol-rule use case; the dialog contains no GraphQL or other engine-specific branch.
+  application protocol-rule use case; the drawer contains no GraphQL, gRPC, or other engine-specific branch.
+- Content-driven protocol choice widths and wrapped supporting descriptions, so contributed labels remain
+  readable without protocol-specific presentation fixes.
 - UI edit state for proposed request/response patches.
 - Immediate pending-event presentation followed by cancellable, off-main preparation of only the selected
   body; resolved-payload memory is bounded to one active transaction.

@@ -6,7 +6,7 @@ Owns KNet's desktop persistence implementation and schema.
 
 ## Owns
 
-- Room database, schema-v22 entities, DAOs, and storage data sources.
+- Room database, schema-v25 entities, DAOs, and storage data sources.
 - The current 14-to-15, 15-to-16, 16-to-17, and 17-to-18 migrations; unsupported older development schemas may
   still be reset.
 - Durable metadata records and references to externally stored bodies.
@@ -24,6 +24,9 @@ Owns KNet's desktop persistence implementation and schema.
 - Breakpoint rule rows containing transport filters plus a generic normalized protocol ID and opaque
   extension-owned criteria payload and deterministic priority; storage never decodes protocol semantics.
 - Complete API Studio authored-request rows, including JSON-encoded query/header/cookie/body-field state.
+- Opaque API Studio workspace documents and imported/reflected schema sources. Storage retains editor identity,
+  semantic request kind, location, name ownership, badge, payload version, and bytes, but never decodes protobuf,
+  gRPC, WebSocket, or another editor document.
 
 ## Does not own
 
@@ -55,4 +58,10 @@ Schema v21 adds canonical traffic-origin attribution to exchanges. Existing capt
 `proxy-client`; request and response protocol columns continue to preserve the two observed protocol legs.
 Schema v22 adds independently encoded request and response trailer columns. Existing captures default to empty
 trailers; the already-canonical stream ID and two protocol-leg columns require no compatibility model.
+Schema v23 activates durable, sequence-keyed duplex protocol messages with direction, compression facts, bounded
+body ownership, terminal state, and error metadata.
+Schema v24 introduced the first opaque API Studio protocol document and schema-source records. Schema v25 replaces
+that prototype document row with the neutral `api_studio_workspace_documents` table, allowing incomplete drafts and
+saved-collection placement for any contributed editor while keeping schema sources independent. This development
+schema intentionally requires no compatibility model for the discarded v24 prototype rows.
 Breakpoint queries return priority then ID order so persistence and live rule evaluation share one stable order.

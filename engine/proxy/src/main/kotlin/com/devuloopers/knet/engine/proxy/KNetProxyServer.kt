@@ -6,6 +6,8 @@ import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureSink
 import com.devuloopers.knet.engine.proxy.pipeline.PipelineHandlerNames
 import com.devuloopers.knet.engine.proxy.pipeline.ProxyChannelAttributes
 import com.devuloopers.knet.engine.proxy.upstream.HttpTwoUpstreamConnectionPool
+import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamInspectorFactory
+import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamTransformerFactory
 import com.devuloopers.knet.traffic.model.IngressContext
 import com.devuloopers.knet.traffic.model.IngressKind
 import com.devuloopers.knet.traffic.model.TrafficEndpoint
@@ -71,6 +73,9 @@ import com.devuloopers.knet.engine.proxy.tls.ServerTlsContextProvider
  * @property requiresFullResponseAggregation Per-request inspection decision supplied by composition.
  * False keeps that response streaming; true uses overflow-safe bounded aggregation.
  * @property runtimeMetrics Runtime-owned constant-time operational metrics sink.
+ * @property streamInspectorFactories Additive protocol observers that cannot control forwarding.
+ * @property streamTransformerFactories Additive, request-selected protocol message gates. A
+ * request stays on the ordinary streaming path when no factory claims it.
  */
 class KNetProxyServer(
     val bindHost: String = DEFAULT_BIND_HOST,
@@ -85,6 +90,8 @@ class KNetProxyServer(
     private val ingressAttribution: IngressAttributionLookup? = null,
     private val requiresFullResponseAggregation: (HttpRequestSnapshot) -> Boolean = { false },
     private val runtimeMetrics: ProxyRuntimeMetrics = ProxyRuntimeMetrics(),
+    private val streamInspectorFactories: List<ProxyStreamInspectorFactory> = emptyList(),
+    private val streamTransformerFactories: List<ProxyStreamTransformerFactory> = emptyList(),
 ) {
 
     companion object {
@@ -449,6 +456,8 @@ class KNetProxyServer(
         streamId = streamId,
         downstreamProtocol = downstreamProtocol,
         httpTwoUpstreamPool = httpTwoUpstreamPool,
+        streamInspectorFactories = streamInspectorFactories,
+        streamTransformerFactories = streamTransformerFactories,
         installTlsApplicationProtocol = { pipeline ->
             pipeline.addAfter(
                 PipelineHandlerNames.SSL,

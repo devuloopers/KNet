@@ -31,6 +31,11 @@ Adapts desktop engines and storage to existing domain and application-facing rep
 - Durable mapping of canonical traffic origin plus separate client-request and upstream-response protocol values.
 - Lossless mapping of native stream identity and independently ordered request/response trailers through Room
   schema v22, paging, restart restoration, and selected-exchange detail.
+- Canonical framed-message writing, paging, body access, retention, recovery, and clear-traffic cleanup through
+  schema v23 without interpreting gRPC or any other framed protocol.
+- Room-backed opaque API Studio workspace documents and descriptor/reflection schema sources through schema v25.
+  Incomplete drafts, generated-name updates, user-name ownership, and collection promotion cross one neutral adapter;
+  byte arrays are defensively copied and never decoded here.
 
 ## Does not own
 
@@ -72,3 +77,5 @@ it does not configure HTTP clients directly. Product composition uses that value
 trust while this module retains certificate generation, persistence, and server-context ownership.
 Settings persistence is side-effect free. It does not configure the HTTP client, breakpoint coordinator, proxy,
 or UI when a preference flow is collected; runtime propagation is owned by the desktop product composition root.
+Contributed API Studio editors share `RoomApiStudioWorkspaceDocumentStore`. The adapter understands identity,
+placement, naming ownership, and payload version only; gRPC/protobuf and future editor payloads stay opaque.

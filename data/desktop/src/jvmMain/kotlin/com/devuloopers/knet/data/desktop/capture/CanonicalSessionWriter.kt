@@ -18,6 +18,7 @@ import com.devuloopers.knet.traffic.id.BodyId
 import com.devuloopers.knet.traffic.id.CaptureSessionId
 import com.devuloopers.knet.traffic.id.ConnectionId
 import com.devuloopers.knet.traffic.id.ExchangeId
+import com.devuloopers.knet.traffic.id.ProtocolMessageId
 import com.devuloopers.knet.traffic.model.CaptureEvent
 import com.devuloopers.knet.traffic.model.TrafficDirection
 import com.devuloopers.knet.traffic.model.body.BodyCaptureOutcome
@@ -66,10 +67,12 @@ class CanonicalSessionWriter private constructor(
     private val droppedBodyBytes = AtomicLong(0L)
     private val writerFailure = AtomicBoolean(false)
     private val lastGapCoordinates = AtomicReference<GapCoordinates?>(null)
-    private val activeReservations = ConcurrentHashMap.newKeySet<Reservation>()
+    private val activeReservations = ConcurrentHashMap.newKeySet<BodyChunkReservation>()
     private val _health = MutableStateFlow<CaptureIngressHealth>(CaptureIngressHealth.Healthy)
     override val health: StateFlow<CaptureIngressHealth> = _health.asStateFlow()
     private val activeBodies = mutableMapOf<BodyKey, ActiveBody>()
+    private val activeMessageBodies = mutableMapOf<ProtocolMessageId, ActiveBody>()
+    private val messageStarts = mutableMapOf<ProtocolMessageId, CaptureEvent.ProtocolMessageStarted>()
     private val writerJob = scope.launch {
         for (command in commands) {
             processCommand(command)
@@ -156,6 +159,72 @@ class CanonicalSessionWriter private constructor(
         return CapturePublishResult.Rejected(REJECTION_METADATA_SATURATED)
     }
 
+    override fun tryReserveMessageBody(
+        connectionId: ConnectionId,
+        exchangeId: ExchangeId,
+        messageId: ProtocolMessageId,
+        direction: TrafficDirection,
+        bodyId: BodyId,
+        contentEncoding: ContentEncoding?,
+        requestedBytes: Int,
+    ): BodyChunkReservation? {
+        require(requestedBytes in 1..limits.maximumChunkBytes) { "Requested message bytes exceed the chunk limit." }
+        if (closed.get()) return null
+        if (!reserveBodyBytes(requestedBytes)) {
+            recordDroppedBodyBytes(connectionId, requestedBytes.toLong())
+            return null
+        }
+        val reservation = MessageReservation(
+            connectionId = connectionId,
+            exchangeId = exchangeId,
+            messageId = messageId,
+            direction = direction,
+            bodyId = bodyId,
+            contentEncoding = contentEncoding,
+            bytes = ByteArray(requestedBytes),
+        ).also(activeReservations::add)
+        if (closed.get()) {
+            reservation.cancel()
+            return null
+        }
+        return reservation
+    }
+
+    override fun tryCompleteMessageBody(
+        connectionId: ConnectionId,
+        exchangeId: ExchangeId,
+        messageId: ProtocolMessageId,
+        direction: TrafficDirection,
+        bodyId: BodyId,
+        observedBytes: Long,
+        outcome: BodyCaptureOutcome,
+        sequence: Long,
+        occurredAtEpochMillis: Long,
+    ): CapturePublishResult {
+        require(observedBytes >= 0L) { "Observed message bytes must not be negative." }
+        require(sequence >= 0L) { "Message body completion sequence must not be negative." }
+        require(occurredAtEpochMillis >= 0L) { "Message body completion timestamp must not be negative." }
+        if (closed.get()) return CapturePublishResult.Rejected(REJECTION_CLOSED)
+        rememberGapCoordinates(connectionId, sequence, occurredAtEpochMillis)
+        val result = commands.trySend(
+            WriterCommand.MessageBodyCompleted(
+                connectionId = connectionId,
+                exchangeId = exchangeId,
+                messageId = messageId,
+                direction = direction,
+                bodyId = bodyId,
+                observedBytes = observedBytes,
+                outcome = outcome,
+                sequence = sequence,
+                occurredAtEpochMillis = occurredAtEpochMillis,
+            )
+        )
+        if (result.isSuccess) return CapturePublishResult.Accepted
+        droppedMetadataEvents.incrementAndGet()
+        _health.value = CaptureIngressHealth.Degraded(REJECTION_METADATA_SATURATED)
+        return CapturePublishResult.Rejected(REJECTION_METADATA_SATURATED)
+    }
+
     override suspend fun flush() {
         closeMutex.withLock {
             if (closed.get()) return@withLock
@@ -187,6 +256,11 @@ class CanonicalSessionWriter private constructor(
                 }
             }
             activeBodies.clear()
+            activeMessageBodies.values.forEach { active ->
+                runCatching { active.writer.abort(BodyCaptureOutcome.Failed(BodyFailure.SourceFailed)) }
+            }
+            activeMessageBodies.clear()
+            messageStarts.clear()
             dao.closeSession(
                 sessionId = sessionId.value,
                 endedAt = Clock.System.now().toEpochMilliseconds(),
@@ -214,6 +288,14 @@ class CanonicalSessionWriter private constructor(
                     persistPendingGap()
                     persistBodyCompletion(command)
                 }
+                is WriterCommand.MessageBodyChunk -> {
+                    persistPendingGap()
+                    persistMessageBodyChunk(command)
+                }
+                is WriterCommand.MessageBodyCompleted -> {
+                    persistPendingGap()
+                    persistMessageBodyCompletion(command)
+                }
                 is WriterCommand.Barrier -> {
                     persistPendingGap()
                     command.completion.complete(Unit)
@@ -222,20 +304,46 @@ class CanonicalSessionWriter private constructor(
         } catch (failure: Throwable) {
             writerFailure.set(true)
             _health.value = CaptureIngressHealth.Degraded(WRITER_FAILURE)
-            if (command is WriterCommand.BodyChunk) {
-                rememberGapCoordinates(
-                    command.connectionId,
-                    command.sequence,
-                    command.occurredAtEpochMillis,
+            val droppedBodyCommand = when (command) {
+                is WriterCommand.BodyChunk -> DroppedBodyCommand(
+                    connectionId = command.connectionId,
+                    sequence = command.sequence,
+                    occurredAtEpochMillis = command.occurredAtEpochMillis,
+                    bytes = command.bytes.size,
                 )
-                droppedBodyBytes.addAndGet(command.bytes.size.toLong())
+                is WriterCommand.MessageBodyChunk -> DroppedBodyCommand(
+                    connectionId = command.connectionId,
+                    sequence = command.sequence,
+                    occurredAtEpochMillis = command.occurredAtEpochMillis,
+                    bytes = command.bytes.size,
+                )
+                else -> null
+            }
+            if (droppedBodyCommand != null) {
+                rememberGapCoordinates(
+                    droppedBodyCommand.connectionId,
+                    droppedBodyCommand.sequence,
+                    droppedBodyCommand.occurredAtEpochMillis,
+                )
+                droppedBodyBytes.addAndGet(droppedBodyCommand.bytes.toLong())
             }
             if (command is WriterCommand.Barrier) command.completion.completeExceptionally(failure)
             KNetLogger.error(TAG, failure) { "Canonical session writer command failed." }
         } finally {
-            if (command is WriterCommand.BodyChunk) releaseBodyBytes(command.bytes.size)
+            when (command) {
+                is WriterCommand.BodyChunk -> releaseBodyBytes(command.bytes.size)
+                is WriterCommand.MessageBodyChunk -> releaseBodyBytes(command.bytes.size)
+                else -> Unit
+            }
         }
     }
+
+    private data class DroppedBodyCommand(
+        val connectionId: ConnectionId,
+        val sequence: Long,
+        val occurredAtEpochMillis: Long,
+        val bytes: Int,
+    )
 
     /** Applies one monotonic metadata event through conditional DAO transitions. */
     private suspend fun persistEvent(event: CaptureEvent) {
@@ -264,6 +372,19 @@ class CanonicalSessionWriter private constructor(
                         encoded,
                     )
                 }
+            }
+            is CaptureEvent.ProtocolMessageStarted -> {
+                dao.insertDuplexMessage(CanonicalCaptureEntityMapper.message(event))
+                messageStarts[event.messageId] = event
+            }
+            is CaptureEvent.ProtocolMessageTerminated -> {
+                dao.terminateDuplexMessage(
+                    messageId = event.messageId.value,
+                    observedBytes = event.observedBytes,
+                    state = event.state.name,
+                    errorCode = event.errorCode,
+                )
+                messageStarts.remove(event.messageId)
             }
             is CaptureEvent.BodyCaptured -> persistBody(event)
             is CaptureEvent.ExchangeTerminated -> dao.terminateExchange(
@@ -393,6 +514,56 @@ class CanonicalSessionWriter private constructor(
         )
     }
 
+    /** Streams one framed-message payload chunk into the common bounded body store. */
+    private suspend fun persistMessageBodyChunk(command: WriterCommand.MessageBodyChunk) {
+        val active = activeMessageBodies[command.messageId] ?: ActiveBody(
+            bodyId = command.bodyId,
+            writer = bodyStore.openWrite(
+                bodyId = command.bodyId,
+                policy = BodyWritePolicy(
+                    maximumStoredBytes = limits.perBodyStoredBytes,
+                    maximumChunkBytes = limits.maximumChunkBytes,
+                ),
+                contentEncoding = command.contentEncoding,
+            ),
+        ).also { activeMessageBodies[command.messageId] = it }
+        check(active.bodyId == command.bodyId) { "A protocol message cannot change body identifiers." }
+        active.writer.append(command.bytes)
+    }
+
+    /** Finalizes one framed-message payload and atomically attaches its body metadata. */
+    private suspend fun persistMessageBodyCompletion(command: WriterCommand.MessageBodyCompleted) {
+        val active = activeMessageBodies.remove(command.messageId) ?: return
+        check(active.bodyId == command.bodyId) { "A protocol message cannot change body identifiers." }
+        val start = checkNotNull(messageStarts[command.messageId]) { "Protocol message start metadata is missing." }
+        val stored = active.writer.complete().body.copy(
+            observedBytes = command.observedBytes,
+            outcome = command.outcome,
+        )
+        val entity = CanonicalCaptureEntityMapper.messageBody(
+            event = start,
+            body = stored,
+            occurredAtEpochMillis = command.occurredAtEpochMillis,
+            storageKey = bodyStoreMaintenance.storageKey(stored.id),
+        )
+        val attached = try {
+            dao.attachDuplexMessageBody(command.messageId.value, entity)
+        } catch (failure: Throwable) {
+            dao.enqueueDeletion(
+                DeletionOutboxEntity(
+                    sessionId = sessionId.value,
+                    bodyId = stored.id.value,
+                    operation = DELETION_OPERATION_BODY,
+                    createdAtEpochMillis = command.occurredAtEpochMillis,
+                    attemptCount = 0,
+                    lastErrorCode = WRITER_FAILURE,
+                )
+            )
+            throw failure
+        }
+        if (!attached) bodyStore.delete(stored.id)
+    }
+
     /** Coalesces saturation counters into a compact durable gap before the next accepted command. */
     private suspend fun persistPendingGap() {
         val droppedEvents = droppedMetadataEvents.getAndSet(0L)
@@ -502,6 +673,56 @@ class CanonicalSessionWriter private constructor(
         }
     }
 
+    /** Reservation implementation for a framed child-message payload. */
+    private inner class MessageReservation(
+        private val connectionId: ConnectionId,
+        private val exchangeId: ExchangeId,
+        private val messageId: ProtocolMessageId,
+        private val direction: TrafficDirection,
+        private val bodyId: BodyId,
+        private val contentEncoding: ContentEncoding?,
+        bytes: ByteArray,
+    ) : BodyChunkReservation {
+        private val terminal = AtomicBoolean(false)
+        override val writableBytes: ByteArray = bytes
+
+        override fun publish(
+            sequence: Long,
+            occurredAtEpochMillis: Long,
+            endOfBody: Boolean,
+        ): CapturePublishResult {
+            require(sequence >= 0L) { "Message chunk sequence must not be negative." }
+            require(occurredAtEpochMillis >= 0L) { "Message chunk timestamp must not be negative." }
+            check(terminal.compareAndSet(false, true)) { "Message reservation is already terminal." }
+            activeReservations.remove(this)
+            rememberGapCoordinates(connectionId, sequence, occurredAtEpochMillis)
+            val result = commands.trySend(
+                WriterCommand.MessageBodyChunk(
+                    connectionId = connectionId,
+                    exchangeId = exchangeId,
+                    messageId = messageId,
+                    direction = direction,
+                    bodyId = bodyId,
+                    contentEncoding = contentEncoding,
+                    bytes = writableBytes,
+                    sequence = sequence,
+                    occurredAtEpochMillis = occurredAtEpochMillis,
+                )
+            )
+            if (result.isSuccess) return CapturePublishResult.Accepted
+            releaseBodyBytes(writableBytes.size)
+            recordDroppedBodyBytes(connectionId, writableBytes.size.toLong())
+            return CapturePublishResult.Rejected(REJECTION_METADATA_SATURATED)
+        }
+
+        override fun cancel() {
+            if (terminal.compareAndSet(false, true)) {
+                activeReservations.remove(this)
+                releaseBodyBytes(writableBytes.size)
+            }
+        }
+    }
+
     /** Commands serialized by the writer actor. */
     private sealed interface WriterCommand {
         data class Metadata(val event: CaptureEvent) : WriterCommand
@@ -521,6 +742,28 @@ class CanonicalSessionWriter private constructor(
             val connectionId: ConnectionId,
             val exchangeId: ExchangeId,
             val exchangeVersion: Long,
+            val direction: TrafficDirection,
+            val bodyId: BodyId,
+            val observedBytes: Long,
+            val outcome: BodyCaptureOutcome,
+            val sequence: Long,
+            val occurredAtEpochMillis: Long,
+        ) : WriterCommand
+        data class MessageBodyChunk(
+            val connectionId: ConnectionId,
+            val exchangeId: ExchangeId,
+            val messageId: ProtocolMessageId,
+            val direction: TrafficDirection,
+            val bodyId: BodyId,
+            val contentEncoding: ContentEncoding?,
+            val bytes: ByteArray,
+            val sequence: Long,
+            val occurredAtEpochMillis: Long,
+        ) : WriterCommand
+        data class MessageBodyCompleted(
+            val connectionId: ConnectionId,
+            val exchangeId: ExchangeId,
+            val messageId: ProtocolMessageId,
             val direction: TrafficDirection,
             val bodyId: BodyId,
             val observedBytes: Long,

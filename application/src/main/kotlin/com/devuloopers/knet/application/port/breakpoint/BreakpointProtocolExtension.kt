@@ -3,6 +3,8 @@ package com.devuloopers.knet.application.port.breakpoint
 import com.devuloopers.knet.domain.rules.model.BreakpointProtocolId
 import com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
+import com.devuloopers.knet.traffic.model.TrafficDirection
+import com.devuloopers.knet.traffic.id.ProtocolMessageId
 
 /** Stable identifier for one editable field contributed by a protocol extension. */
 @JvmInline
@@ -78,6 +80,8 @@ public data class BreakpointProtocolDefinition(
     public val displayName: String,
     /** Version of the extension-owned encoded criteria contract. */
     public val criteriaVersion: Int,
+    /** Interception unit owned by this protocol. HTTP bodies and framed messages use different gates. */
+    public val interceptionUnit: BreakpointInterceptionUnit = BreakpointInterceptionUnit.HTTP_EXCHANGE,
     /** Standard editor fields supported by this protocol. */
     public val fields: List<ProtocolCriteriaFieldDefinition>,
 ) {
@@ -88,6 +92,12 @@ public data class BreakpointProtocolDefinition(
             "Breakpoint protocol criteria field IDs must be unique."
         }
     }
+}
+
+/** Stable interception granularity declared by a protocol extension. */
+public enum class BreakpointInterceptionUnit {
+    HTTP_EXCHANGE,
+    PROTOCOL_MESSAGE,
 }
 
 /** One UI-entered value identified without engine-specific presentation types. */
@@ -134,6 +144,23 @@ public data class ProtocolInspectionInput(
     public val requestObservation: ProtocolObservation? = null,
 )
 
+/** Bounded input offered to an extension for one fully framed live protocol message. */
+public data class ProtocolMessageInspectionInput(
+    public val request: HttpRequestSnapshot,
+    public val messageId: ProtocolMessageId,
+    public val direction: TrafficDirection,
+    public val sequence: Long,
+    public val declaredBytes: Long,
+    public val compressed: Boolean,
+    public val compressionEncoding: String?,
+    public val body: BreakpointBody,
+) {
+    init {
+        require(sequence > 0L) { "Protocol message sequence must be positive." }
+        require(declaredBytes >= 0L) { "Declared protocol message bytes must not be negative." }
+    }
+}
+
 /** Strongly compiled protocol predicate produced from persisted extension criteria. */
 public interface CompiledProtocolCriteria {
     /** Protocol extension that owns this predicate. */
@@ -174,6 +201,12 @@ public interface BreakpointProtocolExtension {
      * @return compact typed facts when the candidate belongs to this protocol, or null otherwise.
      */
     public fun inspect(input: ProtocolInspectionInput): ProtocolObservation?
+
+    /**
+     * Inspects one framed message. HTTP/GraphQL extensions keep the safe default; framed-protocol
+     * extensions opt in without adding protocol branches to the application coordinator.
+     */
+    public fun inspectMessage(input: ProtocolMessageInspectionInput): ProtocolObservation? = null
 
     /** Decodes a valid persisted criterion into UI-neutral editor values. */
     public fun editorValues(criteria: ProtocolMatchCriteria): List<ProtocolCriteriaValue>
@@ -252,6 +285,21 @@ public class BreakpointProtocolRegistry(
             .getOrNull()
             ?.takeIf { it.protocolId == protocolId }
     }
+
+    /** Produces a compact observation for one framed message through its owning extension. */
+    public fun inspectMessage(
+        protocolId: BreakpointProtocolId,
+        input: ProtocolMessageInspectionInput,
+    ): ProtocolObservation? {
+        val extension = extensionsById[protocolId] ?: return null
+        return runCatching { extension.inspectMessage(input) }
+            .getOrNull()
+            ?.takeIf { it.protocolId == protocolId }
+    }
+
+    /** Returns the interception unit declared by a registered extension. */
+    public fun interceptionUnit(protocolId: BreakpointProtocolId): BreakpointInterceptionUnit? =
+        extensionsById[protocolId]?.definition?.interceptionUnit
 
     /** Returns editor values decoded by the owning extension, or an empty list when unavailable. */
     public fun editorValues(criteria: ProtocolMatchCriteria): List<ProtocolCriteriaValue> =

@@ -52,6 +52,21 @@ public value class StreamId(public val value: Long) {
 }
 
 /**
+ * Identifies one framed application-protocol message inside a duplex exchange.
+ *
+ * gRPC, WebSocket, and future framed protocols use this identity without changing the parent
+ * HTTP exchange model or exposing a transport-library object.
+ *
+ * @property value Stable non-blank identifier generated at the capture boundary.
+ */
+@JvmInline
+public value class ProtocolMessageId(public val value: String) {
+    init {
+        require(value.isNotBlank()) { "ProtocolMessageId must not be blank." }
+    }
+}
+
+/**
  * Identifies body content managed by a bounded body store.
  *
  * The value is an opaque storage key. It is not a filesystem path and must not be derived

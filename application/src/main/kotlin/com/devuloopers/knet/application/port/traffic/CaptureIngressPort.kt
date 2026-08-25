@@ -3,6 +3,7 @@ package com.devuloopers.knet.application.port.traffic
 import com.devuloopers.knet.traffic.id.BodyId
 import com.devuloopers.knet.traffic.id.ConnectionId
 import com.devuloopers.knet.traffic.id.ExchangeId
+import com.devuloopers.knet.traffic.id.ProtocolMessageId
 import com.devuloopers.knet.traffic.model.CaptureEvent
 import com.devuloopers.knet.traffic.model.TrafficDirection
 import com.devuloopers.knet.traffic.model.body.ContentEncoding
@@ -135,6 +136,35 @@ public interface CaptureIngressPort {
         connectionId: ConnectionId,
         exchangeId: ExchangeId,
         exchangeVersion: Long,
+        direction: TrafficDirection,
+        bodyId: BodyId,
+        observedBytes: Long,
+        outcome: BodyCaptureOutcome,
+        sequence: Long,
+        occurredAtEpochMillis: Long,
+    ): CapturePublishResult
+
+    /**
+     * Reserves bounded payload capacity for one framed child message.
+     *
+     * Message storage uses the same byte budget and body store as HTTP bodies while remaining
+     * independently addressable by [messageId].
+     */
+    public fun tryReserveMessageBody(
+        connectionId: ConnectionId,
+        exchangeId: ExchangeId,
+        messageId: ProtocolMessageId,
+        direction: TrafficDirection,
+        bodyId: BodyId,
+        contentEncoding: ContentEncoding?,
+        requestedBytes: Int,
+    ): BodyChunkReservation?
+
+    /** Finalizes the bounded payload object owned by one framed child message. */
+    public fun tryCompleteMessageBody(
+        connectionId: ConnectionId,
+        exchangeId: ExchangeId,
+        messageId: ProtocolMessageId,
         direction: TrafficDirection,
         bodyId: BodyId,
         observedBytes: Long,

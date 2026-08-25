@@ -1,6 +1,7 @@
 package com.devuloopers.knet.engine.proxy.capture
 
 import com.devuloopers.knet.traffic.id.ExchangeId
+import com.devuloopers.knet.traffic.id.ProtocolMessageId
 import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.model.ExchangeState
 import com.devuloopers.knet.traffic.model.ExchangeTimings
@@ -12,6 +13,9 @@ import com.devuloopers.knet.traffic.model.body.ContentEncoding
 import com.devuloopers.knet.traffic.model.http.RequestHead
 import com.devuloopers.knet.traffic.model.http.ResponseHead
 import com.devuloopers.knet.traffic.model.http.HeaderField
+import com.devuloopers.knet.traffic.model.message.MessageProtocolId
+import com.devuloopers.knet.traffic.model.message.ProtocolMessageKind
+import com.devuloopers.knet.traffic.model.message.ProtocolMessageState
 
 /** Metadata supplied when one downstream transport connection is admitted. */
 data class ProxyCaptureConnectionMetadata(
@@ -76,6 +80,9 @@ interface ProxyExchangeCapture {
         errorCode: String,
     )
 
+    /** Starts one framed child message, or returns null while forwarding remains unaffected. */
+    fun startMessage(metadata: ProxyMessageCaptureMetadata): ProxyMessageCapture? = null
+
     /** Publishes response metadata without body bytes. */
     fun observeResponse(response: ResponseHead, occurredAtEpochMillis: Long)
 
@@ -90,6 +97,39 @@ interface ProxyExchangeCapture {
     fun terminate(
         state: ExchangeState,
         timings: ExchangeTimings,
+        occurredAtEpochMillis: Long,
+        errorCode: String? = null,
+    )
+}
+
+/** Transport-neutral metadata supplied when a framed child message starts. */
+data class ProxyMessageCaptureMetadata(
+    val messageId: ProtocolMessageId,
+    val streamId: StreamId?,
+    val protocol: MessageProtocolId,
+    val kind: ProtocolMessageKind,
+    val direction: TrafficDirection,
+    val messageSequence: Long,
+    val declaredBytes: Long?,
+    val compressed: Boolean,
+    val compressionEncoding: String?,
+    val occurredAtEpochMillis: Long,
+)
+
+/** Message-scoped bounded capture side output independent from any protocol implementation. */
+interface ProxyMessageCapture {
+    val messageId: ProtocolMessageId
+
+    /** Reserves owned payload bytes before copying from a transport buffer. */
+    fun tryReservePayload(requestedBytes: Int): ProxyBodyReservation?
+
+    /** Finalizes a successfully observed framed message. */
+    fun complete(observedBytes: Long, occurredAtEpochMillis: Long)
+
+    /** Finalizes a truncated, malformed, failed, or cancelled framed message. */
+    fun terminate(
+        observedBytes: Long,
+        state: ProtocolMessageState,
         occurredAtEpochMillis: Long,
         errorCode: String? = null,
     )

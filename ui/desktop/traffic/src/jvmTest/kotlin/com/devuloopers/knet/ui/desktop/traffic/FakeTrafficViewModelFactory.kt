@@ -19,18 +19,29 @@ import com.devuloopers.knet.application.port.traffic.CaptureResumeResult
 import com.devuloopers.knet.application.port.traffic.CaptureSessionControlPort
 import com.devuloopers.knet.application.port.traffic.CaptureSessionState
 import com.devuloopers.knet.application.port.traffic.TrafficMaintenancePort
+import com.devuloopers.knet.application.port.traffic.ProtocolMessagePage
+import com.devuloopers.knet.application.port.traffic.ProtocolMessagePageQuery
+import com.devuloopers.knet.application.port.traffic.ProtocolMessageQueryPort
+import com.devuloopers.knet.application.port.traffic.ProtocolMessagePresentationRegistry
 import com.devuloopers.knet.application.port.inspection.InspectionAnnotationPort
 import com.devuloopers.knet.application.port.inspection.ObserveInspectionAnnotationsUseCase
 import com.devuloopers.knet.application.port.breakpoint.BreakpointControlPort
 import com.devuloopers.knet.application.port.breakpoint.BreakpointDecision
 import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolRegistry
 import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
+import com.devuloopers.knet.application.port.breakpoint.PendingProtocolMessageBreakpoint
+import com.devuloopers.knet.application.port.breakpoint.ProtocolMessageBreakpointControlPort
+import com.devuloopers.knet.application.port.breakpoint.ProtocolMessageBreakpointDecision
 import com.devuloopers.knet.application.usecase.breakpoint.ObservePendingBreakpointsUseCase
+import com.devuloopers.knet.application.usecase.breakpoint.ObservePendingProtocolMessageBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.PrepareBreakpointRuleDraftUseCase
 import com.devuloopers.knet.application.usecase.traffic.ClearTrafficHistoryUseCase
 import com.devuloopers.knet.application.usecase.traffic.LoadTrafficExchangeDetailsUseCase
 import com.devuloopers.knet.application.usecase.traffic.ObserveLatestTrafficSessionUseCase
 import com.devuloopers.knet.application.usecase.traffic.ObserveTrafficGenerationsUseCase
+import com.devuloopers.knet.application.usecase.traffic.ObserveProtocolMessageChangesUseCase
+import com.devuloopers.knet.application.usecase.traffic.QueryProtocolMessagesUseCase
+import com.devuloopers.knet.application.usecase.traffic.LoadProtocolMessageBodyUseCase
 import com.devuloopers.knet.application.usecase.traffic.PrepareTrafficRequestUseCase
 import com.devuloopers.knet.application.usecase.traffic.PrepareCapturedNetworkRequestUseCase
 import com.devuloopers.knet.application.usecase.traffic.QueryTrafficPageUseCase
@@ -155,6 +166,15 @@ object FakeTrafficViewModelFactory {
             }
         }
         val loadTrafficExchangeDetailsUseCase = LoadTrafficExchangeDetailsUseCase(fakeTrafficQueryPort)
+        val protocolMessages = object : ProtocolMessageQueryPort {
+            override fun observeChanges(exchangeId: ExchangeId): Flow<Long> = flowOf(0L)
+
+            override suspend fun queryMessages(query: ProtocolMessagePageQuery): ProtocolMessagePage =
+                ProtocolMessagePage(items = emptyList(), nextCursor = null, totalCount = 0L)
+
+            override suspend fun readBody(bodyId: BodyId, range: BodyRange): BodyChunk =
+                fakeTrafficQueryPort.readBody(bodyId, range)
+        }
 
         return TrafficViewModel(
             observeLatestTrafficSessionUseCase = ObserveLatestTrafficSessionUseCase(
@@ -165,6 +185,12 @@ object FakeTrafficViewModelFactory {
             ),
             queryTrafficPageUseCase = QueryTrafficPageUseCase(fakeTrafficQueryPort),
             observeTrafficGenerationsUseCase = ObserveTrafficGenerationsUseCase(fakeTrafficQueryPort),
+            observeProtocolMessageChangesUseCase = ObserveProtocolMessageChangesUseCase(protocolMessages),
+            queryProtocolMessagesUseCase = QueryProtocolMessagesUseCase(protocolMessages),
+            loadProtocolMessageBodyUseCase = LoadProtocolMessageBodyUseCase(
+                protocolMessages,
+                ProtocolMessagePresentationRegistry(),
+            ),
             clearTrafficHistoryUseCase = ClearTrafficHistoryUseCase(
                 captureSessionControl = fakeCaptureControl,
                 trafficMaintenance = object : TrafficMaintenancePort {
@@ -213,6 +239,18 @@ object FakeTrafficViewModelFactory {
                     override suspend fun clear(): Int = 0
                 },
             ),
+            observePendingProtocolMessageBreakpointsUseCase =
+                ObservePendingProtocolMessageBreakpointsUseCase(
+                    object : ProtocolMessageBreakpointControlPort {
+                        override val pendingProtocolMessages: StateFlow<List<PendingProtocolMessageBreakpoint>> =
+                            MutableStateFlow(emptyList())
+
+                        override suspend fun resolveProtocolMessage(
+                            pendingId: String,
+                            decision: ProtocolMessageBreakpointDecision,
+                        ): Boolean = false
+                    },
+                ),
             getWorkspaceLayoutUseCase = GetWorkspaceLayoutUseCase(workspacePreferencesRepository),
             updateWorkspaceLayoutUseCase = UpdateWorkspaceLayoutUseCase(workspacePreferencesRepository),
             backgroundDispatcher = Dispatchers.Main,

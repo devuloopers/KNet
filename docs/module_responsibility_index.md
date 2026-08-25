@@ -38,6 +38,8 @@ Gradle enforces four rules through `verifyArchitectureFoundation`:
 - [`:storage`](../storage/MODULE.md) — durable desktop persistence, schema, and registered/trusted-device rows.
 - [`:engine:certificate`](../engine/certificate/MODULE.md) — CA, certificate, key, and trust implementation.
 - [`:engine:formatter`](../engine/formatter/MODULE.md) — bounded body formatting and derived views.
+- [`:engine:grpc`](../engine/grpc/MODULE.md) — native gRPC framing, descriptors, reflection, inspection,
+  breakpoints, and API Studio execution.
 - [`:engine:interceptor`](../engine/interceptor/MODULE.md) — breakpoint interception, pre-pause capture admission, and typed mutation behavior.
 - [`:engine:protocol`](../engine/protocol/MODULE.md) — protocol-specific parsers, asynchronous inspectors,
   and additive live-breakpoint extensions.
@@ -51,7 +53,9 @@ Gradle enforces four rules through `verifyArchitectureFoundation`:
 - [`:ui:core`](../ui/core/MODULE.md) — reusable Compose design system and responsive side-drawer shell.
 - [`:ui:desktop:app`](../ui/desktop/app/MODULE.md) — desktop shell, navigation, and row-gated global overlay placement.
 - [`:ui:desktop:workspace`](../ui/desktop/workspace/MODULE.md) — workspace presentation.
-- [`:ui:desktop:apistudio`](../ui/desktop/apistudio/MODULE.md) — API Studio editing and execution presentation.
+- [`:ui:desktop:apiStudio`](../ui/desktop/apiStudio/MODULE.md) — API Studio editing and execution presentation.
+- [`:ui:desktop:apiStudio:grpc`](../ui/desktop/apiStudio/grpc/MODULE.md) — contributed native gRPC authoring,
+  streaming execution, and versioned draft codec.
 - [`:ui:desktop:traffic`](../ui/desktop/traffic/MODULE.md) — traffic list, capture controls, live breakpoint projection, and inspector coordination.
 - [`:ui:desktop:connectivity`](../ui/desktop/connectivity/MODULE.md) — connectivity card grid, QR, and Wi-Fi setup drawer content.
 - [`:ui:desktop:httpPanel`](../ui/desktop/httpPanel/MODULE.md) — reusable HTTP inspection/editing panels.
@@ -86,6 +90,7 @@ exchanges, multiplexes isolated experimental HTTP/2 streams, streams both direct
 startup/shutdown. Application services independently own proxy lifecycle, capture attachment, breakpoints,
 connectivity, pairing, certificates, inspection, script execution, traffic paging, clear, and recording. The
 dedicated setup listeners, authenticated companion-ready gateway, and automatically managed open-client Wi-Fi
-gateway live in `:connectivity:desktop`; none is inserted into the proxy pipeline. HTTP/2 remains
-`EXPERIMENTAL` pending external platform/device qualification. HTTP/3, WebSocket transport, gRPC, VPN, relay,
-and mobile applications remain explicitly unavailable rather than represented by dormant stubs.
+gateway live in `:connectivity:desktop`; none is inserted into the proxy pipeline. HTTP/2 and native gRPC capture,
+breakpoints, and API Studio remain `EXPERIMENTAL` pending external platform/device qualification. HTTP/3,
+WebSocket transport, VPN, relay, and mobile applications remain explicitly unavailable rather than represented by
+dormant stubs.

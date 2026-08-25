@@ -24,11 +24,15 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.apistudio.view.ApiStudioScreen
 import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.ApiStudioViewModel
 import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.CollectionsViewModel
+import com.devuloopers.knet.ui.desktop.apistudio.protocol.ApiStudioWorkspaceContribution
 import com.devuloopers.knet.ui.desktop.app.navigation.DesktopDestination
-import com.devuloopers.knet.ui.desktop.breakpointmanager.components.AddEditBreakpointRuleDialog
+import com.devuloopers.knet.ui.desktop.breakpointmanager.components.AddEditBreakpointRuleDrawer
 import com.devuloopers.knet.ui.desktop.breakpointmanager.components.LiveInterceptDrawerActions
 import com.devuloopers.knet.ui.desktop.breakpointmanager.components.LiveInterceptDrawerState
 import com.devuloopers.knet.ui.desktop.breakpointmanager.components.LiveInterceptDrawer
+import com.devuloopers.knet.ui.desktop.breakpointmanager.components.ProtocolMessageInterceptDrawer
+import com.devuloopers.knet.ui.desktop.breakpointmanager.components.ProtocolMessageInterceptDrawerActions
+import com.devuloopers.knet.ui.desktop.breakpointmanager.components.ProtocolMessageInterceptDrawerState
 import com.devuloopers.knet.ui.desktop.breakpointmanager.view.BreakpointManagerScreen
 import com.devuloopers.knet.ui.desktop.breakpointmanager.viewmodel.BreakpointManagerViewModel
 import com.devuloopers.knet.ui.desktop.certificate.view.CertificateManagerScreen
@@ -39,6 +43,7 @@ import com.devuloopers.knet.ui.desktop.traffic.view.TrafficScreen
 import com.devuloopers.knet.ui.desktop.traffic.model.TrafficInterceptionUiState
 import com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficViewModel
 import org.koin.compose.viewmodel.koinViewModel
+import org.koin.compose.getKoin
 
 /**
  * IDE Workspace Host composable routing active destinations to feature workspaces.
@@ -51,11 +56,19 @@ fun KNetWorkspaceHost(
 ) {
     val apiStudioViewModel: ApiStudioViewModel = koinViewModel()
     val collectionsViewModel: CollectionsViewModel = koinViewModel()
+    val koin = getKoin()
+    val apiStudioProtocolContributions = remember(koin) { koin.getAll<ApiStudioWorkspaceContribution>() }
     val breakpointViewModel: BreakpointManagerViewModel = koinViewModel()
     val breakpointState by breakpointViewModel.uiState.collectAsState()
     val trafficViewModel: TrafficViewModel = koinViewModel()
     val trafficState by trafficViewModel.uiState.collectAsState()
     val drawerEvent = breakpointState.activeEvent?.takeIf { event ->
+        trafficState.transactions.any { row ->
+            val interception = row.interception as? TrafficInterceptionUiState.Paused
+            row.transactionId == event.candidate.exchangeId.value && interception?.pendingId == event.id
+        }
+    }
+    val messageDrawerEvent = breakpointState.activeMessageEvent?.takeIf { event ->
         trafficState.transactions.any { row ->
             val interception = row.interception as? TrafficInterceptionUiState.Paused
             row.transactionId == event.candidate.exchangeId.value && interception?.pendingId == event.id
@@ -74,25 +87,25 @@ fun KNetWorkspaceHost(
                     modifier = Modifier.fillMaxSize()
                 )
 
-                if (trafficState.isBreakpointDialogVisible) {
-                    AddEditBreakpointRuleDialog(
-                        rule = trafficState.prefilledBreakpointRule,
-                        protocolDefinitions = breakpointState.protocolDefinitions,
-                        initialProtocolValues = trafficState.prefilledBreakpointProtocolValues,
-                        onDismiss = { trafficViewModel.closeBreakpointDialog() },
-                        onSave = { urlPattern, method, phase, enabled, protocolId, protocolValues ->
-                            breakpointViewModel.saveRule(
-                                urlPattern,
-                                method,
-                                phase,
-                                enabled,
-                                protocolId,
-                                protocolValues,
-                            )
-                            trafficViewModel.closeBreakpointDialog()
-                        }
-                    )
-                }
+                AddEditBreakpointRuleDrawer(
+                    visible = trafficState.isBreakpointDrawerVisible,
+                    rule = trafficState.prefilledBreakpointRule,
+                    isEditingExistingRule = false,
+                    protocolDefinitions = breakpointState.protocolDefinitions,
+                    initialProtocolValues = trafficState.prefilledBreakpointProtocolValues,
+                    onDismiss = trafficViewModel::closeBreakpointDrawer,
+                    onSave = { urlPattern, method, phase, enabled, protocolId, protocolValues ->
+                        breakpointViewModel.saveRule(
+                            urlPattern,
+                            method,
+                            phase,
+                            enabled,
+                            protocolId,
+                            protocolValues,
+                        )
+                        trafficViewModel.closeBreakpointDrawer()
+                    },
+                )
             }
 
             DesktopDestination.ConnectDevice -> {
@@ -107,6 +120,7 @@ fun KNetWorkspaceHost(
                 ApiStudioScreen(
                     viewModel = apiStudioViewModel,
                     collectionsViewModel = collectionsViewModel,
+                    protocolContributions = apiStudioProtocolContributions,
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -148,7 +162,7 @@ fun KNetWorkspaceHost(
             state = LiveInterceptDrawerState(
                 events = breakpointState.activeEvents,
                 activeEvent = drawerEvent,
-                isVisible = drawerEvent != null,
+                isVisible = drawerEvent != null && messageDrawerEvent == null,
                 resolvedPayloads = breakpointState.resolvedPayloads,
                 requestDescriptors = breakpointState.requestDescriptors,
             ),
@@ -182,6 +196,22 @@ fun KNetWorkspaceHost(
                 dismiss = breakpointViewModel::dismissCurrentEvent,
             ),
             modifier = Modifier.fillMaxSize()
+        )
+
+        ProtocolMessageInterceptDrawer(
+            state = ProtocolMessageInterceptDrawerState(
+                events = breakpointState.activeMessageEvents,
+                activeEvent = messageDrawerEvent,
+                isVisible = messageDrawerEvent != null,
+            ),
+            actions = ProtocolMessageInterceptDrawerActions(
+                selectEvent = breakpointViewModel::selectActiveMessageEvent,
+                continueUnchanged = breakpointViewModel::continueProtocolMessage,
+                replaceAndContinue = breakpointViewModel::replaceProtocolMessage,
+                dropStream = breakpointViewModel::dropProtocolMessageStream,
+                dismiss = breakpointViewModel::dropProtocolMessageStream,
+            ),
+            modifier = Modifier.fillMaxSize(),
         )
     }
 }

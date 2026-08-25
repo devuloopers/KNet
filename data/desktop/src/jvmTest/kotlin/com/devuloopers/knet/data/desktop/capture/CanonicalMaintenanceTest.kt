@@ -6,6 +6,7 @@ import com.devuloopers.knet.storage.capture.entity.BodyObjectEntity
 import com.devuloopers.knet.storage.capture.entity.CanonicalExchangeEntity
 import com.devuloopers.knet.storage.capture.entity.CaptureSessionEntity
 import com.devuloopers.knet.storage.capture.entity.TrafficConnectionEntity
+import com.devuloopers.knet.storage.capture.entity.DuplexMessageEntity
 import com.devuloopers.knet.storage.database.DatabaseFactory
 import com.devuloopers.knet.traffic.id.BodyId
 import com.devuloopers.knet.traffic.model.body.BodyCaptureOutcome
@@ -98,6 +99,7 @@ class CanonicalMaintenanceTest {
             )
             dao.insertConnection(openConnection())
             dao.insertExchange(exchangeReferencingRequestBody(MISSING_BODY_ID).copy(state = "REQUEST_HEADERS"))
+            dao.insertDuplexMessage(interruptedMessage())
             dao.insertBody(
                 bodyEntity(
                     RECOVERY_SESSION_ID,
@@ -139,6 +141,7 @@ class CanonicalMaintenanceTest {
             assertEquals(1, result.recoveredSessions)
             assertEquals(1, result.recoveredConnections)
             assertEquals(1, result.recoveredExchanges)
+            assertEquals(1, result.recoveredMessages)
             assertEquals(1, result.temporaryObjectsDeleted)
             assertEquals(1, result.checkedBodies)
             assertEquals(1, result.missingBodies)
@@ -155,6 +158,9 @@ class CanonicalMaintenanceTest {
             val recoveredExchange = assertNotNull(dao.getExchange(RECOVERY_EXCHANGE_ID))
             assertEquals("FAILED", recoveredExchange.state)
             assertEquals("process-interrupted", recoveredExchange.terminalErrorCode)
+            val recoveredMessage = assertNotNull(dao.getDuplexMessage(RECOVERY_MESSAGE_ID))
+            assertEquals("FAILED", recoveredMessage.state)
+            assertEquals("process-interrupted", recoveredMessage.errorCode)
             val missingBody = assertNotNull(dao.getBody(MISSING_BODY_ID))
             assertEquals("MISSING", missingBody.state)
             assertEquals("FAILED:body-file-missing", missingBody.outcome)
@@ -347,6 +353,27 @@ class CanonicalMaintenanceTest {
         terminalErrorCode = null,
     )
 
+    private fun interruptedMessage(): DuplexMessageEntity = DuplexMessageEntity(
+        id = RECOVERY_MESSAGE_ID,
+        sessionId = RECOVERY_SESSION_ID,
+        connectionId = RECOVERY_CONNECTION_ID,
+        exchangeId = RECOVERY_EXCHANGE_ID,
+        streamId = 3L,
+        captureSequence = 2L,
+        messageSequence = 1L,
+        direction = "CLIENT_TO_SERVER",
+        protocol = "grpc",
+        messageKind = "data",
+        occurredAtEpochMillis = 2L,
+        declaredBytes = 4L,
+        observedBytes = 2L,
+        compressed = false,
+        compressionEncoding = null,
+        bodyId = null,
+        state = "IN_PROGRESS",
+        errorCode = null,
+    )
+
     /** Creates one canonical exchange whose request references the recovery fixture body. */
     private fun exchangeReferencingRequestBody(bodyId: String): CanonicalExchangeEntity = CanonicalExchangeEntity(
         id = RECOVERY_EXCHANGE_ID,
@@ -384,6 +411,7 @@ class CanonicalMaintenanceTest {
         private const val RECOVERY_SESSION_ID = "recovery-session"
         private const val RECOVERY_CONNECTION_ID = "recovery-connection"
         private const val RECOVERY_EXCHANGE_ID = "recovery-exchange"
+        private const val RECOVERY_MESSAGE_ID = "recovery-message"
         private const val MISSING_BODY_ID = "missing-body"
         private const val REFERENCED_BODY_ID = "referenced-body"
         private const val ORPHAN_BODY_ID = "orphan-body"

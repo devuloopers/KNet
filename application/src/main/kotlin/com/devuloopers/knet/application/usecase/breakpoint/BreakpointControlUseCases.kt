@@ -5,6 +5,10 @@ import com.devuloopers.knet.application.port.breakpoint.BreakpointDecision
 import com.devuloopers.knet.application.port.breakpoint.BreakpointRequestEdit
 import com.devuloopers.knet.application.port.breakpoint.BreakpointResponseEdit
 import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
+import com.devuloopers.knet.application.port.breakpoint.PendingProtocolMessageBreakpoint
+import com.devuloopers.knet.application.port.breakpoint.ProtocolMessageBreakpointControlPort
+import com.devuloopers.knet.application.port.breakpoint.ProtocolMessageBreakpointDecision
+import com.devuloopers.knet.application.port.breakpoint.BreakpointBody
 import kotlinx.coroutines.flow.StateFlow
 
 /** Observes immutable pending breakpoint candidates. */
@@ -43,4 +47,28 @@ public class ClearPendingBreakpointsUseCase(
     private val control: BreakpointControlPort,
 ) {
     public suspend fun execute(): Int = control.clear()
+}
+
+/** Observes pending framed-message breakpoints independently from HTTP exchange pauses. */
+public class ObservePendingProtocolMessageBreakpointsUseCase(
+    private val control: ProtocolMessageBreakpointControlPort,
+) {
+    public fun execute(): StateFlow<List<PendingProtocolMessageBreakpoint>> = control.pendingProtocolMessages
+}
+
+/** Resolves one pending framed-message interception. */
+public class ResolveProtocolMessageBreakpointUseCase(
+    private val control: ProtocolMessageBreakpointControlPort,
+) {
+    public suspend fun continueUnchanged(pendingId: String): Boolean =
+        control.resolveProtocolMessage(pendingId, ProtocolMessageBreakpointDecision.ContinueUnchanged)
+
+    public suspend fun replace(pendingId: String, body: ByteArray): Boolean =
+        control.resolveProtocolMessage(
+            pendingId,
+            ProtocolMessageBreakpointDecision.Replace(BreakpointBody(body)),
+        )
+
+    public suspend fun dropStream(pendingId: String): Boolean =
+        control.resolveProtocolMessage(pendingId, ProtocolMessageBreakpointDecision.DropStream)
 }

@@ -4,9 +4,12 @@ import androidx.room.AutoMigration
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import com.devuloopers.knet.storage.apistudio.dao.CollectionDao
+import com.devuloopers.knet.storage.apistudio.dao.ProtocolDocumentDao
 import com.devuloopers.knet.storage.apistudio.entity.CollectionEntity
 import com.devuloopers.knet.storage.apistudio.entity.CollectionFolderEntity
 import com.devuloopers.knet.storage.apistudio.entity.SavedRequestEntity
+import com.devuloopers.knet.storage.apistudio.entity.ApiStudioWorkspaceDocumentEntity
+import com.devuloopers.knet.storage.apistudio.entity.ApiStudioProtocolSchemaEntity
 import com.devuloopers.knet.storage.capture.dao.CanonicalCaptureDao
 import com.devuloopers.knet.storage.capture.entity.BodyObjectEntity
 import com.devuloopers.knet.storage.capture.entity.CanonicalExchangeEntity
@@ -43,8 +46,10 @@ import com.devuloopers.knet.storage.rules.entity.BreakpointRuleEntity
         RegisteredDeviceEntity::class,
         TrustedDeviceCredentialEntity::class,
         PairingInvitationEntity::class,
+        ApiStudioWorkspaceDocumentEntity::class,
+        ApiStudioProtocolSchemaEntity::class,
     ],
-    version = 22,
+    version = 25,
     autoMigrations = [
         AutoMigration(from = 14, to = 15),
         AutoMigration(from = 15, to = 16),
@@ -58,6 +63,9 @@ import com.devuloopers.knet.storage.rules.entity.BreakpointRuleEntity
 abstract class KNetDatabase : RoomDatabase() {
 
     abstract fun collectionDao(): CollectionDao
+
+    /** Opaque authored protocol documents and imported schema sources. */
+    abstract fun protocolDocumentDao(): ProtocolDocumentDao
 
     abstract fun breakpointRuleDao(): BreakpointRuleDao
 

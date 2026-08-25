@@ -288,7 +288,7 @@ Exit gate: all HTTP/2 presentation derives from canonical stored/live data and s
 
 ### Phase H2-8 — Stress, security, and conformance
 
-Status: **LOCAL AUTOMATED GATE COMPLETE — 2026-08-22**
+Status: **LOCAL AUTOMATED GATE COMPLETE — 2026-08-24**
 
 - Run large-header/HPACK, rapid reset, slow consumer, max-concurrency, malformed frame, GOAWAY, timeout, body-limit,
   and connection-churn suites.
@@ -298,21 +298,33 @@ Status: **LOCAL AUTOMATED GATE COMPLETE — 2026-08-22**
 Exit gate: no leak-detector failures, unbounded queues, cross-stream data, duplicate terminal events, or HTTP/1
 regression.
 
+`HttpTwoResilienceIntegrationTest` now adds real-socket qualification for malformed connection traffic receiving
+GOAWAY without terminating the shared listener, PING acknowledgement followed by a healthy application stream,
+and 40 repeated HTTP/2 parent-connection replacements followed by successful forwarding. These cases complement
+the existing stream reset, GOAWAY, HPACK, fairness, breakpoint, translation, and 100-stream suites.
+
 ### Phase H2-9 — Qualification
 
-Status: **PARTIAL — macOS/JVM complete; Windows, Linux, Android, and iOS gates remain**
+Status: **PARTIAL — macOS/JVM complete; desktop CI matrix configured; device and release-soak gates deferred**
 
 - Run the complete automated matrix on macOS, Windows, and Linux.
 - Run a real Android/iOS Wi-Fi proxy smoke matrix for ALPN and certificate behavior.
 - Update module docs, capability evidence, and test strategy.
 - Change `http2` from `UNAVAILABLE`/`EXPERIMENTAL` to `SUPPORTED` only after every required gate passes.
 
-The repository now contains real-socket gates for H2C prior knowledge/upgrade, TLS ALPN, 100 concurrent streams,
+The repository now exposes one `http2Qualification` gate covering architecture rules, canonical HTTP models,
+proxy transport, capture/persistence, the protocol lab, API Studio, Traffic, and desktop composition. The CI
+workflow invokes that same gate on macOS, Windows, and Linux so platform results cannot silently exercise a
+smaller suite. The 2026-08-24 local macOS run passed all 167 Gradle tasks in the gate; configured remote CI jobs
+are not treated as passing evidence until they actually run.
+
+The repository contains real-socket gates for H2C prior knowledge/upgrade, TLS ALPN, 100 concurrent streams,
 H2-to-H2 pooling, H1-to-H2 and H2-to-H1 translation, request/response trailers, large HPACK headers, configured
 header-list rejection, RST_STREAM, GOAWAY replacement, slow-stream fairness, stream-scoped breakpoint pause/edit/
 drop, API Studio exact/AUTO negotiation, proxy CA trust, local attribution, durable stream/trailer round trips,
-and Traffic presentation. Extended release soak and the non-macOS/device matrix remain external qualification
-work, so the capability intentionally remains `EXPERIMENTAL`.
+Traffic presentation, malformed-frame recovery, PING acknowledgement, and repeated HTTP/2 parent churn. Android
+and iOS real-device Wi-Fi smoke tests plus extended release soak are intentionally deferred as future maturity
+work, so the capability remains `EXPERIMENTAL` rather than making an unsupported production claim.
 
 ## 11. Required qualification matrix
 
@@ -346,5 +358,5 @@ work, so the capability intentionally remains `EXPERIMENTAL`.
 The architecture now carries HTTP/2 additively from downstream negotiation through forwarding, capture,
 breakpoints, persistence, API Studio, and Traffic without replacing the stable HTTP/1 or canonical traffic
 paths. The implementation is realistically usable as an experimental desktop capability. KNet must not call it
-fully `SUPPORTED` until the remaining Windows/Linux and Android/iOS Wi-Fi qualification plus release soak gates
-pass; that maturity gate does not require another architecture migration.
+fully `SUPPORTED` until the configured desktop matrix, Android/iOS Wi-Fi smoke qualification, and release-soak
+gates pass; those future maturity gates do not require another architecture migration.

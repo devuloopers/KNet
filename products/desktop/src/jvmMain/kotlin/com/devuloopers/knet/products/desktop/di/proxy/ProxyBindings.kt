@@ -12,11 +12,24 @@ import com.devuloopers.knet.data.desktop.runtime.CertificateRuntimeRepository
 import com.devuloopers.knet.data.desktop.runtime.ProxyRuntimeRepository
 import com.devuloopers.knet.engine.certificate.CertificateManager
 import com.devuloopers.knet.traffic.model.IngressAttributionLookup
+import com.devuloopers.knet.engine.grpc.GrpcStreamInspectorFactory
+import com.devuloopers.knet.engine.grpc.GrpcMessageBreakpointTransformerFactory
+import com.devuloopers.knet.application.port.breakpoint.ProtocolMessageBreakpointGate
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import org.koin.core.module.Module
 import org.koin.dsl.module
 
 /** Proxy transport runtime, breakpoint gate, capture session, and proxy-control composition. */
 internal val proxyBindings: Module = module {
+    single { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
+    single {
+        GrpcMessageBreakpointTransformerFactory(
+            gate = get<ProtocolMessageBreakpointGate>(),
+            scope = get(),
+        )
+    }
     single {
         val certificates: CertificateRuntimeRepository = get()
         val certificateManager: CertificateManager = get()
@@ -25,6 +38,8 @@ internal val proxyBindings: Module = module {
             keyManagerProvider = certificateManager::getKeyManagerFactory,
             breakpointGate = get(),
             ingressAttribution = get<IngressAttributionLookup>(),
+            streamInspectorFactories = listOf(GrpcStreamInspectorFactory()),
+            streamTransformerFactories = listOf(get<GrpcMessageBreakpointTransformerFactory>()),
         )
     }
     single {
