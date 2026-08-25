@@ -5,41 +5,83 @@ import com.devuloopers.knet.application.port.apistudio.HttpLiveResponseUpdate
 import com.devuloopers.knet.application.port.apistudio.HttpResponseStreamInterpreter
 import com.devuloopers.knet.application.port.apistudio.HttpResponseStreamInterpreterSession
 import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutionResponseHead
+import com.devuloopers.knet.engine.sse.encoding.SseContentCodecPlanResult
+import com.devuloopers.knet.engine.sse.encoding.SseContentCodecRegistry
+import com.devuloopers.knet.engine.sse.encoding.SseContentCodecResult
+import com.devuloopers.knet.engine.sse.encoding.SseContentDecoder
 import com.devuloopers.knet.engine.sse.protocol.SseIncrementalParser
 import com.devuloopers.knet.engine.sse.protocol.SseLimits
 import com.devuloopers.knet.engine.sse.protocol.SseParseResult
 import com.devuloopers.knet.engine.sse.protocol.SseProtocol
 import com.devuloopers.knet.engine.sse.protocol.SseRecordKind
 
-/** Interprets identity-encoded `text/event-stream` responses for the existing HTTP API Studio workspace. */
+/** Interprets bounded identity, gzip, and deflate SSE responses in the existing HTTP API Studio workspace. */
 class SseHttpResponseStreamInterpreter(
     private val limits: SseLimits = SseLimits(),
 ) : HttpResponseStreamInterpreter {
     override val id: String = "sse"
+    private val codecs = SseContentCodecRegistry(limits)
 
-    override fun supports(head: HttpExecutionResponseHead): Boolean {
-        val contentType = head.headers.header(SseProtocol.CONTENT_TYPE)
-        val contentEncoding = head.headers.header(SseProtocol.CONTENT_ENCODING)
-        return SseProtocol.isEventStream(contentType) &&
-            (contentEncoding.isNullOrBlank() || contentEncoding.equals("identity", ignoreCase = true))
-    }
+    override fun supports(head: HttpExecutionResponseHead): Boolean =
+        SseProtocol.isEventStream(head.headers.header(SseProtocol.CONTENT_TYPE))
 
     override fun open(head: HttpExecutionResponseHead): HttpResponseStreamInterpreterSession {
-        require(supports(head)) { "The response is not an identity-encoded SSE stream." }
-        return Session(limits)
+        require(supports(head)) { "The response is not an SSE stream." }
+        return Session(limits, codecs.resolve(head.headers.header(SseProtocol.CONTENT_ENCODING)))
     }
 
     private class Session(
         private val limits: SseLimits,
+        planResult: SseContentCodecPlanResult,
     ) : HttpResponseStreamInterpreterSession {
         override val protocolLabel: String = "SSE"
         override val maximumRetainedRecords: Int = limits.maximumRetainedApiStudioEvents
         private val parser = SseIncrementalParser(limits)
+        private val unavailableReason = (planResult as? SseContentCodecPlanResult.Unavailable)?.reason
+        private val decoder: SseContentDecoder? =
+            (planResult as? SseContentCodecPlanResult.Supported)?.plan?.openDecoder()
         private var sequence = 0L
+        private var observedBytes = 0L
+        private var detached = false
 
-        override fun accept(bytes: ByteArray): List<HttpLiveResponseUpdate> = parser.accept(bytes).map(::map)
+        override fun accept(bytes: ByteArray): List<HttpLiveResponseUpdate> {
+            observedBytes = saturatedAdd(observedBytes, bytes.size.toLong())
+            if (detached) return emptyList()
+            unavailableReason?.let { reason ->
+                detached = true
+                return listOf(HttpLiveResponseUpdate.Gap(reason.code, observedBytes))
+            }
+            return when (val result = requireNotNull(decoder).accept(bytes, endOfInput = false)) {
+                is SseContentCodecResult.Failure -> {
+                    decoder.close()
+                    detached = true
+                    listOf(HttpLiveResponseUpdate.Gap(result.reason.code, observedBytes))
+                }
+                is SseContentCodecResult.Output -> parser.accept(result.copyBytes()).map(::map)
+            }
+        }
 
-        override fun finish(): List<HttpLiveResponseUpdate> = parser.finish().map(::map)
+        override fun finish(): List<HttpLiveResponseUpdate> {
+            if (detached) return emptyList()
+            unavailableReason?.let { reason ->
+                detached = true
+                return listOf(HttpLiveResponseUpdate.Gap(reason.code, observedBytes))
+            }
+            return when (val result = requireNotNull(decoder).accept(ByteArray(0), endOfInput = true)) {
+                is SseContentCodecResult.Failure -> {
+                    decoder.close()
+                    detached = true
+                    listOf(HttpLiveResponseUpdate.Gap(result.reason.code, observedBytes))
+                }
+                is SseContentCodecResult.Output -> {
+                    decoder.close()
+                    buildList {
+                        addAll(parser.accept(result.copyBytes()).map(::map))
+                        addAll(parser.finish().map(::map))
+                    }
+                }
+            }
+        }
 
         private fun map(result: SseParseResult): HttpLiveResponseUpdate = when (result) {
             is SseParseResult.Gap -> HttpLiveResponseUpdate.Gap(result.reason, result.observedBytes)
@@ -72,3 +114,6 @@ class SseHttpResponseStreamInterpreter(
 
 private fun Map<String, String>.header(name: String): String? =
     entries.firstOrNull { (candidate, _) -> candidate.equals(name, ignoreCase = true) }?.value
+
+private fun saturatedAdd(left: Long, right: Long): Long =
+    if (Long.MAX_VALUE - left < right) Long.MAX_VALUE else left + right

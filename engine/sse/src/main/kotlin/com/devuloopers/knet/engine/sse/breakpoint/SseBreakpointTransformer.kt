@@ -8,6 +8,11 @@ import com.devuloopers.knet.engine.proxy.capture.ProxyExchangeCapture
 import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamTransformResult
 import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamTransformer
 import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamTransformerFactory
+import com.devuloopers.knet.engine.sse.encoding.SseContentCodecPlanResult
+import com.devuloopers.knet.engine.sse.encoding.SseContentCodecRegistry
+import com.devuloopers.knet.engine.sse.encoding.SseContentCodecResult
+import com.devuloopers.knet.engine.sse.encoding.SseContentDecoder
+import com.devuloopers.knet.engine.sse.encoding.SseContentEncoder
 import com.devuloopers.knet.engine.sse.protocol.SseIncrementalParser
 import com.devuloopers.knet.engine.sse.protocol.SseLimits
 import com.devuloopers.knet.engine.sse.protocol.SseParseResult
@@ -59,16 +64,24 @@ private class SseBreakpointTransformer(
 ) : ProxyStreamTransformer {
     private val cancelled = AtomicBoolean(false)
     private val framer = SseBreakpointRecordFramer(limits.maximumEditableRecordBytes)
+    private val codecs = SseContentCodecRegistry(limits)
+    private var decoder: SseContentDecoder? = null
+    private var encoder: SseContentEncoder? = null
     private var recognized = false
-    private var bypass = false
+    private var transportBypass = false
+    private var semanticBypass = false
     private var sequence = 0L
 
     override fun onResponse(response: ResponseHead, occurredAtEpochMillis: Long) {
-        val encoding = SseProtocol.header(response.headers, SseProtocol.CONTENT_ENCODING)
-            ?.trim()
-            ?.lowercase()
-            ?.takeIf(String::isNotEmpty)
-        recognized = SseProtocol.isEventStream(response.headers) && (encoding == null || encoding == IDENTITY)
+        recognized = SseProtocol.isEventStream(response.headers)
+        if (!recognized) return
+        when (val result = codecs.resolve(SseProtocol.header(response.headers, SseProtocol.CONTENT_ENCODING))) {
+            is SseContentCodecPlanResult.Supported -> {
+                decoder = result.plan.openDecoder()
+                encoder = result.plan.openEncoder()
+            }
+            is SseContentCodecPlanResult.Unavailable -> transportBypass = true
+        }
     }
 
     override fun transform(
@@ -80,7 +93,7 @@ private class SseBreakpointTransformer(
         if (cancelled.get()) {
             return CompletableFuture.completedFuture(ProxyStreamTransformResult.DropStream(STREAM_CANCELLED))
         }
-        if (direction != TrafficDirection.SERVER_TO_CLIENT || !recognized || bypass) {
+        if (direction != TrafficDirection.SERVER_TO_CLIENT || !recognized || transportBypass) {
             return CompletableFuture.completedFuture(ProxyStreamTransformResult.Forward(payload))
         }
         val future = CompletableFuture<ProxyStreamTransformResult>()
@@ -95,6 +108,7 @@ private class SseBreakpointTransformer(
 
     override fun cancel(errorCode: String?) {
         if (!cancelled.compareAndSet(false, true)) return
+        closeCodecs()
         framer.clear()
         gate.cancelProtocolMessages(exchangeCapture.exchangeId)
     }
@@ -104,6 +118,40 @@ private class SseBreakpointTransformer(
         endOfDirection: Boolean,
         occurredAtEpochMillis: Long,
     ): ProxyStreamTransformResult {
+        val decoded = when (val result = requireNotNull(decoder).accept(input, endOfDirection)) {
+            is SseContentCodecResult.Failure -> {
+                closeCodecs()
+                return ProxyStreamTransformResult.DropStream(result.reason.code)
+            }
+            is SseContentCodecResult.Output -> result.copyBytes()
+        }
+        val transformed = transformDecodedResponse(decoded, endOfDirection, occurredAtEpochMillis)
+        if (transformed is ProxyStreamTransformResult.DropStream) {
+            closeCodecs()
+            return transformed
+        }
+        val encoded = when (
+            val result = requireNotNull(encoder).accept(
+                (transformed as ProxyStreamTransformResult.Forward).payload,
+                endOfDirection,
+            )
+        ) {
+            is SseContentCodecResult.Failure -> {
+                closeCodecs()
+                return ProxyStreamTransformResult.DropStream(result.reason.code)
+            }
+            is SseContentCodecResult.Output -> result.copyBytes()
+        }
+        if (endOfDirection) closeCodecs()
+        return ProxyStreamTransformResult.Forward(encoded)
+    }
+
+    private suspend fun transformDecodedResponse(
+        input: ByteArray,
+        endOfDirection: Boolean,
+        occurredAtEpochMillis: Long,
+    ): ProxyStreamTransformResult {
+        if (semanticBypass) return ProxyStreamTransformResult.Forward(input)
         val output = mutableListOf<ByteArray>()
         var offset = 0
         while (offset < input.size) {
@@ -112,7 +160,7 @@ private class SseBreakpointTransformer(
             if (framer.overflowed) {
                 output += framer.drain()
                 if (offset < input.size) output += input.copyOfRange(offset, input.size)
-                bypass = true
+                semanticBypass = true
                 return ProxyStreamTransformResult.Forward(output.concatenate())
             }
             for (record in completed) {
@@ -132,6 +180,11 @@ private class SseBreakpointTransformer(
             framer.drain().takeIf(ByteArray::isNotEmpty)?.let(output::add)
         }
         return ProxyStreamTransformResult.Forward(output.concatenate())
+    }
+
+    private fun closeCodecs() {
+        decoder?.close()
+        encoder?.close()
     }
 
     private suspend fun resolveRecord(
@@ -167,7 +220,6 @@ private class SseBreakpointTransformer(
     }
 
     private companion object {
-        const val IDENTITY: String = "identity"
         const val STREAM_CANCELLED: String = "sse_breakpoint_stream_cancelled"
         const val TRANSFORM_FAILED: String = "sse_breakpoint_transform_failed"
         const val RECORD_DROPPED: String = "sse_breakpoint_record_dropped"

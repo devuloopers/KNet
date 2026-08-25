@@ -9,6 +9,7 @@ data class LiveHttpResponseState(
     val selectedSequence: Long? = null,
     val receivedBytes: Long = 0L,
     val gapCount: Long = 0L,
+    val lastGapReason: String? = null,
     val droppedRecordCount: Long = 0L,
     val terminalReason: String? = null,
 )

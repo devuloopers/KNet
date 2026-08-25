@@ -6,6 +6,9 @@ import com.devuloopers.knet.application.port.breakpoint.BreakpointBodyEdit
 import com.devuloopers.knet.application.port.breakpoint.BreakpointDecision
 import com.devuloopers.knet.application.port.breakpoint.BreakpointRequestEdit
 import com.devuloopers.knet.application.port.breakpoint.BreakpointResponseEdit
+import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolRegistry
+import com.devuloopers.knet.application.port.breakpoint.ProtocolCriteriaValue
+import com.devuloopers.knet.application.port.breakpoint.ProtocolMessageBreakpointDecision
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.engine.certificate.CertificateAuthority
@@ -16,6 +19,9 @@ import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureConnectionMetadata
 import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureSink
 import com.devuloopers.knet.engine.proxy.capture.ProxyConnectionCapture
 import com.devuloopers.knet.engine.proxy.capture.ProxyExchangeCapture
+import com.devuloopers.knet.engine.sse.breakpoint.SseBreakpointExtension
+import com.devuloopers.knet.engine.sse.breakpoint.SseBreakpointProtocol
+import com.devuloopers.knet.engine.sse.breakpoint.SseBreakpointTransformerFactory
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.model.ExchangeState
@@ -52,6 +58,10 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.first
 import kotlin.test.Test
@@ -230,6 +240,98 @@ class HttpTwoBreakpointIsolationTest {
     fun `one paused response does not delay nineteen sibling streams`() =
         verifyStreamIsolation(BreakpointPhase.RESPONSE)
 
+    @Test
+    fun `one paused sse record does not delay an http two sibling stream`() = runBlocking {
+        val selectedRecord = "event: selected\ndata: hold\n\n"
+        val origin = HttpServer.create(InetSocketAddress(KNetProxyServer.DEFAULT_BIND_HOST, 0), 0).apply {
+            createContext("/") { exchange ->
+                val isEventStream = exchange.requestURI.path == "/paused-sse"
+                val body = if (isEventStream) selectedRecord.encodeToByteArray() else {
+                    exchange.requestURI.path.encodeToByteArray()
+                }
+                if (isEventStream) exchange.responseHeaders.add("Content-Type", "text/event-stream")
+                exchange.sendResponseHeaders(200, body.size.toLong())
+                exchange.responseBody.use { it.write(body) }
+            }
+            start()
+        }
+        val extension = SseBreakpointExtension()
+        val criteria = requireNotNull(
+            extension.createCriteria(
+                listOf(
+                    ProtocolCriteriaValue(SseBreakpointProtocol.eventTypeFieldId, "selected"),
+                ),
+            ),
+        )
+        val coordinator = BreakpointCoordinator(
+            protocolRegistry = BreakpointProtocolRegistry(listOf(extension)),
+        ).also { breakpointCoordinator ->
+            breakpointCoordinator.replaceRules(
+                listOf(
+                    BreakpointRule(
+                        id = "http2-sse-record",
+                        phase = BreakpointPhase.RESPONSE,
+                        urlPattern = "*/paused-sse",
+                        protocolCriteria = criteria,
+                    ),
+                ),
+            )
+        }
+        val transformationScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val runtime = ProxyRuntimeRepository(
+            certificateAuthority = CertificateAuthority.generate(),
+            certificateCache = CertificateCache(),
+            breakpointGate = coordinator,
+            streamTransformerFactories = listOf(
+                SseBreakpointTransformerFactory(coordinator, transformationScope),
+            ),
+        )
+        val proxyPort = availableLoopbackPort()
+        runtime.startProxy(port = proxyPort, captureSink = RecordingCaptureSink())
+
+        val group = NioEventLoopGroup(1)
+        var parent: Channel? = null
+        try {
+            parent = Bootstrap()
+                .group(group)
+                .channel(NioSocketChannel::class.java)
+                .handler(object : ChannelInitializer<SocketChannel>() {
+                    override fun initChannel(channel: SocketChannel) {
+                        channel.pipeline().addLast(Http2FrameCodecBuilder.forClient().build())
+                        channel.pipeline().addLast(Http2MultiplexHandler(DiscardInboundStreamHandler()))
+                    }
+                })
+                .connect(KNetProxyServer.DEFAULT_BIND_HOST, proxyPort)
+                .syncUninterruptibly()
+                .channel()
+
+            val paused = send(parent, origin.address.port, "/paused-sse")
+            val pending = awaitPendingProtocolMessage(coordinator)
+            assertEquals(SseBreakpointProtocol.id, pending.matchedProtocolId)
+            assertEquals("HTTP/2", pending.candidate.request.head.protocol.token)
+
+            assertEquals(
+                "/sibling-while-sse-paused",
+                send(parent, origin.address.port, "/sibling-while-sse-paused").get(10, TimeUnit.SECONDS),
+            )
+            assertFalse(paused.isDone, "The selected SSE stream must remain paused until resolved.")
+            assertTrue(
+                coordinator.resolveProtocolMessage(
+                    pending.id,
+                    ProtocolMessageBreakpointDecision.ContinueUnchanged,
+                ),
+            )
+            assertEquals(selectedRecord, paused.get(10, TimeUnit.SECONDS))
+            assertTrue(parent.isActive, "Pausing one SSE record must not close its HTTP/2 parent connection.")
+        } finally {
+            parent?.close()?.syncUninterruptibly()
+            group.shutdownGracefully().syncUninterruptibly()
+            runtime.close()
+            transformationScope.cancel()
+            origin.stop(0)
+        }
+    }
+
     private fun verifyStreamIsolation(phase: BreakpointPhase) = runBlocking {
         val origin = HttpServer.create(InetSocketAddress(KNetProxyServer.DEFAULT_BIND_HOST, 0), 0).apply {
             createContext("/") { exchange ->
@@ -309,6 +411,14 @@ class HttpTwoBreakpointIsolationTest {
         kotlinx.coroutines.withTimeout(10_000L) {
             coordinator.pendingBreakpoints.value.firstOrNull()
                 ?: coordinator.pendingBreakpoints.let { flow ->
+                    flow.first { pending -> pending.isNotEmpty() }.single()
+                }
+        }
+
+    private suspend fun awaitPendingProtocolMessage(coordinator: BreakpointCoordinator) =
+        kotlinx.coroutines.withTimeout(10_000L) {
+            coordinator.pendingProtocolMessages.value.firstOrNull()
+                ?: coordinator.pendingProtocolMessages.let { flow ->
                     flow.first { pending -> pending.isNotEmpty() }.single()
                 }
         }

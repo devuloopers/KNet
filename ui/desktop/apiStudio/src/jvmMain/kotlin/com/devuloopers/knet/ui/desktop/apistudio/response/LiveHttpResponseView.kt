@@ -76,6 +76,9 @@ internal fun LiveHttpResponseView(
                         }
                         append(live.receivedBytes).append(" B received")
                         if (live.gapCount > 0L) append(" · ").append(live.gapCount).append(" gaps")
+                        live.lastGapReason?.let { reason ->
+                            append(" · Last gap: ").append(humanReadableStreamGapReason(reason))
+                        }
                         if (live.droppedRecordCount > 0L) {
                             append(" · ").append(live.droppedRecordCount).append(" older records dropped")
                         }
@@ -194,3 +197,10 @@ internal fun LiveHttpResponseView(
         }
     }
 }
+
+/** Converts stable machine-readable stream failure codes into compact presentation copy. */
+internal fun humanReadableStreamGapReason(reason: String): String = reason
+    .split('_')
+    .filter(String::isNotBlank)
+    .joinToString(" ") { word -> word.lowercase() }
+    .replaceFirstChar { character -> character.titlecase() }

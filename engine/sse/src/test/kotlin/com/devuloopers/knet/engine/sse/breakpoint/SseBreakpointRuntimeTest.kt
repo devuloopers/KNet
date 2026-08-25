@@ -32,7 +32,11 @@ import com.devuloopers.knet.traffic.model.message.ProtocolMessageKind
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
+import java.util.zip.GZIPInputStream
+import java.util.zip.GZIPOutputStream
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -100,6 +104,25 @@ class SseBreakpointRuntimeTest {
     }
 
     @Test
+    fun `gzip response is decoded for a decision and re-encoded for forwarding`() {
+        val replacement = "event: changed\ndata: replacement\n\n".encodeToByteArray()
+        val gate = RecordingSseGate(
+            ArrayDeque(listOf(ProtocolMessageBreakpointDecision.Replace(BreakpointBody(replacement)))),
+        )
+        val transformer = assertNotNull(factory(gate).create(request(), null, Capture()))
+        transformer.onResponse(response("gzip"), 0L)
+        val compressed = gzip("event: original\ndata: one\n\n".encodeToByteArray())
+        val split = compressed.size / 2
+
+        val first = transform(transformer, compressed.copyOfRange(0, split), false, 1L)
+        val second = transform(transformer, compressed.copyOfRange(split, compressed.size), true, 2L)
+
+        assertContentEquals(replacement, gunzip(first + second))
+        assertEquals("event: original", gate.candidates.single().body.copyBytes().decodeToString().lineSequence().first())
+        assertFalse(gate.candidates.single().compressed)
+    }
+
+    @Test
     fun `replacement validator accepts exactly one terminated record`() {
         val extension = SseBreakpointExtension()
         val input = messageInput("data: original\n\n")
@@ -146,12 +169,23 @@ class SseBreakpointRuntimeTest {
         ),
     )
 
-    private fun response() = ResponseHead(
+    private fun response(contentEncoding: String? = null) = ResponseHead(
         protocol = ApplicationProtocol.fromToken("HTTP/1.1"),
         status = HttpStatus(200),
         reasonPhrase = "OK",
-        headers = listOf(HeaderField(HeaderName("content-type"), "text/event-stream")),
+        headers = buildList {
+            add(HeaderField(HeaderName("content-type"), "text/event-stream"))
+            contentEncoding?.let { encoding -> add(HeaderField(HeaderName("content-encoding"), encoding)) }
+        },
     )
+
+    private fun gzip(bytes: ByteArray): ByteArray = ByteArrayOutputStream().use { output ->
+        GZIPOutputStream(output).use { gzip -> gzip.write(bytes) }
+        output.toByteArray()
+    }
+
+    private fun gunzip(bytes: ByteArray): ByteArray =
+        GZIPInputStream(ByteArrayInputStream(bytes)).use { input -> input.readBytes() }
 }
 
 private class RecordingSseGate(

@@ -295,9 +295,8 @@ internal class KNetStreamingProxyHandler(
             if (target.port == 80 || target.port == 443) target.host else "${target.host}:${target.port}",
         )
         if (streamTransformer != null) {
-            // A message edit may change the framed byte length. HTTP/2 does not require this field,
-            // so removing it prevents stale framing metadata without buffering the whole RPC.
-            outboundHead.headers().remove(HttpHeaderNames.CONTENT_LENGTH)
+            // A message edit may change framing and representation integrity metadata.
+            PayloadTransformationHeaders.sanitizeRequest(outboundHead.headers())
         }
 
         val timings = NetworkTimingCollector().apply { markDnsStart() }

@@ -23,6 +23,8 @@ import com.devuloopers.knet.traffic.model.http.ResponseHead
 import com.devuloopers.knet.traffic.model.message.MessageProtocolId
 import com.devuloopers.knet.traffic.model.message.ProtocolMessageKind
 import com.devuloopers.knet.traffic.model.message.ProtocolMessageState
+import java.io.ByteArrayOutputStream
+import java.util.zip.GZIPOutputStream
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -60,6 +62,38 @@ class SseStreamInspectorTest {
         assertEquals("sse_record_ended_without_blank_line", capture.messages.single().errorCode)
     }
 
+    @Test
+    fun `gzip records are decoded incrementally before canonical child capture`() {
+        val capture = RecordingExchangeCapture()
+        val inspector = requireNotNull(SseStreamInspectorFactory().create(request(), null, capture))
+        inspector.onResponse(response("gzip"), 2L)
+        val compressed = gzip("event: price\ndata: 42\n\n".encodeToByteArray())
+
+        compressed.forEachIndexed { index, byte ->
+            inspector.onPayload(TrafficDirection.SERVER_TO_CLIENT, Slice(byteArrayOf(byte)), 3L + index)
+        }
+        inspector.onDirectionEnd(TrafficDirection.SERVER_TO_CLIENT, 100L)
+
+        assertEquals(1, capture.messages.size)
+        assertContentEquals("event: price\ndata: 42\n\n".encodeToByteArray(), capture.messages.single().payload())
+        assertEquals(ProtocolMessageState.COMPLETE, capture.messages.single().state)
+        assertEquals(false, capture.messages.single().metadata.compressed)
+    }
+
+    @Test
+    fun `unsupported content encoding records one failure without parsing representation bytes`() {
+        val capture = RecordingExchangeCapture()
+        val inspector = requireNotNull(SseStreamInspectorFactory().create(request(), null, capture))
+        inspector.onResponse(response("br"), 2L)
+
+        inspector.onPayload(TrafficDirection.SERVER_TO_CLIENT, Slice(byteArrayOf(1, 2, 3)), 3L)
+        inspector.onPayload(TrafficDirection.SERVER_TO_CLIENT, Slice(byteArrayOf(4)), 4L)
+
+        assertEquals(1, capture.messages.size)
+        assertEquals(ProtocolMessageState.FAILED, capture.messages.single().state)
+        assertEquals("sse_content_encoding_unsupported", capture.messages.single().errorCode)
+    }
+
     private fun request(): RequestHead = RequestHead(
         method = HttpMethod.GET,
         target = RequestTarget.Absolute(HttpScheme.fromToken("https"), Authority("events.test"), "/events"),
@@ -67,12 +101,20 @@ class SseStreamInspectorTest {
         headers = emptyList(),
     )
 
-    private fun response(): ResponseHead = ResponseHead(
+    private fun response(contentEncoding: String? = null): ResponseHead = ResponseHead(
         protocol = ApplicationProtocol.fromToken("HTTP/1.1"),
         status = HttpStatus(200),
         reasonPhrase = "OK",
-        headers = listOf(HeaderField(HeaderName("Content-Type"), "text/event-stream; charset=utf-8")),
+        headers = buildList {
+            add(HeaderField(HeaderName("Content-Type"), "text/event-stream; charset=utf-8"))
+            contentEncoding?.let { add(HeaderField(HeaderName("Content-Encoding"), it)) }
+        },
     )
+
+    private fun gzip(bytes: ByteArray): ByteArray = ByteArrayOutputStream().use { output ->
+        GZIPOutputStream(output).use { stream -> stream.write(bytes) }
+        output.toByteArray()
+    }
 }
 
 private class Slice(private val bytes: ByteArray) : ProxyPayloadSlice {

@@ -16,6 +16,7 @@ import org.springframework.web.bind.annotation.RestController
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import java.io.ByteArrayOutputStream
+import java.util.zip.DeflaterOutputStream
 import java.util.zip.GZIPOutputStream
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -128,12 +129,42 @@ class StreamingScenarioController {
         }
     }
 
-    /** Emits a gzip-encoded finite event stream for truthful unsupported-live-body classification tests. */
+    /** Emits a gzip-encoded finite event stream for incremental representation-decoder tests. */
     @GetMapping("/sse/gzip")
     fun gzipServerSentEvents(response: ServerHttpResponse): Mono<Void> {
         response.headers[HttpHeaders.CONTENT_ENCODING] = "gzip"
         val encoded = gzip("id: gzip-1\nevent: compressed\ndata: gzip-event\n\n".encodeToByteArray())
         return response.writeRawEventStream(listOf(encoded))
+    }
+
+    /** Emits a zlib-wrapped DEFLATE event stream for incremental representation-decoder tests. */
+    @GetMapping("/sse/deflate")
+    fun deflateServerSentEvents(response: ServerHttpResponse): Mono<Void> {
+        response.headers[HttpHeaders.CONTENT_ENCODING] = "deflate"
+        val encoded = deflate("id: deflate-1\nevent: compressed\ndata: deflate-event\n\n".encodeToByteArray())
+        return response.writeRawEventStream(listOf(encoded))
+    }
+
+    /** Emits an invalid GZIP trailer while retaining valid HTTP framing. */
+    @GetMapping("/sse/corrupt-gzip")
+    fun corruptGzipServerSentEvents(response: ServerHttpResponse): Mono<Void> {
+        response.headers[HttpHeaders.CONTENT_ENCODING] = "gzip"
+        val encoded = gzip("data: corrupt\n\n".encodeToByteArray()).also { bytes ->
+            bytes[bytes.lastIndex] = (bytes.last().toInt() xor 0xff).toByte()
+        }
+        return response.writeRawEventStream(listOf(encoded))
+    }
+
+    /** Emits a highly compressible stream that exceeds the default decoder expansion allowance. */
+    @GetMapping("/sse/expansion")
+    fun expansionServerSentEvents(response: ServerHttpResponse): Mono<Void> {
+        response.headers[HttpHeaders.CONTENT_ENCODING] = "gzip"
+        val decoded = buildString(EXPANSION_DATA_CHARACTERS + 8) {
+            append("data: ")
+            repeat(EXPANSION_DATA_CHARACTERS) { append('x') }
+            append("\n\n")
+        }.encodeToByteArray()
+        return response.writeRawEventStream(listOf(gzip(decoded)))
     }
 
     /** Emits a large but bounded burst without delays for backpressure and retention tests. */
@@ -174,6 +205,7 @@ class StreamingScenarioController {
         const val MAX_EVENTS = 100
         const val MAX_FAST_EVENTS = 1_000
         const val MAX_DELAY_MILLIS = 10_000L
+        const val EXPANSION_DATA_CHARACTERS = 2 * 1_024 * 1_024
 
         fun event(sequence: Int, message: String): ServerSentEvent<StreamEvent> = ServerSentEvent.builder(
             StreamEvent(sequence = sequence, message = message),
@@ -184,6 +216,11 @@ class StreamingScenarioController {
 
         fun gzip(bytes: ByteArray): ByteArray = ByteArrayOutputStream().use { output ->
             GZIPOutputStream(output).use { gzip -> gzip.write(bytes) }
+            output.toByteArray()
+        }
+
+        fun deflate(bytes: ByteArray): ByteArray = ByteArrayOutputStream().use { output ->
+            DeflaterOutputStream(output).use { deflate -> deflate.write(bytes) }
             output.toByteArray()
         }
     }

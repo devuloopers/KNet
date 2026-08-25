@@ -561,6 +561,35 @@ tasks.register("graphQLWebSocketQualification") {
     )
 }
 
+/** Cross-module Server-Sent Events qualification gate. It never launches the desktop application. */
+tasks.register("sseQualification") {
+    group = "verification"
+    description = "Runs SSE codecs, capture, breakpoints, API Studio, Traffic, persistence, and protocol-lab tests."
+    dependsOn(
+        verifyArchitectureFoundation,
+        ":application:test",
+        ":core:http:jvmTest",
+        ":core:traffic:jvmTest",
+        ":engine:proxy:test",
+        ":engine:sse:test",
+        ":data:desktop:jvmTest",
+        ":storage:jvmTest",
+        ":testingServer:test",
+        ":ui:desktop:apiStudio:jvmTest",
+        ":ui:desktop:breakpointManager:jvmTest",
+        ":ui:desktop:httpPanel:jvmTest",
+        ":ui:desktop:traffic:jvmTest",
+        ":products:desktop:test",
+    )
+}
+
+/** Explicit release-only SSE soak; defaults to three hours and is not part of ordinary CI. */
+tasks.register("sseReleaseSoak") {
+    group = "verification"
+    description = "Runs the configurable long-duration SSE codec churn qualification."
+    dependsOn(":engine:sse:sseReleaseSoak")
+}
+
 /** Standard Phase 18 release gate; extended soak is invoked separately with its configured duration. */
 tasks.register("phase18ReleaseGate") {
     group = "verification"

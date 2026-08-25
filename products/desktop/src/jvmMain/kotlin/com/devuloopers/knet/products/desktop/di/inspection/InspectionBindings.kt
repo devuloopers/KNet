@@ -111,19 +111,20 @@ internal val inspectionBindings: Module = module {
                     "sse.capture",
                     "Live Server-Sent Events capture",
                     CapabilityMaturity.EXPERIMENTAL,
-                    "SseStreamInspectorTest and SseIncrementalParserTest",
+                    "SseContentCodecsTest, SseStreamInspectorTest, and ProtocolLabIntegrationTest",
                 ),
                 RuntimeCapability(
                     "sse.apistudio",
                     "Live Server-Sent Events API Studio execution",
                     CapabilityMaturity.EXPERIMENTAL,
-                    "ServerSentEventsStreamingTest and SseHttpResponseStreamInterpreterTest",
+                    "ServerSentEventsStreamingTest, Http2TlsLabIntegrationTest, and " +
+                        "SseHttpResponseStreamInterpreterTest",
                 ),
                 RuntimeCapability(
                     "sse.breakpoints",
                     "Server-Sent Events record breakpoints",
                     CapabilityMaturity.EXPERIMENTAL,
-                    "SseBreakpointRuntimeTest",
+                    "SseBreakpointRuntimeTest and HttpTwoBreakpointIsolationTest",
                 ),
                 RuntimeCapability(
                     "http2",

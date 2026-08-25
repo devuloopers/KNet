@@ -101,3 +101,36 @@ jobs:
       - name: Run gRPC qualification gate
         shell: bash
         run: ./gradlew grpcQualification --no-daemon
+
+  sse-qualification:
+    name: SSE Qualification (${{ matrix.os_name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            os_name: macOS
+          - os: windows-latest
+            os_name: Windows
+          - os: ubuntu-latest
+            os_name: Linux
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'gradle'
+
+      - name: Grant execute permission for gradlew
+        shell: bash
+        run: chmod +x gradlew
+
+      - name: Run SSE qualification gate
+        shell: bash
+        run: ./gradlew sseQualification --no-daemon

@@ -603,10 +603,14 @@ class ApiStudioViewModel(
             val live = response.liveResponse ?: return@update state
             var records = live.records
             var gaps = live.gapCount
+            var lastGapReason = live.lastGapReason
             var dropped = live.droppedRecordCount
             updates.forEach { update ->
                 when (update) {
-                    is HttpLiveResponseUpdate.Gap -> gaps++
+                    is HttpLiveResponseUpdate.Gap -> {
+                        gaps++
+                        lastGapReason = update.reason
+                    }
                     is HttpLiveResponseUpdate.Record -> {
                         records = records + update.value
                         if (records.size > session.maximumRetainedRecords) {
@@ -626,6 +630,7 @@ class ApiStudioViewModel(
                         selectedSequence = selected,
                         receivedBytes = live.receivedBytes + receivedBytes,
                         gapCount = gaps,
+                        lastGapReason = lastGapReason,
                         droppedRecordCount = dropped,
                     ),
                 ),

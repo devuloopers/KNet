@@ -6,6 +6,10 @@ import com.devuloopers.knet.engine.proxy.capture.ProxyMessageCaptureMetadata
 import com.devuloopers.knet.engine.proxy.inspection.ProxyPayloadSlice
 import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamInspector
 import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamInspectorFactory
+import com.devuloopers.knet.engine.sse.encoding.SseContentCodecPlanResult
+import com.devuloopers.knet.engine.sse.encoding.SseContentCodecRegistry
+import com.devuloopers.knet.engine.sse.encoding.SseContentCodecResult
+import com.devuloopers.knet.engine.sse.encoding.SseContentDecoder
 import com.devuloopers.knet.engine.sse.protocol.SseLimits
 import com.devuloopers.knet.engine.sse.protocol.SseProtocol
 import com.devuloopers.knet.traffic.id.ProtocolMessageId
@@ -37,17 +41,25 @@ class SseStreamInspectorFactory(
 private class SseStreamInspector(
     streamId: StreamId?,
     capture: ProxyExchangeCapture,
-    limits: SseLimits,
+    private val limits: SseLimits,
 ) : ProxyStreamInspector {
     private val framer = SseRecordCaptureFramer(streamId, capture, limits)
+    private val codecs = SseContentCodecRegistry(limits)
     private var active = false
+    private var decoder: SseContentDecoder? = null
+    private var encoded = false
+    private var unavailableReason: String? = null
 
     override fun onResponse(response: ResponseHead, occurredAtEpochMillis: Long) {
-        val encoding = SseProtocol.header(response.headers, SseProtocol.CONTENT_ENCODING)
-            ?.trim()
-            ?.lowercase()
-            ?.takeIf(String::isNotEmpty)
-        active = SseProtocol.isEventStream(response.headers) && (encoding == null || encoding == IDENTITY)
+        active = SseProtocol.isEventStream(response.headers)
+        if (!active) return
+        when (val result = codecs.resolve(SseProtocol.header(response.headers, SseProtocol.CONTENT_ENCODING))) {
+            is SseContentCodecPlanResult.Supported -> {
+                encoded = !result.plan.isIdentity
+                decoder = result.plan.openDecoder().takeIf { encoded }
+            }
+            is SseContentCodecPlanResult.Unavailable -> unavailableReason = result.reason.code
+        }
     }
 
     override fun onPayload(
@@ -55,13 +67,60 @@ private class SseStreamInspector(
         payload: ProxyPayloadSlice,
         occurredAtEpochMillis: Long,
     ) {
-        if (active && direction == TrafficDirection.SERVER_TO_CLIENT) {
+        if (!active || direction != TrafficDirection.SERVER_TO_CLIENT) return
+        unavailableReason?.let { reason ->
+            framer.failAndDetach(occurredAtEpochMillis, reason, payload.size.toLong())
+            unavailableReason = null
+            return
+        }
+        if (!encoded) {
             framer.accept(payload, occurredAtEpochMillis)
+            return
+        }
+        if (payload.size > limits.maximumDecoderInputBytesPerChunk) {
+            framer.failAndDetach(occurredAtEpochMillis, INPUT_LIMIT, payload.size.toLong())
+            return
+        }
+        val ownedInput = ByteArray(payload.size)
+        payload.copyTo(ownedInput)
+        when (val result = requireNotNull(decoder).accept(ownedInput, endOfInput = false)) {
+            is SseContentCodecResult.Failure -> {
+                decoder?.close()
+                framer.failAndDetach(
+                    occurredAtEpochMillis,
+                    result.reason.code,
+                    payload.size.toLong(),
+                )
+            }
+            is SseContentCodecResult.Output -> {
+                val decoded = result.copyBytes()
+                if (decoded.isNotEmpty()) framer.accept(OwnedPayloadSlice(decoded), occurredAtEpochMillis)
+            }
         }
     }
 
     override fun onDirectionEnd(direction: TrafficDirection, occurredAtEpochMillis: Long) {
-        if (active && direction == TrafficDirection.SERVER_TO_CLIENT) framer.finish(occurredAtEpochMillis)
+        if (!active || direction != TrafficDirection.SERVER_TO_CLIENT) return
+        unavailableReason?.let { reason ->
+            framer.failAndDetach(occurredAtEpochMillis, reason, 0L)
+            unavailableReason = null
+            return
+        }
+        if (encoded) {
+            when (val result = requireNotNull(decoder).accept(ByteArray(0), endOfInput = true)) {
+                is SseContentCodecResult.Failure -> {
+                    decoder?.close()
+                    framer.failAndDetach(occurredAtEpochMillis, result.reason.code, 0L)
+                    return
+                }
+                is SseContentCodecResult.Output -> {
+                    val decoded = result.copyBytes()
+                    if (decoded.isNotEmpty()) framer.accept(OwnedPayloadSlice(decoded), occurredAtEpochMillis)
+                }
+            }
+            decoder?.close()
+        }
+        framer.finish(occurredAtEpochMillis)
     }
 
     override fun onExchangeTerminated(
@@ -69,12 +128,30 @@ private class SseStreamInspector(
         occurredAtEpochMillis: Long,
         errorCode: String?,
     ) {
+        decoder?.close()
         framer.cancel(occurredAtEpochMillis, errorCode ?: PARENT_TERMINATED)
     }
 
     private companion object {
-        const val IDENTITY: String = "identity"
+        const val INPUT_LIMIT: String = "sse_decoder_input_chunk_limit"
         const val PARENT_TERMINATED: String = "sse_parent_exchange_terminated"
+    }
+}
+
+/** Owned byte-array adapter used only after bounded representation decoding. */
+private class OwnedPayloadSlice(private val bytes: ByteArray) : ProxyPayloadSlice {
+    override val size: Int = bytes.size
+
+    override fun indexOf(value: Byte, startIndex: Int): Int =
+        (startIndex until bytes.size).firstOrNull { index -> bytes[index] == value } ?: -1
+
+    override fun copyTo(
+        destination: ByteArray,
+        destinationOffset: Int,
+        sourceOffset: Int,
+        length: Int,
+    ) {
+        bytes.copyInto(destination, destinationOffset, sourceOffset, sourceOffset + length)
     }
 }
 
@@ -184,6 +261,20 @@ private class SseRecordCaptureFramer(
                 errorCode = errorCode,
             )
         }
+        resetRecord()
+        detached = true
+    }
+
+    /** Records one bounded semantic failure and permanently detaches this passive inspector. */
+    fun failAndDetach(occurredAtEpochMillis: Long, errorCode: String, observedBytes: Long) {
+        if (detached) return
+        ensureRecord(occurredAtEpochMillis)
+        currentCapture?.terminate(
+            observedBytes = observedRecordBytes + observedBytes,
+            state = ProtocolMessageState.FAILED,
+            occurredAtEpochMillis = occurredAtEpochMillis,
+            errorCode = errorCode,
+        )
         resetRecord()
         detached = true
     }

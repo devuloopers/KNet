@@ -32,11 +32,12 @@ same behavior is required by multiple protocols; never add an SSE branch to prox
 
 ## Current State
 
-The module is registered additively for bounded historical preview, identity-encoded live proxy capture, generic
-Traffic presentation, HTTP API Studio live interpretation, and response-record breakpoints. All live capabilities
-remain `EXPERIMENTAL` while the supported bounded post-capture preview remains independently `SUPPORTED`.
+The module is registered additively for bounded historical preview and identity-, gzip-, and deflate-encoded live
+proxy capture, generic Traffic presentation, HTTP API Studio live interpretation, and response-record
+breakpoints. Passive capture retains the encoded parent response as evidence and stores decoded SSE child records;
+breakpoint transformation re-encodes altered records using the supported original representation.
 
-The current live path deliberately rejects encoded event streams at the semantic boundary. Forwarding and the
-bounded terminal response remain available, but gzip/deflate incremental interpretation, cross-platform and
-real-device evidence, complete HTTP/2 concurrent-stream isolation, and multi-hour resource soak are qualification
-work recorded in `docs/sse_qualification.md`.
+The supported bounded post-capture preview remains independently `SUPPORTED`. Live capabilities remain
+`EXPERIMENTAL` until the configured release soak, cross-platform CI execution, and physical Android/iOS Wi-Fi
+proxy evidence are recorded in `docs/sse_qualification.md`. Brotli and Zstandard decoding, automatic reconnect,
+browser `EventSource` policy emulation, and HTTP/3 remain additive future capabilities.

@@ -1,6 +1,6 @@
 # Server-Sent Events Target Architecture and Implementation Plan
 
-- Status: **IMPLEMENTED — EXPERIMENTAL QUALIFICATION**
+- Status: **SSE-5 LOCAL IMPLEMENTATION COMPLETE — EXTERNAL QUALIFICATION PENDING**
 - Target transport: SSE (`text/event-stream`) over the existing HTTP/1.1 and HTTP/2 transports
 - Capability target: live Traffic capture, API Studio execution, event inspection, persistence, and response-event
   breakpoints
@@ -54,27 +54,32 @@ This plan does not replace KNet's HTTP architecture. SSE is HTTP response semant
 Consequently, the truthful baseline before this increment was **bounded post-capture SSE semantic preview**, not
 complete SSE.
 
-### Implementation checkpoint — 2026-08-25
+### Implementation checkpoint — 2026-08-26
 
-SSE-0 through SSE-4 are implemented additively:
+SSE-0 through SSE-5F are implemented additively:
 
 - `:engine:sse` owns one bounded incremental parser used by live capture, historical inspection, Traffic
   decoding, API Studio interpretation, formatting, and breakpoint validation.
 - HTTP/1.1 and exact/AUTO HTTP/2 API Studio execution publish owned response-head and body-chunk events before
   completion; collection cancellation closes the active response. HTTP/1.0 remains terminal-only.
-- The proxy passively captures identity-encoded records as generic child protocol messages without delaying
-  forwarding. Room and the body store persist them without SSE-specific schema fields.
+- The proxy passively captures identity-, gzip-, and deflate-encoded records as generic child protocol messages
+  without delaying forwarding. Room and the body store persist them without SSE-specific schema fields.
 - Traffic renders live and historical records through its existing payload-decoder registry.
 - API Studio remains the HTTP workspace and switches its response pane to a bounded live record timeline only
   after an interpreter recognizes `text/event-stream`.
 - Response-record breakpoint rules can match event type, event ID, or data, then continue, replace, or terminate
   the matching stream through the generic message-decision boundary.
-- Deterministic HTTP/1.1 and HTTP/2 fixtures prove first-record delivery, fragmentation, malformed input, resume,
-  gzip classification, cancellation, parser limits, capture, persistence, and breakpoint behavior.
+- One shared bounded codec registry handles identity, gzip, zlib-wrapped deflate, raw deflate, stacked supported
+  encodings, malformed input, and decompression-abuse limits across capture, API Studio, and breakpoints.
+- Deterministic HTTP/1.1 and real TLS/ALPN HTTP/2 fixtures prove first-record delivery, encoded fragmentation,
+  malformed input, resume, cancellation, parser/decoder limits, capture, persistence, and breakpoint behavior.
+- A real multiplexed HTTP/2 proxy test proves that one paused SSE record does not delay an ordinary sibling stream.
+- The root `sseQualification` task and three-operating-system CI matrix are checked in, and a configurable
+  three-hour-default release-soak task has passed a one-second infrastructure smoke run.
 
-The runtime capabilities remain `EXPERIMENTAL`, not `SUPPORTED`. Incremental gzip/deflate interpretation,
-cross-platform and real-device proxy evidence, multi-hour soak, and the complete concurrent HTTP/2 isolation
-matrix remain SSE-5 qualification work.
+The runtime capabilities remain `EXPERIMENTAL`, not `SUPPORTED`. Successful execution of the checked-in
+cross-platform CI matrix, physical Android/iOS Wi-Fi proxy evidence, the default multi-hour soak with resource
+measurements, and remaining real-socket lifecycle rows remain SSE-5G qualification work.
 
 ## 3. Architectural decisions
 
@@ -384,10 +389,10 @@ The SSE module therefore owns an internal incremental decoder strategy before it
 SseContentDecoder: identity | gzip | deflate | contributed future decoder
 ```
 
-The first locally qualified increment requires identity encoding. Gzip and deflate should be delivered before a
-`SUPPORTED` claim. Brotli or Zstandard may be added as internal strategies without changing proxy/core/UI contracts.
-Until a decoder exists, KNet forwards and may retain the bounded raw response but reports live semantic inspection
-as unavailable for that encoding; it must never parse compressed bytes as text.
+The local implementation supports identity, gzip, and deflate through one bounded stream-confined registry.
+Brotli or Zstandard may be added as internal strategies without changing proxy/core/UI contracts. For an
+unsupported encoding, KNet forwards and may retain the bounded raw response but reports live semantic inspection
+as unavailable; it never parses compressed bytes as text.
 
 ## 10. API Studio architecture and UX
 
@@ -544,16 +549,222 @@ ordinary HTTP/1.0, HTTP/1.1, and HTTP/2 behavior remains unchanged.
 Exit gate: only the matching event/stream pauses, nonmatching streams and passive forwarding continue, and no
 pending decision or buffer survives termination.
 
-### SSE-5 — Qualification and hardening [PARTIAL]
+### SSE-5 — Qualification and hardening [LOCAL IMPLEMENTATION COMPLETE — EXTERNAL EVIDENCE PENDING]
 
-- Add incremental gzip and deflate observation decoding.
-- Run cross-platform JVM, real listener, device proxy, slow consumer, capture saturation, reconnect, long-lived
-  stream, memory, descriptor, cancellation, and shutdown tests.
-- Publish `docs/sse_qualification.md` with exact evidence, limits, and exclusions.
-- Promote capability from `EXPERIMENTAL` to `SUPPORTED` only when every declared platform gate passes.
+SSE-5A through SSE-5F were delivered as one continuous local implementation and qualification increment. The
+internal stages below remain the frozen acceptance record, not separate product releases. SSE-5G is intentionally
+open because a local macOS run cannot manufacture Windows/Linux CI results, physical-device evidence, or a
+three-hour resource report. No capability is promoted merely because its implementation compiles.
 
-Exit gate: no unbounded path, forwarding regression, silent data loss, UI accumulation, or lifecycle leak remains;
-the capability catalog matches evidence.
+#### Supported profile frozen by this plan
+
+The completed SSE capability covers:
+
+- `text/event-stream` over proxied and direct API Studio HTTP/1.1 and HTTP/2;
+- identity, gzip, and deflate content encodings, including arbitrary transport chunk boundaries;
+- immediate in-progress parent exchange presentation and bounded ordered child records;
+- Room/body-store history, restart query, retention, export, and Clear Traffic behavior;
+- API Studio first-record delivery, bounded retention, cancellation, and direct/local-proxy routing;
+- response-record breakpoint matching, continue, replace, and terminate for the supported encodings;
+- proxy stop, client cancellation, upstream failure, HTTP/2 reset, and application shutdown cleanup;
+- macOS, Windows, and Linux JVM qualification plus Android and iOS manual Wi-Fi proxy evidence.
+
+The Supported claim does not include Brotli/Zstandard live decoding, HTTP/3, browser `EventSource` CORS or
+credential-policy emulation, or automatic reconnect. Those are additive future capabilities and must remain
+truthfully unavailable without weakening the completed SSE profile.
+
+#### SSE-5A — Freeze contracts, limits, and the qualification gate [COMPLETED LOCALLY]
+
+KEEP:
+
+- the canonical `HttpExchangeSnapshot` parent and generic `ProtocolMessageSnapshot` children;
+- the protocol-neutral proxy inspector/transformer contracts, Room schema, body store, Traffic decoder registry,
+  HTTP API Studio workspace, collection model, and global breakpoint drawer;
+- one product-provided `SseLimits` instance as the limits source of truth.
+
+MODIFY:
+
+- extend `SseLimits` with maximum content-encoding layers, decoder input retained between calls, decoded output
+  emitted per call, and a decompression expansion guard;
+- introduce typed decoder and terminal/gap reasons inside `:engine:sse`; primitive error strings must not cross
+  SSE adapter boundaries;
+- add a root `sseQualification` Gradle task that aggregates architecture, parser, proxy, persistence, API Studio,
+  Traffic, breakpoint, protocol-lab, and desktop-composition tests without launching KNet.
+
+ADD:
+
+- one stream-confined content-decoder registry inside `:engine:sse`, justified by the identity, gzip, and deflate
+  implementations and future additive encodings;
+- deterministic compressed fixtures and shared chunk-partition test utilities;
+- CI entries for the short SSE gate on macOS, Windows, and Linux, plus a separately configured release soak gate.
+
+REMOVE:
+
+- duplicated identity-only header checks from capture, API Studio, and breakpoint adapters after all three use the
+  shared decoder selection result;
+- any raw string comparison that independently decides SSE content-encoding support outside the decoder registry.
+
+Exit gate: the contracts compile without a new Gradle module, proxy/UI/storage dependencies remain unchanged, all
+new limits are validated and documented, and the qualification task selects every affected module.
+
+#### SSE-5B — Incremental gzip/deflate semantic pipeline [COMPLETED LOCALLY]
+
+Implement a stream-confined decoder chain before the existing parser:
+
+```text
+raw HTTP body chunks
+  -> reverse Content-Encoding decoder chain
+  -> bounded decoded chunks
+  -> existing SseIncrementalParser
+  -> capture / API Studio / breakpoint adapter
+```
+
+Rules:
+
+- identity remains a zero-copy/pass-through semantic path where the adapter already owns or borrows the bytes;
+- gzip validates header, optional fields, member trailer, CRC, size, and concatenated members incrementally;
+- deflate accepts the standards-compliant zlib wrapper and may fall back to raw DEFLATE only before any decoded
+  semantic bytes have been emitted;
+- a comma-separated encoding chain is decoded in reverse order and rejected when the configured layer limit is
+  exceeded;
+- decoded output is emitted in fixed bounded chunks; no decoder or parser buffer grows with stream lifetime;
+- malformed data, unsupported encoding, output-limit overflow, or expansion-limit overflow produces one typed
+  semantic gap/terminal reason and detaches inspection while passive proxy forwarding continues unchanged;
+- the parent response body remains the original encoded HTTP evidence. Captured child bodies contain decoded raw
+  SSE records and therefore remain `compressed = false`; the original encoding remains available from the parent
+  response headers.
+
+The same decoder implementation must be used by passive capture, API Studio, historical interpretation where
+needed, and breakpoint validation. Whole-response terminal decoders from `:core:domain` must not be reused for a
+live endless stream.
+
+Exit gate: identity/gzip/deflate produce the same semantic records for every tested chunk partition on HTTP/1.1
+and HTTP/2; malformed and bomb fixtures remain bounded; passive forwarding bytes are exactly unchanged.
+
+#### SSE-5C — Encoded event breakpoints [COMPLETED LOCALLY]
+
+An enabled breakpoint transformer is the only path allowed to alter representation bytes. For gzip/deflate it
+must decode, frame at most one bounded unresolved record, obtain the existing generic breakpoint decision, and
+re-encode the entire transformed response stream with the originally declared supported encoding.
+
+- Continue preserves SSE semantics and ordering without retaining the full response.
+- Replace accepts exactly one parser-valid bounded decoded SSE record, then re-encodes it.
+- Terminate uses the existing typed stream decision and releases decoder, encoder, pending record, and pause.
+- The transformed response must not forward a stale `Content-Length` or representation digest/validator. Any
+  required head sanitation belongs to one protocol-neutral proxy response-transformation contract, not an SSE
+  branch in Netty handlers.
+- When no breakpoint transformer is selected, encoded streams retain byte-for-byte passive forwarding.
+- Unsupported encodings bypass event interception with an explicit unavailable reason; they are never parsed as
+  text or silently forwarded through a partially active breakpoint.
+
+Exit gate: continue/replace/terminate pass for identity, gzip, and deflate; downstream decompression is valid;
+nonmatching streams progress; all timeout, drawer-close, disconnect, and proxy-stop paths resolve exactly once.
+
+#### SSE-5D — HTTP/1.1, HTTP/2, and lifecycle isolation [PARTIALLY QUALIFIED LOCALLY]
+
+Extend the real listener/TLS protocol lab matrix to prove:
+
+- HTTP/1.1 chunked and close-delimited finite/live streams, trailers, client cancellation, upstream disconnect,
+  proxy capture pause/resume, and rapid proxy stop/start;
+- TLS/ALPN HTTP/2 fragmentation plus at least two concurrent streams on one connection;
+- pausing or cancelling one SSE HTTP/2 stream does not delay an ordinary sibling or another SSE sibling;
+- `RST_STREAM`, `GOAWAY`, upstream failure, downstream failure, network change, proxy stop, and application
+  shutdown terminate only the correct ownership scopes;
+- no parser, decoder, encoder, capture reservation, breakpoint decision, Ktor call, Netty buffer, or coroutine job
+  survives its exchange/stream owner.
+
+Exit gate: real-socket tests prove stream cardinality and isolation, not only unit-level callback ordering.
+
+#### SSE-5E — Saturation, backpressure, security, and resource gates [PARTIALLY QUALIFIED LOCALLY]
+
+Use the existing finite/live/fast fixtures and add encoded, corrupt, expansion, and concurrent fixtures to prove:
+
+- a closed Traffic screen, slow Room writer, slow UI collector, and capture saturation never delay passive network
+  forwarding;
+- capture stops after the configured record/byte budget and emits one visible gap rather than repeated errors;
+- API Studio retains only its configured rolling window and reports dropped records explicitly;
+- oversized line, record, data, type, ID, encoding chain, and decoded output limits fail predictably;
+- malformed UTF-8, control characters, HTML/script payloads, invalid gzip trailers, truncated deflate, and repeated
+  manual reconnect attempts do not execute content or crash the proxy/UI;
+- sensitive `Last-Event-ID`, headers, and event data continue through existing redaction/export policy;
+- a short deterministic CI stress test and configurable release soak recover heap, direct memory, threads, sockets,
+  files, and coroutine jobs to the documented tolerance after cancellation/shutdown.
+
+The release gate includes a multi-hour stream, but ordinary pull-request CI uses a shorter deterministic duration.
+Neither gate introduces `Thread.sleep`-based correctness assertions or production `runBlocking`.
+
+Exit gate: there is no unbounded accumulation, forwarding regression, silent semantic loss, or resource leak under
+the configured stress and soak profiles.
+
+#### SSE-5F — Presentation and operator evidence [COMPLETED LOCALLY]
+
+- Traffic and API Studio show content encoding, decoded/unsupported state, gap count/reason, terminal reason,
+  observed/captured record counts, and dropped-retention count using existing panes and shared components.
+- A compressed stream does not create a new SSE workspace or SSE-specific Traffic model.
+- Breakpoint editing always presents decoded record text and clearly identifies when the outgoing stream is being
+  re-encoded.
+- The local protocol lab exposes named identity/gzip/deflate/corrupt/bomb/concurrent endpoints and documents exact
+  commands/expected results.
+- `engine/sse/MODULE.md`, this plan, and `docs/sse_qualification.md` are updated with actual limits and evidence.
+
+Exit gate: every failure or limit visible to the user has a stable, actionable explanation; no UI state retains an
+unbounded event list.
+
+#### SSE-5G — Cross-platform, device, and capability promotion [PENDING EXTERNAL EVIDENCE]
+
+Run the aggregate gate on macOS, Windows, and Linux. Record manual Android and iOS Wi-Fi proxy evidence for
+certificate trust, identity and compressed HTTP/1.1/HTTP/2 streams, cancellation, and Traffic persistence. A
+failed or unavailable platform/device row remains explicit rather than being inferred from JVM unit tests.
+
+Promote capabilities independently after evidence is complete:
+
+| Capability | Promotion requirement |
+|---|---|
+| `sse.preview` | Remains `SUPPORTED`; shared-parser regression stays green |
+| `sse.capture` | Encodings, forwarding parity, persistence, platform/device, saturation, and soak gates |
+| `sse.apistudio` | Direct/proxy, HTTP version, encoding, first-record, retention, cancellation, and platform gates |
+| `sse.breakpoints` | Identity/gzip/deflate decisions, re-encoding, lifecycle, and HTTP/2 sibling-isolation gates |
+
+The product capability catalog moves each qualifying entry from `EXPERIMENTAL` to `SUPPORTED` only after its row
+is recorded in `docs/sse_qualification.md`. If a manual device or release-soak gate is still pending, the related
+capability remains `EXPERIMENTAL`; the implementation must not weaken the gate to claim completion.
+
+Final SSE-5 exit gate: the aggregate qualification task and release soak pass, required device evidence is
+recorded, documentation matches observed behavior, and no applicable SSE capability remains experimental.
+
+#### One-go execution order and repository touch set
+
+Implementation proceeds in this fixed order so later work validates the same production path rather than test-only
+adapters:
+
+1. Add decoder types/limits/fixtures and the root qualification task.
+2. Integrate the decoder with passive capture and API Studio, then prove byte-parity and semantic parity.
+3. Integrate bounded decode/re-encode with the existing breakpoint transformer.
+4. Add real HTTP/1.1 and HTTP/2 lifecycle/isolation tests.
+5. Add saturation, decompression-abuse, short stress, and configurable soak gates.
+6. Surface typed state through the existing Traffic/API Studio panes.
+7. Run desktop OS CI, record device evidence, update qualification docs, and promote capabilities independently.
+
+Expected production ownership remains narrow:
+
+| Path | Planned action |
+|---|---|
+| `engine/sse/src/main/.../encoding/` | ADD stream-confined decoder/encoder strategies and typed results |
+| `engine/sse/.../protocol/SseLimits.kt` | MODIFY with shared decoding and expansion limits |
+| `engine/sse/.../capture/SseStreamInspector.kt` | MODIFY to consume the shared decoded stream while forwarding stays proxy-owned |
+| `engine/sse/.../apistudio/SseHttpResponseStreamInterpreter.kt` | MODIFY to consume the same decoded stream |
+| `engine/sse/.../breakpoint/SseBreakpointTransformer.kt` | MODIFY for bounded decoded decisions and supported re-encoding |
+| `engine/sse/.../inspection/` and `:engine:formatter` | MODIFY only for shared typed state/formatting parity |
+| `:engine:proxy` | KEEP protocol-neutral; MODIFY only if a generic transformed-response head policy is required |
+| `:application`, `:core:traffic`, Room/body store | KEEP canonical contracts/schema; MODIFY only for a proven generic typed state gap |
+| `ui/desktop/apiStudio/.../LiveHttpResponse*` and Traffic protocol-message views | MODIFY presentation of existing generic state; no SSE-specific workspace/model |
+| `testingServer/.../stream` and `.../http2` | ADD named compressed, corrupt, expansion, and concurrent fixtures |
+| `products/desktop/.../di` | MODIFY composition only; register implementations and promote evidence-backed maturity |
+| `build.gradle.kts`, `.github/workflows/ci.yml`, release workflow | ADD aggregate short qualification and configurable soak execution |
+| `engine/sse/MODULE.md`, `docs/sse_qualification.md`, this plan | MODIFY with final ownership, limits, evidence, and remaining exclusions |
+
+No migration of existing traffic data is planned. No PAC, manual proxy, Wi-Fi setup, certificate, collection,
+common HTTP model, or mobile-companion boundary changes are part of SSE-5.
 
 ## 15. Test and qualification matrix
 
@@ -596,12 +807,12 @@ backward compatibility before release.
 |---|---|---|
 | HTTP forwarding | Existing HTTP transport, unchanged by SSE | Existing HTTP qualification |
 | Post-capture summary | Supported bounded preview using the shared parser | Regression tests |
-| Live Traffic events | Experimental identity-encoded event history | Platform/device/soak |
+| Live Traffic events | Experimental identity/gzip/deflate event history | Platform/device/soak |
 | Persistence/history | Experimental generic child-message persistence | Restart/retention/clear matrix |
-| API Studio live stream | Experimental for HTTP/1.1 and HTTP/2 | Direct/proxy/version/device matrix |
-| Event breakpoints | Experimental match/continue/replace/terminate | Full lifecycle and HTTP/2 isolation matrix |
-| Identity encoding | Experimental | SSE-5 |
-| Gzip/deflate live decode | Unavailable; terminal response remains bounded | SSE-5 decoder contribution |
+| API Studio live stream | Experimental identity/gzip/deflate over HTTP/1.1 and HTTP/2 | Direct/proxy/version/device matrix |
+| Event breakpoints | Experimental decoded match/continue/replace/terminate with supported re-encoding | Full lifecycle and HTTP/2 isolation matrix |
+| Identity encoding | Implemented locally | External qualification |
+| Gzip/deflate live decode | Implemented locally with bounded incremental codecs | External qualification |
 | Brotli/Zstd live decode | Unavailable | Future decoder contribution |
 | Automatic reconnect | Unavailable | Future opt-in product scope |
 
@@ -630,6 +841,6 @@ new semantic engine plus one generic streaming HTTP execution seam—not a repla
 architecture.
 
 The scalable implementation slice is complete and does not require a future proxy, Traffic, persistence, or API
-Studio rewrite. KNet must still describe live SSE as experimental until incremental content decoding,
-cross-platform/device evidence, complete HTTP/2 isolation, and long-lived resource recovery pass SSE-5. The
-capability catalog deliberately preserves that distinction.
+Studio rewrite. KNet must still describe live SSE as experimental until cross-platform/device evidence, remaining
+real-socket lifecycle rows, and long-lived resource recovery pass SSE-5G. The capability catalog deliberately
+preserves that distinction.

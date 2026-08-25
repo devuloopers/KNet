@@ -61,9 +61,9 @@ class DesktopModulesTest {
         assertNotNull(koinApp.koin)
         val breakpointProtocols = koinApp.koin.get<BreakpointProtocolRegistry>().definitions
         assertEquals(
-            setOf("http", "grpc", "graphql", "websocket", "graphql-websocket"),
+            setOf("http", "grpc", "graphql", "websocket", "graphql-websocket", "sse"),
             breakpointProtocols.map { it.protocolId.value }.toSet(),
         )
-        assertEquals(5, breakpointProtocols.size)
+        assertEquals(6, breakpointProtocols.size)
     }
 }

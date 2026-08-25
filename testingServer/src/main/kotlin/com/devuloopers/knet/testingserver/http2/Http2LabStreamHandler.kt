@@ -20,6 +20,8 @@ import io.netty.handler.codec.http2.Http2StreamFrame
 import java.io.ByteArrayOutputStream
 import java.net.URI
 import java.util.concurrent.TimeUnit
+import java.util.zip.DeflaterOutputStream
+import java.util.zip.GZIPOutputStream
 
 /** Handles one independently multiplexed HTTP/2 stream and exposes bounded frame-level fixtures. */
 internal class Http2LabStreamHandler(
@@ -91,6 +93,9 @@ internal class Http2LabStreamHandler(
                     range = 0L..MAX_STREAM_DELAY_MILLIS,
                 ),
             )
+
+            SSE_GZIP_PATH -> writeEncodedServerSentEventStream(context, "gzip", ::gzip)
+            SSE_DEFLATE_PATH -> writeEncodedServerSentEventStream(context, "deflate", ::deflate)
 
             RESET_STREAM_PATH -> context.writeAndFlush(DefaultHttp2ResetFrame(Http2Error.CANCEL))
             GO_AWAY_PATH -> writeGoAway(context)
@@ -217,6 +222,31 @@ internal class Http2LabStreamHandler(
         }
     }
 
+    private fun writeEncodedServerSentEventStream(
+        context: ChannelHandlerContext,
+        encoding: String,
+        encode: (ByteArray) -> ByteArray,
+    ) {
+        val encoded = encode("id: encoded-1\nevent: http2-lab\ndata: $encoding-event\n\n".encodeToByteArray())
+        context.writeAndFlush(
+            DefaultHttp2HeadersFrame(
+                responseHeaders(context, 200)
+                    .set(HttpHeaderNames.CONTENT_TYPE, "text/event-stream")
+                    .set(HttpHeaderNames.CONTENT_ENCODING, encoding)
+                    .set(HttpHeaderNames.CACHE_CONTROL, HttpHeaderValues.NO_CACHE),
+                false,
+            ),
+        )
+        encoded.asList().chunked(ENCODED_FRAME_BYTES).forEachIndexed { index, chunk ->
+            context.writeAndFlush(
+                DefaultHttp2DataFrame(
+                    Unpooled.wrappedBuffer(chunk.toByteArray()),
+                    index == (encoded.size - 1) / ENCODED_FRAME_BYTES,
+                ),
+            )
+        }
+    }
+
     private fun writeGoAway(context: ChannelHandlerContext) {
         writeTextResponse(context, status = 200, text = "GOAWAY scheduled")
         context.channel().parent()
@@ -228,6 +258,16 @@ internal class Http2LabStreamHandler(
         val headers = responseHeaders(context, 200)
             .set(LARGE_HEADER_NAME, LARGE_HEADER_VALUE.repeat(requestedBytes))
         context.writeAndFlush(DefaultHttp2HeadersFrame(headers, true))
+    }
+
+    private fun gzip(bytes: ByteArray): ByteArray = ByteArrayOutputStream().use { output ->
+        GZIPOutputStream(output).use { gzip -> gzip.write(bytes) }
+        output.toByteArray()
+    }
+
+    private fun deflate(bytes: ByteArray): ByteArray = ByteArrayOutputStream().use { output ->
+        DeflaterOutputStream(output).use { deflate -> deflate.write(bytes) }
+        output.toByteArray()
     }
 
     private fun responseHeaders(context: ChannelHandlerContext, status: Int): Http2Headers = DefaultHttp2Headers()
@@ -255,6 +295,8 @@ internal class Http2LabStreamHandler(
         const val TRAILERS_PATH = "/lab/v1/http2/trailers"
         const val SLOW_STREAM_PATH = "/lab/v1/http2/slow-stream"
         const val SSE_STREAM_PATH = "/lab/v1/http2/sse"
+        const val SSE_GZIP_PATH = "/lab/v1/http2/sse/gzip"
+        const val SSE_DEFLATE_PATH = "/lab/v1/http2/sse/deflate"
         const val RESET_STREAM_PATH = "/lab/v1/http2/reset-stream"
         const val GO_AWAY_PATH = "/lab/v1/http2/goaway"
         const val LARGE_HEADERS_PATH = "/lab/v1/http2/large-headers"
@@ -268,5 +310,6 @@ internal class Http2LabStreamHandler(
         const val MAX_STREAM_DELAY_MILLIS = 5_000L
         const val DEFAULT_LARGE_HEADER_BYTES = 4_096
         const val MAX_LARGE_HEADER_BYTES = 32_768
+        const val ENCODED_FRAME_BYTES = 7
     }
 }

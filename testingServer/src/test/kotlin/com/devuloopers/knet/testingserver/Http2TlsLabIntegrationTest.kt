@@ -20,6 +20,9 @@ import reactor.netty.http.HttpProtocol
 import reactor.netty.http.client.HttpClient
 import reactor.netty.http.client.PrematureCloseException
 import reactor.netty.resources.ConnectionProvider
+import java.io.ByteArrayInputStream
+import java.util.zip.GZIPInputStream
+import java.util.zip.InflaterInputStream
 import kotlin.time.Duration.Companion.seconds
 
 /** Proves the independent HTTP/2 lab listener uses real TLS, ALPN, multiplexing, and stream frames. */
@@ -100,6 +103,30 @@ class Http2TlsLabIntegrationTest {
         } finally {
             provider.disposeLater().awaitSingleOrNull()
         }
+    }
+
+    /** Ensures encoded SSE payloads stay fragmented HTTP/2 data while remaining valid representations. */
+    @Test
+    fun `encoded sse fixtures remain valid over native http two frames`() = runTest {
+        val client = http2Client(HttpClient.newConnection()).compress(false)
+
+        val gzip = encodedSse(client, "gzip")
+        val deflate = encodedSse(client, "deflate")
+
+        assertEquals("HTTP/2.0", gzip.protocol)
+        assertEquals("gzip", gzip.encoding)
+        assertTrue(
+            GZIPInputStream(ByteArrayInputStream(gzip.bytes)).use { input ->
+                input.readBytes().decodeToString().contains("gzip-event")
+            },
+        )
+        assertEquals("HTTP/2.0", deflate.protocol)
+        assertEquals("deflate", deflate.encoding)
+        assertTrue(
+            InflaterInputStream(ByteArrayInputStream(deflate.bytes)).use { input ->
+                input.readBytes().decodeToString().contains("deflate-event")
+            },
+        )
     }
 
     /** Ensures bounded large header blocks survive HPACK encoding and decoding intact. */
@@ -196,6 +223,24 @@ class Http2TlsLabIntegrationTest {
             }
         }
 
+    private suspend fun encodedSse(client: HttpClient, encoding: String): EncodedSseResult =
+        withContext(Dispatchers.IO) {
+            withTimeout(5.seconds) {
+                client.get()
+                    .uri(fixtureUrl("sse/$encoding"))
+                    .responseSingle { response, body ->
+                        body.asByteArray().map { bytes ->
+                            EncodedSseResult(
+                                protocol = response.version().text(),
+                                encoding = response.responseHeaders().get("content-encoding"),
+                                bytes = bytes,
+                            )
+                        }
+                    }
+                    .awaitSingle()
+            }
+        }
+
     private fun http2Client(client: HttpClient): HttpClient {
         val sslContext = Http2SslContextSpec.forClient()
             .configure { builder -> builder.trustManager(InsecureTrustManagerFactory.INSTANCE) }
@@ -211,5 +256,11 @@ class Http2TlsLabIntegrationTest {
     private data class StreamResult(
         val connectionId: String,
         val body: String,
+    )
+
+    private data class EncodedSseResult(
+        val protocol: String,
+        val encoding: String?,
+        val bytes: ByteArray,
     )
 }

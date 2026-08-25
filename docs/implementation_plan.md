@@ -237,7 +237,7 @@ Exit criteria: direct and relay paths pass the same proxy conformance suite; rev
 
 No Android/iOS application, VPN packet adapter, direct tunnel, or relay carrier is added without a real platform target and product/security requirements. The shared traffic model, pairing identity, authenticated gateway, application ports, and connectivity registry are complete, so activating this phase is additive. Runtime capability status remains `UNAVAILABLE` for Mobile Companion, VPN, and Relay.
 
-## Phase 17: Protocol Transports and Inspectors [IN PROGRESS — LIVE SSE AND HTTP/3 PENDING]
+## Phase 17: Protocol Transports and Inspectors [IN PROGRESS — HTTP/3 PENDING]
 
 Deliver independently after Phases 11 and 13 establish the transport and inspector seams:
 
@@ -268,8 +268,9 @@ Implementation started on 2026-08-25 from the approved architecture and gates in
 [`sse_target_and_implementation_plan.md`](sse_target_and_implementation_plan.md). The increment keeps SSE inside
 the canonical HTTP exchange and HTTP API Studio workspace while adding bounded live event records, Traffic
 presentation, streaming execution, and event breakpoints through existing extension seams. Local implementation
-and deterministic JVM evidence are complete; SSE-5 cross-platform, real-device, encoded-stream, and soak gates
-remain before `SUPPORTED` promotion.
+and deterministic JVM evidence are complete. Identity/gzip/deflate streaming is implemented through one bounded
+codec registry; cross-platform execution, real-device evidence, the default release soak, and remaining lifecycle
+rows remain before `SUPPORTED` promotion.
 
 ### Phase 17 WebSocket increment [COMPLETED — EXPERIMENTAL]
 
@@ -2284,3 +2285,47 @@ Completed on 2026-08-25. The complete affected-module gate passed 189 Gradle tas
 formatter, proxy, protocol module, canonical traffic/domain/HTTP contracts, application orchestration, desktop
 persistence, protocol lab, API Studio UI, desktop composition, Kotlin-first source checks, and architecture
 verification. The desktop application was not launched, stopped, or restarted by this work.
+
+## Phase 107: SSE Production Completion Planning [COMPLETED]
+
+Completed on 2026-08-25 without production-code changes. The repository-specific SSE-5 section in
+`docs/sse_target_and_implementation_plan.md` now defines one continuous delivery from the current experimental
+live core to evidence-backed supported capture, API Studio, and breakpoint capabilities. The plan keeps the
+canonical HTTP exchange, generic protocol-message children, proxy inspector/transformer seams, Room/body store,
+Traffic, HTTP API Studio workspace, and global breakpoint drawer. No new Gradle module or alternate SSE request,
+response, traffic, or collection model is introduced.
+
+The completion sequence covers a shared stream-confined identity/gzip/deflate decoder pipeline, bounded encoded
+breakpoint transcoding, real HTTP/1.1 and concurrent HTTP/2 isolation, lifecycle cleanup, saturation and security
+limits, short CI stress plus release soak, presentation evidence, a root `sseQualification` gate, desktop
+cross-platform execution, and Android/iOS Wi-Fi proxy evidence. Brotli/Zstandard, HTTP/3, browser policy emulation,
+and automatic reconnect remain explicit additive future capabilities and do not dilute the frozen Supported SSE
+profile. Capability promotion remains independent and evidence-gated. KNet was not launched by this planning
+phase.
+
+## Phase 108: SSE Production Completion [COMPLETED — LOCAL IMPLEMENTATION; EXTERNAL EVIDENCE PENDING]
+
+Started on 2026-08-25. This phase executes SSE-5 as one continuous implementation increment: shared bounded
+identity/gzip/deflate streaming codecs, passive capture and API Studio integration, encoded record breakpoint
+transcoding, HTTP/1.1 and HTTP/2 lifecycle isolation, saturation/security/resource gates, presentation evidence,
+and the aggregate `sseQualification` task. Existing canonical HTTP, protocol-message, persistence, Traffic,
+connectivity, and API Studio collection boundaries remain authoritative. Capability maturity will change only for
+gates backed by recorded evidence; unavailable operating-system or physical-device evidence will remain explicit.
+
+Completed locally on 2026-08-26. One shared stream-confined codec registry now implements bounded incremental
+identity, gzip, zlib-wrapped deflate, raw deflate, and supported stacked encodings for passive capture, HTTP API
+Studio interpretation, and response-record breakpoints. Encoded breakpoint replacements are re-encoded using the
+supported original representation, while generic proxy head sanitation removes invalid length, digest, validator,
+and range metadata after any payload transformation. The canonical parent remains encoded evidence and decoded
+SSE records remain bounded generic child messages.
+
+Deterministic fixtures and tests cover arbitrary chunk boundaries, gzip trailer validation, malformed and
+expansion-abuse input, decoder cleanup, API Studio gap presentation, HTTP/1.1 streaming, TLS/ALPN HTTP/2 encoded
+DATA frames, and a real multiplexed proxy case where a paused SSE stream does not delay an ordinary sibling. The
+root `sseQualification` gate passed 207 Gradle tasks on macOS, and the configurable `sseReleaseSoak` task passed a
+one-second infrastructure smoke run. The checked-in CI matrix targets macOS, Windows, and Linux.
+
+The live capability entries intentionally remain `EXPERIMENTAL`: the default three-hour soak with resource
+measurements, actual cross-platform CI results, physical Android/iOS Wi-Fi proxy evidence, and remaining
+real-socket lifecycle rows are not locally complete. The desktop application was not launched, stopped, or
+restarted by this phase.

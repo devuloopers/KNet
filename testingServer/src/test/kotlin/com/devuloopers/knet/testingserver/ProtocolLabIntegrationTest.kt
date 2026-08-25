@@ -42,8 +42,11 @@ import reactor.core.publisher.Mono
 import reactor.netty.http.HttpProtocol
 import reactor.netty.http.client.HttpClient
 import reactor.netty.http.client.WebsocketClientSpec
+import java.io.ByteArrayInputStream
 import java.net.URI
 import java.util.concurrent.TimeUnit
+import java.util.zip.GZIPInputStream
+import java.util.zip.InflaterInputStream
 import kotlin.time.Duration.Companion.seconds
 
 /** Verifies every advertised protocol family through a real bound local server. */
@@ -208,6 +211,28 @@ class ProtocolLabIntegrationTest {
         assertEquals(0x1F.toByte(), gzipResponse.second[0])
         assertEquals(0x8B.toByte(), gzipResponse.second[1])
 
+        val deflateResponse = rawSseResponse("deflate")
+        assertEquals("deflate", deflateResponse.first)
+        assertTrue(
+            InflaterInputStream(ByteArrayInputStream(deflateResponse.second)).use { input ->
+                input.readBytes().decodeToString().contains("deflate-event")
+            },
+        )
+
+        val corruptResponse = rawSseResponse("corrupt-gzip")
+        assertEquals("gzip", corruptResponse.first)
+        assertThrows<Exception> {
+            GZIPInputStream(ByteArrayInputStream(corruptResponse.second)).use { input -> input.readBytes() }
+        }
+
+        val expansionResponse = rawSseResponse("expansion")
+        assertEquals("gzip", expansionResponse.first)
+        assertTrue(expansionResponse.second.size < 16 * 1_024)
+        assertTrue(
+            GZIPInputStream(ByteArrayInputStream(expansionResponse.second)).use { input -> input.readBytes().size } >
+                2 * 1_024 * 1_024,
+        )
+
         val resumedEvents: List<StreamEvent> = webClient.get()
             .uri("/lab/v1/streams/sse/resume?count=2")
             .header("Last-Event-ID", "4")
@@ -219,6 +244,15 @@ class ProtocolLabIntegrationTest {
             .orEmpty()
         assertEquals(listOf(5, 6), resumedEvents.map(StreamEvent::sequence))
     }
+
+    private fun rawSseResponse(name: String): Pair<String?, ByteArray> = HttpClient.create()
+        .compress(false)
+        .get()
+        .uri("http://127.0.0.1:$httpPort/lab/v1/streams/sse/$name")
+        .responseSingle { response, body ->
+            body.asByteArray().map { bytes -> response.responseHeaders()["Content-Encoding"] to bytes }
+        }
+        .block() ?: error("The $name SSE fixture did not return a response.")
 
     /** Ensures a named GraphQL operation executes through the configured HTTP transport. */
     @Test

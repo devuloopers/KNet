@@ -11,8 +11,10 @@ import com.devuloopers.knet.traffic.model.http.ResponseHead
 /**
  * Borrowed transport payload visible only for the duration of an inspection callback.
  *
- * Implementations must copy only bytes they have first reserved through canonical capture. They
- * must never retain this object or assume it is backed by a JVM or Netty-specific buffer.
+ * Implementations must never retain this object or assume it is backed by a JVM or Netty-specific
+ * buffer. A protocol inspector may copy into a fixed-capacity, configured scratch buffer required
+ * for incremental decoding. Any bytes transferred to durable capture must still be reserved first
+ * through canonical capture ownership.
  */
 interface ProxyPayloadSlice {
     /** Number of currently readable bytes. */

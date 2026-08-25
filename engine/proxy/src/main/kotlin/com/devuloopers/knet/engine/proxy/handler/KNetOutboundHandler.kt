@@ -217,8 +217,8 @@ internal class KNetOutboundHandler(
         responseStarted = true
         responseContentEncoding = HttpMapper.contentEncoding(response.headers())
         if (streamTransformer != null) {
-            // A message replacement can change the framed payload length without buffering the RPC.
-            response.headers().remove(HttpHeaderNames.CONTENT_LENGTH)
+            // A message replacement can change both framing and representation integrity metadata.
+            PayloadTransformationHeaders.sanitizeResponse(response.headers())
         }
         val upstreamResponseHead = HttpMapper.mapResponseHead(response, upstreamProtocol)
         isKeepAlive = HttpOneSemantics.prepareFinalResponse(
