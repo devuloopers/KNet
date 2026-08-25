@@ -3,6 +3,7 @@ package com.devuloopers.knet.application.port.breakpoint
 import com.devuloopers.knet.domain.rules.model.BreakpointProtocolId
 import com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
+import com.devuloopers.knet.traffic.model.HttpResponseSnapshot
 import com.devuloopers.knet.traffic.model.TrafficDirection
 import com.devuloopers.knet.traffic.id.ProtocolMessageId
 import com.devuloopers.knet.traffic.id.ExchangeId
@@ -120,11 +121,13 @@ public data class ProtocolCriteriaValue(
  * @property request Canonical captured request metadata.
  * @property requestBody Defensive-copy body preview, or null when the request has no readable body.
  * @property requestBodyComplete Whether [requestBody] contains the complete captured request body.
+ * @property response Canonical response metadata when the source exchange has received a response.
  */
 public data class BreakpointRuleSuggestionInput(
     public val request: HttpRequestSnapshot,
     public val requestBody: BreakpointBody?,
     public val requestBodyComplete: Boolean,
+    public val response: HttpResponseSnapshot? = null,
 )
 
 /**

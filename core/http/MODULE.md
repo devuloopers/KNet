@@ -6,7 +6,10 @@ Provides reusable outbound HTTP-client capabilities used by API Studio and relat
 
 ## Owns
 
-- Request execution, authentication, TLS client configuration, multipart, SSE, and WebSocket client helpers.
+- Request execution, authentication, TLS client configuration, multipart, and bounded terminal-response handling.
+- Optional ordered response-head/body-chunk/terminal streaming through the same request preparation and transport
+  selection used by terminal execution. Chunks are owned before crossing the module boundary, and collector
+  cancellation closes the active transport response.
 - Per-request HTTP wire-version dispatch: Ktor remains the exact HTTP/1.1 transport, while narrow JVM adapters
   own exact HTTP/1.0 wire semantics and HTTP/2-preferred ALPN execution.
 - Ktor encoding of the canonical `OutboundRequestBody`, `ApiRequestAuth`, and `ExecutionResult`
@@ -50,3 +53,9 @@ headers are discarded, and attribution is added only when an active proxy port i
 continue to use platform roots only; proxy-configured clients additionally trust that local CA so they can
 validate KNet-generated downstream certificates. Origin-server validation remains independently owned by
 the proxy engine's upstream TLS policy.
+
+Live HTTP response streaming is implemented for HTTP/1.1 and the JVM AUTO/exact-HTTP/2 adapter. Identity-encoded
+`text/event-stream` responses are delivered incrementally without retaining an unbounded terminal body; ordinary
+and encoded responses retain the existing bounded terminal result. HTTP/1.0 intentionally uses the terminal
+compatibility event because its narrow socket adapter is not a long-lived streaming transport. SSE interpretation
+remains outside this module in `:engine:sse`.

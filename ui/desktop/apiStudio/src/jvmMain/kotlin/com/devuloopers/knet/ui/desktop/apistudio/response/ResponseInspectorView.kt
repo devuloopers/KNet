@@ -64,7 +64,9 @@ enum class ResponseSubTab(
  * Cohesive event callbacks parameter object for [ResponseInspectorView].
  */
 data class ResponseInspectorActions(
-    val onClearResponse: () -> Unit = {}
+    val onClearResponse: () -> Unit = {},
+    val onClearVisibleLiveRecords: () -> Unit = {},
+    val onLiveRecordSelected: (Long) -> Unit = {},
 )
 
 /**
@@ -81,6 +83,10 @@ fun ResponseInspectorView(
     onSubTabSelected: (ResponseSubTab) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    if (state.liveResponse != null) {
+        LiveHttpResponseView(state = state, actions = actions, modifier = modifier)
+        return
+    }
     val headerPairs = remember(state.headers) { state.headers.map { it.key to it.value } }
     val cookiePairs = remember(state.cookies) { state.cookies.map { it.key to it.value } }
     val isExecuting = state.executionState == ExecutionState.EXECUTING

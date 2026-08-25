@@ -159,6 +159,67 @@ class ProtocolLabIntegrationTest {
             .hasSize(3)
     }
 
+    /** Ensures SSE edge fixtures preserve raw framing and resume from the supplied event cursor. */
+    @Test
+    fun `sse lab exposes multiline fragmentation malformed bytes gzip and resume fixtures`() {
+        webClient.get()
+            .uri("/lab/v1/streams/sse/multiline")
+            .exchange()
+            .expectStatus().isOk
+            .expectBody(String::class.java)
+            .consumeWith { result ->
+                assertTrue(result.responseBody.orEmpty().contains("data: first\ndata: second\n\n"))
+            }
+
+        webClient.get()
+            .uri("/lab/v1/streams/sse/fragmented")
+            .exchange()
+            .expectStatus().isOk
+            .expectBody(String::class.java)
+            .consumeWith { result ->
+                assertTrue(result.responseBody.orEmpty().contains("event: fragmented"))
+            }
+
+        webClient.get()
+            .uri("/lab/v1/streams/sse/malformed")
+            .exchange()
+            .expectStatus().isOk
+            .expectBody(ByteArray::class.java)
+            .consumeWith { result ->
+                val body = result.responseBody ?: byteArrayOf()
+                assertTrue(body.any { byte -> byte == 0xC3.toByte() })
+                assertTrue(body.decodeToString().contains("valid-after-gap"))
+            }
+
+        // WebTestClient transparently decompresses encoded responses and removes Content-Encoding. Use the
+        // underlying Reactor Netty client with decompression disabled so this fixture verifies the actual wire.
+        val gzipResponse = HttpClient.create()
+            .compress(false)
+            .get()
+            .uri("http://127.0.0.1:$httpPort/lab/v1/streams/sse/gzip")
+            .responseSingle { response, body ->
+                body.asByteArray().map { bytes ->
+                    response.responseHeaders()["Content-Encoding"] to bytes
+                }
+            }
+            .block() ?: error("The gzip SSE fixture did not return a response.")
+        assertEquals("gzip", gzipResponse.first)
+        assertTrue(gzipResponse.second.size >= 2)
+        assertEquals(0x1F.toByte(), gzipResponse.second[0])
+        assertEquals(0x8B.toByte(), gzipResponse.second[1])
+
+        val resumedEvents: List<StreamEvent> = webClient.get()
+            .uri("/lab/v1/streams/sse/resume?count=2")
+            .header("Last-Event-ID", "4")
+            .exchange()
+            .expectStatus().isOk
+            .expectBodyList(StreamEvent::class.java)
+            .returnResult()
+            .responseBody
+            .orEmpty()
+        assertEquals(listOf(5, 6), resumedEvents.map(StreamEvent::sequence))
+    }
+
     /** Ensures a named GraphQL operation executes through the configured HTTP transport. */
     @Test
     fun `graphql endpoint executes named operations`() {

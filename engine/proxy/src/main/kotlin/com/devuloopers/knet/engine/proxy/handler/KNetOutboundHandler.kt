@@ -4,6 +4,7 @@ import com.devuloopers.knet.core.logger.KNetLogger
 import com.devuloopers.knet.engine.proxy.capture.ProxyExchangeCapture
 import com.devuloopers.knet.engine.proxy.http.HttpOneDownstreamPolicy
 import com.devuloopers.knet.engine.proxy.http.HttpOneSemantics
+import com.devuloopers.knet.engine.proxy.http.HttpTwoBridgeHeaders
 import com.devuloopers.knet.engine.proxy.mapper.HttpMapper
 import com.devuloopers.knet.engine.proxy.pipeline.ProxyChannelAttributes
 import com.devuloopers.knet.engine.proxy.timing.NetworkTimingCollector
@@ -117,6 +118,8 @@ internal class KNetOutboundHandler(
 
     private fun acceptFullResponse(context: ChannelHandlerContext, response: FullHttpResponse) {
         publishUpstreamProtocol(response)
+        HttpTwoBridgeHeaders.removeFrom(response.headers())
+        HttpTwoBridgeHeaders.removeFrom(response.trailingHeaders())
         if (response.status().code() in 100..199 && response.status().code() != 101) {
             HttpOneSemantics.prepareProvisionalResponse(response, downstreamPolicy)
             KNetLogger.debug(OUTBOUND_TAG) { "KNet Proxy Provisional Full Response: ${response.status()}" }
@@ -197,6 +200,7 @@ internal class KNetOutboundHandler(
         retainForWrite: Boolean,
     ) {
         publishUpstreamProtocol(response)
+        HttpTwoBridgeHeaders.removeFrom(response.headers())
         provisionalResponseInProgress = response.status().code() in 100..199 && response.status().code() != 101
         if (provisionalResponseInProgress) {
             HttpOneSemantics.prepareProvisionalResponse(response, downstreamPolicy)

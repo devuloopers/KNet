@@ -47,6 +47,7 @@ dependencies {
     implementation(project(":engine:protocol"))
     implementation(project(":engine:proxy"))
     implementation(project(":engine:session"))
+    implementation(project(":engine:sse"))
     implementation(project(":storage"))
     implementation(project(":ui:core"))
 

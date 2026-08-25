@@ -42,6 +42,8 @@ Gradle enforces four rules through `verifyArchitectureFoundation`:
   breakpoints, and API Studio execution.
 - [`:engine:graphqlWebSocket`](../engine/graphqlWebSocket/MODULE.md) — modern `graphql-transport-ws` envelope
   semantics, bounded operation correlation, presentation, breakpoints, identity, and API Studio execution.
+- [`:engine:sse`](../engine/sse/MODULE.md) — incremental Server-Sent Events parsing, live capture, Traffic
+  decoding, HTTP response interpretation, and response-record breakpoints.
 - [`:engine:websocket`](../engine/websocket/MODULE.md) — RFC 6455 handshake recognition, bounded frame/message
   inspection, message breakpoints, payload presentation, and API Studio execution.
 - [`:engine:interceptor`](../engine/interceptor/MODULE.md) — breakpoint interception, pre-pause capture admission, and typed mutation behavior.

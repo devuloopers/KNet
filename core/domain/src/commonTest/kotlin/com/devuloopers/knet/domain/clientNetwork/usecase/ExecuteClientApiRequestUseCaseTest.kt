@@ -1,6 +1,10 @@
 package com.devuloopers.knet.domain.clientNetwork.usecase
 
 import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor
+import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutionBodyChunk
+import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutionEvent
+import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutionResponseHead
+import com.devuloopers.knet.domain.clientNetwork.executor.HttpStreamingExecutor
 import com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult
 import com.devuloopers.knet.domain.clientNetwork.model.HttpVersionPreference
 import com.devuloopers.knet.domain.clientNetwork.model.OutboundRequestBody
@@ -8,6 +12,9 @@ import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.http.HttpMethod
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -58,6 +65,59 @@ class FakeHttpExecutor : HttpExecutor {
 }
 
 class ExecuteClientApiRequestUseCaseTest {
+
+    @Test
+    fun `stream preserves terminal compatibility for a non-streaming executor`() = runTest {
+        val events = ExecuteClientApiRequestUseCase(FakeHttpExecutor()).stream(
+            url = "https://api.example.com/events",
+        ).toList()
+
+        assertEquals(1, events.size)
+        assertEquals(200, (events.single() as HttpExecutionEvent.Completed).result.statusCode)
+    }
+
+    @Test
+    fun `stream forwards ordered head body and completion from a streaming executor`() = runTest {
+        val executor = object : HttpExecutor, HttpStreamingExecutor {
+            override suspend fun execute(
+                url: String,
+                method: HttpMethod,
+                headers: Map<String, String>,
+                body: OutboundRequestBody,
+                auth: ApiRequestAuth,
+                proxyPort: Int?,
+                httpVersionPreference: HttpVersionPreference,
+            ): ExecutionResult = result()
+
+            override fun executeStreaming(
+                url: String,
+                method: HttpMethod,
+                headers: Map<String, String>,
+                body: OutboundRequestBody,
+                auth: ApiRequestAuth,
+                proxyPort: Int?,
+                httpVersionPreference: HttpVersionPreference,
+            ): Flow<HttpExecutionEvent> = flowOf(
+                HttpExecutionEvent.ResponseHead(
+                    HttpExecutionResponseHead(200, "OK", emptyMap(), emptyMap(), null),
+                ),
+                HttpExecutionEvent.BodyChunk(HttpExecutionBodyChunk("data: live\n\n".encodeToByteArray())),
+                HttpExecutionEvent.Completed(result()),
+            )
+
+            override fun close() = Unit
+
+            private fun result() = ExecutionResult(statusCode = 200, statusText = "OK")
+        }
+
+        val events = ExecuteClientApiRequestUseCase(executor).stream(
+            url = "https://api.example.com/events",
+        ).toList()
+
+        assertTrue(events[0] is HttpExecutionEvent.ResponseHead)
+        assertTrue(events[1] is HttpExecutionEvent.BodyChunk)
+        assertTrue(events[2] is HttpExecutionEvent.Completed)
+    }
 
     @Test
     fun `HTTP version preference reaches the executor unchanged`() = runTest {

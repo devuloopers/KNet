@@ -83,6 +83,15 @@ internal class Http2LabStreamHandler(
                 ),
             )
 
+            SSE_STREAM_PATH -> writeServerSentEventStream(
+                context = context,
+                eventCount = query["events"].toBoundedInt(default = 3, range = 1..MAX_CHUNKS),
+                delayMillis = query["delayMillis"].toBoundedLong(
+                    default = DEFAULT_STREAM_DELAY_MILLIS,
+                    range = 0L..MAX_STREAM_DELAY_MILLIS,
+                ),
+            )
+
             RESET_STREAM_PATH -> context.writeAndFlush(DefaultHttp2ResetFrame(Http2Error.CANCEL))
             GO_AWAY_PATH -> writeGoAway(context)
             LARGE_HEADERS_PATH -> writeLargeHeaders(
@@ -175,6 +184,39 @@ internal class Http2LabStreamHandler(
         }
     }
 
+    private fun writeServerSentEventStream(
+        context: ChannelHandlerContext,
+        eventCount: Int,
+        delayMillis: Long,
+    ) {
+        context.writeAndFlush(
+            DefaultHttp2HeadersFrame(
+                responseHeaders(context, 200)
+                    .set(HttpHeaderNames.CONTENT_TYPE, "text/event-stream")
+                    .set(HttpHeaderNames.CACHE_CONTROL, HttpHeaderValues.NO_CACHE),
+                false,
+            ),
+        )
+        repeat(eventCount) { index ->
+            context.executor().schedule(
+                {
+                    if (context.channel().isActive) {
+                        val sequence = index + 1
+                        val bytes = "id: $sequence\nevent: http2-lab\ndata: event-$sequence\n\n".encodeToByteArray()
+                        context.writeAndFlush(
+                            DefaultHttp2DataFrame(
+                                Unpooled.wrappedBuffer(bytes),
+                                sequence == eventCount,
+                            ),
+                        )
+                    }
+                },
+                delayMillis * index,
+                TimeUnit.MILLISECONDS,
+            )
+        }
+    }
+
     private fun writeGoAway(context: ChannelHandlerContext) {
         writeTextResponse(context, status = 200, text = "GOAWAY scheduled")
         context.channel().parent()
@@ -212,6 +254,7 @@ internal class Http2LabStreamHandler(
         const val ECHO_PATH = "/lab/v1/http2/echo"
         const val TRAILERS_PATH = "/lab/v1/http2/trailers"
         const val SLOW_STREAM_PATH = "/lab/v1/http2/slow-stream"
+        const val SSE_STREAM_PATH = "/lab/v1/http2/sse"
         const val RESET_STREAM_PATH = "/lab/v1/http2/reset-stream"
         const val GO_AWAY_PATH = "/lab/v1/http2/goaway"
         const val LARGE_HEADERS_PATH = "/lab/v1/http2/large-headers"

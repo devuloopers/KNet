@@ -4,7 +4,7 @@ import com.devuloopers.knet.application.port.inspection.SemanticInspectionSchedu
 import com.devuloopers.knet.data.desktop.capture.CanonicalCaptureSessionFactory
 import com.devuloopers.knet.data.desktop.capture.CanonicalTrafficQueryAdapter
 import com.devuloopers.knet.data.desktop.capture.recordTestProxyExchange
-import com.devuloopers.knet.engine.protocol.inspector.sse.SseSemanticInspector
+import com.devuloopers.knet.engine.sse.inspection.SseSemanticInspector
 import com.devuloopers.knet.engine.session.FileBodyStore
 import com.devuloopers.knet.storage.database.DatabaseFactory
 import com.devuloopers.knet.traffic.id.ExchangeId

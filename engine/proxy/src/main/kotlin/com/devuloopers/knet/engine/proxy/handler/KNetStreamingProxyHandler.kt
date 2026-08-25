@@ -12,6 +12,7 @@ import com.devuloopers.knet.engine.proxy.http.AuthorityParser
 import com.devuloopers.knet.engine.proxy.http.HttpOneDownstreamPolicy
 import com.devuloopers.knet.engine.proxy.http.HttpOneRequestViolation
 import com.devuloopers.knet.engine.proxy.http.HttpOneSemantics
+import com.devuloopers.knet.engine.proxy.http.HttpTwoBridgeHeaders
 import com.devuloopers.knet.engine.proxy.mapper.HttpMapper
 import com.devuloopers.knet.engine.proxy.pipeline.ProxyChannelAttributes
 import com.devuloopers.knet.engine.proxy.pipeline.PipelineHandlerNames
@@ -65,7 +66,6 @@ import io.netty.handler.codec.http.HttpServerUpgradeHandler
 import io.netty.handler.codec.http.HttpVersion
 import io.netty.handler.codec.http.LastHttpContent
 import io.netty.handler.codec.http2.Http2StreamFrameToHttpObjectCodec
-import io.netty.handler.codec.http2.HttpConversionUtil
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.timeout.ReadTimeoutHandler
 import io.netty.handler.timeout.WriteTimeoutHandler
@@ -286,6 +286,9 @@ internal class KNetStreamingProxyHandler(
             target.relativeUri,
         )
         outboundHead.headers().set(request.headers())
+        // Downstream HTTP/2 bridge fields are transport metadata. Remove them before either the
+        // HTTP/1 upstream wire or the independently allocated upstream HTTP/2 stream sees them.
+        HttpTwoBridgeHeaders.removeFrom(outboundHead.headers())
         HttpOneSemantics.prepareUpstreamRequest(outboundHead, downstreamPolicy)
         outboundHead.headers().set(
             HttpHeaderNames.HOST,
@@ -885,7 +888,7 @@ internal class KNetStreamingProxyHandler(
         if (teValue != null && !teValue.equals(HttpHeaderValues.TRAILERS.toString(), ignoreCase = true)) {
             request.headers().remove(HttpHeaderNames.TE)
         }
-        request.headers().set(HttpConversionUtil.ExtensionHeaderNames.SCHEME.text(), "https")
+        HttpTwoBridgeHeaders.prepareForHttpTwo(request.headers(), scheme = "https")
         return request
     }
 

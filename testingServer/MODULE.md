@@ -36,7 +36,7 @@ testingServer/
 │   ├── catalog/       # Versioned machine-readable capability manifest
 │   ├── http/          # Methods, metadata, status, delay, redirect, cookies, and auth
 │   ├── payload/       # JSON, NDJSON, XML, SOAP, forms, and binary encodings
-│   ├── stream/        # SSE and ordinary chunked response fixtures
+│   ├── stream/        # Finite/live/edge-case SSE and ordinary chunked response fixtures
 │   ├── websocket/     # Raw text/binary WebSocket echo
 │   ├── graphql/       # Query, mutation, and subscription resolvers
 │   ├── http2/         # TLS/ALPN listener and bounded HTTP/2 frame/fault fixtures
@@ -68,8 +68,12 @@ implementations, or label a simulated HTTP response as a transport the server do
 
 Currently executable: HTTP/1.1, H2C, TLS/ALPN HTTP/2, HTTP/2 multiplexing, trailing headers, bounded large header
 blocks, RST_STREAM and GOAWAY faults, JSON, NDJSON, XML, SOAP, form data, multipart, CBOR, MessagePack, Protobuf
-payloads, SSE, chunked text, raw WebSocket, GraphQL HTTP, GraphQL subscriptions, and all four native gRPC RPC
+payloads, deterministic SSE finite/live/multiline/comment/fragmented/malformed/disconnect/resume/gzip/fast
+scenarios, chunked text, raw WebSocket, GraphQL HTTP, GraphQL subscriptions, and all four native gRPC RPC
 cardinalities.
+
+The TLS/ALPN HTTP/2 listener also exposes a framed SSE stream so KNet's exact HTTP/2 execution path is tested
+against real delayed DATA frames rather than an HTTP/1.1 look-alike.
 
 The gRPC fixture also exposes deterministic typed failure/trailer behavior and server reflection so descriptor
 import, operation discovery, unary/server streaming, and interactive client/bidirectional execution share one

@@ -13,6 +13,7 @@ import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
+import com.devuloopers.knet.traffic.model.HttpResponseSnapshot
 import com.devuloopers.knet.traffic.model.absoluteUrl
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -72,6 +73,7 @@ public class PrepareBreakpointRuleDraftUseCase(
         val source = when (val loaded = loadTrafficExchangeDetailsUseCase.execute(exchangeId)) {
             is LoadTrafficExchangeDetailsResult.Found -> loaded.details.requestBody.toSource(
                 request = loaded.details.exchange.request,
+                response = loaded.details.exchange.response,
             )
 
             LoadTrafficExchangeDetailsResult.Missing -> pendingCandidate
@@ -84,6 +86,7 @@ public class PrepareBreakpointRuleDraftUseCase(
                 request = source.request,
                 requestBody = source.body,
                 requestBodyComplete = source.bodyComplete,
+                response = source.response,
             ),
         ) ?: ProtocolMatchCriteria.HttpDefault
         val endpointPattern = source.request.absoluteUrl()
@@ -107,16 +110,20 @@ public class PrepareBreakpointRuleDraftUseCase(
         )
     }
 
-    private fun TrafficBodyPreview.toSource(request: HttpRequestSnapshot): DraftSource = when (this) {
-        TrafficBodyPreview.Empty -> DraftSource(request, body = null, bodyComplete = true)
+    private fun TrafficBodyPreview.toSource(
+        request: HttpRequestSnapshot,
+        response: HttpResponseSnapshot?,
+    ): DraftSource = when (this) {
+        TrafficBodyPreview.Empty -> DraftSource(request, response, body = null, bodyComplete = true)
         is TrafficBodyPreview.Available -> DraftSource(
             request = request,
+            response = response,
             body = BreakpointBody(chunk.copyBytes()),
             bodyComplete = chunk.endOfBody,
         )
 
         is TrafficBodyPreview.Unavailable,
-        TrafficBodyPreview.ReadFailed -> DraftSource(request, body = null, bodyComplete = false)
+        TrafficBodyPreview.ReadFailed -> DraftSource(request, response, body = null, bodyComplete = false)
     }
 
     private fun BreakpointCandidate.toSource(): DraftSource {
@@ -131,6 +138,7 @@ public class PrepareBreakpointRuleDraftUseCase(
         }
         return DraftSource(
             request = request,
+            response = response,
             body = retainedBody,
             bodyComplete = bodyComplete,
         )
@@ -141,6 +149,7 @@ public class PrepareBreakpointRuleDraftUseCase(
 
     private data class DraftSource(
         val request: HttpRequestSnapshot,
+        val response: HttpResponseSnapshot? = null,
         val body: BreakpointBody?,
         val bodyComplete: Boolean,
     )

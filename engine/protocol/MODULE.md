@@ -6,7 +6,7 @@ Hosts protocol-specific parsers and inspectors that derive structured views or s
 
 ## Owns
 
-- GraphQL and SSE semantic inspectors implemented against the application inspector contract.
+- GraphQL semantic inspection implemented against the application inspector contract.
 - The GraphQL live-breakpoint extension: versioned typed criteria, bounded detection, compiled
   operation matching, compact cross-phase observations, and smart captured-rule suggestions.
 - A shared Kotlin serialization GraphQL document parser used by both live breakpoint matching and
@@ -23,12 +23,15 @@ Inspectors consume stable traffic contracts and emit protocol-specific derived d
 
 ## Current state
 
-GraphQL and SSE semantic inspectors are registered additively and run after capture. GraphQL also
-registers an independent live-breakpoint extension because request-phase pauses must be decided before
+GraphQL is registered additively and runs after capture. SSE parsing, historical inspection, live capture,
+Traffic decoding, API Studio interpretation, and response-record breakpoints have moved to the independent
+`:engine:sse` extension described in `docs/sse_target_and_implementation_plan.md`; this module no longer owns or
+duplicates SSE behavior. GraphQL also registers an independent live-breakpoint extension because request-phase
+pauses must be decided before
 capture completes; that extension receives only the bounded candidate owned by the application gate.
 When a breakpoint is created from captured traffic, the same extension reuses the shared parser to select
 GraphQL and prefill a single operation name. Anonymous, batched, or body-incomplete GraphQL requests remain
 endpoint-scoped rather than guessing one operation.
 Dormant WebSocket/protobuf stubs were removed. Experimental HTTP/2 transport lives in `:engine:proxy` and does
-not change this semantic-inspection boundary. WebSocket transport, gRPC inspection, and HTTP/3 remain explicitly
-unavailable until real implementations pass their conformance gates.
+not change this semantic-inspection boundary. WebSocket and gRPC now live in independent experimental engine
+modules; HTTP/3 remains unavailable until a real implementation passes its conformance gates.

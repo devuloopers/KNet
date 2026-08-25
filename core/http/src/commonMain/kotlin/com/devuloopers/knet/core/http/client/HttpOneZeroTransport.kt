@@ -62,6 +62,14 @@ internal data class HttpTransportResponse(
     }
 }
 
+/** Response metadata made available before a streaming transport reads its response body. */
+internal data class HttpTransportResponseHead(
+    val statusCode: Int,
+    val reasonPhrase: String,
+    val protocol: ApplicationProtocol,
+    val headers: List<Pair<String, String>>,
+)
+
 /** Emits a real HTTP/1.0 request line on the current platform. */
 internal expect suspend fun executeHttpOneZero(
     request: HttpOneZeroTransportRequest,
@@ -71,6 +79,13 @@ internal expect suspend fun executeHttpOneZero(
 internal expect class HttpTwoTransport() {
     /** Prefers HTTP/2 and optionally fails if the peer or proxy path downgrades the exchange. */
     suspend fun execute(request: HttpTwoTransportRequest): HttpTransportResponse
+
+    /** Streams owned HTTP/2 body chunks after publishing the response head. */
+    suspend fun executeStreaming(
+        request: HttpTwoTransportRequest,
+        onResponseHead: suspend (HttpTransportResponseHead) -> Unit,
+        onBodyChunk: suspend (ByteArray) -> Unit,
+    ): HttpTransportResponse
 
     /** Cancels active requests and releases cached client ownership. */
     fun close()

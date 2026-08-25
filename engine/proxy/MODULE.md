@@ -23,6 +23,8 @@ Implements the high-throughput proxy transport: listeners, channels, TLS interce
   direction-aware observers and transformers supplied by protocol modules.
 - Boundary-only consumption of local capture-origin metadata before canonical header mapping, breakpoint
   editing, and upstream forwarding.
+- Boundary-only containment of Netty HTTP/2 object-bridge extension headers. Scheme and stream identity remain
+  typed canonical metadata; bridge fields never appear in captured headers or cross an HTTP/1 wire.
 - A reusable protocol-neutral selective HTTP/1 aggregator that falls back to ordered streaming when a
   selected message crosses its bound instead of rejecting otherwise valid traffic.
 - The `ServerTlsContextProvider` transport port and scheduling boundary used for CONNECT interception; its implementation is injected by desktop data.
@@ -61,7 +63,8 @@ and breakpoint gate; no multiplexed connection shares an HTTP/1 response deque. 
 and fall back to the existing HTTP/1.1 connector only when ALPN explicitly reports that HTTP/2 is unavailable.
 Transport, saturation, TLS, reset, and pool failures remain failures rather than silent downgrades. Request and
 response protocols are recorded independently, connection-specific headers are removed before HPACK encoding,
-and request/response trailers are captured separately from initial headers. Netty owns SETTINGS, PING,
+Netty object-bridge headers remain private to HTTP/2 codec conversion, and request/response trailers are captured
+separately from initial headers. Netty owns SETTINGS, PING,
 WINDOW_UPDATE, CONTINUATION, HPACK, RST_STREAM, and GOAWAY wire conformance at this boundary.
 Accepted HTTP/1.1 Upgrade responses must confirm both the requested protocol token and `Connection: Upgrade`
 before the HTTP codec is removed. The resulting raw relay owns read/write coupling and channel lifetime while

@@ -1,5 +1,6 @@
 package com.devuloopers.knet.engine.proxy.mapper
 
+import com.devuloopers.knet.engine.proxy.http.HttpTwoBridgeHeaders
 import com.devuloopers.knet.engine.proxy.http.ProxyRequestContext
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
@@ -96,10 +97,18 @@ object HttpMapper {
     @OptIn(kotlin.uuid.ExperimentalUuidApi::class)
     private fun newExchangeId(): String = kotlin.uuid.Uuid.random().toString()
 
-    /** Maps an ordered Netty header block while removing KNet's private attribution field. */
+    /**
+     * Maps an ordered Netty header block while removing transport-private metadata.
+     *
+     * KNet's capture attribution and Netty's HTTP/2 object-bridge fields have dedicated typed
+     * storage and are therefore never exposed as user/application headers.
+     */
     fun mapHeaders(headers: HttpHeaders): List<HeaderField> = headers
         .asSequence()
-        .filterNot { header -> header.key.equals(TrafficAttributionHeader.NAME, ignoreCase = true) }
+        .filterNot { header ->
+            header.key.equals(TrafficAttributionHeader.NAME, ignoreCase = true) ||
+                HttpTwoBridgeHeaders.contains(header.key)
+        }
         .map { header -> HeaderField(HeaderName(header.key), header.value) }
         .toList()
 }

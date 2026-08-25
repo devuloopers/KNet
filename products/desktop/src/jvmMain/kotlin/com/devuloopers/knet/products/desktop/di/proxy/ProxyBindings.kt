@@ -18,6 +18,8 @@ import com.devuloopers.knet.engine.websocket.WebSocketBreakpointTransformerFacto
 import com.devuloopers.knet.engine.websocket.WebSocketDuplexInspectorFactory
 import com.devuloopers.knet.engine.websocket.WebSocketSemanticBreakpointLayer
 import com.devuloopers.knet.engine.graphqlwebsocket.breakpoint.GraphQLWebSocketBreakpointLayer
+import com.devuloopers.knet.engine.sse.capture.SseStreamInspectorFactory
+import com.devuloopers.knet.engine.sse.breakpoint.SseBreakpointTransformerFactory
 import com.devuloopers.knet.application.port.breakpoint.ProtocolMessageBreakpointGate
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +39,13 @@ internal val proxyBindings: Module = module {
         )
     }
     single {
+        SseBreakpointTransformerFactory(
+            gate = get<ProtocolMessageBreakpointGate>(),
+            scope = get(),
+            limits = get(),
+        )
+    }
+    single {
         WebSocketBreakpointTransformerFactory(
             gate = get<ProtocolMessageBreakpointGate>(),
             scope = get(),
@@ -51,8 +60,11 @@ internal val proxyBindings: Module = module {
             keyManagerProvider = certificateManager::getKeyManagerFactory,
             breakpointGate = get(),
             ingressAttribution = get<IngressAttributionLookup>(),
-            streamInspectorFactories = listOf(GrpcStreamInspectorFactory()),
-            streamTransformerFactories = listOf(get<GrpcMessageBreakpointTransformerFactory>()),
+            streamInspectorFactories = listOf(GrpcStreamInspectorFactory(), SseStreamInspectorFactory(get())),
+            streamTransformerFactories = listOf(
+                get<GrpcMessageBreakpointTransformerFactory>(),
+                get<SseBreakpointTransformerFactory>(),
+            ),
             duplexInspectorFactories = listOf(WebSocketDuplexInspectorFactory()),
             duplexTransformerFactories = listOf(get<WebSocketBreakpointTransformerFactory>()),
         )

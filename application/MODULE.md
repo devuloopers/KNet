@@ -47,6 +47,8 @@ Owns JVM desktop application use cases and UI-neutral ports that coordinate KNet
   `NetworkRequestSpec` without duplicating URL, ordered-header, repeated-query, or body-decoding behavior in UI.
 - API Studio request execution orchestration from the canonical `SavedApiRequest`, including scripts,
   outbound execution, and response formatting. It deliberately cannot manufacture captured Traffic.
+- Generic live-HTTP response interpreter/session contracts and a deterministic registry. Protocol engines can
+  recognize a response head and emit bounded semantic records without application or UI branches for SSE.
 
 ## Does not own
 
@@ -82,6 +84,9 @@ an opaque keyset cursor, storage-owned capture ordering, and an exact first-page
 the cursor snapshot. A null session deliberately means all retained history rather than "latest."
 API Studio execution accepts one complete domain document; it has no dependency on Compose editor state and
 can therefore be reused by another desktop surface, automation entry point, or remote-control adapter.
+The streaming execution path preserves the same pre-request script, route, request body, terminal formatting,
+and response-test pipeline. It forwards owned head/chunk events before completion; protocol interpreters remain
+outer contributions and the terminal-only execution contract stays available.
 It also has no traffic-recording port: direct execution returns its response only to the caller, while a
 proxy-routed execution can appear in Traffic exclusively through the active proxy capture ingress.
 Strict authoring/execution adapters are selected by `RequestKindId`. Persisted workspace documents separately carry

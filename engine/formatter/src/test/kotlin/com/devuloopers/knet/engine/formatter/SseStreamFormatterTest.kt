@@ -11,7 +11,7 @@ class SseStreamFormatterTest {
 
     @Test
     fun testSseStreamParsing() {
-        val sseText = "data: {\"event\":\"ping\"}\n\ndata: {\"event\":\"pong\"}"
+        val sseText = "data: {\"event\":\"ping\"}\n\ndata: {\"event\":\"pong\"}\n\n"
         assertTrue(formatter.matches(mapOf("content-type" to "text/event-stream"), sseText))
 
         val result = formatter.format(mapOf("content-type" to "text/event-stream"), sseText)

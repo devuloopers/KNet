@@ -7,7 +7,10 @@ import com.devuloopers.knet.data.desktop.inspection.RoomInspectionAnnotationAdap
 import com.devuloopers.knet.engine.protocol.inspector.graphql.GraphQLBreakpointExtension
 import com.devuloopers.knet.engine.protocol.inspector.graphql.GraphQLDocumentParser
 import com.devuloopers.knet.engine.protocol.inspector.graphql.GraphQLSemanticInspector
-import com.devuloopers.knet.engine.protocol.inspector.sse.SseSemanticInspector
+import com.devuloopers.knet.engine.sse.inspection.SseProtocolMessageDecoder
+import com.devuloopers.knet.engine.sse.inspection.SseSemanticInspector
+import com.devuloopers.knet.engine.sse.breakpoint.SseBreakpointExtension
+import com.devuloopers.knet.engine.sse.protocol.SseLimits
 import com.devuloopers.knet.engine.grpc.GrpcDescriptorRegistry
 import com.devuloopers.knet.engine.grpc.GrpcProtocolMessageDecoder
 import com.devuloopers.knet.engine.grpc.GrpcBreakpointExtension
@@ -25,19 +28,22 @@ import org.koin.dsl.module
 
 /** Semantic inspectors, persisted annotations, capability truth, and bounded scheduling. */
 internal val inspectionBindings: Module = module {
+    single { SseLimits() }
     single { GrpcDescriptorRegistry() }
     single { GrpcProtocolMessageDecoder(get()) } bind ProtocolMessagePayloadDecoder::class
     single { GraphQLWebSocketEnvelopeParser(graphQLParser = get()) }
     single { GraphQLWebSocketProtocolMessageDecoder(get()) } bind ProtocolMessagePayloadDecoder::class
     single { WebSocketProtocolMessageDecoder() } bind ProtocolMessagePayloadDecoder::class
+    single { SseProtocolMessageDecoder(get()) } bind ProtocolMessagePayloadDecoder::class
     single { ProtocolMessagePresentationRegistry(getAll<ProtocolMessagePayloadDecoder>()) }
     single { GraphQLDocumentParser() }
     single { GraphQLBreakpointExtension(get()) } bind BreakpointProtocolExtension::class
     single { GrpcBreakpointExtension() } bind BreakpointProtocolExtension::class
     single { WebSocketBreakpointExtension() } bind BreakpointProtocolExtension::class
     single { GraphQLWebSocketBreakpointExtension(get()) } bind BreakpointProtocolExtension::class
+    single { SseBreakpointExtension(limits = get()) } bind BreakpointProtocolExtension::class
     single { GraphQLSemanticInspector(get()) } bind SemanticInspector::class
-    single { SseSemanticInspector() } bind SemanticInspector::class
+    single { SseSemanticInspector(get()) } bind SemanticInspector::class
     single<InspectionAnnotationPort> {
         RoomInspectionAnnotationAdapter(get<KNetDatabase>().canonicalCaptureDao())
     }
@@ -96,10 +102,28 @@ internal val inspectionBindings: Module = module {
                     "GraphQLWebSocketApiStudioExecutorTest and GraphQLWebSocketWorkspaceDraftCodecTest",
                 ),
                 RuntimeCapability(
-                    "sse",
-                    "Server-Sent Events inspection",
+                    "sse.preview",
+                    "Bounded Server-Sent Events semantic preview",
                     CapabilityMaturity.SUPPORTED,
-                    "SseSemanticInspectionEndToEndTest"
+                    "SseSemanticInspectionEndToEndTest and SseIncrementalParserTest",
+                ),
+                RuntimeCapability(
+                    "sse.capture",
+                    "Live Server-Sent Events capture",
+                    CapabilityMaturity.EXPERIMENTAL,
+                    "SseStreamInspectorTest and SseIncrementalParserTest",
+                ),
+                RuntimeCapability(
+                    "sse.apistudio",
+                    "Live Server-Sent Events API Studio execution",
+                    CapabilityMaturity.EXPERIMENTAL,
+                    "ServerSentEventsStreamingTest and SseHttpResponseStreamInterpreterTest",
+                ),
+                RuntimeCapability(
+                    "sse.breakpoints",
+                    "Server-Sent Events record breakpoints",
+                    CapabilityMaturity.EXPERIMENTAL,
+                    "SseBreakpointRuntimeTest",
                 ),
                 RuntimeCapability(
                     "http2",

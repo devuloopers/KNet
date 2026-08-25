@@ -18,6 +18,15 @@ interface ProxyPayloadSlice {
     /** Number of currently readable bytes. */
     val size: Int
 
+    /**
+     * Finds [value] without transferring ownership or copying the borrowed payload.
+     *
+     * @param value Byte to locate.
+     * @param startIndex First readable index included in the search.
+     * @return the matching index, or `-1` when no match exists.
+     */
+    fun indexOf(value: Byte, startIndex: Int = 0): Int
+
     /** Copies a bounded range into caller-owned storage. */
     fun copyTo(
         destination: ByteArray,

@@ -34,12 +34,13 @@ data class ResponseInspectorState(
     val protocol: ApplicationProtocol? = null,
     val errorMessage: String? = null,
     val executionState: ExecutionState = ExecutionState.IDLE,
+    val liveResponse: LiveHttpResponseState? = null,
 ) {
     val isGatewayError: Boolean
         get() = statusCode == 502 || statusCode == 503 || statusCode == 504
 
     val hasResponse: Boolean
-        get() = (statusCode > 0 || responseBody.isNotBlank()) && !isGatewayError
+        get() = (statusCode > 0 || responseBody.isNotBlank() || liveResponse != null) && !isGatewayError
 
     val isError: Boolean
         get() = executionState == ExecutionState.ERROR || failureReason != null || isGatewayError ||

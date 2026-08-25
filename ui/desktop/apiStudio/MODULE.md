@@ -12,6 +12,9 @@ dialogs, contribution SPI, and HTTP response inspection projection.
 - Typed `HttpMethod` plus ordered `KeyValueEntry` query/header/cookie rows that retain enabled state.
 - API Studio ViewModels, components, and the `ResponseInspectorState` UI projection for loading,
   failures, console logs, and assertions.
+- A protocol-neutral, bounded live HTTP response timeline with search, record selection, copy, visible-window
+  clear, gap/drop counters, terminal state, and the shared body viewer. It consumes application records rather
+  than importing an SSE parser.
 - Ordered auto-save coordination and explicit restoration/persistence-failure presentation.
 - Debounced latest-wins publication of generated session/request titles while preserving user-defined names.
 - Sidebar projection of semantic request badges from the shared descriptor use case; the editor method selector
@@ -70,6 +73,9 @@ Saved and unsaved sidebar rows derive their badge from the same canonical descri
 uses its actual method, GraphQL uses `GQL`, and unknown future kinds use the neutral feature accent without a
 sidebar code change.
 Execution is delegated to `:application` with cancellation revision checks so superseded results cannot publish.
+Response heads can activate a product-registered live interpreter before the server completes. The ViewModel
+retains only the interpreter's configured record window, accounts for dropped records, and cancellation marks the
+live view terminal while releasing the underlying call. Clearing this view never clears persisted Traffic.
 The response summary reports the protocol actually observed by the API Studio transport. API Studio routes through
 KNet only while capture is `Capturing`; a running listener with capture `Paused` is deliberately ignored. When proxy
 routing is active, the captured Traffic exchange is additionally marked `API Studio`; ordinary phone/browser traffic

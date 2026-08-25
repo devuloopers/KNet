@@ -282,7 +282,11 @@ fun ApiStudioScreen(
                                 )
                                 ResponseInspectorView(
                                     state = inspectorState,
-                                    actions = ResponseInspectorActions(onClearResponse = viewModel::clearResponse),
+                                    actions = ResponseInspectorActions(
+                                        onClearResponse = viewModel::clearResponse,
+                                        onClearVisibleLiveRecords = viewModel::clearVisibleLiveRecords,
+                                        onLiveRecordSelected = viewModel::selectLiveRecord,
+                                    ),
                                     activeSubTab = uiState.editorState.activeResponseSubTab,
                                     onSubTabSelected = viewModel::updateActiveResponseSubTab,
                                     modifier = paneModifier

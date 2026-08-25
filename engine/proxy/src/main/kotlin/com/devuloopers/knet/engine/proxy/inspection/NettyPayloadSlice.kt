@@ -6,6 +6,14 @@ import io.netty.buffer.ByteBuf
 internal class NettyPayloadSlice(private val source: ByteBuf) : ProxyPayloadSlice {
     override val size: Int = source.readableBytes()
 
+    override fun indexOf(value: Byte, startIndex: Int): Int {
+        require(startIndex in 0..size) { "Payload search start is outside the borrowed slice." }
+        if (startIndex == size) return -1
+        val absoluteStart = source.readerIndex() + startIndex
+        val absoluteMatch = source.indexOf(absoluteStart, source.readerIndex() + size, value)
+        return if (absoluteMatch < 0) -1 else absoluteMatch - source.readerIndex()
+    }
+
     override fun copyTo(
         destination: ByteArray,
         destinationOffset: Int,

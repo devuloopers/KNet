@@ -5,6 +5,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.runInterruptible
+import java.io.ByteArrayOutputStream
 import java.net.InetSocketAddress
 import java.net.ProxySelector
 import java.net.URI
@@ -38,6 +40,35 @@ internal actual class HttpTwoTransport actual constructor() {
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (failure: Exception) {
+                lastFailure = failure
+            }
+        }
+        throw checkNotNull(lastFailure)
+    }
+
+    actual suspend fun executeStreaming(
+        request: HttpTwoTransportRequest,
+        onResponseHead: suspend (HttpTransportResponseHead) -> Unit,
+        onBodyChunk: suspend (ByteArray) -> Unit,
+    ): HttpTransportResponse {
+        check(!closed.get()) { "HTTP/2 transport is closed." }
+        var lastFailure: Exception? = null
+        repeat(request.configuration.retryCount.coerceAtLeast(0) + 1) {
+            currentCoroutineContext().ensureActive()
+            var responseStarted = false
+            try {
+                return executeStreamingOnce(
+                    request = request,
+                    onResponseHead = { head ->
+                        responseStarted = true
+                        onResponseHead(head)
+                    },
+                    onBodyChunk = onBodyChunk,
+                )
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (failure: Exception) {
+                if (responseStarted) throw failure
                 lastFailure = failure
             }
         }
@@ -79,6 +110,80 @@ internal actual class HttpTwoTransport actual constructor() {
             headers = response.headers().map().flatMap { (name, values) -> values.map { value -> name to value } },
             body = response.body(),
         )
+    }
+
+    private suspend fun executeStreamingOnce(
+        request: HttpTwoTransportRequest,
+        onResponseHead: suspend (HttpTransportResponseHead) -> Unit,
+        onBodyChunk: suspend (ByteArray) -> Unit,
+    ): HttpTransportResponse {
+        val encodedBody = request.body.encodeForTransport()
+        val builder = request.toJdkRequestBuilder(encodedBody)
+        val response = clientFor(request).sendCancellable(
+            builder.build(),
+            HttpResponse.BodyHandlers.ofInputStream(),
+        )
+        check(!request.requireHttpTwo || response.version() == HttpClient.Version.HTTP_2) {
+            "Exact HTTP/2 was requested, but the peer negotiated ${response.version().displayName()}."
+        }
+        val headers = response.headers().map().flatMap { (name, values) -> values.map { value -> name to value } }
+        val head = HttpTransportResponseHead(
+            statusCode = response.statusCode(),
+            reasonPhrase = "",
+            protocol = ApplicationProtocol.fromToken(response.version().displayName()),
+            headers = headers,
+        )
+        onResponseHead(head)
+        val retainTerminalBody = !headers.isIdentityEventStreamHeaders()
+        val retained = ByteArrayOutputStream()
+        response.body().use { input ->
+            val buffer = ByteArray(STREAM_CHUNK_BYTES)
+            while (true) {
+                currentCoroutineContext().ensureActive()
+                val read = runInterruptible { input.read(buffer) }
+                if (read < 0) break
+                if (read == 0) continue
+                val chunk = buffer.copyOf(read)
+                onBodyChunk(chunk)
+                if (retainTerminalBody) {
+                    check(retained.size() <= MAXIMUM_TERMINAL_BODY_BYTES - read) {
+                        "HTTP response exceeds the bounded API Studio body limit."
+                    }
+                    retained.write(chunk)
+                }
+            }
+        }
+        return HttpTransportResponse(
+            statusCode = head.statusCode,
+            reasonPhrase = head.reasonPhrase,
+            protocol = head.protocol,
+            headers = head.headers,
+            body = retained.toByteArray(),
+        )
+    }
+
+    private fun HttpTwoTransportRequest.toJdkRequestBuilder(
+        encodedBody: EncodedTransportBody,
+    ): HttpRequest.Builder {
+        val builder = HttpRequest.newBuilder(URI(url))
+            .timeout(configuration.timeoutMillis.coerceAtLeast(1L).milliseconds.toJavaDuration())
+            .method(
+                method.token,
+                if (encodedBody.bytes.isEmpty()) {
+                    HttpRequest.BodyPublishers.noBody()
+                } else {
+                    HttpRequest.BodyPublishers.ofByteArray(encodedBody.bytes)
+                },
+            )
+        headers.forEach { (name, value) ->
+            if (name.isSafeHttpTwoHeaderName() && value.isSafeHeaderValue() && value.isNotBlank()) {
+                builder.header(name, value)
+            }
+        }
+        if (encodedBody.contentType != null && headers.keys.none { it.equals("content-type", true) }) {
+            builder.header("Content-Type", encodedBody.contentType)
+        }
+        return builder
     }
 
     /** Reuses multiplex-capable clients while bounding configuration/trust variants retained by one API client. */
@@ -176,7 +281,20 @@ internal actual class HttpTwoTransport actual constructor() {
 
     private companion object {
         const val MAXIMUM_CACHED_CLIENTS: Int = 8
+        const val STREAM_CHUNK_BYTES: Int = 8 * 1_024
+        const val MAXIMUM_TERMINAL_BODY_BYTES: Int = 16 * 1_024 * 1_024
     }
+}
+
+private fun List<Pair<String, String>>.isIdentityEventStreamHeaders(): Boolean {
+    val eventStream = any { (name, value) ->
+        name.equals("content-type", ignoreCase = true) &&
+            value.substringBefore(';').trim().equals("text/event-stream", ignoreCase = true)
+    }
+    val contentEncoding = firstOrNull { (name, _) ->
+        name.equals("content-encoding", ignoreCase = true)
+    }?.second?.trim()?.lowercase()
+    return eventStream && (contentEncoding.isNullOrEmpty() || contentEncoding == "identity")
 }
 
 private fun Throwable.unwrapCompletionFailure(): Throwable = cause ?: this

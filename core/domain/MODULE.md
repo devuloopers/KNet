@@ -8,6 +8,8 @@ Holds non-traffic feature business models, repository contracts, and use cases u
 
 - API Studio outbound request bodies/results/authentication, collections, authored breakpoint rules,
   workspace, validated process-level application settings, and structured payload-policy contracts.
+- A protocol-neutral optional HTTP streaming executor contract that publishes immutable response metadata,
+  defensively owned body chunks, and one canonical terminal `ExecutionResult`; it contains no SSE semantics.
 - Compose-independent persisted Traffic column-width values, including a nullable Path width that represents
   automatic viewport fill without leaking desktop layout calculations into the domain model.
 - `ApplicationSettings`, validated `ProxyPort` and Kotlin `Duration` values, plus the atomic
@@ -47,6 +49,8 @@ Platform detection is not a domain concern; desktop-only host-platform behavior 
 Outbound execution uses `OutboundRequestBody` and `ExecutionResult`; transport timing is the canonical
 `:core:traffic` `ExchangeTimings`, and GraphQL UI state composes `StructuredPayloadState.GraphQL`
 instead of copying its fields.
+`ExecuteClientApiRequestUseCase.stream` uses the optional streaming executor when present and emits one terminal
+event for existing terminal-only adapters, preserving additive compatibility without another request model.
 `SavedApiRequest` is the persistence and execution source of truth. Storage strings and presentation body
 selectors are translated only at their respective module boundaries; the domain body kind is `RequestBodyType`.
 API Studio session/request titles, Traffic method labels, and live-interception queue labels resolve through the

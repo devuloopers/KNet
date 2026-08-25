@@ -142,6 +142,9 @@ class WebSocketDuplexInspectorTest {
 private class WebSocketSlice(private val bytes: ByteArray) : ProxyPayloadSlice {
     override val size: Int = bytes.size
 
+    override fun indexOf(value: Byte, startIndex: Int): Int =
+        (startIndex until bytes.size).firstOrNull { bytes[it] == value } ?: -1
+
     override fun copyTo(
         destination: ByteArray,
         destinationOffset: Int,

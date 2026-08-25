@@ -4,6 +4,10 @@ import com.devuloopers.knet.application.port.script.ScriptExecutionOutcome
 import com.devuloopers.knet.application.port.script.ScriptExecutionPort
 import com.devuloopers.knet.application.port.script.UnavailableScriptExecutionPort
 import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor
+import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutionBodyChunk
+import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutionEvent
+import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutionResponseHead
+import com.devuloopers.knet.domain.clientNetwork.executor.HttpStreamingExecutor
 import com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult
 import com.devuloopers.knet.domain.clientNetwork.model.HttpVersionPreference
 import com.devuloopers.knet.domain.clientNetwork.model.OutboundRequestBody
@@ -24,6 +28,9 @@ import com.devuloopers.knet.traffic.model.http.HttpMethod
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.toList
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -139,6 +146,36 @@ class ExecuteApiStudioRequestUseCaseTest {
         assertTrue(result.testResults.single().passed)
     }
 
+    @Test
+    fun `streaming preserves head chunk and terminal application pipeline order`() = runTest {
+        val executor = StreamingExecutor()
+        val useCase = ExecuteApiStudioRequestUseCase(
+            executeRequest = ExecuteClientApiRequestUseCase(executor),
+            formatResponseBody = FormatResponseBodyUseCase(),
+            scriptExecution = UnavailableScriptExecutionPort,
+            ioDispatcher = UnconfinedTestDispatcher(testScheduler),
+        )
+
+        val events = useCase.executeStreaming(
+            request = SavedApiRequest(
+                id = "request-stream",
+                name = "Live events",
+                method = HttpMethod.GET,
+                url = "https://api.example.test/events",
+            ),
+            proxyPort = null,
+        ).toList()
+
+        assertIs<ApiStudioHttpExecutionEvent.ResponseHead>(events[0])
+        assertEquals(
+            "data: first\n\n",
+            assertIs<ApiStudioHttpExecutionEvent.BodyChunk>(events[1]).value.copyBytes().decodeToString(),
+        )
+        val completed = assertIs<ApiStudioHttpExecutionEvent.Completed>(events[2]).value
+        assertEquals(200, completed.result.statusCode)
+        assertEquals("", completed.formattedBody)
+    }
+
     private class CapturingExecutor : HttpExecutor {
         var url: String = ""
         var headers: Map<String, String> = emptyMap()
@@ -171,5 +208,47 @@ class ExecuteApiStudioRequestUseCaseTest {
         }
 
         override fun close(): Unit = Unit
+    }
+
+    private class StreamingExecutor : HttpExecutor, HttpStreamingExecutor {
+        override suspend fun execute(
+            url: String,
+            method: HttpMethod,
+            headers: Map<String, String>,
+            body: OutboundRequestBody,
+            auth: ApiRequestAuth,
+            proxyPort: Int?,
+            httpVersionPreference: HttpVersionPreference,
+        ): ExecutionResult = result()
+
+        override fun executeStreaming(
+            url: String,
+            method: HttpMethod,
+            headers: Map<String, String>,
+            body: OutboundRequestBody,
+            auth: ApiRequestAuth,
+            proxyPort: Int?,
+            httpVersionPreference: HttpVersionPreference,
+        ): Flow<HttpExecutionEvent> = flowOf(
+            HttpExecutionEvent.ResponseHead(
+                HttpExecutionResponseHead(
+                    statusCode = 200,
+                    statusText = "OK",
+                    headers = mapOf("Content-Type" to "text/event-stream"),
+                    cookies = emptyMap(),
+                    protocol = null,
+                ),
+            ),
+            HttpExecutionEvent.BodyChunk(HttpExecutionBodyChunk("data: first\n\n".encodeToByteArray())),
+            HttpExecutionEvent.Completed(result()),
+        )
+
+        override fun close(): Unit = Unit
+
+        private fun result(): ExecutionResult = ExecutionResult(
+            statusCode = 200,
+            statusText = "OK",
+            headers = mapOf("Content-Type" to "text/event-stream"),
+        )
     }
 }

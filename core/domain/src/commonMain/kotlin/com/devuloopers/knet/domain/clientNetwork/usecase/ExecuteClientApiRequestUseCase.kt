@@ -1,6 +1,8 @@
 package com.devuloopers.knet.domain.clientNetwork.usecase
 
 import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor
+import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutionEvent
+import com.devuloopers.knet.domain.clientNetwork.executor.HttpStreamingExecutor
 import com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult
 import com.devuloopers.knet.domain.clientNetwork.model.HttpVersionPreference
 import com.devuloopers.knet.domain.clientNetwork.model.OutboundRequestBody
@@ -8,6 +10,8 @@ import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
 import com.devuloopers.knet.traffic.model.http.HttpMethod
 import com.devuloopers.knet.domain.util.UrlQueryStringParser
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 
 /**
  * Domain UseCase that handles executing outbound client HTTP/HTTPS API requests using strongly-typed contracts.
@@ -19,6 +23,57 @@ class ExecuteClientApiRequestUseCase(
     private val httpExecutor: HttpExecutor,
     private val validateUseCase: ValidateApiRequestUseCase = ValidateApiRequestUseCase()
 ) {
+
+    /**
+     * Executes the same validated request through a streaming transport when available.
+     *
+     * Executors that only implement the terminal contract remain compatible and produce one completed event.
+     */
+    fun stream(
+        url: String,
+        method: HttpMethod = HttpMethod.GET,
+        headers: Map<String, String> = emptyMap(),
+        queryParams: List<Pair<String, String>> = emptyList(),
+        cookies: Map<String, String> = emptyMap(),
+        body: OutboundRequestBody = OutboundRequestBody.None,
+        auth: ApiRequestAuth = ApiRequestAuth.None,
+        proxyPort: Int? = null,
+        httpVersionPreference: HttpVersionPreference = HttpVersionPreference.AUTO,
+    ): Flow<HttpExecutionEvent> = flow {
+        val prepared = prepare(url, headers, queryParams, cookies)
+        if (prepared == null) {
+            emit(HttpExecutionEvent.Completed(validationFailure(url)))
+            return@flow
+        }
+        val streamingExecutor = httpExecutor as? HttpStreamingExecutor
+        if (streamingExecutor == null) {
+            emit(
+                HttpExecutionEvent.Completed(
+                    invoke(
+                        url = url,
+                        method = method,
+                        headers = headers,
+                        queryParams = queryParams,
+                        cookies = cookies,
+                        body = body,
+                        auth = auth,
+                        proxyPort = proxyPort,
+                        httpVersionPreference = httpVersionPreference,
+                    ),
+                ),
+            )
+        } else {
+            streamingExecutor.executeStreaming(
+                url = prepared.url,
+                method = method,
+                headers = prepared.headers,
+                body = body,
+                auth = auth,
+                proxyPort = proxyPort,
+                httpVersionPreference = httpVersionPreference,
+            ).collect(::emit)
+        }
+    }
 
     /**
      * Executes an API request and returns domain [ExecutionResult].
@@ -45,34 +100,13 @@ class ExecuteClientApiRequestUseCase(
         proxyPort: Int? = null,
         httpVersionPreference: HttpVersionPreference = HttpVersionPreference.AUTO,
     ): ExecutionResult {
-        val sanitizedUrl = try {
-            validateUseCase.execute(url)
-        } catch (e: Exception) {
-            return ExecutionResult(
-                statusCode = 0,
-                statusText = "Validation Error",
-                errorMessage = e.message ?: "Invalid request parameters"
-            )
-        }
-
-        // Rebuild instead of append because editor and capture contracts also retain a complete URL.
-        val finalUrl = if (queryParams.isNotEmpty()) {
-            UrlQueryStringParser.rebuildUrlWithQueryParams(sanitizedUrl, queryParams)
-        } else {
-            sanitizedUrl
-        }
-
-        // Merge cookies into request headers if specified
-        val mergedHeaders = headers.toMutableMap()
-        if (cookies.isNotEmpty() && !mergedHeaders.keys.any { it.equals("cookie", ignoreCase = true) }) {
-            mergedHeaders["Cookie"] = cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
-        }
+        val prepared = prepare(url, headers, queryParams, cookies) ?: return validationFailure(url)
 
         return try {
             httpExecutor.execute(
-                url = finalUrl,
+                url = prepared.url,
                 method = method,
-                headers = mergedHeaders,
+                headers = prepared.headers,
                 body = body,
                 auth = auth,
                 proxyPort = proxyPort,
@@ -88,4 +122,40 @@ class ExecuteClientApiRequestUseCase(
             )
         }
     }
+
+    private fun prepare(
+        url: String,
+        headers: Map<String, String>,
+        queryParams: List<Pair<String, String>>,
+        cookies: Map<String, String>,
+    ): PreparedRequest? {
+        val sanitizedUrl = runCatching { validateUseCase.execute(url) }.getOrNull() ?: return null
+        val finalUrl = if (queryParams.isNotEmpty()) {
+            UrlQueryStringParser.rebuildUrlWithQueryParams(sanitizedUrl, queryParams)
+        } else {
+            sanitizedUrl
+        }
+        val mergedHeaders = headers.toMutableMap()
+        if (cookies.isNotEmpty() && !mergedHeaders.keys.any { it.equals("cookie", ignoreCase = true) }) {
+            mergedHeaders["Cookie"] = cookies.entries.joinToString("; ") { "${it.key}=${it.value}" }
+        }
+        return PreparedRequest(finalUrl, mergedHeaders)
+    }
+
+    private fun validationFailure(url: String): ExecutionResult {
+        val message = runCatching { validateUseCase.execute(url) }
+            .exceptionOrNull()
+            ?.message
+            ?: "Invalid request parameters"
+        return ExecutionResult(
+            statusCode = 0,
+            statusText = "Validation Error",
+            errorMessage = message,
+        )
+    }
+
+    private data class PreparedRequest(
+        val url: String,
+        val headers: Map<String, String>,
+    )
 }

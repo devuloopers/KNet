@@ -11,6 +11,8 @@ import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolReflecti
 import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolReflectionRegistry
 import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolSessionExecutor
 import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolSessionExecutorRegistry
+import com.devuloopers.knet.application.port.apistudio.HttpResponseStreamInterpreter
+import com.devuloopers.knet.application.port.apistudio.HttpResponseStreamInterpreterRegistry
 import com.devuloopers.knet.application.usecase.apistudio.ExecuteApiStudioRequestUseCase
 import com.devuloopers.knet.application.usecase.apistudio.CreateApiStudioProtocolDocumentUseCase
 import com.devuloopers.knet.application.usecase.apistudio.CreateApiStudioWorkspaceDocumentUseCase
@@ -47,6 +49,7 @@ import com.devuloopers.knet.engine.websocket.WebSocketApiStudioAuthoringAdapter
 import com.devuloopers.knet.engine.websocket.WebSocketApiStudioClientFactory
 import com.devuloopers.knet.engine.websocket.WebSocketApiStudioExecutor
 import com.devuloopers.knet.engine.websocket.WebSocketRequestDraftCodec
+import com.devuloopers.knet.engine.sse.apistudio.SseHttpResponseStreamInterpreter
 import com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCase
 import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor
 import com.devuloopers.knet.domain.clientNetwork.usecase.ExecuteClientApiRequestUseCase
@@ -138,6 +141,8 @@ internal val apiStudioBindings: Module = module {
     single { ApiStudioProtocolExecutorRegistry(getAll<ApiStudioProtocolExecutor>()) }
     single { ApiStudioProtocolSessionExecutorRegistry(getAll<ApiStudioProtocolSessionExecutor>()) }
     single { ApiStudioProtocolReflectionRegistry(getAll<ApiStudioProtocolReflectionPort>()) }
+    single<HttpResponseStreamInterpreter> { SseHttpResponseStreamInterpreter(get()) }
+    single { HttpResponseStreamInterpreterRegistry(getAll<HttpResponseStreamInterpreter>()) }
 
     factory { ExecuteClientApiRequestUseCase(get()) }
     factory { FormatResponseBodyUseCase() }
@@ -233,6 +238,7 @@ internal val apiStudioBindings: Module = module {
             getSavedRequestUseCase = get(),
             saveRequestToCollectionUseCase = get(),
             ioDispatcher = Dispatchers.IO,
+            responseStreamInterpreters = get(),
         )
     }
     viewModel {

@@ -73,12 +73,22 @@ Large and streaming inputs are clamped to safety limits so an accidental request
 
 | Transport | Address | Behavior |
 |---|---|---|
-| SSE | `/lab/v1/streams/sse?count=5&delayMillis=250` | Finite named events with IDs and JSON bodies |
+| SSE finite | `/lab/v1/streams/sse/finite?count=5&delayMillis=250` | Finite named events with IDs and JSON bodies; `/sse` is the compact alias |
+| SSE live | `/lab/v1/streams/sse/live?delayMillis=250` | Cancellable unbounded event stream |
+| SSE multiline | `/lab/v1/streams/sse/multiline` | One event assembled from multiple `data` fields |
+| SSE comments | `/lab/v1/streams/sse/comments` | Comment keep-alive followed by a dispatched event |
+| SSE fragmented | `/lab/v1/streams/sse/fragmented` | One record split across inconvenient response chunks |
+| SSE malformed | `/lab/v1/streams/sse/malformed` | Invalid UTF-8 followed by a recoverable valid record |
+| SSE disconnect | `/lab/v1/streams/sse/disconnect` | Complete event followed by an unterminated record and close |
+| SSE resume | `/lab/v1/streams/sse/resume?count=3` | Continues after the `Last-Event-ID` request header |
+| SSE gzip | `/lab/v1/streams/sse/gzip` | Gzip wire fixture for unsupported-live-encoding classification |
+| SSE fast | `/lab/v1/streams/sse/fast?count=250` | Bounded no-delay burst for retention and backpressure tests |
+| SSE over HTTP/2 | `https://127.0.0.1:9443/lab/v1/http2/sse?events=3&delayMillis=100` | Delayed DATA frames over real TLS/ALPN HTTP/2 |
 | Chunked HTTP | `/lab/v1/streams/chunks?count=5&delayMillis=250` | Finite newline-delimited text chunks |
 | Raw WebSocket | `ws://127.0.0.1:9090/lab/v1/websocket/echo` | Echo text and binary messages; answer ping with pong |
 
 Streams are deliberately finite by default, which makes manual tests repeatable and prevents test processes from
-remaining open indefinitely.
+remaining open indefinitely. Only `/sse/live` is intentionally unbounded and should be cancelled by the caller.
 
 ## GraphQL API
 

@@ -6,6 +6,9 @@ import com.devuloopers.knet.application.port.script.ScriptExecutionPort
 import com.devuloopers.knet.application.port.script.ScriptRequest
 import com.devuloopers.knet.application.port.script.ScriptResponse
 import com.devuloopers.knet.domain.clientNetwork.model.ExecutionResult
+import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutionBodyChunk
+import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutionEvent
+import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutionResponseHead
 import com.devuloopers.knet.domain.clientNetwork.model.MimeType
 import com.devuloopers.knet.domain.clientNetwork.model.OutboundRequestBody
 import com.devuloopers.knet.domain.clientNetwork.model.RequestFormField
@@ -20,6 +23,9 @@ import com.devuloopers.knet.domain.util.MimeTypeUtils
 import com.devuloopers.knet.domain.util.UrlQueryStringParser
 import com.devuloopers.knet.scripting.model.ScriptAssertion
 import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 
 /**
@@ -38,6 +44,13 @@ public data class ApiStudioExecutionResult(
     public val testResults: List<ScriptAssertion>,
     public val consoleLogs: List<String>
 )
+
+/** Ordered API Studio HTTP execution events, retaining the existing terminal result contract. */
+public sealed interface ApiStudioHttpExecutionEvent {
+    public data class ResponseHead(public val value: HttpExecutionResponseHead) : ApiStudioHttpExecutionEvent
+    public data class BodyChunk(public val value: HttpExecutionBodyChunk) : ApiStudioHttpExecutionEvent
+    public data class Completed(public val value: ApiStudioExecutionResult) : ApiStudioHttpExecutionEvent
+}
 
 /**
  * Executes a canonical authored request with optional scripts.
@@ -68,6 +81,52 @@ public class ExecuteApiStudioRequestUseCase(
         request: SavedApiRequest,
         proxyPort: Int?
     ): ApiStudioExecutionResult = withContext(ioDispatcher) {
+        val prepared = prepare(request)
+        val result = executeRequest(
+            url = prepared.url,
+            method = request.method,
+            headers = prepared.headers,
+            queryParams = prepared.queryParameters,
+            cookies = prepared.cookies,
+            body = prepared.outboundBody,
+            auth = request.auth,
+            proxyPort = proxyPort,
+            httpVersionPreference = request.httpVersionPreference,
+        )
+        complete(request, prepared, result)
+    }
+
+    /**
+     * Executes [request] as an ordered stream while preserving the same pre/post script pipeline.
+     * Ordinary HTTP executors remain compatible through the domain terminal-event fallback.
+     */
+    public fun executeStreaming(
+        request: SavedApiRequest,
+        proxyPort: Int?,
+    ): Flow<ApiStudioHttpExecutionEvent> = flow {
+        val prepared = prepare(request)
+        executeRequest.stream(
+            url = prepared.url,
+            method = request.method,
+            headers = prepared.headers,
+            queryParams = prepared.queryParameters,
+            cookies = prepared.cookies,
+            body = prepared.outboundBody,
+            auth = request.auth,
+            proxyPort = proxyPort,
+            httpVersionPreference = request.httpVersionPreference,
+        ).collect { event ->
+            when (event) {
+                is HttpExecutionEvent.ResponseHead -> emit(ApiStudioHttpExecutionEvent.ResponseHead(event.value))
+                is HttpExecutionEvent.BodyChunk -> emit(ApiStudioHttpExecutionEvent.BodyChunk(event.value))
+                is HttpExecutionEvent.Completed -> emit(
+                    ApiStudioHttpExecutionEvent.Completed(complete(request, prepared, event.result)),
+                )
+            }
+        }
+    }.flowOn(ioDispatcher)
+
+    private suspend fun prepare(request: SavedApiRequest): PreparedApiStudioExecution {
         var effectiveUrl = request.url
         var headerMap = request.headers.asSequence()
             .filter { it.isEnabled }
@@ -86,7 +145,6 @@ public class ExecuteApiStudioRequestUseCase(
         var effectiveBody = request.body.content
         var environment = emptyMap<String, String>()
         val consoleLogs = mutableListOf<String>()
-
         if (request.scripts.preRequest.isNotBlank()) {
             when (val outcome = scriptExecution.execute(
                 ScriptExecutionCommand(
@@ -97,11 +155,11 @@ public class ExecuteApiStudioRequestUseCase(
                         method = request.method.token,
                         headers = headerMap,
                         queryParameters = queryParameters.toMap(),
-                        body = effectiveBody
+                        body = effectiveBody,
                     ),
                     response = null,
-                    environment = environment
-                )
+                    environment = environment,
+                ),
             )) {
                 is ScriptExecutionOutcome.Success -> {
                     consoleLogs.addAll(outcome.logs)
@@ -111,31 +169,33 @@ public class ExecuteApiStudioRequestUseCase(
                     effectiveBody = outcome.request.body
                     environment = outcome.environment
                 }
-                is ScriptExecutionOutcome.Failure -> {
-                    consoleLogs.add("[Pre-request Error] ${outcome.message}")
-                }
+                is ScriptExecutionOutcome.Failure -> consoleLogs += "[Pre-request Error] ${outcome.message}"
             }
         }
-
-        val cookies = request.cookies.asSequence()
-            .filter { it.isEnabled }
-            .associate { it.name to it.value }
-        val outboundBody = request.body.toOutboundBody(effectiveBody)
-        val result = executeRequest(
+        return PreparedApiStudioExecution(
             url = effectiveUrl,
-            method = request.method,
             headers = headerMap,
-            queryParams = queryParameters,
-            cookies = cookies,
-            body = outboundBody,
-            auth = request.auth,
-            proxyPort = proxyPort,
-            httpVersionPreference = request.httpVersionPreference,
+            queryParameters = queryParameters,
+            cookies = request.cookies.asSequence()
+                .filter { it.isEnabled }
+                .associate { it.name to it.value },
+            effectiveBody = effectiveBody,
+            outboundBody = request.body.toOutboundBody(effectiveBody),
+            environment = environment,
+            consoleLogs = consoleLogs,
         )
+    }
+
+    private suspend fun complete(
+        request: SavedApiRequest,
+        prepared: PreparedApiStudioExecution,
+        result: ExecutionResult,
+    ): ApiStudioExecutionResult {
 
         val mimeType = MimeTypeUtils.extractFromHeaders(result.headers)
         val formattedBody = formatResponseBody.execute(result.responseBody, mimeType)
         val assertions = mutableListOf<ScriptAssertion>()
+        val consoleLogs = prepared.consoleLogs.toMutableList()
 
         if (request.scripts.test.isNotBlank() && result.failureReason == null) {
             when (val outcome = scriptExecution.execute(
@@ -143,11 +203,11 @@ public class ExecuteApiStudioRequestUseCase(
                     language = request.scripts.language,
                     source = request.scripts.test,
                     request = ScriptRequest(
-                        url = effectiveUrl,
+                        url = prepared.url,
                         method = request.method.token,
-                        headers = headerMap,
-                        queryParameters = queryParameters.toMap(),
-                        body = effectiveBody
+                        headers = prepared.headers,
+                        queryParameters = prepared.queryParameters.toMap(),
+                        body = prepared.effectiveBody,
                     ),
                     response = ScriptResponse(
                         statusCode = result.statusCode,
@@ -157,7 +217,7 @@ public class ExecuteApiStudioRequestUseCase(
                         headers = result.headers,
                         body = result.responseBody
                     ),
-                    environment = environment
+                    environment = prepared.environment,
                 )
             )) {
                 is ScriptExecutionOutcome.Success -> {
@@ -175,7 +235,7 @@ public class ExecuteApiStudioRequestUseCase(
             }
         }
 
-        ApiStudioExecutionResult(
+        return ApiStudioExecutionResult(
             result = result,
             formattedBody = formattedBody,
             mimeType = mimeType,
@@ -183,6 +243,17 @@ public class ExecuteApiStudioRequestUseCase(
             consoleLogs = consoleLogs
         )
     }
+
+    private data class PreparedApiStudioExecution(
+        val url: String,
+        val headers: Map<String, String>,
+        val queryParameters: List<Pair<String, String>>,
+        val cookies: Map<String, String>,
+        val effectiveBody: String,
+        val outboundBody: OutboundRequestBody,
+        val environment: Map<String, String>,
+        val consoleLogs: List<String>,
+    )
 
     private fun ApiRequestBody.toOutboundBody(effectiveText: String): OutboundRequestBody =
         when (type) {

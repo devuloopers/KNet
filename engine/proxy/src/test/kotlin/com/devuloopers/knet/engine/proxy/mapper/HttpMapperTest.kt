@@ -8,6 +8,7 @@ import io.netty.handler.codec.http.DefaultFullHttpResponse
 import io.netty.handler.codec.http.HttpMethod
 import io.netty.handler.codec.http.HttpResponseStatus
 import io.netty.handler.codec.http.HttpVersion
+import io.netty.handler.codec.http2.HttpConversionUtil
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Test
@@ -80,5 +81,38 @@ class HttpMapperTest {
             },
         )
         assertEquals(false, request.headers().contains(TrafficAttributionHeader.NAME))
+    }
+
+    @Test
+    fun `excludes Netty HTTP two bridge metadata from canonical request and response headers`() {
+        val request = DefaultFullHttpRequest(
+            HttpVersion.HTTP_1_1,
+            HttpMethod.GET,
+            "/stream",
+            Unpooled.EMPTY_BUFFER,
+        )
+        val response = DefaultFullHttpResponse(
+            HttpVersion.HTTP_1_1,
+            HttpResponseStatus.OK,
+            Unpooled.EMPTY_BUFFER,
+        )
+        HttpConversionUtil.ExtensionHeaderNames.values().forEach { extension ->
+            request.headers().set(extension.text(), "request-internal")
+            response.headers().set(extension.text(), "response-internal")
+        }
+        request.headers().set("Accept", "text/event-stream")
+        response.headers().set("Content-Type", "text/event-stream")
+
+        val requestHead = HttpMapper.mapRequestHead(
+            nettyRequest = request,
+            isSsl = true,
+            host = "events.knet.dev",
+            port = 443,
+            relativeUri = "/stream",
+        )
+        val responseHead = HttpMapper.mapResponseHead(response)
+
+        assertEquals(listOf("Accept"), requestHead.headers.map { header -> header.name.value })
+        assertEquals(listOf("Content-Type"), responseHead.headers.map { header -> header.name.value })
     }
 }

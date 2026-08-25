@@ -20,6 +20,9 @@ public value class MessageProtocolId(public val value: String) {
 
         /** RFC 6455 WebSocket messages after a successful HTTP upgrade. */
         public val WEBSOCKET: MessageProtocolId = MessageProtocolId("websocket")
+
+        /** Server-Sent Events records carried by an HTTP response stream. */
+        public val SSE: MessageProtocolId = MessageProtocolId("sse")
     }
 }
 
@@ -48,6 +51,9 @@ public value class ProtocolMessageKind(public val value: String) {
 
         /** A WebSocket close control message containing an optional code and reason. */
         public val CLOSE: ProtocolMessageKind = ProtocolMessageKind("close")
+
+        /** One application-protocol record whose finer semantics are derived by its decoder. */
+        public val RECORD: ProtocolMessageKind = ProtocolMessageKind("record")
     }
 }
 

@@ -77,11 +77,11 @@ The source of truth for boundaries, invariants, future-feature isolation, and de
 | Target 3: canonical session writer/store/query | Phase 10 | Complete: canonical contracts, schema v12, body store, bounded writer, indexed query, gaps, retention/recovery, finalized-orphan reconciliation, migrating reads, bounded live compatibility, active clear rotation, direct recording, restart-boundary recovery, legacy-writer removal, and the 100,000-row gate are present |
 | Target 4: streaming proxy/bounded capture | Phase 11 | Complete: request/response streaming, bidirectional backpressure, bounded canonical capture, typed cancellation, compatibility gates, runtime metrics, and capacity/churn gates pass |
 | Target 5: breakpoints/UI/dependency migration | Phase 12 | Complete |
-| Target 6: semantic inspector architecture | Phase 13 | Complete; GraphQL and SSE supported, other capabilities truthful |
+| Target 6: semantic inspector architecture | Phases 13 and 106 | Complete; GraphQL and bounded SSE preview are supported, while live SSE is an additive experimental contribution |
 | Target 7: connectivity and portal isolation | Phase 14 | Complete for manual/PAC/Apple/ADB and the isolated setup listener |
 | Target 8: pairing/mobile-ready ingress | Phase 15 | Complete |
 | Target 9: companion/relay product | Phase 16 | Optional product scope not activated; foundations complete and capability unavailable |
-| Target 10: protocol increments | Phase 17 | SSE complete; HTTP/2, native gRPC, HTTP/1.1 WebSocket, and modern GraphQL WebSocket are additive experimental increments; HTTP/3 remains unavailable |
+| Target 10: protocol increments | Phases 17 and 106 | HTTP/2, native gRPC, HTTP/1.1 WebSocket, modern GraphQL WebSocket, and live SSE are additive experimental increments; HTTP/3 remains pending |
 | Target 11: performance/production gates | Phase 18 | Standard gate complete; extended-duration soak is a release operation |
 
 ## Phase 9: Baselines, Security, Correctness, and Application Control [COMPLETED]
@@ -200,7 +200,7 @@ Exit criteria: shared canonical HTTP models serve all applicable features; no de
 * Classify unsupported/dormant WebSocket and gRPC code honestly until their transport prerequisites are delivered.
 * Publish a runtime capability catalog backed by production end-to-end tests.
 
-Completed on 2026-08-18: a bounded concurrency/body/deadline scheduler runs after capture, persists generic versioned annotations, isolates cancellation/timeout/failure, and renders generic results in Traffic detail. GraphQL and SSE are registered inspectors with production-path end-to-end tests. Dormant WebSocket/protobuf transport/parser stubs were removed, and unsupported capabilities remain `UNAVAILABLE`.
+Completed on 2026-08-18: a bounded concurrency/body/deadline scheduler runs after capture, persists generic versioned annotations, isolates cancellation/timeout/failure, and renders generic results in Traffic detail. GraphQL and a bounded post-capture SSE preview are registered inspectors with production-path end-to-end tests. Live SSE capture, API Studio execution, event persistence, and breakpoints are not delivered by this phase. Dormant WebSocket/protobuf transport/parser stubs were removed, and unsupported capabilities remain `UNAVAILABLE`.
 
 Exit criteria: inspector failure or timeout cannot affect forwarding/capture; annotations are rerunnable; every Supported claim has an end-to-end test.
 
@@ -237,19 +237,23 @@ Exit criteria: direct and relay paths pass the same proxy conformance suite; rev
 
 No Android/iOS application, VPN packet adapter, direct tunnel, or relay carrier is added without a real platform target and product/security requirements. The shared traffic model, pairing identity, authenticated gateway, application ports, and connectivity registry are complete, so activating this phase is additive. Runtime capability status remains `UNAVAILABLE` for Mobile Companion, VPN, and Relay.
 
-## Phase 17: Protocol Transports and Inspectors [IN PROGRESS — HTTP/3 PENDING]
+## Phase 17: Protocol Transports and Inspectors [IN PROGRESS — LIVE SSE AND HTTP/3 PENDING]
 
 Deliver independently after Phases 11 and 13 establish the transport and inspector seams:
 
 1. WebSocket upgrade/frame transport and duplex storage/UI.
-2. SSE streaming inspector.
+2. SSE streaming inspector. [COMPLETED — EXPERIMENTAL]
 3. HTTP/2 ALPN and multiplexed stream transport.
 4. gRPC inspector over supported HTTP/2.
 5. HTTP/3/QUIC transport after an explicit library/platform decision.
 
 Each increment must satisfy conformance, failure, backpressure, body-limit, lifecycle, and long-run tests before being marked Supported.
 
-The SSE semantic-inspection increment is complete with an end-to-end test. GraphQL was completed in Phase 13.
+The bounded post-capture SSE semantic preview remains independently supported. Live Traffic event capture,
+API Studio streaming, generic message persistence, bounded parsing, and event breakpoints are implemented as the
+experimental Phase 106 increment specified in
+[`sse_target_and_implementation_plan.md`](sse_target_and_implementation_plan.md). GraphQL HTTP semantics were
+completed in Phase 13.
 HTTP/2 is implemented end to end as an `EXPERIMENTAL` capability with local real-socket tests; its remaining
 cross-platform/device and release-soak gates are tracked in `docs/http2_target_and_implementation_plan.md`.
 Native gRPC capture, message breakpoints, descriptor-driven inspection, and API Studio are now implemented as an
@@ -257,6 +261,15 @@ independent `:engine:grpc` increment. The WebSocket increment completed its loca
 generic post-upgrade duplex proxy seam, RFC 6455 framing/capture, message breakpoints, Traffic presentation, and an
 additive API Studio workspace. HTTP/3 remains an independent future increment. Experimental transports are not
 marked `SUPPORTED` until their external qualification matrices pass.
+
+### Phase 17 Server-Sent Events increment [COMPLETED — EXPERIMENTAL]
+
+Implementation started on 2026-08-25 from the approved architecture and gates in
+[`sse_target_and_implementation_plan.md`](sse_target_and_implementation_plan.md). The increment keeps SSE inside
+the canonical HTTP exchange and HTTP API Studio workspace while adding bounded live event records, Traffic
+presentation, streaming execution, and event breakpoints through existing extension seams. Local implementation
+and deterministic JVM evidence are complete; SSE-5 cross-platform, real-device, encoded-stream, and soak gates
+remain before `SUPPORTED` promotion.
 
 ### Phase 17 WebSocket increment [COMPLETED — EXPERIMENTAL]
 
@@ -2222,6 +2235,13 @@ desktop assemble path in the general CI job was corrected to `:products:desktop:
 passed all 167 Gradle tasks in 2 minutes 45 seconds. Remote CI results, Android/iOS real-device Wi-Fi smoke tests,
 and release soak remain future evidence, so HTTP/2 correctly stays `EXPERIMENTAL`. KNet was not launched.
 
+Header-boundary hardening completed on 2026-08-25. Netty's `x-http2-*` object-bridge fields now remain private to
+HTTP/2 codec conversion: canonical request/response headers exclude the complete Netty extension-header set,
+HTTP/2-to-HTTP/1 forwarding strips them before the origin wire, and upstream HTTP/2 responses strip them before
+downstream delivery. Scheme and stream identity continue through the typed request target and `StreamId` fields.
+Focused canonical mapping, response relay, and real-socket downgrade regressions passed, followed by the complete
+`:engine:proxy:test` and `verifyArchitectureFoundation` gates (27 actionable tasks). KNet was not launched.
+
 ## Phase 105: Native gRPC Target Architecture Planning [COMPLETED]
 
 Completed on 2026-08-24 without production-code changes. `docs/grpc_target_and_implementation_plan.md` now defines
@@ -2238,3 +2258,29 @@ and drawer around stable HTTP-exchange and protocol-message units, and makes Tra
 extension-driven. Delivery phases G0 through G9 remain pending and must progress through real through-proxy
 cardinality, backpressure, persistence, UI, security, cross-platform, and device gates before any gRPC capability
 is marked supported. KNet was not launched, stopped, or restarted.
+
+## Phase 106: Live Server-Sent Events [COMPLETED — EXPERIMENTAL]
+
+Started on 2026-08-25. The implementation adds one isolated `:engine:sse` semantic module and preserves the
+canonical HTTP exchange as the parent request/response model. Identity-encoded event records are incrementally
+parsed and captured as generic child protocol messages; Room, body storage, Traffic paging, and the proxy remain
+protocol-neutral. Historical formatting and inspection use the same parser, removing the old duplicate SSE logic.
+
+API Studio now has an optional protocol-neutral HTTP response stream contract. HTTP/1.1 and AUTO/exact HTTP/2
+publish owned response heads and chunks before completion using the same request preparation as terminal execution;
+collector cancellation releases the active transport response. A product-registered SSE interpreter switches the
+existing HTTP response pane to a bounded live timeline, while ordinary HTTP and encoded event streams retain the
+bounded terminal path. Response-record breakpoints use the generic message gate and can match event type, event ID,
+or data before continuing, replacing, or terminating the stream.
+
+The local protocol lab supplies finite, endless, multiline, comment, fragmented, malformed, disconnect, resume,
+gzip, burst, and real TLS/ALPN HTTP/2 fixtures. The completion gate covers parser limits, passive capture,
+persistence, Traffic decoding, formatting, breakpoint decisions, first-event delivery, cancellation, request
+pipeline preservation, and desktop composition. Capability maturity remains `EXPERIMENTAL`; incremental encoded
+stream decoding, cross-platform/device evidence, complete concurrent HTTP/2 isolation, and multi-hour soak remain
+the explicit SSE-5 promotion gates. KNet is not launched by this phase.
+
+Completed on 2026-08-25. The complete affected-module gate passed 189 Gradle tasks across the SSE engine,
+formatter, proxy, protocol module, canonical traffic/domain/HTTP contracts, application orchestration, desktop
+persistence, protocol lab, API Studio UI, desktop composition, Kotlin-first source checks, and architecture
+verification. The desktop application was not launched, stopped, or restarted by this work.

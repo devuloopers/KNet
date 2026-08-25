@@ -16,6 +16,7 @@ import io.netty.handler.codec.http.DefaultFullHttpResponse
 import io.netty.handler.codec.http.HttpMethod
 import io.netty.handler.codec.http.HttpResponseStatus
 import io.netty.handler.codec.http.HttpVersion
+import io.netty.handler.codec.http2.HttpConversionUtil
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Test
@@ -87,6 +88,39 @@ class KNetOutboundHandlerTest {
         assertEquals(
             ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_1_1),
             capture.response?.protocol,
+        )
+        relayedResponse.release()
+        clientChannel.finishAndReleaseAll()
+        serverChannel.finishAndReleaseAll()
+    }
+
+    @Test
+    fun `does not expose upstream HTTP two bridge headers to capture or downstream clients`() {
+        val clientChannel = EmbeddedChannel()
+        val capture = RecordingExchangeCapture()
+        val serverChannel = EmbeddedChannel(
+            KNetOutboundHandler(
+                clientChannel = clientChannel,
+                request = DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/"),
+                capture = capture,
+                upstreamProtocol = ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_2),
+            ),
+        )
+        val response = DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpResponseStatus.OK).apply {
+            headers().set(HttpConversionUtil.ExtensionHeaderNames.STREAM_ID.text(), "3")
+            headers().set(HttpConversionUtil.ExtensionHeaderNames.SCHEME.text(), "https")
+            headers().set("Content-Type", "application/json")
+        }
+
+        serverChannel.writeInbound(response)
+
+        val relayedResponse = clientChannel.readOutbound<DefaultFullHttpResponse>()
+        assertEquals(false, relayedResponse.headers().contains(HttpConversionUtil.ExtensionHeaderNames.STREAM_ID.text()))
+        assertEquals(false, relayedResponse.headers().contains(HttpConversionUtil.ExtensionHeaderNames.SCHEME.text()))
+        assertEquals("application/json", relayedResponse.headers().get("Content-Type"))
+        assertEquals(
+            listOf("Content-Type"),
+            capture.response?.headers?.map { header -> header.name.value },
         )
         relayedResponse.release()
         clientChannel.finishAndReleaseAll()

@@ -5,6 +5,10 @@ import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
 import com.devuloopers.knet.application.port.traffic.CaptureSessionState
 import com.devuloopers.knet.application.usecase.apistudio.ExecuteApiStudioRequestUseCase
+import com.devuloopers.knet.application.usecase.apistudio.ApiStudioHttpExecutionEvent
+import com.devuloopers.knet.application.port.apistudio.HttpLiveResponseUpdate
+import com.devuloopers.knet.application.port.apistudio.HttpResponseStreamInterpreterRegistry
+import com.devuloopers.knet.application.port.apistudio.HttpResponseStreamInterpreterSession
 import com.devuloopers.knet.application.usecase.breakpoint.DropMatchingBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUseCase
 import com.devuloopers.knet.application.usecase.traffic.ObserveTrafficCaptureStateUseCase
@@ -83,7 +87,9 @@ class ApiStudioViewModel(
     private val autoSaveApiSessionUseCase: AutoSaveApiSessionUseCase,
     private val getSavedRequestUseCase: GetSavedRequestUseCase,
     private val saveRequestToCollectionUseCase: SaveRequestToCollectionUseCase,
-    private val ioDispatcher: CoroutineDispatcher
+    private val ioDispatcher: CoroutineDispatcher,
+    private val responseStreamInterpreters: HttpResponseStreamInterpreterRegistry =
+        HttpResponseStreamInterpreterRegistry(),
 ) : ViewModel() {
 
     companion object {
@@ -453,6 +459,33 @@ class ApiStudioViewModel(
         }
     }
 
+    /** Clears only the bounded live-response presentation window, never persisted Traffic history. */
+    fun clearVisibleLiveRecords() {
+        _uiState.update { state ->
+            state.copy(
+                responseInspection = state.responseInspection?.let { response ->
+                    response.copy(
+                        liveResponse = response.liveResponse?.copy(
+                            records = emptyList(),
+                            selectedSequence = null,
+                        ),
+                    )
+                },
+            )
+        }
+    }
+
+    /** Selects one retained live-response record for detail inspection. */
+    fun selectLiveRecord(sequence: Long) {
+        _uiState.update { state ->
+            state.copy(
+                responseInspection = state.responseInspection?.let { response ->
+                    response.copy(liveResponse = response.liveResponse?.copy(selectedSequence = sequence))
+                },
+            )
+        }
+    }
+
     /** Executes the latest immutable editor snapshot with stale-result and cancellation protection. */
     fun executeRequest() {
         ensureDraftForEdit()
@@ -469,38 +502,75 @@ class ApiStudioViewModel(
         val executionTimer = TimeSource.Monotonic.markNow()
 
         executionJob = viewModelScope.launch {
+            var interpreter: HttpResponseStreamInterpreterSession? = null
             try {
-                val result = executeApiStudioRequestUseCase.execute(executionDocument, activeProxyPort())
-                coroutineContext.ensureActive()
-                if (requestExecutionRevision != executionRevision) return@launch
-
-                if (!result.result.isSuccess) {
-                    dropMatchingBreakpointsSafely(currentEditor)
-                }
-                awaitMinimumLoadingDuration(executionTimer)
-                coroutineContext.ensureActive()
-                if (requestExecutionRevision != executionRevision) return@launch
-
-                _uiState.update {
-                    it.copy(
-                        executionState = if (result.result.isSuccess) ExecutionState.SUCCESS else ExecutionState.ERROR,
-                        responseInspection = ResponseInspectorState(
-                            statusCode = result.result.statusCode,
-                            statusText = result.result.statusText,
-                            durationMs = result.result.latencyMs,
-                            sizeBytes = result.result.responseSizeBytes,
-                            headers = result.result.headers,
-                            cookies = result.result.cookies,
-                            responseBody = result.formattedBody,
-                            testResults = result.testResults,
-                            consoleLogs = result.consoleLogs,
-                            failureReason = result.result.failureReason,
-                            protocol = result.result.protocol,
-                            errorMessage = result.result.errorMessage,
-                            executionState = if (result.result.isSuccess) ExecutionState.SUCCESS else ExecutionState.ERROR
-                        ),
-                        errorMessage = result.result.errorMessage
-                    )
+                executeApiStudioRequestUseCase.executeStreaming(executionDocument, activeProxyPort()).collect { event ->
+                    coroutineContext.ensureActive()
+                    if (requestExecutionRevision != executionRevision) return@collect
+                    when (event) {
+                        is ApiStudioHttpExecutionEvent.ResponseHead -> {
+                            interpreter = responseStreamInterpreters.open(event.value)
+                            _uiState.update { state ->
+                                state.copy(
+                                    responseInspection = ResponseInspectorState(
+                                        statusCode = event.value.statusCode,
+                                        statusText = event.value.statusText,
+                                        headers = event.value.headers,
+                                        cookies = event.value.cookies,
+                                        protocol = event.value.protocol,
+                                        executionState = ExecutionState.EXECUTING,
+                                        liveResponse = interpreter?.let { session ->
+                                            LiveHttpResponseState(protocolLabel = session.protocolLabel)
+                                        },
+                                    ),
+                                )
+                            }
+                        }
+                        is ApiStudioHttpExecutionEvent.BodyChunk -> {
+                            val session = interpreter ?: return@collect
+                            publishLiveUpdates(
+                                session = session,
+                                updates = session.accept(event.value.copyBytes()),
+                                receivedBytes = event.value.size.toLong(),
+                            )
+                        }
+                        is ApiStudioHttpExecutionEvent.Completed -> {
+                            interpreter?.let { session ->
+                                publishLiveUpdates(session, session.finish(), receivedBytes = 0L)
+                            }
+                            val result = event.value
+                            if (!result.result.isSuccess) dropMatchingBreakpointsSafely(currentEditor)
+                            awaitMinimumLoadingDuration(executionTimer)
+                            coroutineContext.ensureActive()
+                            if (requestExecutionRevision != executionRevision) return@collect
+                            _uiState.update { state ->
+                                val live = state.responseInspection?.liveResponse
+                                val terminalState = if (result.result.isSuccess) ExecutionState.SUCCESS else ExecutionState.ERROR
+                                state.copy(
+                                    executionState = terminalState,
+                                    responseInspection = ResponseInspectorState(
+                                        statusCode = result.result.statusCode,
+                                        statusText = result.result.statusText,
+                                        durationMs = result.result.latencyMs,
+                                        sizeBytes = live?.receivedBytes ?: result.result.responseSizeBytes,
+                                        headers = result.result.headers,
+                                        cookies = result.result.cookies,
+                                        responseBody = result.formattedBody,
+                                        testResults = result.testResults,
+                                        consoleLogs = result.consoleLogs,
+                                        failureReason = result.result.failureReason,
+                                        protocol = result.result.protocol,
+                                        errorMessage = result.result.errorMessage,
+                                        executionState = terminalState,
+                                        liveResponse = live?.copy(
+                                            terminalReason = result.result.errorMessage ?: "Stream completed",
+                                        ),
+                                    ),
+                                    errorMessage = result.result.errorMessage,
+                                )
+                            }
+                        }
+                    }
                 }
             } catch (cancellation: CancellationException) {
                 throw cancellation
@@ -523,6 +593,46 @@ class ApiStudioViewModel(
         }
     }
 
+    private fun publishLiveUpdates(
+        session: HttpResponseStreamInterpreterSession,
+        updates: List<HttpLiveResponseUpdate>,
+        receivedBytes: Long,
+    ) {
+        _uiState.update { state ->
+            val response = state.responseInspection ?: return@update state
+            val live = response.liveResponse ?: return@update state
+            var records = live.records
+            var gaps = live.gapCount
+            var dropped = live.droppedRecordCount
+            updates.forEach { update ->
+                when (update) {
+                    is HttpLiveResponseUpdate.Gap -> gaps++
+                    is HttpLiveResponseUpdate.Record -> {
+                        records = records + update.value
+                        if (records.size > session.maximumRetainedRecords) {
+                            val removed = records.size - session.maximumRetainedRecords
+                            records = records.drop(removed)
+                            dropped += removed
+                        }
+                    }
+                }
+            }
+            val selected = live.selectedSequence?.takeIf { sequence -> records.any { it.sequence == sequence } }
+                ?: records.lastOrNull()?.sequence
+            state.copy(
+                responseInspection = response.copy(
+                    liveResponse = live.copy(
+                        records = records,
+                        selectedSequence = selected,
+                        receivedBytes = live.receivedBytes + receivedBytes,
+                        gapCount = gaps,
+                        droppedRecordCount = dropped,
+                    ),
+                ),
+            )
+        }
+    }
+
     /** Returns a local route only for a synchronously observed active capture session. */
     private fun activeProxyPort(): Int? {
         if (captureSessionState.value !is CaptureSessionState.Capturing) return null
@@ -536,7 +646,18 @@ class ApiStudioViewModel(
         executionRevision++
         executionJob?.cancel()
         executionJob = null
-        _uiState.update { it.copy(executionState = ExecutionState.IDLE, errorMessage = null) }
+        _uiState.update { state ->
+            state.copy(
+                executionState = ExecutionState.IDLE,
+                errorMessage = null,
+                responseInspection = state.responseInspection?.let { response ->
+                    response.copy(
+                        executionState = ExecutionState.IDLE,
+                        liveResponse = response.liveResponse?.copy(terminalReason = "Stream cancelled"),
+                    )
+                },
+            )
+        }
         viewModelScope.launch(ioDispatcher) { dropMatchingBreakpointsSafely(currentEditor) }
     }
 

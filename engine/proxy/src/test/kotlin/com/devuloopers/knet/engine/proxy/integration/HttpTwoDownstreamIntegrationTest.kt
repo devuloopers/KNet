@@ -74,6 +74,63 @@ import kotlin.time.toJavaDuration
 class HttpTwoDownstreamIntegrationTest {
 
     @Test
+    fun `HTTP two bridge headers stay inside Netty when forwarding to HTTP one`() {
+        val observedHeaderNames = CopyOnWriteArrayList<String>()
+        val origin = HttpServer.create(InetSocketAddress(KNetProxyServer.DEFAULT_BIND_HOST, 0), 0).apply {
+            createContext("/bridge-boundary") { exchange ->
+                observedHeaderNames += exchange.requestHeaders.keys
+                val body = "clean".encodeToByteArray()
+                exchange.sendResponseHeaders(200, body.size.toLong())
+                exchange.responseBody.use { output -> output.write(body) }
+            }
+            start()
+        }
+        val authority = CertificateAuthority.generate(commonName = "HTTP/2 KNet bridge boundary CA")
+        val capture = RecordingCaptureSink()
+        val proxy = KNetProxyServer(
+            port = availableLoopbackPort(),
+            serverTlsContextProvider = TestServerTlsContextProvider(authority, CertificateCache()),
+            captureSink = capture,
+        )
+        proxy.start()
+        val group = NioEventLoopGroup(1)
+        var clientChannel: Channel? = null
+        try {
+            val channel = Bootstrap()
+                .group(group)
+                .channel(NioSocketChannel::class.java)
+                .handler(object : ChannelInitializer<SocketChannel>() {
+                    override fun initChannel(channel: SocketChannel) {
+                        channel.pipeline().addLast(Http2FrameCodecBuilder.forClient().build())
+                        channel.pipeline().addLast(Http2MultiplexHandler(DiscardInboundStreamHandler()))
+                    }
+                })
+                .connect(assertNotNull(proxy.boundAddress()))
+                .syncUninterruptibly()
+                .channel()
+            clientChannel = channel
+
+            assertEquals(
+                "clean",
+                sendH2cRequest(channel, origin.address.port, "/bridge-boundary").get(10, TimeUnit.SECONDS),
+            )
+            awaitCondition { capture.requests.size == 1 }
+            assertTrue(observedHeaderNames.none { name -> name.startsWith("x-http2-", ignoreCase = true) })
+            assertTrue(
+                capture.requests.single().request.headers.none { header ->
+                    header.name.value.startsWith("x-http2-", ignoreCase = true)
+                },
+            )
+            assertNotNull(capture.requests.single().streamId)
+        } finally {
+            clientChannel?.close()?.syncUninterruptibly()
+            group.shutdownGracefully().syncUninterruptibly()
+            proxy.stop()
+            origin.stop(0)
+        }
+    }
+
+    @Test
     fun `oversized header list rejects its connection and preserves the listener`() {
         val origin = HttpServer.create(InetSocketAddress(KNetProxyServer.DEFAULT_BIND_HOST, 0), 0).apply {
             createContext("/") { exchange ->
