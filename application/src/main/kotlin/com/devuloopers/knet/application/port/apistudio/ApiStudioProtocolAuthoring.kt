@@ -31,7 +31,27 @@ public data class ApiStudioProtocolMetadataEntry(
     public val enabled: Boolean = true,
 )
 
-/** Protocol-neutral input shared by RPC-like API Studio contributions. */
+/** One typed outbound message authored without exposing a protocol library's message type. */
+public data class ApiStudioProtocolAuthoredMessage(
+    public val content: String,
+    public val contentType: String,
+)
+
+/** Stable protocol-owned authoring option passed through the generic API Studio boundary. */
+public data class ApiStudioProtocolParameter(
+    /** Normalized protocol-owned parameter identity. */
+    public val id: String,
+    /** Authored parameter value validated by the receiving protocol contribution. */
+    public val value: String,
+) {
+    init {
+        require(id.isNotBlank() && id == id.trim().lowercase()) {
+            "API Studio protocol parameter ID must be a normalized lowercase token."
+        }
+    }
+}
+
+/** Protocol-neutral input shared by API Studio protocol contributions. */
 public data class ApiStudioProtocolDraft(
     public val id: String,
     public val name: String,
@@ -41,8 +61,14 @@ public data class ApiStudioProtocolDraft(
     public val operationId: String,
     public val deadlineMillis: Long,
     public val metadata: List<ApiStudioProtocolMetadataEntry>,
-    public val outboundMessages: List<String>,
+    public val outboundMessages: List<ApiStudioProtocolAuthoredMessage>,
     public val schemaSourceId: String?,
+    /** URI-shaped endpoint used by protocols that do not address a host and port separately. */
+    public val targetUri: String? = null,
+    /** Ordered application protocols requested during a protocol handshake. */
+    public val requestedProtocols: List<String> = emptyList(),
+    /** Protocol-owned scalar options required by the current contributed editor. */
+    public val parameters: List<ApiStudioProtocolParameter> = emptyList(),
 )
 
 /** Safe result of importing a schema owned by one protocol contribution. */

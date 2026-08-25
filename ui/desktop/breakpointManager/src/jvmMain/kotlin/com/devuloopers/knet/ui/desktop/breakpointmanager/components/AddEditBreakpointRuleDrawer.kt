@@ -3,12 +3,13 @@ package com.devuloopers.knet.ui.desktop.breakpointmanager.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -34,6 +35,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolDefinition
@@ -50,7 +53,6 @@ import com.devuloopers.knet.ui.core.components.drawer.KNetSideDrawer
 import com.devuloopers.knet.ui.core.components.drawer.KNetSideDrawerSize
 import com.devuloopers.knet.ui.core.components.input.InputFieldConfig
 import com.devuloopers.knet.ui.core.components.input.KNetTextField
-import com.devuloopers.knet.ui.core.components.scrollbar.KNetHorizontalScrollbar
 import com.devuloopers.knet.ui.core.components.scrollbar.KNetVerticalScrollbar
 import com.devuloopers.knet.ui.core.components.switch.KNetSwitch
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
@@ -182,53 +184,24 @@ fun AddEditBreakpointRuleDrawer(
                     text = "Protocol Matching Criteria",
                     style = typography.caption.copy(color = themeColors.textMuted, fontWeight = FontWeight.SemiBold)
                 )
-                val protocolScrollState = rememberScrollState()
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(protocolScrollState),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        protocolDefinitions.forEach { definition ->
-                            val isSelected = selectedProtocolId == definition.protocolId
-                            Box(
-                                modifier = Modifier
-                                    .widthIn(min = 120.dp, max = 240.dp)
-                                    .heightIn(min = 40.dp)
-                                    .background(
-                                        if (isSelected) themeColors.accent.copy(alpha = 0.2f) else themeColors.surfaceVariant,
-                                        RoundedCornerShape(4.dp)
-                                    )
-                                    .border(
-                                        1.dp,
-                                        if (isSelected) themeColors.accent else themeColors.border,
-                                        RoundedCornerShape(4.dp)
-                                    )
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .clickable {
-                                        selectedProtocolId = definition.protocolId
-                                        protocolValues = definition.defaultValues()
-                                    }
-                                    .handCursor()
-                                    .padding(horizontal = 14.dp, vertical = 9.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = definition.displayName,
-                                    color = if (isSelected) themeColors.accent else themeColors.textSecondary,
-                                    fontSize = 11.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    textAlign = TextAlign.Center,
-                                )
-                            }
-                        }
-                    }
-                    KNetHorizontalScrollbar(
-                        scrollState = protocolScrollState,
-                        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
-                    )
-                }
+                BreakpointChoiceFlow(
+                    choices = protocolDefinitions.map { definition ->
+                        BreakpointChoice(
+                            value = definition,
+                            label = definition.displayName,
+                        )
+                    },
+                    isSelected = { definition -> selectedProtocolId == definition.protocolId },
+                    onSelect = { definition ->
+                        selectedProtocolId = definition.protocolId
+                        protocolValues = definition.defaultValues()
+                    },
+                    minimumItemWidth = 120.dp,
+                    maximumItemWidth = 240.dp,
+                    minimumItemHeight = 40.dp,
+                    horizontalContentPadding = 14.dp,
+                    verticalContentPadding = 9.dp,
+                )
             }
 
             selectedProtocol?.fields.orEmpty().forEach { field ->
@@ -247,54 +220,20 @@ fun AddEditBreakpointRuleDrawer(
                     text = "HTTP Method",
                     style = typography.caption.copy(color = themeColors.textMuted, fontWeight = FontWeight.SemiBold)
                 )
-                val methodScrollState = rememberScrollState()
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(methodScrollState),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        val availableMethods: List<HttpMethod?> = listOf(null) +
-                            StandardHttpMethod.entries
-                                .filterNot { it == StandardHttpMethod.CONNECT }
-                                .map(HttpMethod::Standard)
-                        availableMethods.forEach { methodOpt ->
-                            val isSelected = selectedMethod == methodOpt
-                            val label = methodOpt?.token ?: "ALL"
-                            Box(
-                                modifier = Modifier
-                                    .background(
-                                        if (isSelected) themeColors.accent.copy(alpha = 0.2f) else themeColors.surfaceVariant,
-                                        RoundedCornerShape(4.dp)
-                                    )
-                                    .border(
-                                        1.dp,
-                                        if (isSelected) themeColors.accent else themeColors.border,
-                                        RoundedCornerShape(4.dp)
-                                    )
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .clickable { selectedMethod = methodOpt }
-                                    .handCursor()
-                                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                Text(
-                                    text = label,
-                                    color = if (isSelected) themeColors.accent else themeColors.textSecondary,
-                                    fontSize = 11.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    maxLines = 1,
-                                    softWrap = false
-                                )
-                            }
-                        }
-                    }
-                    KNetHorizontalScrollbar(
-                        scrollState = methodScrollState,
-                        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
-                    )
-                }
+                val availableMethods: List<HttpMethod?> = listOf(null) +
+                    StandardHttpMethod.entries
+                        .filterNot { it == StandardHttpMethod.CONNECT }
+                        .map(HttpMethod::Standard)
+                BreakpointChoiceFlow(
+                    choices = availableMethods.map { method ->
+                        BreakpointChoice(
+                            value = method,
+                            label = method?.token ?: "ALL",
+                        )
+                    },
+                    isSelected = { method -> selectedMethod == method },
+                    onSelect = { method -> selectedMethod = method },
+                )
             }
 
             // Interception Phase Segmented Control
@@ -437,51 +376,21 @@ private fun ProtocolCriteriaField(
             )
 
             is ProtocolCriteriaFieldDefinition.Choice -> {
-                val choiceScrollState = rememberScrollState()
-                Box(modifier = Modifier.fillMaxWidth()) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .horizontalScroll(choiceScrollState),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        field.options.forEach { option ->
-                            val isSelected = value == option.value
-                            Box(
-                                modifier = Modifier
-                                    .widthIn(min = 128.dp, max = 260.dp)
-                                    .heightIn(min = 40.dp)
-                                    .background(
-                                        if (isSelected) themeColors.accent.copy(alpha = 0.2f)
-                                        else themeColors.surfaceVariant,
-                                        RoundedCornerShape(4.dp),
-                                    )
-                                    .border(
-                                        1.dp,
-                                        if (isSelected) themeColors.accent else themeColors.border,
-                                        RoundedCornerShape(4.dp),
-                                    )
-                                    .clip(RoundedCornerShape(4.dp))
-                                    .clickable { onValueChange(option.value) }
-                                    .handCursor()
-                                    .padding(horizontal = 14.dp, vertical = 9.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    text = option.label,
-                                    color = if (isSelected) themeColors.accent else themeColors.textSecondary,
-                                    fontSize = 11.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                                    textAlign = TextAlign.Center,
-                                )
-                            }
-                        }
-                    }
-                    KNetHorizontalScrollbar(
-                        scrollState = choiceScrollState,
-                        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
-                    )
-                }
+                BreakpointChoiceFlow(
+                    choices = field.options.map { option ->
+                        BreakpointChoice(
+                            value = option,
+                            label = option.label,
+                        )
+                    },
+                    isSelected = { option -> value == option.value },
+                    onSelect = { option -> onValueChange(option.value) },
+                    minimumItemWidth = 128.dp,
+                    maximumItemWidth = 260.dp,
+                    minimumItemHeight = 40.dp,
+                    horizontalContentPadding = 14.dp,
+                    verticalContentPadding = 9.dp,
+                )
             }
         }
         field.description?.let { description ->
@@ -489,6 +398,69 @@ private fun ProtocolCriteriaField(
                 text = description,
                 style = typography.caption.copy(color = themeColors.textMuted, fontSize = 10.sp),
             )
+        }
+    }
+}
+
+private data class BreakpointChoice<T>(
+    val value: T,
+    val label: String,
+)
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun <T> BreakpointChoiceFlow(
+    choices: List<BreakpointChoice<T>>,
+    isSelected: (T) -> Boolean,
+    onSelect: (T) -> Unit,
+    modifier: Modifier = Modifier,
+    minimumItemWidth: Dp = Dp.Unspecified,
+    maximumItemWidth: Dp = Dp.Unspecified,
+    minimumItemHeight: Dp = Dp.Unspecified,
+    horizontalContentPadding: Dp = 8.dp,
+    verticalContentPadding: Dp = 6.dp,
+) {
+    val themeColors = KNetTheme.colors
+    FlowRow(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        choices.forEach { choice ->
+            val selected = isSelected(choice.value)
+            Box(
+                modifier = Modifier
+                    .widthIn(min = minimumItemWidth, max = maximumItemWidth)
+                    .heightIn(min = minimumItemHeight)
+                    .background(
+                        if (selected) themeColors.accent.copy(alpha = 0.2f) else themeColors.surfaceVariant,
+                        RoundedCornerShape(4.dp),
+                    )
+                    .border(
+                        width = 1.dp,
+                        color = if (selected) themeColors.accent else themeColors.border,
+                        shape = RoundedCornerShape(4.dp),
+                    )
+                    .clip(RoundedCornerShape(4.dp))
+                    .clickable { onSelect(choice.value) }
+                    .handCursor()
+                    .padding(
+                        horizontal = horizontalContentPadding,
+                        vertical = verticalContentPadding,
+                    ),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = choice.label,
+                    color = if (selected) themeColors.accent else themeColors.textSecondary,
+                    fontSize = 11.sp,
+                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                )
+            }
         }
     }
 }

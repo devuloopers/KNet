@@ -5,6 +5,8 @@ import com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.TrafficDirection
 import com.devuloopers.knet.traffic.id.ProtocolMessageId
+import com.devuloopers.knet.traffic.id.ExchangeId
+import com.devuloopers.knet.traffic.model.message.ProtocolMessageKind
 
 /** Stable identifier for one editable field contributed by a protocol extension. */
 @JvmInline
@@ -146,8 +148,13 @@ public data class ProtocolInspectionInput(
 
 /** Bounded input offered to an extension for one fully framed live protocol message. */
 public data class ProtocolMessageInspectionInput(
+    /** Canonical parent exchange used for bounded connection-scoped semantic correlation. */
+    public val exchangeId: ExchangeId,
     public val request: HttpRequestSnapshot,
     public val messageId: ProtocolMessageId,
+    public val kind: ProtocolMessageKind,
+    /** Server-selected application subprotocol, when available for this framed transport. */
+    public val negotiatedSubprotocol: String? = null,
     public val direction: TrafficDirection,
     public val sequence: Long,
     public val declaredBytes: Long,
@@ -207,6 +214,20 @@ public interface BreakpointProtocolExtension {
      * extensions opt in without adding protocol branches to the application coordinator.
      */
     public fun inspectMessage(input: ProtocolMessageInspectionInput): ProtocolObservation? = null
+
+    /** Releases any compact framed-message correlation state retained for [exchangeId]. */
+    public fun releaseMessages(exchangeId: ExchangeId): Unit = Unit
+
+    /**
+     * Validates a complete replacement before transport reconstruction.
+     *
+     * The safe default preserves existing framed protocols; semantic extensions override this when
+     * changing identity or lifecycle fields would corrupt connection state.
+     */
+    public fun validateMessageReplacement(
+        input: ProtocolMessageInspectionInput,
+        replacement: BreakpointBody,
+    ): Boolean = true
 
     /** Decodes a valid persisted criterion into UI-neutral editor values. */
     public fun editorValues(criteria: ProtocolMatchCriteria): List<ProtocolCriteriaValue>
@@ -296,6 +317,22 @@ public class BreakpointProtocolRegistry(
             .getOrNull()
             ?.takeIf { it.protocolId == protocolId }
     }
+
+    /** Releases framed-message state from every registered semantic extension. */
+    public fun releaseMessages(exchangeId: ExchangeId) {
+        extensionsById.values.forEach { extension ->
+            runCatching { extension.releaseMessages(exchangeId) }
+        }
+    }
+
+    /** Validates one replacement through the rule-winning protocol extension. */
+    public fun validateMessageReplacement(
+        protocolId: BreakpointProtocolId,
+        input: ProtocolMessageInspectionInput,
+        replacement: BreakpointBody,
+    ): Boolean = extensionsById[protocolId]?.let { extension ->
+        runCatching { extension.validateMessageReplacement(input, replacement) }.getOrDefault(false)
+    } ?: false
 
     /** Returns the interception unit declared by a registered extension. */
     public fun interceptionUnit(protocolId: BreakpointProtocolId): BreakpointInterceptionUnit? =

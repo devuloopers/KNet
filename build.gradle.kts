@@ -104,11 +104,11 @@ abstract class VerifyUiRuntimeIsolationTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val buildScripts: ConfigurableFileCollection
 
-    /** Pure engine packages deliberately approved for presentation-only formatting. */
+    /** Engine packages deliberately approved as presentation-facing typed protocol APIs. */
     @get:Input
     abstract val allowedEngineImportPrefixes: ListProperty<String>
 
-    /** Pure engine project dependencies deliberately approved for presentation. */
+    /** Engine projects deliberately approved as presentation-facing typed protocol APIs. */
     @get:Input
     abstract val allowedEngineProjects: ListProperty<String>
 
@@ -399,7 +399,11 @@ val verifyUiRuntimeIsolation by tasks.registering(VerifyUiRuntimeIsolationTask::
         include("**/build.gradle.kts")
         exclude("**/build/**")
     })
-    allowedEngineImportPrefixes.set(listOf("com.devuloopers.knet.engine.formatter."))
+    allowedEngineImportPrefixes.set(
+        listOf(
+            "com.devuloopers.knet.engine.formatter.",
+        ),
+    )
     allowedEngineProjects.set(listOf(":engine:formatter"))
 }
 
@@ -508,6 +512,50 @@ tasks.register("grpcQualification") {
         ":ui:desktop:apiStudio:jvmTest",
         ":ui:desktop:breakpointManager:jvmTest",
         ":ui:desktop:apiStudio:grpc:jvmTest",
+        ":ui:desktop:traffic:jvmTest",
+        ":products:desktop:test",
+    )
+}
+
+/** Cross-module WebSocket qualification gate. It never launches the desktop application. */
+tasks.register("webSocketQualification") {
+    group = "verification"
+    description = "Runs WebSocket relay, framing, capture, breakpoints, API Studio, Traffic, and protocol-lab tests."
+    dependsOn(
+        verifyArchitectureFoundation,
+        ":application:test",
+        ":core:traffic:jvmTest",
+        ":engine:proxy:test",
+        ":engine:websocket:test",
+        ":data:desktop:jvmTest",
+        ":storage:jvmTest",
+        ":testingServer:test",
+        ":ui:desktop:apiStudio:jvmTest",
+        ":ui:desktop:apiStudio:websocket:jvmTest",
+        ":ui:desktop:breakpointManager:jvmTest",
+        ":ui:desktop:traffic:jvmTest",
+        ":products:desktop:test",
+    )
+}
+
+/** Cross-module GraphQL-over-WebSocket qualification gate. It never launches the desktop application. */
+tasks.register("graphQLWebSocketQualification") {
+    group = "verification"
+    description = "Runs GraphQL WebSocket semantics, capture, breakpoints, API Studio, Traffic, and protocol-lab tests."
+    dependsOn(
+        verifyArchitectureFoundation,
+        ":application:test",
+        ":core:traffic:jvmTest",
+        ":engine:proxy:test",
+        ":engine:websocket:test",
+        ":engine:graphqlWebSocket:test",
+        ":data:desktop:jvmTest",
+        ":storage:jvmTest",
+        ":testingServer:test",
+        ":ui:desktop:apiStudio:jvmTest",
+        ":ui:desktop:apiStudio:websocket:jvmTest",
+        ":ui:desktop:apiStudio:graphqlWebSocket:jvmTest",
+        ":ui:desktop:breakpointManager:jvmTest",
         ":ui:desktop:traffic:jvmTest",
         ":products:desktop:test",
     )

@@ -35,11 +35,13 @@ import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
 import org.springframework.boot.test.web.server.LocalServerPort
 import org.springframework.graphql.client.WebSocketGraphQlClient
+import org.springframework.graphql.client.SubscriptionErrorException
 import org.springframework.test.web.reactive.server.WebTestClient
 import org.springframework.web.reactive.socket.client.ReactorNettyWebSocketClient
 import reactor.core.publisher.Mono
 import reactor.netty.http.HttpProtocol
 import reactor.netty.http.client.HttpClient
+import reactor.netty.http.client.WebsocketClientSpec
 import java.net.URI
 import java.util.concurrent.TimeUnit
 import kotlin.time.Duration.Companion.seconds
@@ -205,6 +207,134 @@ class ProtocolLabIntegrationTest {
             }
 
             assertEquals(listOf(1, 2, 3), sequences)
+        } finally {
+            graphQlClient.stop().awaitSingleOrNull()
+        }
+    }
+
+    /** Ensures the real GraphQL listener explicitly selects the modern subprotocol and answers protocol ping. */
+    @Test
+    fun `graphql websocket negotiates modern protocol and answers ping`() = runTest {
+        val selectedProtocol = CompletableDeferred<String?>()
+        val receivedMessages = CompletableDeferred<List<String>>()
+        val client = ReactorNettyWebSocketClient(
+            HttpClient.create(),
+            { WebsocketClientSpec.builder().protocols("graphql-transport-ws") },
+        )
+
+        withContext(Dispatchers.IO) {
+            withTimeout(5.seconds) {
+                client.execute(URI.create("ws://127.0.0.1:$httpPort/lab/v1/graphql/ws")) { session ->
+                    selectedProtocol.complete(session.handshakeInfo.subProtocol)
+                    val outbound = session.send(
+                        reactor.core.publisher.Flux.just(
+                            session.textMessage("""{"type":"connection_init"}"""),
+                            session.textMessage("""{"type":"ping","payload":{"probe":"knet"}}"""),
+                        ),
+                    )
+                    val inbound = session.receive()
+                        .take(2)
+                        .map { message -> message.payloadAsText }
+                        .collectList()
+                        .doOnNext(receivedMessages::complete)
+                        .then()
+                    Mono.`when`(outbound, inbound).then(session.close())
+                }.awaitSingleOrNull()
+            }
+        }
+
+        assertEquals("graphql-transport-ws", selectedProtocol.await())
+        val messages = receivedMessages.await()
+        assertTrue(messages.any { message -> message.contains("connection_ack") })
+        assertTrue(messages.any { message -> message.contains("pong") })
+    }
+
+    /** Ensures cancellation of one multiplexed operation does not terminate a concurrent sibling. */
+    @Test
+    fun `graphql websocket isolates concurrent subscriptions and cancellation`() = runTest {
+        val graphQlClient = WebSocketGraphQlClient.builder(
+            "ws://127.0.0.1:$httpPort/lab/v1/graphql/ws",
+            ReactorNettyWebSocketClient(),
+        ).build()
+        val document = """
+            subscription NamedTicker(${'$'}message: String!, ${'$'}count: Int!, ${'$'}delay: Int!) {
+              ticker(message: ${'$'}message, count: ${'$'}count, delayMillis: ${'$'}delay) { sequence message }
+            }
+        """.trimIndent()
+
+        try {
+            val (cancelled, sibling) = withContext(Dispatchers.IO) {
+                withTimeout(5.seconds) {
+                    coroutineScope {
+                        val cancelledOperation = async {
+                            graphQlClient.document(document)
+                                .operationName("NamedTicker")
+                                .variable("message", "cancelled")
+                                .variable("count", 100)
+                                .variable("delay", 5)
+                                .retrieveSubscription("ticker.message")
+                                .toEntity(String::class.java)
+                                .take(1)
+                                .collectList()
+                                .awaitSingle()
+                        }
+                        val siblingOperation = async {
+                            graphQlClient.document(document)
+                                .operationName("NamedTicker")
+                                .variable("message", "sibling")
+                                .variable("count", 3)
+                                .variable("delay", 0)
+                                .retrieveSubscription("ticker.message")
+                                .toEntity(String::class.java)
+                                .collectList()
+                                .awaitSingle()
+                        }
+                        cancelledOperation.await() to siblingOperation.await()
+                    }
+                }
+            }
+
+            assertEquals(listOf("cancelled-1"), cancelled)
+            assertEquals(listOf("sibling-1", "sibling-2", "sibling-3"), sibling)
+        } finally {
+            graphQlClient.stop().awaitSingleOrNull()
+        }
+    }
+
+    /** Ensures stream failures become stable GraphQL error envelopes after any emitted data prefix. */
+    @Test
+    fun `graphql websocket exposes typed subscription errors`() = runTest {
+        val graphQlClient = WebSocketGraphQlClient.builder(
+            "ws://127.0.0.1:$httpPort/lab/v1/graphql/ws",
+            ReactorNettyWebSocketClient(),
+        ).build()
+
+        try {
+            val failure = runCatching {
+                withContext(Dispatchers.IO) {
+                    withTimeout(5.seconds) {
+                        graphQlClient.document(
+                            """
+                            subscription FailingTicker {
+                              failingTicker(message: "typed", countBeforeError: 1) { sequence message }
+                            }
+                            """.trimIndent(),
+                        )
+                            .operationName("FailingTicker")
+                            .executeSubscription()
+                            .collectList()
+                            .awaitSingle()
+                    }
+                }
+            }.exceptionOrNull()
+            val subscriptionFailure = failure as? SubscriptionErrorException
+
+            assertTrue(subscriptionFailure != null)
+            assertEquals(1, subscriptionFailure?.errors?.size)
+            assertEquals(
+                org.springframework.graphql.execution.ErrorType.INTERNAL_ERROR,
+                subscriptionFailure?.errors?.single()?.errorType,
+            )
         } finally {
             graphQlClient.stop().awaitSingleOrNull()
         }

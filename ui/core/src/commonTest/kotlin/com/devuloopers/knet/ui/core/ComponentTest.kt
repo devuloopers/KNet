@@ -133,8 +133,14 @@ class ComponentTest {
 
     @Test
     fun scrollbarAppearsOnlyForMeasuredOverflow() {
-        assertFalse(shouldShowScrollbar(maximumScrollOffset = 0))
-        assertTrue(shouldShowScrollbar(maximumScrollOffset = 1))
+        assertFalse(
+            shouldShowScrollbar(
+                viewportSize = 0,
+                maximumScrollOffset = Int.MAX_VALUE,
+            ),
+        )
+        assertFalse(shouldShowScrollbar(viewportSize = 100, maximumScrollOffset = 0))
+        assertTrue(shouldShowScrollbar(viewportSize = 100, maximumScrollOffset = 1))
         assertFalse(shouldShowScrollbar(canScrollBackward = false, canScrollForward = false))
         assertTrue(shouldShowScrollbar(canScrollBackward = true, canScrollForward = false))
         assertTrue(shouldShowScrollbar(canScrollBackward = false, canScrollForward = true))

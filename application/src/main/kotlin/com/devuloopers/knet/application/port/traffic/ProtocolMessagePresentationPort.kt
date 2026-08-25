@@ -54,19 +54,51 @@ public data class ProtocolMessagePresentation(
 
 /** Additive decoder SPI implemented by protocol engines, never by Traffic UI. */
 public interface ProtocolMessagePayloadDecoder {
+    /** Stable composition identity used to reject accidental duplicate registrations. */
+    public val decoderId: ProtocolMessagePayloadDecoderId
+
     public val protocolId: MessageProtocolId
 
+    /** Larger values run first when several semantic decoders share one transport protocol. */
+    public val priority: Int
+
     public fun decode(input: ProtocolMessagePayloadInput): ProtocolMessagePresentation?
+}
+
+/** Stable normalized identity for one protocol-message presentation decoder. */
+@JvmInline
+public value class ProtocolMessagePayloadDecoderId(public val value: String) {
+    init {
+        require(value.isNotBlank()) { "Protocol message decoder ID must not be blank." }
+        require(value == value.trim().lowercase()) {
+            "Protocol message decoder ID must be a normalized lowercase token."
+        }
+    }
 }
 
 /** Immutable validated decoder registry assembled by the product composition root. */
 public class ProtocolMessagePresentationRegistry(
     decoders: List<ProtocolMessagePayloadDecoder> = emptyList(),
 ) {
-    private val decodersByProtocol = decoders.associateBy(ProtocolMessagePayloadDecoder::protocolId).also { indexed ->
-        require(indexed.size == decoders.size) { "Protocol message decoder IDs must be unique." }
-    }
+    private val decodersByProtocol = decoders
+        .also { contributions ->
+            require(contributions.distinctBy(ProtocolMessagePayloadDecoder::decoderId).size == contributions.size) {
+                "Protocol message decoder IDs must be unique."
+            }
+        }
+        .groupBy(ProtocolMessagePayloadDecoder::protocolId)
+        .mapValues { (_, contributions) ->
+            contributions.sortedWith(
+                compareByDescending<ProtocolMessagePayloadDecoder>(ProtocolMessagePayloadDecoder::priority)
+                    .thenBy { decoder -> decoder.decoderId.value },
+            )
+        }
 
-    public fun decode(input: ProtocolMessagePayloadInput): ProtocolMessagePresentation? =
-        decodersByProtocol[input.message.protocol]?.decode(input)
+    /** Resolves the first confident semantic presentation, then falls through to transport decoders. */
+    public fun decode(input: ProtocolMessagePayloadInput): ProtocolMessagePresentation? {
+        for (decoder in decodersByProtocol[input.message.protocol].orEmpty()) {
+            decoder.decode(input)?.let { presentation -> return presentation }
+        }
+        return null
+    }
 }

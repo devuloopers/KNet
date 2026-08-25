@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.application.port.apistudio.ApiStudioEditorId
 import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolDraft
+import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolAuthoredMessage
 import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolDocument
 import com.devuloopers.knet.application.port.apistudio.ApiStudioOperationShape
 import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolExecutionCommand
@@ -246,7 +247,7 @@ class GrpcStudioViewModel(
     fun reflect() {
         val snapshot = mutableState.value
         val port = snapshot.targetPort.toIntOrNull()
-        val deadline = snapshot.deadlineMillis.toLongOrNull()
+        val deadline = snapshot.deadlineMillis.toLongOrDefaultIfBlank(DEFAULT_DEADLINE_MILLIS)
         if (port == null || port !in 1..65_535 || deadline == null || snapshot.targetHost.isBlank()) {
             mutableState.update { it.copy(errorMessage = "Enter a valid target and deadline for reflection.") }
             return
@@ -420,7 +421,9 @@ class GrpcStudioViewModel(
         val operation = requireNotNull(snapshot.selectedOperation) { "Choose a gRPC method." }
         val port = requireNotNull(snapshot.targetPort.toIntOrNull()) { "Enter a valid target port." }
         require(port in 1..65_535) { "Enter a valid target port." }
-        val deadline = requireNotNull(snapshot.deadlineMillis.toLongOrNull()) { "Enter a valid deadline." }
+        val deadline = requireNotNull(
+            snapshot.deadlineMillis.toLongOrDefaultIfBlank(DEFAULT_DEADLINE_MILLIS),
+        ) { "Enter a valid deadline." }
         createDocument.execute(
             RequestKindId.GRPC,
             ApiStudioProtocolDraft(
@@ -432,7 +435,12 @@ class GrpcStudioViewModel(
                 operationId = operation.id,
                 deadlineMillis = deadline,
                 metadata = snapshot.authoredMetadata,
-                outboundMessages = snapshot.outboundMessages,
+                outboundMessages = snapshot.outboundMessages.map { message ->
+                    ApiStudioProtocolAuthoredMessage(
+                        content = message,
+                        contentType = "application/json",
+                    )
+                },
                 schemaSourceId = snapshot.schemaSourceId,
             ),
         ).getOrThrow()
@@ -536,7 +544,11 @@ class GrpcStudioViewModel(
 
     private companion object {
         const val MAXIMUM_VISIBLE_EVENTS = 1_000
+        const val DEFAULT_DEADLINE_MILLIS = 30_000L
         const val MAXIMUM_REFLECTION_DEADLINE_MILLIS = 120_000L
         const val AUTO_SAVE_DEBOUNCE_MILLIS = 300L
     }
 }
+
+private fun String.toLongOrDefaultIfBlank(defaultValue: Long): Long? =
+    if (isBlank()) defaultValue else toLongOrNull()

@@ -84,8 +84,29 @@ class ProtocolGraphQlController {
         }
     }
 
+    /**
+     * Emits a bounded prefix and then terminates with a typed GraphQL error.
+     *
+     * @param message Prefix included in emitted events.
+     * @param countBeforeError Number of data events emitted before the failure.
+     * @return Cold stream that always terminates with the protocol-lab failure.
+     */
+    @SubscriptionMapping
+    fun failingTicker(
+        @Argument message: String,
+        @Argument countBeforeError: Int,
+    ): Flow<GraphQlStreamEvent> = flow {
+        repeat(countBeforeError.coerceIn(0, MAX_EVENTS)) { index ->
+            val sequence = index + 1
+            emit(GraphQlStreamEvent(sequence = sequence, message = "$message-$sequence"))
+        }
+        throw ProtocolLabGraphQlException()
+    }
+
     private companion object {
         const val MAX_EVENTS = 100
         const val MAX_DELAY_MILLIS = 10_000
     }
 }
+
+internal class ProtocolLabGraphQlException : IllegalStateException("Requested protocol-lab GraphQL failure.")

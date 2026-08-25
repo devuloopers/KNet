@@ -9,7 +9,7 @@ data class GrpcStudioState(
     val targetHost: String = "",
     val targetPort: String = "",
     val useTls: Boolean = false,
-    val deadlineMillis: String = "30000",
+    val deadlineMillis: String = "",
     val schemaSourceId: String? = null,
     val operations: List<ApiStudioProtocolOperation> = emptyList(),
     val selectedOperation: ApiStudioProtocolOperation? = null,
@@ -46,6 +46,6 @@ data class GrpcStudioState(
             return selectedOperation != null &&
                 hasValidTarget &&
                 outboundMessages.all { it.isNotBlank() } &&
-                deadline != null && deadline in 1L..3_600_000L
+                (deadlineMillis.isBlank() || deadline != null && deadline in 1L..3_600_000L)
         }
 }

@@ -81,7 +81,7 @@ The source of truth for boundaries, invariants, future-feature isolation, and de
 | Target 7: connectivity and portal isolation | Phase 14 | Complete for manual/PAC/Apple/ADB and the isolated setup listener |
 | Target 8: pairing/mobile-ready ingress | Phase 15 | Complete |
 | Target 9: companion/relay product | Phase 16 | Optional product scope not activated; foundations complete and capability unavailable |
-| Target 10: protocol increments | Phase 17 | SSE increment complete; WebSocket/H2/gRPC/H3 remain independent unavailable increments |
+| Target 10: protocol increments | Phase 17 | SSE complete; HTTP/2, native gRPC, HTTP/1.1 WebSocket, and modern GraphQL WebSocket are additive experimental increments; HTTP/3 remains unavailable |
 | Target 11: performance/production gates | Phase 18 | Standard gate complete; extended-duration soak is a release operation |
 
 ## Phase 9: Baselines, Security, Correctness, and Application Control [COMPLETED]
@@ -237,7 +237,7 @@ Exit criteria: direct and relay paths pass the same proxy conformance suite; rev
 
 No Android/iOS application, VPN packet adapter, direct tunnel, or relay carrier is added without a real platform target and product/security requirements. The shared traffic model, pairing identity, authenticated gateway, application ports, and connectivity registry are complete, so activating this phase is additive. Runtime capability status remains `UNAVAILABLE` for Mobile Companion, VPN, and Relay.
 
-## Phase 17: Protocol Transports and Inspectors [OPTIONAL INCREMENTS — SSE COMPLETE, HTTP/2 EXPERIMENTAL]
+## Phase 17: Protocol Transports and Inspectors [IN PROGRESS — HTTP/3 PENDING]
 
 Deliver independently after Phases 11 and 13 establish the transport and inspector seams:
 
@@ -252,8 +252,44 @@ Each increment must satisfy conformance, failure, backpressure, body-limit, life
 The SSE semantic-inspection increment is complete with an end-to-end test. GraphQL was completed in Phase 13.
 HTTP/2 is implemented end to end as an `EXPERIMENTAL` capability with local real-socket tests; its remaining
 cross-platform/device and release-soak gates are tracked in `docs/http2_target_and_implementation_plan.md`.
-WebSocket transport, gRPC semantic inspection, and HTTP/3 remain independent future increments. HTTP/2 is not
-marked `SUPPORTED` until its external qualification matrix passes.
+Native gRPC capture, message breakpoints, descriptor-driven inspection, and API Studio are now implemented as an
+independent `:engine:grpc` increment. The WebSocket increment completed its local JVM gate on 2026-08-25 with a
+generic post-upgrade duplex proxy seam, RFC 6455 framing/capture, message breakpoints, Traffic presentation, and an
+additive API Studio workspace. HTTP/3 remains an independent future increment. Experimental transports are not
+marked `SUPPORTED` until their external qualification matrices pass.
+
+### Phase 17 WebSocket increment [COMPLETED — EXPERIMENTAL]
+
+* [COMPLETED] Add protocol-neutral post-`101 Switching Protocols` duplex observation/transformation hooks to
+  `:engine:proxy` without adding WebSocket parsing to the proxy.
+* [COMPLETED] Add `:engine:websocket` with bounded incremental RFC 6455 framing, canonical child-message capture,
+  payload presentation, request descriptors, message breakpoints, API Studio execution, and module documentation.
+* [COMPLETED] Add `:ui:desktop:apiStudio:websocket` with transient blank authoring, shared saved/unsaved collections,
+  full-duplex message controls, and bounded event presentation.
+* [COMPLETED] Register product DI, truthful runtime capabilities, protocol-lab coverage, and the root
+  `webSocketQualification` verification gate.
+* [COMPLETED] Locally qualify masking, fragmentation, control frames, close/cancel/error lifecycle, backpressure,
+  capture limits, replacement framing, `ws`, versioned persistence, and API Studio lifecycle without launching the
+  desktop app. `wss` uses the already-qualified CONNECT/TLS path but remains in the external device matrix.
+
+Detailed evidence, limits, and explicit exclusions are recorded in
+[`websocket_qualification.md`](websocket_qualification.md).
+
+### Phase 17 GraphQL over WebSocket semantic increment [COMPLETED — EXPERIMENTAL]
+
+This additive semantic increment targets the modern `graphql-transport-ws` protocol over KNet's existing HTTP/1.1
+WebSocket transport. It keeps one canonical WebSocket parent exchange and child-message stream while adding
+operation-aware Traffic presentation, layered message breakpoints, and a contributed GraphQL subscription API
+Studio editor. The proxy remains unaware of GraphQL semantics, and the existing raw WebSocket tooling remains the
+fallback.
+
+The modern `graphql-transport-ws` semantic increment is implemented and has a dedicated local qualification gate.
+It reuses one canonical WebSocket parent/message stream, adds bounded operation-aware presentation and message
+breakpoints, and contributes a saved/unsaved GraphQL subscription editor to the shared API Studio workspace.
+External `wss`, browser/mobile, network-transition, and soak evidence still gates promotion beyond
+`EXPERIMENTAL`. Architecture, limits, and exact evidence are recorded in
+[`graphql_websocket_target_and_implementation_plan.md`](graphql_websocket_target_and_implementation_plan.md) and
+[`graphql_websocket_qualification.md`](graphql_websocket_qualification.md).
 
 ## Phase 18: Performance, Soak, Security, and Release Gates [STANDARD GATE COMPLETED]
 

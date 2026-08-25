@@ -64,6 +64,9 @@ object PipelineHandlerNames {
      */
     const val OUTBOUND_HANDLER = "outboundHandler"
 
+    /** Raw byte relay installed on both channels after an accepted HTTP protocol switch. */
+    const val DUPLEX_RELAY = "duplexRelay"
+
     /**
      * Maximum request size accepted by the opt-in downstream breakpoint aggregator.
      */

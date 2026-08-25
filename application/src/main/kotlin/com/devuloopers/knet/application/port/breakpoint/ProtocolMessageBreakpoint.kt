@@ -6,14 +6,19 @@ import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.id.ProtocolMessageId
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.TrafficDirection
+import com.devuloopers.knet.traffic.model.message.ProtocolMessageKind
 import kotlinx.coroutines.flow.StateFlow
 
 /** One complete, bounded framed message offered to the application breakpoint gate. */
 public data class ProtocolMessageBreakpointCandidate(
     public val exchangeId: ExchangeId,
     public val messageId: ProtocolMessageId,
-    public val protocolId: BreakpointProtocolId,
+    /** Ordered semantic-to-transport protocol identities that may inspect this one wire message. */
+    public val protocolRoute: List<BreakpointProtocolId>,
+    public val kind: ProtocolMessageKind,
     public val request: HttpRequestSnapshot,
+    /** Server-selected application subprotocol, when the framed transport negotiated one. */
+    public val negotiatedSubprotocol: String? = null,
     public val direction: TrafficDirection,
     public val sequence: Long,
     public val declaredBytes: Long,
@@ -24,6 +29,10 @@ public data class ProtocolMessageBreakpointCandidate(
     public val startedAtEpochMillis: Long,
 ) {
     init {
+        require(protocolRoute.isNotEmpty()) { "A protocol message route must not be empty." }
+        require(protocolRoute.distinct().size == protocolRoute.size) {
+            "A protocol message route must not contain duplicate identities."
+        }
         require(sequence > 0L) { "Protocol message sequence must be positive." }
         require(declaredBytes >= 0L) { "Declared protocol message bytes must not be negative." }
         require(retainedTransportBytes >= 0L) { "Retained protocol transport bytes must not be negative." }
@@ -37,6 +46,10 @@ public data class ProtocolMessageBreakpointCandidate(
 
     public val retainedBytes: Long
         get() = body.size.toLong() + retainedTransportBytes
+
+    /** Most-specific protocol identity offered by the transport adapter. */
+    public val primaryProtocolId: BreakpointProtocolId
+        get() = protocolRoute.first()
 }
 
 /** Decision returned to a framed-message transport adapter. */
@@ -50,6 +63,8 @@ public sealed interface ProtocolMessageBreakpointDecision {
 public data class PendingProtocolMessageBreakpoint(
     public val id: String,
     public val ruleId: String,
+    /** Protocol layer whose rule won deterministic evaluation for this message. */
+    public val matchedProtocolId: BreakpointProtocolId,
     public val candidate: ProtocolMessageBreakpointCandidate,
 )
 
@@ -58,7 +73,7 @@ public interface ProtocolMessageBreakpointGate {
     /** Cheap request-head prefilter used before a protocol adapter buffers complete messages. */
     public fun mayInterceptMessage(
         request: HttpRequestSnapshot,
-        protocolId: BreakpointProtocolId,
+        protocolRoute: List<BreakpointProtocolId>,
         direction: TrafficDirection,
     ): Boolean
 

@@ -8,6 +8,8 @@ import com.devuloopers.knet.engine.proxy.pipeline.ProxyChannelAttributes
 import com.devuloopers.knet.engine.proxy.upstream.HttpTwoUpstreamConnectionPool
 import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamInspectorFactory
 import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamTransformerFactory
+import com.devuloopers.knet.engine.proxy.inspection.ProxyDuplexInspectorFactory
+import com.devuloopers.knet.engine.proxy.inspection.ProxyDuplexTransformerFactory
 import com.devuloopers.knet.traffic.model.IngressContext
 import com.devuloopers.knet.traffic.model.IngressKind
 import com.devuloopers.knet.traffic.model.TrafficEndpoint
@@ -76,6 +78,10 @@ import com.devuloopers.knet.engine.proxy.tls.ServerTlsContextProvider
  * @property streamInspectorFactories Additive protocol observers that cannot control forwarding.
  * @property streamTransformerFactories Additive, request-selected protocol message gates. A
  * request stays on the ordinary streaming path when no factory claims it.
+ * @property duplexInspectorFactories Additive observers for protocols established by an HTTP/1.1
+ * switching response. Ordinary HTTP traffic never enters this path.
+ * @property duplexTransformerFactories Optional post-upgrade message gates. A connection remains
+ * on the zero-copy relay path when no factory claims it.
  */
 class KNetProxyServer(
     val bindHost: String = DEFAULT_BIND_HOST,
@@ -92,6 +98,8 @@ class KNetProxyServer(
     private val runtimeMetrics: ProxyRuntimeMetrics = ProxyRuntimeMetrics(),
     private val streamInspectorFactories: List<ProxyStreamInspectorFactory> = emptyList(),
     private val streamTransformerFactories: List<ProxyStreamTransformerFactory> = emptyList(),
+    private val duplexInspectorFactories: List<ProxyDuplexInspectorFactory> = emptyList(),
+    private val duplexTransformerFactories: List<ProxyDuplexTransformerFactory> = emptyList(),
 ) {
 
     companion object {
@@ -458,6 +466,8 @@ class KNetProxyServer(
         httpTwoUpstreamPool = httpTwoUpstreamPool,
         streamInspectorFactories = streamInspectorFactories,
         streamTransformerFactories = streamTransformerFactories,
+        duplexInspectorFactories = duplexInspectorFactories,
+        duplexTransformerFactories = duplexTransformerFactories,
         installTlsApplicationProtocol = { pipeline ->
             pipeline.addAfter(
                 PipelineHandlerNames.SSL,

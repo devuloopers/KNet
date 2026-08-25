@@ -46,7 +46,11 @@ Starting or stopping the proxy does not clear traffic. Traffic is removed only t
 
 The implemented foundation includes HTTP/1 streaming, experimental HTTP/2 transport, bounded capture/storage, TLS interception, canonical traffic queries, breakpoints, GraphQL/SSE semantic inspection, PAC/manual/Apple/ADB desktop connectivity, pairing, and authenticated ingress foundations.
 
-HTTP/2 has completed local JVM qualification but remains `EXPERIMENTAL` until its external platform/device and release-soak gates pass. Mobile companion apps, VPN capture, relay, HTTP/3, WebSocket transport, and gRPC transport/inspection remain future additive capabilities. They are not presented as supported until their implementation and conformance gates pass.
+HTTP/2, native gRPC, HTTP/1.1 WebSocket, and modern `graphql-transport-ws` inspection/breakpoints/API Studio have
+completed their local JVM increments but remain `EXPERIMENTAL` until their external platform/device and
+release-soak gates pass. Mobile companion apps,
+VPN capture, relay, HTTP/3, and WebSocket over HTTP/2 remain future additive capabilities. They are not presented
+as supported until their implementation and conformance gates pass.
 
 ## Build and verification
 

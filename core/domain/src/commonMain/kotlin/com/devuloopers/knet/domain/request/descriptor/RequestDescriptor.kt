@@ -22,6 +22,12 @@ value class RequestKindId(val value: String) {
 
         /** Native gRPC request kind carried over an HTTP/2 transport. */
         val GRPC: RequestKindId = RequestKindId("grpc")
+
+        /** WebSocket connection established by an HTTP upgrade or extended CONNECT. */
+        val WEBSOCKET: RequestKindId = RequestKindId("websocket")
+
+        /** Modern GraphQL subscription carried by the `graphql-transport-ws` WebSocket subprotocol. */
+        val GRAPHQL_WEBSOCKET: RequestKindId = RequestKindId("graphql-websocket")
     }
 }
 

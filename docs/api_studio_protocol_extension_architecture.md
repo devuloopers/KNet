@@ -1,6 +1,6 @@
 # API Studio Protocol Extension Architecture
 
-Status: **implemented for HTTP/GraphQL and native gRPC**
+Status: **implemented for HTTP/GraphQL, native gRPC, WebSocket, and modern GraphQL over WebSocket**
 
 ## Stable design
 
@@ -69,13 +69,18 @@ Add, without modifying the common sidebar or Room schema:
 
 Examples:
 
-- WebSocket adds a WebSocket editor/codec and session executor; saved collections remain unchanged.
+- WebSocket contributes its own editor/codec and session executor; its UI creates strict engine documents only
+  through `ApiStudioProtocolAuthoringPort`, so saved collections and the UI/runtime dependency boundary remain
+  unchanged.
 - SSE can continue using the HTTP editor when it only authors an HTTP request, while its response inspector is a
   separate additive renderer. It needs a new editor only if KNet later adds SSE-specific authoring state.
 - GraphQL remains an HTTP-editor format because it shares HTTP transport state and only changes semantic naming,
   body editing, badges, and inspection.
 - gRPC uses the contributed-editor path because descriptors, RPC cardinality, metadata, and duplex messages do not
   fit the HTTP request editor without coupling it to protobuf.
+- GraphQL over WebSocket uses the contributed-editor path above the shared WebSocket session transport because
+  initialization, acknowledgement, operation IDs, and streamed `next`/`error`/`complete` events do not fit either
+  the HTTP GraphQL body editor or the raw WebSocket composer. It still uses the same collection tree and store.
 
 Do not add a protocol enum switch to `ApiStudioScreen`, a protocol-specific collection table, a second sidebar, or
 engine objects in persisted/UI contracts. A new editor should be additive at composition time.

@@ -18,6 +18,7 @@ import com.devuloopers.knet.traffic.model.http.HttpMethod
 import com.devuloopers.knet.traffic.model.http.ResponseHead
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import com.devuloopers.knet.traffic.model.http.StandardApplicationProtocol
+import com.devuloopers.knet.traffic.model.message.ProtocolMessageKind
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
@@ -53,12 +54,12 @@ class GrpcMessageBreakpointTransformerFactory(
         if (GrpcMethodIdentity.fromTarget(request.head.target) == null) return null
         val interceptClient = gate.mayInterceptMessage(
             request,
-            GrpcBreakpointProtocol.id,
+            listOf(GrpcBreakpointProtocol.id),
             TrafficDirection.CLIENT_TO_SERVER,
         )
         val interceptServer = gate.mayInterceptMessage(
             request,
-            GrpcBreakpointProtocol.id,
+            listOf(GrpcBreakpointProtocol.id),
             TrafficDirection.SERVER_TO_CLIENT,
         )
         if (!interceptClient && !interceptServer) return null
@@ -274,7 +275,8 @@ private class DirectionMessageGate(
             ProtocolMessageBreakpointCandidate(
                 exchangeId = exchangeCapture.exchangeId,
                 messageId = messageId,
-                protocolId = BreakpointProtocolId("grpc"),
+                protocolRoute = listOf(BreakpointProtocolId("grpc")),
+                kind = ProtocolMessageKind.DATA,
                 request = request,
                 direction = direction,
                 sequence = ++sequence,

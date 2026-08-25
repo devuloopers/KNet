@@ -32,8 +32,10 @@ As of 2026-08-22:
 - the standard Phase 18 architecture/test/package gate is implemented; extended-duration soak is a parameterized release operation;
 - HTTP/2 is now an additive `EXPERIMENTAL` implementation with downstream H2C/TLS ALPN, upstream pooling,
   stream-scoped capture/breakpoints, API Studio, persistence, and Traffic presentation; Windows/Linux and
-  Android/iOS Wi-Fi qualification still gate `SUPPORTED`. Mobile Companion apps, relay, VPN, HTTP/3,
-  WebSocket transport, and gRPC remain additive and explicitly `UNAVAILABLE` until their own gates pass.
+  Android/iOS Wi-Fi qualification still gate `SUPPORTED`. Native gRPC, HTTP/1.1 WebSocket, and modern
+  `graphql-transport-ws` inspection/breakpoints/API Studio are also additive `EXPERIMENTAL` increments with local
+  JVM evidence. Mobile Companion apps, relay, VPN, HTTP/3, WebSocket over HTTP/2, and legacy `graphql-ws` remain
+  explicitly `UNAVAILABLE` until their own gates pass.
 
 The accepted boundary decisions are recorded in `docs/adr/`. Reproducible correctness commands and the distinction between current tests and pending measured capacity gates are recorded in `docs/proxy_test_strategy_and_baselines.md`.
 
@@ -326,8 +328,8 @@ KNet/
 │   │       ├── runtime/
 │   │       ├── connection/
 │   │       ├── transport/http1/
-│   │       ├── transport/http2/                     FUTURE PACKAGE
-│   │       ├── transport/websocket/                 FUTURE PACKAGE
+│   │       ├── transport/http2/                     IMPLEMENTED INTERNALLY
+│   │       ├── duplex/                               IMPLEMENTED PROTOCOL-NEUTRAL UPGRADE RELAY
 │   │       ├── upstream/
 │   │       ├── tls/
 │   │       ├── access/
@@ -340,9 +342,12 @@ KNet/
 │   │       ├── api/
 │   │       ├── registry/
 │   │       ├── graphql/
-│   │       ├── grpc/                                FUTURE/WIRED ONLY
-│   │       ├── sse/                                 FUTURE/WIRED ONLY
-│   │       └── websocket/                           FUTURE SEMANTIC INSPECTION
+│   │       ├── grpc/                                 MOVED TO :engine:grpc
+│   │       ├── sse/                                  IMPLEMENTED
+│   │       └── websocket/                            MOVED TO :engine:websocket
+│   ├── grpc/                                         ADDED, EXPERIMENTAL
+│   ├── graphqlWebSocket/                             ADDED, EXPERIMENTAL SEMANTIC LAYER
+│   ├── websocket/                                    ADDED, EXPERIMENTAL
 │   ├── formatter/                                    KEEP
 │   ├── script/                                       KEEP, HARDEN
 │   ├── session/                                      DEPRECATE/MOVE CONTENT
@@ -2213,8 +2218,9 @@ This design can realistically scale KNet toward a Charles/mitmproxy-class tool w
 The design also gives Mobile Companion, VPN, ADB, PAC, manual setup, Apple profiles, and relay independent additive boundaries. A companion changes how authenticated proxy streams reach the desktop; it does not create a second proxy/capture architecture. Protocol growth is similarly separated into transport adapters and semantic inspectors over stable connection/exchange/body contracts.
 
 The qualification is product capability, not architecture: KNet is not yet Charles/mitmproxy-class in protocol
-breadth. HTTP/2 now has a real experimental implementation and local real-socket evidence, but still requires
-Windows/Linux, Android/iOS Wi-Fi, and release-soak evidence before `SUPPORTED`. HTTP/3, WebSocket transport,
-gRPC, VPN, relay, and companion applications still require real implementations. Those additions can reuse the
-stable proxy ingress, canonical traffic/body/session, application, connectivity, pairing, and inspector seams
-rather than migrating them.
+breadth. HTTP/2, native gRPC, HTTP/1.1 WebSocket, and modern `graphql-transport-ws` semantics now have real
+experimental implementations and local real-socket evidence, but still require Windows/Linux, Android/iOS Wi-Fi
+where applicable, external `wss`/device matrices, and release-soak evidence before `SUPPORTED`. HTTP/3, WebSocket
+over HTTP/2, VPN, relay, companion applications, and legacy `graphql-ws` still require real implementations.
+Those additions can reuse the stable proxy ingress, canonical traffic/body/session, application, connectivity,
+pairing, and inspector seams rather than migrating them.

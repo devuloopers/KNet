@@ -60,6 +60,7 @@ private const val OUTBOUND_TAG = "ProxyEngine"
  * @param onUpstreamWritable Callback used by the request pump when upstream writability returns.
  * @param upstreamProtocol Protocol negotiated by a transport adapter when Netty's HTTP-object bridge
  * represents that protocol using HTTP/1-shaped objects.
+ * @param onUpgradeAccepted Transfers an accepted HTTP/1.1 protocol switch to the raw duplex relay.
  */
 internal class KNetOutboundHandler(
     private val clientChannel: Channel,
@@ -73,6 +74,8 @@ internal class KNetOutboundHandler(
     private val upstreamProtocol: ApplicationProtocol? = null,
     private val streamInspectors: List<ProxyStreamInspector> = emptyList(),
     private val streamTransformer: ProxyStreamTransformer? = null,
+    private val onUpgradeAccepted: (Channel, com.devuloopers.knet.traffic.model.http.ResponseHead, Long) -> Unit =
+        { _, _, _ -> },
 ) : SimpleChannelInboundHandler<HttpObject>() {
     private var responseStarted: Boolean = false
     private var isKeepAlive: Boolean = true
@@ -107,7 +110,7 @@ internal class KNetOutboundHandler(
     override fun channelRead0(context: ChannelHandlerContext, message: HttpObject) {
         when (message) {
             is FullHttpResponse -> acceptFullResponse(context, message)
-            is HttpResponse -> acceptResponseHead(message, retainForWrite = true)
+            is HttpResponse -> acceptResponseHead(context, message, retainForWrite = true)
             is HttpContent -> acceptResponseContent(context, message)
         }
     }
@@ -120,10 +123,14 @@ internal class KNetOutboundHandler(
             lastClientWrite = clientChannel.writeAndFlush(ReferenceCountUtil.retain(response))
             return
         }
+        if (response.status() == HttpResponseStatus.SWITCHING_PROTOCOLS) {
+            acceptValidatedUpgradeResponse(context, response)
+            return
+        }
         if (streamTransformer != null) {
             val head = DefaultHttpResponse(response.protocolVersion(), response.status())
             head.headers().set(response.headers())
-            acceptResponseHead(head, retainForWrite = false)
+            acceptResponseHead(context, head, retainForWrite = false)
             enqueueTransformedResponse(
                 context = context,
                 payload = ByteArray(response.content().readableBytes()).also { bytes ->
@@ -184,13 +191,21 @@ internal class KNetOutboundHandler(
         }
     }
 
-    private fun acceptResponseHead(response: HttpResponse, retainForWrite: Boolean) {
+    private fun acceptResponseHead(
+        context: ChannelHandlerContext,
+        response: HttpResponse,
+        retainForWrite: Boolean,
+    ) {
         publishUpstreamProtocol(response)
         provisionalResponseInProgress = response.status().code() in 100..199 && response.status().code() != 101
         if (provisionalResponseInProgress) {
             HttpOneSemantics.prepareProvisionalResponse(response, downstreamPolicy)
             KNetLogger.debug(OUTBOUND_TAG) { "KNet Proxy Provisional Response Headers: ${response.status()}" }
             lastClientWrite = clientChannel.writeAndFlush(ReferenceCountUtil.retain(response))
+            return
+        }
+        if (response.status() == HttpResponseStatus.SWITCHING_PROTOCOLS) {
+            acceptValidatedUpgradeResponse(context, response, retainForWrite)
             return
         }
 
@@ -215,6 +230,61 @@ internal class KNetOutboundHandler(
         lastClientWrite = clientChannel.writeAndFlush(
             if (retainForWrite) ReferenceCountUtil.retain(response) else response,
         )
+    }
+
+    /** Validates both HTTP/1.1 handshake legs before transferring raw transport ownership. */
+    private fun acceptValidatedUpgradeResponse(
+        context: ChannelHandlerContext,
+        response: HttpResponse,
+        retainForWrite: Boolean = true,
+    ) {
+        if (!isAcceptedUpgrade(response)) {
+            exceptionCaught(context, IOException("Upstream returned an invalid HTTP Upgrade response."))
+            return
+        }
+        timingCollector.markFirstByteReceived()
+        timingCollector.markLastByteReceived()
+        responseStarted = true
+        responseComplete = true
+        val observedAt = Clock.System.now().toEpochMilliseconds()
+        val responseHead = HttpMapper.mapResponseHead(response, upstreamProtocol)
+        capture?.observeResponse(responseHead, observedAt)
+        capture?.completeBody(
+            direction = TrafficDirection.SERVER_TO_CLIENT,
+            observedBytes = 0L,
+            occurredAtEpochMillis = observedAt,
+        )
+        streamInspectors.forEach { inspector -> runCatching { inspector.onResponse(responseHead, observedAt) } }
+        val write = clientChannel.writeAndFlush(
+            if (retainForWrite) ReferenceCountUtil.retain(response) else response,
+        )
+        lastClientWrite = write
+        write.addListener { future ->
+            if (future.isSuccess) {
+                onUpgradeAccepted(context.channel(), responseHead, observedAt)
+            } else {
+                capture?.terminate(
+                    state = ExchangeState.CANCELLED,
+                    timings = timingCollector.getTimings(),
+                    occurredAtEpochMillis = observedAt,
+                    errorCode = DOWNSTREAM_RESPONSE_REJECTED,
+                )
+                notifyTermination(ExchangeState.CANCELLED, observedAt, DOWNSTREAM_RESPONSE_REJECTED)
+                publishCompletion(false)
+                clientChannel.close()
+                context.close()
+            }
+        }
+    }
+
+    /** Matches a switching response to the exact protocol token requested by the downstream client. */
+    private fun isAcceptedUpgrade(response: HttpResponse): Boolean {
+        if (request.protocolVersion() != io.netty.handler.codec.http.HttpVersion.HTTP_1_1) return false
+        if (response.protocolVersion() != io.netty.handler.codec.http.HttpVersion.HTTP_1_1) return false
+        val acceptedProtocol = response.headers().tokens(HttpHeaderNames.UPGRADE).singleOrNull() ?: return false
+        return request.headers().containsToken(HttpHeaderNames.UPGRADE, acceptedProtocol) &&
+            request.headers().containsToken(HttpHeaderNames.CONNECTION, HttpHeaderValues.UPGRADE.toString()) &&
+            response.headers().containsToken(HttpHeaderNames.CONNECTION, HttpHeaderValues.UPGRADE.toString())
     }
 
     private fun acceptResponseContent(context: ChannelHandlerContext, content: HttpContent) {
@@ -595,6 +665,19 @@ internal class KNetOutboundHandler(
         val trailers: List<com.devuloopers.knet.traffic.model.http.HeaderField>,
     )
 }
+
+/** Returns whether any repeated/comma-separated header field contains the requested token. */
+private fun io.netty.handler.codec.http.HttpHeaders.containsToken(
+    name: CharSequence,
+    expected: String,
+): Boolean = tokens(name).any { token -> token.equals(expected, ignoreCase = true) }
+
+/** Parses repeated HTTP fields using the standard comma-separated token grammar. */
+private fun io.netty.handler.codec.http.HttpHeaders.tokens(name: CharSequence): Sequence<String> = getAll(name)
+    .asSequence()
+    .flatMap { value -> value.split(',').asSequence() }
+    .map(String::trim)
+    .filter(String::isNotEmpty)
 
 /** Copies only bytes admitted by the capture sink and never changes the source buffer indices. */
 internal fun captureBodyChunk(

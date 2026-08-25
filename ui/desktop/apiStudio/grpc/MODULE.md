@@ -6,6 +6,8 @@ This module owns the desktop authoring and execution presentation for native gRP
 It renders descriptor import or explicit server reflection, target and method selection, metadata, outbound
 protobuf-JSON messages, stream execution state, cancellation, trailers, and the bounded message timeline. Its
 versioned codec losslessly owns incomplete gRPC authoring payloads stored through the common workspace boundary.
+It uses the common resizable API Studio authoring/result geometry, keeping target actions in the authoring pane
+and the stream timeline full-height in the result pane.
 
 ## Dependency boundary
 
@@ -32,6 +34,9 @@ Opening the gRPC tab renders a complete transient blank editor without writing t
 authoring mutation atomically materializes one unsaved workspace document containing that edit, reports the new ID
 to the common shell, and then enters the normal debounced auto-save path. Message-tab and event selection remain
 presentation-only and cannot create an abandoned request.
+
+The optional deadline remains visually blank in new and persisted incomplete drafts. Reflection and invocation
+apply the 30-second operational default only when execution begins.
 
 Unary and server-streaming calls use the bounded batch execution contract. Client-streaming and bidirectional
 calls use the generic interactive-session contract, so future streaming protocols can add their own workspace

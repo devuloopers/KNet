@@ -151,7 +151,7 @@ private fun MessageQueue(
                         .padding(10.dp),
                 ) {
                     Text(
-                        text = "${item.candidate.protocolId.value.uppercase()}  #${item.candidate.sequence}",
+                        text = "${item.matchedProtocolId.value.uppercase()}  #${item.candidate.sequence}",
                         style = KNetTheme.typography.labelMedium.copy(
                             color = colors.textPrimary,
                             fontWeight = FontWeight.Bold,
@@ -192,7 +192,7 @@ private fun MessageEditor(
         ) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    text = "Intercepted ${candidate.protocolId.value.uppercase()} message",
+                    text = "Intercepted ${event.matchedProtocolId.value.uppercase()} message",
                     style = KNetTheme.typography.heading.copy(color = colors.textPrimary),
                 )
                 Text(

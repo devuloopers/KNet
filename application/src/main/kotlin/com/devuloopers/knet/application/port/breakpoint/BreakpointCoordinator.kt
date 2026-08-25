@@ -244,14 +244,15 @@ public class BreakpointCoordinator(
 
     override fun mayInterceptMessage(
         request: HttpRequestSnapshot,
-        protocolId: BreakpointProtocolId,
+        protocolRoute: List<BreakpointProtocolId>,
         direction: TrafficDirection,
     ): Boolean {
+        require(protocolRoute.isNotEmpty()) { "A protocol message route must not be empty." }
         if (!_enabled.value || !captureAvailable.value) return false
         val phase = direction.toBreakpointPhase()
         return compiledRules.value.any { compiled ->
             compiled.interceptionUnit == BreakpointInterceptionUnit.PROTOCOL_MESSAGE &&
-                    compiled.protocolCriteria.protocolId == protocolId &&
+                    compiled.protocolCriteria.protocolId in protocolRoute &&
                     compiled.matchesTransport(request, phase)
         }
     }
@@ -382,30 +383,37 @@ public class BreakpointCoordinator(
         }
         val rules = compiledRules.value.filter { compiled ->
             compiled.interceptionUnit == BreakpointInterceptionUnit.PROTOCOL_MESSAGE &&
-                    compiled.protocolCriteria.protocolId == candidate.protocolId &&
+                    compiled.protocolCriteria.protocolId in candidate.protocolRoute &&
                     compiled.matchesTransport(candidate.request, candidate.phase)
         }
-        val observation = protocolRegistry.inspectMessage(
-            protocolId = candidate.protocolId,
-            input = ProtocolMessageInspectionInput(
-                request = candidate.request,
-                messageId = candidate.messageId,
-                direction = candidate.direction,
-                sequence = candidate.sequence,
-                declaredBytes = candidate.declaredBytes,
-                compressed = candidate.compressed,
-                compressionEncoding = candidate.compressionEncoding,
-                body = candidate.body,
-            ),
+        val inspectionInput = ProtocolMessageInspectionInput(
+            exchangeId = candidate.exchangeId,
+            request = candidate.request,
+            messageId = candidate.messageId,
+            kind = candidate.kind,
+            negotiatedSubprotocol = candidate.negotiatedSubprotocol,
+            direction = candidate.direction,
+            sequence = candidate.sequence,
+            declaredBytes = candidate.declaredBytes,
+            compressed = candidate.compressed,
+            compressionEncoding = candidate.compressionEncoding,
+            body = candidate.body,
         )
+        val observations = candidate.protocolRoute.associateWith { protocolId ->
+            protocolRegistry.inspectMessage(protocolId, inspectionInput)
+        }
         val rule = rules.firstOrNull { compiled ->
-            protocolRegistry.matches(compiled.protocolCriteria, observation)
+            protocolRegistry.matches(
+                compiled.protocolCriteria,
+                observations[compiled.protocolCriteria.protocolId],
+            )
         } ?: return ProtocolMessageBreakpointDecision.ContinueUnchanged
 
         val entry = PendingMessageEntry(
             public = PendingProtocolMessageBreakpoint(
                 id = Uuid.random().toString(),
                 ruleId = rule.definition.id,
+                matchedProtocolId = rule.protocolCriteria.protocolId,
                 candidate = candidate,
             ),
             decision = CompletableDeferred(),
@@ -462,6 +470,13 @@ public class BreakpointCoordinator(
         ) {
             return@withLock false
         }
+        if (decision is ProtocolMessageBreakpointDecision.Replace &&
+            !protocolRegistry.validateMessageReplacement(
+                protocolId = pending.public.matchedProtocolId,
+                input = pending.public.candidate.toInspectionInput(),
+                replacement = decision.body,
+            )
+        ) return@withLock false
         pending.decision.complete(decision)
     }
 
@@ -474,6 +489,7 @@ public class BreakpointCoordinator(
     }
 
     override fun cancelProtocolMessages(exchangeId: ExchangeId) {
+        protocolRegistry.releaseMessages(exchangeId)
         _pendingProtocolMessages.value
             .filter { it.public.candidate.exchangeId == exchangeId }
             .forEach { it.decision.complete(ProtocolMessageBreakpointDecision.DropStream) }
@@ -607,6 +623,21 @@ public class BreakpointCoordinator(
         val public: PendingProtocolMessageBreakpoint,
         val decision: CompletableDeferred<ProtocolMessageBreakpointDecision>,
     )
+
+    private fun ProtocolMessageBreakpointCandidate.toInspectionInput(): ProtocolMessageInspectionInput =
+        ProtocolMessageInspectionInput(
+            exchangeId = exchangeId,
+            request = request,
+            messageId = messageId,
+            kind = kind,
+            negotiatedSubprotocol = negotiatedSubprotocol,
+            direction = direction,
+            sequence = sequence,
+            declaredBytes = declaredBytes,
+            compressed = compressed,
+            compressionEncoding = compressionEncoding,
+            body = body,
+        )
 
     private class CompiledRule(
         val definition: BreakpointRule,

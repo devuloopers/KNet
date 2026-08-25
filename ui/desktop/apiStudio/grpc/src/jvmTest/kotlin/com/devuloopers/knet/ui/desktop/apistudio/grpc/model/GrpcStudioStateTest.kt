@@ -14,6 +14,7 @@ class GrpcStudioStateTest {
 
         assertTrue(state.targetHost.isEmpty())
         assertTrue(state.targetPort.isEmpty())
+        assertTrue(state.deadlineMillis.isEmpty())
         assertTrue(state.selectedOutboundMessage.isEmpty())
         assertFalse(state.hasValidTarget)
     }

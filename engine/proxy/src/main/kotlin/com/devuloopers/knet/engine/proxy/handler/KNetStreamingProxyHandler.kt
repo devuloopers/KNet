@@ -27,6 +27,10 @@ import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamInspectorFactory
 import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamTransformer
 import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamTransformerFactory
 import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamTransformResult
+import com.devuloopers.knet.engine.proxy.inspection.ProxyDuplexInspector
+import com.devuloopers.knet.engine.proxy.inspection.ProxyDuplexInspectorFactory
+import com.devuloopers.knet.engine.proxy.inspection.ProxyDuplexTransformer
+import com.devuloopers.knet.engine.proxy.inspection.ProxyDuplexTransformerFactory
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.model.ExchangeState
@@ -57,6 +61,7 @@ import io.netty.handler.codec.http.HttpObject
 import io.netty.handler.codec.http.HttpRequest
 import io.netty.handler.codec.http.HttpResponseStatus
 import io.netty.handler.codec.http.HttpServerCodec
+import io.netty.handler.codec.http.HttpServerUpgradeHandler
 import io.netty.handler.codec.http.HttpVersion
 import io.netty.handler.codec.http.LastHttpContent
 import io.netty.handler.codec.http2.Http2StreamFrameToHttpObjectCodec
@@ -106,6 +111,8 @@ internal class KNetStreamingProxyHandler(
     private val installTlsApplicationProtocol: ((io.netty.channel.ChannelPipeline) -> Unit)? = null,
     private val streamInspectorFactories: List<ProxyStreamInspectorFactory> = emptyList(),
     private val streamTransformerFactories: List<ProxyStreamTransformerFactory> = emptyList(),
+    private val duplexInspectorFactories: List<ProxyDuplexInspectorFactory> = emptyList(),
+    private val duplexTransformerFactories: List<ProxyDuplexTransformerFactory> = emptyList(),
 ) : ChannelInboundHandlerAdapter() {
 
     companion object {
@@ -255,6 +262,24 @@ internal class KNetStreamingProxyHandler(
                 }
                 .getOrNull()
         }
+        val duplexInspectors = duplexInspectorFactories.mapNotNull { factory ->
+            runCatching { factory.create(mappedRequest.request, streamId, capture) }
+                .onFailure { failure ->
+                    KNetLogger.warn(STREAMING_TAG) {
+                        "Duplex inspector rejected request setup: ${failure::class.simpleName}"
+                    }
+                }
+                .getOrNull()
+        }
+        val duplexTransformer = duplexTransformerFactories.firstNotNullOfOrNull { factory ->
+            runCatching { factory.create(mappedRequest.request, streamId, capture) }
+                .onFailure { failure ->
+                    KNetLogger.warn(STREAMING_TAG) {
+                        "Duplex transformer rejected request setup: ${failure::class.simpleName}"
+                    }
+                }
+                .getOrNull()
+        }
         val outboundHead = DefaultHttpRequest(
             request.protocolVersion(),
             request.method(),
@@ -281,8 +306,11 @@ internal class KNetStreamingProxyHandler(
             capture = capture,
             streamInspectors = streamInspectors,
             streamTransformer = streamTransformer,
+            duplexInspectors = duplexInspectors,
+            duplexTransformer = duplexTransformer,
             contentEncoding = HttpMapper.contentEncoding(request.headers()),
             timings = timings,
+            requestsDuplexUpgrade = isHttpOneUpgradeRequest(request),
         )
         activeRequest = active
         context.channel().config().isAutoRead = false
@@ -475,7 +503,7 @@ internal class KNetStreamingProxyHandler(
 
             context.executor().execute {
                 if (activeRequest !== active || !context.channel().isActive) return@execute
-                if (active.target.isSsl && httpTwoUpstreamPool != null) {
+                if (active.target.isSsl && httpTwoUpstreamPool != null && !active.requestsDuplexUpgrade) {
                     connectHttpTwo(context, active, resolvedHost)
                 } else {
                     connectHttpOne(context, active, resolvedHost)
@@ -706,8 +734,129 @@ internal class KNetStreamingProxyHandler(
                 onExchangeComplete = { keepDownstreamAlive ->
                     completeExchange(downstreamContext, active, keepDownstreamAlive)
                 },
+                onUpgradeAccepted = { upstream, response, occurredAtEpochMillis ->
+                    establishDuplexRelay(
+                        downstreamContext = downstreamContext,
+                        active = active,
+                        upstreamChannel = upstream,
+                        response = response,
+                        occurredAtEpochMillis = occurredAtEpochMillis,
+                    )
+                },
             ),
         )
+    }
+
+    /** Transfers an accepted HTTP/1.1 Upgrade exchange to the raw duplex relay path. */
+    private fun establishDuplexRelay(
+        downstreamContext: ChannelHandlerContext,
+        active: ActiveStreamingRequest,
+        upstreamChannel: Channel,
+        response: com.devuloopers.knet.traffic.model.http.ResponseHead,
+        occurredAtEpochMillis: Long,
+    ) {
+        if (!downstreamContext.executor().inEventLoop()) {
+            downstreamContext.executor().execute {
+                establishDuplexRelay(
+                    downstreamContext,
+                    active,
+                    upstreamChannel,
+                    response,
+                    occurredAtEpochMillis,
+                )
+            }
+            return
+        }
+        if (activeRequest !== active || !downstreamContext.channel().isActive || !upstreamChannel.isActive) {
+            upstreamChannel.close()
+            return
+        }
+
+        active.timings.markLastByteReceived()
+        active.duplexInspectors.forEach { inspector ->
+            runCatching { inspector.onEstablished(response, occurredAtEpochMillis) }
+        }
+        active.duplexTransformer?.onEstablished(response, occurredAtEpochMillis)
+        activeRequest = null
+        releasePendingObjects()
+
+        val lifecycle = DuplexRelayLifecycle(
+            inspectors = active.duplexInspectors,
+            transformer = active.duplexTransformer,
+        ) { state, terminatedAt, errorCode ->
+            if (active.exchangeCompleted.compareAndSet(false, true)) {
+                active.capture?.terminate(
+                    state = state,
+                    timings = active.timings.getTimings(),
+                    occurredAtEpochMillis = terminatedAt,
+                    errorCode = errorCode,
+                )
+            }
+        }
+        val downstream = downstreamContext.channel()
+        downstream.config().isAutoRead = false
+        upstreamChannel.config().isAutoRead = false
+
+        removeHttpHandlersForDuplex(downstream, downstreamSide = true)
+        removeHttpHandlersForDuplex(upstreamChannel, downstreamSide = false)
+        downstream.pipeline().addLast(
+            PipelineHandlerNames.DUPLEX_RELAY,
+            KNetDuplexRelayHandler(
+                peer = upstreamChannel,
+                direction = TrafficDirection.CLIENT_TO_SERVER,
+                inspectors = active.duplexInspectors,
+                transformer = active.duplexTransformer,
+                lifecycle = lifecycle,
+            ),
+        )
+        upstreamChannel.pipeline().addLast(
+            PipelineHandlerNames.DUPLEX_RELAY,
+            KNetDuplexRelayHandler(
+                peer = downstream,
+                direction = TrafficDirection.SERVER_TO_CLIENT,
+                inspectors = active.duplexInspectors,
+                transformer = active.duplexTransformer,
+                lifecycle = lifecycle,
+            ),
+        )
+        downstream.read()
+        upstreamChannel.read()
+    }
+
+    /** Removes only HTTP-object handlers while preserving TLS and timeout ownership. */
+    private fun removeHttpHandlersForDuplex(channel: Channel, downstreamSide: Boolean) {
+        val pipeline = channel.pipeline()
+        val removableNames = buildList {
+            add(PipelineHandlerNames.HTTP_AGGREGATOR)
+            add(PipelineHandlerNames.SELECTIVE_HTTP_AGGREGATOR)
+            add(PipelineHandlerNames.HTTP_CODEC)
+            if (downstreamSide) {
+                add("knetInterceptorHandler")
+                add(PipelineHandlerNames.PROXY_HANDLER)
+            } else {
+                add(PipelineHandlerNames.OUTBOUND_HANDLER)
+            }
+        }
+        removableNames.forEach { name -> pipeline.get(name)?.let { pipeline.remove(name) } }
+        pipeline.toMap().entries
+            .filter { (_, handler) ->
+                handler is HttpServerCodec ||
+                    handler is HttpServerUpgradeHandler ||
+                    handler is HttpClientCodec
+            }
+            .forEach { (name, _) -> pipeline.get(name)?.let { pipeline.remove(name) } }
+    }
+
+    /** Recognizes RFC 7230-style HTTP/1.1 Upgrade handshakes without protocol-specific knowledge. */
+    private fun isHttpOneUpgradeRequest(request: HttpRequest): Boolean {
+        if (request.protocolVersion() != HttpVersion.HTTP_1_1) return false
+        val connectionTokens = request.headers()
+            .getAll(HttpHeaderNames.CONNECTION)
+            .asSequence()
+            .flatMap { value -> value.split(',').asSequence() }
+            .map(String::trim)
+        return connectionTokens.any { token -> token.equals(HttpHeaderValues.UPGRADE.toString(), ignoreCase = true) } &&
+            !request.headers().get(HttpHeaderNames.UPGRADE).isNullOrBlank()
     }
 
     /**
@@ -1094,8 +1243,11 @@ internal class KNetStreamingProxyHandler(
         val capture: ProxyExchangeCapture?,
         val streamInspectors: List<ProxyStreamInspector>,
         val streamTransformer: ProxyStreamTransformer?,
+        val duplexInspectors: List<ProxyDuplexInspector>,
+        val duplexTransformer: ProxyDuplexTransformer?,
         val contentEncoding: ContentEncoding?,
         val timings: NetworkTimingCollector,
+        val requestsDuplexUpgrade: Boolean,
         val bodyQueue: ArrayDeque<HttpContent> = ArrayDeque(),
         val transformQueue: ArrayDeque<TransformInput> = ArrayDeque(),
         val exchangeCompleted: AtomicBoolean = AtomicBoolean(false),

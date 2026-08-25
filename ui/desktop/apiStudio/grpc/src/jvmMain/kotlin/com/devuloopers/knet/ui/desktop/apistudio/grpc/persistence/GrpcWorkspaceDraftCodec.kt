@@ -60,7 +60,7 @@ class GrpcWorkspaceDraftCodec(
             targetHost = root.stringOrEmpty("targetHost"),
             targetPort = root.stringOrEmpty("targetPort"),
             useTls = root["useTls"]?.jsonPrimitive?.booleanOrNull ?: false,
-            deadlineMillis = root["deadlineMillis"]?.jsonPrimitive?.contentOrNull ?: "30000",
+            deadlineMillis = root.stringOrEmpty("deadlineMillis"),
             schemaSourceId = root["schemaSourceId"]?.jsonPrimitive?.contentOrNull,
             selectedOperationId = root["selectedOperationId"]?.jsonPrimitive?.contentOrNull,
             metadata = root.arrayOrEmpty("metadata").map { element ->

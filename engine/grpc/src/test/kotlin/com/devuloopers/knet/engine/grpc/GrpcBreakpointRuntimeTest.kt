@@ -137,8 +137,10 @@ class GrpcBreakpointRuntimeTest {
         sequence: Long,
         path: String = "/test.echo.EchoService/UnaryEcho",
     ) = ProtocolMessageInspectionInput(
+        exchangeId = ExchangeId("grpc-inspection-exchange"),
         request = request(path = path),
         messageId = ProtocolMessageId("message-$sequence-${direction.name}"),
+        kind = com.devuloopers.knet.traffic.model.message.ProtocolMessageKind.DATA,
         direction = direction,
         sequence = sequence,
         declaredBytes = 1L,
@@ -180,7 +182,7 @@ private class RecordingGate(
 
     override fun mayInterceptMessage(
         request: HttpRequestSnapshot,
-        protocolId: BreakpointProtocolId,
+        protocolRoute: List<BreakpointProtocolId>,
         direction: TrafficDirection,
     ): Boolean = enabled && direction == TrafficDirection.CLIENT_TO_SERVER
 

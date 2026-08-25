@@ -79,7 +79,11 @@ public class ApiStudioProtocolMessage(
 
 /** Streaming execution events shared by unary and long-lived protocols. */
 public sealed interface ApiStudioProtocolExecutionEvent {
-    public data class Started(public val summary: String) : ApiStudioProtocolExecutionEvent
+    public data class Started(
+        public val summary: String,
+        /** Server-selected application protocol, when the transport negotiated one. */
+        public val negotiatedApplicationProtocol: String? = null,
+    ) : ApiStudioProtocolExecutionEvent
     public data class Message(public val message: ApiStudioProtocolMessage) : ApiStudioProtocolExecutionEvent
     public data class Completed(
         public val statusCode: String,

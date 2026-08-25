@@ -10,6 +10,9 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -22,11 +25,11 @@ import com.devuloopers.knet.ui.core.components.button.ButtonSize
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
 import com.devuloopers.knet.ui.core.components.divider.HorizontalDivider
-import com.devuloopers.knet.ui.core.components.divider.VerticalDivider
 import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdown
 import com.devuloopers.knet.ui.core.components.input.InputFieldConfig
 import com.devuloopers.knet.ui.core.components.input.KNetTextField
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import com.devuloopers.knet.ui.desktop.apistudio.layout.ApiStudioSplitWorkspace
 import com.devuloopers.knet.ui.desktop.apistudio.grpc.file.GrpcDescriptorFilePicker
 import com.devuloopers.knet.ui.desktop.apistudio.grpc.file.NativeGrpcDescriptorFilePicker
 import com.devuloopers.knet.ui.desktop.apistudio.grpc.model.GrpcStudioState
@@ -45,63 +48,68 @@ fun GrpcStudioScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val colors = KNetTheme.colors
+    var authoringRatio by remember { mutableFloatStateOf(DEFAULT_AUTHORING_RATIO) }
 
-    Column(modifier = modifier.fillMaxSize().background(colors.surface)) {
-        GrpcTargetBar(
-            state = state,
-            onHostChanged = viewModel::updateTargetHost,
-            onPortChanged = viewModel::updateTargetPort,
-            onToggleTls = viewModel::toggleTls,
-            onImportDescriptor = {
-                filePicker.choose { result ->
-                    result.onSuccess { path -> path?.let(viewModel::importDescriptor) }
-                        .onFailure { error ->
-                            viewModel.reportDescriptorImportFailure(
-                                error.message ?: "Unable to open the descriptor picker.",
-                            )
+    ApiStudioSplitWorkspace(
+        authoringRatio = authoringRatio,
+        onAuthoringRatioChange = { authoringRatio = it },
+        authoringPane = { paneModifier ->
+            Column(modifier = paneModifier.fillMaxSize()) {
+                GrpcTargetBar(
+                    state = state,
+                    onHostChanged = viewModel::updateTargetHost,
+                    onPortChanged = viewModel::updateTargetPort,
+                    onToggleTls = viewModel::toggleTls,
+                    onImportDescriptor = {
+                        filePicker.choose { result ->
+                            result.onSuccess { path -> path?.let(viewModel::importDescriptor) }
+                                .onFailure { error ->
+                                    viewModel.reportDescriptorImportFailure(
+                                        error.message ?: "Unable to open the descriptor picker.",
+                                    )
+                                }
                         }
+                    },
+                    onReflect = viewModel::reflect,
+                    onExecute = viewModel::execute,
+                    onCancel = viewModel::cancel,
+                )
+                HorizontalDivider(color = colors.border)
+                state.errorMessage?.let { message ->
+                    Text(
+                        text = message,
+                        modifier = Modifier.fillMaxWidth()
+                            .background(colors.semantic.errorContainer)
+                            .padding(horizontal = KNetTheme.spacing.md, vertical = KNetTheme.spacing.sm),
+                        style = KNetTheme.typography.bodySmall.copy(color = colors.semantic.error),
+                    )
                 }
-            },
-            onReflect = viewModel::reflect,
-            onExecute = viewModel::execute,
-            onCancel = viewModel::cancel,
-        )
-        HorizontalDivider(color = colors.border)
-
-        state.errorMessage?.let { message ->
-            Text(
-                text = message,
-                modifier = Modifier.fillMaxWidth()
-                    .background(colors.semantic.errorContainer)
-                    .padding(horizontal = KNetTheme.spacing.md, vertical = KNetTheme.spacing.sm),
-                style = KNetTheme.typography.bodySmall.copy(color = colors.semantic.error),
-            )
-        }
-
-        Row(modifier = Modifier.fillMaxSize()) {
-            GrpcRequestPane(
-                state = state,
-                onOperationSelected = { operation -> viewModel.selectOperation(operation.id) },
-                onDeadlineChanged = viewModel::updateDeadline,
-                onMessageSelected = viewModel::selectOutboundMessage,
-                onMessageChanged = viewModel::updateOutboundMessage,
-                onAddMessage = viewModel::addOutboundMessage,
-                onRemoveMessage = viewModel::removeSelectedOutboundMessage,
-                onSendMessage = viewModel::sendSelectedMessage,
-                onHalfClose = viewModel::halfClose,
-                onAddMetadata = viewModel::addMetadata,
-                onUpdateMetadata = viewModel::updateMetadata,
-                onRemoveMetadata = viewModel::removeMetadata,
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-            )
-            VerticalDivider(color = colors.border)
+                GrpcRequestPane(
+                    state = state,
+                    onOperationSelected = { operation -> viewModel.selectOperation(operation.id) },
+                    onDeadlineChanged = viewModel::updateDeadline,
+                    onMessageSelected = viewModel::selectOutboundMessage,
+                    onMessageChanged = viewModel::updateOutboundMessage,
+                    onAddMessage = viewModel::addOutboundMessage,
+                    onRemoveMessage = viewModel::removeSelectedOutboundMessage,
+                    onSendMessage = viewModel::sendSelectedMessage,
+                    onHalfClose = viewModel::halfClose,
+                    onAddMetadata = viewModel::addMetadata,
+                    onUpdateMetadata = viewModel::updateMetadata,
+                    onRemoveMetadata = viewModel::removeMetadata,
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                )
+            }
+        },
+        resultPane = { paneModifier ->
             GrpcEventPane(
                 state = state,
                 onEventSelected = viewModel::selectEvent,
-                modifier = Modifier.weight(1f).fillMaxHeight(),
+                modifier = paneModifier.fillMaxSize(),
             )
-        }
-    }
+        },
+        modifier = modifier.fillMaxSize().background(colors.surface),
+    )
 }
 
 @Composable
@@ -115,44 +123,56 @@ private fun GrpcTargetBar(
     onExecute: () -> Unit,
     onCancel: () -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth().height(68.dp).padding(horizontal = KNetTheme.spacing.md),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm),
+    Column(
+        modifier = Modifier.fillMaxWidth().padding(KNetTheme.spacing.md),
+        verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm),
     ) {
-        KNetTextField(
-            value = state.targetHost,
-            onValueChange = onHostChanged,
-            modifier = Modifier.weight(1f),
-            config = InputFieldConfig(placeholder = "gRPC host"),
-        )
-        KNetTextField(
-            value = state.targetPort,
-            onValueChange = onPortChanged,
-            modifier = Modifier.width(92.dp),
-            config = InputFieldConfig(placeholder = "Port"),
-        )
-        KNetButton(
-            onClick = onToggleTls,
-            variant = if (state.useTls) ButtonVariant.Primary else ButtonVariant.Secondary,
-        ) { Text(if (state.useTls) "TLS" else "Plaintext") }
-        KNetButton(onClick = onImportDescriptor, variant = ButtonVariant.Secondary) {
-            Text(if (state.schemaSourceId == null) "Import descriptor" else "Replace descriptor")
-        }
-        KNetButton(
-            onClick = onReflect,
-            enabled = state.hasValidTarget && !state.isReflecting && !state.isExecuting,
-            loading = state.isReflecting,
-            variant = ButtonVariant.Secondary,
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm),
         ) {
-            Text("Reflect")
+            KNetTextField(
+                value = state.targetHost,
+                onValueChange = onHostChanged,
+                modifier = Modifier.weight(1f),
+                config = InputFieldConfig(placeholder = "gRPC host"),
+            )
+            KNetTextField(
+                value = state.targetPort,
+                onValueChange = onPortChanged,
+                modifier = Modifier.width(92.dp),
+                config = InputFieldConfig(placeholder = "Port"),
+            )
+            KNetButton(
+                onClick = onToggleTls,
+                variant = if (state.useTls) ButtonVariant.Primary else ButtonVariant.Secondary,
+            ) { Text(if (state.useTls) "TLS" else "Plaintext") }
         }
-        KNetButton(
-            onClick = if (state.isExecuting) onCancel else onExecute,
-            enabled = state.isExecuting || (state.canInvoke && !state.isReflecting),
-            loading = state.isExecuting,
-            clickableWhileLoading = true,
-        ) { Text(if (state.isExecuting) "Cancel" else "Invoke") }
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm),
+        ) {
+            KNetButton(onClick = onImportDescriptor, variant = ButtonVariant.Secondary) {
+                Text(if (state.schemaSourceId == null) "Import descriptor" else "Replace descriptor")
+            }
+            KNetButton(
+                onClick = onReflect,
+                enabled = state.hasValidTarget && !state.isReflecting && !state.isExecuting,
+                loading = state.isReflecting,
+                variant = ButtonVariant.Secondary,
+            ) {
+                Text("Reflect")
+            }
+            Spacer(Modifier.weight(1f))
+            KNetButton(
+                onClick = if (state.isExecuting) onCancel else onExecute,
+                enabled = state.isExecuting || (state.canInvoke && !state.isReflecting),
+                loading = state.isExecuting,
+                clickableWhileLoading = true,
+            ) { Text(if (state.isExecuting) "Cancel" else "Invoke") }
+        }
     }
 }
 
@@ -420,3 +440,5 @@ private fun ApiStudioProtocolExecutionEvent?.presentationText(): String = when (
         }
     }
 }
+
+private const val DEFAULT_AUTHORING_RATIO = 0.5f

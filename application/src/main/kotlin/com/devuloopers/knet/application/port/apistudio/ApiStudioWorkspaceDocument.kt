@@ -19,6 +19,8 @@ public value class ApiStudioEditorId(public val value: String) {
     public companion object {
         public val HTTP: ApiStudioEditorId = ApiStudioEditorId("http")
         public val GRPC: ApiStudioEditorId = ApiStudioEditorId("grpc")
+        public val WEBSOCKET: ApiStudioEditorId = ApiStudioEditorId("websocket")
+        public val GRAPHQL_WEBSOCKET: ApiStudioEditorId = ApiStudioEditorId("graphql-websocket")
     }
 }
 

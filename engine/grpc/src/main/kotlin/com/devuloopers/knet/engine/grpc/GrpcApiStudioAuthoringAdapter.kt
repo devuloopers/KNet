@@ -1,6 +1,7 @@
 package com.devuloopers.knet.engine.grpc
 
 import com.devuloopers.knet.application.port.apistudio.ApiStudioOperationShape
+import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolAuthoredMessage
 import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolAuthoringPort
 import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolDocument
 import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolDraft
@@ -56,7 +57,7 @@ class GrpcApiStudioAuthoringAdapter(
                 metadata = draft.metadata.map { entry ->
                     GrpcMetadataEntry(entry.name, entry.value, entry.enabled)
                 },
-                outboundMessagesJson = draft.outboundMessages,
+                outboundMessagesJson = draft.outboundMessages.map(ApiStudioProtocolAuthoredMessage::content),
                 descriptorSourceId = draft.schemaSourceId,
             ),
         )
@@ -79,7 +80,12 @@ class GrpcApiStudioAuthoringAdapter(
                         enabled = entry.enabled,
                     )
                 },
-                outboundMessages = draft.outboundMessagesJson,
+                outboundMessages = draft.outboundMessagesJson.map { message ->
+                    ApiStudioProtocolAuthoredMessage(
+                        content = message,
+                        contentType = "application/json",
+                    )
+                },
                 schemaSourceId = draft.descriptorSourceId,
             )
         }

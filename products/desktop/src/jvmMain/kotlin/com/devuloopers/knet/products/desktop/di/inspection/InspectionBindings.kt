@@ -11,6 +11,11 @@ import com.devuloopers.knet.engine.protocol.inspector.sse.SseSemanticInspector
 import com.devuloopers.knet.engine.grpc.GrpcDescriptorRegistry
 import com.devuloopers.knet.engine.grpc.GrpcProtocolMessageDecoder
 import com.devuloopers.knet.engine.grpc.GrpcBreakpointExtension
+import com.devuloopers.knet.engine.graphqlwebsocket.breakpoint.GraphQLWebSocketBreakpointExtension
+import com.devuloopers.knet.engine.graphqlwebsocket.inspection.GraphQLWebSocketProtocolMessageDecoder
+import com.devuloopers.knet.engine.graphqlwebsocket.protocol.GraphQLWebSocketEnvelopeParser
+import com.devuloopers.knet.engine.websocket.WebSocketBreakpointExtension
+import com.devuloopers.knet.engine.websocket.WebSocketProtocolMessageDecoder
 import com.devuloopers.knet.application.port.traffic.ProtocolMessagePayloadDecoder
 import com.devuloopers.knet.application.port.traffic.ProtocolMessagePresentationRegistry
 import com.devuloopers.knet.storage.database.KNetDatabase
@@ -22,10 +27,15 @@ import org.koin.dsl.module
 internal val inspectionBindings: Module = module {
     single { GrpcDescriptorRegistry() }
     single { GrpcProtocolMessageDecoder(get()) } bind ProtocolMessagePayloadDecoder::class
+    single { GraphQLWebSocketEnvelopeParser(graphQLParser = get()) }
+    single { GraphQLWebSocketProtocolMessageDecoder(get()) } bind ProtocolMessagePayloadDecoder::class
+    single { WebSocketProtocolMessageDecoder() } bind ProtocolMessagePayloadDecoder::class
     single { ProtocolMessagePresentationRegistry(getAll<ProtocolMessagePayloadDecoder>()) }
     single { GraphQLDocumentParser() }
     single { GraphQLBreakpointExtension(get()) } bind BreakpointProtocolExtension::class
     single { GrpcBreakpointExtension() } bind BreakpointProtocolExtension::class
+    single { WebSocketBreakpointExtension() } bind BreakpointProtocolExtension::class
+    single { GraphQLWebSocketBreakpointExtension(get()) } bind BreakpointProtocolExtension::class
     single { GraphQLSemanticInspector(get()) } bind SemanticInspector::class
     single { SseSemanticInspector() } bind SemanticInspector::class
     single<InspectionAnnotationPort> {
@@ -48,7 +58,43 @@ internal val inspectionBindings: Module = module {
                     CapabilityMaturity.SUPPORTED,
                     "SemanticInspectionEndToEndTest"
                 ),
-                RuntimeCapability("websocket", "WebSocket frames", CapabilityMaturity.UNAVAILABLE),
+                RuntimeCapability(
+                    "websocket.capture",
+                    "WebSocket capture and inspection",
+                    CapabilityMaturity.EXPERIMENTAL,
+                    "WebSocketFrameCodecTest, WebSocketDuplexInspectorTest, and DuplexUpgradeIntegrationTest",
+                ),
+                RuntimeCapability(
+                    "websocket.breakpoints",
+                    "WebSocket message breakpoints",
+                    CapabilityMaturity.EXPERIMENTAL,
+                    "WebSocketBreakpointRuntimeTest",
+                ),
+                RuntimeCapability(
+                    "websocket.apistudio",
+                    "WebSocket API Studio",
+                    CapabilityMaturity.EXPERIMENTAL,
+                    "WebSocketApiStudioExecutorTest, WebSocketApiStudioAuthoringAdapterTest, and " +
+                        "WebSocketWorkspaceDraftCodecTest",
+                ),
+                RuntimeCapability(
+                    "graphql-websocket.capture",
+                    "GraphQL WebSocket semantic inspection",
+                    CapabilityMaturity.EXPERIMENTAL,
+                    "GraphQLWebSocketProtocolTest and GraphQLWebSocketLayeringTest",
+                ),
+                RuntimeCapability(
+                    "graphql-websocket.breakpoints",
+                    "GraphQL WebSocket message breakpoints",
+                    CapabilityMaturity.EXPERIMENTAL,
+                    "GraphQLWebSocketLayeringTest and ProtocolMessageBreakpointRoutingTest",
+                ),
+                RuntimeCapability(
+                    "graphql-websocket.apistudio",
+                    "GraphQL subscription API Studio",
+                    CapabilityMaturity.EXPERIMENTAL,
+                    "GraphQLWebSocketApiStudioExecutorTest and GraphQLWebSocketWorkspaceDraftCodecTest",
+                ),
                 RuntimeCapability(
                     "sse",
                     "Server-Sent Events inspection",

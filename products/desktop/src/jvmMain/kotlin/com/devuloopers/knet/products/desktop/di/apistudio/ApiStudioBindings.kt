@@ -40,6 +40,13 @@ import com.devuloopers.knet.engine.grpc.GrpcApiStudioExecutor
 import com.devuloopers.knet.engine.grpc.GrpcApiStudioReflectionAdapter
 import com.devuloopers.knet.engine.grpc.GrpcClientChannelFactory
 import com.devuloopers.knet.engine.grpc.GrpcRequestDraftCodec
+import com.devuloopers.knet.engine.graphqlwebsocket.apistudio.GraphQLWebSocketApiStudioAuthoringAdapter
+import com.devuloopers.knet.engine.graphqlwebsocket.apistudio.GraphQLWebSocketApiStudioExecutor
+import com.devuloopers.knet.engine.graphqlwebsocket.apistudio.GraphQLWebSocketRequestDraftCodec
+import com.devuloopers.knet.engine.websocket.WebSocketApiStudioAuthoringAdapter
+import com.devuloopers.knet.engine.websocket.WebSocketApiStudioClientFactory
+import com.devuloopers.knet.engine.websocket.WebSocketApiStudioExecutor
+import com.devuloopers.knet.engine.websocket.WebSocketRequestDraftCodec
 import com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCase
 import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor
 import com.devuloopers.knet.domain.clientNetwork.usecase.ExecuteClientApiRequestUseCase
@@ -65,6 +72,12 @@ import com.devuloopers.knet.ui.desktop.apistudio.protocol.ApiStudioWorkspaceCont
 import com.devuloopers.knet.ui.desktop.apistudio.grpc.GrpcApiStudioWorkspaceContribution
 import com.devuloopers.knet.ui.desktop.apistudio.grpc.viewmodel.GrpcStudioViewModel
 import com.devuloopers.knet.ui.desktop.apistudio.grpc.persistence.GrpcWorkspaceDraftCodec
+import com.devuloopers.knet.ui.desktop.apistudio.graphqlwebsocket.GraphQLWebSocketApiStudioWorkspaceContribution
+import com.devuloopers.knet.ui.desktop.apistudio.graphqlwebsocket.persistence.GraphQLWebSocketWorkspaceDraftCodec
+import com.devuloopers.knet.ui.desktop.apistudio.graphqlwebsocket.viewmodel.GraphQLWebSocketStudioViewModel
+import com.devuloopers.knet.ui.desktop.apistudio.websocket.WebSocketApiStudioWorkspaceContribution
+import com.devuloopers.knet.ui.desktop.apistudio.websocket.persistence.WebSocketWorkspaceDraftCodec
+import com.devuloopers.knet.ui.desktop.apistudio.websocket.viewmodel.WebSocketStudioViewModel
 import kotlinx.coroutines.Dispatchers
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.viewModel
@@ -101,12 +114,30 @@ internal val apiStudioBindings: Module = module {
     single<ApiStudioProtocolExecutor> { get<GrpcApiStudioExecutor>() }
     single<ApiStudioProtocolSessionExecutor> { get<GrpcApiStudioExecutor>() }
     single { GrpcApiStudioReflectionAdapter(get(), get()) } bind ApiStudioProtocolReflectionPort::class
+    single { GrpcWorkspaceDraftCodec() }
+    single { GrpcApiStudioWorkspaceContribution(get()) } bind ApiStudioWorkspaceContribution::class
+    single { WebSocketRequestDraftCodec() }
+    single { WebSocketApiStudioAuthoringAdapter(get()) } bind ApiStudioProtocolAuthoringPort::class
+    single {
+        val certificates: CertificateRuntimeRepository = get()
+        WebSocketApiStudioClientFactory(certificates.rootCertificateDer())
+    }
+    single { WebSocketApiStudioExecutor(get(), get()) }
+    single<ApiStudioProtocolExecutor> { get<WebSocketApiStudioExecutor>() }
+    single<ApiStudioProtocolSessionExecutor> { get<WebSocketApiStudioExecutor>() }
+    single { WebSocketWorkspaceDraftCodec() }
+    single { WebSocketApiStudioWorkspaceContribution(get()) } bind ApiStudioWorkspaceContribution::class
+    single { GraphQLWebSocketRequestDraftCodec(envelopeParser = get()) }
+    single { GraphQLWebSocketApiStudioAuthoringAdapter(get()) } bind ApiStudioProtocolAuthoringPort::class
+    single { GraphQLWebSocketApiStudioExecutor(get(), get(), get(), get(), get()) }
+    single<ApiStudioProtocolExecutor> { get<GraphQLWebSocketApiStudioExecutor>() }
+    single<ApiStudioProtocolSessionExecutor> { get<GraphQLWebSocketApiStudioExecutor>() }
+    single { GraphQLWebSocketWorkspaceDraftCodec() }
+    single { GraphQLWebSocketApiStudioWorkspaceContribution(get()) } bind ApiStudioWorkspaceContribution::class
     single { ApiStudioProtocolAuthoringRegistry(getAll<ApiStudioProtocolAuthoringPort>()) }
     single { ApiStudioProtocolExecutorRegistry(getAll<ApiStudioProtocolExecutor>()) }
     single { ApiStudioProtocolSessionExecutorRegistry(getAll<ApiStudioProtocolSessionExecutor>()) }
     single { ApiStudioProtocolReflectionRegistry(getAll<ApiStudioProtocolReflectionPort>()) }
-    single { GrpcWorkspaceDraftCodec() }
-    single { GrpcApiStudioWorkspaceContribution(get()) } bind ApiStudioWorkspaceContribution::class
 
     factory { ExecuteClientApiRequestUseCase(get()) }
     factory { FormatResponseBodyUseCase() }
@@ -152,6 +183,32 @@ internal val apiStudioBindings: Module = module {
             saveSchema = get(),
             loadSchema = get(),
             reflectSchema = get(),
+            openSession = get(),
+            observeProxyRuntimeState = get(),
+            observeTrafficCaptureState = get(),
+            draftCodec = get(),
+            ioDispatcher = Dispatchers.IO,
+        )
+    }
+    viewModel {
+        WebSocketStudioViewModel(
+            getWorkspaceDocument = get(),
+            createWorkspaceDocument = get(),
+            updateWorkspaceContent = get(),
+            createProtocolDocument = get(),
+            openSession = get(),
+            observeProxyRuntimeState = get(),
+            observeTrafficCaptureState = get(),
+            draftCodec = get(),
+            ioDispatcher = Dispatchers.IO,
+        )
+    }
+    viewModel {
+        GraphQLWebSocketStudioViewModel(
+            getWorkspaceDocument = get(),
+            createWorkspaceDocument = get(),
+            updateWorkspaceContent = get(),
+            createProtocolDocument = get(),
             openSession = get(),
             observeProxyRuntimeState = get(),
             observeTrafficCaptureState = get(),

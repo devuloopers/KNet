@@ -72,7 +72,7 @@ The envelope below is an enforced regression contract on the reference machine/J
 
 | Dimension | Supported/enforced gate |
 |---|---|
-| HTTP transport | HTTP/1.0/1.1 plus experimental H2C/TLS-ALPN HTTP/2 with bounded multiplexing; HTTP/3 and WebSocket transport are unavailable |
+| HTTP transport | HTTP/1.0/1.1 plus experimental H2C/TLS-ALPN HTTP/2 and HTTP/1.1 WebSocket Upgrade with bounded multiplexing/duplex relaying; HTTP/3 and WebSocket over HTTP/2 are unavailable |
 | Large response | 500 MiB streamed without body-sized test allocation; capture limited to 10 MiB |
 | Large upload | 128 MiB streamed; capture limited to 10 MiB |
 | Concurrent bodies | 100 clients × 10 MiB responses with bounded heap/direct-memory thresholds |

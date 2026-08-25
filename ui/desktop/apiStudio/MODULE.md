@@ -30,8 +30,19 @@ dialogs, contribution SPI, and HTTP response inspection projection.
   redundant request-bar Save action.
 - One protocol-neutral sidebar projection that merges canonical HTTP documents with opaque contributed-editor
   documents. Selection, search, rename, delete, draft creation, and collection promotion use the same UI actions.
+- A full-height Collections region independent of protocol navigation. Editor tabs are scoped to the complete
+  authoring/result workspace on its right, so adding a protocol never consumes sidebar height or changes its layout.
 - A generic workspace-contribution host keyed by open `ApiStudioEditorId`. Native gRPC and future non-HTTP editors
   contribute initial-draft creation and rendering without importing their engines into this module.
+- A protocol-neutral resizable authoring/result workspace used by HTTP and contributed editors. The shared shell
+  continues to own Collections, while each feature supplies its authoring surface and full-height result or timeline.
+- A protocol-neutral content gate that keeps the workspace surface stable until an asynchronously selected
+  contributed document becomes active, preventing transient/default controls from appearing for one frame. The
+  transient-to-unsaved materialization path remains composed while persistence publishes its generated identity, so
+  first-edit draft creation cannot reset editor focus or presentation state. This gate is owned by the final shared
+  contribution host rather than individual protocol screens, making the behavior mandatory for future editors.
+- A single-pass streamed-protocol authoring layout that measures controls, toolbar, and editor deterministically;
+  WebSocket-family editors therefore keep stable geometry while switching protocol workspaces.
 - Side-effect-free editor navigation: switching a protocol tab restores that editor's selected document or renders
   the contribution's transient blank editor. Persistence begins only from an explicit New action or the first
   meaningful authoring mutation; focus and presentation-only selection never create a sidebar row.

@@ -30,7 +30,12 @@ fun KNetVerticalScrollbar(
     modifier: Modifier = Modifier,
 ) {
     val visible by remember(scrollState) {
-        derivedStateOf { shouldShowScrollbar(scrollState.maxValue) }
+        derivedStateOf {
+            shouldShowScrollbar(
+                viewportSize = scrollState.viewportSize,
+                maximumScrollOffset = scrollState.maxValue,
+            )
+        }
     }
     if (!visible) return
 
@@ -88,7 +93,10 @@ internal fun rememberKNetScrollbarStyle(): ScrollbarStyle {
     }
 }
 
-internal fun shouldShowScrollbar(maximumScrollOffset: Int): Boolean = maximumScrollOffset > 0
+internal fun shouldShowScrollbar(
+    viewportSize: Int,
+    maximumScrollOffset: Int,
+): Boolean = viewportSize > 0 && maximumScrollOffset > 0
 
 internal fun shouldShowScrollbar(canScrollBackward: Boolean, canScrollForward: Boolean): Boolean =
     canScrollBackward || canScrollForward

@@ -40,6 +40,10 @@ Gradle enforces four rules through `verifyArchitectureFoundation`:
 - [`:engine:formatter`](../engine/formatter/MODULE.md) — bounded body formatting and derived views.
 - [`:engine:grpc`](../engine/grpc/MODULE.md) — native gRPC framing, descriptors, reflection, inspection,
   breakpoints, and API Studio execution.
+- [`:engine:graphqlWebSocket`](../engine/graphqlWebSocket/MODULE.md) — modern `graphql-transport-ws` envelope
+  semantics, bounded operation correlation, presentation, breakpoints, identity, and API Studio execution.
+- [`:engine:websocket`](../engine/websocket/MODULE.md) — RFC 6455 handshake recognition, bounded frame/message
+  inspection, message breakpoints, payload presentation, and API Studio execution.
 - [`:engine:interceptor`](../engine/interceptor/MODULE.md) — breakpoint interception, pre-pause capture admission, and typed mutation behavior.
 - [`:engine:protocol`](../engine/protocol/MODULE.md) — protocol-specific parsers, asynchronous inspectors,
   and additive live-breakpoint extensions.
@@ -56,6 +60,10 @@ Gradle enforces four rules through `verifyArchitectureFoundation`:
 - [`:ui:desktop:apiStudio`](../ui/desktop/apiStudio/MODULE.md) — API Studio editing and execution presentation.
 - [`:ui:desktop:apiStudio:grpc`](../ui/desktop/apiStudio/grpc/MODULE.md) — contributed native gRPC authoring,
   streaming execution, and versioned draft codec.
+- [`:ui:desktop:apiStudio:graphqlWebSocket`](../ui/desktop/apiStudio/graphqlWebSocket/MODULE.md) — contributed
+  GraphQL subscription authoring, execution presentation, and versioned workspace draft codec.
+- [`:ui:desktop:apiStudio:websocket`](../ui/desktop/apiStudio/websocket/MODULE.md) — contributed WebSocket
+  authoring, interactive duplex execution, and versioned workspace draft codec.
 - [`:ui:desktop:traffic`](../ui/desktop/traffic/MODULE.md) — traffic list, capture controls, live breakpoint projection, and inspector coordination.
 - [`:ui:desktop:connectivity`](../ui/desktop/connectivity/MODULE.md) — connectivity card grid, QR, and Wi-Fi setup drawer content.
 - [`:ui:desktop:httpPanel`](../ui/desktop/httpPanel/MODULE.md) — reusable HTTP inspection/editing panels.
@@ -90,7 +98,8 @@ exchanges, multiplexes isolated experimental HTTP/2 streams, streams both direct
 startup/shutdown. Application services independently own proxy lifecycle, capture attachment, breakpoints,
 connectivity, pairing, certificates, inspection, script execution, traffic paging, clear, and recording. The
 dedicated setup listeners, authenticated companion-ready gateway, and automatically managed open-client Wi-Fi
-gateway live in `:connectivity:desktop`; none is inserted into the proxy pipeline. HTTP/2 and native gRPC capture,
-breakpoints, and API Studio remain `EXPERIMENTAL` pending external platform/device qualification. HTTP/3,
-WebSocket transport, VPN, relay, and mobile applications remain explicitly unavailable rather than represented by
-dormant stubs.
+gateway live in `:connectivity:desktop`; none is inserted into the proxy pipeline. HTTP/2, native gRPC, and
+HTTP/1.1 WebSocket capture, modern `graphql-transport-ws` semantic inspection/breakpoints/API Studio, and native
+gRPC remain `EXPERIMENTAL` pending external platform/device and release-soak qualification. Legacy `graphql-ws`,
+HTTP/3, WebSocket over HTTP/2, VPN, relay, and mobile applications remain explicitly unavailable rather than
+represented by dormant stubs.

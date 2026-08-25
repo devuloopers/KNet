@@ -17,6 +17,9 @@ public value class MessageProtocolId(public val value: String) {
     public companion object {
         /** Native gRPC over HTTP/2. */
         public val GRPC: MessageProtocolId = MessageProtocolId("grpc")
+
+        /** RFC 6455 WebSocket messages after a successful HTTP upgrade. */
+        public val WEBSOCKET: MessageProtocolId = MessageProtocolId("websocket")
     }
 }
 
@@ -30,6 +33,21 @@ public value class ProtocolMessageKind(public val value: String) {
     public companion object {
         /** A data-bearing gRPC message. */
         public val DATA: ProtocolMessageKind = ProtocolMessageKind("data")
+
+        /** A UTF-8 WebSocket data message. */
+        public val TEXT: ProtocolMessageKind = ProtocolMessageKind("text")
+
+        /** An opaque binary WebSocket data message. */
+        public val BINARY: ProtocolMessageKind = ProtocolMessageKind("binary")
+
+        /** A WebSocket ping control message. */
+        public val PING: ProtocolMessageKind = ProtocolMessageKind("ping")
+
+        /** A WebSocket pong control message. */
+        public val PONG: ProtocolMessageKind = ProtocolMessageKind("pong")
+
+        /** A WebSocket close control message containing an optional code and reason. */
+        public val CLOSE: ProtocolMessageKind = ProtocolMessageKind("close")
     }
 }
 

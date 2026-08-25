@@ -19,6 +19,8 @@ Implements the high-throughput proxy transport: listeners, channels, TLS interce
   HTTP/1.0 clients.
 - A listener-preserving child-connection close boundary for real network transitions and terminal shutdown.
 - Protocol-neutral pre-forward exchange admission and one-shot capture handoff across optional forwarding gates.
+- Protocol-neutral validated HTTP/1.1 Upgrade handoff plus backpressured raw duplex relaying, with optional
+  direction-aware observers and transformers supplied by protocol modules.
 - Boundary-only consumption of local capture-origin metadata before canonical header mapping, breakpoint
   editing, and upstream forwarding.
 - A reusable protocol-neutral selective HTTP/1 aggregator that falls back to ordered streaming when a
@@ -61,6 +63,10 @@ Transport, saturation, TLS, reset, and pool failures remain failures rather than
 response protocols are recorded independently, connection-specific headers are removed before HPACK encoding,
 and request/response trailers are captured separately from initial headers. Netty owns SETTINGS, PING,
 WINDOW_UPDATE, CONTINUATION, HPACK, RST_STREAM, and GOAWAY wire conformance at this boundary.
+Accepted HTTP/1.1 Upgrade responses must confirm both the requested protocol token and `Connection: Upgrade`
+before the HTTP codec is removed. The resulting raw relay owns read/write coupling and channel lifetime while
+injected protocol modules optionally inspect or transform owned byte slices; the proxy itself contains no
+WebSocket framing or semantic rules.
 Real-socket HTTP/2 resilience tests prove malformed connection traffic receives GOAWAY without terminating the
 listener, PING acknowledgement preserves stream admission, and repeated parent-connection churn leaves forwarding
 healthy. The root `http2Qualification` task composes these transport tests with canonical model, persistence,
