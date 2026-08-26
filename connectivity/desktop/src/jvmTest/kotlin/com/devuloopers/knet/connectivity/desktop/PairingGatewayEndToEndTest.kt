@@ -1,7 +1,7 @@
 package com.devuloopers.knet.connectivity.desktop
 
-import com.devuloopers.knet.application.port.pairing.PairingCoordinator
-import com.devuloopers.knet.application.port.pairing.TrustedDeviceStorePort
+import com.devuloopers.knet.application.coordinator.pairing.PairingCoordinator
+import com.devuloopers.knet.application.contract.pairing.TrustedDeviceStore
 import com.devuloopers.knet.connectivity.desktop.gateway.AuthenticatedProxyGateway
 import com.devuloopers.knet.connectivity.desktop.gateway.IngressAttributionRegistry
 import com.devuloopers.knet.connectivity.desktop.pairing.JvmPairingCrypto
@@ -230,7 +230,7 @@ class PairingGatewayEndToEndTest {
         return bytes.toByteArray().decodeToString()
     }
 
-    private class InMemoryTrustedDeviceStore : TrustedDeviceStorePort {
+    private class InMemoryTrustedDeviceStore : TrustedDeviceStore {
         private val invitations = mutableMapOf<PairingInvitationId, PendingPairingInvitation>()
         private val devices = mutableMapOf<RegisteredDeviceId, TrustedDevice>()
         private val devicesFlow = MutableStateFlow<List<TrustedDevice>>(emptyList())

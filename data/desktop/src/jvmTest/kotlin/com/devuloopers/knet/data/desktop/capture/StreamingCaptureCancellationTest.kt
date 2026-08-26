@@ -1,6 +1,6 @@
 package com.devuloopers.knet.data.desktop.capture
 
-import com.devuloopers.knet.application.port.traffic.CaptureIngressLimits
+import com.devuloopers.knet.application.contract.traffic.CaptureIngressLimits
 import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureConnectionMetadata
 import com.devuloopers.knet.engine.session.FileBodyStore
 import com.devuloopers.knet.storage.database.DatabaseFactory

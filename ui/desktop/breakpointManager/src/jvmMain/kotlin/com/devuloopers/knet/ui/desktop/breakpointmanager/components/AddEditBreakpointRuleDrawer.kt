@@ -39,9 +39,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolDefinition
-import com.devuloopers.knet.application.port.breakpoint.ProtocolCriteriaFieldDefinition
-import com.devuloopers.knet.application.port.breakpoint.ProtocolCriteriaValue
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointProtocolDefinition
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaFieldDefinition
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaValue
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.BreakpointProtocolId
 import com.devuloopers.knet.domain.rules.model.BreakpointRule

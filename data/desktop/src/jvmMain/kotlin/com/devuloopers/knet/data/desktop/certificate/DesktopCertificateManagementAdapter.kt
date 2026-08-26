@@ -1,12 +1,12 @@
 package com.devuloopers.knet.data.desktop.certificate
 
-import com.devuloopers.knet.application.port.certificate.CertificateAuthoritySummary
-import com.devuloopers.knet.application.port.certificate.CertificateAuthorityStatus
-import com.devuloopers.knet.application.port.certificate.CertificateManagementPort
-import com.devuloopers.knet.application.port.certificate.ClientCertificateFormat
-import com.devuloopers.knet.application.port.certificate.ClientCertificateSummary
-import com.devuloopers.knet.application.port.certificate.MtlsRuleSpec
-import com.devuloopers.knet.application.port.certificate.TrustInstallationResult
+import com.devuloopers.knet.application.contract.certificate.CertificateAuthoritySummary
+import com.devuloopers.knet.application.contract.certificate.CertificateAuthorityStatus
+import com.devuloopers.knet.application.contract.certificate.CertificateManagement
+import com.devuloopers.knet.application.contract.certificate.ClientCertificateFormat
+import com.devuloopers.knet.application.contract.certificate.ClientCertificateSummary
+import com.devuloopers.knet.application.contract.certificate.MtlsRuleSpec
+import com.devuloopers.knet.application.contract.certificate.TrustInstallationResult
 import com.devuloopers.knet.engine.certificate.CertificateManager
 import com.devuloopers.knet.engine.certificate.CertificateAuthorityStatus as EngineCertificateAuthorityStatus
 import com.devuloopers.knet.engine.certificate.EngineMtlsRule
@@ -15,7 +15,7 @@ import com.devuloopers.knet.engine.certificate.EngineMtlsRule
 class DesktopCertificateManagementAdapter(
     private val manager: CertificateManager,
     private val rootTrustController: DesktopRootTrustController,
-) : CertificateManagementPort {
+) : CertificateManagement {
     override suspend fun authoritySummary(): CertificateAuthoritySummary = manager.getAuthorityDetails().let { details ->
         CertificateAuthoritySummary(
             status = when (details.status) {

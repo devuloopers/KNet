@@ -24,7 +24,7 @@ May depend on the proxy transport and application breakpoint contracts. It must 
 
 ## Current state
 
-Coordination, matching, budgets, deadlines, and pending state live in `:application`. Before opening the gate,
+Coordination, matching, budgets, deadlines, and pending state live in `:application:desktop`. Before opening the gate,
 the handler uses the proxy-owned connection capture side output to admit the canonical exchange and stores a
 one-shot handle for forwarding. It terminates that handle if a drop or disconnect prevents ownership transfer.
 Every forwarded request head participates in the bounded response-order queue, including requests that do not

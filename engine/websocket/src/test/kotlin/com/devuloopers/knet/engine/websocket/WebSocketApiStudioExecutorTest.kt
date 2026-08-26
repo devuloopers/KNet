@@ -1,9 +1,9 @@
 package com.devuloopers.knet.engine.websocket
 
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolExecutionCommand
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolExecutionEvent
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolMessageDirection
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolOutboundMessage
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolExecutionCommand
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolExecutionEvent
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolMessageDirection
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolOutboundMessage
 import java.io.InputStream
 import java.net.InetSocketAddress
 import java.net.ServerSocket

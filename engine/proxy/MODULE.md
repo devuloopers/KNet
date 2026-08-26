@@ -39,7 +39,7 @@ Depends inward on stable contracts and injected TLS/traffic extension interfaces
 
 ## Current state
 
-The Netty implementation is behind `ProxyRuntimePort`, defaults to loopback plus strict upstream TLS, rolls
+The Netty implementation is behind `ProxyRuntime`, defaults to loopback plus strict upstream TLS, rolls
 back failed starts, and awaits shutdown. A single streaming proxy handler owns production forwarding; the
 former duplicate full-message handler is removed. Ordinary traffic streams bidirectionally. Optional
 inspection adapters select bounded aggregation per message, and overflow replays the retained head/chunks then

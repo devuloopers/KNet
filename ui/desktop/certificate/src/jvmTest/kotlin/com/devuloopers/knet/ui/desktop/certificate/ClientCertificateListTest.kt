@@ -1,6 +1,6 @@
 package com.devuloopers.knet.ui.desktop.certificate
 
-import com.devuloopers.knet.application.port.certificate.ClientCertificateSummary
+import com.devuloopers.knet.application.contract.certificate.ClientCertificateSummary
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

@@ -1,8 +1,8 @@
 package com.devuloopers.knet.engine.graphqlwebsocket
 
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolExecutionCommand
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolExecutionEvent
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolMessageDirection
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolExecutionCommand
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolExecutionEvent
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolMessageDirection
 import com.devuloopers.knet.engine.graphqlwebsocket.apistudio.GraphQLWebSocketApiStudioExecutor
 import com.devuloopers.knet.engine.graphqlwebsocket.apistudio.GraphQLWebSocketRequestDraft
 import com.devuloopers.knet.engine.graphqlwebsocket.apistudio.GraphQLWebSocketRequestDraftCodec

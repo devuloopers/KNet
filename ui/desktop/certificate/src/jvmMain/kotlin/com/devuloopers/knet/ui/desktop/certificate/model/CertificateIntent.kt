@@ -1,6 +1,6 @@
 package com.devuloopers.knet.ui.desktop.certificate.model
 
-import com.devuloopers.knet.application.port.certificate.MtlsRuleSpec
+import com.devuloopers.knet.application.contract.certificate.MtlsRuleSpec
 
 /**
  * Sealed interface representing UI user actions in KNet Certificate manager.

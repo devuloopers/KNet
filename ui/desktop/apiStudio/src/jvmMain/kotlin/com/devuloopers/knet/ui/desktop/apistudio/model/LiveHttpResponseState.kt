@@ -1,6 +1,6 @@
 package com.devuloopers.knet.ui.desktop.apistudio.model
 
-import com.devuloopers.knet.application.port.apistudio.HttpLiveResponseRecord
+import com.devuloopers.knet.application.contract.apistudio.HttpLiveResponseRecord
 
 /** Bounded presentation state for one live semantic HTTP response. */
 data class LiveHttpResponseState(

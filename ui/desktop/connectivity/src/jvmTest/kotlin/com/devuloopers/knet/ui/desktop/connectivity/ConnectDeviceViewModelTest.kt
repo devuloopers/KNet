@@ -1,13 +1,13 @@
 package com.devuloopers.knet.ui.desktop.connectivity
 
-import com.devuloopers.knet.application.port.connectivity.wifi.WifiSharingPort
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeConfiguration
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeHandle
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimePort
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
-import com.devuloopers.knet.application.port.proxy.ProxyStartResult
-import com.devuloopers.knet.application.port.proxy.ProxyStopReason
-import com.devuloopers.knet.application.port.proxy.ProxyStopResult
+import com.devuloopers.knet.application.contract.connectivity.wifi.WifiSharing
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeConfiguration
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeHandle
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntime
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
+import com.devuloopers.knet.application.contract.proxy.ProxyStartResult
+import com.devuloopers.knet.application.contract.proxy.ProxyStopReason
+import com.devuloopers.knet.application.contract.proxy.ProxyStopResult
 import com.devuloopers.knet.application.usecase.connectivity.wifi.ObserveWifiSharingUseCase
 import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUseCase
 import com.devuloopers.knet.application.usecase.proxy.StartLoopbackProxyUseCase
@@ -132,7 +132,7 @@ class ConnectDeviceViewModelTest {
     private class FakeProxyRuntime(
         runningPort: Int? = null,
         private val startFailureCode: String? = null,
-    ) : ProxyRuntimePort {
+    ) : ProxyRuntime {
         private val mutableState = MutableStateFlow<ProxyRuntimeState>(
             runningPort?.let(::runningState) ?: ProxyRuntimeState.Stopped,
         )
@@ -153,7 +153,7 @@ class ConnectDeviceViewModelTest {
         }
     }
 
-    private class FakeWifiSharingPort : WifiSharingPort {
+    private class FakeWifiSharingPort : WifiSharing {
         val mutableState = MutableStateFlow<WifiSharingState>(WifiSharingState.Disabled(listOf(IPV4_ADDRESS)))
         override val state: StateFlow<WifiSharingState> = mutableState
     }

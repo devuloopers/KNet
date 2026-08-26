@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_title">KNet Companion</string>
+    <string name="foundation_badge">Foundation ready</string>
+    <string name="foundation_summary">The shared companion foundation is ready for Android.</string>
+    <string name="foundation_pending">Pairing transport, certificate handoff, VPN tunnel, and the complete companion workflow will appear here only after their production adapters are implemented.</string>
+    <string name="network_ready">Network available</string>
+    <string name="network_unavailable">Network unavailable</string>
+    <string name="network_unknown">Checking network</string>
+    <string name="paired_desktop_count_one">%1$d paired desktop</string>
+    <string name="paired_desktop_count_other">%1$d paired desktops</string>
+</resources>

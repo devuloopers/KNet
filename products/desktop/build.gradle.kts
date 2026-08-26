@@ -20,7 +20,7 @@ kotlin {
 }
 
 dependencies {
-    implementation(project(":application"))
+    implementation(project(":application:desktop"))
     implementation(project(":ui:desktop:app"))
     implementation(project(":ui:desktop:traffic"))
     implementation(project(":ui:desktop:connectivity"))

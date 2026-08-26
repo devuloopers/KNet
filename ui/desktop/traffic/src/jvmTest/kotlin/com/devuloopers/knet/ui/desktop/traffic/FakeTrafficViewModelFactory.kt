@@ -1,37 +1,37 @@
 package com.devuloopers.knet.ui.desktop.traffic
 
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeConfiguration
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimePort
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
-import com.devuloopers.knet.application.port.proxy.ProxyStartResult
-import com.devuloopers.knet.application.port.proxy.ProxyStopReason
-import com.devuloopers.knet.application.port.proxy.ProxyStopResult
-import com.devuloopers.knet.application.port.traffic.BodyChunk
-import com.devuloopers.knet.application.port.traffic.BodyRange
-import com.devuloopers.knet.application.port.traffic.TrafficGeneration
-import com.devuloopers.knet.application.port.traffic.TrafficPage
-import com.devuloopers.knet.application.port.traffic.TrafficPageQuery
-import com.devuloopers.knet.application.port.traffic.TrafficQueryPort
-import com.devuloopers.knet.application.port.traffic.TrafficSessionCatalogPort
-import com.devuloopers.knet.application.port.traffic.CaptureClearPreparation
-import com.devuloopers.knet.application.port.traffic.CapturePauseResult
-import com.devuloopers.knet.application.port.traffic.CaptureResumeResult
-import com.devuloopers.knet.application.port.traffic.CaptureSessionControlPort
-import com.devuloopers.knet.application.port.traffic.CaptureSessionState
-import com.devuloopers.knet.application.port.traffic.TrafficMaintenancePort
-import com.devuloopers.knet.application.port.traffic.ProtocolMessagePage
-import com.devuloopers.knet.application.port.traffic.ProtocolMessagePageQuery
-import com.devuloopers.knet.application.port.traffic.ProtocolMessageQueryPort
-import com.devuloopers.knet.application.port.traffic.ProtocolMessagePresentationRegistry
-import com.devuloopers.knet.application.port.inspection.InspectionAnnotationPort
-import com.devuloopers.knet.application.port.inspection.ObserveInspectionAnnotationsUseCase
-import com.devuloopers.knet.application.port.breakpoint.BreakpointControlPort
-import com.devuloopers.knet.application.port.breakpoint.BreakpointDecision
-import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolRegistry
-import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
-import com.devuloopers.knet.application.port.breakpoint.PendingProtocolMessageBreakpoint
-import com.devuloopers.knet.application.port.breakpoint.ProtocolMessageBreakpointControlPort
-import com.devuloopers.knet.application.port.breakpoint.ProtocolMessageBreakpointDecision
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeConfiguration
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntime
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
+import com.devuloopers.knet.application.contract.proxy.ProxyStartResult
+import com.devuloopers.knet.application.contract.proxy.ProxyStopReason
+import com.devuloopers.knet.application.contract.proxy.ProxyStopResult
+import com.devuloopers.knet.application.contract.traffic.BodyChunk
+import com.devuloopers.knet.application.contract.traffic.BodyRange
+import com.devuloopers.knet.application.contract.traffic.TrafficGeneration
+import com.devuloopers.knet.application.contract.traffic.TrafficPage
+import com.devuloopers.knet.application.contract.traffic.TrafficPageQuery
+import com.devuloopers.knet.application.contract.traffic.TrafficQuery
+import com.devuloopers.knet.application.contract.traffic.TrafficSessionCatalog
+import com.devuloopers.knet.application.contract.traffic.CaptureClearPreparation
+import com.devuloopers.knet.application.contract.traffic.CapturePauseResult
+import com.devuloopers.knet.application.contract.traffic.CaptureResumeResult
+import com.devuloopers.knet.application.contract.traffic.CaptureSessionControl
+import com.devuloopers.knet.application.contract.traffic.CaptureSessionState
+import com.devuloopers.knet.application.contract.traffic.TrafficMaintenance
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePage
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePageQuery
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessageQuery
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePresentationRegistry
+import com.devuloopers.knet.application.contract.inspection.InspectionAnnotationStore
+import com.devuloopers.knet.application.usecase.inspection.ObserveInspectionAnnotationsUseCase
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointControl
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointDecision
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointProtocolRegistry
+import com.devuloopers.knet.application.contract.breakpoint.PendingBreakpoint
+import com.devuloopers.knet.application.contract.breakpoint.PendingProtocolMessageBreakpoint
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolMessageBreakpointControl
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolMessageBreakpointDecision
 import com.devuloopers.knet.application.usecase.breakpoint.ObservePendingBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.ObservePendingProtocolMessageBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.PrepareBreakpointRuleDraftUseCase
@@ -83,15 +83,15 @@ object FakeTrafficViewModelFactory {
     fun create(
         localIp: String = "127.0.0.1",
         customObserveLocalIpUseCase: ObserveLocalIpUseCase? = null,
-        customTrafficQueryPort: TrafficQueryPort? = null,
-        customSessionCatalogPort: TrafficSessionCatalogPort? = null,
-        customProxyRuntime: ProxyRuntimePort? = null,
-        customCaptureSessionControl: CaptureSessionControlPort? = null,
-        customInspectionAnnotationPort: InspectionAnnotationPort? = null,
+        customTrafficQueryPort: TrafficQuery? = null,
+        customSessionCatalogPort: TrafficSessionCatalog? = null,
+        customProxyRuntime: ProxyRuntime? = null,
+        customCaptureSessionControl: CaptureSessionControl? = null,
+        customInspectionAnnotationPort: InspectionAnnotationStore? = null,
         customWorkspacePreferencesRepository: WidgetPreferencesRepository? = null,
         pendingBreakpointFlow: StateFlow<List<PendingBreakpoint>> = MutableStateFlow(emptyList()),
     ): TrafficViewModel {
-        val fakeProxyRuntime = customProxyRuntime ?: object : ProxyRuntimePort {
+        val fakeProxyRuntime = customProxyRuntime ?: object : ProxyRuntime {
             private val mutableState = MutableStateFlow<ProxyRuntimeState>(ProxyRuntimeState.Stopped)
             override val state: StateFlow<ProxyRuntimeState> = mutableState
 
@@ -105,7 +105,7 @@ object FakeTrafficViewModelFactory {
             }
         }
 
-        val fakeTrafficQueryPort = customTrafficQueryPort ?: object : TrafficQueryPort {
+        val fakeTrafficQueryPort = customTrafficQueryPort ?: object : TrafficQuery {
             override val generations: Flow<TrafficGeneration> = flowOf()
 
             override suspend fun query(query: TrafficPageQuery): TrafficPage = TrafficPage(
@@ -122,7 +122,7 @@ object FakeTrafficViewModelFactory {
             }
         }
         val fakeCaptureState = MutableStateFlow<CaptureSessionState>(CaptureSessionState.Inactive)
-        val fakeCaptureControl = customCaptureSessionControl ?: object : CaptureSessionControlPort {
+        val fakeCaptureControl = customCaptureSessionControl ?: object : CaptureSessionControl {
             override val captureState: StateFlow<CaptureSessionState> = fakeCaptureState
 
             override suspend fun pause(): CapturePauseResult {
@@ -166,7 +166,7 @@ object FakeTrafficViewModelFactory {
             }
         }
         val loadTrafficExchangeDetailsUseCase = LoadTrafficExchangeDetailsUseCase(fakeTrafficQueryPort)
-        val protocolMessages = object : ProtocolMessageQueryPort {
+        val protocolMessages = object : ProtocolMessageQuery {
             override fun observeChanges(exchangeId: ExchangeId): Flow<Long> = flowOf(0L)
 
             override suspend fun queryMessages(query: ProtocolMessagePageQuery): ProtocolMessagePage =
@@ -178,7 +178,7 @@ object FakeTrafficViewModelFactory {
 
         return TrafficViewModel(
             observeLatestTrafficSessionUseCase = ObserveLatestTrafficSessionUseCase(
-                customSessionCatalogPort ?: object : TrafficSessionCatalogPort {
+                customSessionCatalogPort ?: object : TrafficSessionCatalog {
                     override val latestSessionId: Flow<CaptureSessionId?> =
                         flowOf(CaptureSessionId("fake-session"))
                 },
@@ -193,7 +193,7 @@ object FakeTrafficViewModelFactory {
             ),
             clearTrafficHistoryUseCase = ClearTrafficHistoryUseCase(
                 captureSessionControl = fakeCaptureControl,
-                trafficMaintenance = object : TrafficMaintenancePort {
+                trafficMaintenance = object : TrafficMaintenance {
                     override suspend fun clearTerminalTraffic() = Unit
                 },
             ),
@@ -210,7 +210,7 @@ object FakeTrafficViewModelFactory {
                 PrepareTrafficRequestUseCase(fakeTrafficQueryPort),
             ),
             observeInspectionAnnotationsUseCase = ObserveInspectionAnnotationsUseCase(
-                customInspectionAnnotationPort ?: object : InspectionAnnotationPort {
+                customInspectionAnnotationPort ?: object : InspectionAnnotationStore {
                     override suspend fun put(sessionId: CaptureSessionId, annotation: InspectionAnnotation) = Unit
                     override suspend fun get(exchangeId: ExchangeId): List<InspectionAnnotation> = emptyList()
                     override fun observe(exchangeId: ExchangeId): Flow<List<InspectionAnnotation>> = flowOf(emptyList())
@@ -228,7 +228,7 @@ object FakeTrafficViewModelFactory {
             ),
             observeRulesUseCase = ObserveRulesUseCase(fakeRulesRepo),
             observePendingBreakpointsUseCase = ObservePendingBreakpointsUseCase(
-                object : BreakpointControlPort {
+                object : BreakpointControl {
                     override val pendingBreakpoints: StateFlow<List<PendingBreakpoint>> = pendingBreakpointFlow
                     override val isEnabled: StateFlow<Boolean> = MutableStateFlow(true)
                     override fun replaceRules(rules: List<BreakpointRule>) = Unit
@@ -241,7 +241,7 @@ object FakeTrafficViewModelFactory {
             ),
             observePendingProtocolMessageBreakpointsUseCase =
                 ObservePendingProtocolMessageBreakpointsUseCase(
-                    object : ProtocolMessageBreakpointControlPort {
+                    object : ProtocolMessageBreakpointControl {
                         override val pendingProtocolMessages: StateFlow<List<PendingProtocolMessageBreakpoint>> =
                             MutableStateFlow(emptyList())
 

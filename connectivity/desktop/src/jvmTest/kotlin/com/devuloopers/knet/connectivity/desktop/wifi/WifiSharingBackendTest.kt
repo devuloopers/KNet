@@ -1,12 +1,12 @@
 package com.devuloopers.knet.connectivity.desktop.wifi
 
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeConfiguration
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeHandle
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimePort
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
-import com.devuloopers.knet.application.port.proxy.ProxyStartResult
-import com.devuloopers.knet.application.port.proxy.ProxyStopReason
-import com.devuloopers.knet.application.port.proxy.ProxyStopResult
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeConfiguration
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeHandle
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntime
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
+import com.devuloopers.knet.application.contract.proxy.ProxyStartResult
+import com.devuloopers.knet.application.contract.proxy.ProxyStopReason
+import com.devuloopers.knet.application.contract.proxy.ProxyStopResult
 import com.devuloopers.knet.connectivity.desktop.DesktopConnectivityRuntime
 import com.devuloopers.knet.connectivity.desktop.gateway.IngressAttributionRegistry
 import com.devuloopers.knet.connectivity.desktop.network.DesktopNetworkObservation
@@ -289,7 +289,7 @@ class WifiSharingBackendTest {
         }
     }
 
-    private class RunningProxyRuntime(port: Int) : ProxyRuntimePort {
+    private class RunningProxyRuntime(port: Int) : ProxyRuntime {
         private val mutableState = MutableStateFlow<ProxyRuntimeState>(runningState(port))
         override val state: StateFlow<ProxyRuntimeState> = mutableState
 

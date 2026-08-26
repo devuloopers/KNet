@@ -1,18 +1,18 @@
 package com.devuloopers.knet.data.desktop.proxy.repository
 
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeConfiguration
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeHandle
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimePort
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
-import com.devuloopers.knet.application.port.proxy.ProxyStartResult
-import com.devuloopers.knet.application.port.proxy.ProxyStopReason
-import com.devuloopers.knet.application.port.proxy.ProxyStopResult
-import com.devuloopers.knet.application.port.breakpoint.BreakpointCaptureAvailabilityPort
-import com.devuloopers.knet.application.port.traffic.CaptureClearPreparation
-import com.devuloopers.knet.application.port.traffic.CapturePauseResult
-import com.devuloopers.knet.application.port.traffic.CaptureResumeResult
-import com.devuloopers.knet.application.port.traffic.CaptureSessionControlPort
-import com.devuloopers.knet.application.port.traffic.CaptureSessionState
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeConfiguration
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeHandle
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntime
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
+import com.devuloopers.knet.application.contract.proxy.ProxyStartResult
+import com.devuloopers.knet.application.contract.proxy.ProxyStopReason
+import com.devuloopers.knet.application.contract.proxy.ProxyStopResult
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointCaptureAvailability
+import com.devuloopers.knet.application.contract.traffic.CaptureClearPreparation
+import com.devuloopers.knet.application.contract.traffic.CapturePauseResult
+import com.devuloopers.knet.application.contract.traffic.CaptureResumeResult
+import com.devuloopers.knet.application.contract.traffic.CaptureSessionControl
+import com.devuloopers.knet.application.contract.traffic.CaptureSessionState
 import com.devuloopers.knet.connectivity.model.ProxyAccessRequirement
 import com.devuloopers.knet.connectivity.model.ProxyEndpoint
 import com.devuloopers.knet.connectivity.model.ProxyEndpointScope
@@ -42,10 +42,10 @@ import kotlin.uuid.Uuid
 /**
  * Desktop adapter for application-owned proxy lifecycle and canonical traffic capture.
  *
- * [ProxyRuntimePort] is the stable control boundary and every accepted exchange is persisted only
+ * [ProxyRuntime] is the stable control boundary and every accepted exchange is persisted only
  * through the canonical session writer.
  *
- * @property proxyRuntimeRepository Existing Netty lifecycle adapter retained behind the application port.
+ * @property proxyRuntimeRepository Existing Netty lifecycle adapter retained behind the application contract.
  * @property canonicalCaptureSessionFactory Factory for the sole canonical persistence authority.
  * @property breakpointCaptureAvailability Runtime switch that prevents uncaptured exchanges from pausing.
  */
@@ -53,8 +53,8 @@ import kotlin.uuid.Uuid
 class DesktopProxyRuntimeAdapter(
     private val proxyRuntimeRepository: ProxyRuntimeRepository,
     private val canonicalCaptureSessionFactory: CanonicalCaptureSessionFactory,
-    private val breakpointCaptureAvailability: BreakpointCaptureAvailabilityPort,
-) : ProxyRuntimePort, CaptureSessionControlPort {
+    private val breakpointCaptureAvailability: BreakpointCaptureAvailability,
+) : ProxyRuntime, CaptureSessionControl {
 
     private val lifecycleMutex = Mutex()
     private val endpointVersion = AtomicLong(0L)

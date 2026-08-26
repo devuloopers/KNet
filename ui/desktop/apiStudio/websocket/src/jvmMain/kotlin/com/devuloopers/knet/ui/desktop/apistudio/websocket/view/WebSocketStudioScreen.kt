@@ -31,8 +31,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolExecutionEvent
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolMessageDirection
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolExecutionEvent
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolMessageDirection
 import com.devuloopers.knet.ui.core.components.button.ButtonSize
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton

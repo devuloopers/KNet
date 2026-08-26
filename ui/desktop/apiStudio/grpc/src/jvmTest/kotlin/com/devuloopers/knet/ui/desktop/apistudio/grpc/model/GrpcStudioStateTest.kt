@@ -1,8 +1,8 @@
 package com.devuloopers.knet.ui.desktop.apistudio.grpc.model
 
-import com.devuloopers.knet.application.port.apistudio.ApiStudioOperationShape
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolMetadataEntry
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolOperation
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioOperationShape
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolMetadataEntry
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolOperation
 import kotlin.test.Test
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue

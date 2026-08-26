@@ -1,6 +1,6 @@
 package com.devuloopers.knet.data.desktop.inspection
 
-import com.devuloopers.knet.application.port.inspection.SemanticInspectionScheduler
+import com.devuloopers.knet.application.coordinator.inspection.SemanticInspectionScheduler
 import com.devuloopers.knet.data.desktop.capture.CanonicalCaptureSessionFactory
 import com.devuloopers.knet.data.desktop.capture.CanonicalTrafficQueryAdapter
 import com.devuloopers.knet.data.desktop.capture.recordTestProxyExchange

@@ -38,7 +38,7 @@ Started on 2026-08-18 from the approved target architecture in `docs/target_arch
 
 Completed on 2026-08-18:
 
-* Added the stable `:core:traffic`, `:core:connectivity`, `:application`, and `:connectivity:desktop` module boundaries without moving current runtime behavior.
+* Added the stable `:core:traffic`, `:core:connectivity`, `:application:desktop`, and `:connectivity:desktop` module boundaries without moving current runtime behavior.
 * Established canonical shared `HttpRequestSnapshot`, `HttpResponseSnapshot`, and `HttpExchangeSnapshot` contracts for API Studio, Traffic, Breakpoints, collections/replay, inspectors, and export.
 * Kept body bytes out of shared snapshots through `BodyRef`, bounded `BodyRange`/`BodyChunk` access, and explicit capture outcomes.
 * Added UI-neutral proxy runtime, paged traffic query, connectivity context, setup descriptor, and managed mechanism contracts.
@@ -54,7 +54,7 @@ Completed on 2026-08-18:
 
 * Added explicit desktop compatibility mapping from current `HttpTransactionEntity`/domain values to `HttpRequestSnapshot`, `HttpResponseSnapshot`, and `HttpExchangeSnapshot` without introducing a reverse dependency into `:core:traffic`.
 * Added opaque versioned legacy `BodyId` and cursor codecs; neither filesystem paths nor cursor internals cross the data adapter boundary.
-* Added `BodyAccessPort`, bounded `BodyRange`/`BodyChunk` reads, and `LoadTrafficExchangeDetailsUseCase` with a one-mebibyte preview limit per request or response.
+* Added `BodyAccess`, bounded `BodyRange`/`BodyChunk` reads, and `LoadTrafficExchangeDetailsUseCase` with a one-mebibyte preview limit per request or response.
 * Implemented `LegacyTrafficQueryAdapter` over the existing Room table with newest/oldest keyset paging, database-side method/status filtering, parsed-host filtering, and compact monotonic invalidation signals.
 * Added schema v10 with composite time, method, and response-status traffic indexes plus a non-destructive v9-to-v10 migration.
 * Migrated the Traffic inspector detail-loading path to the canonical application use case while leaving the existing live-list and proxy write paths operational.
@@ -102,7 +102,7 @@ Completed in the first containment slice:
 * Replaced racing callback persistence with one bounded ordered compatibility writer; late pending callbacks cannot regress complete rows and orphan responses cannot fabricate requests or bodies.
 * Removed destructive Room fallback, supplied missing historical migrations, and proved v1-to-current-schema data preservation.
 * Secured certificate and payload directories/files, made writes atomic and filenames opaque/contained, and made clear-traffic await both file and database removal.
-* Routed the production Traffic start/stop/state path through `:application` use cases and `ProxyRuntimePort`.
+* Routed the production Traffic start/stop/state path through `:application:desktop` use cases and `ProxyRuntime`.
 * Added executable resource gates for 24 concurrent loopback clients, an 8 MiB aggregated response, slow upstream peers, abrupt downstream disconnects, ten listener lifecycle repetitions, heap/direct-memory peaks, file-descriptor recovery, and canonical metadata storage growth.
 * Added a 100,000-row schema-v11 fixture proving database-side host/method/status filtering returns a bounded 100-item keyset page without full-session materialization.
 
@@ -123,7 +123,7 @@ Exit criteria: the target Phase 0–2 security, lifecycle, ordering, leak, and d
 
 Started on 2026-08-18. Implemented additively with production registration delayed until its safety gates passed:
 
-* Added portable monotonic connection/exchange/body/gap capture events and application `CaptureIngressPort`/`BodyStorePort` contracts.
+* Added portable monotonic connection/exchange/body/gap capture events and application `CaptureIngress`/`BodyStore` contracts.
 * Added pre-allocation body-byte reservations, a bounded metadata channel, explicit degraded health, compact durable saturation gaps, and one ordered writer per test session.
 * Added `FileBodyStore` with opaque hashed paths, owner-only permissions, bounded writes, SHA-256 digesting, explicit truncation, fsync/atomic finalize, range reads, delete, abandoned-temp reconciliation, and bounded opaque finalized-object inventory.
 * Added non-destructive schema v11 for sessions, connections, exchanges, body objects, duplex messages, inspection annotations, capture gaps, and deletion outbox with target query indexes. Schema v12 adds nullable/backfillable opaque object keys for safe finalized-orphan reconciliation.
@@ -185,11 +185,11 @@ Exit criteria: a 500 MiB response forwards with bounded memory; capture truncati
 * Add application-owned breakpoint coordination with compiled rule snapshots and bounded pause time, bytes, and connection count.
 * Migrate the Traffic list from `Flow<List<HttpTransaction>>` to canonical keyset pages and generation-based refresh.
 * Split list/detail/runtime status ownership and keep only bounded detail previews in UI state.
-* Migrate Traffic-to-API-Studio, replay, collections, breakpoints, and export to the shared `HttpRequestSnapshot`/`HttpResponseSnapshot`/`HttpExchangeSnapshot` contracts and bounded `BodyAccessPort`.
+* Migrate Traffic-to-API-Studio, replay, collections, breakpoints, and export to the shared `HttpRequestSnapshot`/`HttpResponseSnapshot`/`HttpExchangeSnapshot` contracts and bounded `BodyAccess`.
 * Move presentation models out of core and migrate every desktop ViewModel away from concrete engines, storage, and desktop adapters.
 * Consolidate `:engine:traffic` rewrite behavior and retire superseded session/simulator paths only after their callers are gone.
 
-Completed on 2026-08-18: Traffic uses canonical keyset pages with a 1,000-row retained window and bounded detail previews; 100,000-row storage and UI tests pass. `PrepareTrafficRequestUseCase` supplies the common `HttpRequestSnapshot` to replay/export/API Studio and rejects silent body truncation. `BreakpointCoordinator` owns bounded rules, pauses, byte/connection budgets, decisions, patches, cancellation, and deadlines. Presentation-only traffic models moved to UI; legacy live presentation/repositories and the dormant `:engine:traffic` module were removed. Certificate, settings, traffic, and API Studio runtime calls now cross application ports. An executable UI isolation rule prevents concrete runtime/storage imports; the pure formatter library is the narrow documented exception.
+Completed on 2026-08-18: Traffic uses canonical keyset pages with a 1,000-row retained window and bounded detail previews; 100,000-row storage and UI tests pass. `PrepareTrafficRequestUseCase` supplies the common `HttpRequestSnapshot` to replay/export/API Studio and rejects silent body truncation. `BreakpointCoordinator` owns bounded rules, pauses, byte/connection budgets, decisions, patches, cancellation, and deadlines. Presentation-only traffic models moved to UI; legacy live presentation/repositories and the dormant `:engine:traffic` module were removed. Certificate, settings, traffic, and API Studio runtime calls now cross application contracts. An executable UI isolation rule prevents concrete runtime/storage imports; the pure formatter library is the narrow documented exception.
 
 Exit criteria: shared canonical HTTP models serve all applicable features; no desktop UI module depends on concrete runtime/storage; Traffic memory follows page and preview limits at 100,000 rows.
 
@@ -206,7 +206,7 @@ Exit criteria: inspector failure or timeout cannot affect forwarding/capture; an
 
 ## Phase 14: Connectivity Mechanisms and Portal Isolation [COMPLETED]
 
-* Implement the desktop network snapshot monitor and independent manual, PAC, Apple profile, and ADB packages behind `:core:connectivity`/`:application` contracts.
+* Implement the desktop network snapshot monitor and independent manual, PAC, Apple profile, and ADB packages behind `:core:connectivity`/`:application:desktop` contracts.
 * Add descriptor-driven setup UI, versioned artifact caching, deterministic PAC generation, and golden tests.
 * Move portal delivery to a strict-authority separate adapter/listener and remove portal routing from the proxy pipeline.
 * Reconcile IPv4, IPv6, Wi-Fi, Ethernet, hotspot, and VPN network changes without unnecessary proxy restarts.
@@ -226,7 +226,11 @@ Completed on 2026-08-18: one-shot expiring invitations, Ed25519 device proof, sc
 
 Exit criteria: a test device can pair, bridge a scoped proxy stream, appear with the correct ingress identity, and be revoked without changing ordinary PAC/manual/proxy/traffic behavior.
 
-## Phase 16: Mobile Companion and Relay Product [OPTIONAL PRODUCT SCOPE — NOT ACTIVATED]
+## Phase 16: Mobile Companion and Relay Product [ACTIVATED — SHARED/ANDROID FOUNDATION IMPLEMENTED]
+
+The application layer is split into explicit siblings: JVM-only desktop orchestration lives in
+`:application:desktop`, while Android/iOS companion workflows live in `:application:companion`. The parent
+`application/` directory is documentation and Gradle namespace only; neither sibling depends on the other.
 
 * Add Android/iOS companion applications and platform VPN adapters only after product scope is approved.
 * Add desktop companion connectivity plus direct tunnel transport; add an end-to-end encrypted relay carrier only if required.
@@ -235,7 +239,14 @@ Exit criteria: a test device can pair, bridge a scoped proxy stream, appear with
 
 Exit criteria: direct and relay paths pass the same proxy conformance suite; revocation and network transition behavior remain bounded and deterministic.
 
-No Android/iOS application, VPN packet adapter, direct tunnel, or relay carrier is added without a real platform target and product/security requirements. The shared traffic model, pairing identity, authenticated gateway, application ports, and connectivity registry are complete, so activating this phase is additive. Runtime capability status remains `UNAVAILABLE` for Mobile Companion, VPN, and Relay.
+The Android-first shared foundation was activated on 2026-08-26. Portable companion domain models, application
+contracts/use cases, versioned persistence/control protocol, shared presentation state/ViewModel, Android Keystore
+identity/credential adapters, Android network/VPN-consent lifecycle boundaries, and Android/iOS compile gates now
+exist as additive modules. See
+[`android_companion_foundation_plan.md`](android_companion_foundation_plan.md). No Android product UI, concrete
+VPN/TUN packet backend, authenticated direct tunnel, desktop companion control/tunnel server, or relay carrier has
+been added yet. Runtime capability status therefore remains `UNAVAILABLE` for Mobile Companion, VPN, and Relay
+until those real implementations and physical-device gates pass.
 
 ## Phase 17: Protocol Transports and Inspectors [IN PROGRESS — HTTP/3 PENDING]
 
@@ -321,7 +332,7 @@ Completed engineering gate on 2026-08-18: `phase18ReleaseGate` aggregates archit
 
 Post-phase architecture cleanup on 2026-08-18 moved every Koin binding declaration into `:products:desktop`, organized by product feature. `:data:desktop` and UI feature modules no longer define composition modules; they expose adapters, use cases, ViewModels, and screens for the product root to assemble. `verifyCompositionOwnership` now prevents binding declarations from drifting back into reusable modules.
 
-Post-phase development cleanup on 2026-08-18 removed backward-compatibility code that was no longer justified for an unreleased product. The old transaction table and schema migrations, old payload-path reader, certificate pipe-format importer, duplicate domain `HttpRequest`/`HttpResponse`/`HttpTransaction`/`HttpTimings`, callback traffic listener/internal correlation header, old proxy repository API, interception-session API, unused HTTP executor facade, and dormant session/export implementations are gone. Schema v13 is canonical-only and older local databases intentionally reset. Proxy, breakpoint, Traffic, API Studio, and persistence now share `:core:traffic` snapshots and application ports directly. The cleanup was verified by `phase18ReleaseGate`: all 254 actionable tasks passed and the desktop distributable was produced.
+Post-phase development cleanup on 2026-08-18 removed backward-compatibility code that was no longer justified for an unreleased product. The old transaction table and schema migrations, old payload-path reader, certificate pipe-format importer, duplicate domain `HttpRequest`/`HttpResponse`/`HttpTransaction`/`HttpTimings`, callback traffic listener/internal correlation header, old proxy repository API, interception-session API, unused HTTP executor facade, and dormant session/export implementations are gone. Schema v13 is canonical-only and older local databases intentionally reset. Proxy, breakpoint, Traffic, API Studio, and persistence now share `:core:traffic` snapshots and application contracts directly. The cleanup was verified by `phase18ReleaseGate`: all 254 actionable tasks passed and the desktop distributable was produced.
 
 ## Phase 19: Kotlin-First Source and Platform Boundaries [COMPLETED]
 
@@ -360,7 +371,7 @@ Started on 2026-08-18 to close IDE/compiler hygiene after the Kotlin-first bound
 
 Completed on 2026-08-18:
 
-* Retained explicit `public` visibility in `:application`, `:core:traffic`, `:core:connectivity`,
+* Retained explicit `public` visibility in `:application:desktop`, `:core:traffic`, `:core:connectivity`,
   and `:connectivity:desktop`, where `explicitApi()` makes the modifier part of the enforced API contract.
 * Removed 1,021 redundant `public` modifiers from implementation, persistence, product,
   presentation, and test sources without changing declaration visibility or behavior. The generated
@@ -409,7 +420,7 @@ Implemented:
   reusable HTTP panel consume canonical `ResponseHead` and `ExchangeTimings`; UI projections add only
   presentation lifecycle, logs, assertions, selection, or formatting.
 * Added the evidence-driven leaf `:core:scripting` module and moved shared language, phase, snippet,
-  and immutable assertion values there. Collections, application ports, UI editors, and the script
+  and immutable assertion values there. Collections, application contracts, UI editors, and the script
   engine consume those contracts directly.
 * Replaced application/UI/interceptor breakpoint copies with the single `BreakpointRule` and
   `BreakpointPhase` in `:core:domain`. Method matching remains typed as canonical `HttpMethod`, and
@@ -421,7 +432,7 @@ Implemented:
 * Removed duplicate Traffic inspector sub-tabs, code-editor context menu items, application menu
   items, unused explorer state, and duplicate API Studio network-error details.
 * Removed certificate UI copies. `CertificateAuthoritySummary`, `ClientCertificateSummary`, typed
-  `ClientCertificateFormat`, and `MtlsRuleSpec` cross `CertificateManagementPort` directly.
+  `ClientCertificateFormat`, and `MtlsRuleSpec` cross `CertificateManagement` directly.
 * Extended dependency-boundary verification for `:core:scripting`, `:core:domain`, and the
   application module, and updated affected module responsibility contracts.
 
@@ -460,7 +471,7 @@ Detailed architecture, phases, security limitations, module changes, and exit cr
 
 Superseded approval prototype checkpoint completed on 2026-08-18 and removed on 2026-08-19:
 
-* Added canonical Wi-Fi sharing models, the application port/use cases, and feature-grouped desktop DI.
+* Added canonical Wi-Fi sharing models, the application contract/use cases, and feature-grouped desktop DI.
 * The prototype proved exact-interface LAN bridging, source attribution, quotas, and listener rollback. Its
   approved-source registry, invitations, token routes, and revocation controls were later removed when the
   product requirement changed to open local-client admission.
@@ -546,7 +557,7 @@ until terminal close.
 Two real loopback regression tests start with an already-connected streaming client, enable either a request
 or response breakpoint, verify the stale connection is refreshed, reconnect, and prove the corresponding
 phase is published as a pending application breakpoint before forwarding resumes. Focused and wider
-verification passed `:application:test`, `:engine:proxy:test`, `:engine:interceptor:test`,
+verification passed `:application:desktop:test`, `:engine:proxy:test`, `:engine:interceptor:test`,
 `:data:desktop:jvmTest`, `:products:desktop:test`, `verifyArchitectureFoundation`, and `git diff --check`
 (149 actionable tasks in the wider gate). The desktop application was not launched.
 
@@ -790,7 +801,7 @@ and the desktop application was not launched.
 ## Phase 36: Traffic Correctness, History, and Scale Remediation [COMPLETED]
 
 Started on 2026-08-19 from the repository-backed Traffic module audit. This phase keeps the canonical
-`:core:traffic` snapshots, application ports, Room storage, proxy/capture ownership, typed breakpoint
+`:core:traffic` snapshots, application contracts, Room storage, proxy/capture ownership, typed breakpoint
 projection, and product DI boundaries. It incrementally corrects selected-detail identity, repeated
 header/query preservation, captured-request URL ownership, decoded-body memory limits, persisted-session
 visibility, bounded viewport paging, non-starving live refresh, transport/protocol classification, clear
@@ -2329,3 +2340,105 @@ The live capability entries intentionally remain `EXPERIMENTAL`: the default thr
 measurements, actual cross-platform CI results, physical Android/iOS Wi-Fi proxy evidence, and remaining
 real-socket lifecycle rows are not locally complete. The desktop application was not launched, stopped, or
 restarted by this phase.
+
+## Phase 109: Explicit SSE API Studio Integration Package [COMPLETED]
+
+Started on 2026-08-26. Move the SSE response-stream interpreter and its mirrored tests from the ambiguous
+`engine.sse.apistudio` package to `engine.sse.integration.apistudio`. This is a naming-only boundary clarification:
+the SSE engine continues to implement the protocol-neutral application contract, while API Studio UI, workspace,
+collection, and presentation ownership remain outside `:engine:sse`. Update composition imports and documentation,
+then verify the focused SSE tests, desktop composition, and architecture gates without launching KNet.
+
+Completed on 2026-08-26. Production and mirrored test packages now use
+`engine.sse.integration.apistudio`; desktop composition imports and SSE documentation point to the explicit
+integration path. The class still implements the same protocol-neutral application contract, and no UI, workspace,
+collection, proxy, persistence, or runtime behavior moved into the SSE engine. `:engine:sse:test`, the focused
+`DesktopModulesTest`, and `verifyArchitectureFoundation` passed together across 163 Gradle tasks. KNet was not
+launched.
+
+## Phase 110: Application Contract Naming and Decomposition [COMPLETED]
+
+Started on 2026-08-26. Replace the ambiguous hexagonal `port` package/type terminology in both
+`:application:desktop` and `:application:companion` with explicit `contract` packages and capability-oriented
+interface names. Split the former companion contract monolith by capability, separate breakpoint contracts from
+the stateful coordinator, separate semantic-inspection contracts from scheduling/use-case behavior, and keep
+outer adapters dependent inward on the renamed contracts. No runtime behavior or application UI is intended to
+change. Completion requires downstream compilation, architecture verification, companion platform gates, and the
+full release qualification without launching KNet.
+
+Completed on 2026-08-26. Both application modules now expose capability-oriented `contract` packages rather than
+the ambiguous `port` package/type vocabulary. Desktop stateful orchestration lives under `coordinator`, focused
+commands and queries remain under `usecase`, and the former companion contract monolith is split into pairing,
+registration, credential, connection, inspection, and certificate contracts. Breakpoint contracts, protocol
+registry behavior, coordination, semantic inspection scheduling, annotation queries, body access, and pairing
+coordination are separated by responsibility without changing their runtime behavior.
+
+The companion Android connectivity adapter now also declares the normal `ACCESS_NETWORK_STATE` permission required
+by its existing `ConnectivityManager` contract. Focused application tests, desktop product tests, architecture
+verification, `companionFoundationQualification`, Android lint, and the complete `phase18ReleaseGate` passed. The
+final release gate covered 524 tasks, including JVM, Android, iOS simulator, engine, Compose UI, packaging, and
+architecture checks. KNet was not launched.
+
+## Phase 111: Android Companion Product Registration [COMPLETED — PRODUCT SHELL; CAPTURE RUNTIME PENDING]
+
+Completed on 2026-08-26. Added the real `:products:companion:androidApp` Android application target with its manifest,
+resource-owned minimal launcher, Android product composition root, lifecycle cleanup, and composition tests. The
+product composes the implemented versioned registration/invitation adapters, protected Android Keystore credential
+storage, non-exportable device identity/proof signing, and Android network observation. It deliberately does not
+substitute successful stubs for the unavailable pinned transport, certificate flow, or VPN/TUN packet backend.
+
+The root `companionAndroidProductQualification` gate covers the portable companion foundation, Android product
+unit tests, lint, and debug APK assembly without installing or launching the application. The installable shell is
+therefore an actual product target, while companion traffic capture, full product UI, certificate trust, physical
+device evidence, and VPN remain explicit follow-up increments. The dedicated product gate passed 287 tasks and the
+complete `phase18ReleaseGate` subsequently passed 589 tasks, including every module check and desktop packaging.
+Neither product was launched.
+
+## Phase 112: Android Companion Compose Multiplatform UI Host [COMPLETED]
+
+Completed on 2026-08-26 following the current JetBrains Compose Multiplatform structure: the Android application
+remains a thin executable host while reusable screens, theme, state rendering, and UI strings live in the new
+`:ui:companion:sharedUi` Kotlin Multiplatform module. The module targets Android and iOS directly and retains a JVM
+target for fast common UI mapping tests. Android's `MainActivity` now uses `ComponentActivity.setContent`, edge-to-edge
+window handling, and lifecycle-aware collection; the former XML layout and duplicated Android screen strings were
+removed. Android manifest, launcher/theme, icon, and backup XML remain product packaging resources rather than UI.
+The architecture gate now rejects companion `res/layout` files plus `setContentView`/`R.layout` usage so later
+features cannot accidentally create a parallel Android View implementation.
+
+The shared UI JVM tests, Android compilation, iOS-simulator production compilation, Android product tests, lint,
+and debug APK assembly passed together across 291 tasks. Pure state/resource mapping tests intentionally run on the
+JVM; executable iOS UI tests require the supported Xcode 26.4 toolchain, while this workstation still has Xcode 16.4.
+The complete `phase18ReleaseGate` then passed all 645 tasks, including every module check and desktop packaging. No
+application was installed or launched.
+
+## Phase 113: Shared Companion iOS UI Entry Point [COMPLETED]
+
+Completed on 2026-08-26 without creating or registering an iOS product. The existing
+`:ui:companion:sharedUi` iOS targets now include an `iosMain` UIKit bridge built with `ComposeUIViewController`.
+It renders the same common Compose UI from an injected `StateFlow<CompanionUiState>` while leaving state ownership,
+lifecycle composition, dependency injection, signing, and Xcode integration to a future iOS product target.
+
+## Phase 114: Cross-Platform UI Core [COMPLETED]
+
+Started on 2026-08-26. Convert `:ui:core` from a JVM-only Compose module into KNet's complete Compose
+Multiplatform UI foundation for JVM, Android, iOS ARM64, and iOS Simulator ARM64. Preserve one common API for
+themes, colors, semantic tokens, typography, spacing, shapes, motion, resources, and reusable components while
+confining unavoidable clipboard and pointer implementations to platform source sets. Migrate companion shared UI
+to consume `KNetTheme` instead of owning a duplicate palette. No iOS product will be registered and Android
+verification will compile and test without assembling an APK.
+
+Completed on 2026-08-26. `:ui:core` now uses Kotlin Multiplatform and the Android Multiplatform Library plugin with
+JVM, Android, iOS ARM64, and iOS Simulator ARM64 production targets. Theme, semantic colors, typography, spacing,
+shapes, motion, resources, and reusable component APIs remain in `commonMain`. JVM-only AWT clipboard adaptation,
+pointer hover/secondary-click handling, resize cursors, and interactive scrollbar chrome are isolated in `jvmMain`;
+Android and iOS provide native Compose clipboard adapters, long-press context menus, touch-native scrolling, and
+safe no-op pointer-only affordances behind the same common contracts.
+
+`:ui:companion:sharedUi` now depends on `:ui:core`, renders under `KNetTheme`, and derives status colors, spacing,
+shapes, and Material values from the shared design system instead of maintaining a companion palette. The root
+architecture gate now rejects future feature-owned companion palette definitions and qualifies the shared core on
+JVM, Android, and iOS Simulator. UI-core JVM tests, the complete UI-core check, companion shared-UI JVM tests,
+architecture verification, and `companionFoundationQualification` passed across 194 tasks. The Android product
+source and complete desktop product then compiled successfully across 210 tasks. Earlier focused production
+compilation also passed for iOS ARM64 and iOS Simulator ARM64. No APK was assembled, no product was installed, and
+no application was launched.

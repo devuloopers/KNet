@@ -1,6 +1,6 @@
 package com.devuloopers.knet.engine.graphqlwebsocket.apistudio
 
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolDocument
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolDocument
 import com.devuloopers.knet.domain.request.descriptor.RequestKindId
 import com.devuloopers.knet.engine.graphqlwebsocket.protocol.GraphQLWebSocketEnvelopeParser
 import com.devuloopers.knet.engine.websocket.WebSocketHandshakeHeader

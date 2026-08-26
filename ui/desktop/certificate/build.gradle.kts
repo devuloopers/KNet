@@ -11,7 +11,7 @@ kotlin {
         val jvmMain by getting {
             dependencies {
                 implementation(project(":ui:core"))
-                implementation(project(":application"))
+                implementation(project(":application:desktop"))
                 implementation(project(":core:domain"))
                 implementation(project(":core:logger"))
                 implementation(libs.compose.runtime)
@@ -22,7 +22,7 @@ kotlin {
                 implementation(libs.compose.uiToolingPreview)
                 implementation(libs.androidx.lifecycle.viewmodelCompose)
                 implementation(libs.androidx.lifecycle.runtimeCompose)
-                implementation(compose.materialIconsExtended)
+                implementation("org.jetbrains.compose.material:material-icons-extended:1.7.3")
             }
         }
         val jvmTest by getting {

@@ -1,4 +1,8 @@
 [versions]
+android-gradle-plugin = "9.1.1"
+android-compile-sdk = "36"
+android-min-sdk = "26"
+androidx-activity = "1.13.0"
 androidx-lifecycle = "2.11.0-beta01"
 composeMultiplatform = "1.11.1"
 junit = "4.13.2"
@@ -7,6 +11,7 @@ kotlinx-coroutines = "1.11.0"
 kotlinx-datetime = "0.8.0"
 material3 = "1.11.0-alpha07"
 bouncycastle = "1.85"
+materialIconsExtended = "1.7.3"
 netty = "4.1.136.Final"
 kermit = "2.1.0"
 room = "2.8.4"
@@ -31,7 +36,9 @@ zxing = "3.5.3"
 
 
 [libraries]
+androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity" }
 graphql-java = { module = "com.graphql-java:graphql-java", version.ref = "graphql-java" }
+material-icons-extended = { module = "org.jetbrains.compose.material:material-icons-extended", version.ref = "materialIconsExtended" }
 spring-boot-starter-webflux = { module = "org.springframework.boot:spring-boot-starter-webflux", version.ref = "spring-boot" }
 spring-boot-starter-graphql = { module = "org.springframework.boot:spring-boot-starter-graphql", version.ref = "spring-boot" }
 spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test", version.ref = "spring-boot" }
@@ -86,6 +93,9 @@ zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 
 
 [plugins]
+androidApplication = { id = "com.android.application", version.ref = "android-gradle-plugin" }
+androidLibrary = { id = "com.android.library", version.ref = "android-gradle-plugin" }
+androidMultiplatformLibrary = { id = "com.android.kotlin.multiplatform.library", version.ref = "android-gradle-plugin" }
 composeMultiplatform = { id = "org.jetbrains.compose", version.ref = "composeMultiplatform" }
 composeCompiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlinJvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }

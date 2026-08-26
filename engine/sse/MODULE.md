@@ -12,7 +12,7 @@
 ## Owns
 
 - SSE media-type recognition, record parsing, event semantics, limits, capture adapter, breakpoint extension,
-  Traffic decoder, and HTTP response-stream interpreter.
+  Traffic decoder, and the HTTP response-stream interpreter under `integration/apistudio`.
 
 ## Does Not Own
 
@@ -21,7 +21,7 @@
 
 ## Dependency Direction
 
-- Depends on protocol-neutral contracts in `:core:traffic`, `:core:domain`, `:application`, and `:engine:proxy`.
+- Depends on protocol-neutral contracts in `:core:traffic`, `:core:domain`, `:application:desktop`, and `:engine:proxy`.
 - The proxy, traffic core, persistence, and UI modules never depend on SSE implementation details.
 - `:products:desktop` registers SSE contributions at the composition root.
 

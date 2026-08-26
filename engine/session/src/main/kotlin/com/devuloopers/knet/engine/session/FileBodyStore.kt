@@ -1,18 +1,18 @@
 package com.devuloopers.knet.engine.session
 
-import com.devuloopers.knet.application.port.traffic.BodyAppendResult
-import com.devuloopers.knet.application.port.traffic.BodyChunk
-import com.devuloopers.knet.application.port.traffic.BodyDeleteResult
-import com.devuloopers.knet.application.port.traffic.BodyFinalizeResult
-import com.devuloopers.knet.application.port.traffic.BodyIntegrityExpectation
-import com.devuloopers.knet.application.port.traffic.BodyIntegrityResult
-import com.devuloopers.knet.application.port.traffic.BodyObjectInventoryPage
-import com.devuloopers.knet.application.port.traffic.BodyRange
-import com.devuloopers.knet.application.port.traffic.BodyStorageKey
-import com.devuloopers.knet.application.port.traffic.BodyStorePort
-import com.devuloopers.knet.application.port.traffic.BodyStoreMaintenancePort
-import com.devuloopers.knet.application.port.traffic.BodyWritePolicy
-import com.devuloopers.knet.application.port.traffic.BodyWriteSession
+import com.devuloopers.knet.application.contract.traffic.BodyAppendResult
+import com.devuloopers.knet.application.contract.traffic.BodyChunk
+import com.devuloopers.knet.application.contract.traffic.BodyDeleteResult
+import com.devuloopers.knet.application.contract.traffic.BodyFinalizeResult
+import com.devuloopers.knet.application.contract.traffic.BodyIntegrityExpectation
+import com.devuloopers.knet.application.contract.traffic.BodyIntegrityResult
+import com.devuloopers.knet.application.contract.traffic.BodyObjectInventoryPage
+import com.devuloopers.knet.application.contract.traffic.BodyRange
+import com.devuloopers.knet.application.contract.traffic.BodyStorageKey
+import com.devuloopers.knet.application.contract.traffic.BodyStore
+import com.devuloopers.knet.application.contract.traffic.BodyStoreMaintenance
+import com.devuloopers.knet.application.contract.traffic.BodyWritePolicy
+import com.devuloopers.knet.application.contract.traffic.BodyWriteSession
 import com.devuloopers.knet.traffic.id.BodyId
 import com.devuloopers.knet.traffic.model.body.BodyCaptureOutcome
 import com.devuloopers.knet.traffic.model.body.BodyDigest
@@ -33,7 +33,7 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Atomic owner-only file implementation of [BodyStorePort].
+ * Atomic owner-only file implementation of [BodyStore].
  *
  * Final paths are derived from a SHA-256 digest of opaque [BodyId] values. Writes remain in a
  * private temporary directory until fsync and atomic rename complete.
@@ -42,7 +42,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 class FileBodyStore(
     root: File,
-) : BodyStorePort, BodyStoreMaintenancePort {
+) : BodyStore, BodyStoreMaintenance {
     private val rootDirectory = root.canonicalFile
     private val objectDirectory = rootDirectory.resolve("objects")
     private val temporaryDirectory = rootDirectory.resolve("tmp")

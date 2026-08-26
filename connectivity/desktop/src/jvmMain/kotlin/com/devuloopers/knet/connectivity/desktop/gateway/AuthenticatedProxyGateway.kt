@@ -1,6 +1,6 @@
 package com.devuloopers.knet.connectivity.desktop.gateway
 
-import com.devuloopers.knet.application.port.pairing.PairingCoordinator
+import com.devuloopers.knet.application.coordinator.pairing.PairingCoordinator
 import com.devuloopers.knet.pairing.DeviceAuthenticationResult
 import com.devuloopers.knet.pairing.DeviceScope
 import com.devuloopers.knet.identity.RegisteredDeviceId

@@ -70,7 +70,7 @@ Add, without modifying the common sidebar or Room schema:
 Examples:
 
 - WebSocket contributes its own editor/codec and session executor; its UI creates strict engine documents only
-  through `ApiStudioProtocolAuthoringPort`, so saved collections and the UI/runtime dependency boundary remain
+  through `ApiStudioProtocolAuthoring`, so saved collections and the UI/runtime dependency boundary remain
   unchanged.
 - SSE can continue using the HTTP editor when it only authors an HTTP request, while its response inspector is a
   separate additive renderer. It needs a new editor only if KNet later adds SSE-specific authoring state.

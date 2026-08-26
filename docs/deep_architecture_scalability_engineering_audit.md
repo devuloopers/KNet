@@ -170,7 +170,7 @@ There are no detected Gradle dependency cycles. The problem is direction and abs
 | Relationship | Classification | Reason |
 |---|---|---|
 | app -> data/domain/presentation | GOOD | composition root is allowed to know implementations |
-| feature UI -> domain ports/use cases | GOOD | stable presentation dependency when models are presentation-neutral |
+| feature UI -> domain contracts/use cases | GOOD | stable presentation dependency when models are presentation-neutral |
 | engine -> domain value/port API | ACCEPTABLE | appropriate only for truly stable transport-neutral types |
 | domain -> logger | SUSPICIOUS | domain is not dependency-inward/pure and logging is a side effect |
 | domain contains `TrafficItemUiState` and UI intents | ARCHITECTURAL VIOLATION | presentation changes force core/domain changes |
@@ -1114,7 +1114,7 @@ This is an incremental target. It does not require replacing Compose, Koin, Nett
        :engine:proxy       :engine:portal     semantic inspectors
        Netty internal      HTTP delivery       GraphQL/etc.
              |                   |                   |
-             +---------- application ports ---------+
+             +---------- application contracts ---------+
 
 Rules:
 - engine modules do not depend on UI, Room, filesystem implementations, or one another's internals;

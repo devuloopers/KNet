@@ -1,6 +1,6 @@
 package com.devuloopers.knet.data.desktop.capture
 
-import com.devuloopers.knet.application.port.traffic.BodyStorageKey
+import com.devuloopers.knet.application.contract.traffic.BodyStorageKey
 import com.devuloopers.knet.storage.capture.entity.BodyObjectEntity
 import com.devuloopers.knet.storage.capture.entity.CanonicalExchangeEntity
 import com.devuloopers.knet.storage.capture.entity.DuplexMessageEntity

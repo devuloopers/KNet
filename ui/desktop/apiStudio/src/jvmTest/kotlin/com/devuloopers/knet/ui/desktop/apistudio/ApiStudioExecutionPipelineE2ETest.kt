@@ -12,8 +12,8 @@ import com.devuloopers.knet.domain.collection.model.ApiRequestAuth
 import com.devuloopers.knet.traffic.model.http.HttpMethod
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.id.CaptureSessionId
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
-import com.devuloopers.knet.application.port.traffic.CaptureSessionState
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
+import com.devuloopers.knet.application.contract.traffic.CaptureSessionState
 import com.devuloopers.knet.application.usecase.breakpoint.DropMatchingBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUseCase
 import com.devuloopers.knet.application.usecase.traffic.ObserveTrafficCaptureStateUseCase
@@ -112,7 +112,7 @@ class ApiStudioExecutionPipelineE2ETest {
             executeApiStudioRequestUseCase = com.devuloopers.knet.application.usecase.apistudio.ExecuteApiStudioRequestUseCase(
                 executeRequest = com.devuloopers.knet.domain.clientNetwork.usecase.ExecuteClientApiRequestUseCase(executor),
                 formatResponseBody = com.devuloopers.knet.domain.clientNetwork.usecase.FormatResponseBodyUseCase(),
-                scriptExecution = com.devuloopers.knet.application.port.script.UnavailableScriptExecutionPort,
+                scriptExecution = com.devuloopers.knet.application.contract.script.UnavailableScriptExecutor,
                 ioDispatcher = testDispatcher
             ),
             observeProxyRuntimeStateUseCase = ObserveProxyRuntimeStateUseCase(proxyRuntime),

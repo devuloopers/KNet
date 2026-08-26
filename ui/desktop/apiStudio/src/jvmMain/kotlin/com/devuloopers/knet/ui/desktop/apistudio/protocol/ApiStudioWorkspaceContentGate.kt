@@ -10,7 +10,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import com.devuloopers.knet.application.port.apistudio.ApiStudioEditorId
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioEditorId
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 /**

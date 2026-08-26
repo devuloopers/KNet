@@ -1,9 +1,9 @@
 package com.devuloopers.knet.engine.interceptor
 
-import com.devuloopers.knet.application.port.breakpoint.BreakpointBody
-import com.devuloopers.knet.application.port.breakpoint.BreakpointBodyEdit
-import com.devuloopers.knet.application.port.breakpoint.BreakpointRequestEdit
-import com.devuloopers.knet.application.port.breakpoint.BreakpointResponseEdit
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointBody
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointBodyEdit
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointRequestEdit
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointResponseEdit
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.HttpResponseSnapshot
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol

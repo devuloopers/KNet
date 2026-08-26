@@ -1,9 +1,9 @@
 package com.devuloopers.knet.engine.graphqlwebsocket.inspection
 
-import com.devuloopers.knet.application.port.traffic.ProtocolMessagePayloadDecoder
-import com.devuloopers.knet.application.port.traffic.ProtocolMessagePayloadDecoderId
-import com.devuloopers.knet.application.port.traffic.ProtocolMessagePayloadInput
-import com.devuloopers.knet.application.port.traffic.ProtocolMessagePresentation
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePayloadDecoder
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePayloadDecoderId
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePayloadInput
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePresentation
 import com.devuloopers.knet.engine.graphqlwebsocket.protocol.GRAPHQL_TRANSPORT_WS_SUBPROTOCOL
 import com.devuloopers.knet.engine.graphqlwebsocket.protocol.GraphQLWebSocketEnvelopeParser
 import com.devuloopers.knet.engine.graphqlwebsocket.protocol.GraphQLWebSocketMessageType

@@ -9,7 +9,7 @@ The audit found desktop UI, repositories, engines, storage, and feature models c
 
 ## Decision
 
-Dependencies point inward: `products/ui/connectivity/data/engine/storage -> application -> core contracts`. `:core:traffic` owns immutable shared HTTP snapshots and body references. The JVM-only `:application` module owns desktop commands, queries, ports, and policies. Engines implement focused capabilities and do not depend on UI, data, storage, connectivity, or composition roots.
+Dependencies point inward: `products/ui/connectivity/data/engine/storage -> application -> core contracts`. `:core:traffic` owns immutable shared HTTP snapshots and body references. The JVM-only `:application:desktop` module owns desktop commands, queries, ports, and policies. Engines implement focused capabilities and do not depend on UI, data, storage, connectivity, or composition roots.
 
 Existing code migrates behind adapters. A source move is not required until behavior and callers have crossed the stable boundary. `verifyArchitectureFoundation` enforces the initial module and dependency rules.
 

@@ -2,9 +2,9 @@ package com.devuloopers.knet.ui.desktop.apistudio.websocket.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.devuloopers.knet.application.port.apistudio.*
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
-import com.devuloopers.knet.application.port.traffic.CaptureSessionState
+import com.devuloopers.knet.application.contract.apistudio.*
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
+import com.devuloopers.knet.application.contract.traffic.CaptureSessionState
 import com.devuloopers.knet.application.usecase.apistudio.*
 import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUseCase
 import com.devuloopers.knet.application.usecase.traffic.ObserveTrafficCaptureStateUseCase

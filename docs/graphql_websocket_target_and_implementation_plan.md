@@ -88,7 +88,7 @@ operation lifecycle, and streamed results are materially different from the raw 
 The contribution reuses:
 
 - `ApiStudioWorkspaceDocument` and the existing saved/unsaved collection tree;
-- `ApiStudioProtocolAuthoringPort` and `ApiStudioProtocolSessionExecutor`;
+- `ApiStudioProtocolAuthoring` and `ApiStudioProtocolSessionExecutor`;
 - the existing WebSocket client/session transport;
 - the shared code editor, key/value controls, dropdowns, drawer, and response/event timeline primitives.
 

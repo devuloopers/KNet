@@ -5,8 +5,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
-import com.devuloopers.knet.application.port.apistudio.ApiStudioEditorId
-import com.devuloopers.knet.application.port.apistudio.ApiStudioWorkspaceDocument
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioEditorId
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioWorkspaceDocument
 import com.devuloopers.knet.domain.request.descriptor.RequestKindId
 import com.devuloopers.knet.ui.desktop.apistudio.protocol.ApiStudioWorkspaceContribution
 import com.devuloopers.knet.ui.desktop.apistudio.protocol.ApiStudioWorkspaceRenderState

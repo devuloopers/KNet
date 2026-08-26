@@ -1,10 +1,10 @@
 package com.devuloopers.knet.ui.desktop.apistudio
 
-import com.devuloopers.knet.application.port.apistudio.ApiStudioDocumentLocation
-import com.devuloopers.knet.application.port.apistudio.ApiStudioEditorId
-import com.devuloopers.knet.application.port.apistudio.ApiStudioWorkspaceContent
-import com.devuloopers.knet.application.port.apistudio.ApiStudioWorkspaceDocument
-import com.devuloopers.knet.application.port.apistudio.ApiStudioWorkspaceDocumentStore
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioDocumentLocation
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioEditorId
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioWorkspaceContent
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioWorkspaceDocument
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioWorkspaceDocumentStore
 import com.devuloopers.knet.application.usecase.apistudio.CreateApiStudioWorkspaceDocumentUseCase
 import com.devuloopers.knet.application.usecase.apistudio.DeleteApiStudioWorkspaceDocumentUseCase
 import com.devuloopers.knet.application.usecase.apistudio.ObserveApiStudioWorkspaceDocumentsUseCase

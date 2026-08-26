@@ -1,7 +1,7 @@
 package com.devuloopers.knet.connectivity.desktop
 
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimePort
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntime
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
 import com.devuloopers.knet.connectivity.desktop.network.DesktopNetworkSnapshotMonitor
 import com.devuloopers.knet.connectivity.model.ConnectivityContext
 import com.devuloopers.knet.connectivity.model.ConnectivityContextVersion
@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
  * therefore network transitions invalidate descriptors without restarting or flushing traffic.
  */
 public class DesktopConnectivityRuntime(
-    proxyRuntime: ProxyRuntimePort,
+    proxyRuntime: ProxyRuntime,
     public val networkMonitor: DesktopNetworkSnapshotMonitor,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) : AutoCloseable {

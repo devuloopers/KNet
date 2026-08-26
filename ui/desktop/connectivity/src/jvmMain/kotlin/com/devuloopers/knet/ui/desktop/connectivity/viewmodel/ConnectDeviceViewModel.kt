@@ -2,7 +2,7 @@ package com.devuloopers.knet.ui.desktop.connectivity.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.devuloopers.knet.application.port.proxy.ProxyStartResult
+import com.devuloopers.knet.application.contract.proxy.ProxyStartResult
 import com.devuloopers.knet.application.usecase.connectivity.wifi.ObserveWifiSharingUseCase
 import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUseCase
 import com.devuloopers.knet.application.usecase.proxy.StartLoopbackProxyUseCase

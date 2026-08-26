@@ -1,6 +1,6 @@
 package com.devuloopers.knet.data.desktop.capture
 
-import com.devuloopers.knet.application.port.traffic.TrafficPageQuery
+import com.devuloopers.knet.application.contract.traffic.TrafficPageQuery
 import com.devuloopers.knet.engine.session.FileBodyStore
 import com.devuloopers.knet.storage.capture.entity.CanonicalExchangeEntity
 import com.devuloopers.knet.storage.capture.entity.CaptureSessionEntity

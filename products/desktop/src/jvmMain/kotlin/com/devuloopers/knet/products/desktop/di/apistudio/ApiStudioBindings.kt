@@ -1,18 +1,18 @@
 package com.devuloopers.knet.products.desktop.di.apistudio
 
-import com.devuloopers.knet.application.port.script.ScriptExecutionPort
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolAuthoringPort
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolAuthoringRegistry
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolExecutor
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolExecutorRegistry
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolSchemaStore
-import com.devuloopers.knet.application.port.apistudio.ApiStudioWorkspaceDocumentStore
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolReflectionPort
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolReflectionRegistry
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolSessionExecutor
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolSessionExecutorRegistry
-import com.devuloopers.knet.application.port.apistudio.HttpResponseStreamInterpreter
-import com.devuloopers.knet.application.port.apistudio.HttpResponseStreamInterpreterRegistry
+import com.devuloopers.knet.application.contract.script.ScriptExecutor
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolAuthoring
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolAuthoringRegistry
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolExecutor
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolExecutorRegistry
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolSchemaStore
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioWorkspaceDocumentStore
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolReflection
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolReflectionRegistry
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolSessionExecutor
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolSessionExecutorRegistry
+import com.devuloopers.knet.application.contract.apistudio.HttpResponseStreamInterpreter
+import com.devuloopers.knet.application.contract.apistudio.HttpResponseStreamInterpreterRegistry
 import com.devuloopers.knet.application.usecase.apistudio.ExecuteApiStudioRequestUseCase
 import com.devuloopers.knet.application.usecase.apistudio.CreateApiStudioProtocolDocumentUseCase
 import com.devuloopers.knet.application.usecase.apistudio.CreateApiStudioWorkspaceDocumentUseCase
@@ -49,7 +49,7 @@ import com.devuloopers.knet.engine.websocket.WebSocketApiStudioAuthoringAdapter
 import com.devuloopers.knet.engine.websocket.WebSocketApiStudioClientFactory
 import com.devuloopers.knet.engine.websocket.WebSocketApiStudioExecutor
 import com.devuloopers.knet.engine.websocket.WebSocketRequestDraftCodec
-import com.devuloopers.knet.engine.sse.apistudio.SseHttpResponseStreamInterpreter
+import com.devuloopers.knet.engine.sse.integration.apistudio.SseHttpResponseStreamInterpreter
 import com.devuloopers.knet.domain.apistudio.usecase.ImportRequestToStudioUseCase
 import com.devuloopers.knet.domain.clientNetwork.executor.HttpExecutor
 import com.devuloopers.knet.domain.clientNetwork.usecase.ExecuteClientApiRequestUseCase
@@ -97,7 +97,7 @@ internal val apiStudioBindings: Module = module {
         )
     }
     single<HttpExecutor> { get<KNetApiClient>() }
-    single<ScriptExecutionPort> { DesktopScriptExecutionAdapter() }
+    single<ScriptExecutor> { DesktopScriptExecutionAdapter() }
     single<CollectionsRepository> {
         CollectionsRepositoryImpl(get<KNetDatabase>().collectionDao())
     }
@@ -108,7 +108,7 @@ internal val apiStudioBindings: Module = module {
         RoomApiStudioProtocolSchemaStore(get<KNetDatabase>().protocolDocumentDao())
     }
     single { GrpcRequestDraftCodec() }
-    single { GrpcApiStudioAuthoringAdapter(get(), get()) } bind ApiStudioProtocolAuthoringPort::class
+    single { GrpcApiStudioAuthoringAdapter(get(), get()) } bind ApiStudioProtocolAuthoring::class
     single {
         val certificates: CertificateRuntimeRepository = get()
         GrpcClientChannelFactory(certificates.rootCertificateDer())
@@ -116,11 +116,11 @@ internal val apiStudioBindings: Module = module {
     single { GrpcApiStudioExecutor(get(), get(), get()) }
     single<ApiStudioProtocolExecutor> { get<GrpcApiStudioExecutor>() }
     single<ApiStudioProtocolSessionExecutor> { get<GrpcApiStudioExecutor>() }
-    single { GrpcApiStudioReflectionAdapter(get(), get()) } bind ApiStudioProtocolReflectionPort::class
+    single { GrpcApiStudioReflectionAdapter(get(), get()) } bind ApiStudioProtocolReflection::class
     single { GrpcWorkspaceDraftCodec() }
     single { GrpcApiStudioWorkspaceContribution(get()) } bind ApiStudioWorkspaceContribution::class
     single { WebSocketRequestDraftCodec() }
-    single { WebSocketApiStudioAuthoringAdapter(get()) } bind ApiStudioProtocolAuthoringPort::class
+    single { WebSocketApiStudioAuthoringAdapter(get()) } bind ApiStudioProtocolAuthoring::class
     single {
         val certificates: CertificateRuntimeRepository = get()
         WebSocketApiStudioClientFactory(certificates.rootCertificateDer())
@@ -131,16 +131,16 @@ internal val apiStudioBindings: Module = module {
     single { WebSocketWorkspaceDraftCodec() }
     single { WebSocketApiStudioWorkspaceContribution(get()) } bind ApiStudioWorkspaceContribution::class
     single { GraphQLWebSocketRequestDraftCodec(envelopeParser = get()) }
-    single { GraphQLWebSocketApiStudioAuthoringAdapter(get()) } bind ApiStudioProtocolAuthoringPort::class
+    single { GraphQLWebSocketApiStudioAuthoringAdapter(get()) } bind ApiStudioProtocolAuthoring::class
     single { GraphQLWebSocketApiStudioExecutor(get(), get(), get(), get(), get()) }
     single<ApiStudioProtocolExecutor> { get<GraphQLWebSocketApiStudioExecutor>() }
     single<ApiStudioProtocolSessionExecutor> { get<GraphQLWebSocketApiStudioExecutor>() }
     single { GraphQLWebSocketWorkspaceDraftCodec() }
     single { GraphQLWebSocketApiStudioWorkspaceContribution(get()) } bind ApiStudioWorkspaceContribution::class
-    single { ApiStudioProtocolAuthoringRegistry(getAll<ApiStudioProtocolAuthoringPort>()) }
+    single { ApiStudioProtocolAuthoringRegistry(getAll<ApiStudioProtocolAuthoring>()) }
     single { ApiStudioProtocolExecutorRegistry(getAll<ApiStudioProtocolExecutor>()) }
     single { ApiStudioProtocolSessionExecutorRegistry(getAll<ApiStudioProtocolSessionExecutor>()) }
-    single { ApiStudioProtocolReflectionRegistry(getAll<ApiStudioProtocolReflectionPort>()) }
+    single { ApiStudioProtocolReflectionRegistry(getAll<ApiStudioProtocolReflection>()) }
     single<HttpResponseStreamInterpreter> { SseHttpResponseStreamInterpreter(get()) }
     single { HttpResponseStreamInterpreterRegistry(getAll<HttpResponseStreamInterpreter>()) }
 

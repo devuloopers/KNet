@@ -1,10 +1,10 @@
 package com.devuloopers.knet.engine.grpc
 
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolExecutionEvent
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolExecutionSession
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolMessage
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolMessageDirection
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolOutboundMessage
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolExecutionEvent
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolExecutionSession
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolMessage
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolMessageDirection
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolOutboundMessage
 import io.grpc.CallOptions
 import io.grpc.ClientCall
 import io.grpc.ManagedChannel

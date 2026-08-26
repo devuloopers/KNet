@@ -1,6 +1,7 @@
 package com.devuloopers.knet.connectivity.desktop.pairing
 
-import com.devuloopers.knet.application.port.pairing.PairingCryptoPort
+import com.devuloopers.knet.application.contract.pairing.PairingCryptography
+import com.devuloopers.knet.pairing.DeviceProofAlgorithm
 import java.security.KeyFactory
 import java.security.MessageDigest
 import java.security.SecureRandom
@@ -8,10 +9,10 @@ import java.security.Signature
 import java.security.spec.X509EncodedKeySpec
 import kotlin.io.encoding.Base64
 
-/** JCA implementation using CSPRNG, SHA-256, constant-time digest matching, and Ed25519 proof. */
+/** JCA implementation using CSPRNG, SHA-256, constant-time matching, and explicit proof algorithms. */
 public class JvmPairingCrypto(
     private val random: SecureRandom = SecureRandom(),
-) : PairingCryptoPort {
+) : PairingCryptography {
     override fun randomToken(entropyBytes: Int): String {
         require(entropyBytes in 16..128)
         return ByteArray(entropyBytes).also(random::nextBytes).urlEncode()
@@ -24,14 +25,23 @@ public class JvmPairingCrypto(
         MessageDigest.isEqual(digest(value).encodeToByteArray(), expectedDigest.encodeToByteArray())
 
     override fun verifyDeviceProof(
+        algorithm: DeviceProofAlgorithm,
         publicKeyEncoded: String,
         message: String,
         signatureEncoded: String,
     ): Boolean = runCatching {
         val keyBytes = URL_BASE64.decode(publicKeyEncoded)
         val signatureBytes = URL_BASE64.decode(signatureEncoded)
-        val publicKey = KeyFactory.getInstance("Ed25519").generatePublic(X509EncodedKeySpec(keyBytes))
-        Signature.getInstance("Ed25519").run {
+        val keyAlgorithm = when (algorithm) {
+            DeviceProofAlgorithm.ED25519 -> "Ed25519"
+            DeviceProofAlgorithm.ECDSA_P256_SHA256 -> "EC"
+        }
+        val signatureAlgorithm = when (algorithm) {
+            DeviceProofAlgorithm.ED25519 -> "Ed25519"
+            DeviceProofAlgorithm.ECDSA_P256_SHA256 -> "SHA256withECDSA"
+        }
+        val publicKey = KeyFactory.getInstance(keyAlgorithm).generatePublic(X509EncodedKeySpec(keyBytes))
+        Signature.getInstance(signatureAlgorithm).run {
             initVerify(publicKey)
             update(message.encodeToByteArray())
             verify(signatureBytes)

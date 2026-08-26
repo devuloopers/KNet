@@ -11,7 +11,7 @@ kotlin {
         val jvmMain by getting {
             dependencies {
                 implementation(project(":ui:core"))
-                implementation(project(":application"))
+                implementation(project(":application:desktop"))
                 implementation(project(":core:domain"))
                 implementation(project(":core:logger"))
                 api(project(":ui:desktop:traffic"))
@@ -29,7 +29,7 @@ kotlin {
                 implementation(libs.compose.ui)
                 implementation(libs.compose.components.resources)
                 implementation(libs.compose.uiToolingPreview)
-                implementation(compose.materialIconsExtended)
+                implementation(libs.material.icons.extended)
             }
         }
         val jvmTest by getting {

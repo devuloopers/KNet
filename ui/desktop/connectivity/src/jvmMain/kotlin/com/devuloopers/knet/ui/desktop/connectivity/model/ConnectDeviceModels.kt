@@ -1,6 +1,6 @@
 package com.devuloopers.knet.ui.desktop.connectivity.model
 
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
 import com.devuloopers.knet.connectivity.model.ProxyEndpointScope
 import com.devuloopers.knet.connectivity.model.WifiSharingState
 

@@ -1,6 +1,6 @@
 package com.devuloopers.knet.engine.interceptor
 
-import com.devuloopers.knet.application.port.breakpoint.BreakpointGate
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointGate
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.engine.proxy.pipeline.SelectiveHttpObjectAggregator
 import io.netty.handler.codec.http.HttpMethod

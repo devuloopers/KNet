@@ -1,6 +1,6 @@
 package com.devuloopers.knet.products.desktop.di.certificate
 
-import com.devuloopers.knet.application.port.certificate.CertificateManagementPort
+import com.devuloopers.knet.application.contract.certificate.CertificateManagement
 import com.devuloopers.knet.data.desktop.certificate.DesktopCertificateManagementAdapter
 import com.devuloopers.knet.data.desktop.runtime.CertificateRuntimeRepository
 import com.devuloopers.knet.engine.certificate.CertificateManager
@@ -19,6 +19,6 @@ internal val certificateBindings: Module = module {
         val certificates: CertificateRuntimeRepository = get()
         certificates.createCertificateManager(File(System.getProperty("user.home"), ".knet/certificates"))
     }
-    single<CertificateManagementPort> { DesktopCertificateManagementAdapter(get(), get<CertificateRuntimeRepository>()) }
-    viewModel { CertificateViewModel(get<CertificateManagementPort>()) }
+    single<CertificateManagement> { DesktopCertificateManagementAdapter(get(), get<CertificateRuntimeRepository>()) }
+    viewModel { CertificateViewModel(get<CertificateManagement>()) }
 }

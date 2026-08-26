@@ -1,7 +1,7 @@
 package com.devuloopers.knet.ui.desktop.apistudio.graphqlwebsocket.model
 
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolExecutionEvent
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolMetadataEntry
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolExecutionEvent
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolMetadataEntry
 
 /** Editable GraphQL subscription document selected in the shared code-editor area. */
 enum class GraphQLWebSocketAuthoringTab {
@@ -15,7 +15,7 @@ enum class GraphQLWebSocketAuthoringTab {
  * Immutable authoring and execution state for one modern GraphQL WebSocket request.
  *
  * The state remains presentation-owned. Wire validation and lifecycle enforcement stay in
- * `:engine:graphqlWebSocket` behind API Studio application ports.
+ * `:engine:graphqlWebSocket` behind API Studio application contracts.
  */
 data class GraphQLWebSocketStudioState(
     val documentId: String,

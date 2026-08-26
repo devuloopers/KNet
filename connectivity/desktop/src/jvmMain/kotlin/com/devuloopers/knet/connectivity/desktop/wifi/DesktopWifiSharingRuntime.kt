@@ -1,8 +1,8 @@
 package com.devuloopers.knet.connectivity.desktop.wifi
 
-import com.devuloopers.knet.application.port.connectivity.wifi.WifiSharingPort
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimePort
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
+import com.devuloopers.knet.application.contract.connectivity.wifi.WifiSharing
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntime
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
 import com.devuloopers.knet.connectivity.desktop.DesktopConnectivityRuntime
 import com.devuloopers.knet.connectivity.model.ConnectivityContext
 import com.devuloopers.knet.connectivity.model.ConnectivityMechanismId
@@ -59,7 +59,7 @@ import kotlinx.coroutines.sync.withLock
  */
 @OptIn(ExperimentalUuidApi::class)
 public class DesktopWifiSharingRuntime(
-    private val proxyRuntime: ProxyRuntimePort,
+    private val proxyRuntime: ProxyRuntime,
     private val connectivityRuntime: DesktopConnectivityRuntime,
     private val attributions: IngressAttributionRegistration,
     private val certificateDer: () -> ByteArray,
@@ -68,7 +68,7 @@ public class DesktopWifiSharingRuntime(
     setupPortalPorts: List<Int> = DEFAULT_SETUP_PORTS,
     private val onActivationFailure: (WifiSharingFailure, Throwable) -> Unit = { _, _ -> },
     private val onRecovery: (ProxyEndpoint) -> Unit = {},
-) : WifiSharingPort, AutoCloseable {
+) : WifiSharing, AutoCloseable {
     private val closed = AtomicBoolean(false)
     private val lifecycleMutex = Mutex()
     private val resourceLock = ReentrantLock()

@@ -1,8 +1,8 @@
 package com.devuloopers.knet.products.desktop.di.platform
 
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
-import com.devuloopers.knet.application.port.traffic.BodyStoreMaintenancePort
-import com.devuloopers.knet.application.port.traffic.BodyStorePort
+import com.devuloopers.knet.application.contract.traffic.BodyStoreMaintenance
+import com.devuloopers.knet.application.contract.traffic.BodyStore
 import com.devuloopers.knet.engine.session.FileBodyStore
 import com.devuloopers.knet.storage.database.DatabaseFactory
 import java.io.File
@@ -24,6 +24,6 @@ internal val desktopPlatformBindings: Module = module {
         )
     }
     single { FileBodyStore(File(System.getProperty("user.home"), ".knet/bodies")) }
-    single<BodyStorePort> { get<FileBodyStore>() }
-    single<BodyStoreMaintenancePort> { get<FileBodyStore>() }
+    single<BodyStore> { get<FileBodyStore>() }
+    single<BodyStoreMaintenance> { get<FileBodyStore>() }
 }

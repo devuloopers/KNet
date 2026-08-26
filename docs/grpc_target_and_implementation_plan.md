@@ -23,7 +23,7 @@ HTTP exchange and the same stored protocol-message records.
 
 A dedicated `:engine:grpc` JVM module is justified now. Native gRPC requires HTTP/2 message framing, protobuf
 descriptors, server reflection, compression codecs, status/trailer interpretation, and outbound call execution.
-Keeping those dependencies out of `:engine:proxy`, `:core:http`, `:application`, and Compose avoids coupling the
+Keeping those dependencies out of `:engine:proxy`, `:core:http`, `:application:desktop`, and Compose avoids coupling the
 stable core to one protocol. Future protocols do not need to use this module; they implement the same
 protocol-message and breakpoint extension contracts independently.
 
@@ -65,7 +65,7 @@ over HTTP/3. Those are different wire contracts and must receive separate capabi
 - The current HTTP/2 H2C/TLS negotiation, per-stream bridge, protocol-leg reporting, resets, GOAWAY behavior,
   backpressure, and qualification gate.
 - `ProxyCaptureSink` as the non-blocking capture boundary.
-- `:application` as owner of use cases, bounded breakpoint coordination, capability-neutral ports, and lifecycle.
+- `:application:desktop` as owner of use cases, bounded breakpoint coordination, capability-neutral ports, and lifecycle.
 - `BreakpointProtocolExtension` and its dynamic rule-field schema. The gRPC rule definition will be another
   contribution, like GraphQL, rather than a branch in the rule editor.
 - `:engine:interceptor` as the HTTP request/response breakpoint adapter. Existing HTTP and GraphQL behavior will
@@ -127,7 +127,7 @@ over HTTP/3. Those are different wire contracts and must receive separate capabi
                      :core:domain        :core:traffic
                            ^                   ^
                            |                   |
-                     :application -------------+
+                     :application:desktop -------------+
                         ^      ^
                         |      |
               :engine:grpc    :data:desktop ------> :storage
@@ -138,7 +138,7 @@ over HTTP/3. Those are different wire contracts and must receive separate capabi
                   |
           :engine:interceptor
 
-UI modules ----------> :application / :core:domain / :core:traffic
+UI modules ----------> :application:desktop / :core:domain / :core:traffic
 products:desktop -----> all runtime implementations and UI composition
 testingServer --------> test-only server libraries; no production module depends on it
 ```
@@ -146,8 +146,8 @@ testingServer --------> test-only server libraries; no production module depends
 Rules:
 
 - `:engine:proxy` exposes only transport-neutral stream hooks and never imports gRPC/protobuf types.
-- `:engine:grpc` may depend on the proxy hook API, application ports, canonical models, protobuf, and grpc-java.
-- `:application` never depends on Netty, Room, grpc-java, protobuf runtime objects, or Compose.
+- `:engine:grpc` may depend on the proxy hook API, application contracts, canonical models, protobuf, and grpc-java.
+- `:application:desktop` never depends on Netty, Room, grpc-java, protobuf runtime objects, or Compose.
 - `:storage` never decodes protobuf or decides gRPC semantics.
 - UI never receives Netty frames, protobuf descriptors, Room entities, or grpc-java call objects.
 - `:core:http` remains the ordinary HTTP/API Studio client and does not acquire grpc-java dependencies.
@@ -177,7 +177,7 @@ core/traffic/src/commonMain/kotlin/com/devuloopers/knet/traffic/
 ├── model/message/           # protocol-neutral message snapshots
 └── event/                   # message capture lifecycle events
 
-application/src/main/kotlin/com/devuloopers/knet/application/
+application/desktop/src/main/kotlin/com/devuloopers/knet/application/
 ├── port/message/            # message store/query/body access contracts
 ├── port/breakpoint/         # generic interception-unit additions
 ├── port/apistudio/          # protocol document/executor/editor-neutral contracts

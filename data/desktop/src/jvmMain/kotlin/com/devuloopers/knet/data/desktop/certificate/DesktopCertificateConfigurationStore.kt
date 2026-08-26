@@ -1,6 +1,6 @@
 package com.devuloopers.knet.data.desktop.certificate
 
-import com.devuloopers.knet.application.port.certificate.ClientCertificateFormat
+import com.devuloopers.knet.application.contract.certificate.ClientCertificateFormat
 import com.devuloopers.knet.engine.certificate.CertificateConfiguration
 import com.devuloopers.knet.engine.certificate.CertificateConfigurationStore
 import com.devuloopers.knet.engine.certificate.CertificateFileSecurity

@@ -1,8 +1,8 @@
 package com.devuloopers.knet.ui.desktop.traffic.model
 
-import com.devuloopers.knet.application.port.breakpoint.ProtocolCriteriaValue
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
-import com.devuloopers.knet.application.port.traffic.TrafficPageCursor
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaValue
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
+import com.devuloopers.knet.application.contract.traffic.TrafficPageCursor
 import com.devuloopers.knet.traffic.id.CaptureSessionId
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.workspace.model.TrafficTableColumnWidths
@@ -11,8 +11,8 @@ import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import com.devuloopers.knet.traffic.model.http.HttpScheme
 import com.devuloopers.knet.traffic.model.http.StandardApplicationProtocol
 import com.devuloopers.knet.traffic.model.http.StandardHttpScheme
-import com.devuloopers.knet.application.port.traffic.ProtocolMessagePageCursor
-import com.devuloopers.knet.application.port.traffic.ProtocolMessagePresentation
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePageCursor
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePresentation
 import com.devuloopers.knet.traffic.id.ProtocolMessageId
 import com.devuloopers.knet.traffic.model.message.ProtocolMessageSnapshot
 

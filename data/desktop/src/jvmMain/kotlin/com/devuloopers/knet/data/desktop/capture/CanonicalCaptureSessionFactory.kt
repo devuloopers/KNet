@@ -1,8 +1,8 @@
 package com.devuloopers.knet.data.desktop.capture
 
-import com.devuloopers.knet.application.port.traffic.BodyStorePort
-import com.devuloopers.knet.application.port.traffic.BodyStoreMaintenancePort
-import com.devuloopers.knet.application.port.traffic.CaptureIngressLimits
+import com.devuloopers.knet.application.contract.traffic.BodyStore
+import com.devuloopers.knet.application.contract.traffic.BodyStoreMaintenance
+import com.devuloopers.knet.application.contract.traffic.CaptureIngressLimits
 import com.devuloopers.knet.storage.database.KNetDatabase
 import com.devuloopers.knet.traffic.id.CaptureSessionId
 import kotlinx.coroutines.sync.Mutex
@@ -27,8 +27,8 @@ import kotlin.uuid.Uuid
 @OptIn(ExperimentalUuidApi::class)
 class CanonicalCaptureSessionFactory(
     private val database: KNetDatabase,
-    private val bodyStore: BodyStorePort,
-    private val bodyStoreMaintenance: BodyStoreMaintenancePort,
+    private val bodyStore: BodyStore,
+    private val bodyStoreMaintenance: BodyStoreMaintenance,
     private val limits: CaptureIngressLimits = DEFAULT_LIMITS,
 ) {
     private val startupRecoveryMutex = Mutex()

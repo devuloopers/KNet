@@ -2,8 +2,8 @@ package com.devuloopers.knet.ui.desktop.settings.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.devuloopers.knet.application.port.certificate.CertificateManagementPort
-import com.devuloopers.knet.application.port.certificate.TrustInstallationResult
+import com.devuloopers.knet.application.contract.certificate.CertificateManagement
+import com.devuloopers.knet.application.contract.certificate.TrustInstallationResult
 import com.devuloopers.knet.core.logger.KNetLogger
 import com.devuloopers.knet.core.logger.LogTags
 import com.devuloopers.knet.domain.settings.model.ApplicationSettings
@@ -44,7 +44,7 @@ import kotlinx.coroutines.sync.Mutex
 class SettingsViewModel(
     private val observeApplicationSettings: ObserveApplicationSettingsUseCase,
     private val updateApplicationSettings: UpdateApplicationSettingsUseCase,
-    private val certificateManager: CertificateManagementPort,
+    private val certificateManager: CertificateManagement,
     private val platformActions: SettingsPlatformActions,
     private val ioDispatcher: CoroutineDispatcher,
 ) : ViewModel() {

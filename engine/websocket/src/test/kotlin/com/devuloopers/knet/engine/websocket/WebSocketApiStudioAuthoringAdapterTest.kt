@@ -1,8 +1,8 @@
 package com.devuloopers.knet.engine.websocket
 
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolAuthoredMessage
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolDraft
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolMetadataEntry
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolAuthoredMessage
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolDraft
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolMetadataEntry
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue

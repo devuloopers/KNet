@@ -1,5 +1,7 @@
 package com.devuloopers.knet.connectivity.model
 
+import kotlin.jvm.JvmInline
+
 /** Stable non-secret identifier for one automatically managed Wi-Fi sharing lifecycle. */
 @JvmInline
 public value class WifiSharingSessionId(public val value: String) {

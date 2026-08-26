@@ -9,7 +9,7 @@ Request/response values are needed by Traffic, API Studio, breakpoints, replay, 
 
 ## Decision
 
-`HttpRequestSnapshot`, `HttpResponseSnapshot`, and `HttpExchangeSnapshot` in `:core:traffic` are the immutable shared records. They contain metadata and `BodyRef`, never generally owned body arrays. `BodyAccessPort` supplies bounded ranges. API Studio keeps mutable drafts and converts them at execution boundaries; breakpoints use typed patches; presentation owns only selection and derived state.
+`HttpRequestSnapshot`, `HttpResponseSnapshot`, and `HttpExchangeSnapshot` in `:core:traffic` are the immutable shared records. They contain metadata and `BodyRef`, never generally owned body arrays. `BodyAccess` supplies bounded ranges. API Studio keeps mutable drafts and converts them at execution boundaries; breakpoints use typed patches; presentation owns only selection and derived state.
 
 One ordered session writer will own durable exchange mutation. A body store will own atomic body files, references, retention, and reconciliation. Until Phase 10, exactly one legacy compatibility writer remains active.
 

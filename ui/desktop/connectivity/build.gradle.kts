@@ -10,7 +10,7 @@ kotlin {
     sourceSets {
         val jvmMain by getting {
             dependencies {
-                implementation(project(":application"))
+                implementation(project(":application:desktop"))
                 implementation(project(":core:connectivity"))
                 implementation(project(":core:domain"))
                 implementation(project(":ui:core"))
@@ -23,7 +23,7 @@ kotlin {
                 implementation(libs.compose.uiToolingPreview)
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.zxing.core)
-                implementation(compose.materialIconsExtended)
+                implementation(libs.material.icons.extended)
             }
         }
         val jvmTest by getting {

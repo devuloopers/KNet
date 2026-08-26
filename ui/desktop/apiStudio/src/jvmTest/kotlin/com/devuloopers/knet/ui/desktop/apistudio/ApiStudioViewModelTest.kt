@@ -1,24 +1,24 @@
 package com.devuloopers.knet.ui.desktop.apistudio
 
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeConfiguration
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeHandle
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimePort
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
-import com.devuloopers.knet.application.port.proxy.ProxyStartResult
-import com.devuloopers.knet.application.port.proxy.ProxyStopReason
-import com.devuloopers.knet.application.port.proxy.ProxyStopResult
-import com.devuloopers.knet.application.port.traffic.CaptureClearPreparation
-import com.devuloopers.knet.application.port.traffic.CapturePauseResult
-import com.devuloopers.knet.application.port.traffic.CaptureResumeResult
-import com.devuloopers.knet.application.port.traffic.CaptureSessionControlPort
-import com.devuloopers.knet.application.port.traffic.CaptureSessionState
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeConfiguration
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeHandle
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntime
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
+import com.devuloopers.knet.application.contract.proxy.ProxyStartResult
+import com.devuloopers.knet.application.contract.proxy.ProxyStopReason
+import com.devuloopers.knet.application.contract.proxy.ProxyStopResult
+import com.devuloopers.knet.application.contract.traffic.CaptureClearPreparation
+import com.devuloopers.knet.application.contract.traffic.CapturePauseResult
+import com.devuloopers.knet.application.contract.traffic.CaptureResumeResult
+import com.devuloopers.knet.application.contract.traffic.CaptureSessionControl
+import com.devuloopers.knet.application.contract.traffic.CaptureSessionState
 import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUseCase
 import com.devuloopers.knet.application.usecase.traffic.ObserveTrafficCaptureStateUseCase
-import com.devuloopers.knet.application.port.breakpoint.BreakpointControlPort
-import com.devuloopers.knet.application.port.breakpoint.BreakpointDecision
-import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointControl
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointDecision
+import com.devuloopers.knet.application.contract.breakpoint.PendingBreakpoint
 import com.devuloopers.knet.application.usecase.breakpoint.DropMatchingBreakpointsUseCase
-import com.devuloopers.knet.application.port.script.UnavailableScriptExecutionPort
+import com.devuloopers.knet.application.contract.script.UnavailableScriptExecutor
 import com.devuloopers.knet.application.usecase.apistudio.ExecuteApiStudioRequestUseCase
 import com.devuloopers.knet.connectivity.model.ProxyAccessRequirement
 import com.devuloopers.knet.connectivity.model.ProxyEndpoint
@@ -150,7 +150,7 @@ fun createTestObserveTrafficCaptureStateUseCase(
 
 class TestCaptureSessionControl(
     initialState: CaptureSessionState = CaptureSessionState.Inactive,
-) : CaptureSessionControlPort {
+) : CaptureSessionControl {
     private val mutableState = MutableStateFlow(initialState)
     override val captureState: StateFlow<CaptureSessionState> = mutableState
 
@@ -175,7 +175,7 @@ class TestCaptureSessionControl(
 
 class TestProxyRuntime(
     initialState: ProxyRuntimeState = ProxyRuntimeState.Stopped,
-) : ProxyRuntimePort {
+) : ProxyRuntime {
     private val mutableState = MutableStateFlow(initialState)
     override val state: StateFlow<ProxyRuntimeState> = mutableState
 
@@ -239,7 +239,7 @@ fun createTestApplicationSettingsUseCases(): Pair<ObserveApplicationSettingsUseC
 }
 
 
-class FakeTestBreakpointControl : BreakpointControlPort {
+class FakeTestBreakpointControl : BreakpointControl {
     var droppedUrl: String? = null
     var droppedMethod: String? = null
 
@@ -315,7 +315,7 @@ class ApiStudioViewModelTest {
 
     private fun createTestViewModel(
         executeUseCase: ExecuteClientApiRequestUseCase,
-        breakpointControl: BreakpointControlPort = fakeBreakpointControl,
+        breakpointControl: BreakpointControl = fakeBreakpointControl,
         collectionsRepository: TestCollectionsRepository = TestCollectionsRepository(),
         initialSettings: WorkspaceLayoutSettings = WorkspaceLayoutSettings(),
         layoutUseCases: Pair<GetWorkspaceLayoutUseCase, UpdateWorkspaceLayoutUseCase>? = null
@@ -327,7 +327,7 @@ class ApiStudioViewModelTest {
             executeApiStudioRequestUseCase = ExecuteApiStudioRequestUseCase(
                 executeRequest = executeUseCase,
                 formatResponseBody = FormatResponseBodyUseCase(),
-                scriptExecution = UnavailableScriptExecutionPort,
+                scriptExecution = UnavailableScriptExecutor,
                 ioDispatcher = testDispatcher
             ),
             observeProxyRuntimeStateUseCase = createTestObserveProxyRuntimeStateUseCase(),

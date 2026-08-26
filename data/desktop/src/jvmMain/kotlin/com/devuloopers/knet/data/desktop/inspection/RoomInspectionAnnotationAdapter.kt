@@ -1,6 +1,6 @@
 package com.devuloopers.knet.data.desktop.inspection
 
-import com.devuloopers.knet.application.port.inspection.InspectionAnnotationPort
+import com.devuloopers.knet.application.contract.inspection.InspectionAnnotationStore
 import com.devuloopers.knet.storage.capture.dao.CanonicalCaptureDao
 import com.devuloopers.knet.storage.capture.entity.InspectionAnnotationEntity
 import com.devuloopers.knet.traffic.id.CaptureSessionId
@@ -26,7 +26,7 @@ import kotlinx.serialization.json.jsonPrimitive
 class RoomInspectionAnnotationAdapter(
     private val dao: CanonicalCaptureDao,
     private val json: Json = Json { ignoreUnknownKeys = true },
-) : InspectionAnnotationPort {
+) : InspectionAnnotationStore {
     override suspend fun put(sessionId: CaptureSessionId, annotation: InspectionAnnotation) {
         dao.upsertInspectionAnnotation(annotation.toEntity(sessionId))
     }

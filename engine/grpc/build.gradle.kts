@@ -7,7 +7,7 @@ dependencies {
     api(project(":engine:proxy"))
 
     implementation(project(":core:domain"))
-    implementation(project(":application"))
+    implementation(project(":application:desktop"))
     implementation(libs.protobuf.java)
     implementation(libs.protobuf.java.util)
     implementation(libs.kotlinx.serialization.json)

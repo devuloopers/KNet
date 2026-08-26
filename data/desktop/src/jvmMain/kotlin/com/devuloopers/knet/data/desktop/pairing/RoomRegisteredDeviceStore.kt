@@ -1,7 +1,7 @@
 package com.devuloopers.knet.data.desktop.pairing
 
-import com.devuloopers.knet.application.port.pairing.RegisteredDeviceStorePort
-import com.devuloopers.knet.application.port.pairing.TrustedDeviceStorePort
+import com.devuloopers.knet.application.contract.pairing.RegisteredDeviceStore
+import com.devuloopers.knet.application.contract.pairing.TrustedDeviceStore
 import com.devuloopers.knet.identity.DeviceRegistrationKind
 import com.devuloopers.knet.pairing.DeviceScope
 import com.devuloopers.knet.pairing.PairingInvitationId
@@ -28,7 +28,7 @@ class RoomRegisteredDeviceStore(
     private val dao: RegisteredDeviceDao,
     private val nowMillis: () -> Long = { Clock.System.now().toEpochMilliseconds() },
     private val maximumPendingInvitations: Int = DEFAULT_MAXIMUM_PENDING_INVITATIONS,
-) : RegisteredDeviceStorePort, TrustedDeviceStorePort {
+) : RegisteredDeviceStore, TrustedDeviceStore {
     init {
         require(maximumPendingInvitations in 1..MAXIMUM_CONFIGURABLE_PENDING_INVITATIONS)
     }

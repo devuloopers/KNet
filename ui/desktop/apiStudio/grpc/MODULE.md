@@ -11,7 +11,7 @@ and the stream timeline full-height in the result pane.
 
 ## Dependency boundary
 
-- Depends on `:application` authoring/execution contracts and safe domain identifiers.
+- Depends on `:application:desktop` authoring/execution contracts and safe domain identifiers.
 - Reuses `:ui:core`, `:ui:desktop:codeEditor`, and the API Studio workspace contribution SPI.
 - Does **not** depend on `:engine:grpc`, protobuf, grpc-java, Netty, Room, proxy handlers, or certificates.
 - Is composed by `:products:desktop`; it does not define product DI.

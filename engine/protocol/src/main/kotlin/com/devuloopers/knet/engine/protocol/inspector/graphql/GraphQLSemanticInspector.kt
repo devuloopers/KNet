@@ -1,7 +1,7 @@
 package com.devuloopers.knet.engine.protocol.inspector.graphql
 
-import com.devuloopers.knet.application.port.inspection.SemanticInspectionInput
-import com.devuloopers.knet.application.port.inspection.SemanticInspector
+import com.devuloopers.knet.application.contract.inspection.SemanticInspectionInput
+import com.devuloopers.knet.application.contract.inspection.SemanticInspector
 import com.devuloopers.knet.traffic.inspection.InspectionDocument
 import com.devuloopers.knet.traffic.inspection.InspectionField
 import com.devuloopers.knet.traffic.inspection.InspectorId

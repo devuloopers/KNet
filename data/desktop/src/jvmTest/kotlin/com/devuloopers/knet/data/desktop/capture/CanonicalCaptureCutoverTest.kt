@@ -1,17 +1,17 @@
 package com.devuloopers.knet.data.desktop.capture
 
-import com.devuloopers.knet.application.port.breakpoint.BreakpointCoordinator
-import com.devuloopers.knet.application.port.proxy.ProxyBindingConfiguration
-import com.devuloopers.knet.application.port.proxy.ProxyConnectionLimits
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeConfiguration
-import com.devuloopers.knet.application.port.proxy.ProxyStartResult
-import com.devuloopers.knet.application.port.proxy.ProxyStopReason
-import com.devuloopers.knet.application.port.proxy.ProxyTimeoutPolicy
-import com.devuloopers.knet.application.port.traffic.BodyRange
-import com.devuloopers.knet.application.port.traffic.CaptureClearPreparation
-import com.devuloopers.knet.application.port.traffic.CapturePauseResult
-import com.devuloopers.knet.application.port.traffic.CaptureResumeResult
-import com.devuloopers.knet.application.port.traffic.CaptureSessionState
+import com.devuloopers.knet.application.coordinator.breakpoint.BreakpointCoordinator
+import com.devuloopers.knet.application.contract.proxy.ProxyBindingConfiguration
+import com.devuloopers.knet.application.contract.proxy.ProxyConnectionLimits
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeConfiguration
+import com.devuloopers.knet.application.contract.proxy.ProxyStartResult
+import com.devuloopers.knet.application.contract.proxy.ProxyStopReason
+import com.devuloopers.knet.application.contract.proxy.ProxyTimeoutPolicy
+import com.devuloopers.knet.application.contract.traffic.BodyRange
+import com.devuloopers.knet.application.contract.traffic.CaptureClearPreparation
+import com.devuloopers.knet.application.contract.traffic.CapturePauseResult
+import com.devuloopers.knet.application.contract.traffic.CaptureResumeResult
+import com.devuloopers.knet.application.contract.traffic.CaptureSessionState
 import com.devuloopers.knet.application.usecase.traffic.ClearTrafficHistoryUseCase
 import com.devuloopers.knet.connectivity.model.ProxyEndpointScope
 import com.devuloopers.knet.data.desktop.proxy.repository.DesktopProxyRuntimeAdapter
@@ -120,7 +120,7 @@ class CanonicalCaptureCutoverTest {
 
             assertEquals(CapturePauseResult.PAUSED, repository.pause())
             assertIs<CaptureSessionState.Paused>(repository.captureState.value)
-            val stillRunning = assertIs<com.devuloopers.knet.application.port.proxy.ProxyRuntimeState.Running>(
+            val stillRunning = assertIs<com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState.Running>(
                 repository.state.value,
             )
             assertEquals(started.handle.runtimeId, stillRunning.handle.runtimeId)
@@ -133,7 +133,7 @@ class CanonicalCaptureCutoverTest {
             val resumed = assertIs<CaptureResumeResult.Capturing>(repository.resume())
             assertTrue(resumed.sessionId != firstSession)
             assertEquals(1, database.canonicalCaptureDao().countActiveSessions())
-            val afterResume = assertIs<com.devuloopers.knet.application.port.proxy.ProxyRuntimeState.Running>(
+            val afterResume = assertIs<com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState.Running>(
                 repository.state.value,
             )
             assertEquals(started.handle.runtimeId, afterResume.handle.runtimeId)

@@ -1,7 +1,9 @@
 package com.devuloopers.knet.products.desktop.di.inspection
 
-import com.devuloopers.knet.application.port.inspection.*
-import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolExtension
+import com.devuloopers.knet.application.contract.inspection.*
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointProtocolExtension
+import com.devuloopers.knet.application.coordinator.inspection.SemanticInspectionScheduler
+import com.devuloopers.knet.application.usecase.inspection.ObserveInspectionAnnotationsUseCase
 import com.devuloopers.knet.data.desktop.inspection.DesktopSemanticInspectionRuntime
 import com.devuloopers.knet.data.desktop.inspection.RoomInspectionAnnotationAdapter
 import com.devuloopers.knet.engine.protocol.inspector.graphql.GraphQLBreakpointExtension
@@ -19,8 +21,8 @@ import com.devuloopers.knet.engine.graphqlwebsocket.inspection.GraphQLWebSocketP
 import com.devuloopers.knet.engine.graphqlwebsocket.protocol.GraphQLWebSocketEnvelopeParser
 import com.devuloopers.knet.engine.websocket.WebSocketBreakpointExtension
 import com.devuloopers.knet.engine.websocket.WebSocketProtocolMessageDecoder
-import com.devuloopers.knet.application.port.traffic.ProtocolMessagePayloadDecoder
-import com.devuloopers.knet.application.port.traffic.ProtocolMessagePresentationRegistry
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePayloadDecoder
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePresentationRegistry
 import com.devuloopers.knet.storage.database.KNetDatabase
 import org.koin.core.module.Module
 import org.koin.dsl.bind
@@ -44,7 +46,7 @@ internal val inspectionBindings: Module = module {
     single { SseBreakpointExtension(limits = get()) } bind BreakpointProtocolExtension::class
     single { GraphQLSemanticInspector(get()) } bind SemanticInspector::class
     single { SseSemanticInspector(get()) } bind SemanticInspector::class
-    single<InspectionAnnotationPort> {
+    single<InspectionAnnotationStore> {
         RoomInspectionAnnotationAdapter(get<KNetDatabase>().canonicalCaptureDao())
     }
     single { SemanticInspectionScheduler(get(), get(), getAll()) }

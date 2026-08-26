@@ -1,10 +1,10 @@
 package com.devuloopers.knet.engine.graphqlwebsocket
 
-import com.devuloopers.knet.application.port.breakpoint.BreakpointBody
-import com.devuloopers.knet.application.port.breakpoint.ProtocolCriteriaValue
-import com.devuloopers.knet.application.port.breakpoint.ProtocolMessageInspectionInput
-import com.devuloopers.knet.application.port.traffic.ProtocolMessagePayloadInput
-import com.devuloopers.knet.application.port.traffic.ProtocolMessagePresentationRegistry
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointBody
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaValue
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolMessageInspectionInput
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePayloadInput
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePresentationRegistry
 import com.devuloopers.knet.engine.graphqlwebsocket.breakpoint.GraphQLWebSocketBreakpointExtension
 import com.devuloopers.knet.engine.graphqlwebsocket.breakpoint.GraphQLWebSocketBreakpointLayer
 import com.devuloopers.knet.engine.graphqlwebsocket.breakpoint.GraphQLWebSocketBreakpointProtocol

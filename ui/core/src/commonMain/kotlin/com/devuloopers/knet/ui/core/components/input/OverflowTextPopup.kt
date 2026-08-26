@@ -15,11 +15,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.onPointerEvent
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
@@ -34,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
+import com.devuloopers.knet.ui.core.foundation.pointer.platformHoverEvents
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -86,7 +84,6 @@ private class OverflowHoverDelayController {
  * @param contentAlignment Alignment for the caller-owned inline content.
  * @param content Inline content rendered inside the measured anchor.
  */
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 internal fun OverflowTextPopupHost(
     text: String,
@@ -139,18 +136,18 @@ internal fun OverflowTextPopupHost(
     Box(
         modifier = modifier
             .onSizeChanged { containerWidthPx = it.width }
-            .onPointerEvent(PointerEventType.Enter) {
-                isHovered = true
-                resetHoverTimer()
-            }
-            .onPointerEvent(PointerEventType.Move) {
-                if (isHovered) resetHoverTimer()
-            }
-            .onPointerEvent(PointerEventType.Exit) {
-                isHovered = false
-                isMouseStationary = false
-                hoverDelayController.cancel()
-            },
+            .platformHoverEvents(
+                onEnter = {
+                    isHovered = true
+                    resetHoverTimer()
+                },
+                onMove = { if (isHovered) resetHoverTimer() },
+                onExit = {
+                    isHovered = false
+                    isMouseStationary = false
+                    hoverDelayController.cancel()
+                },
+            ),
         contentAlignment = contentAlignment
     ) {
         content()

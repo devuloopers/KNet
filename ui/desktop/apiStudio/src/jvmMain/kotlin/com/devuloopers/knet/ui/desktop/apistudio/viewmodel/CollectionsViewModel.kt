@@ -2,7 +2,7 @@ package com.devuloopers.knet.ui.desktop.apistudio.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.devuloopers.knet.application.port.apistudio.ApiStudioWorkspaceDocument
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioWorkspaceDocument
 import com.devuloopers.knet.application.usecase.apistudio.CreateApiStudioWorkspaceDocumentUseCase
 import com.devuloopers.knet.application.usecase.apistudio.DeleteApiStudioWorkspaceDocumentUseCase
 import com.devuloopers.knet.application.usecase.apistudio.ObserveApiStudioWorkspaceDocumentsUseCase

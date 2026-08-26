@@ -1,6 +1,6 @@
 package com.devuloopers.knet.engine.grpc
 
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolRoute
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolRoute
 import io.grpc.HttpConnectProxiedSocketAddress
 import io.grpc.ManagedChannel
 import io.grpc.netty.shaded.io.grpc.netty.GrpcSslContexts

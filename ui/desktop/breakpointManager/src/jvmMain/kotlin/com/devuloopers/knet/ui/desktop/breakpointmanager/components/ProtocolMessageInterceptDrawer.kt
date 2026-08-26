@@ -35,7 +35,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.devuloopers.knet.application.port.breakpoint.PendingProtocolMessageBreakpoint
+import com.devuloopers.knet.application.contract.breakpoint.PendingProtocolMessageBreakpoint
 import com.devuloopers.knet.traffic.model.TrafficDirection
 import com.devuloopers.knet.traffic.model.absoluteUrl
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant

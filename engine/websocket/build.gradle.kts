@@ -7,7 +7,7 @@ dependencies {
     api(project(":engine:proxy"))
 
     implementation(project(":core:domain"))
-    implementation(project(":application"))
+    implementation(project(":application:desktop"))
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
 

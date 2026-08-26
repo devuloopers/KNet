@@ -1,14 +1,14 @@
 package com.devuloopers.knet.engine.protocol.inspector.graphql
 
-import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolDefinition
-import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolExtension
-import com.devuloopers.knet.application.port.breakpoint.BreakpointRuleSuggestionInput
-import com.devuloopers.knet.application.port.breakpoint.CompiledProtocolCriteria
-import com.devuloopers.knet.application.port.breakpoint.ProtocolCriteriaFieldDefinition
-import com.devuloopers.knet.application.port.breakpoint.ProtocolCriteriaFieldId
-import com.devuloopers.knet.application.port.breakpoint.ProtocolCriteriaValue
-import com.devuloopers.knet.application.port.breakpoint.ProtocolInspectionInput
-import com.devuloopers.knet.application.port.breakpoint.ProtocolObservation
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointProtocolDefinition
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointProtocolExtension
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointRuleSuggestionInput
+import com.devuloopers.knet.application.contract.breakpoint.CompiledProtocolCriteria
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaFieldDefinition
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaFieldId
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaValue
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolInspectionInput
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolObservation
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.BreakpointProtocolId
 import com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria

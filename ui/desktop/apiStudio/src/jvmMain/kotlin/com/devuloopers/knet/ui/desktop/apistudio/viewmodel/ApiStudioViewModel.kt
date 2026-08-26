@@ -2,13 +2,13 @@ package com.devuloopers.knet.ui.desktop.apistudio.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
-import com.devuloopers.knet.application.port.traffic.CaptureSessionState
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
+import com.devuloopers.knet.application.contract.traffic.CaptureSessionState
 import com.devuloopers.knet.application.usecase.apistudio.ExecuteApiStudioRequestUseCase
 import com.devuloopers.knet.application.usecase.apistudio.ApiStudioHttpExecutionEvent
-import com.devuloopers.knet.application.port.apistudio.HttpLiveResponseUpdate
-import com.devuloopers.knet.application.port.apistudio.HttpResponseStreamInterpreterRegistry
-import com.devuloopers.knet.application.port.apistudio.HttpResponseStreamInterpreterSession
+import com.devuloopers.knet.application.contract.apistudio.HttpLiveResponseUpdate
+import com.devuloopers.knet.application.contract.apistudio.HttpResponseStreamInterpreterRegistry
+import com.devuloopers.knet.application.contract.apistudio.HttpResponseStreamInterpreterSession
 import com.devuloopers.knet.application.usecase.breakpoint.DropMatchingBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUseCase
 import com.devuloopers.knet.application.usecase.traffic.ObserveTrafficCaptureStateUseCase

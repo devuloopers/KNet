@@ -1,7 +1,7 @@
 package com.devuloopers.knet.ui.desktop.traffic.model
 
-import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
-import com.devuloopers.knet.application.port.breakpoint.PendingProtocolMessageBreakpoint
+import com.devuloopers.knet.application.contract.breakpoint.PendingBreakpoint
+import com.devuloopers.knet.application.contract.breakpoint.PendingProtocolMessageBreakpoint
 import com.devuloopers.knet.domain.request.descriptor.RequestDescriptor
 import com.devuloopers.knet.domain.request.descriptor.RequestKindId
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase

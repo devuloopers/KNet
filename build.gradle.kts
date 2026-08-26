@@ -327,8 +327,69 @@ abstract class VerifyKotlinFirstSourcesTask : DefaultTask() {
     }
 }
 
+/** Prevents the Android companion product from regaining a second XML/View screen implementation. */
+abstract class VerifyCompanionComposeUiOwnershipTask : DefaultTask() {
+    /** Android layout resources, which must remain empty for the companion product. */
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val layoutResources: ConfigurableFileCollection
+
+    /** Android product Kotlin sources checked for legacy View layout inflation. */
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val productSources: ConfigurableFileCollection
+
+    /** Shared companion Compose sources checked for a second feature-owned theme palette. */
+    @get:InputFiles
+    @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val sharedUiSources: ConfigurableFileCollection
+
+    /** Enforces shared Compose ownership while leaving manifest/theme/icon XML available to Android packaging. */
+    @TaskAction
+    fun verify() {
+        val layoutViolations = layoutResources.files.sortedBy { it.path }.map { layout ->
+            "${layout.relativeTo(project.rootDir)} is an Android View layout"
+        }
+        val legacyTokens = listOf("setContentView(", "R.layout.")
+        val sourceViolations = productSources.files.sortedBy { it.path }.flatMap { source ->
+            source.readLines().mapIndexedNotNull { index, line ->
+                val token = legacyTokens.firstOrNull(line::contains) ?: return@mapIndexedNotNull null
+                "${source.relativeTo(project.rootDir)}:${index + 1} uses $token"
+            }
+        }
+        val companionPaletteTokens = listOf(
+            "darkColorScheme(",
+            "lightColorScheme(",
+            "Color(0x",
+            "Color.White",
+            "Color.Black",
+            "Color.Red",
+            "Color.Green",
+            "Color.Blue",
+            "Color.Yellow",
+            "Color.Gray",
+        )
+        val paletteViolations = sharedUiSources.files.sortedBy { it.path }.flatMap { source ->
+            source.readLines().mapIndexedNotNull { index, line ->
+                val token = companionPaletteTokens.firstOrNull(line::contains) ?: return@mapIndexedNotNull null
+                "${source.relativeTo(project.rootDir)}:${index + 1} owns palette token $token instead of using :ui:core"
+            }
+        }
+        val violations = layoutViolations + sourceViolations + paletteViolations
+        check(violations.isEmpty()) {
+            violations.joinToString(
+                prefix = "Android companion UI must be hosted from :ui:companion:sharedUi:\n",
+                separator = "\n",
+            )
+        }
+    }
+}
+
 plugins {
     // this is necessary to avoid the plugins to be loaded multiple times
+    alias(libs.plugins.androidApplication) apply false
+    alias(libs.plugins.androidLibrary) apply false
+    alias(libs.plugins.androidMultiplatformLibrary) apply false
     // in each subproject's classloader
     alias(libs.plugins.composeMultiplatform) apply false
     alias(libs.plugins.composeCompiler) apply false
@@ -340,7 +401,7 @@ plugins {
 }
 
 val allowedArchitectureDependencies = mapOf(
-    ":application" to setOf(
+    ":application:desktop" to setOf(
         ":core:traffic",
         ":core:scripting",
         ":core:domain",
@@ -354,8 +415,45 @@ val allowedArchitectureDependencies = mapOf(
     ":core:identity" to emptySet(),
     ":core:pairing" to setOf(":core:identity"),
     ":core:connectivity" to emptySet(),
+    ":core:companion" to setOf(
+        ":core:connectivity",
+        ":core:identity",
+        ":core:pairing",
+    ),
+    ":application:companion" to setOf(
+        ":core:companion",
+        ":core:identity",
+        ":core:pairing",
+    ),
+    ":data:companion" to setOf(
+        ":application:companion",
+        ":core:companion",
+        ":core:identity",
+        ":core:pairing",
+    ),
+    ":ui:companion:presentation" to setOf(
+        ":application:companion",
+        ":core:companion",
+    ),
+    ":ui:companion:sharedUi" to setOf(
+        ":core:companion",
+        ":ui:core",
+        ":ui:companion:presentation",
+    ),
+    ":connectivity:companion:android" to setOf(
+        ":application:companion",
+        ":core:companion",
+    ),
+    ":products:companion:androidApp" to setOf(
+        ":application:companion",
+        ":connectivity:companion:android",
+        ":core:companion",
+        ":data:companion",
+        ":ui:companion:presentation",
+        ":ui:companion:sharedUi",
+    ),
     ":connectivity:desktop" to setOf(
-        ":application",
+        ":application:desktop",
         ":core:traffic",
         ":core:connectivity",
         ":core:identity",
@@ -436,6 +534,7 @@ val verifyKotlinFirstSources by tasks.registering(VerifyKotlinFirstSourcesTask::
         include(
             "**/src/main/**/*.kt",
             "**/src/commonMain/**/*.kt",
+            "**/src/androidMain/**/*.kt",
             "**/src/jvmMain/**/*.kt",
         )
         exclude("**/build/**", "**/src/test/**", "**/src/commonTest/**", "**/src/jvmTest/**")
@@ -451,8 +550,7 @@ val verifyKotlinFirstSources by tasks.registering(VerifyKotlinFirstSourcesTask::
             "data/desktop/src/**/*.kt",
             "engine/src/**/*.kt",
             "engine/*/src/**/*.kt",
-            "products/src/**/*.kt",
-            "products/desktop/src/**/*.kt",
+            "products/**/src/**/*.kt",
             "storage/src/**/*.kt",
             "testingServer/src/**/*.kt",
             "ui/src/**/*.kt",
@@ -466,6 +564,22 @@ val verifyKotlinFirstSources by tasks.registering(VerifyKotlinFirstSourcesTask::
     )
 }
 
+val verifyCompanionComposeUiOwnership by tasks.registering(VerifyCompanionComposeUiOwnershipTask::class) {
+    group = "verification"
+    description = "Verifies that Android companion screens remain owned by shared Compose Multiplatform UI."
+    layoutResources.from(fileTree("products/companion/androidApp/src/main/res/layout") {
+        include("**/*.xml")
+    })
+    productSources.from(fileTree("products/companion/androidApp/src/main") {
+        include("**/*.kt")
+        exclude("**/build/**")
+    })
+    sharedUiSources.from(fileTree("ui/companion/sharedUi/src/commonMain") {
+        include("**/*.kt")
+        exclude("**/build/**")
+    })
+}
+
 val verifyArchitectureFoundation by tasks.registering {
     group = "verification"
     description = "Runs module ownership and target dependency-boundary checks."
@@ -475,6 +589,50 @@ val verifyArchitectureFoundation by tasks.registering {
         verifyUiRuntimeIsolation,
         verifyCompositionOwnership,
         verifyKotlinFirstSources,
+        verifyCompanionComposeUiOwnership,
+    )
+}
+
+/** Shared/Android companion foundation gate. It compiles portable iOS consumers and never launches an app. */
+tasks.register("companionFoundationQualification") {
+    group = "verification"
+    description = "Runs companion models, workflows, persistence, presentation, Android adapters, pairing crypto, and iOS compile gates."
+    dependsOn(
+        verifyArchitectureFoundation,
+        ":application:desktop:test",
+        ":connectivity:desktop:jvmTest",
+        ":core:companion:jvmTest",
+        ":application:companion:jvmTest",
+        ":data:companion:jvmTest",
+        ":ui:companion:presentation:jvmTest",
+        ":ui:companion:sharedUi:jvmTest",
+        ":ui:core:jvmTest",
+        ":ui:core:compileAndroidMain",
+        ":ui:core:compileKotlinIosSimulatorArm64",
+        ":connectivity:companion:android:testDebugUnitTest",
+        ":data:companion:compileAndroidMain",
+        ":ui:companion:presentation:compileAndroidMain",
+        ":ui:companion:sharedUi:compileAndroidMain",
+        ":core:identity:compileKotlinIosSimulatorArm64",
+        ":core:pairing:compileKotlinIosSimulatorArm64",
+        ":core:connectivity:compileKotlinIosSimulatorArm64",
+        ":core:companion:compileKotlinIosSimulatorArm64",
+        ":application:companion:compileKotlinIosSimulatorArm64",
+        ":data:companion:compileKotlinIosSimulatorArm64",
+        ":ui:companion:presentation:compileKotlinIosSimulatorArm64",
+        ":ui:companion:sharedUi:compileKotlinIosSimulatorArm64",
+    )
+}
+
+/** Installable Android companion product gate. It assembles the APK but never installs or launches it. */
+tasks.register("companionAndroidProductQualification") {
+    group = "verification"
+    description = "Runs companion foundations, Android product composition tests/lint, and debug APK assembly."
+    dependsOn(
+        "companionFoundationQualification",
+        ":products:companion:androidApp:testDebugUnitTest",
+        ":products:companion:androidApp:lintDebug",
+        ":products:companion:androidApp:assembleDebug",
     )
 }
 
@@ -502,7 +660,7 @@ tasks.register("grpcQualification") {
     description = "Runs gRPC framing, persistence, breakpoints, API Studio, Traffic, and protocol-lab tests."
     dependsOn(
         verifyArchitectureFoundation,
-        ":application:test",
+        ":application:desktop:test",
         ":core:traffic:jvmTest",
         ":engine:grpc:test",
         ":engine:proxy:test",
@@ -523,7 +681,7 @@ tasks.register("webSocketQualification") {
     description = "Runs WebSocket relay, framing, capture, breakpoints, API Studio, Traffic, and protocol-lab tests."
     dependsOn(
         verifyArchitectureFoundation,
-        ":application:test",
+        ":application:desktop:test",
         ":core:traffic:jvmTest",
         ":engine:proxy:test",
         ":engine:websocket:test",
@@ -544,7 +702,7 @@ tasks.register("graphQLWebSocketQualification") {
     description = "Runs GraphQL WebSocket semantics, capture, breakpoints, API Studio, Traffic, and protocol-lab tests."
     dependsOn(
         verifyArchitectureFoundation,
-        ":application:test",
+        ":application:desktop:test",
         ":core:traffic:jvmTest",
         ":engine:proxy:test",
         ":engine:websocket:test",
@@ -567,7 +725,7 @@ tasks.register("sseQualification") {
     description = "Runs SSE codecs, capture, breakpoints, API Studio, Traffic, persistence, and protocol-lab tests."
     dependsOn(
         verifyArchitectureFoundation,
-        ":application:test",
+        ":application:desktop:test",
         ":core:http:jvmTest",
         ":core:traffic:jvmTest",
         ":engine:proxy:test",

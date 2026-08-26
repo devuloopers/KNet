@@ -1,12 +1,12 @@
 package com.devuloopers.knet.engine.graphqlwebsocket.apistudio
 
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolExecutionCommand
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolExecutionEvent
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolExecutionSession
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolExecutor
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolMessageDirection
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolOutboundMessage
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolSessionExecutor
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolExecutionCommand
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolExecutionEvent
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolExecutionSession
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolExecutor
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolMessageDirection
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolOutboundMessage
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolSessionExecutor
 import com.devuloopers.knet.domain.request.descriptor.RequestKindId
 import com.devuloopers.knet.engine.graphqlwebsocket.protocol.GRAPHQL_TRANSPORT_WS_SUBPROTOCOL
 import com.devuloopers.knet.engine.graphqlwebsocket.protocol.GraphQLWebSocketEnvelopeParser

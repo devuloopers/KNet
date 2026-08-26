@@ -1,12 +1,12 @@
 package com.devuloopers.knet.engine.protocol
 
-import com.devuloopers.knet.application.port.breakpoint.BreakpointBody
-import com.devuloopers.knet.application.port.breakpoint.BreakpointCandidate
-import com.devuloopers.knet.application.port.breakpoint.BreakpointCoordinator
-import com.devuloopers.knet.application.port.breakpoint.BreakpointDecision
-import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolRegistry
-import com.devuloopers.knet.application.port.breakpoint.BreakpointRuleSuggestionInput
-import com.devuloopers.knet.application.port.breakpoint.ProtocolCriteriaValue
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointBody
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointCandidate
+import com.devuloopers.knet.application.coordinator.breakpoint.BreakpointCoordinator
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointDecision
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointProtocolRegistry
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointRuleSuggestionInput
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaValue
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria

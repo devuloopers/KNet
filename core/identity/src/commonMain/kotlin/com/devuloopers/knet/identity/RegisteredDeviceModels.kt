@@ -1,5 +1,7 @@
 package com.devuloopers.knet.identity
 
+import kotlin.jvm.JvmInline
+
 /**
  * Stable non-secret device identity used across registration, pairing, ingress, traffic, and revocation.
  *

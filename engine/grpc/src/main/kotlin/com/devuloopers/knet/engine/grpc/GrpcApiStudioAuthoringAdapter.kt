@@ -1,20 +1,20 @@
 package com.devuloopers.knet.engine.grpc
 
-import com.devuloopers.knet.application.port.apistudio.ApiStudioOperationShape
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolAuthoredMessage
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolAuthoringPort
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolDocument
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolDraft
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolMetadataEntry
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolOperation
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolSchemaImport
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioOperationShape
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolAuthoredMessage
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolAuthoring
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolDocument
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolDraft
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolMetadataEntry
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolOperation
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolSchemaImport
 import com.devuloopers.knet.domain.request.descriptor.RequestKindId
 
 /** Maps UI-neutral authoring inputs into the extension-owned native gRPC draft. */
 class GrpcApiStudioAuthoringAdapter(
     private val descriptors: GrpcDescriptorRegistry,
     private val draftCodec: GrpcRequestDraftCodec,
-) : ApiStudioProtocolAuthoringPort {
+) : ApiStudioProtocolAuthoring {
     override val kind: RequestKindId = RequestKindId.GRPC
 
     override fun importSchema(

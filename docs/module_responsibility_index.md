@@ -16,12 +16,16 @@ Gradle enforces four rules through `verifyArchitectureFoundation`:
 - [`:core`](../core/MODULE.md) — stable contracts and low-level utilities.
 - [`:data`](../data/MODULE.md) — platform data adapters.
 - [`:engine`](../engine/MODULE.md) — independently testable runtime capabilities.
+- [`application`](../application/MODULE.md) — application-layer namespace for desktop and companion workflows.
 - [`:ui`](../ui/MODULE.md) — presentation modules.
 - [`:ui:desktop`](../ui/desktop/MODULE.md) — desktop presentation features.
 
 ## Stable contracts and application boundary
 
-- [`:application`](../application/MODULE.md) — JVM desktop use cases and UI-neutral proxy/capture runtime ports.
+- [`:application:desktop`](../application/desktop/MODULE.md) — JVM desktop use cases and UI-neutral proxy/capture runtime contracts.
+- [`:application:companion`](../application/companion/MODULE.md) — portable companion workflows and platform adapter contracts.
+- [`:core:companion`](../core/companion/MODULE.md) — portable companion registration, connection, certificate,
+  inspection, network, and failure models.
 - [`:core:traffic`](../core/traffic/MODULE.md) — canonical shared HTTP request, response, exchange, body-reference, and ingress models.
 - [`:core:connectivity`](../core/connectivity/MODULE.md) — connectivity mechanism and setup contracts.
 - [`:core:domain`](../core/domain/MODULE.md) — non-traffic feature domain contracts and use cases.
@@ -34,6 +38,10 @@ Gradle enforces four rules through `verifyArchitectureFoundation`:
 ## Runtime implementations and adapters
 
 - [`:connectivity:desktop`](../connectivity/desktop/MODULE.md) — desktop connectivity mechanism implementations.
+- [`:connectivity:companion:android`](../connectivity/companion/android/MODULE.md) — Android network observation,
+  VPN consent, and inspection-backend lifecycle boundary.
+- [`:data:companion`](../data/companion/MODULE.md) — versioned companion registration/credential adapters,
+  invitation codec, shared control client, and Android Keystore implementations.
 - [`:data:desktop`](../data/desktop/MODULE.md) — desktop repository, capture-generation, registered-device, and mapping adapters.
 - [`:storage`](../storage/MODULE.md) — durable desktop persistence, schema, and registered/trusted-device rows.
 - [`:engine:certificate`](../engine/certificate/MODULE.md) — CA, certificate, key, and trust implementation.
@@ -54,9 +62,12 @@ Gradle enforces four rules through `verifyArchitectureFoundation`:
 - [`:engine:session`](../engine/session/MODULE.md) — canonical body-object file storage.
 - [`:engine:simulator`](../engine/simulator/MODULE.md) — network condition simulation.
 
-## Desktop presentation
+## Shared presentation foundation
 
-- [`:ui:core`](../ui/core/MODULE.md) — reusable Compose design system and responsive side-drawer shell.
+- [`:ui:core`](../ui/core/MODULE.md) — Compose Multiplatform design system, resources, and adaptive components for
+  JVM desktop, Android, and iOS.
+
+## Desktop presentation
 - [`:ui:desktop:app`](../ui/desktop/app/MODULE.md) — desktop shell, navigation, and row-gated global overlay placement.
 - [`:ui:desktop:workspace`](../ui/desktop/workspace/MODULE.md) — workspace presentation.
 - [`:ui:desktop:apiStudio`](../ui/desktop/apiStudio/MODULE.md) — API Studio editing and execution presentation.
@@ -77,9 +88,19 @@ Gradle enforces four rules through `verifyArchitectureFoundation`:
   extensible language services, search/history, and virtualized Compose code editor; independent
   from HTTP and feature models.
 
+## Companion presentation
+
+- [`:ui:companion:presentation`](../ui/companion/presentation/MODULE.md) — framework-neutral companion state,
+  actions, native effects, and lifecycle-owned shared ViewModel for Android and future iOS.
+- [`:ui:companion:sharedUi`](../ui/companion/sharedUi/MODULE.md) — Compose Multiplatform companion screens,
+  responsive layout, and shared UI resources hosted by platform products using the `:ui:core` theme.
+
 ## Composition and test support
 
 - [`:products:desktop`](../products/desktop/MODULE.md) — sole desktop Koin binding/composition root and process lifecycle owner; bindings are grouped by feature under `di/`.
+- [`:products:companion:androidApp`](../products/companion/androidApp/MODULE.md) — installable Android companion APK,
+  manifest, thin Compose host lifecycle, and Android companion composition root; unavailable transport/VPN
+  capabilities are not simulated.
 - [`:testingServer`](../testingServer/MODULE.md) — deterministic integration-test server.
 
 ## Shared HTTP model rule
@@ -91,7 +112,7 @@ Gradle enforces four rules through `verifyArchitectureFoundation`:
 - Traffic UI stores selection/filter/presentation state, not a duplicate exchange.
 - Body bytes are obtained through a body store using `BodyRef`, not embedded in every model copy.
 
-Production consumers include paged Traffic list/detail, API Studio direct recording and replay preparation, breakpoints, semantic inspectors, storage, and paired ingress. `:data:desktop` maps current-schema Room records to canonical exchanges and registered identities, returns bounded previews through `:application`, and adapts concrete runtimes to application ports. Breakpoint persistence stores a generic protocol ID/payload envelope and never branches on GraphQL or future formats. The canonical writer/body/query stack is the sole traffic authority. Ordinary proxy traffic streams; Traffic Start/Stop attaches or detaches a versioned capture target while the listener and Wi-Fi forwarding remain stable. Detached writers drain through one bounded owner. Enabled request or response breakpoints request bounded aggregation, but capture pause bypasses and releases breakpoint decisions without changing that pipeline shape.
+Production consumers include paged Traffic list/detail, API Studio direct recording and replay preparation, breakpoints, semantic inspectors, storage, and paired ingress. `:data:desktop` maps current-schema Room records to canonical exchanges and registered identities, returns bounded previews through `:application:desktop`, and adapts concrete runtimes to application contracts. Breakpoint persistence stores a generic protocol ID/payload envelope and never branches on GraphQL or future formats. The canonical writer/body/query stack is the sole traffic authority. Ordinary proxy traffic streams; Traffic Start/Stop attaches or detaches a versioned capture target while the listener and Wi-Fi forwarding remain stable. Detached writers drain through one bounded owner. Enabled request or response breakpoints request bounded aggregation, but capture pause bypasses and releases breakpoint decisions without changing that pipeline shape.
 
 ## Current target ownership
 

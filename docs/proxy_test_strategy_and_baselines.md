@@ -12,7 +12,7 @@ This document records reproducible evidence for proxy correctness and scalabilit
 Run the focused containment suite with:
 
 ```shell
-./gradlew :engine:proxy:test :engine:interceptor:test :engine:certificate:test :engine:session:test :engine:protocol:test :storage:jvmTest :data:desktop:jvmTest :application:test :connectivity:desktop:jvmTest :ui:desktop:traffic:jvmTest :ui:desktop:apiStudio:jvmTest
+./gradlew :engine:proxy:test :engine:interceptor:test :engine:certificate:test :engine:session:test :engine:protocol:test :storage:jvmTest :data:desktop:jvmTest :application:desktop:test :connectivity:desktop:jvmTest :ui:desktop:traffic:jvmTest :ui:desktop:apiStudio:jvmTest
 ```
 
 The suite covers loopback binding, failed-bind rollback/retry, strict authority rejection, setup-listener isolation, HTTP/1 ordering/streaming semantics, breakpoint terminal paths, trust and file security, canonical writer non-regression, saturation gaps, disk-exhaustion degradation, corrupt-body marking, active-session clear rotation, deletion convergence, retention/recovery, finalized-orphan inventory, schema-v13 persistence, semantic inspector isolation, connectivity transitions, pairing, gateway admission/revocation/attribution, and application lifecycle shutdown.

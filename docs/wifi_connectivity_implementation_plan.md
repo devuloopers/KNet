@@ -38,7 +38,7 @@ participate in manual Wi-Fi connectivity.
 
 ### MODIFY
 
-- `WifiSharingPort` is read-only; the platform runtime follows proxy lifecycle instead of receiving UI
+- `WifiSharing` is read-only; the platform runtime follows proxy lifecycle instead of receiving UI
   enable/disable commands.
 - `WifiSharingState.Active` exposes only its session and metrics.
 - The LAN endpoint advertises `OPEN_LAN_CLIENT`, and traffic uses `WifiLanClient` ingress attribution.
@@ -69,7 +69,7 @@ participate in manual Wi-Fi connectivity.
 ```mermaid
 flowchart LR
     UI["Connect Device card and dialog"] --> Observe["ObserveWifiSharingUseCase"]
-    Observe --> Port["WifiSharingPort state"]
+    Observe --> Port["WifiSharing state"]
 
     Proxy["Loopback proxy lifecycle"] --> Context["DesktopConnectivityRuntime"]
     Network["Desktop network snapshots"] --> Context
@@ -87,12 +87,12 @@ flowchart LR
 Dependency direction remains:
 
 ```text
-:ui:desktop:connectivity -> :application -> :core:connectivity / :core:traffic
-:products:desktop -> :connectivity:desktop -> :application / :core:*
+:ui:desktop:connectivity -> :application:desktop -> :core:connectivity / :core:traffic
+:products:desktop -> :connectivity:desktop -> :application:desktop / :core:*
 :connectivity:desktop -X-> :engine:proxy implementation
 ```
 
-The Wi-Fi adapter receives the loopback endpoint through `ProxyRuntimePort` and forwards bytes to it; it
+The Wi-Fi adapter receives the loopback endpoint through `ProxyRuntime` and forwards bytes to it; it
 does not import Netty handlers, certificate engines, traffic persistence, or UI.
 
 ## 4. Listener and lifecycle rules

@@ -2,14 +2,15 @@
 
 ## Responsibility
 
-Implements desktop connectivity mechanisms against `:core:connectivity` and `:application` ports.
+Implements desktop connectivity mechanisms against `:core:connectivity` and `:application:desktop` ports.
 
 ## Owns
 
 - Desktop manual-proxy, deterministic PAC, resource-backed typed Apple profile, and ADB reverse providers.
 - Versioned desktop network snapshots across IPv4/IPv6/interface/default-route/VPN transitions.
 - Bounded setup artifacts and a strict-authority dedicated loopback setup portal.
-- Ed25519 pairing crypto, QR/deep-link onboarding support, and the bounded authenticated standard-proxy gateway.
+- Algorithm-bound Ed25519/P-256 pairing crypto, QR/deep-link onboarding support, and the bounded authenticated
+  standard-proxy gateway.
 - Automatically managed exact-interface Wi-Fi sharing, open local-client admission with bounded per-source
   quotas, stable setup-page delivery, Android/Apple certificate downloads, and LAN-to-loopback bridging.
 - One-shot ingress attribution so paired identity reaches canonical traffic without changing proxy or storage contracts.
@@ -21,7 +22,7 @@ Implements desktop connectivity mechanisms against `:core:connectivity` and `:ap
 
 ## Dependency rule
 
-May depend on `:application`, `:core:connectivity`, `:core:traffic`, and `:core:pairing`. It must not depend on
+May depend on `:application:desktop`, `:core:connectivity`, `:core:traffic`, and `:core:pairing`. It must not depend on
 UI modules, logging implementations, or proxy implementation internals. Typed diagnostic callbacks are supplied
 by the product composition root.
 

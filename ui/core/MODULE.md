@@ -2,7 +2,8 @@
 
 ## Responsibility
 
-Provides the KMP-safe Compose design system, foundations, themes, layouts, and reusable visual components.
+Provides KNet's Compose Multiplatform design system, foundations, themes, layouts, resources, and reusable visual
+components. Production code targets JVM desktop, Android, iOS ARM64, and iOS Simulator ARM64 from one common API.
 
 ## Owns
 
@@ -52,7 +53,9 @@ Provides the KMP-safe Compose design system, foundations, themes, layouts, and r
   consumers may explicitly opt into single-line value truncation. Editable key/value rows remain single-line.
 - The non-modal, right-edge `KNetSideDrawer` shell, including responsive size classes, animation,
   surface, and border. Feature modules own drawer state and content.
-- Portable clipboard and pointer APIs whose desktop-only AWT adaptation is confined to `jvmMain`.
+- Portable clipboard and pointer APIs. JVM confines its AWT clipboard adaptation, hover, secondary-click, cursor,
+  and interactive scrollbar implementations to `jvmMain`; Android and iOS use native Compose clipboard access,
+  long-press context menus, touch-native scrolling, and no-op pointer-only affordances.
 
 ## Does not own
 
@@ -61,7 +64,9 @@ Provides the KMP-safe Compose design system, foundations, themes, layouts, and r
 
 ## Dependency rule
 
-Stay independent of product features and infrastructure. Feature UI modules may depend on it, never the reverse.
+Stay independent of product features and infrastructure. Desktop and companion feature UI modules may depend on
+it, never the reverse. Common code must not import JVM, Android, or iOS platform APIs; unavoidable adaptation lives
+behind common contracts in the matching platform source set.
 
 ## Migration direction
 
@@ -69,3 +74,5 @@ Keep as the reusable visual foundation; move feature-specific components back to
 Do not add compatibility aliases, no-op helpers, production catalogs/samples, or speculative component-framework types.
 Prefer one cohesive component API over parallel overload families when state such as text selection must be preserved.
 Feature code must use the asynchronous foundation clipboard API and must never import AWT clipboard types directly.
+Platform-specific behavior should adapt an existing common component contract rather than create a second public
+component family.

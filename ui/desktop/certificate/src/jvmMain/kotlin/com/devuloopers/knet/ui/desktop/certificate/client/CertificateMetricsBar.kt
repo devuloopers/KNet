@@ -24,8 +24,8 @@ import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.components.scrollbar.KNetHorizontalScrollbar
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.application.port.certificate.ClientCertificateSummary
-import com.devuloopers.knet.application.port.certificate.MtlsRuleSpec
+import com.devuloopers.knet.application.contract.certificate.ClientCertificateSummary
+import com.devuloopers.knet.application.contract.certificate.MtlsRuleSpec
 
 /**
  * 4-card horizontal metrics bar displaying summary PKI statistics matching the design system.

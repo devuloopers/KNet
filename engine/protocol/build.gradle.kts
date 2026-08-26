@@ -3,7 +3,7 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":application"))
+    implementation(project(":application:desktop"))
     implementation(project(":core:traffic"))
     api(project(":core:domain"))
     implementation(project(":core:logger"))

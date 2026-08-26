@@ -15,7 +15,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
 import com.devuloopers.knet.ui.core.components.switch.KNetSwitch
 import com.devuloopers.knet.ui.core.components.toolbar.KNetToolbar
 import com.devuloopers.knet.ui.core.components.toolbar.ToolbarGroup

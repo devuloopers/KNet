@@ -1,7 +1,7 @@
 package com.devuloopers.knet.products.desktop.di.proxy
 
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimePort
-import com.devuloopers.knet.application.port.traffic.CaptureSessionControlPort
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntime
+import com.devuloopers.knet.application.contract.traffic.CaptureSessionControl
 import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUseCase
 import com.devuloopers.knet.application.usecase.proxy.StartLoopbackProxyUseCase
 import com.devuloopers.knet.application.usecase.proxy.StopProxyRuntimeUseCase
@@ -20,7 +20,7 @@ import com.devuloopers.knet.engine.websocket.WebSocketSemanticBreakpointLayer
 import com.devuloopers.knet.engine.graphqlwebsocket.breakpoint.GraphQLWebSocketBreakpointLayer
 import com.devuloopers.knet.engine.sse.capture.SseStreamInspectorFactory
 import com.devuloopers.knet.engine.sse.breakpoint.SseBreakpointTransformerFactory
-import com.devuloopers.knet.application.port.breakpoint.ProtocolMessageBreakpointGate
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolMessageBreakpointGate
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -83,8 +83,8 @@ internal val proxyBindings: Module = module {
             breakpointCaptureAvailability = get(),
         )
     }
-    single<ProxyRuntimePort> { get<DesktopProxyRuntimeAdapter>() }
-    single<CaptureSessionControlPort> { get<DesktopProxyRuntimeAdapter>() }
+    single<ProxyRuntime> { get<DesktopProxyRuntimeAdapter>() }
+    single<CaptureSessionControl> { get<DesktopProxyRuntimeAdapter>() }
     factory { StartLoopbackProxyUseCase(get()) }
     factory { StopProxyRuntimeUseCase(get()) }
     factory { ObserveProxyRuntimeStateUseCase(get()) }

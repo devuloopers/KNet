@@ -1,13 +1,13 @@
 package com.devuloopers.knet.products.desktop.di.connectivity
 
-import com.devuloopers.knet.application.port.connectivity.ConnectivityCoordinator
-import com.devuloopers.knet.application.port.connectivity.wifi.WifiSharingPort
-import com.devuloopers.knet.application.port.pairing.PairingCoordinator
-import com.devuloopers.knet.application.port.pairing.PairingCryptoPort
-import com.devuloopers.knet.application.port.pairing.RegisteredDeviceStorePort
-import com.devuloopers.knet.application.port.pairing.TrustedDeviceStorePort
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimePort
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
+import com.devuloopers.knet.application.coordinator.connectivity.ConnectivityCoordinator
+import com.devuloopers.knet.application.contract.connectivity.wifi.WifiSharing
+import com.devuloopers.knet.application.coordinator.pairing.PairingCoordinator
+import com.devuloopers.knet.application.contract.pairing.PairingCryptography
+import com.devuloopers.knet.application.contract.pairing.RegisteredDeviceStore
+import com.devuloopers.knet.application.contract.pairing.TrustedDeviceStore
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntime
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
 import com.devuloopers.knet.application.usecase.pairing.CreatePairingOnboardingUseCase
 import com.devuloopers.knet.application.usecase.connectivity.wifi.ObserveWifiSharingUseCase
 import com.devuloopers.knet.connectivity.desktop.DesktopConnectivityRuntime
@@ -51,10 +51,10 @@ internal val connectivityBindings: Module = module {
     single<IngressAttributionLookup> { get<IngressAttributionRegistry>() }
     single<IngressAttributionRegistration> { get<IngressAttributionRegistry>() }
 
-    single<PairingCryptoPort> { JvmPairingCrypto() }
+    single<PairingCryptography> { JvmPairingCrypto() }
     single { RoomRegisteredDeviceStore(get<KNetDatabase>().registeredDeviceDao()) }
-    single<RegisteredDeviceStorePort> { get<RoomRegisteredDeviceStore>() }
-    single<TrustedDeviceStorePort> { get<RoomRegisteredDeviceStore>() }
+    single<RegisteredDeviceStore> { get<RoomRegisteredDeviceStore>() }
+    single<TrustedDeviceStore> { get<RoomRegisteredDeviceStore>() }
     single { PairingCoordinator(get(), get(), System::currentTimeMillis) }
     factory { CreatePairingOnboardingUseCase(get()) }
 
@@ -73,7 +73,7 @@ internal val connectivityBindings: Module = module {
     single { AdbSetupProvider() } bind SetupDescriptorProvider::class
 
     single {
-        val proxy: ProxyRuntimePort = get()
+        val proxy: ProxyRuntime = get()
         AdbReverseMechanism(proxyPort = {
             (proxy.state.value as? ProxyRuntimeState.Running)
                 ?.handle?.endpoints?.endpoints?.firstOrNull()?.port
@@ -99,7 +99,7 @@ internal val connectivityBindings: Module = module {
             },
         )
     }
-    single<WifiSharingPort> { get<DesktopWifiSharingRuntime>() }
+    single<WifiSharing> { get<DesktopWifiSharingRuntime>() }
     factory { ObserveWifiSharingUseCase(get()) }
     viewModel {
         ConnectDeviceViewModel(
@@ -129,7 +129,7 @@ internal val connectivityBindings: Module = module {
         )
     }
     single {
-        val proxy: ProxyRuntimePort = get()
+        val proxy: ProxyRuntime = get()
         AuthenticatedProxyGateway(
             bindPort = AUTHENTICATED_GATEWAY_PORT,
             targetProxy = {

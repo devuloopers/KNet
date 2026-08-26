@@ -1,17 +1,17 @@
 package com.devuloopers.knet.ui.desktop.traffic
 
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeConfiguration
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeHandle
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimePort
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
-import com.devuloopers.knet.application.port.proxy.ProxyStartResult
-import com.devuloopers.knet.application.port.proxy.ProxyStopReason
-import com.devuloopers.knet.application.port.proxy.ProxyStopResult
-import com.devuloopers.knet.application.port.traffic.CaptureClearPreparation
-import com.devuloopers.knet.application.port.traffic.CapturePauseResult
-import com.devuloopers.knet.application.port.traffic.CaptureResumeResult
-import com.devuloopers.knet.application.port.traffic.CaptureSessionControlPort
-import com.devuloopers.knet.application.port.traffic.CaptureSessionState
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeConfiguration
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeHandle
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntime
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
+import com.devuloopers.knet.application.contract.proxy.ProxyStartResult
+import com.devuloopers.knet.application.contract.proxy.ProxyStopReason
+import com.devuloopers.knet.application.contract.proxy.ProxyStopResult
+import com.devuloopers.knet.application.contract.traffic.CaptureClearPreparation
+import com.devuloopers.knet.application.contract.traffic.CapturePauseResult
+import com.devuloopers.knet.application.contract.traffic.CaptureResumeResult
+import com.devuloopers.knet.application.contract.traffic.CaptureSessionControl
+import com.devuloopers.knet.application.contract.traffic.CaptureSessionState
 import com.devuloopers.knet.connectivity.model.ProxyAccessRequirement
 import com.devuloopers.knet.connectivity.model.ProxyEndpoint
 import com.devuloopers.knet.connectivity.model.ProxyEndpointScope
@@ -91,7 +91,7 @@ class TrafficCaptureLifecycleTest {
         assertEquals("Capture unavailable (writer-unavailable)", viewModel.uiState.value.trafficErrorMessage)
     }
 
-    private class StatefulCaptureRuntime : ProxyRuntimePort, CaptureSessionControlPort {
+    private class StatefulCaptureRuntime : ProxyRuntime, CaptureSessionControl {
         private val runtimeState = MutableStateFlow<ProxyRuntimeState>(ProxyRuntimeState.Stopped)
         private val mutableCaptureState = MutableStateFlow<CaptureSessionState>(CaptureSessionState.Inactive)
         override val state: StateFlow<ProxyRuntimeState> = runtimeState

@@ -1,7 +1,7 @@
 package com.devuloopers.knet.ui.desktop.apistudio.websocket.model
 
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolExecutionEvent
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolMetadataEntry
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolExecutionEvent
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolMetadataEntry
 
 /** Presentation-owned kinds supported by the WebSocket message composer. */
 enum class WebSocketStudioMessageKind {

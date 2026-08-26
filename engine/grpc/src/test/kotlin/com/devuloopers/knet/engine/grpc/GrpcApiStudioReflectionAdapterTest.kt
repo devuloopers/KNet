@@ -1,6 +1,6 @@
 package com.devuloopers.knet.engine.grpc
 
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolReflectionTarget
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolReflectionTarget
 import io.grpc.Server
 import io.grpc.netty.shaded.io.grpc.netty.NettyServerBuilder
 import io.grpc.protobuf.services.HealthStatusManager

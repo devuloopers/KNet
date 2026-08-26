@@ -1,6 +1,6 @@
 package com.devuloopers.knet.ui.desktop.certificate
 
-import com.devuloopers.knet.application.port.certificate.CertificateAuthoritySummary
+import com.devuloopers.knet.application.contract.certificate.CertificateAuthoritySummary
 import kotlin.test.Test
 import kotlin.test.assertEquals
 

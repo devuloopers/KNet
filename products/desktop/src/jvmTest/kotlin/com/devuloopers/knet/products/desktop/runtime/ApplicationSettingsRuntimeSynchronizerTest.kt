@@ -1,8 +1,8 @@
 package com.devuloopers.knet.products.desktop.runtime
 
-import com.devuloopers.knet.application.port.breakpoint.BreakpointControlPort
-import com.devuloopers.knet.application.port.breakpoint.BreakpointDecision
-import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointControl
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointDecision
+import com.devuloopers.knet.application.contract.breakpoint.PendingBreakpoint
 import com.devuloopers.knet.core.http.client.KNetApiClient
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.settings.model.ApplicationSettings
@@ -60,7 +60,7 @@ class ApplicationSettingsRuntimeSynchronizerTest {
     }
 }
 
-private class RecordingBreakpointControl : BreakpointControlPort {
+private class RecordingBreakpointControl : BreakpointControl {
     override val pendingBreakpoints = MutableStateFlow<List<PendingBreakpoint>>(emptyList())
     override val isEnabled = MutableStateFlow(true)
     var timeoutMillis: Long? = null

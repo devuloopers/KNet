@@ -10,7 +10,7 @@ kotlin {
     sourceSets {
         val jvmMain by getting {
             dependencies {
-                implementation(project(":application"))
+                implementation(project(":application:desktop"))
                 implementation(project(":ui:core"))
                 implementation(project(":ui:desktop:httpPanel"))
                 implementation(project(":core:domain"))
@@ -23,7 +23,7 @@ kotlin {
                 implementation(libs.compose.uiToolingPreview)
                 implementation(libs.androidx.lifecycle.viewmodelCompose)
                 implementation(libs.androidx.lifecycle.runtimeCompose)
-                implementation(compose.materialIconsExtended)
+                implementation(libs.material.icons.extended)
             }
         }
         val jvmTest by getting {

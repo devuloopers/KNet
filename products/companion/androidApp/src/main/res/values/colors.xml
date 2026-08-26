@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="knet_background">#080E15</color>
+    <color name="knet_surface">#111A2B</color>
+    <color name="knet_text_primary">#F1F5F9</color>
+    <color name="knet_text_secondary">#A9B2C3</color>
+    <color name="knet_accent">#3B82F6</color>
+</resources>

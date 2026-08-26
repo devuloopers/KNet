@@ -3,7 +3,7 @@
 ## Responsibility
 
 Defines the small, platform-neutral scripting vocabulary shared by authored collections, desktop
-editors, application ports, and concrete script engines.
+editors, application contracts, and concrete script engines.
 
 ## Owns
 

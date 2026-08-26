@@ -1,9 +1,9 @@
 package com.devuloopers.knet.engine.session
 
-import com.devuloopers.knet.application.port.traffic.BodyFinalizeResult
-import com.devuloopers.knet.application.port.traffic.BodyDeleteResult
-import com.devuloopers.knet.application.port.traffic.BodyRange
-import com.devuloopers.knet.application.port.traffic.BodyWritePolicy
+import com.devuloopers.knet.application.contract.traffic.BodyFinalizeResult
+import com.devuloopers.knet.application.contract.traffic.BodyDeleteResult
+import com.devuloopers.knet.application.contract.traffic.BodyRange
+import com.devuloopers.knet.application.contract.traffic.BodyWritePolicy
 import com.devuloopers.knet.traffic.id.BodyId
 import com.devuloopers.knet.traffic.model.body.BodyCaptureOutcome
 import kotlinx.coroutines.test.runTest

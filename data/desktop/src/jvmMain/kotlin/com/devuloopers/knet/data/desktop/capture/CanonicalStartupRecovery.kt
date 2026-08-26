@@ -1,10 +1,10 @@
 package com.devuloopers.knet.data.desktop.capture
 
-import com.devuloopers.knet.application.port.traffic.BodyRange
-import com.devuloopers.knet.application.port.traffic.BodyDeleteResult
-import com.devuloopers.knet.application.port.traffic.BodyStorageKey
-import com.devuloopers.knet.application.port.traffic.BodyStorePort
-import com.devuloopers.knet.application.port.traffic.BodyStoreMaintenancePort
+import com.devuloopers.knet.application.contract.traffic.BodyRange
+import com.devuloopers.knet.application.contract.traffic.BodyDeleteResult
+import com.devuloopers.knet.application.contract.traffic.BodyStorageKey
+import com.devuloopers.knet.application.contract.traffic.BodyStore
+import com.devuloopers.knet.application.contract.traffic.BodyStoreMaintenance
 import com.devuloopers.knet.storage.capture.dao.CanonicalCaptureDao
 import com.devuloopers.knet.traffic.id.BodyId
 
@@ -18,8 +18,8 @@ import com.devuloopers.knet.traffic.id.BodyId
  */
 class CanonicalStartupRecovery(
     private val dao: CanonicalCaptureDao,
-    private val bodyStore: BodyStorePort,
-    private val bodyStoreMaintenance: BodyStoreMaintenancePort,
+    private val bodyStore: BodyStore,
+    private val bodyStoreMaintenance: BodyStoreMaintenance,
     private val deletionReconciler: BodyDeletionReconciler = BodyDeletionReconciler(dao, bodyStore),
 ) {
     /**

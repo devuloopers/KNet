@@ -1,18 +1,18 @@
 package com.devuloopers.knet.ui.desktop.traffic
 
-import com.devuloopers.knet.application.port.breakpoint.BreakpointCandidate
-import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
-import com.devuloopers.knet.application.port.traffic.BodyChunk
-import com.devuloopers.knet.application.port.traffic.BodyRange
-import com.devuloopers.knet.application.port.traffic.TrafficGeneration
-import com.devuloopers.knet.application.port.traffic.TrafficCaptureSequence
-import com.devuloopers.knet.application.port.traffic.TrafficPage
-import com.devuloopers.knet.application.port.traffic.TrafficPageCursor
-import com.devuloopers.knet.application.port.traffic.TrafficPageItem
-import com.devuloopers.knet.application.port.traffic.TrafficPageQuery
-import com.devuloopers.knet.application.port.traffic.TrafficQueryPort
-import com.devuloopers.knet.application.port.traffic.TrafficSessionCatalogPort
-import com.devuloopers.knet.application.port.inspection.InspectionAnnotationPort
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointCandidate
+import com.devuloopers.knet.application.contract.breakpoint.PendingBreakpoint
+import com.devuloopers.knet.application.contract.traffic.BodyChunk
+import com.devuloopers.knet.application.contract.traffic.BodyRange
+import com.devuloopers.knet.application.contract.traffic.TrafficGeneration
+import com.devuloopers.knet.application.contract.traffic.TrafficCaptureSequence
+import com.devuloopers.knet.application.contract.traffic.TrafficPage
+import com.devuloopers.knet.application.contract.traffic.TrafficPageCursor
+import com.devuloopers.knet.application.contract.traffic.TrafficPageItem
+import com.devuloopers.knet.application.contract.traffic.TrafficPageQuery
+import com.devuloopers.knet.application.contract.traffic.TrafficQuery
+import com.devuloopers.knet.application.contract.traffic.TrafficSessionCatalog
+import com.devuloopers.knet.application.contract.inspection.InspectionAnnotationStore
 import com.devuloopers.knet.traffic.id.BodyId
 import com.devuloopers.knet.traffic.id.CaptureSessionId
 import com.devuloopers.knet.traffic.id.ExchangeId
@@ -209,7 +209,7 @@ class TrafficPagingViewModelTest {
             ),
         )
         val annotations = MutableStateFlow<Map<ExchangeId, List<InspectionAnnotation>>>(emptyMap())
-        val annotationPort = object : InspectionAnnotationPort {
+        val annotationPort = object : InspectionAnnotationStore {
             override suspend fun put(sessionId: CaptureSessionId, annotation: InspectionAnnotation) = Unit
             override suspend fun get(exchangeId: ExchangeId): List<InspectionAnnotation> =
                 annotations.value[exchangeId].orEmpty()
@@ -263,7 +263,7 @@ class TrafficPagingViewModelTest {
         )
         val viewModel = FakeTrafficViewModelFactory.create(
             customTrafficQueryPort = port,
-            customSessionCatalogPort = object : TrafficSessionCatalogPort {
+            customSessionCatalogPort = object : TrafficSessionCatalog {
                 override val latestSessionId: Flow<CaptureSessionId?> = activeSession
             },
         )
@@ -399,7 +399,7 @@ class TrafficPagingViewModelTest {
         assertEquals(emptyList(), state.prefilledBreakpointProtocolValues)
     }
 
-    private class FakePagedPort(rowCount: Int) : TrafficQueryPort {
+    private class FakePagedPort(rowCount: Int) : TrafficQuery {
         private val snapshots = List(rowCount) { index -> snapshot("exchange-$index", 10_000L - index) }
         val requestedLimits = mutableListOf<Int>()
         override val generations: Flow<TrafficGeneration> = emptyFlow()
@@ -433,7 +433,7 @@ class TrafficPagingViewModelTest {
     private class LiveTrafficPort(
         private val sessionId: CaptureSessionId,
         initialSnapshots: List<HttpExchangeSnapshot>,
-    ) : TrafficQueryPort {
+    ) : TrafficQuery {
         private val mutableGenerations = MutableSharedFlow<TrafficGeneration>(extraBufferCapacity = 64)
         private val snapshots = initialSnapshots.toMutableList()
         private var generation = 1L
@@ -472,7 +472,7 @@ class TrafficPagingViewModelTest {
 
     private class SessionPagedPort(
         private val snapshotsBySession: Map<CaptureSessionId, List<HttpExchangeSnapshot>>,
-    ) : TrafficQueryPort {
+    ) : TrafficQuery {
         override val generations: Flow<TrafficGeneration> = emptyFlow()
 
         override suspend fun query(query: TrafficPageQuery): TrafficPage {

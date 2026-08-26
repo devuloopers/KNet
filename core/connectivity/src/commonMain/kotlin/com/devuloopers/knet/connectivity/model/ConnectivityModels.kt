@@ -1,5 +1,7 @@
 package com.devuloopers.knet.connectivity.model
 
+import kotlin.jvm.JvmInline
+
 /**
  * Stable identifier for a connectivity mechanism such as manual proxy, PAC, ADB, or companion.
  *

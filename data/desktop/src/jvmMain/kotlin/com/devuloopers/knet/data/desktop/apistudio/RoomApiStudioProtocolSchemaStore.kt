@@ -1,7 +1,7 @@
 package com.devuloopers.knet.data.desktop.apistudio
 
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolSchemaSource
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolSchemaStore
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolSchemaSource
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolSchemaStore
 import com.devuloopers.knet.domain.request.descriptor.RequestKindId
 import com.devuloopers.knet.storage.apistudio.dao.ProtocolDocumentDao
 import com.devuloopers.knet.storage.apistudio.entity.ApiStudioProtocolSchemaEntity

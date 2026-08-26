@@ -27,7 +27,7 @@ import com.devuloopers.knet.ui.core.components.switch.KNetSwitch
 import com.devuloopers.knet.ui.core.components.button.KNetIconButton
 import com.devuloopers.knet.ui.core.components.scrollbar.KNetVerticalScrollbar
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.application.port.certificate.ClientCertificateSummary
+import com.devuloopers.knet.application.contract.certificate.ClientCertificateSummary
 
 @Composable
 fun ClientCertificateList(

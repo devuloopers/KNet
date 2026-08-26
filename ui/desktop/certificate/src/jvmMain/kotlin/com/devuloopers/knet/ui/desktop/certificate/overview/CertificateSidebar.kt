@@ -18,8 +18,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.application.port.certificate.CertificateAuthoritySummary
-import com.devuloopers.knet.application.port.certificate.CertificateAuthorityStatus
+import com.devuloopers.knet.application.contract.certificate.CertificateAuthoritySummary
+import com.devuloopers.knet.application.contract.certificate.CertificateAuthorityStatus
 import com.devuloopers.knet.ui.core.components.button.KNetIconButton
 import com.devuloopers.knet.ui.core.components.dialog.AlertDialog
 import com.devuloopers.knet.ui.core.components.scrollbar.KNetVerticalScrollbar

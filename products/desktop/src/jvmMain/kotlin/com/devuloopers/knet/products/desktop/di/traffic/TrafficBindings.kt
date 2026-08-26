@@ -1,9 +1,9 @@
 package com.devuloopers.knet.products.desktop.di.traffic
 
-import com.devuloopers.knet.application.port.traffic.TrafficMaintenancePort
-import com.devuloopers.knet.application.port.traffic.TrafficQueryPort
-import com.devuloopers.knet.application.port.traffic.ProtocolMessageQueryPort
-import com.devuloopers.knet.application.port.traffic.TrafficSessionCatalogPort
+import com.devuloopers.knet.application.contract.traffic.TrafficMaintenance
+import com.devuloopers.knet.application.contract.traffic.TrafficQuery
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessageQuery
+import com.devuloopers.knet.application.contract.traffic.TrafficSessionCatalog
 import com.devuloopers.knet.application.usecase.traffic.ClearTrafficHistoryUseCase
 import com.devuloopers.knet.application.usecase.traffic.LoadTrafficExchangeDetailsUseCase
 import com.devuloopers.knet.application.usecase.traffic.ObserveLatestTrafficSessionUseCase
@@ -32,16 +32,16 @@ internal val trafficBindings: Module = module {
             canonicalBodyStore = get(),
         )
     }
-    single<TrafficMaintenancePort> { get<DesktopTrafficMaintenanceAdapter>() }
+    single<TrafficMaintenance> { get<DesktopTrafficMaintenanceAdapter>() }
     single {
         DesktopTrafficQueryAdapter(
             dao = get<KNetDatabase>().canonicalCaptureDao(),
             bodyStore = get(),
         )
     }
-    single<TrafficQueryPort> { get<DesktopTrafficQueryAdapter>() }
-    single<ProtocolMessageQueryPort> { get<DesktopTrafficQueryAdapter>() }
-    single<TrafficSessionCatalogPort> { get<DesktopTrafficQueryAdapter>() }
+    single<TrafficQuery> { get<DesktopTrafficQueryAdapter>() }
+    single<ProtocolMessageQuery> { get<DesktopTrafficQueryAdapter>() }
+    single<TrafficSessionCatalog> { get<DesktopTrafficQueryAdapter>() }
 
     single { ClearTrafficHistoryUseCase(get(), get()) }
     factory { LoadTrafficExchangeDetailsUseCase(get()) }

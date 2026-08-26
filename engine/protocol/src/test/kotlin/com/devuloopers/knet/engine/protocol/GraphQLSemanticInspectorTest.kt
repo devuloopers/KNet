@@ -1,8 +1,8 @@
 package com.devuloopers.knet.engine.protocol
 
-import com.devuloopers.knet.application.port.inspection.InspectionBody
-import com.devuloopers.knet.application.port.inspection.SemanticInspectionInput
-import com.devuloopers.knet.application.port.traffic.BodyChunk
+import com.devuloopers.knet.application.contract.inspection.InspectionBody
+import com.devuloopers.knet.application.contract.inspection.SemanticInspectionInput
+import com.devuloopers.knet.application.contract.traffic.BodyChunk
 import com.devuloopers.knet.engine.protocol.inspector.graphql.GraphQLSemanticInspector
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.ExchangeState

@@ -1,16 +1,16 @@
 package com.devuloopers.knet.engine.sse.breakpoint
 
-import com.devuloopers.knet.application.port.breakpoint.BreakpointInterceptionUnit
-import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolDefinition
-import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolExtension
-import com.devuloopers.knet.application.port.breakpoint.BreakpointRuleSuggestionInput
-import com.devuloopers.knet.application.port.breakpoint.CompiledProtocolCriteria
-import com.devuloopers.knet.application.port.breakpoint.ProtocolCriteriaFieldDefinition
-import com.devuloopers.knet.application.port.breakpoint.ProtocolCriteriaFieldId
-import com.devuloopers.knet.application.port.breakpoint.ProtocolCriteriaValue
-import com.devuloopers.knet.application.port.breakpoint.ProtocolInspectionInput
-import com.devuloopers.knet.application.port.breakpoint.ProtocolMessageInspectionInput
-import com.devuloopers.knet.application.port.breakpoint.ProtocolObservation
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointInterceptionUnit
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointProtocolDefinition
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointProtocolExtension
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointRuleSuggestionInput
+import com.devuloopers.knet.application.contract.breakpoint.CompiledProtocolCriteria
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaFieldDefinition
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaFieldId
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaValue
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolInspectionInput
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolMessageInspectionInput
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolObservation
 import com.devuloopers.knet.domain.rules.model.BreakpointProtocolId
 import com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria
 import com.devuloopers.knet.engine.sse.protocol.SseIncrementalParser
@@ -95,7 +95,7 @@ class SseBreakpointExtension(
 
     override fun validateMessageReplacement(
         input: ProtocolMessageInspectionInput,
-        replacement: com.devuloopers.knet.application.port.breakpoint.BreakpointBody,
+        replacement: com.devuloopers.knet.application.contract.breakpoint.BreakpointBody,
     ): Boolean {
         val bytes = replacement.copyBytes()
         val results = SseIncrementalParser(limits).accept(bytes)

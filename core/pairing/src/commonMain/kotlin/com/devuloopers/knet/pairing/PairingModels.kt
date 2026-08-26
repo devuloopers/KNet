@@ -2,6 +2,7 @@ package com.devuloopers.knet.pairing
 
 import com.devuloopers.knet.identity.RegisteredDevice
 import com.devuloopers.knet.identity.RegisteredDeviceId
+import kotlin.jvm.JvmInline
 
 @JvmInline
 value class PairingInvitationId(val value: String) {
@@ -13,6 +14,12 @@ enum class DeviceScope {
     PROXY_STREAM,
     SETUP_ARTIFACT_READ,
     TRAFFIC_METADATA_READ,
+}
+
+/** Proof algorithm is transcript-bound so adding mobile-safe keys cannot create a downgrade ambiguity. */
+enum class DeviceProofAlgorithm {
+    ED25519,
+    ECDSA_P256_SHA256,
 }
 
 /** One-time onboarding material returned only to the creator and never stored in plaintext. */
@@ -46,6 +53,7 @@ data class PairingCompletionRequest(
     val displayName: String,
     val publicKeyEncoded: String,
     val proofSignatureEncoded: String,
+    val proofAlgorithm: DeviceProofAlgorithm = DeviceProofAlgorithm.ED25519,
 ) {
     init {
         require(displayName.isNotBlank() && displayName.length <= 128)
@@ -53,7 +61,7 @@ data class PairingCompletionRequest(
     }
 
     fun proofMessage(): String =
-        "${invitationId.value}|$invitationSecret|${deviceId.value}|$displayName"
+        "${proofAlgorithm.name}|${invitationId.value}|$invitationSecret|${deviceId.value}|$displayName"
 }
 
 /**

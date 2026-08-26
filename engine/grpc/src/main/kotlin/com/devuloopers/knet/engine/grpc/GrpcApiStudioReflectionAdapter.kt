@@ -1,10 +1,10 @@
 package com.devuloopers.knet.engine.grpc
 
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolReflectionPort
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolReflectionResult
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolReflectionTarget
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolSchemaImport
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolSchemaSource
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolReflection
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolReflectionResult
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolReflectionTarget
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolSchemaImport
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolSchemaSource
 import com.devuloopers.knet.domain.request.descriptor.RequestKindId
 import com.google.protobuf.DescriptorProtos
 import io.grpc.reflection.v1.ServerReflectionGrpc
@@ -23,7 +23,7 @@ class GrpcApiStudioReflectionAdapter(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val maximumServices: Int = 1_000,
     private val maximumDescriptorBytes: Int = 8 * 1_024 * 1_024,
-) : ApiStudioProtocolReflectionPort {
+) : ApiStudioProtocolReflection {
     init {
         require(maximumServices > 0) { "Maximum reflected service count must be positive." }
         require(maximumDescriptorBytes > 0) { "Maximum reflected descriptor bytes must be positive." }

@@ -1,7 +1,7 @@
 # KNet Target Architecture and Implementation Plan
 
 - **Status:** Approved target; mandatory foundation implemented through the standard Phase 18 gate
-- **Date:** 2026-08-18
+- **Date:** 2026-08-26
 - **Basis:** `docs/deep_architecture_scalability_engineering_audit.md` and the actual 33-module repository
 - **Scope:** desktop proxy, capture/storage, protocol inspection, connectivity, security, lifecycle, and future mobile companion/relay boundaries
 - **Implementation tracking:** `docs/implementation_plan.md` is the live delivery board
@@ -10,7 +10,7 @@
 
 This document remains the boundary source of truth. Optional product/transports are not treated as implemented merely because their foundations exist.
 
-As of 2026-08-22:
+As of 2026-08-26:
 
 - the four original foundation modules, the evidence-driven `:core:scripting` contract module, and
   module responsibility contracts are present;
@@ -34,8 +34,11 @@ As of 2026-08-22:
   stream-scoped capture/breakpoints, API Studio, persistence, and Traffic presentation; Windows/Linux and
   Android/iOS Wi-Fi qualification still gate `SUPPORTED`. Native gRPC, HTTP/1.1 WebSocket, and modern
   `graphql-transport-ws` inspection/breakpoints/API Studio are also additive `EXPERIMENTAL` increments with local
-  JVM evidence. Mobile Companion apps, relay, VPN, HTTP/3, WebSocket over HTTP/2, and legacy `graphql-ws` remain
-  explicitly `UNAVAILABLE` until their own gates pass.
+  JVM evidence. The Android-first companion foundation now has portable models, use cases/contracts, versioned
+  persistence/control protocol, shared presentation state/ViewModel, Android Keystore/network/VPN-consent
+  adapters, and Android/iOS compile gates; product UI, a real VPN/TUN backend, direct tunnel/control server, and
+  relay remain explicitly `UNAVAILABLE` until their own gates pass. HTTP/3, WebSocket over HTTP/2, and legacy
+  `graphql-ws` also remain unavailable.
 
 The accepted boundary decisions are recorded in `docs/adr/`. Reproducible correctness commands and the distinction between current tests and pending measured capacity gates are recorded in `docs/proxy_test_strategy_and_baselines.md`.
 
@@ -74,14 +77,26 @@ modules only when concrete ownership requires them:
 
 1. `:core:traffic` — stable, portable traffic values and capture contracts.
 2. `:core:connectivity` — portable setup/lifecycle/capability values and small mechanism contracts.
-3. `:application` — JVM desktop orchestration, use cases, lifecycle reducers, and technology-neutral ports.
+3. `:application:desktop` — JVM desktop orchestration, use cases, lifecycle reducers, and technology-neutral ports.
 4. `:connectivity:desktop` — current desktop PAC/manual/profile/ADB implementations, isolated by package.
 5. `:core:scripting` — the small portable scripting vocabulary shared by collections, application
    ports, editors, and script engines.
 6. `:core:identity` — dependency-free registered-device identity shared by connectivity and pairing
    without coupling those sibling modules.
+7. `:core:companion`, `:application:companion`, `:data:companion`, `:ui:companion:presentation`, and
+   `:ui:companion:sharedUi` — portable companion contracts/workflows/adapters/state/Compose UI now justified by
+   Android and iOS compilation.
+8. `:connectivity:companion:android` — Android network/VPN-consent lifecycle adapter boundary; the concrete packet
+   backend remains a separate future implementation.
+9. `:products:companion:androidApp` — installable Android product shell and composition root for capabilities that now
+   have production adapters; it does not simulate unavailable transport, certificate, or VPN behavior.
+10. `:ui:core` — the shared Compose Multiplatform design system and adaptive component foundation for JVM desktop,
+    Android, and iOS; feature UI owns screens but not duplicate palettes or platform-neutral primitives.
 
-Future modules such as `:connectivity:companion`, `:connectivity:relay`, or an HTTP/3 transport are added only when implementation work begins and their dependencies justify isolation. Current modules keep their names during the behavioral migration; directory/module renames are optional cleanup after dependency rules are green.
+Future runtime modules such as a concrete Android VPN packet backend, desktop companion tunnel/control adapters,
+`:connectivity:relay`, or an HTTP/3 transport are added only when real
+implementation work begins and their dependencies justify isolation. Current modules keep their names during the
+behavioral migration; directory/module renames are optional cleanup after dependency rules are green.
 
 ## 2. Architectural objectives and non-goals
 
@@ -116,7 +131,7 @@ Future modules such as `:connectivity:companion`, `:connectivity:relay`, or an H
                            composition root and process owner
                        /          /         |          \
                       v          v          v           v
-              desktop UIs   :application  runtime     adapters
+              desktop UIs   :application:desktop  runtime     adapters
                   |              |          |           |
                   |              | ports    |           |
                   +--------------+<---------+-----------+
@@ -143,8 +158,8 @@ Dependency arrows always point inward:
 
 ```text
 UI -> application APIs/use cases -> core values/policy
-application services -> application ports -> core values/policy
-runtime/adapters -> application ports + core values
+application services -> application contracts -> core values/policy
+runtime/adapters -> application contracts + core values
 products:desktop -> every concrete implementation strictly for composition
 ```
 
@@ -155,7 +170,9 @@ There are no reverse arrows from core/application to Netty, Room, Ktor, Graal, C
 | Module/group | Target responsibility | Must not contain/depend on |
 |---|---|---|
 | `:products:desktop` | Koin bindings, process start/close, configuration loading, top-level window | business policy, Netty handlers, Room queries, feature coordination |
-| `:application` | JVM desktop session/proxy/connectivity orchestration, command/query use cases, lifecycle state machines, application ports, typed failures | Netty, Room, files, Compose, Ktor, Graal, OS commands, mobile-companion workflows |
+| `:application:desktop` | JVM desktop session/proxy/connectivity orchestration, command/query use cases, lifecycle state machines, application contracts, typed failures | Netty, Room, files, Compose, Ktor, Graal, OS commands, mobile-companion workflows |
+| `:application:companion` | portable companion pairing, registration, connection, certificate, inspection, recovery, and forget workflows plus platform contracts | platform APIs, sockets, persistence implementations, UI state, desktop proxy internals |
+| `:core:companion` | validated companion invitation/registration/endpoints and connection/certificate/inspection/network/failure state | credentials, private keys, persistence, sockets, VPN handles, UI |
 | `:core:traffic` | connection/exchange/message IDs, header/head/timing/TLS/body-reference models, capture events/admission contract | UI state, Room entities, filesystem paths, Netty buffers |
 | `:core:connectivity` | endpoint/setup descriptors, capabilities, availability/lifecycle/health, setup and managed-mechanism contracts | proxy handlers, UI, network-interface discovery, OS commands |
 | `:core:identity` | stable registered-device ID, display identity, enrollment kind, last-seen and revocation state | pairing credentials, network addresses, persistence, UI |
@@ -166,21 +183,26 @@ There are no reverse arrows from core/application to Netty, Room, Ktor, Graal, C
 | `:engine:certificate` | CA/leaf certificate operations, TLS context creation, verification results, cache policy | plaintext key persistence, UI, portal, Room |
 | `:engine:interceptor` | compiled rule evaluation, bounded pause/resume/modify/drop mechanics, framing-safe mutation | global state, UI sessions, database writes, semantic inspection |
 | `:engine:protocol` | semantic inspector API/host and currently wired built-in inspectors | proxy forwarding, Netty listener ownership, UI state, Room entities |
-| `:engine:formatter` | bounded body preview detection/formatting behind an application port | traffic transport or persistence ownership |
+| `:engine:formatter` | bounded body preview detection/formatting behind an application contract | traffic transport or persistence ownership |
 | `:engine:script` | isolated/bounded script execution implementation | Netty event loops, direct traffic persistence, unrestricted untrusted Kotlin execution |
-| `:core:http` | transition location for API Studio contracts/Ktor client | proxy traffic models; eventually implementation moves behind application port |
+| `:core:http` | transition location for API Studio contracts/Ktor client | proxy traffic models; eventually implementation moves behind application contract |
 | `:storage` | Room schema/DAOs/migrations, file body-store implementation, retention/reconciliation primitives | domain use cases, UI models, proxy handlers |
 | `:data:desktop` | desktop repository adapters/mappers, secure/network adapters until extracted | cross-engine orchestration, process-lifetime unmanaged scopes, capture hot-path callbacks |
 | `:connectivity:desktop` | PAC/manual/Apple/ADB implementations, platform network snapshot, strict setup listener, pairing security, authenticated ingress gateway | proxy parsing, traffic storage, feature UI, protocol inspection |
+| `:data:companion` | versioned companion persistence/control protocol and platform secure-storage/key adapters | workflow policy, UI, VPN lifecycle, proxy/traffic ownership |
+| `:connectivity:companion:android` | Android network observation, VPN consent, and inspection-backend lifecycle adapter | packet-engine implementation, shared policy, UI, desktop proxy/capture |
+| `:ui:core` | Compose Multiplatform theme, semantic tokens, resources, and platform-adaptive reusable components | feature state/screens, application policy, runtime adapters, platform APIs in common code |
+| `:ui:companion:presentation` | portable companion state/actions/effects and lifecycle-owned ViewModel | Compose/SwiftUI widgets, platform intents, repositories, sockets, VPN handles |
+| `:ui:companion:sharedUi` | Compose Multiplatform screens and shared resources using `:ui:core` | duplicate theme palettes, platform lifecycle/effects, repositories, transports, credentials, VPN handles |
 | `:ui:*` | presentation state, Compose rendering, typed user actions/navigation | concrete engine/runtime classes, Room, files, OS/process APIs |
 | `:testingServer` | deterministic loopback origins and failure fixtures | production behavior |
 
 ### 3.3 Enforced dependency rules
 
 1. Only `:products:desktop` may import concrete classes from both UI and runtime/adapter groups.
-2. UI modules depend on `:application`, pure core/UI modules, and the existing pure `:engine:formatter` presentation helper only; never concrete runtimes, `:storage`, or `:data:desktop` classes. The exception is executable and must not expand.
-3. The JVM-only `:application` module depends only on JVM variants of pure core modules and coroutine primitives.
-4. Runtime/adapters implement ports declared by `:application` or `:core:*`.
+2. UI modules depend on `:application:desktop`, pure core/UI modules, and the existing pure `:engine:formatter` presentation helper only; never concrete runtimes, `:storage`, or `:data:desktop` classes. The exception is executable and must not expand.
+3. The JVM-only `:application:desktop` module depends only on JVM variants of pure core modules and coroutine primitives.
+4. Runtime/adapters implement ports declared by `:application:desktop` or `:core:*`.
 5. `:engine:proxy` has no project dependency on portal, protocol inspectors, storage, data, connectivity, or UI.
 6. `:engine:protocol` consumes captured views and produces annotations; it never receives a Netty `Channel`, `ByteBuf`, or write callback.
 7. `:core:*` common source sets contain no JVM-only API unless isolated in `jvmMain` behind a port.
@@ -189,7 +211,7 @@ There are no reverse arrows from core/application to Netty, Room, Ktor, Graal, C
 10. Architecture tests fail CI for forbidden imports and project dependency edges.
 11. Koin binding declarations live only in `:products:desktop`, grouped by feature; reusable modules expose constructors/contracts and may use product-provided instances but never define product assembly.
 
-The repository rule that ViewModels receive use cases rather than repositories remains in force. Pure business use cases stay in `:core:domain`; cross-engine/session orchestration use cases live in `:application`. Both are injected through Koin, and neither permits a ViewModel to inject a repository or concrete runtime directly.
+The repository rule that ViewModels receive use cases rather than repositories remains in force. Pure business use cases stay in `:core:domain`; cross-engine/session orchestration use cases live in `:application:desktop`. Both are injected through Koin, and neither permits a ViewModel to inject a repository or concrete runtime directly.
 
 ### 3.4 Target runtime flow
 
@@ -227,7 +249,8 @@ Forwarding continues when body capture is truncated or unavailable. A policy may
 These evidence-backed modules are now included:
 
 ```kotlin
-include(":application")
+include(":application:desktop")
+include(":application:companion")
 include(":core:traffic")
 include(":core:connectivity")
 include(":core:identity")
@@ -235,7 +258,8 @@ include(":connectivity:desktop")
 include(":core:scripting")
 ```
 
-Keep all current module paths while callers migrate. Do not combine behavioral changes with global path/package renaming.
+The application layer is now an explicit namespace with a JVM desktop module and a portable companion module.
+This structural split does not change package names or runtime behavior.
 
 Future additions are conditional:
 
@@ -243,7 +267,7 @@ Future additions are conditional:
 :testing:benchmarks              add with the load harness
 :connectivity:companion          add when desktop companion pairing/tunnel begins
 :connectivity:relay              add when a real relay transport begins
-:products:companion-android      add only with an Android product target
+:products:companion:androidApp   current installable Android product shell/composition
 :products:companion-ios          add only with an iOS product target
 :engine:proxy-http3              add only if QUIC dependencies justify isolation
 :inspection:<name>               add only when an inspector needs independent dependencies/release
@@ -262,23 +286,14 @@ KNet/
 │           ├── composition/
 │           └── lifecycle/
 │
-├── application/                                      ADD
-│   └── src/main/.../application/                     JVM desktop workflows
-│       ├── port/
-│       │   ├── proxy/
-│       │   ├── capture/
-│       │   ├── traffic/
-│       │   ├── certificate/
-│       │   ├── connectivity/
-│       │   ├── inspection/
-│       │   └── security/
-│       ├── proxy/
-│       ├── capture/
-│       ├── traffic/
-│       ├── connectivity/
-│       ├── pairing/
-│       ├── export/
-│       └── error/
+├── application/
+│   ├── desktop/src/main/.../application/             JVM desktop workflows
+│   │   ├── contract/                                 adapter-facing interfaces and values
+│   │   ├── coordinator/                              stateful application orchestration
+│   │   └── usecase/                                  focused commands and queries
+│   └── companion/src/commonMain/.../application/     portable Android/iOS workflows
+│       ├── contract/                                 platform/data interfaces and values
+│       └── usecase/                                  portable companion workflows
 │
 ├── core/
 │   ├── traffic/                                      ADD
@@ -403,7 +418,7 @@ KNet/
 | `:products:desktop` | **KEEP, MODIFY** | one visible composition root; normal close invokes ordered application shutdown | unregistered resources and non-deterministic close (F-10) |
 | `:core:domain` | **MODIFY, MOVE** | keep product policy; move UI state to UI and traffic values to `:core:traffic`; remove logger/Java URI | cross-layer/domain/platform leakage (F-20, F-28) |
 | `:core:scripting` | **ADD** | own the proven cross-feature scripting vocabulary without runtime/UI dependencies | duplicated language, phase, snippet, and assertion values (F-20, F-30) |
-| `:core:http` | **MODIFY, LATER MOVE** | expose API Studio through application port; keep Ktor implementation during migration, then optionally rename | duplicate HTTP models and internal header/capture coupling (F-15, F-30) |
+| `:core:http` | **MODIFY, LATER MOVE** | expose API Studio through application contract; keep Ktor implementation during migration, then optionally rename | duplicate HTTP models and internal header/capture coupling (F-15, F-30) |
 | `:core:pairing` | **KEEP, MODIFY** | make it the portable pairing protocol/value module; no runtime singleton | disconnected pairing and future companion boundary |
 | `:core:logger` | **KEEP, MODIFY** | actual configured asynchronous diagnostic adapter; no domain dependency | nominal/hot-path logging (F-24) |
 | `:core:serialization` | **KEEP** | retain portable serialization only | preserves a useful stable component |
@@ -415,13 +430,13 @@ KNet/
 | `:engine:traffic` | **REMOVE/MERGE** | merge the one canonical rewrite-rule model/runtime into interceptor/application policy | duplicate dormant traffic path (F-26, F-30) |
 | `:engine:portal` | **REMOVE** | replaced by the strict loopback setup listener in `:connectivity:desktop`; no proxy handler remains | proxy route collision, Host injection, missing isolation (F-12) |
 | `:engine:protocol` | **KEEP, MODIFY** | asynchronous semantic inspector host; remove dormant transport ownership | protocol claims and closed/coupled metadata (F-20, F-26) |
-| `:engine:formatter` | **KEEP, MODIFY** | bounded preview formatter behind application port | unbounded body read/cache and UI-to-engine edge (F-19) |
+| `:engine:formatter` | **KEEP, MODIFY** | bounded preview formatter behind application contract | unbounded body read/cache and UI-to-engine edge (F-19) |
 | `:engine:script` | **KEEP, MODIFY** | process/context isolation, bound values, hard limits; never proxy-event-loop execution | ineffective timeout/JVM access/source injection (F-14) |
 | `:engine:session` | **MOVE, REMOVE LEGACY PATH** | move body store/mappers/retention to storage/application; retire unused `SessionManager` after canonical writer lands | parallel/dormant session architectures (F-05, F-26) |
 | `:engine:simulator` | **MOVE/REMOVE** | test support unless a product simulator is approved | premature/dormant module (F-26, F-30) |
 | desktop UI modules | **KEEP, MODIFY** | depend on application use cases; page metadata and bound detail bodies; shell stops constructing cross-feature engines | direct engine edges and O(n)/retained state (F-18, F-19, F-20) |
 | `:testingServer` | **KEEP, EXPAND** | deterministic real upstream/TLS/slow/failure fixture | shallow proxy integration/stress tests (F-27) |
-| `:application` | **ADD** | lifecycle/order/policy owner between UI and implementations | missing application layer and scattered orchestration |
+| `:application:desktop` | **ADD** | lifecycle/order/policy owner between UI and implementations | missing application layer and scattered orchestration |
 | `:core:traffic` | **ADD** | stable protocol-neutral capture values/contracts | one mutable cross-layer request/response model (F-20, F-21) |
 | `:core:connectivity` | **ADD** | stable setup/lifecycle/capability contracts | absent connectivity/PAC architecture (F-16) |
 | `:connectivity:desktop` | **ADD** | independent desktop mechanism implementations | portal/proxy/connectivity coupling and network-state gaps (F-12, F-16, F-23) |
@@ -555,9 +570,9 @@ host objects, and rendering state exist only when they add behavior required by 
 | HTTP method/status/protocol/headers/timing/content encoding | `:core:traffic` | all HTTP features and adapters | final Ktor/Netty/Room conversions only |
 | Outbound authored body/authentication/execution result | `:core:domain` | API Studio use cases and `:core:http` | API Studio editor widgets; Ktor request builders |
 | Authored breakpoint rule and phase | `:core:domain` | application coordinator, repository, interceptor, Traffic, Breakpoint Manager | Room entity and mutable edit form only |
-| Script language/phase/snippet/assertion | `:core:scripting` | collections, application ports, editors, engine | mutable sandbox host request/response objects only |
+| Script language/phase/snippet/assertion | `:core:scripting` | collections, application contracts, editors, engine | mutable sandbox host request/response objects only |
 | Structured GraphQL payload | `:core:domain` | HTTP panel and API Studio | UI wrapper adds only active sub-tab |
-| Certificate summaries/format/mTLS rule | `:application` certificate port | certificate UI and desktop adapter | JCA/engine certificate material and persisted representation |
+| Certificate summaries/format/mTLS rule | `:application:desktop` certificate port | certificate UI and desktop adapter | JCA/engine certificate material and persisted representation |
 | Shared inspector tabs and menu items | reusable owning UI module | Traffic/API Studio/code editor/app shell | feature-only tabs that have genuinely different behavior |
 
 `ResponseInspectorState`, traffic row/detail state, breakpoint edit state, and request editor drafts are
@@ -845,7 +860,7 @@ API Studio records through an application `CaptureSource` adapter using the same
 `:engine:proxy` is a runtime adapter. Its externally visible surface is deliberately small:
 
 ```kotlin
-interface ProxyRuntimePort {
+interface ProxyRuntime {
     val state: StateFlow<ProxyRuntimeState>
 
     suspend fun start(configuration: ProxyRuntimeConfiguration): ProxyRuntimeHandle
@@ -1304,7 +1319,7 @@ Steps and artifacts use typed values such as `OpenUrl`, `DownloadCertificate`, `
 
 ### 8.5 Connectivity catalog
 
-`ConnectivityCoordinator` in `:application` receives a list of registered providers/mechanisms from Koin at the composition root. It:
+`ConnectivityCoordinator` in `:application:desktop` receives a list of registered providers/mechanisms from Koin at the composition root. It:
 
 - combines current endpoint/network/security state into `ConnectivityContext`;
 - evaluates availability without hard-coding provider IDs;
@@ -1332,7 +1347,7 @@ PacConfiguration (:core:connectivity)
 GeneratePacArtifact (:connectivity:desktop/pac)
   pure deterministic configuration + endpoint -> script
 
-PacArtifactService (:application)
+PacArtifactService (:application:desktop)
   combines versions, caches artifact, authorizes delivery
 
 Portal route (:connectivity:desktop/portal)
@@ -1452,7 +1467,7 @@ products:companion-*                                :products:desktop
 
 The desktop proxy receives the same HTTP proxy request/CONNECT bytes it receives from a manually configured client. The only additional stable metadata is authenticated `IngressContext`/`ClientIdentity`, already part of the target traffic model.
 
-### 9.3 Future module boundaries
+### 9.3 Current foundation and future runtime boundaries
 
 Desktop-side modules added only when implementation begins:
 
@@ -1471,20 +1486,34 @@ Desktop-side modules added only when implementation begins:
   no proxy or traffic dependency
 ```
 
-Shared/mobile modules, either in this repository when real targets exist or in a companion repository consuming versioned artifacts:
+Shared/mobile foundation and product modules now present in this repository:
 
 ```text
 :core:identity                   shared durable registered-device values
 :core:pairing                    shared invitation/handshake/credential values
 :core:connectivity               shared capability/setup/lifecycle values
-:companion:core                  tunnel/control protocol and mobile application logic
-:products:companion-android      Android UI/composition
-:products:companion-ios          iOS UI/composition
-:companion:android-vpn           Android VPN/TUN adapter
-:companion:ios-vpn               iOS Network Extension adapter
+:core:companion                  companion registration/state/policy values
+:application:companion           portable companion contracts and workflows
+:data:companion                  versioned persistence/control plus platform secure-store adapters
+:ui:core                         JVM/Android/iOS Compose design system and adaptive components
+:ui:companion:presentation       shared UI state/actions/effects/ViewModel
+:ui:companion:sharedUi           shared Compose Multiplatform screens/resources using :ui:core
+:connectivity:companion:android  Android network/VPN-consent/inspection lifecycle boundary
+:products:companion:androidApp   installable Android Compose host and product composition root
 ```
 
-The mobile targets do not depend on desktop `:engine:proxy`, Room schema, desktop `:application` implementation, Compose Desktop, Netty, or filesystem body storage.
+Future product/runtime leaves:
+
+```text
+:ui:companion:sharedUi           complete companion workflow screens added within the existing shared module
+:products:companion-ios          thin iOS Compose host/composition
+:connectivity:companion:android-vpn  concrete Android VPN/TUN packet backend
+:connectivity:companion:ios-vpn      iOS Network Extension adapter
+:connectivity:companion:desktop      desktop control/direct-tunnel implementation if isolated
+```
+
+The mobile targets do not depend on `:engine:proxy`, the Room schema, `:application:desktop`, Compose Desktop,
+Netty, or filesystem body storage.
 
 ### 9.4 Pairing control plane
 
@@ -1905,15 +1934,15 @@ Work inside current modules before structural migration.
 **ADD**
 
 - `:core:traffic` with IDs, ordered headers, request/response heads, `BodyRef`, lifecycle/events, ingress identity, and compatibility mappers.
-- `:application` with proxy/session/traffic/certificate/breakpoint ports and lifecycle command/state reducers.
+- `:application:desktop` with proxy/session/traffic/certificate/breakpoint ports and lifecycle command/state reducers.
 - Koin bindings in `:products:desktop` connecting current implementations through adapters.
 - architecture rules: new UI code cannot import engines; new proxy code cannot import data/storage/portal/protocol/connectivity.
 
 **MODIFY**
 
-- wrap current `KNetProxyServer` as `ProxyRuntimePort` without changing its internals yet;
+- wrap current `KNetProxyServer` as `ProxyRuntime` without changing its internals yet;
 - map current listener callbacks into a temporary `LegacyCaptureIngressAdapter`;
-- expose current traffic repository through initial paged/query-shaped application ports, even if internally still full-query until Phase 3;
+- expose current traffic repository through initial paged/query-shaped application contracts, even if internally still full-query until Phase 3;
 - route one low-risk UI control (proxy state/start/stop) through application use cases as a proof.
 
 **Affected:** new modules, `:products:desktop`, `:engine:proxy`, `:data:desktop`, `:core:domain`, `:ui:desktop:traffic`.
@@ -1949,7 +1978,7 @@ Work inside current modules before structural migration.
 - production `SELECT *` traffic observation;
 - database-only clear.
 
-**Affected:** `:core:traffic`, `:application`, `:storage`, `:data:desktop`, `:engine:session`, traffic/export tests.
+**Affected:** `:core:traffic`, `:application:desktop`, `:storage`, `:data:desktop`, `:engine:session`, traffic/export tests.
 
 **Solves:** F-05, F-07, F-08, F-13, F-18, F-20, F-21, F-26.
 
@@ -1973,7 +2002,7 @@ Work inside current modules before structural migration.
 - static pipeline initializers;
 - dormant or duplicate connection-pool path.
 
-**Affected:** `:engine:proxy`, `:engine:certificate`, `:engine:interceptor`, `:core:traffic`, `:application`, `:products:desktop`.
+**Affected:** `:engine:proxy`, `:engine:certificate`, `:engine:interceptor`, `:core:traffic`, `:application:desktop`, `:products:desktop`.
 
 **Solves:** F-02, F-03, F-06, F-08, F-17, F-25.
 
@@ -1997,7 +2026,7 @@ Work inside current modules before structural migration.
 - consolidate `:engine:traffic` rewrite concepts into the canonical breakpoint/rewrite service.
 - remove unused pass-through/duplicate models only after all callers use new ports.
 
-**Affected:** `:engine:interceptor`, `:engine:traffic`, `:application`, `:core:domain`, `:engine:formatter`, `:core:logger`, all desktop feature modules, `:data:desktop`.
+**Affected:** `:engine:interceptor`, `:engine:traffic`, `:application:desktop`, `:core:domain`, `:engine:formatter`, `:core:logger`, all desktop feature modules, `:data:desktop`.
 
 **Solves:** F-04, F-09, F-18, F-19, F-20, F-22, F-24, F-25, F-30.
 
@@ -2012,7 +2041,7 @@ Work inside current modules before structural migration.
 - classify or remove dormant WebSocket/gRPC handlers until their transport prerequisites exist.
 - publish runtime capability catalog and align README/UI/docs.
 
-**Affected:** `:engine:protocol`, `:application`, `:core:traffic`, `:storage`, `:data:desktop`, traffic/http-panel UI.
+**Affected:** `:engine:protocol`, `:application:desktop`, `:core:traffic`, `:storage`, `:data:desktop`, traffic/http-panel UI.
 
 **Solves:** synchronous GraphQL parsing, closed metadata coupling, and false protocol claims (F-03, F-20, F-26).
 
@@ -2039,7 +2068,7 @@ Work inside current modules before structural migration.
 - portal network-interface enumeration/business logic;
 - provider-type switches in generic UI/application code.
 
-**Affected:** new connectivity modules, `:application`, `:engine:proxy` only to expose endpoint snapshot through its port, `:ui:desktop:certificate`, settings/app shell, `:data:desktop` network adapter.
+**Affected:** new connectivity modules, `:application:desktop`, `:engine:proxy` only to expose endpoint snapshot through its port, `:ui:desktop:certificate`, settings/app shell, `:data:desktop` network adapter.
 
 **Solves:** F-12, F-16, F-23 and preserves the intended proxy/portal boundary.
 
@@ -2063,15 +2092,16 @@ This phase creates the stable boundary; it does not require shipping a mobile ap
 - gateway-like loopback byte bridge under backpressure;
 - network change/reconnect state without proxy restart.
 
-**Affected:** `:core:pairing`, `:core:connectivity`, `:core:traffic`, `:application`, secure storage adapter, neutral proxy ingress attribution, connectivity setup UI.
+**Affected:** `:core:pairing`, `:core:connectivity`, `:core:traffic`, `:application:desktop`, secure storage adapter, neutral proxy ingress attribution, connectivity setup UI.
 
 **Solves/prevents:** future companion feature leakage into proxy/traffic/PAC and closes LAN authentication design.
 
 **Exit criteria:** a test client can pair, receive a scoped credential, bridge an authenticated standard proxy stream, appear with correct ingress identity, revoke access, and leave all ordinary proxy/capture behavior unchanged.
 
-### Phase 9 — Optional companion and relay product work
+### Phase 9 — Companion and relay product work
 
-Start only with approved product scope and real Android/iOS targets.
+The portable/Android adapter foundation is implemented. Start each remaining product/runtime leaf only with a real
+target and its security/qualification requirements.
 
 **ADD**
 
@@ -2125,7 +2155,7 @@ Keep PRs narrow:
 3. ByteBuf ownership and HTTP/1 ordering tests/fixes.
 4. lifecycle rollback/shutdown and migration completeness.
 5. `:core:traffic` and compatibility mappers.
-6. `:application` ports/controllers and proxy-control vertical slice.
+6. `:application:desktop` ports/controllers and proxy-control vertical slice.
 7. new schema/body store/SessionWriter and old-data reader.
 8. capture queues/legacy source cutover.
 9. paged queries/retention/clear/reconciliation.
@@ -2199,7 +2229,7 @@ New companion transport
 The architecture is ready to implement once these decisions are accepted:
 
 1. Add the four near-term modules and keep current module names elsewhere during migration.
-2. Treat `:application` as the sole cross-engine orchestration layer and enforce UI/runtime dependency rules.
+2. Treat `:application:desktop` as the sole cross-engine orchestration layer and enforce UI/runtime dependency rules.
 3. Adopt connection/exchange/stream/duplex plus `BodyRef` as the stable traffic model; bodies never live in metadata events/UI rows.
 4. Use reservation-before-copy and byte-aware bounded capture queues; forwarding survives capture truncation/failure by default.
 5. Make loopback/strict TLS the defaults and require credentials for LAN/internal gateway bindings.

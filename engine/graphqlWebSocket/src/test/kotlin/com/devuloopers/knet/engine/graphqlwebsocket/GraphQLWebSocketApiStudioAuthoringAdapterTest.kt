@@ -1,8 +1,8 @@
 package com.devuloopers.knet.engine.graphqlwebsocket
 
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolAuthoredMessage
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolDraft
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolParameter
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolAuthoredMessage
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolDraft
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolParameter
 import com.devuloopers.knet.engine.graphqlwebsocket.apistudio.GraphQLWebSocketApiStudioAuthoringAdapter
 import com.devuloopers.knet.engine.graphqlwebsocket.apistudio.GraphQLWebSocketRequestDraftCodec
 import com.devuloopers.knet.engine.graphqlwebsocket.protocol.GraphQLWebSocketEnvelopeParser

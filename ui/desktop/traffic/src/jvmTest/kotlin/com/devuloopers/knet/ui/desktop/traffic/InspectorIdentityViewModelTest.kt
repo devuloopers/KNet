@@ -1,13 +1,13 @@
 package com.devuloopers.knet.ui.desktop.traffic
 
-import com.devuloopers.knet.application.port.traffic.BodyChunk
-import com.devuloopers.knet.application.port.traffic.BodyRange
-import com.devuloopers.knet.application.port.traffic.TrafficGeneration
-import com.devuloopers.knet.application.port.traffic.TrafficCaptureSequence
-import com.devuloopers.knet.application.port.traffic.TrafficPage
-import com.devuloopers.knet.application.port.traffic.TrafficPageItem
-import com.devuloopers.knet.application.port.traffic.TrafficPageQuery
-import com.devuloopers.knet.application.port.traffic.TrafficQueryPort
+import com.devuloopers.knet.application.contract.traffic.BodyChunk
+import com.devuloopers.knet.application.contract.traffic.BodyRange
+import com.devuloopers.knet.application.contract.traffic.TrafficGeneration
+import com.devuloopers.knet.application.contract.traffic.TrafficCaptureSequence
+import com.devuloopers.knet.application.contract.traffic.TrafficPage
+import com.devuloopers.knet.application.contract.traffic.TrafficPageItem
+import com.devuloopers.knet.application.contract.traffic.TrafficPageQuery
+import com.devuloopers.knet.application.contract.traffic.TrafficQuery
 import com.devuloopers.knet.traffic.id.BodyId
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.ExchangeState
@@ -91,7 +91,7 @@ class InspectorIdentityViewModelTest {
     private class DetailPort(
         private val snapshots: List<HttpExchangeSnapshot>,
         private val delayedExchangeId: String? = null,
-    ) : TrafficQueryPort {
+    ) : TrafficQuery {
         override val generations: Flow<TrafficGeneration> = emptyFlow()
         val detailReads = mutableMapOf<String, Int>()
 

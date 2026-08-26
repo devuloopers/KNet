@@ -1,7 +1,7 @@
 package com.devuloopers.knet.engine.interceptor
 
-import com.devuloopers.knet.application.port.breakpoint.BreakpointBodyEdit
-import com.devuloopers.knet.application.port.breakpoint.BreakpointResponseEdit
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointBodyEdit
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointResponseEdit
 import io.netty.buffer.Unpooled
 import io.netty.handler.codec.http.DefaultFullHttpResponse
 import io.netty.handler.codec.http.FullHttpResponse

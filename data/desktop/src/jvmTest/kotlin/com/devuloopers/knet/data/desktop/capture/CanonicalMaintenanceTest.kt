@@ -1,6 +1,6 @@
 package com.devuloopers.knet.data.desktop.capture
 
-import com.devuloopers.knet.application.port.traffic.BodyWritePolicy
+import com.devuloopers.knet.application.contract.traffic.BodyWritePolicy
 import com.devuloopers.knet.engine.session.FileBodyStore
 import com.devuloopers.knet.storage.capture.entity.BodyObjectEntity
 import com.devuloopers.knet.storage.capture.entity.CanonicalExchangeEntity
@@ -71,7 +71,7 @@ class CanonicalMaintenanceTest {
             assertNotNull(dao.getSession("retention-session-1"))
             assertNotNull(dao.getSession("retention-session-2"))
             assertFailsWith<IllegalStateException> {
-                bodyStore.readBody(BodyId("retention-body-0"), com.devuloopers.knet.application.port.traffic.BodyRange(0L, 1))
+                bodyStore.readBody(BodyId("retention-body-0"), com.devuloopers.knet.application.contract.traffic.BodyRange(0L, 1))
             }
         } finally {
             database.close()
@@ -170,11 +170,11 @@ class CanonicalMaintenanceTest {
             )
             assertEquals(
                 "referenced",
-                bodyStore.readBody(BodyId(REFERENCED_BODY_ID), com.devuloopers.knet.application.port.traffic.BodyRange(0L, 100))
+                bodyStore.readBody(BodyId(REFERENCED_BODY_ID), com.devuloopers.knet.application.contract.traffic.BodyRange(0L, 100))
                     .copyBytes().decodeToString(),
             )
             assertFailsWith<IllegalStateException> {
-                bodyStore.readBody(BodyId(ORPHAN_BODY_ID), com.devuloopers.knet.application.port.traffic.BodyRange(0L, 1))
+                bodyStore.readBody(BodyId(ORPHAN_BODY_ID), com.devuloopers.knet.application.contract.traffic.BodyRange(0L, 1))
             }
 
             val snapshot = CanonicalCaptureEntityMapper.snapshot(

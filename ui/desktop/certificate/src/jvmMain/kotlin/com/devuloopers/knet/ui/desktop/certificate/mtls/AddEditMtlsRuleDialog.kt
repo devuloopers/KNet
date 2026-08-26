@@ -15,8 +15,8 @@ import com.devuloopers.knet.ui.core.components.input.InputFieldState
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.core.components.chip.KNetTag
 import com.devuloopers.knet.ui.core.components.dropdown.KNetSearchableDropdown
-import com.devuloopers.knet.application.port.certificate.ClientCertificateSummary
-import com.devuloopers.knet.application.port.certificate.MtlsRuleSpec
+import com.devuloopers.knet.application.contract.certificate.ClientCertificateSummary
+import com.devuloopers.knet.application.contract.certificate.MtlsRuleSpec
 import androidx.compose.ui.text.style.TextOverflow
 
 @Composable

@@ -2,7 +2,7 @@
 
 ## Responsibility
 
-Groups platform data adapters that implement inward-facing repository and application ports. It owns no implementation directly.
+Groups platform data adapters that implement inward-facing repository and application contracts. It owns no implementation directly.
 
 ## Dependency rule
 

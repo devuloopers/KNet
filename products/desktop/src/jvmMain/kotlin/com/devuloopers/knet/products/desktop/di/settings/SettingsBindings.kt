@@ -2,7 +2,7 @@ package com.devuloopers.knet.products.desktop.di.settings
 
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
-import com.devuloopers.knet.application.port.certificate.CertificateManagementPort
+import com.devuloopers.knet.application.contract.certificate.CertificateManagement
 import com.devuloopers.knet.data.desktop.settings.DataStoreApplicationSettingsRepository
 import com.devuloopers.knet.domain.settings.repository.ApplicationSettingsRepository
 import com.devuloopers.knet.domain.settings.usecase.ObserveApplicationSettingsUseCase
@@ -29,7 +29,7 @@ internal val settingsBindings: Module = module {
         SettingsViewModel(
             observeApplicationSettings = get(),
             updateApplicationSettings = get(),
-            certificateManager = get<CertificateManagementPort>(),
+            certificateManager = get<CertificateManagement>(),
             platformActions = get(),
             ioDispatcher = Dispatchers.IO,
         )

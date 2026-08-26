@@ -10,7 +10,7 @@ kotlin {
     sourceSets {
         val jvmMain by getting {
             dependencies {
-                implementation(project(":application"))
+                implementation(project(":application:desktop"))
                 implementation(project(":core:connectivity"))
                 implementation(project(":core:identity"))
                 implementation(project(":core:traffic"))

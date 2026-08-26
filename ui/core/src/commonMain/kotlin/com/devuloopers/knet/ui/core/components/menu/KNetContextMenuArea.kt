@@ -20,12 +20,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.pointer.PointerButton
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.IntOffset
@@ -33,8 +30,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupProperties
-import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
+import com.devuloopers.knet.ui.core.foundation.pointer.platformContextMenuGesture
+import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 /**
  * Data class representing a single action item inside a [KNetContextMenuArea].
@@ -55,16 +53,15 @@ data class ContextMenuItem(
 )
 
 /**
- * Reusable Right-Click Context Menu Wrapper.
+ * Reusable platform-adaptive context-menu wrapper.
  *
- * Wraps any target composable with right-click tap detection and displays a styled
- * dropdown context menu with icon badges and keyboard shortcuts using [KNetTheme].
+ * Wraps any target composable with secondary-click detection on pointer platforms or long-press detection on
+ * touch platforms, then displays a styled dropdown context menu using [KNetTheme].
  *
  * @param items List of context menu action items.
  * @param modifier Custom layout modifier.
  * @param content Wrapped target composable content.
  */
-@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun KNetContextMenuArea(
     items: List<ContextMenuItem>,
@@ -80,20 +77,9 @@ fun KNetContextMenuArea(
     val elevation = KNetTheme.elevation
 
     Box(
-        modifier = modifier.pointerInput(items) {
-            awaitPointerEventScope {
-                while (true) {
-                    val event = awaitPointerEvent()
-                    if (event.button == PointerButton.Secondary) {
-                        val change = event.changes.firstOrNull()
-                        if (change != null) {
-                            popupOffset = IntOffset(change.position.x.toInt(), change.position.y.toInt())
-                            expanded = true
-                            change.consume()
-                        }
-                    }
-                }
-            }
+        modifier = modifier.platformContextMenuGesture(items) { position ->
+            popupOffset = position
+            expanded = true
         }
     ) {
         content()

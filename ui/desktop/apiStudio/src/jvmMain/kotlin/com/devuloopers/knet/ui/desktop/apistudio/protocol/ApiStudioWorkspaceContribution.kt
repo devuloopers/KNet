@@ -3,8 +3,8 @@ package com.devuloopers.knet.ui.desktop.apistudio.protocol
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import com.devuloopers.knet.application.port.apistudio.ApiStudioEditorId
-import com.devuloopers.knet.application.port.apistudio.ApiStudioWorkspaceDocument
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioEditorId
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioWorkspaceDocument
 import com.devuloopers.knet.domain.request.descriptor.RequestKindId
 
 /**

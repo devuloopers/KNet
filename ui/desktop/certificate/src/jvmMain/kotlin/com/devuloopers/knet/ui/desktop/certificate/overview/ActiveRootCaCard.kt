@@ -19,8 +19,8 @@ import com.devuloopers.knet.ui.core.components.badge.KNetBadge
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.core.foundation.time.KNetDateTime
-import com.devuloopers.knet.application.port.certificate.CertificateAuthoritySummary
-import com.devuloopers.knet.application.port.certificate.CertificateAuthorityStatus
+import com.devuloopers.knet.application.contract.certificate.CertificateAuthoritySummary
+import com.devuloopers.knet.application.contract.certificate.CertificateAuthorityStatus
 import com.devuloopers.knet.ui.desktop.certificate.model.TrustInstallationState
 import kotlin.time.Instant
 

@@ -1,6 +1,6 @@
 package com.devuloopers.knet.ui.desktop.certificate
 
-import com.devuloopers.knet.application.port.certificate.CertificateAuthorityStatus
+import com.devuloopers.knet.application.contract.certificate.CertificateAuthorityStatus
 import com.devuloopers.knet.ui.desktop.certificate.model.CertificateState
 import com.devuloopers.knet.ui.desktop.certificate.model.TrustInstallationState
 import kotlin.test.Test

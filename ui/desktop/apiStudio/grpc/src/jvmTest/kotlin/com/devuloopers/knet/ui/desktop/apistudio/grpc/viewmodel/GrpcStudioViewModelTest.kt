@@ -1,25 +1,25 @@
 package com.devuloopers.knet.ui.desktop.apistudio.grpc.viewmodel
 
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolAuthoringRegistry
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolExecutorRegistry
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolReflectionRegistry
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolSchemaSource
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolSchemaStore
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolSessionExecutorRegistry
-import com.devuloopers.knet.application.port.apistudio.ApiStudioWorkspaceContent
-import com.devuloopers.knet.application.port.apistudio.ApiStudioWorkspaceDocument
-import com.devuloopers.knet.application.port.apistudio.ApiStudioWorkspaceDocumentStore
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeConfiguration
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimePort
-import com.devuloopers.knet.application.port.proxy.ProxyRuntimeState
-import com.devuloopers.knet.application.port.proxy.ProxyStartResult
-import com.devuloopers.knet.application.port.proxy.ProxyStopReason
-import com.devuloopers.knet.application.port.proxy.ProxyStopResult
-import com.devuloopers.knet.application.port.traffic.CaptureClearPreparation
-import com.devuloopers.knet.application.port.traffic.CapturePauseResult
-import com.devuloopers.knet.application.port.traffic.CaptureResumeResult
-import com.devuloopers.knet.application.port.traffic.CaptureSessionControlPort
-import com.devuloopers.knet.application.port.traffic.CaptureSessionState
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolAuthoringRegistry
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolExecutorRegistry
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolReflectionRegistry
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolSchemaSource
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolSchemaStore
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolSessionExecutorRegistry
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioWorkspaceContent
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioWorkspaceDocument
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioWorkspaceDocumentStore
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeConfiguration
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntime
+import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
+import com.devuloopers.knet.application.contract.proxy.ProxyStartResult
+import com.devuloopers.knet.application.contract.proxy.ProxyStopReason
+import com.devuloopers.knet.application.contract.proxy.ProxyStopResult
+import com.devuloopers.knet.application.contract.traffic.CaptureClearPreparation
+import com.devuloopers.knet.application.contract.traffic.CapturePauseResult
+import com.devuloopers.knet.application.contract.traffic.CaptureResumeResult
+import com.devuloopers.knet.application.contract.traffic.CaptureSessionControl
+import com.devuloopers.knet.application.contract.traffic.CaptureSessionState
 import com.devuloopers.knet.application.usecase.apistudio.CreateApiStudioProtocolDocumentUseCase
 import com.devuloopers.knet.application.usecase.apistudio.CreateApiStudioWorkspaceDocumentUseCase
 import com.devuloopers.knet.application.usecase.apistudio.ExecuteApiStudioProtocolDocumentUseCase
@@ -201,7 +201,7 @@ private class EmptySchemaStore : ApiStudioProtocolSchemaStore {
     override suspend fun schema(kind: RequestKindId, sourceId: String): ApiStudioProtocolSchemaSource? = null
 }
 
-private class StoppedProxyRuntime : ProxyRuntimePort {
+private class StoppedProxyRuntime : ProxyRuntime {
     override val state: StateFlow<ProxyRuntimeState> = MutableStateFlow(ProxyRuntimeState.Stopped)
 
     override suspend fun start(configuration: ProxyRuntimeConfiguration): ProxyStartResult =
@@ -210,7 +210,7 @@ private class StoppedProxyRuntime : ProxyRuntimePort {
     override suspend fun stop(reason: ProxyStopReason): ProxyStopResult = ProxyStopResult.Stopped
 }
 
-private class InactiveCaptureControl : CaptureSessionControlPort {
+private class InactiveCaptureControl : CaptureSessionControl {
     override val captureState: StateFlow<CaptureSessionState> = MutableStateFlow(CaptureSessionState.Inactive)
 
     override suspend fun pause(): CapturePauseResult = CapturePauseResult.PROXY_INACTIVE

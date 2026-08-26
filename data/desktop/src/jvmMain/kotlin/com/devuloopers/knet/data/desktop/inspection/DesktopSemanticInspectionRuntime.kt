@@ -1,9 +1,9 @@
 package com.devuloopers.knet.data.desktop.inspection
 
-import com.devuloopers.knet.application.port.inspection.SemanticInspectionScheduler
-import com.devuloopers.knet.application.port.traffic.TrafficPageQuery
-import com.devuloopers.knet.application.port.traffic.TrafficQueryPort
-import com.devuloopers.knet.application.port.traffic.TrafficSessionCatalogPort
+import com.devuloopers.knet.application.coordinator.inspection.SemanticInspectionScheduler
+import com.devuloopers.knet.application.contract.traffic.TrafficPageQuery
+import com.devuloopers.knet.application.contract.traffic.TrafficQuery
+import com.devuloopers.knet.application.contract.traffic.TrafficSessionCatalog
 import com.devuloopers.knet.core.logger.KNetLogger
 import com.devuloopers.knet.traffic.id.CaptureSessionId
 import com.devuloopers.knet.traffic.model.ExchangeState
@@ -26,8 +26,8 @@ import kotlin.time.Clock
  * after capture. It never runs on a Netty event loop and closes its scope deterministically.
  */
 class DesktopSemanticInspectionRuntime(
-    sessionCatalog: TrafficSessionCatalogPort,
-    private val trafficQuery: TrafficQueryPort,
+    sessionCatalog: TrafficSessionCatalog,
+    private val trafficQuery: TrafficQuery,
     private val scheduler: SemanticInspectionScheduler,
     private val nowMillis: () -> Long = { Clock.System.now().toEpochMilliseconds() },
 ) : AutoCloseable {
@@ -54,7 +54,7 @@ class DesktopSemanticInspectionRuntime(
     private suspend fun inspectRecent(sessionId: CaptureSessionId) {
         try {
             val candidates = buildList {
-                var cursor: com.devuloopers.knet.application.port.traffic.TrafficPageCursor? = null
+                var cursor: com.devuloopers.knet.application.contract.traffic.TrafficPageCursor? = null
                 for (pageIndex in 0 until MAX_PAGES_PER_GENERATION) {
                     val page = trafficQuery.query(
                         TrafficPageQuery(sessionId = sessionId, cursor = cursor, limit = PAGE_SIZE),

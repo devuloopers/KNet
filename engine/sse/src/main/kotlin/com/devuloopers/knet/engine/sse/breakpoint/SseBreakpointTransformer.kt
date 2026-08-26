@@ -1,9 +1,9 @@
 package com.devuloopers.knet.engine.sse.breakpoint
 
-import com.devuloopers.knet.application.port.breakpoint.BreakpointBody
-import com.devuloopers.knet.application.port.breakpoint.ProtocolMessageBreakpointCandidate
-import com.devuloopers.knet.application.port.breakpoint.ProtocolMessageBreakpointDecision
-import com.devuloopers.knet.application.port.breakpoint.ProtocolMessageBreakpointGate
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointBody
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolMessageBreakpointCandidate
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolMessageBreakpointDecision
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolMessageBreakpointGate
 import com.devuloopers.knet.engine.proxy.capture.ProxyExchangeCapture
 import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamTransformResult
 import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamTransformer
@@ -54,7 +54,6 @@ class SseBreakpointTransformerFactory(
 }
 
 /** Response-only transformer that withholds at most one configured SSE record at a time. */
-@OptIn(ExperimentalUuidApi::class)
 private class SseBreakpointTransformer(
     private val request: HttpRequestSnapshot,
     private val exchangeCapture: ProxyExchangeCapture,

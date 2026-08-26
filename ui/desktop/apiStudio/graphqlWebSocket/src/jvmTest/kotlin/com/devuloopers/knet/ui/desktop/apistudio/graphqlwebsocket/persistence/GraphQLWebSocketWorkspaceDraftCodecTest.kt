@@ -1,6 +1,6 @@
 package com.devuloopers.knet.ui.desktop.apistudio.graphqlwebsocket.persistence
 
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolMetadataEntry
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolMetadataEntry
 import com.devuloopers.knet.ui.desktop.apistudio.graphqlwebsocket.model.GraphQLWebSocketAuthoringTab
 import com.devuloopers.knet.ui.desktop.apistudio.graphqlwebsocket.model.GraphQLWebSocketStudioState
 import kotlin.test.Test

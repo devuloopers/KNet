@@ -24,7 +24,7 @@ Owns the desktop **Connect Device** presentation for the automatically managed W
 
 ## Dependency rule
 
-May depend on `:application`, `:core:connectivity`, `:core:domain`, and `:ui:core`. It must not depend on
+May depend on `:application:desktop`, `:core:connectivity`, `:core:domain`, and `:ui:core`. It must not depend on
 `:connectivity:desktop`, `:engine:*`, `:data:*`, `:storage`, or `:products:*`.
 
 ## Lifecycle rule

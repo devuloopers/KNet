@@ -1,7 +1,7 @@
 package com.devuloopers.knet.data.desktop.capture
 
-import com.devuloopers.knet.application.port.traffic.BodyDeleteResult
-import com.devuloopers.knet.application.port.traffic.BodyStorePort
+import com.devuloopers.knet.application.contract.traffic.BodyDeleteResult
+import com.devuloopers.knet.application.contract.traffic.BodyStore
 import com.devuloopers.knet.storage.capture.dao.CanonicalCaptureDao
 import com.devuloopers.knet.traffic.id.BodyId
 
@@ -13,7 +13,7 @@ import com.devuloopers.knet.traffic.id.BodyId
  */
 class BodyDeletionReconciler(
     private val dao: CanonicalCaptureDao,
-    private val bodyStore: BodyStorePort,
+    private val bodyStore: BodyStore,
 ) {
     /**
      * Processes a bounded oldest-first batch.

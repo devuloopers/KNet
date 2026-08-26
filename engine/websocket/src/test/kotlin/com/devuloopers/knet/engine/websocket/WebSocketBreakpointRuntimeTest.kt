@@ -1,11 +1,11 @@
 package com.devuloopers.knet.engine.websocket
 
-import com.devuloopers.knet.application.port.breakpoint.BreakpointBody
-import com.devuloopers.knet.application.port.breakpoint.ProtocolMessageBreakpointCandidate
-import com.devuloopers.knet.application.port.breakpoint.ProtocolMessageBreakpointDecision
-import com.devuloopers.knet.application.port.breakpoint.ProtocolMessageBreakpointGate
-import com.devuloopers.knet.application.port.breakpoint.ProtocolCriteriaValue
-import com.devuloopers.knet.application.port.breakpoint.ProtocolMessageInspectionInput
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointBody
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolMessageBreakpointCandidate
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolMessageBreakpointDecision
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolMessageBreakpointGate
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaValue
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolMessageInspectionInput
 import com.devuloopers.knet.domain.rules.model.BreakpointProtocolId
 import com.devuloopers.knet.engine.proxy.capture.ProxyBodyReservation
 import com.devuloopers.knet.engine.proxy.capture.ProxyExchangeCapture

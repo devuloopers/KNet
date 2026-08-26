@@ -1,9 +1,9 @@
 package com.devuloopers.knet.data.desktop.capture
 
-import com.devuloopers.knet.application.port.traffic.BodyChunkReservation
-import com.devuloopers.knet.application.port.traffic.CaptureIngressLimits
-import com.devuloopers.knet.application.port.traffic.CaptureIngressPort
-import com.devuloopers.knet.application.port.traffic.CapturePublishResult
+import com.devuloopers.knet.application.contract.traffic.BodyChunkReservation
+import com.devuloopers.knet.application.contract.traffic.CaptureIngressLimits
+import com.devuloopers.knet.application.contract.traffic.CaptureIngress
+import com.devuloopers.knet.application.contract.traffic.CapturePublishResult
 import com.devuloopers.knet.engine.proxy.capture.ProxyBodyReservation
 import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureConnectionMetadata
 import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureSink
@@ -52,7 +52,7 @@ import kotlin.uuid.Uuid
 @OptIn(ExperimentalUuidApi::class)
 class StreamingProxyCaptureSession internal constructor(
     val sessionId: CaptureSessionId,
-    private val ingress: CaptureIngressPort,
+    private val ingress: CaptureIngress,
     private val limits: CaptureIngressLimits,
 ) : ProxyCaptureSink {
     private val closed = AtomicBoolean(false)
@@ -115,7 +115,7 @@ private class StreamingConnectionCapture(
     private val sessionId: CaptureSessionId,
     private val connectionId: ConnectionId,
     private val metadata: ProxyCaptureConnectionMetadata,
-    private val ingress: CaptureIngressPort,
+    private val ingress: CaptureIngress,
     private val limits: CaptureIngressLimits,
     private val onClosed: (StreamingConnectionCapture) -> Unit,
 ) : ProxyConnectionCapture {
@@ -211,7 +211,7 @@ private class StreamingExchangeCapture(
     private val connectionId: ConnectionId,
     override val exchangeId: ExchangeId,
     private val streamId: StreamId?,
-    private val ingress: CaptureIngressPort,
+    private val ingress: CaptureIngress,
     private val limits: CaptureIngressLimits,
     private val nextSequence: () -> Long,
     private val addObservedBytes: (TrafficDirection, Long) -> Unit,
@@ -481,7 +481,7 @@ private class StreamingMessageCapture(
     private val connectionId: ConnectionId,
     private val exchangeId: ExchangeId,
     private val metadata: ProxyMessageCaptureMetadata,
-    private val ingress: CaptureIngressPort,
+    private val ingress: CaptureIngress,
     private val limits: CaptureIngressLimits,
     private val nextSequence: () -> Long,
     private val publishGap: (Long, Long) -> Unit,

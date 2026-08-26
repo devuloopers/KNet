@@ -1,9 +1,9 @@
 package com.devuloopers.knet.engine.websocket
 
-import com.devuloopers.knet.application.port.traffic.ProtocolMessagePayloadDecoder
-import com.devuloopers.knet.application.port.traffic.ProtocolMessagePayloadDecoderId
-import com.devuloopers.knet.application.port.traffic.ProtocolMessagePayloadInput
-import com.devuloopers.knet.application.port.traffic.ProtocolMessagePresentation
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePayloadDecoder
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePayloadDecoderId
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePayloadInput
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePresentation
 import com.devuloopers.knet.traffic.model.message.MessageProtocolId
 import com.devuloopers.knet.traffic.model.message.ProtocolMessageKind
 

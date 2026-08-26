@@ -1,9 +1,9 @@
 package com.devuloopers.knet.data.desktop.script
 
-import com.devuloopers.knet.application.port.script.ScriptExecutionCommand
-import com.devuloopers.knet.application.port.script.ScriptExecutionOutcome
-import com.devuloopers.knet.application.port.script.ScriptExecutionPort
-import com.devuloopers.knet.application.port.script.ScriptRequest
+import com.devuloopers.knet.application.contract.script.ScriptExecutionCommand
+import com.devuloopers.knet.application.contract.script.ScriptExecutionOutcome
+import com.devuloopers.knet.application.contract.script.ScriptExecutor
+import com.devuloopers.knet.application.contract.script.ScriptRequest
 import com.devuloopers.knet.engine.script.api.EnvironmentStore
 import com.devuloopers.knet.engine.script.api.ScriptExecutionResult
 import com.devuloopers.knet.engine.script.api.ScriptRequestModel
@@ -11,7 +11,7 @@ import com.devuloopers.knet.engine.script.api.ScriptResponseModel
 import com.devuloopers.knet.engine.script.runtime.ScriptRuntime
 
 /** Desktop adapter that contains all knowledge of the concrete script engine. */
-class DesktopScriptExecutionAdapter : ScriptExecutionPort {
+class DesktopScriptExecutionAdapter : ScriptExecutor {
     override suspend fun execute(command: ScriptExecutionCommand): ScriptExecutionOutcome {
         val environment = EnvironmentStore(command.environment)
         val result = ScriptRuntime.execute(

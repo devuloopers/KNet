@@ -1,6 +1,6 @@
 package com.devuloopers.knet.data.desktop.runtime
 
-import com.devuloopers.knet.application.port.breakpoint.BreakpointCoordinator
+import com.devuloopers.knet.application.coordinator.breakpoint.BreakpointCoordinator
 import com.devuloopers.knet.engine.certificate.CertificateAuthority
 import com.devuloopers.knet.engine.certificate.CertificateCache
 import kotlin.test.Test

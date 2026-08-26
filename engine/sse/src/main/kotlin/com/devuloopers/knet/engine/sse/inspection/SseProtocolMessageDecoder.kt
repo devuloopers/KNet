@@ -1,9 +1,9 @@
 package com.devuloopers.knet.engine.sse.inspection
 
-import com.devuloopers.knet.application.port.traffic.ProtocolMessagePayloadDecoder
-import com.devuloopers.knet.application.port.traffic.ProtocolMessagePayloadDecoderId
-import com.devuloopers.knet.application.port.traffic.ProtocolMessagePayloadInput
-import com.devuloopers.knet.application.port.traffic.ProtocolMessagePresentation
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePayloadDecoder
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePayloadDecoderId
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePayloadInput
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePresentation
 import com.devuloopers.knet.engine.sse.protocol.SseIncrementalParser
 import com.devuloopers.knet.engine.sse.protocol.SseLimits
 import com.devuloopers.knet.engine.sse.protocol.SseParseResult

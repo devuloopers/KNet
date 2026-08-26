@@ -40,11 +40,11 @@ Holds non-traffic feature business models, repository contracts, and use cases u
 
 ## Dependency rule
 
-Keep dependencies limited to `:core:traffic`, `:core:scripting`, and low-level core utilities. New code should prefer narrower contract modules and `:application` use cases.
+Keep dependencies limited to `:core:traffic`, `:core:scripting`, and low-level core utilities. New code should prefer narrower contract modules and `:application:desktop` use cases.
 
 ## Current state
 
-Duplicated `HttpRequest`, `HttpResponse`, `HttpTransaction`, `HttpTimings`, proxy-runtime, live-traffic, and interception-session contracts have been removed. Captured traffic uses `:core:traffic`; cross-feature runtime orchestration uses `:application`.
+Duplicated `HttpRequest`, `HttpResponse`, `HttpTransaction`, `HttpTimings`, proxy-runtime, live-traffic, and interception-session contracts have been removed. Captured traffic uses `:core:traffic`; cross-feature runtime orchestration uses `:application:desktop`.
 Platform detection is not a domain concern; desktop-only host-platform behavior lives with its consuming certificate UI. Domain-generated identities use Kotlin `Uuid`.
 Outbound execution uses `OutboundRequestBody` and `ExecutionResult`; transport timing is the canonical
 `:core:traffic` `ExchangeTimings`, and GraphQL UI state composes `StructuredPayloadState.GraphQL`

@@ -1,14 +1,14 @@
 package com.devuloopers.knet.data.desktop.capture
 
-import com.devuloopers.knet.application.port.traffic.BodyRange
-import com.devuloopers.knet.application.port.traffic.BodyChunk
-import com.devuloopers.knet.application.port.traffic.BodyDeleteResult
-import com.devuloopers.knet.application.port.traffic.BodyStorePort
-import com.devuloopers.knet.application.port.traffic.BodyWritePolicy
-import com.devuloopers.knet.application.port.traffic.CaptureIngressHealth
-import com.devuloopers.knet.application.port.traffic.CaptureIngressLimits
-import com.devuloopers.knet.application.port.traffic.CapturePublishResult
-import com.devuloopers.knet.application.port.traffic.TrafficPageQuery
+import com.devuloopers.knet.application.contract.traffic.BodyRange
+import com.devuloopers.knet.application.contract.traffic.BodyChunk
+import com.devuloopers.knet.application.contract.traffic.BodyDeleteResult
+import com.devuloopers.knet.application.contract.traffic.BodyStore
+import com.devuloopers.knet.application.contract.traffic.BodyWritePolicy
+import com.devuloopers.knet.application.contract.traffic.CaptureIngressHealth
+import com.devuloopers.knet.application.contract.traffic.CaptureIngressLimits
+import com.devuloopers.knet.application.contract.traffic.CapturePublishResult
+import com.devuloopers.knet.application.contract.traffic.TrafficPageQuery
 import com.devuloopers.knet.engine.session.FileBodyStore
 import com.devuloopers.knet.storage.database.DatabaseFactory
 import com.devuloopers.knet.storage.capture.entity.DeletionOutboxEntity
@@ -434,7 +434,7 @@ class CanonicalSessionWriterTest {
         /** Opens a new writer for the shared deterministic test session. */
         suspend fun openWriter(
             limits: CaptureIngressLimits,
-            bodyStore: BodyStorePort = this.bodyStore,
+            bodyStore: BodyStore = this.bodyStore,
         ): CanonicalSessionWriter = CanonicalSessionWriter.open(
             sessionId = SESSION_ID,
             startedAtEpochMillis = 1_000L,
@@ -464,12 +464,12 @@ class CanonicalSessionWriterTest {
     }
 
     /** Deterministic body store used to model an exhausted filesystem. */
-    private object ExhaustedBodyStore : BodyStorePort {
+    private object ExhaustedBodyStore : BodyStore {
         override suspend fun openWrite(
             bodyId: BodyId,
             policy: BodyWritePolicy,
             contentEncoding: com.devuloopers.knet.traffic.model.body.ContentEncoding?,
-        ): com.devuloopers.knet.application.port.traffic.BodyWriteSession {
+        ): com.devuloopers.knet.application.contract.traffic.BodyWriteSession {
             throw java.io.IOException("No space left on device")
         }
 

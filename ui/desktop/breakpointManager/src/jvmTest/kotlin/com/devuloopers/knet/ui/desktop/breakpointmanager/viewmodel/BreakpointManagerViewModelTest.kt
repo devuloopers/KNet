@@ -1,16 +1,16 @@
 package com.devuloopers.knet.ui.desktop.breakpointmanager.viewmodel
 
-import com.devuloopers.knet.application.port.breakpoint.BreakpointBody
-import com.devuloopers.knet.application.port.breakpoint.BreakpointCandidate
-import com.devuloopers.knet.application.port.breakpoint.BreakpointControlPort
-import com.devuloopers.knet.application.port.breakpoint.BreakpointDecision
-import com.devuloopers.knet.application.port.breakpoint.BreakpointRequestEdit
-import com.devuloopers.knet.application.port.breakpoint.BreakpointResponseEdit
-import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolRegistry
-import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
-import com.devuloopers.knet.application.port.breakpoint.PendingProtocolMessageBreakpoint
-import com.devuloopers.knet.application.port.breakpoint.ProtocolMessageBreakpointControlPort
-import com.devuloopers.knet.application.port.breakpoint.ProtocolMessageBreakpointDecision
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointBody
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointCandidate
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointControl
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointDecision
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointRequestEdit
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointResponseEdit
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointProtocolRegistry
+import com.devuloopers.knet.application.contract.breakpoint.PendingBreakpoint
+import com.devuloopers.knet.application.contract.breakpoint.PendingProtocolMessageBreakpoint
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolMessageBreakpointControl
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolMessageBreakpointDecision
 import com.devuloopers.knet.application.usecase.breakpoint.ClearPendingBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.ObservePendingBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.ObservePendingProtocolMessageBreakpointsUseCase
@@ -86,7 +86,7 @@ private class FakeRulesRepository : RulesRepository {
     }
 }
 
-private class FakeBreakpointControl : BreakpointControlPort {
+private class FakeBreakpointControl : BreakpointControl {
     private val pending = MutableStateFlow<List<PendingBreakpoint>>(emptyList())
     override val pendingBreakpoints = pending.asStateFlow()
     override val isEnabled = MutableStateFlow(true)
@@ -113,7 +113,7 @@ private class FakeBreakpointControl : BreakpointControlPort {
     override suspend fun clear(): Int = pending.value.size.also { pending.value = emptyList() }
 }
 
-private class FakeProtocolMessageBreakpointControl : ProtocolMessageBreakpointControlPort {
+private class FakeProtocolMessageBreakpointControl : ProtocolMessageBreakpointControl {
     override val pendingProtocolMessages =
         MutableStateFlow<List<PendingProtocolMessageBreakpoint>>(emptyList())
 

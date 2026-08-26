@@ -28,9 +28,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import com.devuloopers.knet.application.port.apistudio.ApiStudioDocumentLocation
-import com.devuloopers.knet.application.port.apistudio.ApiStudioEditorId
-import com.devuloopers.knet.application.port.apistudio.ApiStudioWorkspaceDocument
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioDocumentLocation
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioEditorId
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioWorkspaceDocument
 import com.devuloopers.knet.domain.request.descriptor.RequestKindId
 import com.devuloopers.knet.domain.collection.model.SavedApiRequest
 import com.devuloopers.knet.traffic.model.http.HttpMethod

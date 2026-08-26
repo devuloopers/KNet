@@ -1,6 +1,6 @@
 package com.devuloopers.knet.engine.grpc
 
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolDocument
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolDocument
 import com.devuloopers.knet.domain.request.descriptor.RequestKindId
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray

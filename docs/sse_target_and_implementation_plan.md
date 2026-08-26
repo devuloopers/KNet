@@ -752,11 +752,11 @@ Expected production ownership remains narrow:
 | `engine/sse/src/main/.../encoding/` | ADD stream-confined decoder/encoder strategies and typed results |
 | `engine/sse/.../protocol/SseLimits.kt` | MODIFY with shared decoding and expansion limits |
 | `engine/sse/.../capture/SseStreamInspector.kt` | MODIFY to consume the shared decoded stream while forwarding stays proxy-owned |
-| `engine/sse/.../apistudio/SseHttpResponseStreamInterpreter.kt` | MODIFY to consume the same decoded stream |
+| `engine/sse/.../integration/apistudio/SseHttpResponseStreamInterpreter.kt` | MODIFY to consume the same decoded stream |
 | `engine/sse/.../breakpoint/SseBreakpointTransformer.kt` | MODIFY for bounded decoded decisions and supported re-encoding |
 | `engine/sse/.../inspection/` and `:engine:formatter` | MODIFY only for shared typed state/formatting parity |
 | `:engine:proxy` | KEEP protocol-neutral; MODIFY only if a generic transformed-response head policy is required |
-| `:application`, `:core:traffic`, Room/body store | KEEP canonical contracts/schema; MODIFY only for a proven generic typed state gap |
+| `:application:desktop`, `:core:traffic`, Room/body store | KEEP canonical contracts/schema; MODIFY only for a proven generic typed state gap |
 | `ui/desktop/apiStudio/.../LiveHttpResponse*` and Traffic protocol-message views | MODIFY presentation of existing generic state; no SSE-specific workspace/model |
 | `testingServer/.../stream` and `.../http2` | ADD named compressed, corrupt, expansion, and concurrent fixtures |
 | `products/desktop/.../di` | MODIFY composition only; register implementations and promote evidence-backed maturity |

@@ -2,9 +2,9 @@ package com.devuloopers.knet.ui.desktop.certificate.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.devuloopers.knet.application.port.certificate.CertificateManagementPort
-import com.devuloopers.knet.application.port.certificate.MtlsRuleSpec
-import com.devuloopers.knet.application.port.certificate.TrustInstallationResult
+import com.devuloopers.knet.application.contract.certificate.CertificateManagement
+import com.devuloopers.knet.application.contract.certificate.MtlsRuleSpec
+import com.devuloopers.knet.application.contract.certificate.TrustInstallationResult
 import com.devuloopers.knet.ui.desktop.certificate.model.CertificateIntent
 import com.devuloopers.knet.ui.desktop.certificate.model.CertificateOperation
 import com.devuloopers.knet.ui.desktop.certificate.model.CertificateState
@@ -25,7 +25,7 @@ import kotlinx.coroutines.withContext
 
 /** Owns the certificate workspace state and serializes all persistent mutations. */
 class CertificateViewModel(
-    private val certificateManager: CertificateManagementPort,
+    private val certificateManager: CertificateManagement,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : ViewModel() {
 

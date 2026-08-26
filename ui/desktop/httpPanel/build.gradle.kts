@@ -11,7 +11,7 @@ kotlin {
     sourceSets {
         val jvmMain by getting {
             dependencies {
-                implementation(project(":application"))
+                implementation(project(":application:desktop"))
                 implementation(project(":core:scripting"))
                 implementation(project(":ui:core"))
                 implementation(project(":core:domain"))
@@ -21,7 +21,7 @@ kotlin {
                 implementation(libs.compose.foundation)
                 implementation(libs.compose.material3)
                 implementation(libs.compose.ui)
-                implementation(compose.materialIconsExtended)
+                implementation(libs.material.icons.extended)
                 implementation(libs.kotlinx.serialization.json)
             }
         }

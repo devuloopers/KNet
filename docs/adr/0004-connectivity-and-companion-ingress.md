@@ -11,7 +11,7 @@ PAC, manual proxy, Apple profiles, ADB reverse, VPN, companion tunnels, and rela
 
 Connectivity mechanisms consume versioned proxy endpoint snapshots and publish setup descriptors/status. They may establish reachability to an authorized proxy ingress, but cannot own parsing, capture, storage, body access, or inspectors. A future companion or relay terminates pairing/authentication/encryption in a gateway adapter and forwards authenticated byte streams or tunnel sessions to the same ingress contract.
 
-Remote traffic/query/control APIs depend on `:application`, never on Netty or Room. VPN packet capture may require a separate transport adapter, but its decoded HTTP events enter the same capture/session contracts.
+Remote traffic/query/control APIs depend on `:application:desktop`, never on Netty or Room. VPN packet capture may require a separate transport adapter, but its decoded HTTP events enter the same capture/session contracts.
 
 ## Consequences
 

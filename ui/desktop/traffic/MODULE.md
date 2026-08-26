@@ -32,7 +32,7 @@ Owns the live traffic table, filtering, selection, inspector coordination, and t
 
 ## Dependency rule
 
-Query retained traffic through application use cases and `TrafficQueryPort`; control capture attachment, required
+Query retained traffic through application use cases and `TrafficQuery`; control capture attachment, required
 proxy configuration rebinding, and clear history through application use cases. Never retain unbounded body
 bytes in UI state. Detail uses bounded body previews, bounded decompression, identity-keyed preparation, and
 an eight-entry/16 MiB byte-weighted presentation cache.

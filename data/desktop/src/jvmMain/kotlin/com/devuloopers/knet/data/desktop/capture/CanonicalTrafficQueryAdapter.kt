@@ -1,16 +1,16 @@
 package com.devuloopers.knet.data.desktop.capture
 
-import com.devuloopers.knet.application.port.traffic.BodyChunk
-import com.devuloopers.knet.application.port.traffic.BodyRange
-import com.devuloopers.knet.application.port.traffic.BodyStorePort
-import com.devuloopers.knet.application.port.traffic.TrafficGeneration
-import com.devuloopers.knet.application.port.traffic.TrafficCaptureSequence
-import com.devuloopers.knet.application.port.traffic.TrafficPage
-import com.devuloopers.knet.application.port.traffic.TrafficPageCursor
-import com.devuloopers.knet.application.port.traffic.TrafficPageItem
-import com.devuloopers.knet.application.port.traffic.TrafficPageQuery
-import com.devuloopers.knet.application.port.traffic.TrafficQueryPort
-import com.devuloopers.knet.application.port.traffic.TrafficSortDirection
+import com.devuloopers.knet.application.contract.traffic.BodyChunk
+import com.devuloopers.knet.application.contract.traffic.BodyRange
+import com.devuloopers.knet.application.contract.traffic.BodyStore
+import com.devuloopers.knet.application.contract.traffic.TrafficGeneration
+import com.devuloopers.knet.application.contract.traffic.TrafficCaptureSequence
+import com.devuloopers.knet.application.contract.traffic.TrafficPage
+import com.devuloopers.knet.application.contract.traffic.TrafficPageCursor
+import com.devuloopers.knet.application.contract.traffic.TrafficPageItem
+import com.devuloopers.knet.application.contract.traffic.TrafficPageQuery
+import com.devuloopers.knet.application.contract.traffic.TrafficQuery
+import com.devuloopers.knet.application.contract.traffic.TrafficSortDirection
 import com.devuloopers.knet.storage.capture.dao.CanonicalCaptureDao
 import com.devuloopers.knet.storage.capture.entity.CanonicalExchangeEntity
 import com.devuloopers.knet.traffic.id.BodyId
@@ -27,7 +27,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.updateAndGet
 
 /**
- * Indexed canonical [TrafficQueryPort] over current exchange/body metadata.
+ * Indexed canonical [TrafficQuery] over current exchange/body metadata.
  *
  * A null configured session permits a query across every retained capture session. This remains an
  * internal storage implementation detail; application callers express scope through [TrafficPageQuery].
@@ -35,9 +35,9 @@ import kotlinx.coroutines.flow.updateAndGet
 internal class CanonicalTrafficQueryAdapter(
     private val sessionId: CaptureSessionId?,
     private val dao: CanonicalCaptureDao,
-    private val bodyStore: BodyStorePort,
+    private val bodyStore: BodyStore,
     private val currentGeneration: () -> Long = { 0L },
-) : TrafficQueryPort {
+) : TrafficQuery {
     private val observedGeneration = MutableStateFlow(0L)
 
     override val generations: Flow<TrafficGeneration> = sessionId?.let { configuredSessionId ->

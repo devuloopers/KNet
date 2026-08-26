@@ -4,7 +4,7 @@ plugins {
 }
 
 dependencies {
-    api(project(":application"))
+    api(project(":application:desktop"))
     implementation(libs.kotlinx.coroutines.core)
     
     testImplementation(kotlin("test"))

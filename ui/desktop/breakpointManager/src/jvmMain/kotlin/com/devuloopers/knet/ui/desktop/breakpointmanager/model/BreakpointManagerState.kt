@@ -1,9 +1,9 @@
 package com.devuloopers.knet.ui.desktop.breakpointmanager.model
 
-import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
-import com.devuloopers.knet.application.port.breakpoint.PendingProtocolMessageBreakpoint
-import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolDefinition
-import com.devuloopers.knet.application.port.breakpoint.ProtocolCriteriaValue
+import com.devuloopers.knet.application.contract.breakpoint.PendingBreakpoint
+import com.devuloopers.knet.application.contract.breakpoint.PendingProtocolMessageBreakpoint
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointProtocolDefinition
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaValue
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.request.descriptor.RequestDescriptor
 

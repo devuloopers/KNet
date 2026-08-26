@@ -1,11 +1,11 @@
 package com.devuloopers.knet.ui.desktop.settings
 
-import com.devuloopers.knet.application.port.certificate.CertificateAuthorityStatus
-import com.devuloopers.knet.application.port.certificate.CertificateAuthoritySummary
-import com.devuloopers.knet.application.port.certificate.CertificateManagementPort
-import com.devuloopers.knet.application.port.certificate.ClientCertificateSummary
-import com.devuloopers.knet.application.port.certificate.MtlsRuleSpec
-import com.devuloopers.knet.application.port.certificate.TrustInstallationResult
+import com.devuloopers.knet.application.contract.certificate.CertificateAuthorityStatus
+import com.devuloopers.knet.application.contract.certificate.CertificateAuthoritySummary
+import com.devuloopers.knet.application.contract.certificate.CertificateManagement
+import com.devuloopers.knet.application.contract.certificate.ClientCertificateSummary
+import com.devuloopers.knet.application.contract.certificate.MtlsRuleSpec
+import com.devuloopers.knet.application.contract.certificate.TrustInstallationResult
 import com.devuloopers.knet.domain.settings.model.ApplicationSettings
 import com.devuloopers.knet.domain.settings.model.ProxyPort
 import com.devuloopers.knet.domain.settings.repository.ApplicationSettingsRepository
@@ -54,7 +54,7 @@ private class FakeApplicationSettingsRepository(
 }
 
 /** Configurable certificate boundary used by Settings tests. */
-private class FakeCertificateManager : CertificateManagementPort {
+private class FakeCertificateManager : CertificateManagement {
     var isTrusted: Boolean = false
     var installationResult: TrustInstallationResult = TrustInstallationResult.Installed
 

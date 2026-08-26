@@ -1,15 +1,15 @@
 package com.devuloopers.knet.data.desktop.capture
 
-import com.devuloopers.knet.application.port.traffic.BodyIntegrityExpectation
-import com.devuloopers.knet.application.port.traffic.BodyIntegrityResult
-import com.devuloopers.knet.application.port.traffic.BodyStorageKey
-import com.devuloopers.knet.application.port.traffic.BodyStoreMaintenancePort
+import com.devuloopers.knet.application.contract.traffic.BodyIntegrityExpectation
+import com.devuloopers.knet.application.contract.traffic.BodyIntegrityResult
+import com.devuloopers.knet.application.contract.traffic.BodyStorageKey
+import com.devuloopers.knet.application.contract.traffic.BodyStoreMaintenance
 import com.devuloopers.knet.storage.capture.dao.CanonicalCaptureDao
 
 /** Bounded background integrity scrubber for finalized canonical body objects. */
 class CanonicalBodyIntegrityVerifier(
     private val dao: CanonicalCaptureDao,
-    private val bodyStore: BodyStoreMaintenancePort,
+    private val bodyStore: BodyStoreMaintenance,
 ) {
     /** Verifies at most [maximumObjects] and never hashes more than [maximumDigestBytesPerObject]. */
     suspend fun verify(

@@ -1,17 +1,17 @@
 package com.devuloopers.knet.data.desktop.traffic.repository
 
-import com.devuloopers.knet.application.port.traffic.BodyChunk
-import com.devuloopers.knet.application.port.traffic.BodyRange
-import com.devuloopers.knet.application.port.traffic.BodyStorePort
-import com.devuloopers.knet.application.port.traffic.TrafficGeneration
-import com.devuloopers.knet.application.port.traffic.ProtocolMessagePage
-import com.devuloopers.knet.application.port.traffic.ProtocolMessagePageCursor
-import com.devuloopers.knet.application.port.traffic.ProtocolMessagePageQuery
-import com.devuloopers.knet.application.port.traffic.ProtocolMessageQueryPort
-import com.devuloopers.knet.application.port.traffic.TrafficPage
-import com.devuloopers.knet.application.port.traffic.TrafficPageQuery
-import com.devuloopers.knet.application.port.traffic.TrafficQueryPort
-import com.devuloopers.knet.application.port.traffic.TrafficSessionCatalogPort
+import com.devuloopers.knet.application.contract.traffic.BodyChunk
+import com.devuloopers.knet.application.contract.traffic.BodyRange
+import com.devuloopers.knet.application.contract.traffic.BodyStore
+import com.devuloopers.knet.application.contract.traffic.TrafficGeneration
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePage
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePageCursor
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePageQuery
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessageQuery
+import com.devuloopers.knet.application.contract.traffic.TrafficPage
+import com.devuloopers.knet.application.contract.traffic.TrafficPageQuery
+import com.devuloopers.knet.application.contract.traffic.TrafficQuery
+import com.devuloopers.knet.application.contract.traffic.TrafficSessionCatalog
 import com.devuloopers.knet.data.desktop.capture.CanonicalTrafficQueryAdapter
 import com.devuloopers.knet.data.desktop.capture.CanonicalCaptureEntityMapper
 import com.devuloopers.knet.storage.capture.dao.CanonicalCaptureDao
@@ -32,8 +32,8 @@ import kotlinx.coroutines.flow.updateAndGet
 @OptIn(ExperimentalCoroutinesApi::class)
 class DesktopTrafficQueryAdapter(
     private val dao: CanonicalCaptureDao,
-    private val bodyStore: BodyStorePort,
-) : TrafficQueryPort, TrafficSessionCatalogPort, ProtocolMessageQueryPort {
+    private val bodyStore: BodyStore,
+) : TrafficQuery, TrafficSessionCatalog, ProtocolMessageQuery {
     private val generation = MutableStateFlow(0L)
 
     override val generations: Flow<TrafficGeneration> = dao.observeLatestSessionId()

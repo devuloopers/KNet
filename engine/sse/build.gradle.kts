@@ -9,7 +9,7 @@ dependencies {
     api(project(":core:traffic"))
     api(project(":engine:proxy"))
 
-    implementation(project(":application"))
+    implementation(project(":application:desktop"))
     implementation(project(":core:domain"))
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)

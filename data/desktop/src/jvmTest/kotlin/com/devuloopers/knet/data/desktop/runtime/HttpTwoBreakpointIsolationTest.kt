@@ -1,14 +1,14 @@
 package com.devuloopers.knet.data.desktop.runtime
 
-import com.devuloopers.knet.application.port.breakpoint.BreakpointCoordinator
-import com.devuloopers.knet.application.port.breakpoint.BreakpointBody
-import com.devuloopers.knet.application.port.breakpoint.BreakpointBodyEdit
-import com.devuloopers.knet.application.port.breakpoint.BreakpointDecision
-import com.devuloopers.knet.application.port.breakpoint.BreakpointRequestEdit
-import com.devuloopers.knet.application.port.breakpoint.BreakpointResponseEdit
-import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolRegistry
-import com.devuloopers.knet.application.port.breakpoint.ProtocolCriteriaValue
-import com.devuloopers.knet.application.port.breakpoint.ProtocolMessageBreakpointDecision
+import com.devuloopers.knet.application.coordinator.breakpoint.BreakpointCoordinator
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointBody
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointBodyEdit
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointDecision
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointRequestEdit
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointResponseEdit
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointProtocolRegistry
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaValue
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolMessageBreakpointDecision
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.engine.certificate.CertificateAuthority

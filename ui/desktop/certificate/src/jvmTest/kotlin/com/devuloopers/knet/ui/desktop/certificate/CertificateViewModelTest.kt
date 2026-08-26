@@ -1,12 +1,12 @@
 package com.devuloopers.knet.ui.desktop.certificate
 
-import com.devuloopers.knet.application.port.certificate.CertificateAuthoritySummary
-import com.devuloopers.knet.application.port.certificate.CertificateAuthorityStatus
-import com.devuloopers.knet.application.port.certificate.CertificateManagementPort
-import com.devuloopers.knet.application.port.certificate.ClientCertificateSummary
-import com.devuloopers.knet.application.port.certificate.ClientCertificateFormat
-import com.devuloopers.knet.application.port.certificate.MtlsRuleSpec
-import com.devuloopers.knet.application.port.certificate.TrustInstallationResult
+import com.devuloopers.knet.application.contract.certificate.CertificateAuthoritySummary
+import com.devuloopers.knet.application.contract.certificate.CertificateAuthorityStatus
+import com.devuloopers.knet.application.contract.certificate.CertificateManagement
+import com.devuloopers.knet.application.contract.certificate.ClientCertificateSummary
+import com.devuloopers.knet.application.contract.certificate.ClientCertificateFormat
+import com.devuloopers.knet.application.contract.certificate.MtlsRuleSpec
+import com.devuloopers.knet.application.contract.certificate.TrustInstallationResult
 import com.devuloopers.knet.ui.desktop.certificate.model.CertificateIntent
 import com.devuloopers.knet.ui.desktop.certificate.model.TrustInstallationState
 import com.devuloopers.knet.ui.desktop.certificate.viewmodel.CertificateViewModel
@@ -27,9 +27,9 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 /**
- * Fake implementation of [CertificateManagementPort] to enable unit testing the UI presentation layer.
+ * Fake implementation of [CertificateManagement] to enable unit testing the UI presentation layer.
  */
-class FakeCertificateManager : CertificateManagementPort {
+class FakeCertificateManager : CertificateManagement {
     private val clientCertificates: MutableList<ClientCertificateSummary> = mutableListOf()
     private val mtlsRules: MutableList<MtlsRuleSpec> = mutableListOf()
     var trustInstallationResult: TrustInstallationResult = TrustInstallationResult.Installed

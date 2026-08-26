@@ -1,6 +1,6 @@
 package com.devuloopers.knet.products.desktop.runtime
 
-import com.devuloopers.knet.application.port.breakpoint.BreakpointControlPort
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointControl
 import com.devuloopers.knet.core.http.client.KNetApiClient
 import com.devuloopers.knet.core.logger.KNetLogger
 import com.devuloopers.knet.domain.settings.usecase.ObserveApplicationSettingsUseCase
@@ -25,7 +25,7 @@ import kotlinx.coroutines.flow.onEach
 internal class ApplicationSettingsRuntimeSynchronizer(
     private val observeSettings: ObserveApplicationSettingsUseCase,
     private val apiClient: KNetApiClient,
-    private val breakpointControl: BreakpointControlPort,
+    private val breakpointControl: BreakpointControl,
 ) {
     /**
      * Starts synchronization in [scope]. Cancelling the scope terminates observation.

@@ -1,6 +1,6 @@
 package com.devuloopers.knet.products.desktop
 
-import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolRegistry
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointProtocolRegistry
 import com.devuloopers.knet.products.desktop.config.DesktopConfiguration
 import com.devuloopers.knet.products.desktop.di.DesktopModules
 import org.koin.core.context.startKoin

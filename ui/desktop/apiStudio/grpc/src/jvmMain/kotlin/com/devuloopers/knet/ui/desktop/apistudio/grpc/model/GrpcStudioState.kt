@@ -1,8 +1,8 @@
 package com.devuloopers.knet.ui.desktop.apistudio.grpc.model
 
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolExecutionEvent
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolMetadataEntry
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolOperation
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolExecutionEvent
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolMetadataEntry
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolOperation
 
 data class GrpcStudioState(
     val documentId: String,

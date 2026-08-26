@@ -72,7 +72,7 @@ with their ownership. Manual save-dialog or sidebar renames disable future autom
 Saved and unsaved sidebar rows derive their badge from the same canonical descriptor pipeline: ordinary HTTP
 uses its actual method, GraphQL uses `GQL`, and unknown future kinds use the neutral feature accent without a
 sidebar code change.
-Execution is delegated to `:application` with cancellation revision checks so superseded results cannot publish.
+Execution is delegated to `:application:desktop` with cancellation revision checks so superseded results cannot publish.
 Response heads can activate a product-registered live interpreter before the server completes. The ViewModel
 retains only the interpreter's configured record window, accounts for dropped records, and cancellation marks the
 live view terminal while releasing the underlying call. Clearing this view never clears persisted Traffic.

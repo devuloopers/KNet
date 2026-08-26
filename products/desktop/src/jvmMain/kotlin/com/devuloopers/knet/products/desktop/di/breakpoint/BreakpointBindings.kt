@@ -1,13 +1,13 @@
 package com.devuloopers.knet.products.desktop.di.breakpoint
 
-import com.devuloopers.knet.application.port.breakpoint.BreakpointControlPort
-import com.devuloopers.knet.application.port.breakpoint.BreakpointCoordinator
-import com.devuloopers.knet.application.port.breakpoint.BreakpointCaptureAvailabilityPort
-import com.devuloopers.knet.application.port.breakpoint.BreakpointGate
-import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolExtension
-import com.devuloopers.knet.application.port.breakpoint.BreakpointProtocolRegistry
-import com.devuloopers.knet.application.port.breakpoint.ProtocolMessageBreakpointGate
-import com.devuloopers.knet.application.port.breakpoint.ProtocolMessageBreakpointControlPort
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointControl
+import com.devuloopers.knet.application.coordinator.breakpoint.BreakpointCoordinator
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointCaptureAvailability
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointGate
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointProtocolExtension
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointProtocolRegistry
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolMessageBreakpointGate
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolMessageBreakpointControl
 import com.devuloopers.knet.application.usecase.breakpoint.ClearPendingBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.DropMatchingBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.ObservePendingBreakpointsUseCase
@@ -39,10 +39,10 @@ internal val breakpointBindings: Module = module {
     single { BreakpointProtocolRegistry(getAll<BreakpointProtocolExtension>()) }
     single { BreakpointCoordinator(protocolRegistry = get()) }
     single<BreakpointGate> { get<BreakpointCoordinator>() }
-    single<BreakpointControlPort> { get<BreakpointCoordinator>() }
-    single<BreakpointCaptureAvailabilityPort> { get<BreakpointCoordinator>() }
+    single<BreakpointControl> { get<BreakpointCoordinator>() }
+    single<BreakpointCaptureAvailability> { get<BreakpointCoordinator>() }
     single<ProtocolMessageBreakpointGate> { get<BreakpointCoordinator>() }
-    single<ProtocolMessageBreakpointControlPort> { get<BreakpointCoordinator>() }
+    single<ProtocolMessageBreakpointControl> { get<BreakpointCoordinator>() }
 
     single {
         RulesRepositoryImpl(

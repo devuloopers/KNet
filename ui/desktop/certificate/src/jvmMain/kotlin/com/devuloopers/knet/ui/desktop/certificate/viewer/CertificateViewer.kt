@@ -27,7 +27,7 @@ import com.devuloopers.knet.ui.core.components.inspector.KNetInspectorRow
 import com.devuloopers.knet.ui.core.components.panel.PanelHeader
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.application.port.certificate.ClientCertificateSummary
+import com.devuloopers.knet.application.contract.certificate.ClientCertificateSummary
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable

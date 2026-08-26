@@ -1,7 +1,7 @@
 package com.devuloopers.knet.ui.desktop.apistudio.model
 
-import com.devuloopers.knet.application.port.apistudio.ApiStudioDocumentLocation
-import com.devuloopers.knet.application.port.apistudio.ApiStudioWorkspaceDocument
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioDocumentLocation
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioWorkspaceDocument
 import com.devuloopers.knet.domain.request.descriptor.RequestDescriptor
 import com.devuloopers.knet.domain.collection.model.ApiCollection
 import com.devuloopers.knet.domain.collection.model.SavedApiRequest

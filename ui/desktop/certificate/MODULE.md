@@ -17,11 +17,11 @@ Owns desktop certificate-management, trust guidance, CA details, mTLS rules, and
 
 ## Dependency rule
 
-Invoke `CertificateManagementPort` and connectivity use cases; never depend on concrete cryptographic implementations.
+Invoke `CertificateManagement` and connectivity use cases; never depend on concrete cryptographic implementations.
 
 ## Current state
 
-All certificate operations cross `CertificateManagementPort` and render its canonical
+All certificate operations cross `CertificateManagement` and render its canonical
 `CertificateAuthoritySummary`, `ClientCertificateSummary`, and `MtlsRuleSpec` values directly. The
 old proxy-pipeline mobile setup widget and portal dependency are removed. The single CA runtime and
 feature assembly live in `:products:desktop` under `di/certificate`.

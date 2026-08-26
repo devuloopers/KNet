@@ -1,7 +1,7 @@
 package com.devuloopers.knet.data.desktop.traffic.repository
 
-import com.devuloopers.knet.application.port.traffic.BodyStorePort
-import com.devuloopers.knet.application.port.traffic.TrafficMaintenancePort
+import com.devuloopers.knet.application.contract.traffic.BodyStore
+import com.devuloopers.knet.application.contract.traffic.TrafficMaintenance
 import com.devuloopers.knet.core.logger.KNetLogger
 import com.devuloopers.knet.core.logger.LogTags
 import com.devuloopers.knet.data.desktop.capture.BodyDeletionReconciler
@@ -15,8 +15,8 @@ import kotlin.time.Clock
 /** Clears terminal canonical sessions after application-level active-session rotation. */
 class DesktopTrafficMaintenanceAdapter(
     private val database: KNetDatabase,
-    private val canonicalBodyStore: BodyStorePort,
-) : TrafficMaintenancePort {
+    private val canonicalBodyStore: BodyStore,
+) : TrafficMaintenance {
     override suspend fun clearTerminalTraffic() {
         withContext(Dispatchers.IO) {
             val retention = CanonicalRetentionManager(

@@ -1,7 +1,7 @@
 package com.devuloopers.knet.engine.sse.inspection
 
-import com.devuloopers.knet.application.port.inspection.SemanticInspectionInput
-import com.devuloopers.knet.application.port.inspection.SemanticInspector
+import com.devuloopers.knet.application.contract.inspection.SemanticInspectionInput
+import com.devuloopers.knet.application.contract.inspection.SemanticInspector
 import com.devuloopers.knet.engine.sse.protocol.SseIncrementalParser
 import com.devuloopers.knet.engine.sse.protocol.SseLimits
 import com.devuloopers.knet.engine.sse.protocol.SseParseResult

@@ -1,9 +1,9 @@
 package com.devuloopers.knet.ui.desktop.apistudio.websocket.persistence
 
-import com.devuloopers.knet.application.port.apistudio.ApiStudioDocumentLocation
-import com.devuloopers.knet.application.port.apistudio.ApiStudioEditorId
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolMetadataEntry
-import com.devuloopers.knet.application.port.apistudio.ApiStudioWorkspaceDocument
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioDocumentLocation
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioEditorId
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolMetadataEntry
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioWorkspaceDocument
 import com.devuloopers.knet.domain.apistudio.naming.RequestNameOrigin
 import com.devuloopers.knet.domain.request.descriptor.RequestKindId
 import com.devuloopers.knet.ui.desktop.apistudio.websocket.model.WebSocketStudioState

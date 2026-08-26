@@ -7,20 +7,20 @@ Adapts desktop engines and storage to existing domain and application-facing rep
 ## Owns
 
 - Desktop repository implementations, persistence mappers, and reusable runtime adapters.
-- The application `ProxyRuntimePort` and `CaptureSessionControlPort` adapters, including listener-preserving
+- The application `ProxyRuntime` and `CaptureSessionControl` adapters, including listener-preserving
   capture pause/resume and active canonical session rotation for clear.
 - The sole production canonical writer/query adapter, streaming proxy capture session, deletion-outbox reconciler, bounded global retention, and startup recovery.
 - Translation between storage/engine models and feature-facing contracts.
 - Composition-controlled selective request/response aggregation using the current immutable breakpoint
   prefilter. Rule changes affect the next request on already-connected clients; ordinary and oversized
   traffic remains streaming.
-- Concrete adapters for certificates and script execution; UI sees only application ports.
+- Concrete adapters for certificates and script execution; UI sees only application contracts.
 - Atomic, versioned certificate/rule configuration persistence as one snapshot, plus owner-only desktop Root CA material and OS-specific trust-store detection/installation.
 - The bridge from the certificate runtime to the proxy-owned `ServerTlsContextProvider`; proxy code never imports CA, cache, private-key, persistence, or OS-trust implementations.
 - Post-capture semantic inspection orchestration, annotation persistence, and grouped bounded annotation
   observation for retained Traffic rows.
 - Bounded body-integrity verification in addition to retention/startup recovery.
-- Room-backed registered-device and trusted-pairing persistence behind application ports.
+- Room-backed registered-device and trusted-pairing persistence behind application contracts.
 - Generic breakpoint criteria-envelope persistence. Room stores a normalized protocol ID and opaque
   versioned payload without GraphQL/gRPC/WebSocket mapping branches.
 - Lossless API Studio request mapping and transactional draft promotion through the collection DAO.

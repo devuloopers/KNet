@@ -1,8 +1,8 @@
 package com.devuloopers.knet.engine.grpc
 
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolExecutionCommand
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolExecutionEvent
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolOutboundMessage
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolExecutionCommand
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolExecutionEvent
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolOutboundMessage
 import com.google.protobuf.DescriptorProtos
 import io.grpc.Metadata
 import io.grpc.MethodDescriptor

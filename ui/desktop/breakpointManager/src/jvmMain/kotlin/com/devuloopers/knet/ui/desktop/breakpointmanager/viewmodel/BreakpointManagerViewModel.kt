@@ -2,10 +2,10 @@ package com.devuloopers.knet.ui.desktop.breakpointmanager.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.devuloopers.knet.application.port.breakpoint.BreakpointRequestEdit
-import com.devuloopers.knet.application.port.breakpoint.BreakpointResponseEdit
-import com.devuloopers.knet.application.port.breakpoint.ProtocolCriteriaValue
-import com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointRequestEdit
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointResponseEdit
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaValue
+import com.devuloopers.knet.application.contract.breakpoint.PendingBreakpoint
 import com.devuloopers.knet.application.usecase.breakpoint.ClearPendingBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.ObservePendingBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.breakpoint.ObservePendingProtocolMessageBreakpointsUseCase
@@ -327,7 +327,7 @@ class BreakpointManagerViewModel(
         }
     }
 
-    private fun resolvePayload(event: com.devuloopers.knet.application.port.breakpoint.PendingBreakpoint):
+    private fun resolvePayload(event: com.devuloopers.knet.application.contract.breakpoint.PendingBreakpoint):
         ResolvedInterceptPayload {
         val requestBodySpec = PayloadInspectionSpec.fromBytes(
             body = event.candidate.requestBody?.copyBytes(),

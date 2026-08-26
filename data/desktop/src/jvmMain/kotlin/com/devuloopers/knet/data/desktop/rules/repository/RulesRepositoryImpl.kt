@@ -5,7 +5,7 @@ import com.devuloopers.knet.domain.rules.model.BreakpointProtocolId
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria
 import com.devuloopers.knet.domain.rules.repository.RulesRepository
-import com.devuloopers.knet.application.port.breakpoint.BreakpointControlPort
+import com.devuloopers.knet.application.contract.breakpoint.BreakpointControl
 import com.devuloopers.knet.traffic.model.http.HttpMethod
 import com.devuloopers.knet.storage.rules.dao.BreakpointRuleDao
 import com.devuloopers.knet.storage.rules.entity.BreakpointRuleEntity
@@ -25,7 +25,7 @@ import kotlinx.coroutines.flow.onEach
  */
 class RulesRepositoryImpl(
     private val breakpointRuleDao: BreakpointRuleDao,
-    private val breakpointControl: BreakpointControlPort,
+    private val breakpointControl: BreakpointControl,
     private val coroutineScope: CoroutineScope,
 ) : RulesRepository, AutoCloseable {
 

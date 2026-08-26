@@ -1,13 +1,13 @@
 package com.devuloopers.knet.engine.graphqlwebsocket.apistudio
 
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolAuthoredMessage
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolAuthoringPort
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolDocument
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolDraft
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolMetadataEntry
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolOperation
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolParameter
-import com.devuloopers.knet.application.port.apistudio.ApiStudioProtocolSchemaImport
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolAuthoredMessage
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolAuthoring
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolDocument
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolDraft
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolMetadataEntry
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolOperation
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolParameter
+import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolSchemaImport
 import com.devuloopers.knet.domain.request.descriptor.RequestKindId
 import com.devuloopers.knet.engine.websocket.WebSocketHandshakeHeader
 import java.net.URI
@@ -17,7 +17,7 @@ import kotlin.uuid.Uuid
 class GraphQLWebSocketApiStudioAuthoringAdapter(
     private val codec: GraphQLWebSocketRequestDraftCodec,
     private val operationIdFactory: () -> String = { Uuid.random().toString() },
-) : ApiStudioProtocolAuthoringPort {
+) : ApiStudioProtocolAuthoring {
     override val kind: RequestKindId = RequestKindId.GRAPHQL_WEBSOCKET
 
     override fun importSchema(sourceId: String, bytes: ByteArray): Result<ApiStudioProtocolSchemaImport> =

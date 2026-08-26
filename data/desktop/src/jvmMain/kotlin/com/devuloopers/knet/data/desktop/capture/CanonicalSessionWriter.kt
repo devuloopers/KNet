@@ -1,14 +1,14 @@
 package com.devuloopers.knet.data.desktop.capture
 
-import com.devuloopers.knet.application.port.traffic.BodyChunkReservation
-import com.devuloopers.knet.application.port.traffic.BodyStorePort
-import com.devuloopers.knet.application.port.traffic.BodyStoreMaintenancePort
-import com.devuloopers.knet.application.port.traffic.BodyWritePolicy
-import com.devuloopers.knet.application.port.traffic.BodyWriteSession
-import com.devuloopers.knet.application.port.traffic.CaptureIngressHealth
-import com.devuloopers.knet.application.port.traffic.CaptureIngressLimits
-import com.devuloopers.knet.application.port.traffic.CaptureIngressPort
-import com.devuloopers.knet.application.port.traffic.CapturePublishResult
+import com.devuloopers.knet.application.contract.traffic.BodyChunkReservation
+import com.devuloopers.knet.application.contract.traffic.BodyStore
+import com.devuloopers.knet.application.contract.traffic.BodyStoreMaintenance
+import com.devuloopers.knet.application.contract.traffic.BodyWritePolicy
+import com.devuloopers.knet.application.contract.traffic.BodyWriteSession
+import com.devuloopers.knet.application.contract.traffic.CaptureIngressHealth
+import com.devuloopers.knet.application.contract.traffic.CaptureIngressLimits
+import com.devuloopers.knet.application.contract.traffic.CaptureIngress
+import com.devuloopers.knet.application.contract.traffic.CapturePublishResult
 import com.devuloopers.knet.core.logger.KNetLogger
 import com.devuloopers.knet.storage.capture.dao.CanonicalCaptureDao
 import com.devuloopers.knet.storage.capture.entity.CaptureGapEntity
@@ -54,10 +54,10 @@ import kotlin.time.Clock
 class CanonicalSessionWriter private constructor(
     private val sessionId: CaptureSessionId,
     private val dao: CanonicalCaptureDao,
-    private val bodyStore: BodyStorePort,
-    private val bodyStoreMaintenance: BodyStoreMaintenancePort,
+    private val bodyStore: BodyStore,
+    private val bodyStoreMaintenance: BodyStoreMaintenance,
     private val limits: CaptureIngressLimits,
-) : CaptureIngressPort {
+) : CaptureIngress {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val commands = Channel<WriterCommand>(limits.metadataEventsInFlight)
     private val closeMutex = Mutex()
@@ -803,8 +803,8 @@ class CanonicalSessionWriter private constructor(
             sessionId: CaptureSessionId,
             startedAtEpochMillis: Long,
             dao: CanonicalCaptureDao,
-            bodyStore: BodyStorePort,
-            bodyStoreMaintenance: BodyStoreMaintenancePort,
+            bodyStore: BodyStore,
+            bodyStoreMaintenance: BodyStoreMaintenance,
             limits: CaptureIngressLimits,
         ): CanonicalSessionWriter {
             require(startedAtEpochMillis >= 0L) { "Session start timestamp must not be negative." }

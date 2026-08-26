@@ -9,7 +9,7 @@ Composes and launches the desktop product. This is the desktop composition root 
 - Desktop `main`, configuration loading, Koin composition, process-owned startup policies, and reverse-order
   shutdown of connectivity, gateway, setup portal, inspector, proxy/capture, and Room resources.
 - All Koin binding declarations, organized under `di/<feature>/` so each feature's adapters, use cases, and ViewModels have one visible assembly location.
-- Wiring concrete adapters to application ports.
+- Wiring concrete adapters to application contracts.
 - Routing typed connectivity diagnostics into the product logging backend without making reusable connectivity
   adapters depend on that backend.
 - The product-owned dedicated setup-portal index as packaged HTML, injected into the connectivity adapter through
