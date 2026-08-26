@@ -60,6 +60,24 @@ abstract class RegisteredDeviceDao {
     @Query(TRUSTED_DEVICE_SELECT + " WHERE registered.id = :id")
     abstract suspend fun getTrustedDevice(id: String): TrustedDeviceRecord?
 
+    /**
+     * Atomically rotates the credential only when the caller still presents the current digest and the registered
+     * identity has not been revoked.
+     */
+    @Query(
+        "UPDATE trusted_device_credentials SET credentialDigest = :newCredentialDigest, " +
+            "credentialExpiresAtEpochMillis = :credentialExpiresAtEpochMillis " +
+            "WHERE deviceId = :id AND credentialDigest = :expectedCredentialDigest " +
+            "AND EXISTS (SELECT 1 FROM registered_devices WHERE registered_devices.id = :id " +
+            "AND registered_devices.revokedAtEpochMillis IS NULL)",
+    )
+    abstract suspend fun rotateCredential(
+        id: String,
+        expectedCredentialDigest: String,
+        newCredentialDigest: String,
+        credentialExpiresAtEpochMillis: Long,
+    ): Int
+
     /** Observes all joined trusted devices, including revoked devices needed for active-stream termination. */
     @Query(TRUSTED_DEVICE_SELECT + " ORDER BY registered.registeredAtEpochMillis ASC")
     abstract fun observeTrustedDevices(): Flow<List<TrustedDeviceRecord>>

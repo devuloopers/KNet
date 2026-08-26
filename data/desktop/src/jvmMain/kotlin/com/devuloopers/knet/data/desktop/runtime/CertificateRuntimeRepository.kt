@@ -1,6 +1,7 @@
 package com.devuloopers.knet.data.desktop.runtime
 
 import com.devuloopers.knet.data.desktop.certificate.DesktopCertificateConfigurationStore
+import com.devuloopers.knet.data.desktop.certificate.DesktopCompanionTlsIdentity
 import com.devuloopers.knet.data.desktop.certificate.DesktopRootTrustController
 import com.devuloopers.knet.data.desktop.certificate.DesktopServerTlsContextProvider
 import com.devuloopers.knet.data.desktop.certificate.InstallationResult
@@ -31,6 +32,7 @@ class CertificateRuntimeRepository(
     private val certificateAuthority: CertificateAuthority = loadOrCreateCertificateAuthority()
 
     private val certificateCache: CertificateCache = CertificateCache()
+    private val companionTlsIdentities: MutableMap<String, DesktopCompanionTlsIdentity> = mutableMapOf()
 
     fun createCertificateManager(certificatesDirectory: File): CertificateManager =
         CertificateManagerImpl(
@@ -45,6 +47,13 @@ class CertificateRuntimeRepository(
         DesktopServerTlsContextProvider(certificateAuthority, certificateCache)
 
     fun rootCertificateDer(): ByteArray = certificateAuthority.certificate.encoded.copyOf()
+
+    /** Returns one process-stable KNet-CA-signed companion listener identity for [serverName]. */
+    @Synchronized
+    fun companionTlsIdentity(serverName: String): DesktopCompanionTlsIdentity =
+        companionTlsIdentities.getOrPut(serverName) {
+            DesktopCompanionTlsIdentity.create(serverName, certificateAuthority)
+        }
 
     override fun installRootCertificate(): InstallationResult = TrustStoreInstaller.install(
         caCertificate = certificateAuthority.certificate,

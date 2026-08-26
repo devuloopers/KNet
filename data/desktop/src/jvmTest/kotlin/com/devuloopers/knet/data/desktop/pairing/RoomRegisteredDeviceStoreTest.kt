@@ -52,7 +52,15 @@ class RoomRegisteredDeviceStoreTest {
             val reloaded = RoomRegisteredDeviceStore(database.registeredDeviceDao(), { 3_000L })
             assertEquals(identity, reloaded.observeRegisteredDevices().first().single())
             assertEquals(trusted, reloaded.getDevice(identity.id))
+            assertFalse(reloaded.rotateCredential(identity.id, "wrong-digest", "new-digest", 100_000L))
+            assertTrue(reloaded.rotateCredential(identity.id, "credential-digest", "new-digest", 100_000L))
+            assertFalse(reloaded.rotateCredential(identity.id, "credential-digest", "replayed-digest", 110_000L))
+            assertEquals(
+                trusted.copy(credentialDigest = "new-digest", credentialExpiresAtEpochMillis = 100_000L),
+                reloaded.getDevice(identity.id),
+            )
             assertTrue(reloaded.revoke(identity.id, 3_000L))
+            assertFalse(reloaded.rotateCredential(identity.id, "new-digest", "after-revoke", 120_000L))
             assertTrue(reloaded.getDevice(identity.id)?.isRevoked == true)
             assertTrue(reloaded.observeRegisteredDevices().first().isEmpty())
         } finally {

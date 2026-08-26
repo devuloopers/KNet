@@ -113,6 +113,15 @@ sealed interface PairingCompletionResult {
     data class Rejected(val code: String) : PairingCompletionResult
 }
 
+/** Result of atomically replacing one valid paired-device credential. */
+sealed interface PairingCredentialRefreshResult {
+    /** Newly issued credential and updated durable device state. */
+    data class Refreshed(val issued: IssuedDeviceCredential) : PairingCredentialRefreshResult
+
+    /** Non-secret stable reason the credential could not be rotated. */
+    data class Rejected(val code: String) : PairingCredentialRefreshResult
+}
+
 sealed interface DeviceAuthenticationResult {
     data class Authenticated(val principal: PairedDevicePrincipal) : DeviceAuthenticationResult
     data class Rejected(val code: String) : DeviceAuthenticationResult

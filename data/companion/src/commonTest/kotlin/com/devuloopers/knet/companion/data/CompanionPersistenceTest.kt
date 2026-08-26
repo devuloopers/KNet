@@ -1,10 +1,14 @@
 package com.devuloopers.knet.companion.data
 
 import com.devuloopers.knet.companion.data.store.CompanionRecordStore
+import com.devuloopers.knet.companion.model.CompanionBootstrapId
+import com.devuloopers.knet.companion.model.CompanionBootstrapSecret
 import com.devuloopers.knet.companion.model.CompanionCredentialReference
 import com.devuloopers.knet.companion.model.CompanionDesktopId
 import com.devuloopers.knet.companion.model.CompanionPairingInvitation
+import com.devuloopers.knet.companion.model.CompanionPairingBootstrap
 import com.devuloopers.knet.companion.model.CompanionRegistration
+import com.devuloopers.knet.companion.model.CompanionRootCertificate
 import com.devuloopers.knet.companion.model.CompanionServiceEndpoint
 import com.devuloopers.knet.companion.model.Sha256Fingerprint
 import com.devuloopers.knet.identity.RegisteredDeviceId
@@ -23,13 +27,16 @@ import kotlinx.coroutines.test.runTest
 
 class CompanionPersistenceTest {
     @Test
-    fun invitationRoundTripPreservesUnicodeAndRequiredFields() {
+    fun bootstrapRoundTripPreservesRequiredFields() {
         val codec = VersionedCompanionInvitationCodec()
-        val invitation = invitation().copy(desktopDisplayName = "KNet – Development Mac")
+        val bootstrap = bootstrap()
 
-        val result = codec.decode(codec.encode(invitation))
+        val result = codec.decode(codec.encode(bootstrap))
 
-        assertEquals(invitation, assertIs<com.devuloopers.knet.companion.application.contract.InvitationDecodeResult.Accepted>(result).invitation)
+        assertEquals(
+            bootstrap,
+            assertIs<com.devuloopers.knet.companion.application.contract.InvitationDecodeResult.Accepted>(result).bootstrap,
+        )
     }
 
     @Test
@@ -37,14 +44,14 @@ class CompanionPersistenceTest {
         val codec = VersionedCompanionInvitationCodec()
 
         assertIs<com.devuloopers.knet.companion.application.contract.InvitationDecodeResult.Rejected>(
-            codec.decode("knet://pair/v1?id=a&id=b"),
+            codec.decode("knet://pair/v3?id=a&id=b"),
         )
     }
 
     @Test
     fun unknownInvitationFieldsFailClosed() {
         val codec = VersionedCompanionInvitationCodec()
-        val payload = codec.encode(invitation()) + "&unexpected=value"
+        val payload = codec.encode(bootstrap()) + "&unexpected=value"
 
         assertIs<com.devuloopers.knet.companion.application.contract.InvitationDecodeResult.Rejected>(
             codec.decode(payload),
@@ -56,8 +63,37 @@ class CompanionPersistenceTest {
         val codec = VersionedCompanionInvitationCodec()
 
         assertIs<com.devuloopers.knet.companion.application.contract.InvitationDecodeResult.Rejected>(
-            codec.decode("knet://pair/v1?payload=" + "a".repeat(8 * 1024)),
+            codec.decode("knet://pair/v3?payload=" + "a".repeat(2 * 1024)),
         )
+    }
+
+    @Test
+    fun legacyInvitationVersionFailsClosed() {
+        val codec = VersionedCompanionInvitationCodec()
+
+        assertIs<com.devuloopers.knet.companion.application.contract.InvitationDecodeResult.Rejected>(
+            codec.decode("knet://pair/v1?desktopId=legacy"),
+        )
+    }
+
+    private fun bootstrap(): CompanionPairingBootstrap = CompanionPairingBootstrap(
+        protocolVersion = CompanionPairingInvitation.CURRENT_PROTOCOL_VERSION,
+        id = CompanionBootstrapId("bootstrap-1"),
+        retrievalSecret = CompanionBootstrapSecret("r".repeat(32)),
+        expiresAtEpochMillis = 2_000L,
+        rootCertificateEndpoint = CompanionServiceEndpoint("192.168.1.2", 8_181, secure = false),
+        retrievalEndpoint = CompanionServiceEndpoint("192.168.1.2", 8_183, secure = true),
+        transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
+        rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
+    )
+
+    @Test
+    fun legacyRegistrationSchemaFailsClosed() {
+        val legacy = """{"schema_version":1,"active_desktop_id":"desktop-1","registrations":[]}"""
+        val repository = VersionedCompanionRegistrationRepository(MemoryRecordStore(legacy))
+
+        assertTrue(repository.registrations.value.isEmpty())
+        assertNull(repository.activeRegistration.value)
     }
 
     @Test
@@ -70,6 +106,9 @@ class CompanionPersistenceTest {
         val restored = VersionedCompanionRegistrationRepository(store)
         assertEquals("desktop-1", restored.activeRegistration.value?.desktopId?.value)
         assertEquals(1, restored.registrations.value.size)
+        assertTrue(
+            restored.activeRegistration.value?.rootCertificate?.copyBytes()?.contentEquals(ROOT_CERTIFICATE_BYTES) == true,
+        )
     }
 
     @Test
@@ -93,7 +132,7 @@ class CompanionPersistenceTest {
     }
 
     private fun invitation(): CompanionPairingInvitation = CompanionPairingInvitation(
-        protocolVersion = 1,
+        protocolVersion = CompanionPairingInvitation.CURRENT_PROTOCOL_VERSION,
         desktopId = CompanionDesktopId("desktop-1"),
         desktopDisplayName = "Development Mac",
         pairing = PairingInvitation(
@@ -106,6 +145,7 @@ class CompanionPersistenceTest {
         proxyEndpoint = CompanionServiceEndpoint("proxy.knet.local", 8184, secure = true),
         transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
         rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
+        rootCertificate = CompanionRootCertificate(ROOT_CERTIFICATE_BYTES),
     )
 
     private fun registration(
@@ -119,9 +159,14 @@ class CompanionPersistenceTest {
         proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", 8184, secure = true),
         transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
         rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
+        rootCertificate = CompanionRootCertificate(ROOT_CERTIFICATE_BYTES),
         credentialReference = CompanionCredentialReference("credential-$desktopId"),
         scopes = setOf(DeviceScope.PROXY_STREAM),
         pairedAtEpochMillis = 1_000L,
         credentialExpiresAtEpochMillis = 2_000L,
     )
+
+    private companion object {
+        val ROOT_CERTIFICATE_BYTES: ByteArray = byteArrayOf(1, 2, 3, 4)
+    }
 }

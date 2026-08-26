@@ -1,6 +1,5 @@
 package com.devuloopers.knet.companion.application.usecase
 
-import com.devuloopers.knet.companion.application.contract.CompanionCertificateController
 import com.devuloopers.knet.companion.application.contract.CompanionInspectionConfiguration
 import com.devuloopers.knet.companion.application.contract.CompanionInspectionController
 import com.devuloopers.knet.companion.application.contract.CompanionInspectionPreparationResult
@@ -19,13 +18,13 @@ import kotlinx.coroutines.flow.StateFlow
 /** Determines whether capture may start and whether HTTPS bodies can be inspected. */
 public class PrepareCompanionInspectionUseCase(
     private val registrations: CompanionRegistrationRepository,
-    private val certificates: CompanionCertificateController,
+    private val verifyCertificateTrust: VerifyCompanionCertificateTrustUseCase,
     private val inspection: CompanionInspectionController,
 ) {
     public suspend fun execute(): PrepareCompanionInspectionResult {
         val registration = registrations.activeRegistration.value
             ?: return PrepareCompanionInspectionResult.Rejected(registrationMissing())
-        val certificateState = certificates.verifyTrust(registration)
+        val certificateState = verifyCertificateTrust.execute(registration.desktopId)
         return when (val preparation = inspection.prepare()) {
             CompanionInspectionPreparationResult.Ready -> PrepareCompanionInspectionResult.Ready(
                 fullHttpsInspection = certificateState is CompanionCertificateState.Trusted,
@@ -49,7 +48,7 @@ public sealed interface PrepareCompanionInspectionResult {
 public class StartCompanionInspectionUseCase(
     private val registrations: CompanionRegistrationRepository,
     private val connect: ConnectCompanionUseCase,
-    private val certificates: CompanionCertificateController,
+    private val verifyCertificateTrust: VerifyCompanionCertificateTrustUseCase,
     private val inspection: CompanionInspectionController,
     private val transport: CompanionTransport,
 ) {
@@ -71,7 +70,7 @@ public class StartCompanionInspectionUseCase(
                     }
                 }
                 val certificateState = try {
-                    certificates.verifyTrust(registration)
+                    verifyCertificateTrust.execute(registration.desktopId)
                 } catch (cancelled: CancellationException) {
                     cleanupFailedStart()
                     throw cancelled
@@ -140,4 +139,3 @@ public class ObserveCompanionInspectionUseCase(
 ) {
     public val state: StateFlow<CompanionInspectionState> = inspection.state
 }
-

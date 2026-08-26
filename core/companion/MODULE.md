@@ -8,8 +8,15 @@ pairing invitations, pinned endpoints, certificate trust, connection state, insp
 ## Owns
 
 - Validated companion identifiers and immutable state models.
+- The canonical, bounded `knet://pair/v3` bootstrap codec, one-time redemption body codec, and complete invitation
+  response codec shared by desktop and companion products.
+- Canonical bounded pairing-completion, initial credential-grant, and credential-refresh wire codecs plus their
+  versioned control paths and media types.
+- Strongly typed public-root and pinned-TLS bootstrap endpoints, fingerprints, bounds, and media types.
 - Direct-versus-relay transport selection and unsupported-traffic policy values.
-- Secret-free durable registration metadata.
+- Secret-free durable registration metadata, including bounded immutable public root trust material.
+- Certificate-readiness states plus the versioned TLS server name, endpoint paths, nonce, and response bounds used
+  by platform adapters.
 - Platform-neutral failure codes suitable for application and presentation layers.
 
 ## Does not own

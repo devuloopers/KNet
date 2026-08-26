@@ -40,6 +40,12 @@ Owns JVM desktop application use cases, coordinators, and UI-neutral contracts t
 - Connectivity provider/mechanism coordination, canonical certificate-management summaries/rules,
   pairing, durable companion-device coordination, read-only stock-phone Wi-Fi lifecycle observation, and
   sandboxed script-execution contracts.
+- Companion onboarding orchestration that stores a complete one-time pairing invitation behind a distinct
+  digest-protected bootstrap secret, emits only the lightweight canonical version-3 QR reference, and atomically
+  redeems the complete response without consuming the later pairing invitation. Its presentation descriptor
+  exposes only display metadata, expiry, and lightweight QR/deep-link text.
+- Proof-bearing companion pairing and compare-and-set credential rotation policies. One invitation produces one
+  credential, and one current credential can authorize exactly one successful rotation.
 - Cross-capability orchestration contracts.
 - Application-level commands, results, and lifecycle policies.
 - Typed certificate-authority lifecycle and Root trust-installation results, including explicit manual-action instructions; UI never parses engine strings or JCA types.

@@ -10,14 +10,14 @@ import com.devuloopers.knet.companion.model.CompanionCredentialReference
 import com.devuloopers.knet.companion.model.CompanionDesktopId
 import com.devuloopers.knet.companion.model.CompanionFailure
 import com.devuloopers.knet.companion.model.CompanionFailureCode
-import com.devuloopers.knet.companion.model.CompanionPairingInvitation
+import com.devuloopers.knet.companion.model.CompanionBootstrapPayloadCodec
+import com.devuloopers.knet.companion.model.CompanionPairingBootstrap
 import com.devuloopers.knet.companion.model.CompanionRegistration
+import com.devuloopers.knet.companion.model.CompanionRootCertificate
 import com.devuloopers.knet.companion.model.CompanionServiceEndpoint
 import com.devuloopers.knet.companion.model.Sha256Fingerprint
 import com.devuloopers.knet.identity.RegisteredDeviceId
 import com.devuloopers.knet.pairing.DeviceScope
-import com.devuloopers.knet.pairing.PairingInvitation
-import com.devuloopers.knet.pairing.PairingInvitationId
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,6 +27,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlin.io.encoding.Base64
 
 /** Versioned durable registration repository. Invalid or future-version records fail closed to an empty state. */
 public class VersionedCompanionRegistrationRepository(
@@ -97,7 +98,7 @@ public class VersionedCompanionRegistrationRepository(
     }.getOrNull() ?: PersistedCompanionEnvelope()
 
     private companion object {
-        const val SCHEMA_VERSION: Int = 1
+        const val SCHEMA_VERSION: Int = 2
     }
 }
 
@@ -115,39 +116,12 @@ public class ProtectedCompanionCredentialStore(
     override suspend fun remove(reference: CompanionCredentialReference): Unit = secrets.remove(reference.value)
 }
 
-/** Strict `knet://pair/v1` invitation codec shared by QR, deep-link, and paste entry points. */
-public class VersionedCompanionInvitationCodec : CompanionInvitationCodec {
+/** Application adapter for the canonical lightweight version-3 companion bootstrap payload codec. */
+public class VersionedCompanionInvitationCodec(
+    private val payloadCodec: CompanionBootstrapPayloadCodec = CompanionBootstrapPayloadCodec(),
+) : CompanionInvitationCodec {
     override fun decode(payload: String): InvitationDecodeResult = runCatching {
-        require(payload.length <= MAXIMUM_INVITATION_CHARACTERS) { "Pairing invitation is too large." }
-        val query = payload.removePrefix(PREFIX).takeIf { payload.startsWith(PREFIX) }
-            ?: error("Unsupported pairing invitation scheme or version.")
-        val fields = parseQuery(query)
-        require(fields.keys == EXPECTED_FIELDS) { "Pairing invitation fields do not match protocol version 1." }
-        val scopes = required(fields, "scopes").split(',').filter(String::isNotBlank).map(DeviceScope::valueOf).toSet()
-        val invitation = CompanionPairingInvitation(
-            protocolVersion = CompanionPairingInvitation.CURRENT_PROTOCOL_VERSION,
-            desktopId = CompanionDesktopId(required(fields, "desktopId")),
-            desktopDisplayName = required(fields, "desktopName"),
-            pairing = PairingInvitation(
-                id = PairingInvitationId(required(fields, "id")),
-                secret = required(fields, "secret"),
-                expiresAtEpochMillis = required(fields, "expires").toLong(),
-                scopes = scopes,
-            ),
-            controlEndpoint = CompanionServiceEndpoint(
-                host = required(fields, "controlHost"),
-                port = required(fields, "controlPort").toInt(),
-                secure = true,
-            ),
-            proxyEndpoint = CompanionServiceEndpoint(
-                host = required(fields, "proxyHost"),
-                port = required(fields, "proxyPort").toInt(),
-                secure = true,
-            ),
-            transportIdentitySha256 = Sha256Fingerprint(required(fields, "transportPin")),
-            rootCertificateSha256 = Sha256Fingerprint(required(fields, "rootCa")),
-        )
-        InvitationDecodeResult.Accepted(invitation)
+        InvitationDecodeResult.Accepted(payloadCodec.decode(payload))
     }.getOrElse {
         InvitationDecodeResult.Rejected(
             CompanionFailure(
@@ -158,98 +132,8 @@ public class VersionedCompanionInvitationCodec : CompanionInvitationCodec {
         )
     }
 
-    /** Encodes the same canonical payload used by a future desktop companion onboarding surface. */
-    public fun encode(invitation: CompanionPairingInvitation): String = buildString {
-        append(PREFIX)
-        append(
-            listOf(
-                "desktopId" to invitation.desktopId.value,
-                "desktopName" to invitation.desktopDisplayName,
-                "id" to invitation.pairing.id.value,
-                "secret" to invitation.pairing.secret,
-                "expires" to invitation.pairing.expiresAtEpochMillis.toString(),
-                "scopes" to invitation.pairing.scopes.sortedBy(DeviceScope::name).joinToString(",", transform = DeviceScope::name),
-                "controlHost" to invitation.controlEndpoint.host,
-                "controlPort" to invitation.controlEndpoint.port.toString(),
-                "proxyHost" to invitation.proxyEndpoint.host,
-                "proxyPort" to invitation.proxyEndpoint.port.toString(),
-                "transportPin" to invitation.transportIdentitySha256.value,
-                "rootCa" to invitation.rootCertificateSha256.value,
-            ).joinToString("&") { (key, value) -> "$key=${percentEncode(value)}" },
-        )
-    }
-
-    private fun parseQuery(query: String): Map<String, String> {
-        val pairs = query.split('&').filter(String::isNotBlank).map { token ->
-            val separator = token.indexOf('=')
-            require(separator > 0)
-            percentDecode(token.substring(0, separator)) to percentDecode(token.substring(separator + 1))
-        }
-        require(pairs.map(Pair<String, String>::first).distinct().size == pairs.size) {
-            "Duplicate invitation fields are not allowed."
-        }
-        return pairs.toMap()
-    }
-
-    private fun required(fields: Map<String, String>, name: String): String =
-        fields[name]?.takeIf(String::isNotBlank) ?: error("Missing $name.")
-
-    private fun percentEncode(value: String): String = buildString {
-        value.encodeToByteArray().forEach { byte ->
-            val unsigned = byte.toInt() and 0xff
-            val character = unsigned.toChar()
-            if (character.isAsciiUnreserved()) {
-                append(character)
-            } else {
-                append('%')
-                append(HEX[unsigned ushr 4])
-                append(HEX[unsigned and 0x0f])
-            }
-        }
-    }
-
-    private fun percentDecode(value: String): String {
-        val bytes = ArrayList<Byte>(value.length)
-        var index = 0
-        while (index < value.length) {
-            if (value[index] == '%') {
-                require(index + 2 < value.length)
-                val high = value[index + 1].digitToInt(16)
-                val low = value[index + 2].digitToInt(16)
-                bytes += ((high shl 4) or low).toByte()
-                index += 3
-            } else {
-                val codePoint = value[index].code
-                require(codePoint <= 0x7f) { "Non-ASCII invitation text must be percent encoded." }
-                bytes += codePoint.toByte()
-                index += 1
-            }
-        }
-        return bytes.toByteArray().decodeToString(throwOnInvalidSequence = true)
-    }
-
-    private fun Char.isAsciiUnreserved(): Boolean =
-        this in 'a'..'z' || this in 'A'..'Z' || this in '0'..'9' || this == '-' || this == '.' || this == '_' || this == '~'
-
-    private companion object {
-        const val PREFIX: String = "knet://pair/v1?"
-        const val HEX: String = "0123456789ABCDEF"
-        const val MAXIMUM_INVITATION_CHARACTERS: Int = 8 * 1024
-        val EXPECTED_FIELDS: Set<String> = setOf(
-            "desktopId",
-            "desktopName",
-            "id",
-            "secret",
-            "expires",
-            "scopes",
-            "controlHost",
-            "controlPort",
-            "proxyHost",
-            "proxyPort",
-            "transportPin",
-            "rootCa",
-        )
-    }
+    /** Encodes [bootstrap] for callers that use the data adapter directly. */
+    public fun encode(bootstrap: CompanionPairingBootstrap): String = payloadCodec.encode(bootstrap)
 }
 
 /** KNet-owned strict JSON defaults for companion durable records. */
@@ -261,7 +145,7 @@ public fun defaultCompanionJson(): Json = Json {
 
 @Serializable
 private data class PersistedCompanionEnvelope(
-    @SerialName("schema_version") val schemaVersion: Int = 1,
+    @SerialName("schema_version") val schemaVersion: Int = 2,
     @SerialName("active_desktop_id") val activeDesktopId: String? = null,
     val registrations: List<PersistedCompanionRegistration> = emptyList(),
 )
@@ -277,6 +161,7 @@ private data class PersistedCompanionRegistration(
     @SerialName("proxy_port") val proxyPort: Int,
     @SerialName("transport_identity_sha256") val transportIdentitySha256: String,
     @SerialName("root_certificate_sha256") val rootCertificateSha256: String,
+    @SerialName("root_certificate_der_base64_url") val rootCertificateDerBase64Url: String,
     @SerialName("credential_reference") val credentialReference: String,
     val scopes: List<String>,
     @SerialName("paired_at_epoch_millis") val pairedAtEpochMillis: Long,
@@ -291,6 +176,7 @@ private data class PersistedCompanionRegistration(
             proxyEndpoint = CompanionServiceEndpoint(proxyHost, proxyPort, secure = true),
             transportIdentitySha256 = Sha256Fingerprint(transportIdentitySha256),
             rootCertificateSha256 = Sha256Fingerprint(rootCertificateSha256),
+            rootCertificate = CompanionRootCertificate(ROOT_CERTIFICATE_ENCODING.decode(rootCertificateDerBase64Url)),
             credentialReference = CompanionCredentialReference(credentialReference),
             scopes = scopes.map(DeviceScope::valueOf).toSet(),
             pairedAtEpochMillis = pairedAtEpochMillis,
@@ -299,6 +185,9 @@ private data class PersistedCompanionRegistration(
     }.getOrNull()
 
     companion object {
+        private val ROOT_CERTIFICATE_ENCODING: Base64 =
+            Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT_OPTIONAL)
+
         fun fromDomain(registration: CompanionRegistration): PersistedCompanionRegistration =
             PersistedCompanionRegistration(
                 desktopId = registration.desktopId.value,
@@ -310,6 +199,7 @@ private data class PersistedCompanionRegistration(
                 proxyPort = registration.proxyEndpoint.port,
                 transportIdentitySha256 = registration.transportIdentitySha256.value,
                 rootCertificateSha256 = registration.rootCertificateSha256.value,
+                rootCertificateDerBase64Url = ROOT_CERTIFICATE_ENCODING.encode(registration.rootCertificate.copyBytes()),
                 credentialReference = registration.credentialReference.value,
                 scopes = registration.scopes.sortedBy(DeviceScope::name).map(DeviceScope::name),
                 pairedAtEpochMillis = registration.pairedAtEpochMillis,

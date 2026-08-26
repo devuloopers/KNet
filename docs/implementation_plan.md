@@ -2442,3 +2442,448 @@ architecture verification, and `companionFoundationQualification` passed across 
 source and complete desktop product then compiled successfully across 210 tasks. Earlier focused production
 compilation also passed for iOS ARM64 and iOS Simulator ARM64. No APK was assembled, no product was installed, and
 no application was launched.
+
+## Phase 115: KMP Companion Certificate Readiness [COMPLETED — ANDROID DEVICE EVIDENCE PENDING]
+
+Started on 2026-08-26. Implement Android-first, iOS-ready KMP certificate readiness without enumerating private or
+unsupported platform trust stores. Shared domain state and application use cases will distinguish certificate
+trust from transport/route readiness. Android Settings and trust-store events will only trigger a bounded,
+end-to-end TLS challenge against the paired KNet desktop; only Android trust validation plus the expected
+challenge identity and nonce may produce a trusted result. Platform APIs remain in Android adapters, desktop
+challenge serving remains in desktop connectivity, and common UI continues through ViewModel and use cases. The
+phase requires security, replay, failure, concurrency, architecture, and JVM/Android/iOS compile verification
+without assembling an APK or launching a product.
+
+Completed locally on 2026-08-26. `:core:companion` now owns portable readiness states, a validated Base64URL
+challenge nonce, and versioned certificate-proof wire constants. `:application:companion` separates authenticated
+root retrieval, platform trust proof, and trust-store recheck notifications; use cases alone read protected
+credentials and may bind verification to the expected active desktop. The shared ViewModel treats platform events
+as triggers, cancels superseded work, rejects stale results after selection changes, and never promotes an event or
+download into trusted state.
+
+Phase 115 initially used a narrowly scoped, fail-closed bootstrap trust manager to pin the pairing identity before
+transmitting a credential. Phase 116 supersedes that bootstrap implementation with platform-managed PKIX trust
+created from the invitation's validated root material. HTTPS hostname verification, transport identity, exact
+root, and fresh nonce checks remain mandatory. The process-owned trust-store receiver only emits recheck events.
+The Android application enables user anchors solely for `companion.knet.local`; unrelated destinations keep
+platform defaults. The Android product graph owns the adapters and their use cases, while certificate installation
+UI remains intentionally outside this no-UI phase.
+
+Desktop composition now owns a process-stable KNet-CA-signed TLS identity and a separate authenticated certificate
+gateway. The gateway has strict bounded HTTP parsing, TLS 1.2-or-newer policy, scoped device authentication,
+bounded admission, bounded five-minute nonce retention, replay/capacity rejection, defensive public-root copies,
+and deterministic shutdown. The future general pairing/control surface must advertise this secure endpoint; this
+phase does not invent a second pairing protocol or claim the still-missing general mobile transport/VPN backend.
+
+Focused model, application, presentation, Android-adapter, and real desktop TLS tests passed. The combined
+`companionFoundationQualification`, Android application compilation/unit tests/lint, desktop compilation/product
+tests, and architecture guards passed across 452 actionable tasks. Android, JVM, and iOS Simulator boundaries were
+compiled. No APK was assembled, no product was installed or launched, and physical-device/OEM trust behavior
+remains explicit release evidence rather than an inferred local-test result. The design and extension boundary are
+documented in `docs/companion_certificate_readiness.md`.
+
+## Phase 116: Platform-Managed Companion Bootstrap Trust [COMPLETED — ANDROID DEVICE EVIDENCE PENDING]
+
+Started on 2026-08-26. Replace the Android certificate-bootstrap custom `X509TrustManager` with a standard PKIX
+trust manager created by `TrustManagerFactory`. The versioned companion invitation will carry bounded public KNet
+root material alongside its fingerprint so every platform can validate the trust anchor before constructing its
+native TLS policy. Android will use an in-memory `KeyStore`, retain HTTPS hostname verification, and transmit no
+credential until the platform TLS handshake succeeds. The existing user-anchor network security configuration
+continues to prove post-installation readiness. This phase includes protocol/persistence migration, Android and
+desktop composition updates, negative certificate-chain tests, lint, multiplatform compilation, and architecture
+verification without assembling an APK or launching a product.
+
+Completed locally on 2026-08-26. Pairing invitation protocol v2 now carries a bounded defensive copy of the public
+KNet root DER together with its SHA-256 fingerprint. Registrations persist both values under schema v2; legacy
+protocol/schema v1 inputs fail closed and require re-pairing rather than silently acquiring a new trust anchor.
+The application layer preserves that material from invitation to registration, and control requests expose it to
+platform adapters without coupling common code to Android TLS APIs.
+
+The Android adapter validates that the paired DER is a currently valid, self-signed CA whose fingerprint matches
+the invitation. It then places that certificate in an in-memory `KeyStore` and delegates chain validation to the
+default `TrustManagerFactory`; there is no production custom `X509TrustManager` and no lint suppression. HTTPS
+endpoint identification, SNI, the pinned transport identity, and the expected root relationship are checked before
+the device credential is written. The post-installation challenge still uses Android's default socket factory and
+the host-scoped user-anchor network security policy, so successful bootstrap trust cannot be mistaken for proof
+that the user installed the KNet CA.
+
+Protocol, persistence, use-case, presentation, Android adapter, and real certificate-chain tests passed, including
+malformed roots, mismatched fingerprints, non-CA anchors, platform PKIX acceptance, protocol-v1 rejection, and
+defensive-copy coverage. The complete `companionFoundationQualification`, Android adapter/app unit tests and lint,
+desktop compilation/product tests, and architecture verification passed across 455 actionable tasks. Android,
+JVM, and iOS Simulator boundaries were compiled. No APK was assembled, no product was installed or launched, and
+physical-device/OEM trust behavior remains explicit release evidence.
+
+## Phase 117: KMP Companion Connectivity Adapters [COMPLETED — IOS NATIVE IMPLEMENTATION PENDING]
+
+Started on 2026-08-26. Promote the Android-only `:connectivity:companion:android` leaf into the multiplatform
+`:connectivity:companion` module. Preserve the qualified Android connectivity and certificate behavior in
+`androidMain`, retain host-side Android tests under the Android-KMP test compilation, and add explicit iOS
+placeholder adapters that compile for device and simulator without claiming network, certificate, or inspection
+support. Product composition remains platform-owned. The migration must update architecture guards and companion
+qualification while compiling Android and iOS Simulator targets without assembling or launching an application.
+
+Completed locally on 2026-08-26. The Android-only child project was removed and its production adapters, manifest,
+host tests, and real certificate fixtures now live in `:connectivity:companion` Android source sets. The module uses
+the repository's Android-KMP library convention and publishes Android, iOS ARM64, and iOS Simulator ARM64 targets.
+Android product composition now depends on the promoted module without changing its native adapter APIs or runtime
+behavior.
+
+The serialized inspection lifecycle reducer moved to `commonMain`, so locking, idempotent start/stop behavior,
+permission-state mapping, cancellation recovery, and failure containment are shared. Android `androidMain` now
+adapts `VpnService` consent and the replaceable packet backend into that reducer. `iosMain` contains explicitly
+named placeholders for network observation, certificate retrieval/trust/rechecks, and inspection. They fail closed
+with `PLATFORM_ADAPTER_UNAVAILABLE`, publish no synthetic trust events, and are not registered in a product.
+Common lifecycle tests run through both platform test trees; iOS tests prove placeholder behavior.
+
+The complete companion foundation, Android host tests, iOS device compilation, iOS Simulator tests, Android product
+unit tests/lint/compilation, and architecture verification passed across 343 actionable tasks. Qualification now
+permanently includes the connectivity module's Android host tests, iOS ARM64 compilation, and iOS Simulator tests.
+No APK or iOS application was assembled, installed, or launched. Native iOS Network, Security, and Network
+Extension adapters remain future implementation work rather than an inferred capability.
+
+## Phase 118: Companion Platform Adapter Contract and Decomposition [COMPLETE]
+
+Started on 2026-08-26. Introduce one portable companion-platform adapter bundle and a narrowly scoped
+`expect`/`actual` factory boundary while keeping every Android `Context` and future Apple native dependency solely
+inside its platform source set. The common API must not accept `Any`, an opaque context wrapper, or a global
+service locator. Decompose the Android connectivity and certificate adapters into cohesive files, share
+fail-closed unavailable behavior instead of duplicating iOS placeholders, centralize multiplatform test fixtures,
+and preserve the already-qualified Android certificate and lifecycle behavior. Completion requires Android host
+tests, Android product tests/lint/compilation, iOS Simulator tests, iOS device/simulator compilation, and
+architecture qualification without assembling or launching an application.
+
+Completed on 2026-08-26. `commonMain` now exposes one portable adapter bundle, one factory interface, and a
+constructor-free expected platform factory. Android constructs its actual factory with `Context` only in
+`androidMain`; iOS provides a no-argument actual factory that assembles shared fail-closed capabilities until its
+native implementations exist. No native context, opaque wrapper, `Any` bridge, or service locator crosses the
+common boundary. The Android product composition root consumes only the portable adapter bundle and owns its
+callback lifecycle.
+
+The former Android connectivity and certificate monoliths were decomposed into lifecycle, consent, network,
+certificate retrieval, trust verification, store observation, X.509 validation, paired PKIX trust, and bounded TLS
+client files. Common lifecycle tests now cover concurrent start serialization, cancellation recovery, unexpected
+backend failures, preparation while running, stop failure recovery, and idempotency. Android host tests retain the
+real certificate-chain and platform adapter checks; iOS Simulator tests verify that every unavailable capability
+fails closed. Shared fixtures remove duplicated registration/configuration construction.
+
+Architecture verification now rejects native imports in all `commonMain` code and specifically rejects native
+context types, `Any`-typed bridge declarations, or a common constructor on the companion expected factory. The
+full companion foundation and Android lint qualification passed across 337 actionable tasks, including Android
+host tests, Android product compilation, both iOS production target compilations, iOS Simulator tests, shared
+application/data/presentation tests, and architecture checks. No APK or iOS application was assembled, installed,
+or launched.
+
+## Phase 119: Companion Feature-Based Package Structure [COMPLETE]
+
+Started on 2026-08-26. Replace the redundant Android-named package beneath `androidMain` with feature-owned
+packages. Common production code will be grouped under `platform`, `inspection`, and `fallback`; Android code under
+`platform`, `network`, `inspection`, and `certificate`; and tests will mirror those feature boundaries. The
+expected and actual platform factories remain in the same Kotlin package, while `.android.kt` and `.ios.kt`
+filenames continue to identify platform implementations. Redundant Android adapter APIs will become `internal`,
+except for the public packet-backend extension contract required by the Android actual factory. Completion requires
+Android host tests, Android product compilation/lint, iOS device and simulator compilation, iOS Simulator tests,
+and architecture verification without assembling or launching an application.
+
+Completed on 2026-08-26. The redundant `connectivity.android` and `connectivity.ios` packages were removed.
+Production sources now use capability-owned `platform`, `inspection`, `fallback`, `network`, and `certificate`
+packages, while tests mirror `platform`, `inspection`, and `certificate` and isolate shared builders under
+`testing`. The expected and actual factories share `connectivity.platform`; platform-specific filename suffixes
+remain for source navigation.
+
+Concrete Android network, consent, and inspection-controller adapters are now internal implementation details.
+Only `AndroidInspectionBackend` and `AndroidInspectionBackendResult` remain public because the Android actual
+factory deliberately exposes that qualified future packet-backend extension point. Documentation and the expected
+factory architecture guard follow the new paths. Companion foundation qualification, Android product compilation,
+unit tests and lint, Android host tests, iOS device/simulator compilation, iOS Simulator tests, and architecture
+verification passed across 343 actionable tasks. No APK or iOS application was assembled, installed, or launched.
+
+## Phase 120: Companion Navigation 3 Onboarding [COMPLETED]
+
+Started on 2026-08-26. Replace the companion foundation placeholder with a state-gated Compose Multiplatform
+onboarding and readiness experience built on Navigation 3. The shared flow will cover desktop invitation entry,
+desktop confirmation, certificate installation and authoritative trust verification, inspection permission, and
+the paired home state. Serializable navigation keys and explicit multiplatform saved-state configuration will live
+in `:ui:companion:sharedUi`; navigation types will not leak into the framework-neutral presentation module.
+
+The presentation monolith will be decomposed into state, actions, effects, flow-stage resolution, and ViewModel
+files. Product-owned native effects will remain strongly typed and free of `Context` or `Any` in common code.
+Every screen will reuse `:ui:core` theme tokens and components, provide responsive scrolling, and prevent restored
+or back-stack state from bypassing pairing and certificate gates. Completion requires presentation tests,
+Navigation 3 state tests, shared UI compilation/tests, Android product compilation/tests, iOS production
+compilation, and architecture verification without assembling or launching an application.
+
+Completed on 2026-08-26. `:ui:companion:presentation` is decomposed into immutable state, typed actions/effects,
+flow-stage resolution, and a framework-neutral lifecycle-owned ViewModel. `:ui:companion:sharedUi` now provides
+serializable Navigation 3 routes with explicit multiplatform saved-state configuration, guarded restored-stack
+reconciliation, a responsive setup scaffold, and shared invitation, confirmation, certificate, VPN-explanation,
+and ready screens using only `:ui:core` tokens and components.
+
+The Android product now owns the ViewModel lifecycle and native QR-image import, certificate installer, security
+settings, and VPN-consent effects. Unimplemented secure pairing/data-plane backends remain typed and fail-closed.
+Presentation JVM/iOS tests, shared UI navigation tests and JVM/iOS compilation, Android product compilation/tests,
+and the full architecture-foundation verification passed across 208 actionable tasks. No APK was assembled,
+installed, or launched.
+
+## Phase 121: Companion Lifecycle ViewModel Integration [COMPLETED]
+
+Started on 2026-08-26. Replace the presentation-owned coroutine lifecycle with the multiplatform AndroidX
+`ViewModel` contract. `CompanionViewModel` will use `viewModelScope`; the Android product will obtain it from the
+Activity `ViewModelStore` through an explicit factory and collect native effects only while the Activity is
+started. The manual parent scope, public close contract, and Activity-owned coroutine lifecycle will be removed.
+Completion requires lifecycle cancellation coverage, focused presentation tests, and Android companion
+compilation/tests without assembling an APK.
+
+Completed on 2026-08-26. `CompanionViewModel` now extends the multiplatform AndroidX `ViewModel` and owns all
+presentation coroutines through `viewModelScope`. The manual parent scope, child `SupervisorJob`, closed-state
+guard, and public `close()` contract were removed. Presentation-only invitation material and effect delivery are
+cleared through `onCleared()` after lifecycle-owned coroutine cancellation.
+
+The Android product retrieves the ViewModel from the Activity `ViewModelStore` with an explicit dependency factory,
+retains it across configuration changes, and collects native effects only while the Activity is started. Tests now
+construct the ViewModel through `ViewModelProvider` and prove that clearing the store stops repository collectors.
+Focused presentation tests, Android compilation/unit tests, iOS device and simulator compilation, and the complete
+`companionFoundationQualification` passed; the final qualification completed 196 actionable tasks. No APK was
+assembled, installed, or launched.
+
+## Phase 122: Companion Android Execution Boundaries [COMPLETED]
+
+Started on 2026-08-26. Keep `CompanionViewModel` lifecycle-owned on `viewModelScope` while moving blocking Android
+storage, keystore, cryptographic, and selected-image decoding operations behind adapter-owned coroutine dispatchers.
+Decompose the Android companion data adapters into cohesive files, retain deterministic committed persistence,
+make execution policies injectable for tests, and ensure product callbacks never decode QR images on the main
+thread. Completion requires focused dispatcher-boundary tests, Android companion compilation and unit tests,
+multiplatform companion qualification, and architecture verification without assembling or launching an APK.
+
+Completed on 2026-08-26. The Android registration store now has a suspending factory that restores its first
+SharedPreferences snapshot on a worker dispatcher, and committed writes publish durable and in-memory state in one
+non-suspending operation. The encrypted credential vault, Android Keystore P-256 identity provider, and proof
+signer route preference, cipher, key-generation, key-loading, and signature work through the same injectable
+blocking-call boundary. The former four-class Android storage monolith is decomposed into cohesive files.
+
+The Android process graph is restored asynchronously before lifecycle ViewModel creation, while ActivityResult
+launchers remain registered during Activity creation. Selected QR image reads and bitmap decoding run on IO, QR
+recognition runs on a computation dispatcher, and results return through the Activity lifecycle scope. Failed or
+cancelled graph construction closes already-created platform adapters. The ViewModel remains on `viewModelScope`;
+use cases and presentation code do not choose Android execution threads.
+
+New Android host tests prove configured worker dispatch and failure preservation, and the host-test gate is now a
+permanent part of `companionFoundationQualification`. Focused Android host/product tests and lint passed across
+214 actionable tasks. Architecture verification, Android compilation/tests/lint, JVM tests, iOS device/simulator
+compilation, iOS Simulator tests, and the complete companion qualification passed across 348 actionable tasks. No
+APK was assembled, installed, or launched.
+
+## Phase 123: Companion Product Koin Composition [COMPLETED]
+
+Started on 2026-08-26. Replace the Android companion's manual product graph and `ViewModelProvider` factory with
+the repository-standard Koin container already used by the desktop product. Keep Koin confined to the Android
+product composition layer, finish suspending Android storage restoration before module creation, bind contracts to
+their platform/data implementations, construct application use cases through Koin, resolve the lifecycle-owned
+`CompanionViewModel` through Koin Compose, and close process resources deterministically. Completion requires
+container resolution/lifecycle tests, Android compilation/tests/lint, companion qualification, and architecture
+verification without assembling or launching an APK.
+
+Completed on 2026-08-26. The manual `AndroidCompanionProductGraph` and Activity `ViewModelProvider` factory were
+removed. The Android product now owns five focused Koin modules for restored platform dependencies, data adapters,
+runtime ports, application use cases, and presentation. Every application contract is bound to its concrete
+product choice, the complete `CompanionViewModelDependencies` graph is resolved during process bootstrap, and
+`CompanionViewModel` is registered with Koin's lifecycle ViewModel DSL and obtained through `koinViewModel()`.
+
+Disk-backed stores are still restored asynchronously before Koin startup, so synchronous Koin definitions never
+hide blocking Android initialization. The callback-owning platform adapter is an eager Koin singleton with an
+`onClose` lifecycle callback. Bootstrap failure closes resources whether failure occurs before or after global Koin
+startup, while `KNetCompanionApplication` stops Koin during process test/emulator termination. Koin imports and
+dependencies remain confined to `:products:companion:androidApp`; common, application, data, connectivity,
+presentation, and shared UI companion modules remain DI-framework-free.
+
+The new module-resolution test resolves stores, platform contracts, repositories, credential protection, codecs,
+device identity/signing ports, the complete use-case dependency bundle, and the lifecycle ViewModel. It also proves
+that Koin closure releases the platform adapter exactly once. Focused compilation and product tests passed across
+128 actionable tasks. Architecture verification, Android compilation/tests/lint, JVM tests, iOS device/simulator
+compilation, iOS Simulator tests, and `companionFoundationQualification` passed across 348 actionable tasks. No APK
+was assembled, installed, or launched.
+
+## Phase 124: Desktop Companion Connection Onboarding [COMPLETED]
+
+Started on 2026-08-26. Add a distinct **Connect Companion App** entry to the desktop Connect Device workspace,
+separate from the browser-oriented Wi-Fi proxy setup. Opening the entry creates an in-memory, short-lived, one-time
+companion invitation through the application pairing use case and presents its QR code, reachable desktop details,
+expiry state, refresh action, and concise certificate/connection guidance in the shared responsive drawer.
+
+Completed on 2026-08-26. Desktop encoding and companion decoding now share one bounded canonical
+`knet://pair/v2` codec in `:core:companion`; the former version-1 desktop payload was removed. The application
+onboarding use case combines a one-time invitation with a product-owned environment containing current LAN,
+endpoint, stable desktop, transport-pin, root-pin, and public-root data. Koin resolves that environment from the
+active Wi-Fi session and process-stable KNet certificate identity without exposing private key material.
+
+The Connect Device grid now contains separate Wi-Fi Proxy Setup and Connect Companion App cards. The companion
+drawer has immutable idle/creating/ready/expired/failure states, a QR expiry countdown, refresh and recovery actions,
+and bounded desktop guidance. Secret-bearing payloads remain only in ViewModel state and are removed on
+drawer close, expiry, or replacement. Drawer hosting, active content, and recovery panels are decomposed into
+cohesive files. The invitation presentation is not recorded as completion of the general authenticated pairing
+handler or secured companion data plane; the Android product continues to fail closed until those adapters are
+implemented.
+
+Focused core/data/application/UI/product tests passed across 176 actionable tasks, and desktop connectivity plus
+product compilation passed across 152 actionable tasks. Architecture verification and diff validation complete
+the phase without packaging, launching, or assembling an APK.
+
+## Phase 125: Companion Drawer Width and Text Flow [COMPLETED]
+
+Started on 2026-08-26 from desktop visual feedback. Align the Connect Companion App drawer with the existing
+Wi-Fi setup drawer's shared standard width, while preserving the larger companion QR scan area required by its
+denser canonical invitation payload. Narrative descriptions, instructions, warnings, and failure guidance will
+wrap vertically instead of truncating with ellipses; compact identifiers, endpoints, labels, and controls may
+remain single-line. Completion requires focused connectivity tests, desktop compilation, architecture verification,
+and diff validation without launching or packaging the application.
+
+Completed on 2026-08-26. The companion drawer now uses the same shared standard width as Wi-Fi setup. Header copy,
+instructions, warnings, inactive guidance, and operation failures wrap naturally within that width, while compact
+identity and endpoint fields retain their deliberate single-line presentation. The QR renderer is unchanged and
+shared with Wi-Fi setup; its larger scan surface is retained because the canonical companion invitation contains a
+denser authenticated pairing payload. Focused desktop connectivity tests, desktop product compilation, and
+architecture verification passed across 163 actionable tasks. Diff validation passed without launching or
+packaging the application.
+
+## Phase 126: Lightweight Companion Bootstrap Invitation [COMPLETED — ANDROID DEVICE EVIDENCE PENDING]
+
+Started on 2026-08-26. Replace the certificate-heavy companion QR payload with a bounded bootstrap reference that
+contains only protocol version, one-time retrieval identity and secret, expiry, reachable TLS endpoint, and the
+desktop transport pin. Publish the complete pairing invitation behind a bounded TLS redemption endpoint, consume
+the retrieval secret atomically without consuming the later pairing invitation, and make companion acceptance an
+asynchronous resolve-and-validate workflow. The mobile boundary must authenticate the advertised desktop identity
+before accepting the returned root, endpoints, scopes, or pairing secret. Completion requires codec size and
+malformation tests, expiry and replay coverage, TLS gateway integration tests, companion application/presentation
+tests, platform compilation, architecture verification, and diff validation without packaging or launching apps.
+
+Completed locally on 2026-08-26. The canonical protocol is now `knet://pair/v3`: its QR contains only a bounded
+bootstrap id, separately generated one-time retrieval secret, expiry, the active public-root and TLS redemption
+authorities, and independent root/transport fingerprints. The public Wi-Fi setup portal supplies only the DER root
+at `/knet-ca.crt`; Android rejects that response unless its exact fingerprint, validity, self-signature, and CA
+constraints match the QR. The validated root is promoted through an in-memory `KeyStore` and the platform
+`TrustManagerFactory`. No production custom `X509TrustManager` or lint suppression is present. The retrieval secret
+is sent only after PKIX, HTTPS hostname, transport-pin, and root-chain validation succeeds.
+
+Desktop application code now stores the complete invitation behind a distinct digest-protected bootstrap record.
+The TLS gateway consumes that record atomically, returns the bounded complete invitation once, and gives invalid,
+expired, wrong-secret, and replayed requests one non-descriptive rejection without consuming the later pairing
+invitation. Composition derives the public-root authority from the active Wi-Fi session's actual setup URL, so its
+ordered port fallback remains correct. Companion acceptance is asynchronous, rejects expired input before network
+I/O, validates returned expiry/endpoints/root/transport identities, and ignores stale ViewModel jobs. The desktop
+presentation descriptor exposes only display metadata, expiry, and the lightweight QR text; the complete pairing
+secret remains confined to the one-time store and TLS response.
+
+Codec size/malformed-field tests, complete-response round trips, expiry-before-I/O, metadata mismatch, root-pin,
+wrong-secret, one-shot replay, bounded-store, real TLS gateway, resolver, persistence, and presentation tests pass.
+The focused cross-module suite passed across 212 tasks. `companionFoundationQualification`, Android product
+compilation/unit tests/lint, iOS device/simulator compilation, iOS Simulator tests, and architecture verification
+then passed across 348 tasks. No APK was assembled, no application was installed or launched, and physical-device
+LAN/OEM behavior remains explicit future release evidence.
+
+## Phase 127: In-App Companion QR Scanner [COMPLETED — ANDROID DEVICE EVIDENCE PENDING]
+
+Started on 2026-08-26. Add a shared Navigation 3 scanner stage and portable scanner capability contract while
+keeping camera permission, frame acquisition, and QR recognition in the Android product. Android will use a
+lifecycle-bound CameraX preview and bundled ML Kit QR-only analyzer, deliver at most one payload per scanner
+session, and reuse the existing asynchronous invitation acceptance use case. Gallery import remains an explicit
+fallback rather than being presented as camera scanning. Completion requires common presentation/navigation tests,
+Android scanner state and duplicate-delivery tests, Android compilation/unit tests/lint, companion KMP
+qualification, architecture verification, and diff validation without assembling or launching an APK.
+
+Completed on 2026-08-26. The companion now owns a shared Navigation 3 scanner stage and portable scanner contract,
+while the Android product supplies the Activity-scoped CameraX preview, permission flow, QR-only bundled ML Kit
+analyzer, and app-settings recovery. Camera and gallery acquisition converge on the existing invitation acceptance
+use case, invalid payloads remain on the scanner with an explicit retry, scanner dismissal cancels in-flight work,
+and one scanner composition can deliver at most one payload. Common presentation/navigation coverage and Android
+permission/single-delivery coverage were added. `companionFoundationQualification`, Android Kotlin compilation,
+Android unit tests, Android lint, and `verifyArchitectureFoundation` passed together across 348 Gradle tasks;
+`git diff --check` also passed. No APK was assembled or launched, so physical Android camera, permission, OEM, and
+deep-link behavior remains release evidence rather than an automated qualification claim.
+
+## Phase 128: Secure Companion Pairing Control Plane [COMPLETED — ANDROID DEVICE RE-TEST PENDING]
+
+Started on 2026-08-26 after physical Android QR redemption reached the deliberate fail-closed pairing adapter.
+Complete the authenticated control plane without enabling the separate VPN/data-plane carrier: define one shared,
+bounded pairing and credential-refresh wire protocol; expose a platform-neutral control transport contract; provide
+Android pinned-root PKIX, hostname, and transport-identity verification; handle pairing and atomic credential
+rotation on the desktop TLS gateway; and replace only the Android pairing placeholder through Koin. Completion
+requires proof, malformed-body, wrong-secret, invitation replay, authorization, credential-rotation replay, TLS
+identity, Android transport, real TLS end-to-end, persistence, compilation, lint, KMP qualification, architecture,
+and diff checks. No APK will be assembled or launched.
+
+Completed locally on 2026-08-26. `:core:companion` now owns bounded canonical pairing-completion, initial-grant,
+and credential-refresh codecs. `:application:companion` owns a typed platform-neutral control request boundary,
+strict authorization tokens, and fail-closed local commit rules that never restore a credential after the desktop
+has replaced it. `:data:companion` supplies the shared proof-bearing pairing/refresh client. Android provides the
+native transport: it validates the QR-pinned root, builds platform PKIX trust without a custom trust manager,
+performs SNI/HTTPS hostname verification, verifies the served root chain and exact transport fingerprint, and only
+then transmits a pairing secret or paired credential. Koin now binds this production pairing path while the
+separate VPN/data plane remains deliberately unavailable.
+
+The desktop's renamed `CompanionControlGateway` now owns one bounded TLS control surface for bootstrap redemption,
+proof-bearing one-shot pairing, authenticated credential refresh, and certificate readiness. Credential rotation
+uses a Room compare-and-set update, so concurrent or replayed old credentials cannot both succeed. Pairing and
+refresh responses expose a credential once; malformed requests and authorization failures remain bounded and
+presentation-safe. Gateway shutdown now closes admitted blocking sockets, and a test-discovered concurrent-set
+shutdown race in the authenticated proxy gateway was removed.
+
+Coverage now includes codec round trips and malformed fields, proof rejection without invitation consumption,
+wrong-secret and invitation replay, real-TLS pairing, old-credential refresh replay, Room rotation/revocation,
+Android root-pin validation before network access, fail-closed iOS control fallback, Koin binding, local
+persistence failure behavior, and gateway lifecycle regressions. Focused cross-module tests passed, then
+`companionFoundationQualification`, Android product unit tests/lint, desktop product tests, data persistence tests,
+and architecture checks passed across 466 actionable tasks. `git diff --check` passed. No APK was assembled,
+installed, or launched. The user's earlier physical Android scan already proves QR/bootstrap acquisition; pressing
+**Pair securely** against this completed control path remains the explicit physical-device re-test.
+
+## Phase 129: Multiplatform Ktor Companion Control Transport [COMPLETED — DEVICE RE-TEST PENDING]
+
+Started on 2026-08-26. Replace Android-only manual HTTP/TLS socket clients with one bounded `commonMain` Ktor
+exchange used for bootstrap redemption, pairing, credential refresh, and certificate endpoint calls. Keep TLS
+enforcement native: Android configures the Ktor Android engine with platform PKIX and fixed-hostname/root/transport
+identity checks; iOS configures the Darwin engine with Security-framework hostname policy, request-scoped pinned
+anchors, system trust where required, and the same exact identities. No native context or `Any` bridge may enter
+common code, and the separate VPN/data plane remains out of scope.
+
+Completion requires common MockEngine coverage for request mapping, response limits, public-root-before-secret
+sequencing, and authenticated control calls; Android host tests; iOS Simulator tests; Android/iOS target
+compilation; companion foundation, Android product, desktop gateway, persistence, lint, architecture, and diff
+qualification. No APK or iOS application will be assembled or launched.
+
+Completed locally on 2026-08-26. `:connectivity:companion` now owns one request-scoped Ktor exchange in
+`commonMain` for public-root retrieval, one-time bootstrap redemption, pairing, credential refresh, and Android
+certificate endpoint calls. The former Android manual HTTP/TLS socket clients and unused unavailable control
+fallback were removed. Shared policy rejects redirects, requires bounded declared response lengths, copies bodies
+defensively, keeps invitation secrets out of the public-root request, and releases native client/certificate
+resources deterministically.
+
+The Android engine validates CA material, builds platform PKIX trust without a custom `X509TrustManager`, and
+enforces the fixed hostname, exact root chain, and transport identity. The Darwin engine performs the equivalent
+Security-framework trust challenge with request-scoped pinned anchors or native system trust; invitation and
+control transport are therefore ready for a future iOS product while network observation, certificate readiness,
+and the Network Extension data plane remain explicitly fail-closed.
+
+Common SHA-256 vectors and MockEngine tests cover request mapping, body/response bounds, root-before-secret
+sequencing, pin mismatch short-circuiting, and authenticated control calls. Android host and iOS Simulator tests,
+Android/iOS device target compilation, architecture checks, companion foundation qualification, Android product
+unit tests/lint, desktop gateway tests, and desktop persistence tests passed across 466 actionable tasks. No APK or
+iOS application was assembled, installed, or launched; the Android physical pairing flow and future iOS product
+remain device qualification evidence.
+
+Physical-device diagnosis on 2026-08-26 then showed that Android's product network policy rejected the first
+dynamic-LAN HTTP request before Ktor could retrieve `/knet-ca.crt`. The Android product now permits runtime-LAN
+cleartext at the platform boundary because Android network-security XML cannot express a QR-discovered IP plus an
+exact path. The shared transport still exposes only a typed bootstrap-root capability: credential-free `GET`, the
+exact root path and media type, no custom headers or body, a certificate-sized response bound, redirects disabled,
+and QR SHA-256 verification before any secret-bearing TLS request. Android host tests, iOS Simulator tests, Android
+compilation/lint, packaged-manifest/resource inspection, architecture verification, and `git diff --check` pass.
+No APK was assembled or installed; the corrected physical pairing flow remains the explicit device re-test.
+
+The subsequent physical certificate-install attempt exposed one desktop HTTP/1.1 framing incompatibility: Ktor's
+Android engine correctly omitted `Content-Length` from its bodyless authenticated root-certificate `GET`, while
+the control gateway required that header for every method and rejected the request before authentication. The
+gateway now interprets an absent request length as a zero-length body, while continuing to reject malformed or
+oversized lengths, duplicate headers, and unsupported transfer encoding. A real-TLS regression sends the root
+request without `Content-Length`; malformed-length, oversized-length, and chunked-framing cases remain rejected.
+Focused desktop gateway tests, Android companion host tests, Android compilation, and lint pass. Existing pairing
+and credential records are unchanged; the running desktop must be restarted before the physical re-test.

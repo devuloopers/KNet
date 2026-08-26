@@ -22,12 +22,14 @@ import com.devuloopers.knet.ui.core.foundation.clipboard.setPlainText
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.connectivity.components.WifiProxySetupCard
 import com.devuloopers.knet.ui.desktop.connectivity.components.WifiProxySetupDrawer
+import com.devuloopers.knet.ui.desktop.connectivity.components.CompanionConnectionCard
+import com.devuloopers.knet.ui.desktop.connectivity.components.CompanionConnectionDrawer
 import com.devuloopers.knet.ui.desktop.connectivity.model.ConnectDeviceIntent
 import com.devuloopers.knet.ui.desktop.connectivity.model.ConnectDeviceUiState
 import com.devuloopers.knet.ui.desktop.connectivity.viewmodel.ConnectDeviceViewModel
 import kotlinx.coroutines.launch
 
-/** Renders the top-left connectivity method grid and its Wi-Fi setup drawer. */
+/** Renders the connectivity-method grid and its mutually exclusive feature drawers. */
 @Composable
 fun ConnectDeviceScreen(
     viewModel: ConnectDeviceViewModel,
@@ -66,13 +68,22 @@ internal fun ConnectDeviceScreenContent(
         ) {
             WifiProxySetupCard(
                 state = state,
-                onClick = { onIntent(ConnectDeviceIntent.OpenSetup) },
+                onClick = { onIntent(ConnectDeviceIntent.OpenWifiSetup) },
+            )
+            CompanionConnectionCard(
+                state = state,
+                onClick = { onIntent(ConnectDeviceIntent.OpenCompanionConnection) },
             )
         }
         WifiProxySetupDrawer(
             state = state,
             onIntent = onIntent,
             onCopy = { value -> coroutineScope.launch { clipboard.setPlainText(value) } },
+            modifier = Modifier.fillMaxSize(),
+        )
+        CompanionConnectionDrawer(
+            state = state,
+            onIntent = onIntent,
             modifier = Modifier.fillMaxSize(),
         )
     }

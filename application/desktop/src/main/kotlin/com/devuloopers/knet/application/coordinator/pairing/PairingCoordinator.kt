@@ -11,6 +11,7 @@ import com.devuloopers.knet.pairing.IssuedDeviceCredential
 import com.devuloopers.knet.pairing.PairedDevicePrincipal
 import com.devuloopers.knet.pairing.PairingCompletionRequest
 import com.devuloopers.knet.pairing.PairingCompletionResult
+import com.devuloopers.knet.pairing.PairingCredentialRefreshResult
 import com.devuloopers.knet.pairing.PairingInvitation
 import com.devuloopers.knet.pairing.PairingInvitationId
 import com.devuloopers.knet.pairing.PendingPairingInvitation
@@ -91,6 +92,47 @@ public class PairingCoordinator(
         }
         return DeviceAuthenticationResult.Authenticated(
             PairedDevicePrincipal(device.id, device.displayName, device.scopes),
+        )
+    }
+
+    /**
+     * Rotates the credential presented by [deviceId] exactly once.
+     *
+     * The store compare-and-set prevents concurrent or replayed refresh requests from producing multiple current
+     * credentials. Rejected results never expose which credential check failed to an external caller.
+     */
+    public suspend fun refreshCredential(
+        deviceId: RegisteredDeviceId,
+        currentCredential: String,
+    ): PairingCredentialRefreshResult {
+        val device = store.getDevice(deviceId)
+            ?: return PairingCredentialRefreshResult.Rejected("credential_rejected")
+        val now = nowMillis()
+        if (
+            device.isRevoked ||
+            now >= device.credentialExpiresAtEpochMillis ||
+            !crypto.constantTimeMatches(currentCredential, device.credentialDigest)
+        ) {
+            return PairingCredentialRefreshResult.Rejected("credential_rejected")
+        }
+        val credential = crypto.randomToken(48)
+        val credentialDigest = crypto.digest(credential)
+        val credentialExpiresAtEpochMillis = now + credentialLifetimeMillis
+        val rotated = store.rotateCredential(
+            id = deviceId,
+            expectedCredentialDigest = device.credentialDigest,
+            newCredentialDigest = credentialDigest,
+            credentialExpiresAtEpochMillis = credentialExpiresAtEpochMillis,
+        )
+        if (!rotated) return PairingCredentialRefreshResult.Rejected("credential_rejected")
+        return PairingCredentialRefreshResult.Refreshed(
+            IssuedDeviceCredential(
+                device = device.copy(
+                    credentialDigest = credentialDigest,
+                    credentialExpiresAtEpochMillis = credentialExpiresAtEpochMillis,
+                ),
+                credential = credential,
+            ),
         )
     }
 

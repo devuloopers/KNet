@@ -257,6 +257,22 @@ class PairingGatewayEndToEndTest {
 
         override suspend fun getDevice(id: RegisteredDeviceId): TrustedDevice? = devices[id]
 
+        override suspend fun rotateCredential(
+            id: RegisteredDeviceId,
+            expectedCredentialDigest: String,
+            newCredentialDigest: String,
+            credentialExpiresAtEpochMillis: Long,
+        ): Boolean {
+            val current = devices[id] ?: return false
+            if (current.isRevoked || current.credentialDigest != expectedCredentialDigest) return false
+            devices[id] = current.copy(
+                credentialDigest = newCredentialDigest,
+                credentialExpiresAtEpochMillis = credentialExpiresAtEpochMillis,
+            )
+            publish()
+            return true
+        }
+
         override suspend fun revoke(id: RegisteredDeviceId, revokedAtEpochMillis: Long): Boolean {
             val current = devices[id] ?: return false
             if (current.isRevoked) return true

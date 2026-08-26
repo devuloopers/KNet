@@ -11,6 +11,10 @@ kotlin {
         namespace = "com.devuloopers.knet.companion.data"
         compileSdk = libs.versions.android.compile.sdk.get().toInt()
         minSdk = libs.versions.android.min.sdk.get().toInt()
+
+        withHostTestBuilder {}.configure {
+            isIncludeAndroidResources = false
+        }
     }
     iosArm64()
     iosSimulatorArm64()

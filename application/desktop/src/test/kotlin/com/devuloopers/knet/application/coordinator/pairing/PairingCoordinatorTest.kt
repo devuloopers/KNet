@@ -7,6 +7,7 @@ import com.devuloopers.knet.pairing.DeviceProofAlgorithm
 import com.devuloopers.knet.pairing.DeviceScope
 import com.devuloopers.knet.pairing.PairingCompletionRequest
 import com.devuloopers.knet.pairing.PairingCompletionResult
+import com.devuloopers.knet.pairing.PairingCredentialRefreshResult
 import com.devuloopers.knet.pairing.PairingInvitationId
 import com.devuloopers.knet.pairing.PendingPairingInvitation
 import com.devuloopers.knet.identity.RegisteredDeviceId
@@ -42,9 +43,21 @@ class PairingCoordinatorTest {
         assertIs<DeviceAuthenticationResult.Rejected>(
             coordinator.authenticate(paired.issued.device.id, paired.issued.credential, DeviceScope.TRAFFIC_METADATA_READ),
         )
-        assertTrue(coordinator.revoke(paired.issued.device.id))
+        val refreshed = assertIs<PairingCredentialRefreshResult.Refreshed>(
+            coordinator.refreshCredential(paired.issued.device.id, paired.issued.credential),
+        )
         assertIs<DeviceAuthenticationResult.Rejected>(
             coordinator.authenticate(paired.issued.device.id, paired.issued.credential, DeviceScope.PROXY_STREAM),
+        )
+        assertIs<DeviceAuthenticationResult.Authenticated>(
+            coordinator.authenticate(refreshed.issued.device.id, refreshed.issued.credential, DeviceScope.PROXY_STREAM),
+        )
+        assertIs<PairingCredentialRefreshResult.Rejected>(
+            coordinator.refreshCredential(paired.issued.device.id, paired.issued.credential),
+        )
+        assertTrue(coordinator.revoke(paired.issued.device.id))
+        assertIs<DeviceAuthenticationResult.Rejected>(
+            coordinator.authenticate(refreshed.issued.device.id, refreshed.issued.credential, DeviceScope.PROXY_STREAM),
         )
 
         val expired = coordinator.createInvitation(setOf(DeviceScope.PROXY_STREAM))
@@ -85,6 +98,21 @@ class PairingCoordinatorTest {
         }
         override suspend fun putDevice(device: TrustedDevice) { devices[device.id] = device; flow.value = devices.values.toList() }
         override suspend fun getDevice(id: RegisteredDeviceId): TrustedDevice? = devices[id]
+        override suspend fun rotateCredential(
+            id: RegisteredDeviceId,
+            expectedCredentialDigest: String,
+            newCredentialDigest: String,
+            credentialExpiresAtEpochMillis: Long,
+        ): Boolean {
+            val device = devices[id] ?: return false
+            if (device.isRevoked || device.credentialDigest != expectedCredentialDigest) return false
+            devices[id] = device.copy(
+                credentialDigest = newCredentialDigest,
+                credentialExpiresAtEpochMillis = credentialExpiresAtEpochMillis,
+            )
+            flow.value = devices.values.toList()
+            return true
+        }
         override suspend fun revoke(id: RegisteredDeviceId, revokedAtEpochMillis: Long): Boolean {
             val device = devices[id] ?: return false
             devices[id] = device.copy(

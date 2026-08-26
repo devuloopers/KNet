@@ -80,6 +80,18 @@ class RoomRegisteredDeviceStore(
     override suspend fun getDevice(id: RegisteredDeviceId): TrustedDevice? =
         dao.getTrustedDevice(id.value)?.toDomain()
 
+    override suspend fun rotateCredential(
+        id: RegisteredDeviceId,
+        expectedCredentialDigest: String,
+        newCredentialDigest: String,
+        credentialExpiresAtEpochMillis: Long,
+    ): Boolean = dao.rotateCredential(
+        id = id.value,
+        expectedCredentialDigest = expectedCredentialDigest,
+        newCredentialDigest = newCredentialDigest,
+        credentialExpiresAtEpochMillis = credentialExpiresAtEpochMillis,
+    ) == 1
+
     override suspend fun revoke(id: RegisteredDeviceId, revokedAtEpochMillis: Long): Boolean =
         revokeIdentity(id, revokedAtEpochMillis)
 

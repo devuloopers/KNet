@@ -4,13 +4,20 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.application.contract.proxy.ProxyStartResult
 import com.devuloopers.knet.application.usecase.connectivity.wifi.ObserveWifiSharingUseCase
+import com.devuloopers.knet.application.usecase.pairing.CreatePairingOnboardingUseCase
 import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUseCase
 import com.devuloopers.knet.application.usecase.proxy.StartLoopbackProxyUseCase
+import com.devuloopers.knet.connectivity.model.WifiSharingState
 import com.devuloopers.knet.domain.settings.usecase.ObserveApplicationSettingsUseCase
+import com.devuloopers.knet.ui.desktop.connectivity.model.CompanionInvitationFailure
+import com.devuloopers.knet.ui.desktop.connectivity.model.CompanionInvitationUiState
+import com.devuloopers.knet.ui.desktop.connectivity.model.ConnectDeviceDrawer
 import com.devuloopers.knet.ui.desktop.connectivity.model.ConnectDeviceIntent
 import com.devuloopers.knet.ui.desktop.connectivity.model.ConnectDeviceOperation
 import com.devuloopers.knet.ui.desktop.connectivity.model.ConnectDeviceUiState
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,14 +30,17 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 
-/** UI-only state holder for the single-card Wi-Fi proxy setup workflow. */
+/** UI-only state holder for the extensible desktop connectivity-method workspace. */
 class ConnectDeviceViewModel(
     private val startLoopbackProxy: StartLoopbackProxyUseCase,
     observeProxyRuntimeState: ObserveProxyRuntimeStateUseCase,
     observeWifiSharing: ObserveWifiSharingUseCase,
     observeApplicationSettings: ObserveApplicationSettingsUseCase,
+    private val createPairingOnboarding: CreatePairingOnboardingUseCase,
+    private val nowEpochMillis: () -> Long,
 ) : ViewModel() {
     private val operationMutex = Mutex()
+    private var invitationJob: Job? = null
     private val proxyStates = observeProxyRuntimeState.execute()
     private val sharingStates = observeWifiSharing.execute()
     private val mutableUiState = MutableStateFlow(
@@ -46,7 +56,7 @@ class ConnectDeviceViewModel(
             .onEach { proxyState -> mutableUiState.update { current -> current.copy(proxyState = proxyState) } }
             .launchIn(viewModelScope)
         sharingStates
-            .onEach { sharingState -> mutableUiState.update { current -> current.copy(sharingState = sharingState) } }
+            .onEach(::onSharingStateChanged)
             .launchIn(viewModelScope)
         observeApplicationSettings.execute()
             .map { settings -> settings.proxyPort.value }
@@ -62,11 +72,128 @@ class ConnectDeviceViewModel(
     /** Applies one user interaction without exposing application use cases to Compose. */
     fun processIntent(intent: ConnectDeviceIntent) {
         when (intent) {
-            ConnectDeviceIntent.OpenSetup -> mutableUiState.update { it.copy(isSetupDrawerVisible = true) }
-            ConnectDeviceIntent.CloseSetup -> mutableUiState.update { it.copy(isSetupDrawerVisible = false) }
+            ConnectDeviceIntent.OpenWifiSetup -> openWifiSetup()
+            ConnectDeviceIntent.OpenCompanionConnection -> openCompanionConnection()
+            ConnectDeviceIntent.RefreshCompanionInvitation -> createCompanionInvitation()
+            ConnectDeviceIntent.CloseDrawer -> closeDrawer()
             ConnectDeviceIntent.StartProxy -> runOperation(ConnectDeviceOperation.STARTING_PROXY, ::startProxy)
         }
     }
+
+    private fun openWifiSetup() {
+        clearCompanionInvitation()
+        mutableUiState.update { current -> current.copy(activeDrawer = ConnectDeviceDrawer.WIFI_PROXY_SETUP) }
+    }
+
+    private fun openCompanionConnection() {
+        mutableUiState.update { current -> current.copy(activeDrawer = ConnectDeviceDrawer.COMPANION_CONNECTION) }
+        if (mutableUiState.value.activeSharing != null) createCompanionInvitation()
+    }
+
+    private fun closeDrawer() {
+        clearCompanionInvitation()
+        mutableUiState.update { current -> current.copy(activeDrawer = null) }
+    }
+
+    private fun onSharingStateChanged(sharingState: WifiSharingState) {
+        val previousSharing = mutableUiState.value.activeSharing
+        val previousInvitation = mutableUiState.value.companionInvitation
+        mutableUiState.update { current -> current.copy(sharingState = sharingState) }
+        if (!mutableUiState.value.isCompanionDrawerVisible) return
+        val active = sharingState as? WifiSharingState.Active
+        if (active == null) {
+            clearCompanionInvitation()
+            return
+        }
+        if (previousSharing?.session?.networkVersion != active.session.networkVersion) {
+            createCompanionInvitation()
+            return
+        }
+        when (previousInvitation) {
+            CompanionInvitationUiState.Idle -> createCompanionInvitation()
+            is CompanionInvitationUiState.Ready,
+            CompanionInvitationUiState.Creating,
+            CompanionInvitationUiState.Expired,
+            is CompanionInvitationUiState.Failed
+            -> Unit
+        }
+    }
+
+    private fun createCompanionInvitation() {
+        val sharing = mutableUiState.value.activeSharing
+        if (sharing == null) {
+            invitationJob?.cancel()
+            invitationJob = null
+            mutableUiState.update {
+                it.copy(
+                    companionInvitation = CompanionInvitationUiState.Failed(
+                        CompanionInvitationFailure.CONNECTIVITY_UNAVAILABLE,
+                    ),
+                )
+            }
+            return
+        }
+        val expectedNetworkVersion = sharing.session.networkVersion
+        invitationJob?.cancel()
+        mutableUiState.update { current -> current.copy(companionInvitation = CompanionInvitationUiState.Creating) }
+        invitationJob = viewModelScope.launch {
+            try {
+                val descriptor = createPairingOnboarding.execute()
+                if (
+                    !mutableUiState.value.isCompanionDrawerVisible ||
+                    mutableUiState.value.activeSharing?.session?.networkVersion != expectedNetworkVersion
+                ) {
+                    return@launch
+                }
+                while (true) {
+                    val remainingSeconds = remainingSeconds(descriptor.expiresAtEpochMillis)
+                    if (remainingSeconds <= 0L) {
+                        mutableUiState.update { current ->
+                            if (current.isCompanionDrawerVisible) {
+                                current.copy(companionInvitation = CompanionInvitationUiState.Expired)
+                            } else {
+                                current
+                            }
+                        }
+                        break
+                    }
+                    mutableUiState.update { current ->
+                        current.copy(
+                            companionInvitation = CompanionInvitationUiState.Ready(
+                                qrPayload = descriptor.qrPayload,
+                                desktopDisplayName = descriptor.desktopDisplayName,
+                                host = descriptor.controlEndpoint.host,
+                                controlPort = descriptor.controlEndpoint.port,
+                                expiresAtEpochMillis = descriptor.expiresAtEpochMillis,
+                                remainingSeconds = remainingSeconds,
+                                networkVersion = expectedNetworkVersion,
+                            ),
+                        )
+                    }
+                    delay(COUNTDOWN_TICK_MILLIS)
+                }
+            } catch (cancellation: CancellationException) {
+                throw cancellation
+            } catch (_: Exception) {
+                mutableUiState.update { current ->
+                    current.copy(
+                        companionInvitation = CompanionInvitationUiState.Failed(
+                            CompanionInvitationFailure.CREATION_FAILED,
+                        ),
+                    )
+                }
+            }
+        }
+    }
+
+    private fun clearCompanionInvitation() {
+        invitationJob?.cancel()
+        invitationJob = null
+        mutableUiState.update { current -> current.copy(companionInvitation = CompanionInvitationUiState.Idle) }
+    }
+
+    private fun remainingSeconds(expiresAtEpochMillis: Long): Long =
+        ((expiresAtEpochMillis - nowEpochMillis() + 999L) / 1_000L).coerceAtLeast(0L)
 
     private fun runOperation(
         operation: ConnectDeviceOperation,
@@ -97,5 +224,9 @@ class ConnectDeviceViewModel(
 
     private fun showFailure(code: String) {
         mutableUiState.update { it.copy(failureCode = code) }
+    }
+
+    private companion object {
+        const val COUNTDOWN_TICK_MILLIS: Long = 1_000L
     }
 }

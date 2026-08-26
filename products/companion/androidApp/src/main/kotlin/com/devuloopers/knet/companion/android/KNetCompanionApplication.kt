@@ -1,19 +1,56 @@
 package com.devuloopers.knet.companion.android
 
 import android.app.Application
+import com.devuloopers.knet.companion.android.di.AndroidCompanionBootstrap
+import com.devuloopers.knet.companion.android.di.CompanionAndroidModules
+import com.devuloopers.knet.companion.presentation.viewmodel.CompanionViewModelDependencies
+import kotlinx.coroutines.*
+import org.koin.core.KoinApplication
+import org.koin.core.context.startKoin
+import org.koin.core.context.stopKoin
 
-/** Android companion process root that owns the product graph for the process lifetime. */
+/** Android companion process root that owns asynchronous Koin bootstrap for the process lifetime. */
 class KNetCompanionApplication : Application() {
-    private val graphDelegate: Lazy<AndroidCompanionProductGraph> = lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-        AndroidCompanionProductGraph.create(this)
+    private val dependencyInjectionScope: CoroutineScope =
+        CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    @Volatile
+    private var koinApplication: KoinApplication? = null
+    private val dependencyInjectionDeferred: Lazy<Deferred<KoinApplication>> =
+        lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+            dependencyInjectionScope.async {
+                val bootstrap = AndroidCompanionBootstrap.create(this@KNetCompanionApplication)
+                var startedApplication: KoinApplication? = null
+                try {
+                    startKoin {
+                        allowOverride(false)
+                        modules(CompanionAndroidModules.create(bootstrap))
+                    }.also { application ->
+                        startedApplication = application
+                        // Resolve the complete non-UI graph before exposing the container to the Activity.
+                        application.koin.get<CompanionViewModelDependencies>()
+                        koinApplication = application
+                    }
+                } catch (failure: Throwable) {
+                    if (startedApplication == null) {
+                        bootstrap.platformAdapters.close()
+                    } else {
+                        stopKoin()
+                    }
+                    throw failure
+                }
+            }
+        }
+
+    /** Waits until restored Android dependencies are registered in the process Koin container. */
+    internal suspend fun awaitDependencyInjection() {
+        dependencyInjectionDeferred.value.await()
     }
 
-    internal val graph: AndroidCompanionProductGraph
-        get() = graphDelegate.value
-
-    /** Releases owned callbacks during emulator/test process teardown when Android invokes this callback. */
+    /** Stops Koin and releases callback-owning singleton definitions during emulator/test process teardown. */
     override fun onTerminate() {
-        if (graphDelegate.isInitialized()) graphDelegate.value.close()
+        if (koinApplication != null) stopKoin()
+        dependencyInjectionScope.cancel()
         super.onTerminate()
     }
 }

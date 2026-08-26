@@ -60,6 +60,7 @@ dependencies {
 
     testImplementation(libs.kotlin.test)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(project(":core:companion"))
 }
 
 val appName: String = providers.gradleProperty("knet.app.name").getOrElse("KNet")

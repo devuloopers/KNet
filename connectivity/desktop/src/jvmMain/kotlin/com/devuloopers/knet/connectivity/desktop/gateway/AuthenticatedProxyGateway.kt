@@ -214,9 +214,11 @@ public class AuthenticatedProxyGateway(
         running.set(false)
         runCatching { listener?.close() }
         listener = null
-        activeSockets.toList().forEach { socket -> runCatching(socket::close) }
+        activeSockets.forEach { socket -> runCatching(socket::close) }
         activeSockets.clear()
-        activeByDevice.values.flatten().forEach { runCatching(it::close) }
+        activeByDevice.values.forEach { sockets ->
+            sockets.forEach { socket -> runCatching(socket::close) }
+        }
         activeByDevice.clear()
         gatewayScope.cancel()
     }

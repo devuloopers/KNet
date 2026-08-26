@@ -1,12 +1,16 @@
 package com.devuloopers.knet.companion.model
 
 import com.devuloopers.knet.identity.RegisteredDeviceId
+import com.devuloopers.knet.pairing.DeviceProofAlgorithm
 import com.devuloopers.knet.pairing.DeviceScope
+import com.devuloopers.knet.pairing.PairingCompletionRequest
 import com.devuloopers.knet.pairing.PairingInvitation
 import com.devuloopers.knet.pairing.PairingInvitationId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class CompanionModelsTest {
     @Test
@@ -54,8 +58,148 @@ class CompanionModelsTest {
         assertFailsWith<IllegalArgumentException> { CompanionCredentialReference("r".repeat(513)) }
     }
 
+    @Test
+    fun certificateChallengeNonceAcceptsOnlyBoundedBase64UrlText() {
+        assertEquals("a".repeat(43), CompanionCertificateChallengeNonce("a".repeat(43)).value)
+        assertFailsWith<IllegalArgumentException> { CompanionCertificateChallengeNonce("a".repeat(31)) }
+        assertFailsWith<IllegalArgumentException> { CompanionCertificateChallengeNonce("a".repeat(129)) }
+        assertFailsWith<IllegalArgumentException> { CompanionCertificateChallengeNonce("a".repeat(42) + "+") }
+    }
+
+    @Test
+    fun companionRootCertificateIsBoundedAndDefensivelyCopied() {
+        val input = byteArrayOf(1, 2, 3)
+        val certificate = CompanionRootCertificate(input)
+        input[0] = 9
+        val copy = certificate.copyBytes()
+        copy[1] = 9
+
+        assertEquals(1, certificate.copyBytes()[0])
+        assertEquals(2, certificate.copyBytes()[1])
+        assertFailsWith<IllegalArgumentException> { CompanionRootCertificate(ByteArray(0)) }
+        assertFailsWith<IllegalArgumentException> {
+            CompanionRootCertificate(ByteArray(CompanionCertificateProtocol.MAXIMUM_ROOT_CERTIFICATE_BYTES + 1))
+        }
+        assertFalse(certificate == CompanionRootCertificate(byteArrayOf(9, 2, 3)))
+    }
+
+    @Test
+    fun companionBootstrapPayloadIsSmallAndRoundTripsCanonicalVersionThreeFields() {
+        val bootstrap = bootstrap()
+        val codec = CompanionBootstrapPayloadCodec()
+
+        val payload = codec.encode(bootstrap)
+
+        assertTrue(payload.startsWith("knet://pair/v3?"))
+        assertTrue(payload.length < 512)
+        assertFalse(payload.contains("rootDer"))
+        assertFalse(payload.contains("desktopName"))
+        assertEquals(bootstrap, codec.decode(payload))
+    }
+
+    @Test
+    fun companionBootstrapPayloadRejectsLegacyAndDuplicateFields() {
+        val codec = CompanionBootstrapPayloadCodec()
+        val payload = codec.encode(bootstrap())
+
+        assertFailsWith<IllegalArgumentException> {
+            codec.decode(payload.replace("knet://pair/v3?", "knet://pair/v2?"))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            codec.decode("$payload&id=duplicate")
+        }
+    }
+
+    @Test
+    fun companionBootstrapSeparatesOpenPublicRootDeliveryFromSecureRedemption() {
+        assertFailsWith<IllegalArgumentException> {
+            bootstrap().copy(
+                rootCertificateEndpoint = CompanionServiceEndpoint("192.168.1.2", 8181, secure = true),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            bootstrap().copy(
+                retrievalEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, secure = false),
+            )
+        }
+    }
+
+    @Test
+    fun completeInvitationResponseAndRedemptionRequestRoundTripSeparately() {
+        val invitation = invitation().copy(desktopDisplayName = "Development Mac & Lab")
+        val invitationCodec = CompanionInvitationResponseCodec()
+        val redemption = CompanionBootstrapRedemptionRequest(bootstrap().id, bootstrap().retrievalSecret)
+        val redemptionCodec = CompanionBootstrapRedemptionCodec()
+
+        assertEquals(invitation, invitationCodec.decode(invitationCodec.encode(invitation)))
+        assertEquals(redemption, redemptionCodec.decode(redemptionCodec.encode(redemption)))
+    }
+
+    @Test
+    fun pairingAndCredentialRefreshControlBodiesRoundTrip() {
+        val completion = PairingCompletionRequest(
+            invitationId = PairingInvitationId("invitation-1"),
+            invitationSecret = "s".repeat(32),
+            deviceId = RegisteredDeviceId("device-1"),
+            displayName = "Development Pixel",
+            publicKeyEncoded = "public-key-material",
+            proofSignatureEncoded = "proof-signature-material",
+            proofAlgorithm = DeviceProofAlgorithm.ECDSA_P256_SHA256,
+        )
+        val pairingGrant = CompanionPairingGrant(
+            credential = "c".repeat(48),
+            scopes = setOf(DeviceScope.PROXY_STREAM, DeviceScope.SETUP_ARTIFACT_READ),
+            credentialExpiresAtEpochMillis = 9_000L,
+        )
+        val refreshRequest = CompanionCredentialRefreshRequest(RegisteredDeviceId("device-1"))
+        val refreshGrant = CompanionCredentialRefreshGrant("n".repeat(48), 10_000L)
+
+        assertEquals(
+            completion,
+            CompanionPairingCompletionCodec().run { decode(encode(completion)) },
+        )
+        assertEquals(
+            pairingGrant,
+            CompanionPairingGrantCodec().run { decode(encode(pairingGrant)) },
+        )
+        assertEquals(
+            refreshRequest,
+            CompanionCredentialRefreshRequestCodec().run { decode(encode(refreshRequest)) },
+        )
+        assertEquals(
+            refreshGrant,
+            CompanionCredentialRefreshGrantCodec().run { decode(encode(refreshGrant)) },
+        )
+    }
+
+    @Test
+    fun controlBodyCodecsRejectDuplicateUnexpectedAndOversizedFields() {
+        val refreshCodec = CompanionCredentialRefreshRequestCodec()
+
+        assertFailsWith<IllegalArgumentException> {
+            refreshCodec.decode("deviceId=device-1&deviceId=device-2".encodeToByteArray())
+        }
+        assertFailsWith<IllegalArgumentException> {
+            refreshCodec.decode("deviceId=device-1&unexpected=value".encodeToByteArray())
+        }
+        assertFailsWith<IllegalArgumentException> {
+            refreshCodec.decode(ByteArray(CompanionControlProtocol.MAXIMUM_REQUEST_BYTES + 1))
+        }
+    }
+
+    private fun bootstrap(): CompanionPairingBootstrap = CompanionPairingBootstrap(
+        protocolVersion = CompanionPairingInvitation.CURRENT_PROTOCOL_VERSION,
+        id = CompanionBootstrapId("bootstrap-1"),
+        retrievalSecret = CompanionBootstrapSecret("r".repeat(32)),
+        expiresAtEpochMillis = 2_000L,
+        rootCertificateEndpoint = CompanionServiceEndpoint("192.168.1.2", 8181, secure = false),
+        retrievalEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, secure = true),
+        transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
+        rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
+    )
+
     private fun invitation(): CompanionPairingInvitation = CompanionPairingInvitation(
-        protocolVersion = 1,
+        protocolVersion = CompanionPairingInvitation.CURRENT_PROTOCOL_VERSION,
         desktopId = CompanionDesktopId("desktop-1"),
         desktopDisplayName = "Development Mac",
         pairing = PairingInvitation(
@@ -68,6 +212,7 @@ class CompanionModelsTest {
         proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", 8184, secure = true),
         transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
         rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
+        rootCertificate = CompanionRootCertificate(byteArrayOf(1, 2, 3)),
     )
 
     private fun registration(): CompanionRegistration = CompanionRegistration(
@@ -78,6 +223,7 @@ class CompanionModelsTest {
         proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", 8184, secure = true),
         transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
         rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
+        rootCertificate = CompanionRootCertificate(byteArrayOf(1, 2, 3)),
         credentialReference = CompanionCredentialReference("credential-reference"),
         scopes = setOf(DeviceScope.PROXY_STREAM),
         pairedAtEpochMillis = 1_000L,

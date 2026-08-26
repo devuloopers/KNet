@@ -8,6 +8,11 @@ Composes and launches the desktop product. This is the desktop composition root 
 
 - Desktop `main`, configuration loading, Koin composition, process-owned startup policies, and reverse-order
   shutdown of connectivity, gateway, setup portal, inspector, proxy/capture, and Room resources.
+- Composition and lifecycle ownership for the authenticated companion control gateway and its process-stable
+  KNet-CA-signed TLS identity.
+- Product-owned companion onboarding environment composition, including the active setup-portal authority,
+  current LAN address, public root and transport identity, service endpoints, stable desktop metadata, and shared
+  version-3 bootstrap/response codecs.
 - All Koin binding declarations, organized under `di/<feature>/` so each feature's adapters, use cases, and ViewModels have one visible assembly location.
 - Wiring concrete adapters to application contracts.
 - Routing typed connectivity diagnostics into the product logging backend without making reusable connectivity
@@ -42,6 +47,12 @@ the shared capture-state observer used by Traffic and API Studio. API Studio rec
 while canonical capture is active, so a direct or capture-paused call cannot create a Room session or Traffic row.
 The same assembly injects a defensive DER copy of the process-owned KNet Root CA into the API client as
 local-proxy-only trust material. It does not weaken direct or proxy-to-origin TLS verification.
+Product integration tests exercise the control gateway through real TLS with generated KNet root and leaf
+material; reusable connectivity modules do not gain a certificate-engine dependency for test convenience.
+The Connect Device composition creates a lightweight companion bootstrap from the active LAN session and resolves
+the setup portal's actual fallback port instead of assuming 8181. The complete invitation remains behind the
+one-time TLS redemption route. The same process-owned control gateway completes proof-bearing pairing and atomic
+credential refresh. The secured VPN/data-plane adapter remains a separate, deliberately fail-closed capability.
 Cross-feature request presentation lives in `di/request`, where descriptor strategies are Koin multi-bindings
 and deterministic strategy priority is enforced by the domain resolver. API Studio, Traffic, and Breakpoint
 ViewModels consume only that composed use case.

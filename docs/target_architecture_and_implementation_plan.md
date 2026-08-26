@@ -86,8 +86,9 @@ modules only when concrete ownership requires them:
 7. `:core:companion`, `:application:companion`, `:data:companion`, `:ui:companion:presentation`, and
    `:ui:companion:sharedUi` — portable companion contracts/workflows/adapters/state/Compose UI now justified by
    Android and iOS compilation.
-8. `:connectivity:companion:android` — Android network/VPN-consent lifecycle adapter boundary; the concrete packet
-   backend remains a separate future implementation.
+8. `:connectivity:companion` — KMP platform connectivity boundary; Android owns its network, certificate, and
+   VPN-consent adapters in `androidMain`, iOS placeholders remain fail closed in `iosMain`, and concrete packet
+   backends remain separate future implementations.
 9. `:products:companion:androidApp` — installable Android product shell and composition root for capabilities that now
    have production adapters; it does not simulate unavailable transport, certificate, or VPN behavior.
 10. `:ui:core` — the shared Compose Multiplatform design system and adaptive component foundation for JVM desktop,
@@ -190,7 +191,7 @@ There are no reverse arrows from core/application to Netty, Room, Ktor, Graal, C
 | `:data:desktop` | desktop repository adapters/mappers, secure/network adapters until extracted | cross-engine orchestration, process-lifetime unmanaged scopes, capture hot-path callbacks |
 | `:connectivity:desktop` | PAC/manual/Apple/ADB implementations, platform network snapshot, strict setup listener, pairing security, authenticated ingress gateway | proxy parsing, traffic storage, feature UI, protocol inspection |
 | `:data:companion` | versioned companion persistence/control protocol and platform secure-storage/key adapters | workflow policy, UI, VPN lifecycle, proxy/traffic ownership |
-| `:connectivity:companion:android` | Android network observation, VPN consent, and inspection-backend lifecycle adapter | packet-engine implementation, shared policy, UI, desktop proxy/capture |
+| `:connectivity:companion` | KMP platform connectivity adapters; Android implementation and fail-closed iOS placeholders | packet-engine implementation, shared policy, UI, desktop proxy/capture |
 | `:ui:core` | Compose Multiplatform theme, semantic tokens, resources, and platform-adaptive reusable components | feature state/screens, application policy, runtime adapters, platform APIs in common code |
 | `:ui:companion:presentation` | portable companion state/actions/effects and lifecycle-owned ViewModel | Compose/SwiftUI widgets, platform intents, repositories, sockets, VPN handles |
 | `:ui:companion:sharedUi` | Compose Multiplatform screens and shared resources using `:ui:core` | duplicate theme palettes, platform lifecycle/effects, repositories, transports, credentials, VPN handles |
@@ -1498,7 +1499,7 @@ Shared/mobile foundation and product modules now present in this repository:
 :ui:core                         JVM/Android/iOS Compose design system and adaptive components
 :ui:companion:presentation       shared UI state/actions/effects/ViewModel
 :ui:companion:sharedUi           shared Compose Multiplatform screens/resources using :ui:core
-:connectivity:companion:android  Android network/VPN-consent/inspection lifecycle boundary
+:connectivity:companion          KMP Android implementation and fail-closed iOS connectivity boundary
 :products:companion:androidApp   installable Android Compose host and product composition root
 ```
 

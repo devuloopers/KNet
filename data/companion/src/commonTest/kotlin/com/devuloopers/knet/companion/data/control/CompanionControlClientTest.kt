@@ -1,10 +1,24 @@
 package com.devuloopers.knet.companion.data.control
 
+import com.devuloopers.knet.companion.application.contract.CompanionControlOperation
+import com.devuloopers.knet.companion.application.contract.CompanionControlRequest
+import com.devuloopers.knet.companion.application.contract.CompanionControlResponse
+import com.devuloopers.knet.companion.application.contract.CompanionControlTransport
+import com.devuloopers.knet.companion.application.contract.CompanionCredentialRefreshResult
 import com.devuloopers.knet.companion.application.contract.CompanionDeviceProofSigner
 import com.devuloopers.knet.companion.application.contract.CompanionPairingClientResult
+import com.devuloopers.knet.companion.model.CompanionPairingCompletionCodec
+import com.devuloopers.knet.companion.model.CompanionPairingGrant
+import com.devuloopers.knet.companion.model.CompanionPairingGrantCodec
 import com.devuloopers.knet.companion.model.CompanionDesktopId
+import com.devuloopers.knet.companion.model.CompanionCredentialReference
+import com.devuloopers.knet.companion.model.CompanionCredentialRefreshGrant
+import com.devuloopers.knet.companion.model.CompanionCredentialRefreshGrantCodec
+import com.devuloopers.knet.companion.model.CompanionCredentialRefreshRequestCodec
 import com.devuloopers.knet.companion.model.CompanionDeviceIdentity
 import com.devuloopers.knet.companion.model.CompanionPairingInvitation
+import com.devuloopers.knet.companion.model.CompanionRootCertificate
+import com.devuloopers.knet.companion.model.CompanionRegistration
 import com.devuloopers.knet.companion.model.CompanionServiceEndpoint
 import com.devuloopers.knet.companion.model.Sha256Fingerprint
 import com.devuloopers.knet.identity.RegisteredDeviceId
@@ -19,9 +33,6 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 
 class CompanionControlClientTest {
     @Test
@@ -37,8 +48,9 @@ class CompanionControlClientTest {
                 capturedRequest = request
                 CompanionControlResponse(
                     statusCode = 200,
-                    body = """{"credential":"grant-secret","scopes":["PROXY_STREAM"],"credential_expires_at_epoch_millis":9000}"""
-                        .encodeToByteArray(),
+                    body = CompanionPairingGrantCodec().encode(
+                        CompanionPairingGrant("grant-secret-value", setOf(DeviceScope.PROXY_STREAM), 9_000L),
+                    ),
                 )
             },
         )
@@ -46,18 +58,20 @@ class CompanionControlClientTest {
         val result = client.pair(invitation(), identity(), " Pixel ")
 
         val paired = assertIs<CompanionPairingClientResult.Paired>(result)
-        assertEquals("grant-secret", paired.credential)
+        assertEquals("grant-secret-value", paired.credential)
         assertEquals(setOf(DeviceScope.PROXY_STREAM), paired.scopes)
         assertTrue(requireNotNull(signedMessage).contains(DeviceProofAlgorithm.ECDSA_P256_SHA256.name))
         val request = requireNotNull(capturedRequest)
-        assertEquals("/companion/v1/pair", request.path)
+        assertEquals(CompanionControlOperation.PAIR, request.operation)
         assertEquals(invitation().controlEndpoint, request.endpoint)
         assertEquals(invitation().transportIdentitySha256, request.transportIdentitySha256)
-        assertEquals(null, request.authorizationCredential)
-        val payload = Json.parseToJsonElement(request.copyBody().decodeToString()).jsonObject
-        assertEquals("one-time-secret!", payload.getValue("invitation_secret").jsonPrimitive.content)
-        assertEquals(DeviceProofAlgorithm.ECDSA_P256_SHA256.name, payload.getValue("proof_algorithm").jsonPrimitive.content)
-        assertEquals("signed-proof", payload.getValue("proof_signature_encoded").jsonPrimitive.content)
+        assertEquals(invitation().rootCertificateSha256, request.rootCertificateSha256)
+        assertEquals(invitation().rootCertificate, request.rootCertificate)
+        assertEquals(null, request.authorization)
+        val payload = CompanionPairingCompletionCodec().decode(request.copyBody())
+        assertEquals("one-time-secret!", payload.invitationSecret)
+        assertEquals(DeviceProofAlgorithm.ECDSA_P256_SHA256, payload.proofAlgorithm)
+        assertEquals("signed-proof", payload.proofSignatureEncoded)
     }
 
     @Test
@@ -78,13 +92,43 @@ class CompanionControlClientTest {
     }
 
     @Test
+    fun credentialRefreshUsesTypedAuthorizationAndBoundedGrant() = runTest {
+        var capturedRequest: CompanionControlRequest? = null
+        val client = DefaultCompanionPairingClient(
+            signer = CompanionDeviceProofSigner { _, _ -> "signed-proof" },
+            transport = CompanionControlTransport { request ->
+                capturedRequest = request
+                CompanionControlResponse(
+                    200,
+                    CompanionCredentialRefreshGrantCodec().encode(
+                        CompanionCredentialRefreshGrant("new-credential-value", 12_000L),
+                    ),
+                )
+            },
+        )
+
+        val result = assertIs<CompanionCredentialRefreshResult.Refreshed>(
+            client.refresh(registration(), "current-credential-value"),
+        )
+
+        assertEquals("new-credential-value", result.credential)
+        val request = requireNotNull(capturedRequest)
+        assertEquals(CompanionControlOperation.REFRESH_CREDENTIAL, request.operation)
+        assertEquals("device-1", request.authorization?.deviceId?.value)
+        assertEquals("current-credential-value", request.authorization?.credential())
+        assertEquals("device-1", CompanionCredentialRefreshRequestCodec().decode(request.copyBody()).deviceId.value)
+    }
+
+    @Test
     fun requestAndResponseOwnDefensiveBodyCopies() {
         val requestBytes = byteArrayOf(1, 2, 3)
         val responseBytes = byteArrayOf(4, 5, 6)
         val request = CompanionControlRequest(
             endpoint = invitation().controlEndpoint,
             transportIdentitySha256 = invitation().transportIdentitySha256,
-            path = "/companion/v1/pair",
+            rootCertificateSha256 = invitation().rootCertificateSha256,
+            rootCertificate = invitation().rootCertificate,
+            operation = CompanionControlOperation.PAIR,
             body = requestBytes,
         )
         val response = CompanionControlResponse(200, responseBytes)
@@ -114,6 +158,7 @@ class CompanionControlClientTest {
         proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", 8184, true),
         transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
         rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
+        rootCertificate = CompanionRootCertificate(byteArrayOf(1, 2, 3)),
     )
 
     private fun identity(): CompanionDeviceIdentity = CompanionDeviceIdentity(
@@ -121,5 +166,20 @@ class CompanionControlClientTest {
         publicKeyEncoded = "public-key",
         privateKeyReference = "private-key-reference",
         proofAlgorithm = DeviceProofAlgorithm.ECDSA_P256_SHA256,
+    )
+
+    private fun registration(): CompanionRegistration = CompanionRegistration(
+        desktopId = CompanionDesktopId("desktop-1"),
+        desktopDisplayName = "Development Mac",
+        deviceId = RegisteredDeviceId("device-1"),
+        controlEndpoint = invitation().controlEndpoint,
+        proxyEndpoint = invitation().proxyEndpoint,
+        transportIdentitySha256 = invitation().transportIdentitySha256,
+        rootCertificateSha256 = invitation().rootCertificateSha256,
+        rootCertificate = invitation().rootCertificate,
+        credentialReference = CompanionCredentialReference("credential-reference"),
+        scopes = setOf(DeviceScope.PROXY_STREAM),
+        pairedAtEpochMillis = 1_000L,
+        credentialExpiresAtEpochMillis = 9_000L,
     )
 }

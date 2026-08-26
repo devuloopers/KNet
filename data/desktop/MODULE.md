@@ -17,10 +17,14 @@ Adapts desktop engines and storage to existing domain and application-facing rep
 - Concrete adapters for certificates and script execution; UI sees only application contracts.
 - Atomic, versioned certificate/rule configuration persistence as one snapshot, plus owner-only desktop Root CA material and OS-specific trust-store detection/installation.
 - The bridge from the certificate runtime to the proxy-owned `ServerTlsContextProvider`; proxy code never imports CA, cache, private-key, persistence, or OS-trust implementations.
+- A process-stable KNet-CA-signed TLS identity for the fixed companion certificate-challenge server name. Private
+  key material remains inside the desktop certificate runtime and only the server socket factory plus defensive
+  public-root copies reach connectivity composition.
 - Post-capture semantic inspection orchestration, annotation persistence, and grouped bounded annotation
   observation for retained Traffic rows.
 - Bounded body-integrity verification in addition to retention/startup recovery.
-- Room-backed registered-device and trusted-pairing persistence behind application contracts.
+- Room-backed registered-device and trusted-pairing persistence behind application contracts, including atomic
+  compare-and-set credential rotation that rejects stale, replayed, revoked, or concurrently replaced digests.
 - Generic breakpoint criteria-envelope persistence. Room stores a normalized protocol ID and opaque
   versioned payload without GraphQL/gRPC/WebSocket mapping branches.
 - Lossless API Studio request mapping and transactional draft promotion through the collection DAO.

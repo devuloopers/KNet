@@ -3,6 +3,8 @@ package com.devuloopers.knet.companion.application.usecase
 import com.devuloopers.knet.companion.application.contract.CompanionCredentialStore
 import com.devuloopers.knet.companion.application.contract.CompanionDeviceIdentityProvider
 import com.devuloopers.knet.companion.application.contract.CompanionInvitationCodec
+import com.devuloopers.knet.companion.application.contract.CompanionInvitationResolutionResult
+import com.devuloopers.knet.companion.application.contract.CompanionInvitationResolver
 import com.devuloopers.knet.companion.application.contract.CompanionPairingClient
 import com.devuloopers.knet.companion.application.contract.CompanionPairingClientResult
 import com.devuloopers.knet.companion.application.contract.CompanionRegistrationRepository
@@ -13,6 +15,7 @@ import com.devuloopers.knet.companion.model.CompanionDeviceIdentity
 import com.devuloopers.knet.companion.model.CompanionFailure
 import com.devuloopers.knet.companion.model.CompanionFailureCode
 import com.devuloopers.knet.companion.model.CompanionPairingInvitation
+import com.devuloopers.knet.companion.model.CompanionPairingBootstrap
 import com.devuloopers.knet.companion.model.CompanionRegistration
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
@@ -21,22 +24,50 @@ import kotlinx.coroutines.withContext
 /** Validates a scanned or pasted invitation without retaining its secret. */
 public class AcceptPairingInvitationUseCase(
     private val codec: CompanionInvitationCodec,
+    private val resolver: CompanionInvitationResolver,
     private val nowEpochMillis: () -> Long,
 ) {
-    public fun execute(payload: String): AcceptPairingInvitationResult {
+    /** Decodes and redeems [payload] without retaining its bootstrap secret after completion. */
+    public suspend fun execute(payload: String): AcceptPairingInvitationResult {
         if (payload.isBlank()) return AcceptPairingInvitationResult.Rejected(
             CompanionFailure(CompanionFailureCode.INVITATION_INVALID, "Pairing invitation is empty.", false),
         )
         return when (val decoded = codec.decode(payload.trim())) {
             is InvitationDecodeResult.Rejected -> AcceptPairingInvitationResult.Rejected(decoded.failure)
             is InvitationDecodeResult.Accepted -> {
-                if (nowEpochMillis() >= decoded.invitation.pairing.expiresAtEpochMillis) {
+                if (nowEpochMillis() >= decoded.bootstrap.expiresAtEpochMillis) {
                     AcceptPairingInvitationResult.Rejected(
                         CompanionFailure(CompanionFailureCode.INVITATION_EXPIRED, "Pairing invitation expired.", false),
                     )
                 } else {
-                    AcceptPairingInvitationResult.Accepted(decoded.invitation)
+                    resolve(decoded.bootstrap)
                 }
+            }
+        }
+    }
+
+    private suspend fun resolve(
+        bootstrap: CompanionPairingBootstrap,
+    ): AcceptPairingInvitationResult = when (val result = resolver.resolve(bootstrap)) {
+        is CompanionInvitationResolutionResult.Rejected -> AcceptPairingInvitationResult.Rejected(result.failure)
+        is CompanionInvitationResolutionResult.Resolved -> {
+            val invitation = result.invitation
+            if (
+                nowEpochMillis() >= invitation.pairing.expiresAtEpochMillis ||
+                invitation.pairing.expiresAtEpochMillis != bootstrap.expiresAtEpochMillis ||
+                invitation.controlEndpoint != bootstrap.retrievalEndpoint ||
+                invitation.transportIdentitySha256 != bootstrap.transportIdentitySha256 ||
+                invitation.rootCertificateSha256 != bootstrap.rootCertificateSha256
+            ) {
+                AcceptPairingInvitationResult.Rejected(
+                    CompanionFailure(
+                        CompanionFailureCode.INVITATION_INVALID,
+                        "Desktop returned pairing details that do not match the scanned invitation.",
+                        false,
+                    ),
+                )
+            } else {
+                AcceptPairingInvitationResult.Accepted(invitation)
             }
         }
     }
@@ -48,7 +79,7 @@ public sealed interface AcceptPairingInvitationResult {
     public data class Rejected(public val failure: CompanionFailure) : AcceptPairingInvitationResult
 }
 
-/** Completes pairing and commits credential plus non-secret registration with rollback on failure. */
+/** Completes pairing and atomically commits the secret plus its non-secret registration locally. */
 public class PairCompanionDeviceUseCase(
     private val identityProvider: CompanionDeviceIdentityProvider,
     private val pairingClient: CompanionPairingClient,
@@ -107,6 +138,7 @@ public class PairCompanionDeviceUseCase(
                     proxyEndpoint = invitation.proxyEndpoint,
                     transportIdentitySha256 = invitation.transportIdentitySha256,
                     rootCertificateSha256 = invitation.rootCertificateSha256,
+                    rootCertificate = invitation.rootCertificate,
                     credentialReference = credentialReference,
                     scopes = paired.scopes,
                     pairedAtEpochMillis = pairedAt,
@@ -116,31 +148,25 @@ public class PairCompanionDeviceUseCase(
                     it.desktopId == invitation.desktopId
                 }
                 val previousActiveDesktopId = registrations.activeRegistration.value?.desktopId
-                var previousCredential: String? = null
-                var credentialMutationStarted = false
                 try {
-                    previousCredential = credentials.read(credentialReference)
-                    credentialMutationStarted = true
-                    credentials.write(credentialReference, paired.credential)
-                    registrations.upsert(registration, makeActive = true)
+                    withContext(NonCancellable) {
+                        credentials.write(credentialReference, paired.credential)
+                        registrations.upsert(registration, makeActive = true)
+                    }
                     PairCompanionDeviceResult.Paired(registration)
                 } catch (cancelled: CancellationException) {
-                    rollbackPairing(
+                    invalidateLocalPairing(
                         invitation.desktopId,
                         credentialReference,
-                        previousCredential,
-                        credentialMutationStarted,
-                        previousRegistration,
+                        previousRegistration?.credentialReference,
                         previousActiveDesktopId,
                     )
                     throw cancelled
                 } catch (_: Throwable) {
-                    rollbackPairing(
+                    invalidateLocalPairing(
                         invitation.desktopId,
                         credentialReference,
-                        previousCredential,
-                        credentialMutationStarted,
-                        previousRegistration,
+                        previousRegistration?.credentialReference,
                         previousActiveDesktopId,
                     )
                     PairCompanionDeviceResult.Rejected(
@@ -151,32 +177,20 @@ public class PairCompanionDeviceUseCase(
         }
     }
 
-    private suspend fun rollbackPairing(
+    private suspend fun invalidateLocalPairing(
         desktopId: CompanionDesktopId,
         credentialReference: CompanionCredentialReference,
-        previousCredential: String?,
-        credentialMutationStarted: Boolean,
-        previousRegistration: CompanionRegistration?,
+        previousCredentialReference: CompanionCredentialReference?,
         previousActiveDesktopId: CompanionDesktopId?,
     ) {
         withContext(NonCancellable) {
-            if (credentialMutationStarted) {
-                runCatching {
-                    if (previousCredential == null) {
-                        credentials.remove(credentialReference)
-                    } else {
-                        credentials.write(credentialReference, previousCredential)
-                    }
-                }
+            // A successful remote pairing invalidates any prior credential for this desktop. Never
+            // restore that stale secret when the local commit fails; require a fresh pairing instead.
+            listOfNotNull(credentialReference, previousCredentialReference).distinct().forEach { reference ->
+                runCatching { credentials.remove(reference) }
             }
-            runCatching {
-                if (previousRegistration == null) {
-                    registrations.remove(desktopId)
-                } else {
-                    registrations.upsert(previousRegistration, makeActive = false)
-                }
-                registrations.setActive(previousActiveDesktopId)
-            }
+            runCatching { registrations.remove(desktopId) }
+            runCatching { registrations.setActive(previousActiveDesktopId?.takeUnless { it == desktopId }) }
         }
     }
 }
@@ -186,4 +200,3 @@ public sealed interface PairCompanionDeviceResult {
     public data class Paired(public val registration: CompanionRegistration) : PairCompanionDeviceResult
     public data class Rejected(public val failure: CompanionFailure) : PairCompanionDeviceResult
 }
-

@@ -1,7 +1,8 @@
 # Android Companion Foundation
 
-- **Status:** Shared foundation, Compose Multiplatform Android shell, and Android platform boundaries implemented;
-  transport, certificate, complete workflow UI, and packet/tunnel backends not started
+- **Status:** Shared foundation, Compose Multiplatform Android shell, Android connectivity/certificate boundaries,
+  and fail-closed iOS connectivity placeholders implemented; transport, complete workflow UI, and packet/tunnel
+  backends not started
 - **Updated:** 2026-08-26
 - **Scope:** Android-first companion application logic that also compiles for iOS, without changing desktop proxy, traffic, PAC, manual Wi-Fi, or protocol-inspector architecture
 
@@ -26,7 +27,7 @@ streams to the existing desktop companion gateway, which then enters the same pr
 | `:ui:companion:presentation` | Framework-neutral state, actions, effects, and lifecycle-owned shared ViewModel | JVM, Android, iOS |
 | `:ui:core` | Shared Compose theme, semantic tokens, resources, and adaptive visual components | JVM, Android, iOS |
 | `:ui:companion:sharedUi` | Shared Compose Multiplatform screens and localized UI resources | JVM, Android, iOS |
-| `:connectivity:companion:android` | Android network observation, VPN-consent boundary, and deterministic inspection-controller lifecycle | Android |
+| `:connectivity:companion` | KMP connectivity boundary with qualified Android network/certificate/VPN lifecycle adapters and fail-closed iOS placeholders | Android, iOS |
 | `:products:companion:androidApp` | APK, manifest, thin Compose host lifecycle, and product composition for currently implemented Android adapters | Android |
 
 `core:identity`, `core:pairing`, and `core:connectivity` now compile for Android and iOS as portable prerequisites.
@@ -43,15 +44,16 @@ Android product shell
 :ui:companion:sharedUi       -> :ui:core + :ui:companion:presentation + :core:companion
 :ui:companion:presentation -> :application:companion -> :core:companion
 :data:companion             -> :application:companion + portable core
-:connectivity:companion:android -> :application:companion + :core:companion
+:connectivity:companion         -> :application:companion + :core:companion
 
 platform adapters -> application contracts
 application/core -X-> Android Context, Intent, VpnService, KeyStore, sockets, Compose, Room
 companion modules -X-> desktop proxy internals, traffic persistence, protocol inspectors
 ```
 
-The intermediate `ui/companion` and `connectivity/companion` directories are Gradle namespaces only and have their
-own ownership documents. They contain no runtime source.
+The intermediate `ui/companion` directory remains a Gradle namespace. `connectivity/companion` is now a KMP module:
+Android APIs are isolated in `androidMain`, while `iosMain` contains explicit fail-closed placeholders pending
+native Network, Security, and Network Extension implementations.
 
 ## State and runtime flow
 

@@ -38,8 +38,9 @@ Gradle enforces four rules through `verifyArchitectureFoundation`:
 ## Runtime implementations and adapters
 
 - [`:connectivity:desktop`](../connectivity/desktop/MODULE.md) — desktop connectivity mechanism implementations.
-- [`:connectivity:companion:android`](../connectivity/companion/android/MODULE.md) — Android network observation,
-  VPN consent, and inspection-backend lifecycle boundary.
+- [`:connectivity:companion`](../connectivity/companion/MODULE.md) — shared bounded Ktor bootstrap/control
+  transports, native Android/Darwin TLS enforcement, qualified Android network/certificate/VPN lifecycle
+  boundaries, and explicit fail-closed iOS device-capability placeholders.
 - [`:data:companion`](../data/companion/MODULE.md) — versioned companion registration/credential adapters,
   invitation codec, shared control client, and Android Keystore implementations.
 - [`:data:desktop`](../data/desktop/MODULE.md) — desktop repository, capture-generation, registered-device, and mapping adapters.
@@ -78,7 +79,8 @@ Gradle enforces four rules through `verifyArchitectureFoundation`:
 - [`:ui:desktop:apiStudio:websocket`](../ui/desktop/apiStudio/websocket/MODULE.md) — contributed WebSocket
   authoring, interactive duplex execution, and versioned workspace draft codec.
 - [`:ui:desktop:traffic`](../ui/desktop/traffic/MODULE.md) — traffic list, capture controls, live breakpoint projection, and inspector coordination.
-- [`:ui:desktop:connectivity`](../ui/desktop/connectivity/MODULE.md) — connectivity card grid, QR, and Wi-Fi setup drawer content.
+- [`:ui:desktop:connectivity`](../ui/desktop/connectivity/MODULE.md) — connectivity card grid plus Wi-Fi and
+  ephemeral companion-onboarding drawer presentation.
 - [`:ui:desktop:httpPanel`](../ui/desktop/httpPanel/MODULE.md) — reusable HTTP inspection/editing panels.
 - [`:ui:desktop:scripting`](../ui/desktop/scripting/MODULE.md) — scripting UI.
 - [`:ui:desktop:certificate`](../ui/desktop/certificate/MODULE.md) — certificate-management UI.

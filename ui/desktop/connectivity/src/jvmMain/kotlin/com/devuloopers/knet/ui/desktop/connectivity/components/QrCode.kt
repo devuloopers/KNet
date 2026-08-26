@@ -52,8 +52,9 @@ internal fun encodeQrCode(value: String): QrCodeMatrix {
     )
 }
 
+/** Renders any validated KNet QR payload with stable module sizing and a scan-safe quiet zone. */
 @Composable
-internal fun SetupQrCode(
+internal fun KNetQrCode(
     value: String,
     modifier: Modifier = Modifier,
 ) {

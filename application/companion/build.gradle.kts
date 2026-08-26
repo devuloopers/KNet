@@ -19,7 +19,7 @@ kotlin {
             api(project(":core:companion"))
             api(project(":core:identity"))
             api(project(":core:pairing"))
-            implementation(libs.kotlinx.coroutines.core)
+            api(libs.kotlinx.coroutines.core)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))

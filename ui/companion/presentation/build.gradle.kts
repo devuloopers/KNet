@@ -18,6 +18,8 @@ kotlin {
         commonMain.dependencies {
             api(project(":application:companion"))
             api(project(":core:companion"))
+            api(libs.androidx.lifecycle.viewmodel)
+            implementation(project(":core:logger"))
             implementation(libs.kotlinx.coroutines.core)
         }
         commonTest.dependencies {

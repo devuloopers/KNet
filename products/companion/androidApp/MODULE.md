@@ -7,17 +7,36 @@ Owns the installable Android companion APK, Android manifest, launcher lifecycle
 ## Owns
 
 - Android application identity, permissions, packaging resources, Compose host activity, and process lifecycle.
-- Composition of the implemented registration, protected credential, invitation, device-identity, proof-signing,
-  and network-observation adapters.
-- Lifecycle-aware binding of product state into the shared Compose Multiplatform companion UI.
+- Product-owned Koin modules that bind the implemented registration, protected credential, version 3 invitation,
+  device-identity, proof-signing, pinned-TLS pairing/credential refresh, network-observation, platform-PKIX
+  certificate confirmation, Android trust-verification, trust-store event, application-use-case, and lifecycle
+  ViewModel dependencies.
+- A domain-scoped Android network-security policy that permits user-installed anchors only for
+  `companion.knet.local`; unrelated application traffic retains platform defaults.
+- Activity `ViewModelStore` ownership, lifecycle-aware state binding, and started-state effect collection for the
+  shared Compose Multiplatform companion UI.
+- Activity-owned native effect handling for bounded QR-image invitation decoding, public-certificate export,
+  certificate settings guidance, and Android VPN consent; no Android handle crosses into common code.
+- Public CA export to `Downloads/KNet` through MediaStore on Android 10+, with a Storage Access Framework fallback
+  on Android 8–9 and export/Settings-return diagnostics under the shared certificate log tag.
+- An Activity-scoped CameraX preview with bundled ML Kit QR-only analysis, typed permission mapping, one in-flight
+  frame, one delivered payload per composition, lifecycle binding, and deterministic analyzer cleanup. The scanner
+  is supplied through the shared UI capability contract rather than Koin because Activity Result registration and
+  camera preview ownership are Activity-scoped.
+- Asynchronous dependency restoration before Koin startup and lifecycle-scoped QR decoding so preference
+  initialization, image I/O, and QR processing do not block the Activity main thread.
+- A production pairing client backed by the Android control transport, while the separate VPN/data-plane adapter
+  remains fail closed until its packet backend is implemented.
 
 ## Does not own
 
 - Shared companion models, workflows, persistence schemas, presentation state, UI screens, or UI resources.
-- Pinned control/data transport, certificate installation, or VPN/TUN behavior that has not yet been implemented.
+- General VPN/TUN packet handling that has not yet been implemented. The product owns only Android composition and
+  system handoffs; reusable control transport, verification, and lifecycle behavior remain in lower layers.
 - Desktop proxy, canonical Traffic persistence, protocol inspection, or reusable Android adapters.
 
 ## Dependency rule
 
-May depend on companion application, data, presentation, shared UI, Android connectivity, and core modules solely
-to compose the executable product. No reusable module may depend on this product.
+May depend on companion application, data, presentation, shared UI, Android connectivity, core modules, and the
+repository-standard Koin runtime solely to compose the executable product. Koin definitions remain product-owned;
+no reusable companion module depends on Koin or on this product.

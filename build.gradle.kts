@@ -212,17 +212,37 @@ abstract class VerifyKotlinFirstSourcesTask : DefaultTask() {
     fun verify() {
         val repositoryRoot = repositoryDirectory.get().asFile
         val commonViolations = commonSources.files.sortedBy { it.path }.flatMap { source ->
-            source.codeLines().mapNotNull { (lineNumber, line) ->
+            val relativePath = source.relativeTo(repositoryRoot).invariantSeparatorsPath
+            val sourceLines = source.codeLines()
+            val lineViolations = sourceLines.mapNotNull { (lineNumber, line) ->
                 when {
                     line.startsWith("import java.") || line.startsWith("import javax.") ->
-                        "${source.relativeTo(repositoryRoot)}:$lineNumber imports a JVM API from commonMain"
+                        "$relativePath:$lineNumber imports a JVM API from commonMain"
+                    line.startsWith("import android.") || line.startsWith("import platform.") ->
+                        "$relativePath:$lineNumber imports a native platform API from commonMain"
                     JVM_QUALIFIED_REFERENCE.containsMatchIn(line) ->
-                        "${source.relativeTo(repositoryRoot)}:$lineNumber references a JVM API from commonMain"
+                        "$relativePath:$lineNumber references a JVM API from commonMain"
                     SYSTEM_REFERENCE.containsMatchIn(line) ->
-                        "${source.relativeTo(repositoryRoot)}:$lineNumber references System from commonMain"
+                        "$relativePath:$lineNumber references System from commonMain"
+                    relativePath.startsWith(COMPANION_COMMON_SOURCE_PREFIX) &&
+                        (
+                            COMPANION_NATIVE_CONTEXT_REFERENCE.containsMatchIn(line) ||
+                                COMPANION_OPAQUE_ANY_DECLARATION.containsMatchIn(line)
+                        ) ->
+                        "$relativePath:$lineNumber exposes a native context or opaque Any bridge from commonMain"
                     else -> null
                 }
             }
+            val factoryConstructorViolation = if (
+                relativePath == COMPANION_EXPECT_FACTORY_PATH &&
+                sourceLines.joinToString("\n") { (_, line) -> line }
+                    .contains("expect class PlatformCompanionAdapterFactory(")
+            ) {
+                listOf("$relativePath declares a common constructor for the native platform factory")
+            } else {
+                emptyList()
+            }
+            lineViolations + factoryConstructorViolation
         }
 
         val approvedClipboardPaths = allowedAwtClipboardPaths.get().toSet()
@@ -306,6 +326,11 @@ abstract class VerifyKotlinFirstSourcesTask : DefaultTask() {
     private companion object {
         val JVM_QUALIFIED_REFERENCE = Regex("""\b(?:java|javax)\.""")
         val SYSTEM_REFERENCE = Regex("""(?<!Clock\.)\bSystem\.""")
+        const val COMPANION_COMMON_SOURCE_PREFIX = "connectivity/companion/src/commonMain/"
+        const val COMPANION_EXPECT_FACTORY_PATH =
+            "connectivity/companion/src/commonMain/kotlin/com/devuloopers/knet/companion/connectivity/platform/PlatformCompanionAdapterFactory.kt"
+        val COMPANION_NATIVE_CONTEXT_REFERENCE = Regex("""\b[A-Za-z0-9_.]*Context\b""")
+        val COMPANION_OPAQUE_ANY_DECLARATION = Regex("""\b[A-Za-z_][A-Za-z0-9_]*\s*:\s*Any\??\s*[,)=]""")
         val RUN_BLOCKING_REFERENCE = Regex("""(?:import kotlinx\.coroutines\.runBlocking|\brunBlocking\s*[({])""")
         val JAVA_UUID_REFERENCE = Regex("""\bjava\.util\.UUID\b""")
         val JAVA_TIME_REFERENCE = Regex("""\bjava\.time(?:\.|\b)""")
@@ -406,6 +431,7 @@ val allowedArchitectureDependencies = mapOf(
         ":core:scripting",
         ":core:domain",
         ":core:connectivity",
+        ":core:companion",
         ":core:identity",
         ":core:pairing",
     ),
@@ -434,26 +460,30 @@ val allowedArchitectureDependencies = mapOf(
     ":ui:companion:presentation" to setOf(
         ":application:companion",
         ":core:companion",
+        ":core:logger",
     ),
     ":ui:companion:sharedUi" to setOf(
         ":core:companion",
         ":ui:core",
         ":ui:companion:presentation",
     ),
-    ":connectivity:companion:android" to setOf(
+    ":connectivity:companion" to setOf(
         ":application:companion",
         ":core:companion",
+        ":core:logger",
     ),
     ":products:companion:androidApp" to setOf(
         ":application:companion",
-        ":connectivity:companion:android",
+        ":connectivity:companion",
         ":core:companion",
+        ":core:logger",
         ":data:companion",
         ":ui:companion:presentation",
         ":ui:companion:sharedUi",
     ),
     ":connectivity:desktop" to setOf(
         ":application:desktop",
+        ":core:companion",
         ":core:traffic",
         ":core:connectivity",
         ":core:identity",
@@ -609,7 +639,11 @@ tasks.register("companionFoundationQualification") {
         ":ui:core:jvmTest",
         ":ui:core:compileAndroidMain",
         ":ui:core:compileKotlinIosSimulatorArm64",
-        ":connectivity:companion:android:testDebugUnitTest",
+        ":connectivity:companion:testAndroidHostTest",
+        ":data:companion:testAndroidHostTest",
+        ":connectivity:companion:compileKotlinIosArm64",
+        ":connectivity:companion:compileKotlinIosSimulatorArm64",
+        ":connectivity:companion:iosSimulatorArm64Test",
         ":data:companion:compileAndroidMain",
         ":ui:companion:presentation:compileAndroidMain",
         ":ui:companion:sharedUi:compileAndroidMain",

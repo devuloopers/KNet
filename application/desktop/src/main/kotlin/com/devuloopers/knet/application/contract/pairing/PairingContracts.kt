@@ -54,6 +54,16 @@ public interface TrustedDeviceStore {
     ): PendingPairingInvitation?
     public suspend fun putDevice(device: TrustedDevice)
     public suspend fun getDevice(id: RegisteredDeviceId): TrustedDevice?
+    /**
+     * Replaces one credential digest only when [expectedCredentialDigest] is still current and the identity remains
+     * active, preventing concurrent refresh requests from issuing multiple usable credentials.
+     */
+    public suspend fun rotateCredential(
+        id: RegisteredDeviceId,
+        expectedCredentialDigest: String,
+        newCredentialDigest: String,
+        credentialExpiresAtEpochMillis: Long,
+    ): Boolean
     public suspend fun revoke(id: RegisteredDeviceId, revokedAtEpochMillis: Long): Boolean
     public fun observeDevices(): Flow<List<TrustedDevice>>
 }

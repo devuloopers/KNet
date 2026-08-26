@@ -1,12 +1,87 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_title">KNet Companion</string>
-    <string name="foundation_badge">Foundation ready</string>
-    <string name="foundation_summary">The shared companion foundation is ready for Android.</string>
-    <string name="foundation_pending">Pairing transport, certificate handoff, VPN tunnel, and the complete companion workflow will appear here only after their production adapters are implemented.</string>
+    <string name="back">Back</string>
+    <string name="dismiss">Dismiss</string>
+    <string name="retry">Try again</string>
+    <string name="step_connect">Connect</string>
+    <string name="step_certificate">Certificate</string>
+    <string name="step_inspection">Inspection</string>
+    <string name="step_ready">Ready</string>
+
+    <string name="connect_title">Connect to KNet Desktop</string>
+    <string name="connect_summary">Pair this device with a trusted KNet desktop before installing its certificate or forwarding traffic.</string>
+    <string name="invitation_label">Pairing invitation</string>
+    <string name="invitation_placeholder">Paste the invitation copied from KNet Desktop</string>
+    <string name="invitation_help">In KNet Desktop, open Connect Device and copy the one-time invitation. Invitation secrets are validated in memory and are never saved.</string>
+    <string name="continue_action">Continue</string>
+    <string name="scan_qr">Scan QR code</string>
+    <string name="import_qr">Import QR image</string>
+    <string name="paired_desktops">Paired desktops</string>
+    <string name="use_desktop">Use desktop</string>
     <string name="network_ready">Network available</string>
     <string name="network_unavailable">Network unavailable</string>
     <string name="network_unknown">Checking network</string>
-    <string name="paired_desktop_count_one">%1$d paired desktop</string>
-    <string name="paired_desktop_count_other">%1$d paired desktops</string>
+
+    <string name="scan_invitation_title">Scan KNet Desktop</string>
+    <string name="scan_invitation_summary">Point the camera at the companion QR code shown by KNet Desktop.</string>
+    <string name="scan_invitation_active">Keep the KNet QR code inside the frame.</string>
+    <string name="scan_invitation_resolving">Verifying this KNet desktop securely.</string>
+    <string name="camera_permission_required">Camera access is required only while scanning the pairing QR code.</string>
+    <string name="camera_permission_denied">Camera access was denied. You can try the permission request again or import a QR image.</string>
+    <string name="camera_permission_permanently_denied">Enable camera access for KNet Companion in application settings, or import a QR image.</string>
+    <string name="camera_unavailable">Camera scanning is unavailable on this device. Import a QR image instead.</string>
+    <string name="camera_failed">The camera could not be started. Close other camera applications and try again.</string>
+    <string name="use_camera">Allow camera</string>
+    <string name="open_app_settings">Open application settings</string>
+
+    <string name="confirm_title">Confirm this desktop</string>
+    <string name="confirm_summary">Make sure this is the KNet desktop you intended to pair with.</string>
+    <string name="desktop_name">Desktop</string>
+    <string name="device_name_label">Name this device</string>
+    <string name="device_name_placeholder">For example, Personal phone</string>
+    <string name="pair_action">Pair securely</string>
+
+    <string name="certificate_title">Set up the KNet certificate</string>
+    <string name="certificate_summary">Download and trust the public KNet root certificate before inspecting HTTPS traffic from this device.</string>
+    <string name="certificate_install_required">Certificate installation or trust is required</string>
+    <string name="certificate_verifying">Verifying certificate trust</string>
+    <string name="certificate_trusted">Certificate verified</string>
+    <string name="certificate_rejected">Certificate verification could not be completed</string>
+    <string name="download_certificate">Download certificate</string>
+    <string name="verify_certificate">Verify installation</string>
+    <string name="open_trust_settings">Open trust settings</string>
+    <string name="certificate_download_note">KNet securely retrieves the public certificate from the paired desktop and saves it for manual installation. Already installed it? Verify to continue.</string>
+    <string name="certificate_downloaded_file">Downloaded file</string>
+    <string name="certificate_downloaded_location">Saved in</string>
+    <string name="certificate_downloaded_note">Downloading does not install the certificate. Complete the device Settings steps, return to KNet Companion, and verify.</string>
+    <string name="certificate_download_again">Download again</string>
+
+    <string name="inspection_title">Allow traffic inspection</string>
+    <string name="inspection_summary">KNet uses Android's VPN interface to route this device's traffic to your paired desktop. KNet does not connect to a third-party VPN.</string>
+    <string name="inspection_detail_title">What this permission enables</string>
+    <string name="inspection_detail_body">Traffic is forwarded only while inspection is running. You can stop it at any time, and pairing remains available for later sessions.</string>
+    <string name="allow_inspection">Continue to VPN permission</string>
+    <string name="not_now">Not now</string>
+
+    <string name="home_title">KNet Companion is ready</string>
+    <string name="home_summary">Manage the paired desktop, secure connection, certificate trust, and inspection from one place.</string>
+    <string name="status_desktop">Paired desktop</string>
+    <string name="status_network">Network</string>
+    <string name="status_connection">Connection</string>
+    <string name="status_certificate">Certificate</string>
+    <string name="status_inspection">Inspection</string>
+    <string name="status_connected">Connected</string>
+    <string name="status_connecting">Connecting</string>
+    <string name="status_disconnected">Disconnected</string>
+    <string name="status_failed">Needs attention</string>
+    <string name="status_running">Running</string>
+    <string name="status_stopped">Stopped</string>
+    <string name="status_preparing">Preparing</string>
+    <string name="start_inspection">Start inspection</string>
+    <string name="stop_inspection">Stop inspection</string>
+    <string name="connect_action">Connect</string>
+    <string name="disconnect_action">Disconnect</string>
+    <string name="refresh_credential">Refresh credential</string>
+    <string name="forget_desktop">Forget desktop</string>
 </resources>

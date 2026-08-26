@@ -57,7 +57,7 @@ internal fun WifiProxySetupDrawer(
     modifier: Modifier = Modifier,
 ) {
     KNetSideDrawer(
-        visible = state.isSetupDrawerVisible,
+        visible = state.isWifiSetupDrawerVisible,
         size = KNetSideDrawerSize.STANDARD,
         modifier = modifier,
     ) {
@@ -68,7 +68,7 @@ internal fun WifiProxySetupDrawer(
                 .padding(22.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
-            DrawerHeader(onClose = { onIntent(ConnectDeviceIntent.CloseSetup) })
+            DrawerHeader(onClose = { onIntent(ConnectDeviceIntent.CloseDrawer) })
             val operationFailureCode = state.failureCode
             if (operationFailureCode != null) {
                 OperationFailurePanel(operationFailureCode)
@@ -141,7 +141,7 @@ private fun ActiveSetupContent(
             color = androidx.compose.ui.graphics.Color.White,
             shape = KNetTheme.shapes.large,
         ) {
-            SetupQrCode(value = session.setupUrl, modifier = Modifier.size(216.dp))
+            KNetQrCode(value = session.setupUrl, modifier = Modifier.size(216.dp))
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(11.dp)) {
             StatusLabel("Wi-Fi proxy ready", colors.semantic.success)

@@ -1,7 +1,8 @@
 package com.devuloopers.knet.companion.application.usecase
 
-import com.devuloopers.knet.companion.application.contract.CompanionCertificateController
+import com.devuloopers.knet.companion.application.contract.CompanionCertificateArtifact
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateDownloadResult
+import com.devuloopers.knet.companion.application.contract.CompanionCertificateTrustVerifier
 import com.devuloopers.knet.companion.application.contract.CompanionCredentialRefreshResult
 import com.devuloopers.knet.companion.application.contract.CompanionCredentialStore
 import com.devuloopers.knet.companion.application.contract.CompanionDeviceIdentityProvider
@@ -10,14 +11,19 @@ import com.devuloopers.knet.companion.application.contract.CompanionInspectionCo
 import com.devuloopers.knet.companion.application.contract.CompanionInspectionPreparationResult
 import com.devuloopers.knet.companion.application.contract.CompanionInspectionStartResult
 import com.devuloopers.knet.companion.application.contract.CompanionInvitationCodec
+import com.devuloopers.knet.companion.application.contract.CompanionInvitationResolutionResult
+import com.devuloopers.knet.companion.application.contract.CompanionInvitationResolver
 import com.devuloopers.knet.companion.application.contract.CompanionNetworkObserver
 import com.devuloopers.knet.companion.application.contract.CompanionPairingClient
 import com.devuloopers.knet.companion.application.contract.CompanionPairingClientResult
 import com.devuloopers.knet.companion.application.contract.CompanionRegistrationRepository
+import com.devuloopers.knet.companion.application.contract.CompanionRootCertificateSource
 import com.devuloopers.knet.companion.application.contract.CompanionTransport
 import com.devuloopers.knet.companion.application.contract.CompanionTransportResult
 import com.devuloopers.knet.companion.application.contract.InvitationDecodeResult
 import com.devuloopers.knet.companion.model.CompanionCertificateState
+import com.devuloopers.knet.companion.model.CompanionBootstrapId
+import com.devuloopers.knet.companion.model.CompanionBootstrapSecret
 import com.devuloopers.knet.companion.model.CompanionConnectionState
 import com.devuloopers.knet.companion.model.CompanionCredentialReference
 import com.devuloopers.knet.companion.model.CompanionDesktopId
@@ -27,7 +33,9 @@ import com.devuloopers.knet.companion.model.CompanionFailureCode
 import com.devuloopers.knet.companion.model.CompanionInspectionState
 import com.devuloopers.knet.companion.model.CompanionNetworkState
 import com.devuloopers.knet.companion.model.CompanionPairingInvitation
+import com.devuloopers.knet.companion.model.CompanionPairingBootstrap
 import com.devuloopers.knet.companion.model.CompanionRegistration
+import com.devuloopers.knet.companion.model.CompanionRootCertificate
 import com.devuloopers.knet.companion.model.CompanionServiceEndpoint
 import com.devuloopers.knet.companion.model.Sha256Fingerprint
 import com.devuloopers.knet.companion.model.UnsupportedTrafficPolicy
@@ -42,24 +50,46 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 
 class CompanionUseCasesTest {
     @Test
-    fun expiredInvitationIsRejectedBeforePairing() {
-        val invitation = invitation(expiresAt = 999L)
+    fun expiredInvitationIsRejectedBeforePairing() = runTest {
+        val bootstrap = bootstrap(expiresAt = 999L)
         val useCase = AcceptPairingInvitationUseCase(
-            codec = CompanionInvitationCodec { InvitationDecodeResult.Accepted(invitation) },
+            codec = CompanionInvitationCodec { InvitationDecodeResult.Accepted(bootstrap) },
+            resolver = CompanionInvitationResolver { error("Expired bootstrap must not perform network I/O.") },
             nowEpochMillis = { 1_000L },
         )
 
         val result = assertIs<AcceptPairingInvitationResult.Rejected>(useCase.execute("payload"))
 
         assertEquals(CompanionFailureCode.INVITATION_EXPIRED, result.failure.code)
+    }
+
+    @Test
+    fun resolvedInvitationMustMatchPinnedBootstrapMetadata() = runTest {
+        val bootstrap = bootstrap()
+        val mismatches = listOf(
+            invitation().copy(transportIdentitySha256 = Sha256Fingerprint("c".repeat(64))),
+            invitation().copy(rootCertificateSha256 = Sha256Fingerprint("c".repeat(64))),
+        )
+
+        mismatches.forEach { mismatched ->
+            val useCase = AcceptPairingInvitationUseCase(
+                codec = CompanionInvitationCodec { InvitationDecodeResult.Accepted(bootstrap) },
+                resolver = CompanionInvitationResolver {
+                    CompanionInvitationResolutionResult.Resolved(mismatched)
+                },
+                nowEpochMillis = { 1_000L },
+            )
+
+            val result = assertIs<AcceptPairingInvitationResult.Rejected>(useCase.execute("payload"))
+
+            assertEquals(CompanionFailureCode.INVITATION_INVALID, result.failure.code)
+        }
     }
 
     @Test
@@ -76,6 +106,7 @@ class CompanionUseCasesTest {
         assertEquals(result.registration, repository.activeRegistration.value)
         assertEquals("issued-secret", credentials.values[result.registration.credentialReference])
         assertFalse(result.registration.toString().contains("issued-secret"))
+        assertEquals(invitation().rootCertificate, result.registration.rootCertificate)
     }
 
     @Test
@@ -93,6 +124,104 @@ class CompanionUseCasesTest {
 
         assertEquals(CompanionFailureCode.PERSISTENCE_FAILED, result.failure.code)
         assertTrue(credentials.values.isEmpty())
+    }
+
+    @Test
+    fun failedRepairDoesNotRestoreTheCredentialInvalidatedByTheDesktop() = runTest {
+        val existing = registration()
+        val repository = FakeRegistrationRepository(failWrites = true).apply {
+            mutableRegistrations.value = listOf(existing)
+            mutableActive.value = existing
+        }
+        val credentials = FakeCredentialStore().apply {
+            values[existing.credentialReference] = "previous-secret"
+        }
+        val useCase = PairCompanionDeviceUseCase(
+            identityProvider(),
+            FakePairingClient(),
+            credentials,
+            repository,
+        ) { 1_000L }
+
+        val result = assertIs<PairCompanionDeviceResult.Rejected>(useCase.execute(invitation(), "Pixel"))
+
+        assertEquals(CompanionFailureCode.PERSISTENCE_FAILED, result.failure.code)
+        assertTrue(credentials.values.isEmpty())
+        assertTrue(repository.registrations.value.isEmpty())
+        assertNull(repository.activeRegistration.value)
+    }
+
+    @Test
+    fun credentialRefreshPersistsTheRotatedSecretAndExpiry() = runTest {
+        val existing = registration()
+        val repository = FakeRegistrationRepository().apply {
+            mutableRegistrations.value = listOf(existing)
+            mutableActive.value = existing
+        }
+        val credentials = FakeCredentialStore().apply {
+            values[existing.credentialReference] = "previous-secret"
+        }
+        val useCase = RefreshCompanionCredentialUseCase(
+            repository,
+            credentials,
+            FakePairingClient(
+                refreshResult = CompanionCredentialRefreshResult.Refreshed("rotated-secret", 3_000L),
+            ),
+        ) { 1_000L }
+
+        val result = assertIs<RefreshCompanionCredentialResult.Refreshed>(useCase.execute())
+
+        assertEquals("rotated-secret", credentials.values[existing.credentialReference])
+        assertEquals(3_000L, result.registration.credentialExpiresAtEpochMillis)
+        assertEquals(result.registration, repository.activeRegistration.value)
+    }
+
+    @Test
+    fun refreshStorageFailureRemovesTheNowInvalidPreviousSecret() = runTest {
+        val existing = registration()
+        val repository = FakeRegistrationRepository().apply {
+            mutableRegistrations.value = listOf(existing)
+            mutableActive.value = existing
+        }
+        val credentials = FakeCredentialStore(failWrites = true).apply {
+            values[existing.credentialReference] = "previous-secret"
+        }
+        val useCase = RefreshCompanionCredentialUseCase(
+            repository,
+            credentials,
+            FakePairingClient(
+                refreshResult = CompanionCredentialRefreshResult.Refreshed("rotated-secret", 3_000L),
+            ),
+        ) { 1_000L }
+
+        val result = assertIs<RefreshCompanionCredentialResult.Rejected>(useCase.execute())
+
+        assertEquals(CompanionFailureCode.PERSISTENCE_FAILED, result.failure.code)
+        assertTrue(credentials.values.isEmpty())
+    }
+
+    @Test
+    fun refreshKeepsTheValidRotatedSecretWhenOnlyRegistrationUpdateFails() = runTest {
+        val existing = registration()
+        val repository = FakeRegistrationRepository(failWrites = true).apply {
+            mutableRegistrations.value = listOf(existing)
+            mutableActive.value = existing
+        }
+        val credentials = FakeCredentialStore().apply {
+            values[existing.credentialReference] = "previous-secret"
+        }
+        val useCase = RefreshCompanionCredentialUseCase(
+            repository,
+            credentials,
+            FakePairingClient(
+                refreshResult = CompanionCredentialRefreshResult.Refreshed("rotated-secret", 3_000L),
+            ),
+        ) { 1_000L }
+
+        val result = assertIs<RefreshCompanionCredentialResult.Rejected>(useCase.execute())
+
+        assertEquals(CompanionFailureCode.PERSISTENCE_FAILED, result.failure.code)
+        assertEquals("rotated-secret", credentials.values[existing.credentialReference])
     }
 
     @Test
@@ -155,6 +284,95 @@ class CompanionUseCasesTest {
         assertEquals(UnsupportedTrafficPolicy.REJECT, environment.inspection.startedConfiguration?.unsupportedTrafficPolicy)
     }
 
+    @Test
+    fun certificateVerificationUsesProtectedCredentialAndExactRegistrationRoot() = runTest {
+        val repository = FakeRegistrationRepository().apply {
+            mutableRegistrations.value = listOf(registration())
+            mutableActive.value = registration()
+        }
+        val credentials = FakeCredentialStore().apply {
+            values[registration().credentialReference] = "issued-secret"
+        }
+        var downloadedCredential: String? = null
+        var verifiedCredential: String? = null
+        val source = CompanionRootCertificateSource { _, credential ->
+            downloadedCredential = credential
+            CompanionCertificateDownloadResult.Downloaded(
+                CompanionCertificateArtifact(byteArrayOf(1, 2, 3), "knet-root-ca.crt"),
+            )
+        }
+        val verifier = CompanionCertificateTrustVerifier { active, credential, _ ->
+            verifiedCredential = credential
+            CompanionCertificateState.Trusted(active.rootCertificateSha256, 1_500L)
+        }
+        val useCase = VerifyCompanionCertificateTrustUseCase(
+            repository,
+            credentials,
+            source,
+            verifier,
+            nowEpochMillis = { 1_000L },
+        )
+
+        val result = assertIs<CompanionCertificateState.Trusted>(useCase.execute())
+
+        assertEquals(registration().rootCertificateSha256, result.rootCertificateSha256)
+        assertEquals("issued-secret", downloadedCredential)
+        assertEquals("issued-secret", verifiedCredential)
+    }
+
+    @Test
+    fun missingCertificateCredentialFailsBeforeNetworkAdapters() = runTest {
+        val repository = FakeRegistrationRepository().apply {
+            mutableRegistrations.value = listOf(registration())
+            mutableActive.value = registration()
+        }
+        var sourceCalls = 0
+        val useCase = VerifyCompanionCertificateTrustUseCase(
+            repository,
+            FakeCredentialStore(),
+            CompanionRootCertificateSource { _, _ ->
+                sourceCalls += 1
+                error("must not run")
+            },
+            CompanionCertificateTrustVerifier { _, _, _ -> error("must not run") },
+            nowEpochMillis = { 1_000L },
+        )
+
+        val result = assertIs<CompanionCertificateState.Rejected>(useCase.execute())
+
+        assertEquals(CompanionFailureCode.CREDENTIAL_NOT_FOUND, result.reason.code)
+        assertEquals(0, sourceCalls)
+    }
+
+    @Test
+    fun certificateVerificationFailsClosedWhenTheExpectedDesktopIsNoLongerActive() = runTest {
+        val repository = FakeRegistrationRepository().apply {
+            mutableRegistrations.value = listOf(registration())
+            mutableActive.value = registration()
+        }
+        val credentials = FakeCredentialStore().apply {
+            values[registration().credentialReference] = "issued-secret"
+        }
+        var sourceCalls = 0
+        val useCase = VerifyCompanionCertificateTrustUseCase(
+            repository,
+            credentials,
+            CompanionRootCertificateSource { _, _ ->
+                sourceCalls += 1
+                error("must not run")
+            },
+            CompanionCertificateTrustVerifier { _, _, _ -> error("must not run") },
+            nowEpochMillis = { 1_000L },
+        )
+
+        val result = assertIs<CompanionCertificateState.Rejected>(
+            useCase.execute(CompanionDesktopId("desktop-2")),
+        )
+
+        assertEquals(CompanionFailureCode.REGISTRATION_NOT_FOUND, result.reason.code)
+        assertEquals(0, sourceCalls)
+    }
+
     private class StartEnvironment(preparation: CompanionInspectionPreparationResult) {
         val repository = FakeRegistrationRepository().apply {
             val registration = registration()
@@ -166,7 +384,19 @@ class CompanionUseCasesTest {
         }
         val transport = FakeTransport()
         val inspection = FakeInspectionController(preparation)
-        val certificate = FakeCertificateController(CompanionCertificateState.Missing)
+        private val verifyCertificate = VerifyCompanionCertificateTrustUseCase(
+            registrations = repository,
+            credentials = credentials,
+            certificates = CompanionRootCertificateSource { _, _ ->
+                CompanionCertificateDownloadResult.Downloaded(
+                    CompanionCertificateArtifact(byteArrayOf(1), "knet-root-ca.crt"),
+                )
+            },
+            verifier = CompanionCertificateTrustVerifier { _, _, _ ->
+                CompanionCertificateState.InstallationRequired
+            },
+            nowEpochMillis = { 1_000L },
+        )
         private val connect = ConnectCompanionUseCase(
             repository,
             credentials,
@@ -174,7 +404,7 @@ class CompanionUseCasesTest {
             transport,
             nowEpochMillis = { 1_000L },
         )
-        val start = StartCompanionInspectionUseCase(repository, connect, certificate, inspection, transport)
+        val start = StartCompanionInspectionUseCase(repository, connect, verifyCertificate, inspection, transport)
     }
 
     private class FakeRegistrationRepository(
@@ -206,9 +436,12 @@ class CompanionUseCasesTest {
         }
     }
 
-    private class FakeCredentialStore : CompanionCredentialStore {
+    private class FakeCredentialStore(
+        private val failWrites: Boolean = false,
+    ) : CompanionCredentialStore {
         val values = mutableMapOf<CompanionCredentialReference, String>()
         override suspend fun write(reference: CompanionCredentialReference, credential: String) {
+            if (failWrites) error("write failed")
             values[reference] = credential
         }
         override suspend fun read(reference: CompanionCredentialReference): String? = values[reference]
@@ -219,6 +452,9 @@ class CompanionUseCasesTest {
 
     private class FakePairingClient(
         private val grantedScopes: Set<DeviceScope> = setOf(DeviceScope.PROXY_STREAM),
+        private val refreshResult: CompanionCredentialRefreshResult = CompanionCredentialRefreshResult.Rejected(
+            CompanionFailure(CompanionFailureCode.PAIRING_REJECTED, "not used", false),
+        ),
     ) : CompanionPairingClient {
         override suspend fun pair(
             invitation: CompanionPairingInvitation,
@@ -233,9 +469,7 @@ class CompanionUseCasesTest {
         override suspend fun refresh(
             registration: CompanionRegistration,
             currentCredential: String,
-        ): CompanionCredentialRefreshResult = CompanionCredentialRefreshResult.Rejected(
-            CompanionFailure(CompanionFailureCode.PAIRING_REJECTED, "not used", false),
-        )
+        ): CompanionCredentialRefreshResult = refreshResult
     }
 
     private class FakeTransport : CompanionTransport {
@@ -280,17 +514,6 @@ class CompanionUseCasesTest {
         }
     }
 
-    private class FakeCertificateController(
-        private val state: CompanionCertificateState,
-    ) : CompanionCertificateController {
-        override fun observe(registration: CompanionRegistration): Flow<CompanionCertificateState> = flowOf(state)
-        override suspend fun download(registration: CompanionRegistration): CompanionCertificateDownloadResult =
-            CompanionCertificateDownloadResult.Failed(
-                CompanionFailure(CompanionFailureCode.CERTIFICATE_UNAVAILABLE, "not used", true),
-            )
-        override suspend fun verifyTrust(registration: CompanionRegistration): CompanionCertificateState = state
-    }
-
     private fun identityProvider(): CompanionDeviceIdentityProvider = CompanionDeviceIdentityProvider {
         CompanionDeviceIdentity(
             deviceId = RegisteredDeviceId("device-1"),
@@ -301,7 +524,7 @@ class CompanionUseCasesTest {
     }
 
     private fun invitation(expiresAt: Long = 2_000L): CompanionPairingInvitation = CompanionPairingInvitation(
-        protocolVersion = 1,
+        protocolVersion = CompanionPairingInvitation.CURRENT_PROTOCOL_VERSION,
         desktopId = CompanionDesktopId("desktop-1"),
         desktopDisplayName = "Development Mac",
         pairing = PairingInvitation(
@@ -312,6 +535,18 @@ class CompanionUseCasesTest {
         ),
         controlEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, secure = true),
         proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", 8184, secure = true),
+        transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
+        rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
+        rootCertificate = CompanionRootCertificate(byteArrayOf(1, 2, 3)),
+    )
+
+    private fun bootstrap(expiresAt: Long = 2_000L): CompanionPairingBootstrap = CompanionPairingBootstrap(
+        protocolVersion = CompanionPairingInvitation.CURRENT_PROTOCOL_VERSION,
+        id = CompanionBootstrapId("bootstrap-1"),
+        retrievalSecret = CompanionBootstrapSecret("r".repeat(32)),
+        expiresAtEpochMillis = expiresAt,
+        rootCertificateEndpoint = CompanionServiceEndpoint("192.168.1.2", 8181, secure = false),
+        retrievalEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, secure = true),
         transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
         rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
     )
@@ -325,6 +560,7 @@ class CompanionUseCasesTest {
             proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", 8184, secure = true),
             transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
             rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
+            rootCertificate = CompanionRootCertificate(byteArrayOf(1, 2, 3)),
             credentialReference = CompanionCredentialReference("credential-reference"),
             scopes = setOf(DeviceScope.PROXY_STREAM),
             pairedAtEpochMillis = 1_000L,

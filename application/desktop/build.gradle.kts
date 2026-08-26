@@ -11,6 +11,7 @@ dependencies {
     api(project(":core:scripting"))
     api(project(":core:domain"))
     api(project(":core:connectivity"))
+    api(project(":core:companion"))
     api(project(":core:identity"))
     api(project(":core:pairing"))
     implementation(libs.kotlinx.coroutines.core)

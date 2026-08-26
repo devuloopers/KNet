@@ -51,24 +51,42 @@ public class RefreshCompanionCredentialUseCase(
                     )
                 }
                 val updated = registration.copy(credentialExpiresAtEpochMillis = result.credentialExpiresAtEpochMillis)
+                var refreshedCredentialPersisted = false
                 try {
-                    credentials.write(registration.credentialReference, result.credential)
-                    registrations.upsert(updated, makeActive = true)
+                    withContext(NonCancellable) {
+                        credentials.write(registration.credentialReference, result.credential)
+                        refreshedCredentialPersisted = true
+                        registrations.upsert(updated, makeActive = true)
+                    }
                     RefreshCompanionCredentialResult.Refreshed(updated)
                 } catch (cancelled: CancellationException) {
-                    withContext(NonCancellable) {
-                        runCatching { credentials.write(registration.credentialReference, current) }
-                    }
+                    discardInvalidCredentialUnlessRefreshedWasPersisted(
+                        registration,
+                        refreshedCredentialPersisted,
+                    )
                     throw cancelled
                 } catch (_: Throwable) {
-                    withContext(NonCancellable) {
-                        runCatching { credentials.write(registration.credentialReference, current) }
-                    }
+                    discardInvalidCredentialUnlessRefreshedWasPersisted(
+                        registration,
+                        refreshedCredentialPersisted,
+                    )
                     RefreshCompanionCredentialResult.Rejected(
                         CompanionFailure(CompanionFailureCode.PERSISTENCE_FAILED, "Unable to save refreshed credential.", true),
                     )
                 }
             }
+        }
+    }
+
+    private suspend fun discardInvalidCredentialUnlessRefreshedWasPersisted(
+        registration: CompanionRegistration,
+        refreshedCredentialPersisted: Boolean,
+    ) {
+        if (refreshedCredentialPersisted) return
+        withContext(NonCancellable) {
+            // The desktop has already rotated the credential, so the previous local secret is no
+            // longer valid and must not be restored after a protected-storage failure.
+            runCatching { credentials.remove(registration.credentialReference) }
         }
     }
 }
@@ -78,4 +96,3 @@ public sealed interface RefreshCompanionCredentialResult {
     public data class Refreshed(public val registration: CompanionRegistration) : RefreshCompanionCredentialResult
     public data class Rejected(public val failure: CompanionFailure) : RefreshCompanionCredentialResult
 }
-

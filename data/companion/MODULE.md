@@ -7,12 +7,15 @@ secret protection replaceable per platform.
 
 ## Owns
 
-- Versioned JSON DTOs and strict domain mapping.
+- Version 3 lightweight bootstrap decoding and version 2 durable registration DTOs with strict, bounded Base64URL
+  public-root mapping.
 - Registration repository implementation, active-desktop selection, migration boundary, and credential-store
   adapter over an encrypted secret store.
-- A bounded, defensive, versioned pairing/credential-refresh control client over a pinned-transport port.
+- A bounded, defensive, versioned pairing/credential-refresh control client that supplies paired-root trust
+  material to native transports without implementing TLS policy in common code.
 - Android record, AES-GCM credential vault, non-exportable P-256 device identity, and proof signer adapters in
-  `androidMain`; future iOS adapters can implement the same small ports.
+  `androidMain`; their suspending factories and operations isolate synchronous Android storage and cryptography on
+  an injected worker dispatcher. Future iOS adapters can implement the same small ports.
 
 ## Does not own
 
