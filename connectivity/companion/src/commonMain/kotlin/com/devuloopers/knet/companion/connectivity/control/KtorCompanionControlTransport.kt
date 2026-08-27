@@ -54,6 +54,11 @@ internal class KtorCompanionControlTransport(
             requestMediaType = CompanionControlProtocol.REFRESH_REQUEST_MEDIA_TYPE,
             responseMediaType = CompanionControlProtocol.REFRESH_RESPONSE_MEDIA_TYPE,
         )
+        CompanionControlOperation.RECONCILE_ENDPOINTS -> ControlWireOperation(
+            path = CompanionControlProtocol.RECONCILE_PATH,
+            requestMediaType = CompanionControlProtocol.RECONCILE_REQUEST_MEDIA_TYPE,
+            responseMediaType = CompanionControlProtocol.RECONCILE_RESPONSE_MEDIA_TYPE,
+        )
     }
 
     private data class ControlWireOperation(

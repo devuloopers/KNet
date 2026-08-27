@@ -6,11 +6,16 @@ import com.devuloopers.knet.companion.application.contract.CompanionControlRespo
 import com.devuloopers.knet.companion.application.contract.CompanionControlTransport
 import com.devuloopers.knet.companion.application.contract.CompanionCredentialRefreshResult
 import com.devuloopers.knet.companion.application.contract.CompanionDeviceProofSigner
+import com.devuloopers.knet.companion.application.contract.CompanionEndpointReconciliationResult
 import com.devuloopers.knet.companion.application.contract.CompanionPairingClientResult
 import com.devuloopers.knet.companion.model.CompanionPairingCompletionCodec
 import com.devuloopers.knet.companion.model.CompanionPairingGrant
 import com.devuloopers.knet.companion.model.CompanionPairingGrantCodec
 import com.devuloopers.knet.companion.model.CompanionDesktopId
+import com.devuloopers.knet.companion.model.CompanionDesktopRuntimeId
+import com.devuloopers.knet.companion.model.CompanionDiscoveryProtocol
+import com.devuloopers.knet.companion.model.CompanionEndpointDescriptor
+import com.devuloopers.knet.companion.model.CompanionEndpointReconciliationCodec
 import com.devuloopers.knet.companion.model.CompanionCredentialReference
 import com.devuloopers.knet.companion.model.CompanionCredentialRefreshGrant
 import com.devuloopers.knet.companion.model.CompanionCredentialRefreshGrantCodec
@@ -35,6 +40,41 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 
 class CompanionControlClientTest {
+    @Test
+    fun endpointReconciliationUsesCandidateAddressButRetainsExistingPinnedIdentity() = runTest {
+        var capturedRequest: CompanionControlRequest? = null
+        val descriptor = CompanionEndpointDescriptor(
+            protocolVersion = CompanionDiscoveryProtocol.VERSION,
+            desktopId = CompanionDesktopId("11111111-1111-4111-8111-111111111111"),
+            acceptedLegacyIds = setOf(registration().desktopId),
+            runtimeId = CompanionDesktopRuntimeId.parse("22222222-2222-4222-8222-222222222222"),
+            controlPort = 8183,
+            proxyPort = 8182,
+        )
+        val codec = CompanionEndpointReconciliationCodec()
+        val client = DefaultCompanionEndpointReconciliationClient(
+            CompanionControlTransport { request ->
+                capturedRequest = request
+                CompanionControlResponse(200, codec.encodeDescriptor(descriptor))
+            },
+            codec,
+        )
+        val candidateEndpoint = CompanionServiceEndpoint("192.168.1.77", 8183, secure = true)
+
+        val result = assertIs<CompanionEndpointReconciliationResult.Verified>(
+            client.reconcile(registration(), candidateEndpoint, "current-credential-value"),
+        )
+
+        assertEquals(descriptor, result.descriptor)
+        val request = requireNotNull(capturedRequest)
+        assertEquals(candidateEndpoint, request.endpoint)
+        assertEquals(registration().rootCertificateSha256, request.rootCertificateSha256)
+        assertEquals(registration().transportIdentitySha256, request.transportIdentitySha256)
+        assertEquals(CompanionControlOperation.RECONCILE_ENDPOINTS, request.operation)
+        assertEquals("current-credential-value", request.authorization?.credential())
+        assertEquals(registration().desktopId, codec.decodeRequest(request.copyBody()).desktopId)
+    }
+
     @Test
     fun pairingSignsAlgorithmBoundTranscriptAndUsesPinnedEndpoint() = runTest {
         var capturedRequest: CompanionControlRequest? = null

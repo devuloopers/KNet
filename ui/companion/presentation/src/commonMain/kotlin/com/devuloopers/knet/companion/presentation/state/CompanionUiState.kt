@@ -6,6 +6,7 @@ import com.devuloopers.knet.companion.model.CompanionFailure
 import com.devuloopers.knet.companion.model.CompanionInspectionState
 import com.devuloopers.knet.companion.model.CompanionNetworkState
 import com.devuloopers.knet.companion.model.CompanionRegistration
+import com.devuloopers.knet.companion.model.CompanionDiscoveryState
 
 /**
  * Immutable companion presentation state rendered by the shared Compose Multiplatform interface.
@@ -35,6 +36,7 @@ public data class CompanionUiState(
     public val certificate: CompanionCertificateState = CompanionCertificateState.Unknown,
     public val certificateExport: CompanionCertificateExportState = CompanionCertificateExportState.Idle,
     public val network: CompanionNetworkState = CompanionNetworkState.Unknown,
+    public val discovery: CompanionDiscoveryState = CompanionDiscoveryState.Idle,
     public val inspectionPermissionRequired: Boolean = false,
     public val operationInProgress: Boolean = false,
     public val failure: CompanionFailure? = null,

@@ -2,6 +2,7 @@ package com.devuloopers.knet.products.desktop.di.certificate
 
 import com.devuloopers.knet.application.contract.certificate.CertificateManagement
 import com.devuloopers.knet.data.desktop.certificate.DesktopCertificateManagementAdapter
+import com.devuloopers.knet.data.desktop.identity.DesktopInstallationIdentityRepository
 import com.devuloopers.knet.data.desktop.runtime.CertificateRuntimeRepository
 import com.devuloopers.knet.engine.certificate.CertificateManager
 import com.devuloopers.knet.ui.desktop.certificate.viewmodel.CertificateViewModel
@@ -12,6 +13,9 @@ import org.koin.dsl.module
 
 /** Shared desktop CA runtime, certificate-management port, and certificate presentation. */
 internal val certificateBindings: Module = module {
+    single {
+        DesktopInstallationIdentityRepository(File(System.getProperty("user.home"), ".knet"))
+    }
     single {
         CertificateRuntimeRepository(File(System.getProperty("user.home"), ".knet"))
     }

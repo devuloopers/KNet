@@ -18,6 +18,7 @@ kotlin {
                 implementation(project(":core:pairing"))
                 implementation(libs.kotlinx.coroutines.core)
                 implementation(libs.kotlinx.serialization.json)
+                implementation(libs.jmdns)
             }
         }
         val jvmTest by getting {

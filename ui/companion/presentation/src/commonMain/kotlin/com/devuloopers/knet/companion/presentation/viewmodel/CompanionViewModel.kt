@@ -11,6 +11,7 @@ import com.devuloopers.knet.companion.model.CompanionCertificateState
 import com.devuloopers.knet.companion.model.CompanionDesktopId
 import com.devuloopers.knet.companion.model.CompanionFailure
 import com.devuloopers.knet.companion.model.CompanionFailureCode
+import com.devuloopers.knet.companion.model.CompanionInspectionState
 import com.devuloopers.knet.companion.model.CompanionPairingInvitation
 import com.devuloopers.knet.companion.presentation.state.CompanionUiState
 import com.devuloopers.knet.companion.presentation.state.CompanionCertificateExportState
@@ -47,6 +48,7 @@ public class CompanionViewModel(
             connection = dependencies.observeConnection.state.value,
             inspection = dependencies.observeInspection.state.value,
             network = dependencies.observeNetwork.state.value,
+            discovery = dependencies.observeDiscovery.state.value,
         ),
     )
     private val activeOperationCount: MutableStateFlow<Int> = MutableStateFlow(0)
@@ -56,6 +58,7 @@ public class CompanionViewModel(
     private var invitationResolutionVersion: Long = 0L
     private var certificateVerificationJob: Job? = null
     private var certificateDownloadJob: Job? = null
+    private var endpointMaintenanceJob: Job? = null
 
     /** Current immutable screen state. */
     public val state: StateFlow<CompanionUiState> = mutableState.asStateFlow()
@@ -91,11 +94,26 @@ public class CompanionViewModel(
         viewModelScope.launch {
             dependencies.observeInspection.state.collect { inspection ->
                 mutableState.update { current -> current.copy(inspection = inspection) }
+                if (inspection is CompanionInspectionState.Running) {
+                    if (endpointMaintenanceJob?.isActive != true) {
+                        endpointMaintenanceJob = viewModelScope.launch {
+                            dependencies.maintainEndpoint.execute()
+                        }
+                    }
+                } else {
+                    endpointMaintenanceJob?.cancel()
+                    endpointMaintenanceJob = null
+                }
             }
         }
         viewModelScope.launch {
             dependencies.observeNetwork.state.collect { network ->
                 mutableState.update { current -> current.copy(network = network) }
+            }
+        }
+        viewModelScope.launch {
+            dependencies.observeDiscovery.state.collect { discovery ->
+                mutableState.update { current -> current.copy(discovery = discovery) }
             }
         }
         viewModelScope.launch {
@@ -184,10 +202,12 @@ public class CompanionViewModel(
 
     /** Clears presentation-only secrets and effect delivery after lifecycle-owned work has been cancelled. */
     override fun onCleared() {
+        endpointMaintenanceJob?.cancel()
         pendingInvitation = null
         invitationResolutionJob = null
         certificateVerificationJob = null
         certificateDownloadJob = null
+        endpointMaintenanceJob = null
         effectChannel.close()
     }
 

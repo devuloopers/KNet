@@ -6,6 +6,7 @@ import com.devuloopers.knet.companion.application.contract.CompanionCertificateS
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateTrustVerifier
 import com.devuloopers.knet.companion.application.contract.CompanionControlTransport
 import com.devuloopers.knet.companion.application.contract.CompanionCredentialStore
+import com.devuloopers.knet.companion.application.contract.CompanionDesktopDiscovery
 import com.devuloopers.knet.companion.application.contract.CompanionDeviceIdentityProvider
 import com.devuloopers.knet.companion.application.contract.CompanionDeviceProofSigner
 import com.devuloopers.knet.companion.application.contract.CompanionInspectionConfiguration
@@ -30,6 +31,8 @@ import com.devuloopers.knet.companion.data.VersionedCompanionRegistrationReposit
 import com.devuloopers.knet.companion.data.store.CompanionRecordStore
 import com.devuloopers.knet.companion.data.store.CompanionSecretStore
 import com.devuloopers.knet.companion.model.CompanionCertificateState
+import com.devuloopers.knet.companion.model.CompanionDesktopId
+import com.devuloopers.knet.companion.model.CompanionDiscoveryState
 import com.devuloopers.knet.companion.model.CompanionInspectionState
 import com.devuloopers.knet.companion.model.CompanionNetworkState
 import com.devuloopers.knet.companion.presentation.viewmodel.CompanionViewModel
@@ -145,6 +148,14 @@ class CompanionAndroidModulesTest {
 
         override val networkObserver: CompanionNetworkObserver = CompanionNetworkObserver {
             MutableStateFlow(CompanionNetworkState.Unknown)
+        }
+        override val desktopDiscovery: CompanionDesktopDiscovery = object : CompanionDesktopDiscovery {
+            override val state: StateFlow<CompanionDiscoveryState> =
+                MutableStateFlow(CompanionDiscoveryState.Idle)
+
+            override fun start(targetDesktopIds: Set<CompanionDesktopId>): Unit = Unit
+
+            override fun stop(): Unit = Unit
         }
         override val invitationResolver: CompanionInvitationResolver =
             UnavailableCompanionInvitationResolver("composition test")

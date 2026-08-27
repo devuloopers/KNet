@@ -5,6 +5,7 @@ import androidx.compose.ui.window.application
 import com.devuloopers.knet.connectivity.desktop.DesktopConnectivityRuntime
 import com.devuloopers.knet.connectivity.desktop.gateway.AuthenticatedProxyGateway
 import com.devuloopers.knet.connectivity.desktop.gateway.CompanionControlGateway
+import com.devuloopers.knet.connectivity.desktop.discovery.CompanionDiscoveryPublisher
 import com.devuloopers.knet.connectivity.desktop.portal.DedicatedSetupPortal
 import com.devuloopers.knet.connectivity.desktop.wifi.DesktopWifiSharingRuntime
 import com.devuloopers.knet.core.logger.KNetLogger
@@ -144,6 +145,18 @@ object DesktopBootstrap {
         ApplicationLifecycle.registerResource(object : ShutdownAware {
             override fun close() {
                 companionControlGateway.close()
+            }
+        })
+
+        val companionDiscovery = koin.get<CompanionDiscoveryPublisher>()
+        runCatching(companionDiscovery::start).onFailure { failure ->
+            KNetLogger.warn("DesktopBootstrap") {
+                "Companion discovery advertisement is unavailable: ${failure::class.simpleName}"
+            }
+        }
+        ApplicationLifecycle.registerResource(object : ShutdownAware {
+            override fun close() {
+                companionDiscovery.close()
             }
         })
 

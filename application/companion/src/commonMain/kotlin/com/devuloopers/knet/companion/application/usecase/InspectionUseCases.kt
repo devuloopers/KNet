@@ -56,7 +56,7 @@ public class StartCompanionInspectionUseCase(
         mode: CompanionInspectionMode = CompanionInspectionMode.DEVICE_VPN,
         unsupportedTrafficPolicy: UnsupportedTrafficPolicy = UnsupportedTrafficPolicy.REJECT,
     ): StartCompanionInspectionResult {
-        val registration = registrations.activeRegistration.value
+        registrations.activeRegistration.value
             ?: return StartCompanionInspectionResult.Rejected(registrationMissing())
         return when (val preparation = inspection.prepare()) {
             CompanionInspectionPreparationResult.ConsentRequired -> StartCompanionInspectionResult.VpnConsentRequired
@@ -69,6 +69,8 @@ public class StartCompanionInspectionUseCase(
                         return StartCompanionInspectionResult.Rejected(connection.failure)
                     }
                 }
+                val registration = registrations.activeRegistration.value
+                    ?: return StartCompanionInspectionResult.Rejected(registrationMissing())
                 val certificateState = try {
                     verifyCertificateTrust.execute(registration.desktopId)
                 } catch (cancelled: CancellationException) {

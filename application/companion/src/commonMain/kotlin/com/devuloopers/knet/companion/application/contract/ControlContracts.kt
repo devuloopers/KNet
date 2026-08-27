@@ -13,6 +13,9 @@ public enum class CompanionControlOperation {
 
     /** Replace a valid paired-device credential atomically. */
     REFRESH_CREDENTIAL,
+
+    /** Resolve canonical identity and current ports after DNS-SD supplied only an untrusted address. */
+    RECONCILE_ENDPOINTS,
 }
 
 /** Device credential transmitted only after the pinned desktop TLS identity is authenticated. */
@@ -73,6 +76,9 @@ public class CompanionControlRequest(
         }
         require(operation != CompanionControlOperation.REFRESH_CREDENTIAL || authorization != null) {
             "Credential refresh requests require device authorization."
+        }
+        require(operation != CompanionControlOperation.RECONCILE_ENDPOINTS || authorization != null) {
+            "Endpoint reconciliation requests require device authorization."
         }
     }
 

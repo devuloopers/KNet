@@ -1,11 +1,7 @@
 package com.devuloopers.knet.companion.model
 
-import com.devuloopers.knet.pairing.DeviceScope
-import com.devuloopers.knet.pairing.DeviceProofAlgorithm
-import com.devuloopers.knet.pairing.PairingCompletionRequest
-import com.devuloopers.knet.pairing.PairingInvitation
-import com.devuloopers.knet.pairing.PairingInvitationId
 import com.devuloopers.knet.identity.RegisteredDeviceId
+import com.devuloopers.knet.pairing.*
 import kotlin.io.encoding.Base64
 
 /** Canonical codec for the small secret-bearing `knet://pair/v3` bootstrap QR payload. */
@@ -208,6 +204,9 @@ public object CompanionControlProtocol {
     /** Atomically rotates the credential of one already paired device. */
     public const val REFRESH_PATH: String = "/companion/v1/credentials/refresh"
 
+    /** Authenticates a discovered address and returns canonical identity plus current service ports. */
+    public const val RECONCILE_PATH: String = "/companion/v1/endpoints/reconcile"
+
     /** Media type for a proof-bearing pairing completion request. */
     public const val PAIR_REQUEST_MEDIA_TYPE: String = "application/vnd.knet.companion-pair-request"
 
@@ -219,6 +218,9 @@ public object CompanionControlProtocol {
 
     /** Media type for a rotated credential grant. */
     public const val REFRESH_RESPONSE_MEDIA_TYPE: String = "application/vnd.knet.companion-refresh-grant"
+
+    public const val RECONCILE_REQUEST_MEDIA_TYPE: String = "application/vnd.knet.companion-endpoint-request"
+    public const val RECONCILE_RESPONSE_MEDIA_TYPE: String = "application/vnd.knet.companion-endpoint-descriptor"
 
     /** Maximum accepted request body across control-plane operations. */
     public const val MAXIMUM_REQUEST_BYTES: Int = 32 * 1024

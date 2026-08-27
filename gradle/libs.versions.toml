@@ -37,6 +37,7 @@ zxing = "3.5.3"
 camerax = "1.6.1"
 mlkit-barcode = "17.3.0"
 hevtunnel = "1.0.1"
+jmdns = "3.6.3"
 
 
 [libraries]
@@ -104,6 +105,7 @@ androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", versi
 androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
 mlkit-barcode-scanning = { module = "com.google.mlkit:barcode-scanning", version.ref = "mlkit-barcode" }
 hevtunnel = { module = "com.zaneschepke:hevtunnel", version.ref = "hevtunnel" }
+jmdns = { module = "org.jmdns:jmdns", version.ref = "jmdns" }
 
 
 [plugins]

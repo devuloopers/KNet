@@ -11,10 +11,13 @@ import com.devuloopers.knet.application.contract.proxy.ProxyRuntime
 import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
 import com.devuloopers.knet.application.usecase.pairing.PairingOnboardingEnvironment
 import com.devuloopers.knet.application.usecase.pairing.PairingOnboardingEnvironmentProvider
+import com.devuloopers.knet.application.usecase.pairing.CompanionDiscoveryEnvironment
+import com.devuloopers.knet.application.usecase.pairing.CompanionDiscoveryEnvironmentProvider
 import com.devuloopers.knet.application.usecase.pairing.CreatePairingOnboardingUseCase
 import com.devuloopers.knet.application.usecase.pairing.RedeemPairingOnboardingUseCase
 import com.devuloopers.knet.application.usecase.connectivity.wifi.ObserveWifiSharingUseCase
 import com.devuloopers.knet.companion.model.CompanionDesktopId
+import com.devuloopers.knet.companion.model.CompanionDesktopRuntimeId
 import com.devuloopers.knet.companion.model.CompanionBootstrapPayloadCodec
 import com.devuloopers.knet.companion.model.CompanionBootstrapRedemptionCodec
 import com.devuloopers.knet.companion.model.CompanionInvitationResponseCodec
@@ -27,6 +30,7 @@ import com.devuloopers.knet.connectivity.desktop.artifact.SetupArtifactStore
 import com.devuloopers.knet.connectivity.desktop.gateway.AuthenticatedProxyGateway
 import com.devuloopers.knet.connectivity.desktop.gateway.CompanionControlGateway
 import com.devuloopers.knet.connectivity.desktop.gateway.IngressAttributionRegistry
+import com.devuloopers.knet.connectivity.desktop.discovery.CompanionDiscoveryPublisher
 import com.devuloopers.knet.connectivity.desktop.network.DesktopNetworkSnapshotMonitor
 import com.devuloopers.knet.connectivity.desktop.pairing.JvmPairingCrypto
 import com.devuloopers.knet.connectivity.desktop.pairing.InMemoryCompanionOnboardingStore
@@ -41,6 +45,7 @@ import com.devuloopers.knet.connectivity.model.WifiSharingState
 import com.devuloopers.knet.connectivity.spi.ManagedConnectivityMechanism
 import com.devuloopers.knet.connectivity.spi.SetupDescriptorProvider
 import com.devuloopers.knet.core.logger.KNetLogger
+import com.devuloopers.knet.data.desktop.identity.DesktopInstallationIdentityRepository
 import com.devuloopers.knet.data.desktop.network.repository.NetworkRepositoryImpl
 import com.devuloopers.knet.data.desktop.pairing.RoomRegisteredDeviceStore
 import com.devuloopers.knet.data.desktop.runtime.CertificateRuntimeRepository
@@ -61,6 +66,7 @@ import java.net.InetSocketAddress
 import java.net.URI
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.uuid.Uuid
 
 /** Pairing, network discovery, setup delivery, and desktop connectivity mechanisms. */
 internal val connectivityBindings: Module = module {
@@ -121,9 +127,34 @@ internal val connectivityBindings: Module = module {
         )
     }
     single<WifiSharing> { get<DesktopWifiSharingRuntime>() }
+    single {
+        CompanionDiscoveryPublisher(
+            sharingState = get<DesktopWifiSharingRuntime>().state,
+            environmentProvider = get(),
+        )
+    }
     factory { ObserveWifiSharingUseCase(get()) }
+    single<CompanionDiscoveryEnvironmentProvider> {
+        val certificates: CertificateRuntimeRepository = get()
+        val desktopIdentities: DesktopInstallationIdentityRepository = get()
+        val runtimeId = CompanionDesktopRuntimeId(Uuid.random())
+        CompanionDiscoveryEnvironmentProvider {
+            val tlsIdentity = certificates.companionTlsIdentity(CompanionControlGateway.TLS_SERVER_NAME)
+            val identity = desktopIdentities.loadOrCreate(
+                setOf(CompanionDesktopId("knet-${tlsIdentity.rootCertificateSha256}")),
+            )
+            CompanionDiscoveryEnvironment(
+                desktopId = identity.canonicalId,
+                legacyDesktopIds = identity.legacyIds,
+                runtimeId = runtimeId,
+                controlPort = COMPANION_CONTROL_GATEWAY_PORT,
+                proxyPort = AUTHENTICATED_GATEWAY_PORT,
+            )
+        }
+    }
     single<PairingOnboardingEnvironmentProvider> {
         val certificates: CertificateRuntimeRepository = get()
+        val discovery: CompanionDiscoveryEnvironmentProvider = get()
         val sharing: WifiSharing = get()
         PairingOnboardingEnvironmentProvider {
             withContext(Dispatchers.IO) {
@@ -132,8 +163,9 @@ internal val connectivityBindings: Module = module {
                 val identity = certificates.companionTlsIdentity(
                     CompanionControlGateway.TLS_SERVER_NAME,
                 )
+                val desktopIdentity = discovery.load()
                 PairingOnboardingEnvironment(
-                    desktopId = CompanionDesktopId("knet-${identity.rootCertificateSha256}"),
+                    desktopId = desktopIdentity.desktopId,
                     desktopDisplayName = "KNet Desktop",
                     rootCertificateEndpoint = active.session.setupUrl.toRootCertificateEndpoint(),
                     controlEndpoint = CompanionServiceEndpoint(
@@ -207,6 +239,7 @@ internal val connectivityBindings: Module = module {
         val identity = certificates.companionTlsIdentity(
             CompanionControlGateway.TLS_SERVER_NAME,
         )
+        val discovery: CompanionDiscoveryEnvironmentProvider = get()
         CompanionControlGateway(
             bindHost = COMPANION_LAN_BIND_HOST,
             bindPort = COMPANION_CONTROL_GATEWAY_PORT,
@@ -216,6 +249,7 @@ internal val connectivityBindings: Module = module {
             redeemOnboarding = get(),
             redemptionCodec = get(),
             invitationCodec = get(),
+            endpointDescriptor = { discovery.load().endpointDescriptor() },
             nowEpochMillis = System::currentTimeMillis,
         )
     }

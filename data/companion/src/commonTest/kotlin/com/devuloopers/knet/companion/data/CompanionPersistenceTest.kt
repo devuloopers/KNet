@@ -123,6 +123,27 @@ class CompanionPersistenceTest {
         assertNull(repository.remove(CompanionDesktopId("missing")))
     }
 
+    @Test
+    fun authenticatedLegacyIdentityMigrationIsPersistedAsOneActiveCanonicalRecord() = runTest {
+        val store = MemoryRecordStore()
+        val repository = VersionedCompanionRegistrationRepository(store)
+        val legacy = registration("legacy-desktop", "KNet Desktop")
+        val canonical = legacy.copy(
+            desktopId = CompanionDesktopId("11111111-1111-4111-8111-111111111111"),
+            controlEndpoint = CompanionServiceEndpoint("192.168.1.77", 8183, secure = true),
+            proxyEndpoint = CompanionServiceEndpoint("192.168.1.77", 8182, secure = true),
+        )
+        repository.upsert(legacy, makeActive = true)
+
+        assertTrue(repository.migrateIdentity(legacy.desktopId, canonical, makeActive = true))
+
+        assertEquals(listOf(canonical), repository.registrations.value)
+        assertEquals(canonical, repository.activeRegistration.value)
+        val restored = VersionedCompanionRegistrationRepository(store)
+        assertEquals(listOf(canonical), restored.registrations.value)
+        assertEquals(canonical, restored.activeRegistration.value)
+    }
+
     private class MemoryRecordStore(initial: String? = null) : CompanionRecordStore {
         private val mutableContent = MutableStateFlow(initial)
         override val content: StateFlow<String?> = mutableContent

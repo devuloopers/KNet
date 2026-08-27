@@ -11,6 +11,9 @@ import com.devuloopers.knet.companion.application.contract.CompanionCertificateT
 import com.devuloopers.knet.companion.application.contract.CompanionCredentialRefreshResult
 import com.devuloopers.knet.companion.application.contract.CompanionCredentialStore
 import com.devuloopers.knet.companion.application.contract.CompanionDeviceIdentityProvider
+import com.devuloopers.knet.companion.application.contract.CompanionDesktopDiscovery
+import com.devuloopers.knet.companion.application.contract.CompanionEndpointReconciliationClient
+import com.devuloopers.knet.companion.application.contract.CompanionEndpointReconciliationResult
 import com.devuloopers.knet.companion.application.contract.CompanionInspectionConfiguration
 import com.devuloopers.knet.companion.application.contract.CompanionInspectionController
 import com.devuloopers.knet.companion.application.contract.CompanionInspectionPreparationResult
@@ -29,14 +32,17 @@ import com.devuloopers.knet.companion.application.contract.InvitationDecodeResul
 import com.devuloopers.knet.companion.application.usecase.AcceptPairingInvitationUseCase
 import com.devuloopers.knet.companion.application.usecase.ConnectCompanionUseCase
 import com.devuloopers.knet.companion.application.usecase.DownloadCompanionRootCertificateUseCase
+import com.devuloopers.knet.companion.application.usecase.MaintainCompanionEndpointUseCase
 import com.devuloopers.knet.companion.application.usecase.ForgetCompanionDesktopUseCase
 import com.devuloopers.knet.companion.application.usecase.ObserveCompanionCertificateStoreChangesUseCase
 import com.devuloopers.knet.companion.application.usecase.ObserveCompanionConnectionUseCase
 import com.devuloopers.knet.companion.application.usecase.ObserveCompanionInspectionUseCase
 import com.devuloopers.knet.companion.application.usecase.ObserveCompanionNetworkUseCase
+import com.devuloopers.knet.companion.application.usecase.ObserveCompanionDiscoveryUseCase
 import com.devuloopers.knet.companion.application.usecase.ObserveCompanionRegistrationsUseCase
 import com.devuloopers.knet.companion.application.usecase.PairCompanionDeviceUseCase
 import com.devuloopers.knet.companion.application.usecase.RefreshCompanionCredentialUseCase
+import com.devuloopers.knet.companion.application.usecase.RecoverCompanionEndpointUseCase
 import com.devuloopers.knet.companion.application.usecase.SelectCompanionRegistrationUseCase
 import com.devuloopers.knet.companion.application.usecase.StartCompanionInspectionUseCase
 import com.devuloopers.knet.companion.application.usecase.StopCompanionInspectionUseCase
@@ -48,6 +54,7 @@ import com.devuloopers.knet.companion.model.CompanionConnectionState
 import com.devuloopers.knet.companion.model.CompanionCredentialReference
 import com.devuloopers.knet.companion.model.CompanionDesktopId
 import com.devuloopers.knet.companion.model.CompanionDeviceIdentity
+import com.devuloopers.knet.companion.model.CompanionDiscoveryState
 import com.devuloopers.knet.companion.model.CompanionFailure
 import com.devuloopers.knet.companion.model.CompanionFailureCode
 import com.devuloopers.knet.companion.model.CompanionInspectionState
@@ -482,7 +489,24 @@ class CompanionViewModelTest {
         }
 
         fun viewModel(): CompanionViewModel {
-            val connect = ConnectCompanionUseCase(repository, credentials, network, transport) { 1_000L }
+            val connect = ConnectCompanionUseCase(
+                repository,
+                credentials,
+                network,
+                transport,
+                nowEpochMillis = { 1_000L },
+            )
+            val discovery = FakeDesktopDiscovery()
+            val recoverEndpoint = RecoverCompanionEndpointUseCase(
+                repository,
+                credentials,
+                discovery,
+                CompanionEndpointReconciliationClient { _, _, _ ->
+                    CompanionEndpointReconciliationResult.Rejected(
+                        CompanionFailure(CompanionFailureCode.TRANSPORT_UNAVAILABLE, "not used", true),
+                    )
+                },
+            )
             val verifyCertificate = VerifyCompanionCertificateTrustUseCase(
                 repository,
                 credentials,
@@ -511,6 +535,14 @@ class CompanionViewModelTest {
                             selectRegistration = SelectCompanionRegistrationUseCase(repository),
                             observeConnection = ObserveCompanionConnectionUseCase(transport),
                             observeNetwork = ObserveCompanionNetworkUseCase(network),
+                            observeDiscovery = ObserveCompanionDiscoveryUseCase(discovery),
+                            maintainEndpoint = MaintainCompanionEndpointUseCase(
+                                repository,
+                                discovery,
+                                recoverEndpoint,
+                                transport,
+                                connect,
+                            ),
                             startInspection = StartCompanionInspectionUseCase(
                                 repository,
                                 connect,
@@ -577,6 +609,18 @@ class CompanionViewModelTest {
             if (mutableActive.value?.desktopId == desktopId) mutableActive.value = null
             return removed
         }
+
+        override suspend fun migrateIdentity(
+            previousDesktopId: CompanionDesktopId,
+            registration: CompanionRegistration,
+            makeActive: Boolean,
+        ): Boolean {
+            if (mutableRegistrations.value.none { it.desktopId == previousDesktopId }) return false
+            mutableRegistrations.value = mutableRegistrations.value
+                .filterNot { it.desktopId == previousDesktopId || it.desktopId == registration.desktopId } + registration
+            if (makeActive || mutableActive.value?.desktopId == previousDesktopId) mutableActive.value = registration
+            return true
+        }
     }
 
     private class FakeCredentialStore : CompanionCredentialStore {
@@ -587,6 +631,19 @@ class CompanionViewModelTest {
         override suspend fun read(reference: CompanionCredentialReference): String? = values[reference]
         override suspend fun remove(reference: CompanionCredentialReference) {
             values.remove(reference)
+        }
+    }
+
+    private class FakeDesktopDiscovery : CompanionDesktopDiscovery {
+        private val mutableState = MutableStateFlow<CompanionDiscoveryState>(CompanionDiscoveryState.Idle)
+        override val state: StateFlow<CompanionDiscoveryState> = mutableState
+
+        override fun start(targetDesktopIds: Set<CompanionDesktopId>) {
+            mutableState.value = CompanionDiscoveryState.Searching(targetDesktopIds.first())
+        }
+
+        override fun stop() {
+            mutableState.value = CompanionDiscoveryState.Idle
         }
     }
 

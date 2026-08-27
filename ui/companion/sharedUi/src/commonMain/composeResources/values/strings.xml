@@ -73,6 +73,7 @@
     <string name="status_inspection">Inspection</string>
     <string name="status_connected">Connected</string>
     <string name="status_connecting">Connecting</string>
+    <string name="status_finding_desktop">Finding paired desktop</string>
     <string name="status_disconnected">Disconnected</string>
     <string name="status_failed">Needs attention</string>
     <string name="status_running">Running</string>

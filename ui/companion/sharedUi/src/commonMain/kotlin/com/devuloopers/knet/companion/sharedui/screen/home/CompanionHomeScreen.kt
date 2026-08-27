@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.devuloopers.knet.companion.model.CompanionCertificateState
 import com.devuloopers.knet.companion.model.CompanionConnectionState
+import com.devuloopers.knet.companion.model.CompanionDiscoveryState
 import com.devuloopers.knet.companion.model.CompanionInspectionState
 import com.devuloopers.knet.companion.model.CompanionNetworkState
 import com.devuloopers.knet.companion.presentation.action.CompanionAction
@@ -31,6 +32,7 @@ import com.devuloopers.knet.companion.sharedui.generated.resources.status_connec
 import com.devuloopers.knet.companion.sharedui.generated.resources.status_desktop
 import com.devuloopers.knet.companion.sharedui.generated.resources.status_disconnected
 import com.devuloopers.knet.companion.sharedui.generated.resources.status_failed
+import com.devuloopers.knet.companion.sharedui.generated.resources.status_finding_desktop
 import com.devuloopers.knet.companion.sharedui.generated.resources.status_inspection
 import com.devuloopers.knet.companion.sharedui.generated.resources.status_network
 import com.devuloopers.knet.companion.sharedui.generated.resources.status_preparing
@@ -47,13 +49,19 @@ import org.jetbrains.compose.resources.stringResource
 /** Ready screen for durable pairing, connection, credential, and inspection controls. */
 @Composable
 internal fun CompanionHomeScreen(state: CompanionUiState, onAction: (CompanionAction) -> Unit) {
-    val connectionText = when (state.connection) {
-        is CompanionConnectionState.Connected -> stringResource(Res.string.status_connected)
-        is CompanionConnectionState.Connecting,
-        is CompanionConnectionState.Reconnecting,
-        -> stringResource(Res.string.status_connecting)
-        CompanionConnectionState.Disconnected -> stringResource(Res.string.status_disconnected)
-        is CompanionConnectionState.Failed -> stringResource(Res.string.status_failed)
+    val findingDesktop = state.inspection is CompanionInspectionState.Running &&
+        state.discovery is CompanionDiscoveryState.Searching
+    val connectionText = if (findingDesktop) {
+        stringResource(Res.string.status_finding_desktop)
+    } else {
+        when (state.connection) {
+            is CompanionConnectionState.Connected -> stringResource(Res.string.status_connected)
+            is CompanionConnectionState.Connecting,
+            is CompanionConnectionState.Reconnecting,
+            -> stringResource(Res.string.status_connecting)
+            CompanionConnectionState.Disconnected -> stringResource(Res.string.status_disconnected)
+            is CompanionConnectionState.Failed -> stringResource(Res.string.status_failed)
+        }
     }
     val networkText = when (state.network) {
         is CompanionNetworkState.Available -> stringResource(Res.string.network_ready)
@@ -97,8 +105,8 @@ internal fun CompanionHomeScreen(state: CompanionUiState, onAction: (CompanionAc
                 CompanionStatusRow(
                     label = stringResource(Res.string.status_connection),
                     value = connectionText,
-                    icon = if (connected) KNetIcons.Check else KNetIcons.Warning,
-                    positive = connected,
+                    icon = if (connected && !findingDesktop) KNetIcons.Check else KNetIcons.Warning,
+                    positive = connected && !findingDesktop,
                 )
                 CompanionStatusRow(
                     label = stringResource(Res.string.status_certificate),

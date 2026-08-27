@@ -7,6 +7,7 @@ import com.devuloopers.knet.companion.application.contract.CompanionInspectionCo
 import com.devuloopers.knet.companion.application.contract.CompanionInvitationResolver
 import com.devuloopers.knet.companion.application.contract.CompanionNetworkObserver
 import com.devuloopers.knet.companion.application.contract.CompanionRootCertificateSource
+import com.devuloopers.knet.companion.application.contract.CompanionDesktopDiscovery
 
 /**
  * Complete portable view of the connectivity capabilities supplied by one native companion platform.
@@ -17,6 +18,9 @@ import com.devuloopers.knet.companion.application.contract.CompanionRootCertific
 public interface CompanionPlatformAdapters : AutoCloseable {
     /** Observes whether the platform currently has a usable network route. */
     public val networkObserver: CompanionNetworkObserver
+
+    /** Resolves the currently paired desktop after local address changes. */
+    public val desktopDiscovery: CompanionDesktopDiscovery
 
     /** Retrieves and authenticates a complete invitation from a lightweight scanned bootstrap. */
     public val invitationResolver: CompanionInvitationResolver

@@ -10,6 +10,7 @@ import com.devuloopers.knet.companion.connectivity.certificate.AndroidCompanionR
 import com.devuloopers.knet.companion.connectivity.certificate.PlatformAndroidCertificateTlsClient
 import com.devuloopers.knet.companion.connectivity.certificate.PlatformAndroidTrustedCertificateStore
 import com.devuloopers.knet.companion.connectivity.control.KtorCompanionControlTransport
+import com.devuloopers.knet.companion.connectivity.discovery.AndroidCompanionDesktopDiscovery
 import com.devuloopers.knet.companion.connectivity.fallback.UnavailableCompanionInspectionController
 import com.devuloopers.knet.companion.connectivity.http.AndroidCompanionKtorClientProvider
 import com.devuloopers.knet.companion.connectivity.http.KtorCompanionHttpClient
@@ -35,6 +36,7 @@ public actual class PlatformCompanionAdapterFactory(
     /** Creates an independently owned Android adapter bundle. */
     actual override fun create(): CompanionPlatformAdapters {
         val networkObserver = AndroidCompanionNetworkObserver(applicationContext)
+        val desktopDiscovery = AndroidCompanionDesktopDiscovery(applicationContext)
         val httpClient = KtorCompanionHttpClient(AndroidCompanionKtorClientProvider())
         val certificateClient = PlatformAndroidCertificateTlsClient(httpClient)
         val certificateStoreChanges = AndroidCertificateStoreChangeObserver(applicationContext)
@@ -47,6 +49,7 @@ public actual class PlatformCompanionAdapterFactory(
         } ?: UnavailableCompanionInspectionController(ANDROID_PLATFORM_NAME)
         return DefaultCompanionPlatformAdapters(
             networkObserver = networkObserver,
+            desktopDiscovery = desktopDiscovery,
             invitationResolver = DefaultCompanionInvitationResolver(KtorCompanionBootstrapClient(httpClient)),
             controlTransport = KtorCompanionControlTransport(httpClient),
             rootCertificateSource = AndroidCompanionRootCertificateSource(certificateClient),
@@ -59,6 +62,7 @@ public actual class PlatformCompanionAdapterFactory(
             inspectionController = inspectionController,
             closePlatform = {
                 certificateStoreChanges.close()
+                desktopDiscovery.stop()
                 networkObserver.close()
             },
         )

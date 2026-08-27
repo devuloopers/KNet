@@ -7,6 +7,8 @@ import com.devuloopers.knet.companion.application.usecase.ObserveCompanionCertif
 import com.devuloopers.knet.companion.application.usecase.ObserveCompanionConnectionUseCase
 import com.devuloopers.knet.companion.application.usecase.ObserveCompanionInspectionUseCase
 import com.devuloopers.knet.companion.application.usecase.ObserveCompanionNetworkUseCase
+import com.devuloopers.knet.companion.application.usecase.ObserveCompanionDiscoveryUseCase
+import com.devuloopers.knet.companion.application.usecase.MaintainCompanionEndpointUseCase
 import com.devuloopers.knet.companion.application.usecase.ObserveCompanionRegistrationsUseCase
 import com.devuloopers.knet.companion.application.usecase.PairCompanionDeviceUseCase
 import com.devuloopers.knet.companion.application.usecase.RefreshCompanionCredentialUseCase
@@ -27,6 +29,8 @@ import com.devuloopers.knet.companion.application.usecase.VerifyCompanionCertifi
  * @property selectRegistration changes the active desktop.
  * @property observeConnection observes transport lifecycle state.
  * @property observeNetwork observes native network reachability.
+ * @property observeDiscovery observes native DNS-SD discovery lifecycle without platform handles.
+ * @property maintainEndpoint securely follows the active desktop across LAN address changes during inspection.
  * @property startInspection prepares connection, trust, and native inspection.
  * @property stopInspection releases inspection before transport.
  * @property observeInspection observes native inspection lifecycle state.
@@ -43,6 +47,8 @@ public data class CompanionViewModelDependencies(
     public val selectRegistration: SelectCompanionRegistrationUseCase,
     public val observeConnection: ObserveCompanionConnectionUseCase,
     public val observeNetwork: ObserveCompanionNetworkUseCase,
+    public val observeDiscovery: ObserveCompanionDiscoveryUseCase,
+    public val maintainEndpoint: MaintainCompanionEndpointUseCase,
     public val startInspection: StartCompanionInspectionUseCase,
     public val stopInspection: StopCompanionInspectionUseCase,
     public val observeInspection: ObserveCompanionInspectionUseCase,

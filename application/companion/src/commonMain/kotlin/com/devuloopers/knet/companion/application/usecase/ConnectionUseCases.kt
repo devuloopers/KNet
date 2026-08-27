@@ -5,6 +5,7 @@ import com.devuloopers.knet.companion.application.contract.CompanionNetworkObser
 import com.devuloopers.knet.companion.application.contract.CompanionRegistrationRepository
 import com.devuloopers.knet.companion.application.contract.CompanionTransport
 import com.devuloopers.knet.companion.application.contract.CompanionTransportResult
+import com.devuloopers.knet.companion.application.contract.CompanionEndpointRecoveryResult
 import com.devuloopers.knet.companion.model.CompanionConnectionState
 import com.devuloopers.knet.companion.model.CompanionFailure
 import com.devuloopers.knet.companion.model.CompanionFailureCode
@@ -19,6 +20,7 @@ public class ConnectCompanionUseCase(
     private val network: CompanionNetworkObserver,
     private val transport: CompanionTransport,
     private val nowEpochMillis: () -> Long,
+    private val recoverEndpoint: RecoverCompanionEndpointUseCase? = null,
 ) {
     public suspend fun execute(): ConnectCompanionResult {
         val registration = registrations.activeRegistration.value
@@ -50,7 +52,22 @@ public class ConnectCompanionUseCase(
             ?: return ConnectCompanionResult.Rejected(
                 CompanionFailure(CompanionFailureCode.CREDENTIAL_NOT_FOUND, "Paired credential is unavailable.", false),
             )
-        return try {
+        val initial = connect(registration, credential)
+        if (initial !is ConnectCompanionResult.Rejected || recoverEndpoint == null) return initial
+        if (
+            initial.failure.code != CompanionFailureCode.TRANSPORT_UNAVAILABLE &&
+            initial.failure.code != CompanionFailureCode.TRANSPORT_IDENTITY_MISMATCH
+        ) return initial
+        return when (val recovery = recoverEndpoint.execute(registration)) {
+            is CompanionEndpointRecoveryResult.Rejected -> ConnectCompanionResult.Rejected(recovery.failure)
+            is CompanionEndpointRecoveryResult.Recovered -> connect(recovery.registration, credential)
+        }
+    }
+
+    private suspend fun connect(
+        registration: com.devuloopers.knet.companion.model.CompanionRegistration,
+        credential: String,
+    ): ConnectCompanionResult = try {
             when (val result = transport.connect(registration, credential)) {
                 CompanionTransportResult.Connected -> ConnectCompanionResult.Connected
                 is CompanionTransportResult.Rejected -> ConnectCompanionResult.Rejected(result.failure)
@@ -62,7 +79,6 @@ public class ConnectCompanionUseCase(
                 CompanionFailure(CompanionFailureCode.TRANSPORT_UNAVAILABLE, "Unable to reach the paired desktop securely.", true),
             )
         }
-    }
 }
 
 /** Connection workflow outcome. */
@@ -104,4 +120,3 @@ public class RecoverCompanionSessionUseCase(
             connect.execute()
         }
 }
-

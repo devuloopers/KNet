@@ -19,17 +19,12 @@ import com.devuloopers.knet.companion.model.CompanionFailure
 import com.devuloopers.knet.companion.model.CompanionFailureCode
 import com.devuloopers.knet.core.logger.KNetLogger
 import com.devuloopers.knet.core.logger.LogTags
-import java.net.DatagramSocket
-import java.net.Socket
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.koin.core.context.GlobalContext
+import java.net.DatagramSocket
+import java.net.Socket
 
 /** Android system component that owns the companion TUN descriptor and foreground lifecycle. */
 class KNetInspectionVpnService : VpnService(), AndroidSocketProtector {
@@ -50,10 +45,12 @@ class KNetInspectionVpnService : VpnService(), AndroidSocketProtector {
                 startForeground(NOTIFICATION_ID, createNotification())
                 serviceScope.launch { startPendingInspection() }
             }
+
             ACTION_STOP -> serviceScope.launch {
                 stopInspection()
                 stopSelf()
             }
+
             else -> stopSelf()
         }
         return START_NOT_STICKY

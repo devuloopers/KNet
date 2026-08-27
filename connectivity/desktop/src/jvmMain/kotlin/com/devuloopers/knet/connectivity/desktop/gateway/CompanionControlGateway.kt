@@ -12,6 +12,8 @@ import com.devuloopers.knet.companion.model.CompanionCredentialRefreshGrant
 import com.devuloopers.knet.companion.model.CompanionCredentialRefreshGrantCodec
 import com.devuloopers.knet.companion.model.CompanionCredentialRefreshRequestCodec
 import com.devuloopers.knet.companion.model.CompanionInvitationResponseCodec
+import com.devuloopers.knet.companion.model.CompanionEndpointDescriptor
+import com.devuloopers.knet.companion.model.CompanionEndpointReconciliationCodec
 import com.devuloopers.knet.companion.model.CompanionPairingCompletionCodec
 import com.devuloopers.knet.companion.model.CompanionPairingGrant
 import com.devuloopers.knet.companion.model.CompanionPairingGrantCodec
@@ -60,6 +62,8 @@ public class CompanionControlGateway(
     private val redeemOnboarding: RedeemPairingOnboardingUseCase,
     private val redemptionCodec: CompanionBootstrapRedemptionCodec = CompanionBootstrapRedemptionCodec(),
     private val invitationCodec: CompanionInvitationResponseCodec = CompanionInvitationResponseCodec(),
+    private val endpointDescriptor: () -> CompanionEndpointDescriptor? = { null },
+    private val endpointCodec: CompanionEndpointReconciliationCodec = CompanionEndpointReconciliationCodec(),
     private val pairingCompletionCodec: CompanionPairingCompletionCodec = CompanionPairingCompletionCodec(),
     private val pairingGrantCodec: CompanionPairingGrantCodec = CompanionPairingGrantCodec(),
     private val refreshRequestCodec: CompanionCredentialRefreshRequestCodec = CompanionCredentialRefreshRequestCodec(),
@@ -145,6 +149,9 @@ public class CompanionControlGateway(
         }
         if (request.method == "POST" && request.path == CompanionControlProtocol.REFRESH_PATH) {
             return refreshCredential(socket, request)
+        }
+        if (request.method == "POST" && request.path == CompanionControlProtocol.RECONCILE_PATH) {
+            return reconcileEndpoint(socket, request)
         }
         if (request.body.isNotEmpty()) return socket.respond(400, "body_not_allowed")
         val authorization = request.authorization ?: return socket.respond(401, "authorization_required")
@@ -252,6 +259,31 @@ public class CompanionControlGateway(
                 ),
             )
         }
+    }
+
+    private suspend fun reconcileEndpoint(socket: SSLSocket, request: ControlGatewayRequest) {
+        if (request.contentType != CompanionControlProtocol.RECONCILE_REQUEST_MEDIA_TYPE) {
+            return socket.respond(415, "unsupported_media_type")
+        }
+        val authorization = request.authorization ?: return socket.respond(401, "authorization_required")
+        val authentication = pairing.authenticate(
+            authorization.deviceId,
+            authorization.credential,
+            DeviceScope.SETUP_ARTIFACT_READ,
+        )
+        if (authentication !is DeviceAuthenticationResult.Authenticated) {
+            return socket.respond(401, "authorization_rejected")
+        }
+        val reconciliation = runCatching { endpointCodec.decodeRequest(request.body) }.getOrNull()
+            ?: return socket.respond(400, "invalid_endpoint_request")
+        val descriptor = endpointDescriptor() ?: return socket.respond(503, "endpoint_unavailable")
+        if (!descriptor.accepts(reconciliation.desktopId)) return socket.respond(409, "desktop_identity_mismatch")
+        socket.respond(
+            statusCode = 200,
+            reason = "OK",
+            mediaType = CompanionControlProtocol.RECONCILE_RESPONSE_MEDIA_TYPE,
+            body = endpointCodec.encodeDescriptor(descriptor),
+        )
     }
 
     private fun claimChallenge(
@@ -417,7 +449,33 @@ private data class ControlGatewayRequest(
     val challenge: CompanionCertificateChallengeNonce?,
     val contentType: String?,
     val body: ByteArray,
-)
+) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as ControlGatewayRequest
+
+        if (method != other.method) return false
+        if (path != other.path) return false
+        if (authorization != other.authorization) return false
+        if (challenge != other.challenge) return false
+        if (contentType != other.contentType) return false
+        if (!body.contentEquals(other.body)) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = method.hashCode()
+        result = 31 * result + path.hashCode()
+        result = 31 * result + authorization.hashCode()
+        result = 31 * result + challenge.hashCode()
+        result = 31 * result + contentType.hashCode()
+        result = 31 * result + body.contentHashCode()
+        return result
+    }
+}
 
 private data class ControlGatewayAuthorization(
     val deviceId: RegisteredDeviceId,

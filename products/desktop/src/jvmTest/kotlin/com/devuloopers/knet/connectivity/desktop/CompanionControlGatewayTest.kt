@@ -17,6 +17,11 @@ import com.devuloopers.knet.companion.model.CompanionCredentialRefreshGrantCodec
 import com.devuloopers.knet.companion.model.CompanionCredentialRefreshRequest
 import com.devuloopers.knet.companion.model.CompanionCredentialRefreshRequestCodec
 import com.devuloopers.knet.companion.model.CompanionDesktopId
+import com.devuloopers.knet.companion.model.CompanionDesktopRuntimeId
+import com.devuloopers.knet.companion.model.CompanionDiscoveryProtocol
+import com.devuloopers.knet.companion.model.CompanionEndpointDescriptor
+import com.devuloopers.knet.companion.model.CompanionEndpointReconciliationCodec
+import com.devuloopers.knet.companion.model.CompanionEndpointReconciliationRequest
 import com.devuloopers.knet.companion.model.CompanionInvitationResponseCodec
 import com.devuloopers.knet.companion.model.CompanionPairingInvitation
 import com.devuloopers.knet.companion.model.CompanionPairingCompletionCodec
@@ -56,6 +61,63 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 
 class CompanionControlGatewayTest {
+    @Test
+    fun endpointReconciliationRequiresCredentialAndAcceptsOnlyCanonicalOrLegacyIdentity() = runTest {
+        val certificateAuthority = CertificateAuthority.generate()
+        val pairing = pairingCoordinator()
+        val credential = pairDevice(pairing)
+        val legacyId = CompanionDesktopId("knet-${"b".repeat(64)}")
+        val descriptor = CompanionEndpointDescriptor(
+            protocolVersion = CompanionDiscoveryProtocol.VERSION,
+            desktopId = CompanionDesktopId("11111111-1111-4111-8111-111111111111"),
+            acceptedLegacyIds = setOf(legacyId),
+            runtimeId = CompanionDesktopRuntimeId.parse("22222222-2222-4222-8222-222222222222"),
+            controlPort = 8_183,
+            proxyPort = 8_182,
+        )
+        val gateway = CompanionControlGateway(
+            bindHost = "127.0.0.1",
+            bindPort = 0,
+            serverSocketFactory = serverFactory(certificateAuthority),
+            rootCertificateDer = { certificateAuthority.certificate.encoded },
+            pairing = pairing,
+            redeemOnboarding = redemptionUseCase(),
+            endpointDescriptor = { descriptor },
+            nowEpochMillis = { 1_000L },
+        )
+        gateway.start()
+        try {
+            val codec = CompanionEndpointReconciliationCodec()
+            val port = requireNotNull(gateway.boundPort)
+            fun reconciliationRequest(desktopId: CompanionDesktopId, authorization: String? = null): String =
+                controlRequest(
+                    path = CompanionControlProtocol.RECONCILE_PATH,
+                    mediaType = CompanionControlProtocol.RECONCILE_REQUEST_MEDIA_TYPE,
+                    body = codec.encodeRequest(CompanionEndpointReconciliationRequest(desktopId)),
+                    authorization = authorization,
+                )
+
+            val unauthorized = request(port, certificateAuthority.certificate, reconciliationRequest(legacyId))
+            val accepted = request(
+                port,
+                certificateAuthority.certificate,
+                reconciliationRequest(legacyId, "Bearer device-1:$credential"),
+            )
+            val mismatched = request(
+                port,
+                certificateAuthority.certificate,
+                reconciliationRequest(CompanionDesktopId("unrelated-desktop"), "Bearer device-1:$credential"),
+            )
+
+            assertEquals(401, unauthorized.statusCode)
+            assertEquals(200, accepted.statusCode)
+            assertEquals(descriptor, codec.decodeDescriptor(accepted.body))
+            assertEquals(409, mismatched.statusCode)
+        } finally {
+            gateway.close()
+        }
+    }
+
     @Test
     fun authenticatedTlsGatewayServesRootEchoesOnceAndRejectsReplay() = runTest {
         val certificateAuthority = CertificateAuthority.generate()

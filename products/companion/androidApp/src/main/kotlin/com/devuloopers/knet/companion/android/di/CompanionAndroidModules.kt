@@ -1,44 +1,17 @@
 package com.devuloopers.knet.companion.android.di
 
 import com.devuloopers.knet.companion.android.inspection.AndroidInspectionRuntimeCoordinator
-import com.devuloopers.knet.companion.application.contract.CompanionCertificateStoreChangeObserver
-import com.devuloopers.knet.companion.application.contract.CompanionCertificateTrustVerifier
-import com.devuloopers.knet.companion.application.contract.CompanionControlTransport
-import com.devuloopers.knet.companion.application.contract.CompanionCredentialStore
-import com.devuloopers.knet.companion.application.contract.CompanionDeviceIdentityProvider
-import com.devuloopers.knet.companion.application.contract.CompanionDeviceProofSigner
-import com.devuloopers.knet.companion.application.contract.CompanionInspectionController
-import com.devuloopers.knet.companion.application.contract.CompanionInvitationCodec
-import com.devuloopers.knet.companion.application.contract.CompanionInvitationResolver
-import com.devuloopers.knet.companion.application.contract.CompanionNetworkObserver
-import com.devuloopers.knet.companion.application.contract.CompanionPairingClient
-import com.devuloopers.knet.companion.application.contract.CompanionRegistrationRepository
-import com.devuloopers.knet.companion.application.contract.CompanionRootCertificateSource
-import com.devuloopers.knet.companion.application.contract.CompanionTransport
-import com.devuloopers.knet.companion.application.usecase.AcceptPairingInvitationUseCase
-import com.devuloopers.knet.companion.application.usecase.ConnectCompanionUseCase
-import com.devuloopers.knet.companion.application.usecase.DisconnectCompanionUseCase
-import com.devuloopers.knet.companion.application.usecase.DownloadCompanionRootCertificateUseCase
-import com.devuloopers.knet.companion.application.usecase.ForgetCompanionDesktopUseCase
-import com.devuloopers.knet.companion.application.usecase.ObserveCompanionCertificateStoreChangesUseCase
-import com.devuloopers.knet.companion.application.usecase.ObserveCompanionConnectionUseCase
-import com.devuloopers.knet.companion.application.usecase.ObserveCompanionInspectionUseCase
-import com.devuloopers.knet.companion.application.usecase.ObserveCompanionNetworkUseCase
-import com.devuloopers.knet.companion.application.usecase.ObserveCompanionRegistrationsUseCase
-import com.devuloopers.knet.companion.application.usecase.PairCompanionDeviceUseCase
-import com.devuloopers.knet.companion.application.usecase.RefreshCompanionCredentialUseCase
-import com.devuloopers.knet.companion.application.usecase.SelectCompanionRegistrationUseCase
-import com.devuloopers.knet.companion.application.usecase.StartCompanionInspectionUseCase
-import com.devuloopers.knet.companion.application.usecase.StopCompanionInspectionUseCase
-import com.devuloopers.knet.companion.application.usecase.VerifyCompanionCertificateTrustUseCase
+import com.devuloopers.knet.companion.application.contract.*
+import com.devuloopers.knet.companion.application.usecase.*
 import com.devuloopers.knet.companion.connectivity.platform.CompanionPlatformAdapters
 import com.devuloopers.knet.companion.connectivity.transport.AndroidTunForwarder
-import com.devuloopers.knet.companion.data.control.DefaultCompanionPairingClient
 import com.devuloopers.knet.companion.data.ProtectedCompanionCredentialStore
 import com.devuloopers.knet.companion.data.VersionedCompanionInvitationCodec
 import com.devuloopers.knet.companion.data.VersionedCompanionRegistrationRepository
 import com.devuloopers.knet.companion.data.android.AndroidKeystoreCompanionDeviceIdentityProvider
 import com.devuloopers.knet.companion.data.android.AndroidKeystoreCompanionDeviceProofSigner
+import com.devuloopers.knet.companion.data.control.DefaultCompanionEndpointReconciliationClient
+import com.devuloopers.knet.companion.data.control.DefaultCompanionPairingClient
 import com.devuloopers.knet.companion.data.store.CompanionRecordStore
 import com.devuloopers.knet.companion.data.store.CompanionSecretStore
 import com.devuloopers.knet.companion.presentation.viewmodel.CompanionViewModel
@@ -65,6 +38,7 @@ internal object CompanionAndroidModules {
             adapters?.close()
         }
         single<CompanionNetworkObserver> { get<CompanionPlatformAdapters>().networkObserver }
+        single<CompanionDesktopDiscovery> { get<CompanionPlatformAdapters>().desktopDiscovery }
         single<CompanionInvitationResolver> { get<CompanionPlatformAdapters>().invitationResolver }
         single<CompanionRootCertificateSource> { get<CompanionPlatformAdapters>().rootCertificateSource }
         single<CompanionCertificateTrustVerifier> { get<CompanionPlatformAdapters>().trustVerifier }
@@ -87,6 +61,7 @@ internal object CompanionAndroidModules {
     private fun runtimeBindings(bootstrap: AndroidCompanionBootstrap): Module = module {
         single<CompanionControlTransport> { get<CompanionPlatformAdapters>().controlTransport }
         single<CompanionPairingClient> { DefaultCompanionPairingClient(get(), get()) }
+        single<CompanionEndpointReconciliationClient> { DefaultCompanionEndpointReconciliationClient(get()) }
         single<CompanionTransport> { bootstrap.transport }
         single<AndroidTunForwarder> { bootstrap.tunForwarder }
         single<AndroidInspectionRuntimeCoordinator> { bootstrap.inspectionCoordinator }
@@ -99,10 +74,13 @@ internal object CompanionAndroidModules {
         }
         single { ObserveCompanionRegistrationsUseCase(get()) }
         single { SelectCompanionRegistrationUseCase(get()) }
-        single { ConnectCompanionUseCase(get(), get(), get(), get(), System::currentTimeMillis) }
+        single { RecoverCompanionEndpointUseCase(get(), get(), get(), get()) }
+        single { MaintainCompanionEndpointUseCase(get(), get(), get(), get(), get()) }
+        single { ConnectCompanionUseCase(get(), get(), get(), get(), System::currentTimeMillis, get()) }
         single { DisconnectCompanionUseCase(get()) }
         single { ObserveCompanionConnectionUseCase(get()) }
         single { ObserveCompanionNetworkUseCase(get()) }
+        single { ObserveCompanionDiscoveryUseCase(get()) }
         single { DownloadCompanionRootCertificateUseCase(get(), get(), get(), System::currentTimeMillis) }
         single { VerifyCompanionCertificateTrustUseCase(get(), get(), get(), get(), System::currentTimeMillis) }
         single { ObserveCompanionCertificateStoreChangesUseCase(get()) }
@@ -122,6 +100,8 @@ internal object CompanionAndroidModules {
                 selectRegistration = get(),
                 observeConnection = get(),
                 observeNetwork = get(),
+                observeDiscovery = get(),
+                maintainEndpoint = get(),
                 startInspection = get(),
                 stopInspection = get(),
                 observeInspection = get(),

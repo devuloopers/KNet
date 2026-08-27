@@ -80,6 +80,25 @@ public class VersionedCompanionRegistrationRepository(
         removed
     }
 
+    override suspend fun migrateIdentity(
+        previousDesktopId: CompanionDesktopId,
+        registration: CompanionRegistration,
+        makeActive: Boolean,
+    ): Boolean = lock.withLock {
+        val previous = mutableRegistrations.value.firstOrNull { it.desktopId == previousDesktopId } ?: return@withLock false
+        val updated = mutableRegistrations.value
+            .filterNot { it.desktopId == previousDesktopId || it.desktopId == registration.desktopId }
+            .plus(registration)
+            .sortedBy { it.desktopDisplayName.lowercase() }
+        val activeId = when {
+            makeActive -> registration.desktopId
+            mutableActiveRegistration.value?.desktopId == previous.desktopId -> registration.desktopId
+            else -> mutableActiveRegistration.value?.desktopId
+        }
+        persist(updated, activeId)
+        true
+    }
+
     private suspend fun persist(
         updated: List<CompanionRegistration>,
         activeDesktopId: CompanionDesktopId?,

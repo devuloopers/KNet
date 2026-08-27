@@ -485,6 +485,19 @@ class CompanionUseCasesTest {
             if (mutableActive.value?.desktopId == desktopId) mutableActive.value = null
             return removed
         }
+
+        override suspend fun migrateIdentity(
+            previousDesktopId: CompanionDesktopId,
+            registration: CompanionRegistration,
+            makeActive: Boolean,
+        ): Boolean {
+            if (failWrites) error("write failed")
+            if (mutableRegistrations.value.none { it.desktopId == previousDesktopId }) return false
+            mutableRegistrations.value = mutableRegistrations.value
+                .filterNot { it.desktopId == previousDesktopId || it.desktopId == registration.desktopId } + registration
+            if (makeActive || mutableActive.value?.desktopId == previousDesktopId) mutableActive.value = registration
+            return true
+        }
     }
 
     private class FakeCredentialStore(

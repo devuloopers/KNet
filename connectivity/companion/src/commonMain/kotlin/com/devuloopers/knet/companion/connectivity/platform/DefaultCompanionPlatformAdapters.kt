@@ -7,10 +7,12 @@ import com.devuloopers.knet.companion.application.contract.CompanionInspectionCo
 import com.devuloopers.knet.companion.application.contract.CompanionInvitationResolver
 import com.devuloopers.knet.companion.application.contract.CompanionNetworkObserver
 import com.devuloopers.knet.companion.application.contract.CompanionRootCertificateSource
+import com.devuloopers.knet.companion.application.contract.CompanionDesktopDiscovery
 
 /** Internal immutable adapter bundle with one idempotent platform cleanup operation. */
 internal class DefaultCompanionPlatformAdapters(
     override val networkObserver: CompanionNetworkObserver,
+    override val desktopDiscovery: CompanionDesktopDiscovery,
     override val invitationResolver: CompanionInvitationResolver,
     override val controlTransport: CompanionControlTransport,
     override val rootCertificateSource: CompanionRootCertificateSource,

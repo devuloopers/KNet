@@ -12,4 +12,11 @@ public interface CompanionRegistrationRepository {
     public suspend fun upsert(registration: CompanionRegistration, makeActive: Boolean)
     public suspend fun setActive(desktopId: CompanionDesktopId?): Boolean
     public suspend fun remove(desktopId: CompanionDesktopId): CompanionRegistration?
+
+    /** Atomically replaces a legacy identity key with its authenticated canonical registration. */
+    public suspend fun migrateIdentity(
+        previousDesktopId: CompanionDesktopId,
+        registration: CompanionRegistration,
+        makeActive: Boolean,
+    ): Boolean
 }
