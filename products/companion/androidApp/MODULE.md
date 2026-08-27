@@ -9,8 +9,8 @@ Owns the installable Android companion APK, Android manifest, launcher lifecycle
 - Android application identity, permissions, packaging resources, Compose host activity, and process lifecycle.
 - Product-owned Koin modules that bind the implemented registration, protected credential, version 3 invitation,
   device-identity, proof-signing, pinned-TLS pairing/credential refresh, network-observation, platform-PKIX
-  certificate confirmation, Android trust-verification, trust-store event, application-use-case, and lifecycle
-  ViewModel dependencies.
+  certificate confirmation, Android trust-verification, trust-store event, authenticated inspection transport,
+  TUN forwarding, application-use-case, and lifecycle ViewModel dependencies.
 - A domain-scoped Android network-security policy that permits user-installed anchors only for
   `companion.knet.local`; unrelated application traffic retains platform defaults.
 - Activity `ViewModelStore` ownership, lifecycle-aware state binding, and started-state effect collection for the
@@ -25,14 +25,16 @@ Owns the installable Android companion APK, Android manifest, launcher lifecycle
   camera preview ownership are Activity-scoped.
 - Asynchronous dependency restoration before Koin startup and lifecycle-scoped QR decoding so preference
   initialization, image I/O, and QR processing do not block the Activity main thread.
-- A production pairing client backed by the Android control transport, while the separate VPN/data-plane adapter
-  remains fail closed until its packet backend is implemented.
+- A public, non-exported Android `VpnService` foreground component that owns the TUN descriptor, delegates packet
+  translation to the reusable Android connectivity adapter, and reports bounded start/stop completion back to the
+  shared inspection lifecycle.
+- A production pairing client and inspection carrier backed by separate pinned-TLS control and proxy gateways.
 
 ## Does not own
 
 - Shared companion models, workflows, persistence schemas, presentation state, UI screens, or UI resources.
-- General VPN/TUN packet handling that has not yet been implemented. The product owns only Android composition and
-  system handoffs; reusable control transport, verification, and lifecycle behavior remain in lower layers.
+- Reusable packet translation, proxy authentication, certificate verification, or shared inspection policy. The
+  product owns only Android composition, foreground-service lifetime, TUN creation, and native system handoffs.
 - Desktop proxy, canonical Traffic persistence, protocol inspection, or reusable Android adapters.
 
 ## Dependency rule

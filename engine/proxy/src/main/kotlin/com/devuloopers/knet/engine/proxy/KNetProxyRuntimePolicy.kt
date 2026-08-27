@@ -13,6 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * @property maximumDownstreamConnections Total admitted client connections.
  * @property maximumConnectionsPerClient Admitted connections for one remote address.
  * @property maximumUpstreamConnections Total concurrent origin connections.
+ * @property maximumTlsClientHelloBytes Maximum buffered downstream TLS ClientHello size used for SNI selection.
  * @property maximumHttp2ConnectionsPerOrigin Maximum pooled HTTP/2 parent connections for one origin.
  * @property maximumHttp2ConcurrentStreams Maximum independently active streams per HTTP/2 connection.
  * @property maximumHttp2HeaderListBytes Maximum decoded header-list size accepted per stream.
@@ -27,6 +28,7 @@ data class KNetProxyRuntimePolicy(
     val maximumDownstreamConnections: Int = 1_024,
     val maximumConnectionsPerClient: Int = 128,
     val maximumUpstreamConnections: Int = 1_024,
+    val maximumTlsClientHelloBytes: Int = 64 * 1024,
     val maximumHttp2ConnectionsPerOrigin: Int = 2,
     val maximumHttp2ConcurrentStreams: Long = 100L,
     val maximumHttp2HeaderListBytes: Long = 64L * 1024L,
@@ -44,6 +46,7 @@ data class KNetProxyRuntimePolicy(
             "Per-client connection limit cannot exceed the total downstream limit."
         }
         require(maximumUpstreamConnections > 0) { "Upstream connection limit must be positive." }
+        require(maximumTlsClientHelloBytes > 0) { "TLS ClientHello limit must be positive." }
         require(maximumHttp2ConnectionsPerOrigin > 0) {
             "HTTP/2 connections-per-origin limit must be positive."
         }

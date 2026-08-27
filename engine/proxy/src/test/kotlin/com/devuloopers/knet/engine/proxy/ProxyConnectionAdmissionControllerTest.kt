@@ -1,11 +1,19 @@
 package com.devuloopers.knet.engine.proxy
 
 import kotlin.test.Test
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 /** Tests bounded, idempotent connection admission for one proxy runtime. */
 class ProxyConnectionAdmissionControllerTest {
+
+    @Test
+    fun `runtime policy rejects an unbounded ClientHello configuration`() {
+        assertFailsWith<IllegalArgumentException> {
+            KNetProxyRuntimePolicy(maximumTlsClientHelloBytes = 0)
+        }
+    }
 
     /** Verifies total and per-client downstream limits recover when leases close. */
     @Test

@@ -3,6 +3,7 @@ package com.devuloopers.knet.companion.android.certificate
 import android.content.ContentResolver
 import android.net.Uri
 import android.os.Build
+import androidx.annotation.ChecksSdkIntAtLeast
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateArtifact
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -17,7 +18,7 @@ internal class AndroidDownloadsCertificateExporter(
     /** Saves to Downloads on Android 10+, or requests a user-owned destination on Android 8–9. */
     suspend fun export(artifact: CompanionCertificateArtifact): AndroidCertificateExportResult =
         withContext(Dispatchers.IO) {
-            if (sdkInt < Build.VERSION_CODES.Q) {
+            if (!supportsMediaStoreDownloads()) {
                 AndroidCertificateExportResult.DestinationRequired
             } else {
                 if (storage.writeToDownloads(artifact.copyBytes())) {
@@ -30,6 +31,9 @@ internal class AndroidDownloadsCertificateExporter(
                 }
             }
         }
+
+    @ChecksSdkIntAtLeast(api = Build.VERSION_CODES.Q)
+    private fun supportsMediaStoreDownloads(): Boolean = sdkInt >= Build.VERSION_CODES.Q
 
     /** Writes to a URI returned by Android's document picker. */
     suspend fun exportToDocument(

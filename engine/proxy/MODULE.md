@@ -27,6 +27,8 @@ Implements the high-throughput proxy transport: listeners, channels, TLS interce
   typed canonical metadata; bridge fields never appear in captured headers or cross an HTTP/1 wire.
 - A reusable protocol-neutral selective HTTP/1 aggregator that falls back to ordered streaming when a
   selected message crosses its bound instead of rejecting otherwise valid traffic.
+- Bounded asynchronous ClientHello SNI selection for CONNECT interception. The CONNECT authority remains the
+  socket route, while SNI and the decrypted HTTP authority remain semantic TLS/HTTP identities.
 - The `ServerTlsContextProvider` transport port and scheduling boundary used for CONNECT interception; its implementation is injected by desktop data.
 
 ## Does not own
@@ -57,6 +59,12 @@ before any downstream HTTP/1 compatibility rewrite. The local attribution header
 `TrafficOrigin` and is then removed, so it never appears in captured headers or on the origin-server wire.
 Strict upstream TLS uses the host JVM trust roots. KNet's interception CA is downstream identity material and is
 never added to upstream trust; insecure upstream validation remains an explicit runtime policy.
+Transparent companion tunnels may carry an IP-literal CONNECT target after TUN routing has already resolved DNS.
+KNet therefore waits for the bounded ClientHello, generates the downstream leaf for its validated SNI name, and
+uses that name for upstream TLS while retaining the CONNECT IP for the upstream socket. Decrypted `Host` or
+HTTP/2 authority metadata remains visible to capture and breakpoint matching. Missing SNI falls back to the
+validated CONNECT host, malformed SNI fails only that child connection, and HTTP/2 pooling keys include both TLS
+identity and resolved route so a parent cannot be reused for a different transparent destination IP.
 HTTP/2 streams reuse the canonical HTTP object/capture/breakpoint boundary after Netty's frame codec maps
 pseudo-headers, DATA, and trailers. Each child has its own forwarding state, body queue, capture handle, timeout,
 and breakpoint gate; no multiplexed connection shares an HTTP/1 response deque. TLS origins prefer pooled HTTP/2

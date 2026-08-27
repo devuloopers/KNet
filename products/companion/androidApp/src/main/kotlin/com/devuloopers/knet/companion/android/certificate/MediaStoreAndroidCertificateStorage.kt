@@ -4,12 +4,15 @@ import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.ContentValues
 import android.net.Uri
+import android.os.Build
 import android.provider.MediaStore
+import androidx.annotation.RequiresApi
 
 /** Android MediaStore/Storage Access Framework implementation of public certificate storage. */
 internal class MediaStoreAndroidCertificateStorage(
     private val contentResolver: ContentResolver,
 ) : AndroidCertificateStorage {
+    @RequiresApi(Build.VERSION_CODES.Q)
     override fun writeToDownloads(bytes: ByteArray): Boolean {
         val collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI
         val existing = findExistingCertificate(collection)
@@ -20,7 +23,7 @@ internal class MediaStoreAndroidCertificateStorage(
             require(write(destination, bytes))
             publish(destination)
             true
-        } catch (_: Throwable) {
+        } catch (_: Exception) {
             if (inserted) runCatching { contentResolver.delete(destination, null, null) }
             if (!inserted) runCatching { publish(destination) }
             false

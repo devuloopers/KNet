@@ -1,6 +1,6 @@
 package com.devuloopers.knet.companion.android.di
 
-import com.devuloopers.knet.companion.android.UnavailableCompanionTransport
+import com.devuloopers.knet.companion.android.inspection.AndroidInspectionRuntimeCoordinator
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateStoreChangeObserver
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateTrustVerifier
 import com.devuloopers.knet.companion.application.contract.CompanionControlTransport
@@ -32,6 +32,7 @@ import com.devuloopers.knet.companion.application.usecase.StartCompanionInspecti
 import com.devuloopers.knet.companion.application.usecase.StopCompanionInspectionUseCase
 import com.devuloopers.knet.companion.application.usecase.VerifyCompanionCertificateTrustUseCase
 import com.devuloopers.knet.companion.connectivity.platform.CompanionPlatformAdapters
+import com.devuloopers.knet.companion.connectivity.transport.AndroidTunForwarder
 import com.devuloopers.knet.companion.data.control.DefaultCompanionPairingClient
 import com.devuloopers.knet.companion.data.ProtectedCompanionCredentialStore
 import com.devuloopers.knet.companion.data.VersionedCompanionInvitationCodec
@@ -54,7 +55,7 @@ internal object CompanionAndroidModules {
     fun create(bootstrap: AndroidCompanionBootstrap): List<Module> = listOf(
         platformBindings(bootstrap),
         dataBindings(bootstrap),
-        runtimeBindings(),
+        runtimeBindings(bootstrap),
         applicationBindings(),
         presentationBindings(),
     )
@@ -83,10 +84,12 @@ internal object CompanionAndroidModules {
         single { AndroidKeystoreCompanionDeviceProofSigner() } bind CompanionDeviceProofSigner::class
     }
 
-    private fun runtimeBindings(): Module = module {
+    private fun runtimeBindings(bootstrap: AndroidCompanionBootstrap): Module = module {
         single<CompanionControlTransport> { get<CompanionPlatformAdapters>().controlTransport }
         single<CompanionPairingClient> { DefaultCompanionPairingClient(get(), get()) }
-        single<CompanionTransport> { UnavailableCompanionTransport() }
+        single<CompanionTransport> { bootstrap.transport }
+        single<AndroidTunForwarder> { bootstrap.tunForwarder }
+        single<AndroidInspectionRuntimeCoordinator> { bootstrap.inspectionCoordinator }
     }
 
     private fun applicationBindings(): Module = module {
@@ -117,8 +120,6 @@ internal object CompanionAndroidModules {
                 pair = get(),
                 observeRegistrations = get(),
                 selectRegistration = get(),
-                connect = get(),
-                disconnect = get(),
                 observeConnection = get(),
                 observeNetwork = get(),
                 startInspection = get(),

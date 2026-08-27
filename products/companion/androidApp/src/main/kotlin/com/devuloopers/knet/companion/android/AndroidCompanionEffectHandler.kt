@@ -11,11 +11,9 @@ import com.devuloopers.knet.companion.android.certificate.AndroidCertificateExpo
 import com.devuloopers.knet.companion.android.certificate.AndroidCertificateExportPolicy
 import com.devuloopers.knet.companion.android.certificate.AndroidCertificateExportResult
 import com.devuloopers.knet.companion.android.certificate.AndroidDownloadsCertificateExporter
+import com.devuloopers.knet.companion.model.CompanionDesktopId
 import com.devuloopers.knet.companion.presentation.action.CompanionAction
 import com.devuloopers.knet.companion.presentation.effect.CompanionEffect
-import com.devuloopers.knet.companion.model.CompanionDesktopId
-import com.devuloopers.knet.core.logger.KNetLogger
-import com.devuloopers.knet.core.logger.LogTags
 import kotlinx.coroutines.launch
 
 /** Executes native Android effects while keeping intents and platform handles outside common code. */
@@ -46,9 +44,6 @@ internal class AndroidCompanionEffectHandler(
     private val certificateSettings = activity.registerForActivityResult(
         ActivityResultContracts.StartActivityForResult(),
     ) {
-        KNetLogger.info(LogTags.CERTIFICATE) {
-            "companion_event=trust_settings_returned"
-        }
         onAction(CompanionAction.VerifyCertificateTrustRequested)
     }
     private val vpnConsent = activity.registerForActivityResult(
@@ -76,7 +71,6 @@ internal class AndroidCompanionEffectHandler(
     }
 
     private fun exportCertificate(effect: CompanionEffect.ExportCertificate) {
-        KNetLogger.info(LogTags.CERTIFICATE) { "companion_event=platform_export_started" }
         activity.lifecycleScope.launch {
             when (val result = certificateExporter.export(effect.artifact)) {
                 AndroidCertificateExportResult.DestinationRequired -> {

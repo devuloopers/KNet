@@ -36,6 +36,7 @@ graalvm = "25.2.4"
 zxing = "3.5.3"
 camerax = "1.6.1"
 mlkit-barcode = "17.3.0"
+hevtunnel = "1.0.1"
 
 
 [libraries]
@@ -102,6 +103,7 @@ androidx-camera-camera2 = { module = "androidx.camera:camera-camera2", version.r
 androidx-camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
 androidx-camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
 mlkit-barcode-scanning = { module = "com.google.mlkit:barcode-scanning", version.ref = "mlkit-barcode" }
+hevtunnel = { module = "com.zaneschepke:hevtunnel", version.ref = "hevtunnel" }
 
 
 [plugins]

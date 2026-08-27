@@ -1,6 +1,7 @@
 package com.devuloopers.knet.connectivity.desktop.gateway
 
 import com.devuloopers.knet.application.coordinator.pairing.PairingCoordinator
+import com.devuloopers.knet.companion.model.CompanionProxyProtocol
 import com.devuloopers.knet.pairing.DeviceAuthenticationResult
 import com.devuloopers.knet.pairing.DeviceScope
 import com.devuloopers.knet.identity.RegisteredDeviceId
@@ -11,12 +12,14 @@ import com.devuloopers.knet.traffic.model.IngressKind
 import com.devuloopers.knet.traffic.model.TrafficEndpoint
 import java.io.ByteArrayOutputStream
 import java.net.InetSocketAddress
-import java.net.ServerSocket
 import java.net.Socket
 import java.net.SocketException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Semaphore
 import java.util.concurrent.atomic.AtomicBoolean
+import javax.net.ssl.SSLServerSocket
+import javax.net.ssl.SSLServerSocketFactory
+import javax.net.ssl.SSLSocket
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -27,12 +30,14 @@ import kotlinx.coroutines.launch
 import kotlin.time.Clock
 
 /**
- * Loopback-only standard HTTP proxy gateway. It validates `Proxy-Authorization: Bearer
+ * LAN-reachable TLS standard HTTP proxy gateway. It validates `Proxy-Authorization: Bearer
  * <device-id>:<credential>`, strips that local credential, attributes the bridge socket, and then
  * copies bytes bidirectionally to the unchanged internal proxy under blocking-stream backpressure.
  */
 public class AuthenticatedProxyGateway(
+    private val bindHost: String,
     private val bindPort: Int,
+    private val serverSocketFactory: SSLServerSocketFactory,
     private val targetProxy: () -> InetSocketAddress?,
     private val pairing: PairingCoordinator,
     private val attributions: IngressAttributionRegistration,
@@ -47,10 +52,11 @@ public class AuthenticatedProxyGateway(
     private val gatewayScope = CoroutineScope(SupervisorJob() + gatewayDispatcher)
     private val activeByDevice = ConcurrentHashMap<String, MutableSet<Socket>>()
     private val activeSockets: MutableSet<Socket> = ConcurrentHashMap.newKeySet()
-    private var listener: ServerSocket? = null
+    private var listener: SSLServerSocket? = null
 
     init {
-        require(bindPort in 1..65_535)
+        require(bindHost.isNotBlank())
+        require(bindPort in 0..65_535)
         require(maximumConnections in 1..MAXIMUM_CONFIGURABLE_CONNECTIONS)
         gatewayScope.launch {
             pairing.observeDevices().collect { devices ->
@@ -65,9 +71,13 @@ public class AuthenticatedProxyGateway(
         check(!closed.get()) { "Authenticated gateway is already closed." }
         if (!running.compareAndSet(false, true)) return
         try {
-            val socket = ServerSocket()
+            val socket = serverSocketFactory.createServerSocket() as SSLServerSocket
             socket.reuseAddress = false
-            socket.bind(InetSocketAddress("127.0.0.1", bindPort), 64)
+            socket.needClientAuth = false
+            socket.enabledProtocols = socket.supportedProtocols
+                .filter { protocol -> protocol == "TLSv1.3" || protocol == "TLSv1.2" }
+                .toTypedArray()
+            socket.bind(InetSocketAddress(bindHost, bindPort), LISTENER_BACKLOG)
             listener = socket
             gatewayScope.launch { acceptLoop(socket) }
         } catch (failure: Throwable) {
@@ -77,11 +87,15 @@ public class AuthenticatedProxyGateway(
         }
     }
 
-    private fun acceptLoop(server: ServerSocket) {
+    /** Actual listener port, including an operating-system-assigned test port when configured with zero. */
+    public val boundPort: Int?
+        get() = listener?.localPort
+
+    private fun acceptLoop(server: SSLServerSocket) {
         while (running.get()) {
-            val downstream = try { server.accept() } catch (_: SocketException) { break }
+            val downstream = try { server.accept() as SSLSocket } catch (_: SocketException) { break }
             if (!admission.tryAcquire()) {
-                downstream.respondAndClose("HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n")
+                runCatching(downstream::close)
                 continue
             }
             activeSockets.add(downstream)
@@ -97,13 +111,22 @@ public class AuthenticatedProxyGateway(
         }
     }
 
-    private suspend fun bridge(downstream: Socket) {
+    private suspend fun bridge(downstream: SSLSocket) {
         downstream.soTimeout = HEADER_TIMEOUT_MILLIS
+        downstream.startHandshake()
         val header = readHeader(downstream) ?: return downstream.respondAndClose(PROXY_AUTH_REQUIRED)
         val parsed = parseAuthorization(header) ?: return downstream.respondAndClose(PROXY_AUTH_REQUIRED)
         val authentication = pairing.authenticate(parsed.deviceId, parsed.credential, DeviceScope.PROXY_STREAM)
         val principal = (authentication as? DeviceAuthenticationResult.Authenticated)?.principal
             ?: return downstream.respondAndClose(PROXY_AUTH_REQUIRED)
+        if (parsed.isReadinessProbe) {
+            val response = if (targetProxy() == null) {
+                "HTTP/1.1 503 Service Unavailable\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            } else {
+                "HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n"
+            }
+            return downstream.respondAndClose(response)
+        }
         val target = targetProxy() ?: return downstream.respondAndClose(
             "HTTP/1.1 503 Service Unavailable\r\nConnection: close\r\n\r\n",
         )
@@ -161,6 +184,7 @@ public class AuthenticatedProxyGateway(
         val deviceId: RegisteredDeviceId,
         val credential: String,
         val sanitizedHeader: ByteArray,
+        val isReadinessProbe: Boolean,
     )
 
     private fun parseAuthorization(header: ByteArray): AuthorizedHeader? {
@@ -177,7 +201,13 @@ public class AuthenticatedProxyGateway(
         val sanitized = (listOf(lines.first()) + lines.drop(1).filterNot {
             it.substringBefore(':').equals("Proxy-Authorization", true)
         }).joinToString("\r\n", postfix = "\r\n\r\n").encodeToByteArray()
-        return AuthorizedHeader(RegisteredDeviceId(device), credential, sanitized)
+        val readinessTarget = "GET ${CompanionProxyProtocol.READINESS_PATH} HTTP/1.1"
+        return AuthorizedHeader(
+            deviceId = RegisteredDeviceId(device),
+            credential = credential,
+            sanitizedHeader = sanitized,
+            isReadinessProbe = lines.first() == readinessTarget,
+        )
     }
 
     private fun readHeader(socket: Socket): ByteArray? {
@@ -237,6 +267,7 @@ public class AuthenticatedProxyGateway(
         private const val CONNECT_TIMEOUT_MILLIS = 5_000
         private const val ATTRIBUTION_LIFETIME_MILLIS = 10_000L
         private const val MAXIMUM_CONFIGURABLE_CONNECTIONS = 512
+        private const val LISTENER_BACKLOG = 64
         private const val PROXY_AUTH_REQUIRED =
             "HTTP/1.1 407 Proxy Authentication Required\r\nProxy-Authenticate: Bearer realm=\"KNet\"\r\nConnection: close\r\n\r\n"
     }

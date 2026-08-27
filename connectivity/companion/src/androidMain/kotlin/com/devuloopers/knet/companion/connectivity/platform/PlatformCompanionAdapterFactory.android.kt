@@ -8,6 +8,7 @@ import com.devuloopers.knet.companion.connectivity.certificate.AndroidCertificat
 import com.devuloopers.knet.companion.connectivity.certificate.AndroidCompanionCertificateTrustVerifier
 import com.devuloopers.knet.companion.connectivity.certificate.AndroidCompanionRootCertificateSource
 import com.devuloopers.knet.companion.connectivity.certificate.PlatformAndroidCertificateTlsClient
+import com.devuloopers.knet.companion.connectivity.certificate.PlatformAndroidTrustedCertificateStore
 import com.devuloopers.knet.companion.connectivity.control.KtorCompanionControlTransport
 import com.devuloopers.knet.companion.connectivity.fallback.UnavailableCompanionInspectionController
 import com.devuloopers.knet.companion.connectivity.http.AndroidCompanionKtorClientProvider
@@ -49,7 +50,11 @@ public actual class PlatformCompanionAdapterFactory(
             invitationResolver = DefaultCompanionInvitationResolver(KtorCompanionBootstrapClient(httpClient)),
             controlTransport = KtorCompanionControlTransport(httpClient),
             rootCertificateSource = AndroidCompanionRootCertificateSource(certificateClient),
-            trustVerifier = AndroidCompanionCertificateTrustVerifier(certificateClient, nowEpochMillis),
+            trustVerifier = AndroidCompanionCertificateTrustVerifier(
+                client = certificateClient,
+                trustedCertificates = PlatformAndroidTrustedCertificateStore(),
+                nowEpochMillis = nowEpochMillis,
+            ),
             certificateStoreChanges = certificateStoreChanges,
             inspectionController = inspectionController,
             closePlatform = {

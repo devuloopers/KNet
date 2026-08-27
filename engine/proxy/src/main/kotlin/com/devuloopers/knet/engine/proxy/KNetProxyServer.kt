@@ -363,7 +363,12 @@ class KNetProxyServer(
     ): ChannelInitializer<Channel> = object : ChannelInitializer<Channel>() {
         override fun initChannel(channel: Channel) {
             channel.attr(ProxyChannelAttributes.CONNECTION_CAPTURE).set(connectionCapture)
-            channel.attr(ProxyChannelAttributes.HOST).set(parentChannel.attr(ProxyChannelAttributes.HOST).get())
+            channel.attr(ProxyChannelAttributes.ROUTE_HOST).set(
+                parentChannel.attr(ProxyChannelAttributes.ROUTE_HOST).get(),
+            )
+            channel.attr(ProxyChannelAttributes.TLS_SERVER_NAME).set(
+                parentChannel.attr(ProxyChannelAttributes.TLS_SERVER_NAME).get(),
+            )
             channel.attr(ProxyChannelAttributes.PORT).set(parentChannel.attr(ProxyChannelAttributes.PORT).get())
             channel.attr(ProxyChannelAttributes.IS_SSL).set(parentChannel.attr(ProxyChannelAttributes.IS_SSL).get())
             channel.pipeline().addLast(

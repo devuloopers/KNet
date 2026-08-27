@@ -282,6 +282,57 @@ class CompanionUseCasesTest {
         assertFalse(result.fullHttpsInspection)
         assertFalse(environment.inspection.startedConfiguration?.fullHttpsInspection ?: true)
         assertEquals(UnsupportedTrafficPolicy.REJECT, environment.inspection.startedConfiguration?.unsupportedTrafficPolicy)
+        assertEquals(1, environment.transport.connectCalls)
+    }
+
+    @Test
+    fun failedInspectionStartReleasesBackendAndAuthenticatedTransport() = runTest {
+        val environment = StartEnvironment(CompanionInspectionPreparationResult.Ready)
+        val failure = CompanionFailure(CompanionFailureCode.VPN_START_FAILED, "Could not start.", true)
+        environment.inspection.startResult = CompanionInspectionStartResult.Failed(failure)
+
+        val result = assertIs<StartCompanionInspectionResult.Rejected>(environment.start.execute())
+
+        assertEquals(failure, result.failure)
+        assertEquals(1, environment.inspection.stopCalls)
+        assertEquals(1, environment.transport.disconnectCalls)
+    }
+
+    @Test
+    fun stopInspectionReleasesPacketBackendBeforeTransport() = runTest {
+        val events = mutableListOf<String>()
+        val inspection = object : CompanionInspectionController {
+            override val state: StateFlow<CompanionInspectionState> =
+                MutableStateFlow(CompanionInspectionState.Stopped)
+
+            override suspend fun prepare(): CompanionInspectionPreparationResult =
+                CompanionInspectionPreparationResult.Ready
+
+            override suspend fun start(
+                configuration: CompanionInspectionConfiguration,
+            ): CompanionInspectionStartResult = CompanionInspectionStartResult.Started
+
+            override suspend fun stop() {
+                events += "inspection"
+            }
+        }
+        val transport = object : CompanionTransport {
+            override val state: StateFlow<CompanionConnectionState> =
+                MutableStateFlow(CompanionConnectionState.Disconnected)
+
+            override suspend fun connect(
+                registration: CompanionRegistration,
+                credential: String,
+            ): CompanionTransportResult = CompanionTransportResult.Connected
+
+            override suspend fun disconnect() {
+                events += "transport"
+            }
+        }
+
+        StopCompanionInspectionUseCase(inspection, transport).execute()
+
+        assertEquals(listOf("inspection", "transport"), events)
     }
 
     @Test
@@ -476,6 +527,7 @@ class CompanionUseCasesTest {
         private val mutableState = MutableStateFlow<CompanionConnectionState>(CompanionConnectionState.Disconnected)
         override val state: StateFlow<CompanionConnectionState> = mutableState
         var connectCalls: Int = 0
+        var disconnectCalls: Int = 0
 
         override suspend fun connect(
             registration: CompanionRegistration,
@@ -491,6 +543,7 @@ class CompanionUseCasesTest {
         }
 
         override suspend fun disconnect() {
+            disconnectCalls += 1
             mutableState.value = CompanionConnectionState.Disconnected
         }
     }
@@ -501,15 +554,18 @@ class CompanionUseCasesTest {
         private val mutableState = MutableStateFlow<CompanionInspectionState>(CompanionInspectionState.Stopped)
         override val state: StateFlow<CompanionInspectionState> = mutableState
         var startedConfiguration: CompanionInspectionConfiguration? = null
+        var startResult: CompanionInspectionStartResult = CompanionInspectionStartResult.Started
+        var stopCalls: Int = 0
 
         override suspend fun prepare(): CompanionInspectionPreparationResult = preparation
 
         override suspend fun start(configuration: CompanionInspectionConfiguration): CompanionInspectionStartResult {
             startedConfiguration = configuration
-            return CompanionInspectionStartResult.Started
+            return startResult
         }
 
         override suspend fun stop() {
+            stopCalls += 1
             mutableState.value = CompanionInspectionState.Stopped
         }
     }

@@ -19,6 +19,7 @@ import com.devuloopers.knet.engine.proxy.pipeline.PipelineHandlerNames
 import com.devuloopers.knet.engine.proxy.pipeline.SelectiveHttpObjectAggregator
 import com.devuloopers.knet.engine.proxy.ssl.ProxyTrustManager
 import com.devuloopers.knet.engine.proxy.timing.NetworkTimingCollector
+import com.devuloopers.knet.engine.proxy.tls.SniTlsContextHandlerFactory
 import com.devuloopers.knet.engine.proxy.upstream.HttpTwoNegotiationUnavailableException
 import com.devuloopers.knet.engine.proxy.upstream.HttpTwoUpstreamConnectionPool
 import com.devuloopers.knet.engine.proxy.upstream.HttpTwoUpstreamRoute
@@ -128,6 +129,12 @@ internal class KNetStreamingProxyHandler(
     }
 
     private val pendingObjects = ArrayDeque<HttpObject>()
+    private val sniTlsContextHandlerFactory = SniTlsContextHandlerFactory(
+        tlsContextProvider = serverTlsContextProvider,
+        certificateExecutor = certificateExecutor,
+        maximumClientHelloBytes = runtimePolicy.maximumTlsClientHelloBytes,
+        handshakeTimeoutMillis = runtimePolicy.tlsHandshakeTimeoutMillis,
+    )
     private var pendingRequestHeads: Int = 0
     private var pendingContentBytes: Long = 0L
     private var activeRequest: ActiveStreamingRequest? = null
@@ -228,7 +235,7 @@ internal class KNetStreamingProxyHandler(
         val mappedRequest = preparedRequest ?: HttpMapper.mapRequestContext(
             nettyReq = request,
             isSsl = target.isSsl,
-            host = target.host,
+            host = target.authorityHost,
             port = target.port,
             relativeUri = target.relativeUri,
             protocolOverride = downstreamProtocol,
@@ -292,7 +299,11 @@ internal class KNetStreamingProxyHandler(
         HttpOneSemantics.prepareUpstreamRequest(outboundHead, downstreamPolicy)
         outboundHead.headers().set(
             HttpHeaderNames.HOST,
-            if (target.port == 80 || target.port == 443) target.host else "${target.host}:${target.port}",
+            if (target.port == 80 || target.port == 443) {
+                target.authorityHost
+            } else {
+                "${target.authorityHost}:${target.port}"
+            },
         )
         if (streamTransformer != null) {
             // A message edit may change framing and representation integrity metadata.
@@ -497,10 +508,10 @@ internal class KNetStreamingProxyHandler(
     private fun connectUpstream(context: ChannelHandlerContext, active: ActiveStreamingRequest) {
         proxyScope.launch {
             val resolvedHost = try {
-                InetAddress.getByName(active.target.host).hostAddress.also { active.timings.markDnsEnd() }
+                InetAddress.getByName(active.target.routeHost).hostAddress.also { active.timings.markDnsEnd() }
             } catch (_: Exception) {
                 active.timings.markDnsEnd()
-                active.target.host
+                active.target.routeHost
             }
 
             context.executor().execute {
@@ -527,7 +538,7 @@ internal class KNetStreamingProxyHandler(
         pool.openStream(
             eventLoop = context.channel().eventLoop(),
             route = HttpTwoUpstreamRoute(
-                host = active.target.host,
+                host = active.target.tlsServerName,
                 resolvedHost = resolvedHost,
                 port = active.target.port,
             ),
@@ -659,9 +670,9 @@ internal class KNetStreamingProxyHandler(
             active.timings.markTlsStart()
             val sslBuilder = SslContextBuilder.forClient()
                 .trustManager(ProxyTrustManager.getTrustManagerFactory(strictSsl))
-            keyManagerProvider?.getKeyManagerFactory(active.target.host)?.let(sslBuilder::keyManager)
+            keyManagerProvider?.getKeyManagerFactory(active.target.tlsServerName)?.let(sslBuilder::keyManager)
             val sslHandler = sslBuilder.build()
-                .newHandler(channel.alloc(), active.target.host, active.target.port)
+                .newHandler(channel.alloc(), active.target.tlsServerName, active.target.port)
                 .apply { setHandshakeTimeoutMillis(runtimePolicy.tlsHandshakeTimeoutMillis) }
             sslHandler.handshakeFuture().addListener { handshake ->
                 downstreamContext.executor().execute {
@@ -897,7 +908,7 @@ internal class KNetStreamingProxyHandler(
         else -> failure
     }
 
-    /** Handles CONNECT without blocking certificate generation on the event loop. */
+    /** Handles CONNECT and defers bounded certificate generation until ClientHello reveals SNI. */
     private fun handleConnect(context: ChannelHandlerContext, request: HttpRequest) {
         val parsedAuthority = AuthorityParser.parse(request.uri(), defaultPort = 443)
         if (parsedAuthority !is AuthorityParseResult.Valid) {
@@ -906,7 +917,7 @@ internal class KNetStreamingProxyHandler(
         }
         val host = parsedAuthority.authority.host
         val port = parsedAuthority.authority.port
-        context.channel().attr(ProxyChannelAttributes.HOST).set(host)
+        context.channel().attr(ProxyChannelAttributes.ROUTE_HOST).set(host)
         context.channel().attr(ProxyChannelAttributes.PORT).set(port)
         context.channel().attr(ProxyChannelAttributes.IS_SSL).set(true)
 
@@ -921,40 +932,28 @@ internal class KNetStreamingProxyHandler(
                 context.close()
                 return@addListener
             }
-            serverTlsContextProvider.resolve(host, certificateExecutor)
-                .whenComplete { sslContext, failure ->
-                    context.executor().execute {
-                        if (failure != null || sslContext == null || !context.channel().isActive) {
-                            context.close()
-                            return@execute
-                        }
-                        try {
-                            val pipeline = context.pipeline()
-                            pipeline.get(HttpServerCodec::class.java)?.let(pipeline::remove)
-                            pipeline.get(PipelineHandlerNames.HTTP_AGGREGATOR)?.let { pipeline.remove(it) }
-                            val sslHandler = sslContext.newHandler(context.alloc()).apply {
-                                setHandshakeTimeoutMillis(runtimePolicy.tlsHandshakeTimeoutMillis)
-                            }
-                            pipeline.addFirst(PipelineHandlerNames.SSL, sslHandler)
-                            val tlsProtocolInstaller = installTlsApplicationProtocol
-                            if (tlsProtocolInstaller == null) {
-                                pipeline.addAfter(
-                                    PipelineHandlerNames.SSL,
-                                    PipelineHandlerNames.HTTP_CODEC,
-                                    HttpServerCodec(),
-                                )
-                            } else {
-                                tlsProtocolInstaller(pipeline)
-                            }
-                            context.channel().config().isAutoRead = true
-                        } catch (pipelineFailure: Exception) {
-                            KNetLogger.error(STREAMING_TAG, pipelineFailure) {
-                                "Failed to configure streaming TLS pipeline for $host: ${pipelineFailure.message}"
-                            }
-                            context.close()
-                        }
-                    }
+            try {
+                val pipeline = context.pipeline()
+                pipeline.get(HttpServerCodec::class.java)?.let(pipeline::remove)
+                pipeline.get(PipelineHandlerNames.HTTP_AGGREGATOR)?.let { pipeline.remove(it) }
+                pipeline.addFirst(PipelineHandlerNames.SSL, sniTlsContextHandlerFactory.create(context, host))
+                val tlsProtocolInstaller = installTlsApplicationProtocol
+                if (tlsProtocolInstaller == null) {
+                    pipeline.addAfter(
+                        PipelineHandlerNames.SSL,
+                        PipelineHandlerNames.HTTP_CODEC,
+                        HttpServerCodec(),
+                    )
+                } else {
+                    tlsProtocolInstaller(pipeline)
                 }
+                context.channel().config().isAutoRead = true
+            } catch (pipelineFailure: Exception) {
+                KNetLogger.error(STREAMING_TAG, pipelineFailure) {
+                    "Failed to configure streaming TLS pipeline for $host: ${pipelineFailure.message}"
+                }
+                context.close()
+            }
         }
     }
 
@@ -962,7 +961,9 @@ internal class KNetStreamingProxyHandler(
     private fun resolveTarget(context: ChannelHandlerContext, request: HttpRequest): ResolvedTarget? {
         val tunnelSsl = context.channel().attr(ProxyChannelAttributes.IS_SSL).get() ?: false
         var isSsl = tunnelSsl
-        var targetHost = context.channel().attr(ProxyChannelAttributes.HOST).get()
+        var routeHost = context.channel().attr(ProxyChannelAttributes.ROUTE_HOST).get()
+        var authorityHost: String? = null
+        var tlsServerName = context.channel().attr(ProxyChannelAttributes.TLS_SERVER_NAME).get()
         var targetPort = context.channel().attr(ProxyChannelAttributes.PORT).get() ?: if (isSsl) 443 else 80
         val absoluteUri = if (request.uri().startsWith("http://") || request.uri().startsWith("https://")) {
             runCatching { URI.create(request.uri()) }.getOrNull()
@@ -971,35 +972,46 @@ internal class KNetStreamingProxyHandler(
         }
 
         if (absoluteUri != null) {
-            targetHost = absoluteUri.host
+            routeHost = absoluteUri.host
+            authorityHost = absoluteUri.host
+            tlsServerName = absoluteUri.host
             isSsl = absoluteUri.scheme.equals("https", ignoreCase = true)
             targetPort = when {
                 absoluteUri.port != -1 -> absoluteUri.port
                 isSsl -> 443
                 else -> 80
             }
-        } else if (targetHost == null) {
+        } else {
             val hostHeader = request.headers().get(HttpHeaderNames.HOST)
             when (val authority = hostHeader?.let {
                 AuthorityParser.parse(it, defaultPort = if (isSsl) 443 else 80)
             }) {
                 is AuthorityParseResult.Valid -> {
-                    targetHost = authority.authority.host
-                    targetPort = authority.authority.port
+                    authorityHost = authority.authority.host
+                    if (routeHost == null) {
+                        routeHost = authority.authority.host
+                        targetPort = authority.authority.port
+                    }
                 }
-                else -> {
+                null -> if (routeHost == null) {
+                    writeBadRequest(context, "Missing or invalid Host authority", request.protocolVersion())
+                    return null
+                }
+                is AuthorityParseResult.Invalid -> {
                     writeBadRequest(context, "Missing or invalid Host authority", request.protocolVersion())
                     return null
                 }
             }
         }
 
-        if (targetHost == null) {
+        if (routeHost == null) {
             writeBadRequest(context, "Missing target authority", request.protocolVersion())
             return null
         }
+        authorityHost = authorityHost ?: tlsServerName ?: routeHost
+        tlsServerName = tlsServerName ?: authorityHost
         val localPort = (context.channel().localAddress() as? InetSocketAddress)?.port ?: -1
-        if (isSelfTarget(targetHost, targetPort, localPort)) {
+        if (isSelfTarget(routeHost, targetPort, localPort)) {
             writeBadRequest(context, "Recursive self-proxy connection", request.protocolVersion())
             return null
         }
@@ -1010,7 +1022,14 @@ internal class KNetStreamingProxyHandler(
         } else {
             request.uri()
         }
-        return ResolvedTarget(targetHost, targetPort, isSsl, relativeUri)
+        return ResolvedTarget(
+            routeHost = routeHost,
+            authorityHost = authorityHost,
+            tlsServerName = tlsServerName,
+            port = targetPort,
+            isSsl = isSsl,
+            relativeUri = relativeUri,
+        )
     }
 
     /** Queues only objects already decoded after read suspension and rejects an excessive pipeline. */
@@ -1230,7 +1249,9 @@ internal class KNetStreamingProxyHandler(
 
     /** Immutable route resolved from one downstream request head. */
     private data class ResolvedTarget(
-        val host: String,
+        val routeHost: String,
+        val authorityHost: String,
+        val tlsServerName: String,
         val port: Int,
         val isSsl: Boolean,
         val relativeUri: String,

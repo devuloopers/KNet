@@ -14,6 +14,7 @@ import kotlin.io.encoding.Base64
 /** Android-policy TLS challenge verifier for one paired desktop identity. */
 internal class AndroidCompanionCertificateTrustVerifier(
     private val client: AndroidCertificateTlsClient,
+    private val trustedCertificates: AndroidTrustedCertificateStore,
     private val nowEpochMillis: () -> Long,
 ) : CompanionCertificateTrustVerifier {
     override suspend fun verify(
@@ -21,7 +22,6 @@ internal class AndroidCompanionCertificateTrustVerifier(
         credential: String,
         rootCertificate: CompanionCertificateArtifact,
     ): CompanionCertificateState {
-        KNetLogger.debug(LogTags.CERTIFICATE) { "companion_event=trust_challenge_started" }
         val root = rootCertificate.copyBytes().parseX509Certificate()
             ?: return rejectedAndroidCertificate("The downloaded KNet root certificate is invalid.").also {
                 KNetLogger.warn(LogTags.CERTIFICATE) {
@@ -33,6 +33,21 @@ internal class AndroidCompanionCertificateTrustVerifier(
                 "companion_event=trust_challenge_rejected reason=root_identity"
             }
             return rejectedAndroidCertificate("The downloaded KNet root certificate does not match this desktop.")
+        }
+        when (trustedCertificates.lookup(root)) {
+            AndroidTrustedCertificateLookupResult.Present -> Unit
+            AndroidTrustedCertificateLookupResult.Absent -> {
+                KNetLogger.info(LogTags.CERTIFICATE) {
+                    "companion_event=trusted_root_lookup result=absent"
+                }
+                return CompanionCertificateState.InstallationRequired
+            }
+            AndroidTrustedCertificateLookupResult.Unavailable -> {
+                KNetLogger.error(LogTags.CERTIFICATE) {
+                    "companion_event=trusted_root_lookup result=unavailable"
+                }
+                return CompanionCertificateState.Rejected(androidCertificateStoreUnavailable())
+            }
         }
         val challenge = CompanionCertificateChallengeNonce(randomChallenge())
         return when (
@@ -50,7 +65,6 @@ internal class AndroidCompanionCertificateTrustVerifier(
                     result.statusCode in 200..299 &&
                     result.responseHeaders[CompanionCertificateProtocol.CHALLENGE_HEADER.lowercase()] == challenge.value
                 ) {
-                    KNetLogger.info(LogTags.CERTIFICATE) { "companion_event=trust_challenge_completed result=trusted" }
                     CompanionCertificateState.Trusted(registration.rootCertificateSha256, nowEpochMillis())
                 } else {
                     KNetLogger.warn(LogTags.CERTIFICATE) {
@@ -60,25 +74,12 @@ internal class AndroidCompanionCertificateTrustVerifier(
                 }
             }
 
-            AndroidCertificateTlsResult.TrustRejected -> {
-                KNetLogger.info(LogTags.CERTIFICATE) {
-                    "companion_event=trust_challenge_completed result=installation_required"
-                }
-                CompanionCertificateState.InstallationRequired
-            }
-            AndroidCertificateTlsResult.IdentityRejected -> {
-                KNetLogger.warn(LogTags.CERTIFICATE) {
-                    "companion_event=trust_challenge_rejected reason=server_identity"
-                }
+            AndroidCertificateTlsResult.TrustRejected -> CompanionCertificateState.InstallationRequired
+            AndroidCertificateTlsResult.IdentityRejected ->
                 rejectedAndroidCertificate("The trusted server identity does not match the paired desktop.")
-            }
 
-            AndroidCertificateTlsResult.Unavailable -> {
-                KNetLogger.error(LogTags.CERTIFICATE) {
-                    "companion_event=trust_challenge_rejected reason=transport_unavailable"
-                }
+            AndroidCertificateTlsResult.Unavailable ->
                 CompanionCertificateState.Rejected(androidCertificateTransportUnavailable())
-            }
         }
     }
 

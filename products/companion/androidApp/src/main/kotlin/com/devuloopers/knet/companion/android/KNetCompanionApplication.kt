@@ -4,7 +4,12 @@ import android.app.Application
 import com.devuloopers.knet.companion.android.di.AndroidCompanionBootstrap
 import com.devuloopers.knet.companion.android.di.CompanionAndroidModules
 import com.devuloopers.knet.companion.presentation.viewmodel.CompanionViewModelDependencies
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancel
 import org.koin.core.KoinApplication
 import org.koin.core.context.startKoin
 import org.koin.core.context.stopKoin

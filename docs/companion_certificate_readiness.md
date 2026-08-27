@@ -2,9 +2,10 @@
 
 ## Purpose
 
-The companion must know whether the exact KNet Root CA paired with the active desktop is usable by the platform
-TLS policy. KNet does not infer readiness from a downloaded file, an Android Settings broadcast, or private
-trust-store enumeration. Readiness is proven by a real TLS handshake and a fresh authenticated challenge.
+The companion must know whether the exact KNet Root CA paired with the active desktop is installed and usable by
+the platform TLS policy. KNet does not infer readiness from a downloaded file or an Android Settings broadcast.
+Android requires both an exact DER SHA-256 match in its CA store and a real TLS handshake with a fresh authenticated
+challenge.
 
 This design is Android-first and iOS-ready. Shared state, contracts, use cases, presentation behavior, and bounded
 Ktor HTTP execution live in Kotlin Multiplatform source sets. Android framework calls remain in
@@ -32,12 +33,15 @@ adapters and lifecycle notifications are implemented.
 7. The authenticated desktop endpoint returns the exact DER-encoded KNet root. Android validates its validity,
    self-signature, CA constraint, paired root fingerprint, and relationship to the served TLS chain.
 8. Download and installation are separate. The user installs or enables the public root through platform UI.
-9. `VerifyCompanionCertificateTrustUseCase` confirms the expected root again, creates a cryptographically random
-   single-use nonce, and connects with Android's normal TLS trust policy and HTTPS hostname verification.
-10. The desktop authenticates the paired credential and `SETUP_ARTIFACT_READ` scope, accepts the nonce once during
+9. `VerifyCompanionCertificateTrustUseCase` confirms the expected root again. Android enumerates the current CA
+   store and requires an exact DER SHA-256 match. An absent root returns `InstallationRequired` without opening TLS;
+   lookup failure is fail-closed.
+10. The verifier creates a cryptographically random single-use nonce and connects with Android's normal TLS trust
+   policy and HTTPS hostname verification.
+11. The desktop authenticates the paired credential and `SETUP_ARTIFACT_READ` scope, accepts the nonce once during
    the replay window, and echoes it in the response header.
-11. The companion reports `Trusted` only when platform TLS trust, hostname verification, the paired transport pin,
-   the exact root, desktop authentication, and nonce echo all succeed.
+12. The companion reports `Trusted` only when the exact user-installed root is present and platform TLS trust,
+   hostname verification, the paired transport pin, desktop authentication, and nonce echo all succeed.
 
 `CompanionCertificateState` distinguishes `Unknown`, `InstallationRequired`, `Verifying`, `Trusted`, and a typed
 `Rejected` failure. Transport connection and inspection readiness remain separate state machines.
@@ -63,8 +67,9 @@ The platform adapter listens for `KeyChain.ACTION_TRUST_STORE_CHANGED`; the even
 but never changes state to trusted by itself. If the process was not alive for an event, initial ViewModel
 verification on the active registration remains authoritative.
 
-Android does not expose a supported API for reliably enumerating every user-installed CA across versions and
-device policies. KNet therefore tests the capability it needs instead of guessing from store contents.
+The readiness gate enumerates the platform `AndroidCAStore` behind one Android adapter and compares the full
+certificate fingerprint. The lookup is repeated for every verification, so a previous TLS session cannot hide a
+removed certificate. Unsupported provider behavior fails closed instead of reporting the certificate as trusted.
 
 ## Desktop endpoint security
 
@@ -97,7 +102,7 @@ Unit and JVM integration tests cover pairing proof, invitation and credential re
 scoping, missing/expired credentials, state mapping, trust-store
 rechecks, stale ViewModel results, version 3 bootstrap/response round trips, legacy-version rejection, one-time
 expiry/replay behavior, PKIX trust rooted only in the paired certificate, malformed invitation-root rejection
-before network access, exact-root confirmation, Android
+before network access, exact-root confirmation, Android user-root presence/absence and lookup failure, Android
 trust rejection, exact nonce echo, authenticated desktop root delivery, replay rejection, nonce-capacity bounds,
 and unauthenticated denial. Android, JVM, and iOS Simulator compilation verifies the portable boundaries.
 Physical-device evidence for OEM trust behavior remains a release qualification step and is not replaced by local

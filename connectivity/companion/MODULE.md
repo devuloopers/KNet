@@ -11,6 +11,9 @@ lifecycle APIs remain in their platform source sets.
 - A platform-neutral, serialized inspection lifecycle reducer in `commonMain`.
 - Platform-neutral adapter-bundle and factory contracts plus a constructor-free `expect` factory boundary.
 - Android network observation, VPN consent/lifecycle adaptation, and certificate readiness proof.
+- Android pinned-TLS companion proxy transport, loopback SOCKS ingress, and TUN-to-SOCKS forwarding boundary.
+- A fail-closed Android UDP policy: protected direct DNS is supported, while unsupported UDP is rejected by
+  default so QUIC can fall back to inspectable TCP/TLS.
 - Shared Ktor bootstrap and control transports with one bounded request/response policy, typed operations,
   redirect rejection, defensive body handling, and request-scoped clients.
 - A root-bootstrap-only cleartext capability for the QR-discovered LAN endpoint: exact credential-free root GET,
@@ -18,6 +21,7 @@ lifecycle APIs remain in their platform source sets.
 - Android Ktor OkHttp-engine TLS configuration that resolves the fixed `companion.knet.local` authority to the
   paired LAN endpoint, then applies platform PKIX plus QR-root, root-chain, and exact transport-identity checks
   before a secret-bearing request is transmitted.
+- Fresh exact DER SHA-256 lookups in Android's CA store before the TLS readiness challenge.
 - Secret-free transport, root-validation, and trust-challenge diagnostics under the shared certificate log tag.
 - iOS Darwin-engine TLS configuration using Security-framework policies, request-scoped custom anchors for
   pairing, native system trust for platform-trusted requests, and the same root/identity checks.
@@ -35,6 +39,7 @@ lifecycle APIs remain in their platform source sets.
 - `connectivity.bootstrap` owns portable public-root pinning and complete-invitation redemption.
 - `connectivity.control` owns portable pinned-TLS pairing and credential-refresh transport.
 - `connectivity.certificate` owns Android certificate retrieval, trust, store observation, X.509, and TLS adapters.
+- `connectivity.transport` owns the Android authenticated carrier, SOCKS ingress, and replaceable TUN forwarder.
 
 Source sets identify the native platform; platform-named packages such as `connectivity.android` or
 `connectivity.ios` are intentionally avoided. Platform suffixes remain on actual filenames for IDE clarity.

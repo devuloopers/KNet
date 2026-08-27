@@ -42,22 +42,23 @@ private fun resolveBreakpointAuthority(
     request: HttpRequest,
     isSsl: Boolean,
 ): Pair<String, Int> {
-    val tunneledHost = context.channel().attr(ProxyChannelAttributes.HOST).get()
-    if (!tunneledHost.isNullOrBlank()) {
-        val tunneledPort = context.channel().attr(ProxyChannelAttributes.PORT).get()
-        return tunneledHost to (tunneledPort ?: if (isSsl) 443 else 80)
-    }
     val hostHeader = request.headers()["Host"].orEmpty()
-    val defaultPort = if (isSsl) 443 else 80
-    val bracketEnd = hostHeader.indexOf(']')
-    return if (hostHeader.startsWith('[') && bracketEnd > 0) {
-        val host = hostHeader.substring(1, bracketEnd)
-        host to (hostHeader.substring(bracketEnd + 1).removePrefix(":").toIntOrNull() ?: defaultPort)
-    } else {
-        val possiblePort = hostHeader.substringAfterLast(':', "").toIntOrNull()
-        val host = if (possiblePort == null) hostHeader else hostHeader.substringBeforeLast(':')
-        host.ifBlank { "unknown" } to (possiblePort ?: defaultPort)
+    val defaultPort = context.channel().attr(ProxyChannelAttributes.PORT).get()
+        ?: if (isSsl) 443 else 80
+    if (hostHeader.isNotBlank()) {
+        val bracketEnd = hostHeader.indexOf(']')
+        return if (hostHeader.startsWith('[') && bracketEnd > 0) {
+            val host = hostHeader.substring(1, bracketEnd)
+            host to (hostHeader.substring(bracketEnd + 1).removePrefix(":").toIntOrNull() ?: defaultPort)
+        } else {
+            val possiblePort = hostHeader.substringAfterLast(':', "").toIntOrNull()
+            val host = if (possiblePort == null) hostHeader else hostHeader.substringBeforeLast(':')
+            host to (possiblePort ?: defaultPort)
+        }
     }
+    val semanticHost = context.channel().attr(ProxyChannelAttributes.TLS_SERVER_NAME).get()
+    val routeHost = context.channel().attr(ProxyChannelAttributes.ROUTE_HOST).get()
+    return (semanticHost ?: routeHost ?: "unknown") to defaultPort
 }
 
 private fun relativeRequestTarget(uri: String): String =

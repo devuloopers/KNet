@@ -22,6 +22,8 @@ kotlin {
         }
         val jvmTest by getting {
             dependencies {
+                implementation(libs.bouncycastle.pkix)
+                implementation(libs.bouncycastle.prov)
                 implementation(kotlin("test"))
                 implementation(libs.kotlinx.coroutines.test)
             }

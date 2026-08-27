@@ -13,9 +13,10 @@ platform source set to depend on another.
   fail-closed capabilities, and the serialized inspection lifecycle reducer. Native adapters supply Ktor engine
   trust configuration, preparation, start, stop, and failure operations without duplicating request policy,
   locking, idempotency, cancellation recovery, or state transitions.
-- `androidMain` owns `ConnectivityManager`, `VpnService`, `KeyChain`, Java/Android certificate APIs, Android TLS,
-  trust-store callback lifecycles, and the Android `actual` factory. Only this source set accepts Android
-  `Context`, and it immediately retains the application context.
+- `androidMain` owns `ConnectivityManager`, `VpnService` adaptation, `KeyChain`, Java/Android certificate APIs,
+  Android TLS, trust-store callback lifecycles, the authenticated proxy carrier, loopback SOCKS ingress,
+  TUN-to-SOCKS forwarding, and the Android `actual` factory. Only this source set accepts Android `Context`, and
+  it immediately retains the application context.
 - `iosMain` owns the Darwin Ktor engine and Security-framework trust evaluation used by invitation redemption and
   control calls. Network observation, certificate installation/readiness, and inspection still use unavailable
   adapters, publish no synthetic readiness, and must not be registered in a production iOS composition root yet.
@@ -37,6 +38,13 @@ The package hierarchy describes capability ownership rather than repeating the s
 - `connectivity.control`: portable secret-bearing pairing and credential refresh over the paired-root TLS channel.
 - `connectivity.certificate`: Android certificate retrieval, platform trust proof, store observation, X.509 helpers,
   paired PKIX construction, and the bounded TLS client.
+- `connectivity.transport`: Android pinned-TLS proxy carrier, bounded SOCKS ingress, protected DNS handling, and
+  the replaceable TUN-to-SOCKS engine boundary.
+
+The Android TUN path can preserve a destination IP after device DNS resolution even though the originating TLS
+ClientHello still carries the application hostname in SNI. The companion forwards that standard CONNECT tunnel
+without interpreting TLS. Desktop proxy transport owns the corresponding SNI-aware certificate selection and
+keeps the destination IP separate from TLS/HTTP authority metadata.
 
 Bootstrap and control calls use Ktor in `commonMain`; the request policy rejects redirects, requires explicit
 bounded response lengths, defensively copies bodies, and creates a fresh native client per request so trust anchors
@@ -50,7 +58,9 @@ response limit. The one-time secret is placed only in the second, pinned-TLS req
 Android trust does not use a hand-written `X509TrustManager`. Its Ktor OkHttp engine maps the fixed
 `companion.knet.local` TLS authority to the paired LAN endpoint, rejects the root unless the DER fingerprint and CA
 constraints match the QR, places it in an in-memory `KeyStore`, and obtains trust managers from the platform
-`TrustManagerFactory`. Darwin creates a Security-framework certificate and request-scoped custom
+`TrustManagerFactory`. Certificate readiness additionally performs a fresh exact DER SHA-256 lookup in Android's CA
+store before TLS, preventing a resumed session from hiding certificate removal. Darwin creates a Security-framework
+certificate and request-scoped custom
 anchor for pinned pairing; platform-trusted readiness keeps the system trust policy. Both platforms enforce the
 fixed TLS hostname, exact transport identity, and expected root chain before Ktor transmits a secret-bearing body.
 
@@ -81,10 +91,11 @@ Extension product will own their native lifecycles, entitlements, and compositio
 will replace the unavailable capabilities with `NWPathMonitor`, certificate installation/readiness, lifecycle
 recheck triggers, and a separately qualified Network Extension packet backend.
 
-The module does not own pairing persistence, protected credentials, shared UI, desktop proxy behavior, or packet
-inspection policy. Those concerns remain behind their existing application, data, presentation, and desktop
-boundaries. Android and iOS bootstrap/control HTTP transports are implemented. iOS certificate readiness and both
-platforms' packet data plane remain explicit future adapters.
+The module does not own pairing persistence, protected credentials, shared UI, desktop proxy behavior, or product
+service lifecycle. Those concerns remain behind their existing application, data, presentation, desktop, and
+product boundaries. Android and iOS bootstrap/control HTTP transports are implemented. Android has a qualified
+packet adapter wired by the Android product; iOS certificate readiness and its Network Extension packet data plane
+remain explicit future adapters.
 
 ## Qualification
 

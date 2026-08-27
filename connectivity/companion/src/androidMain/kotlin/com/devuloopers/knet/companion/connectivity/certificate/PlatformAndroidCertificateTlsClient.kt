@@ -72,9 +72,6 @@ internal class PlatformAndroidCertificateTlsClient(
             is CompanionHttpSecurity.PinnedRoot -> "pinned_root"
             is CompanionHttpSecurity.PlatformTrusted -> "platform_trusted"
         }
-        KNetLogger.debug(LogTags.CERTIFICATE) {
-            "companion_event=transport_started trust_mode=$trustMode"
-        }
         return try {
             val response = httpClient.execute(
                 CompanionHttpRequest(
@@ -94,11 +91,7 @@ internal class PlatformAndroidCertificateTlsClient(
                 statusCode = response.statusCode,
                 responseHeaders = response.headers,
                 body = response.copyBody(),
-            ).also {
-                KNetLogger.info(LogTags.CERTIFICATE) {
-                    "companion_event=transport_completed trust_mode=$trustMode status=${response.statusCode}"
-                }
-            }
+            )
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: CompanionHttpSecurityException.IdentityRejected) {
@@ -111,7 +104,7 @@ internal class PlatformAndroidCertificateTlsClient(
                 "companion_event=transport_rejected trust_mode=$trustMode reason=platform_trust"
             }
             AndroidCertificateTlsResult.TrustRejected
-        } catch (failure: Throwable) {
+        } catch (failure: Exception) {
             KNetLogger.error(LogTags.CERTIFICATE) {
                 "companion_event=transport_unavailable trust_mode=$trustMode " +
                     "reason=${failure::class.simpleName ?: "unknown"}"

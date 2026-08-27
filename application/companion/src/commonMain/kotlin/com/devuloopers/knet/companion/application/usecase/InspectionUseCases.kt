@@ -90,7 +90,22 @@ public class StartCompanionInspectionUseCase(
                     unsupportedTrafficPolicy = unsupportedTrafficPolicy,
                     fullHttpsInspection = certificateState is CompanionCertificateState.Trusted,
                 )
-                when (val started = inspection.start(configuration)) {
+                val started = try {
+                    inspection.start(configuration)
+                } catch (cancelled: CancellationException) {
+                    cleanupFailedStart()
+                    throw cancelled
+                } catch (_: Throwable) {
+                    cleanupFailedStart()
+                    return StartCompanionInspectionResult.Rejected(
+                        CompanionFailure(
+                            CompanionFailureCode.VPN_START_FAILED,
+                            "Unable to start device inspection.",
+                            true,
+                        ),
+                    )
+                }
+                when (started) {
                     CompanionInspectionStartResult.Started -> StartCompanionInspectionResult.Started(
                         fullHttpsInspection = configuration.fullHttpsInspection,
                     )

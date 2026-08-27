@@ -2,7 +2,11 @@ package com.devuloopers.knet.companion.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.devuloopers.knet.companion.application.usecase.*
+import com.devuloopers.knet.companion.application.usecase.AcceptPairingInvitationResult
+import com.devuloopers.knet.companion.application.usecase.DownloadCompanionRootCertificateResult
+import com.devuloopers.knet.companion.application.usecase.PairCompanionDeviceResult
+import com.devuloopers.knet.companion.application.usecase.RefreshCompanionCredentialResult
+import com.devuloopers.knet.companion.application.usecase.StartCompanionInspectionResult
 import com.devuloopers.knet.companion.model.CompanionCertificateState
 import com.devuloopers.knet.companion.model.CompanionDesktopId
 import com.devuloopers.knet.companion.model.CompanionFailure
@@ -14,9 +18,16 @@ import com.devuloopers.knet.companion.presentation.action.CompanionAction
 import com.devuloopers.knet.companion.presentation.effect.CompanionEffect
 import com.devuloopers.knet.core.logger.KNetLogger
 import com.devuloopers.knet.core.logger.LogTags
-import kotlinx.coroutines.*
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.flow.*
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.flow.update
 
 /**
  * Lifecycle-aware shared companion presentation model.
@@ -130,8 +141,6 @@ public class CompanionViewModel(
                 }
             }
 
-            CompanionAction.ConnectRequested -> connect()
-            CompanionAction.DisconnectRequested -> launchOperation { dependencies.disconnect.execute() }
             CompanionAction.StartInspectionRequested -> startInspection()
             CompanionAction.VpnConsentRequested -> emitEffect(CompanionEffect.RequestVpnConsent)
             is CompanionAction.VpnConsentResolved -> {
@@ -264,13 +273,6 @@ public class CompanionViewModel(
         }
     }
 
-    private fun connect(): Unit = launchOperation {
-        when (val result = dependencies.connect.execute()) {
-            ConnectCompanionResult.Connected -> Unit
-            is ConnectCompanionResult.Rejected -> showFailure(result.failure)
-        }
-    }
-
     private fun startInspection(): Unit = launchOperation {
         when (val result = dependencies.startInspection.execute()) {
             is StartCompanionInspectionResult.Started -> Unit
@@ -289,13 +291,11 @@ public class CompanionViewModel(
         mutableState.update { current ->
             current.copy(certificateExport = CompanionCertificateExportState.Saving(desktopId), failure = null)
         }
-        KNetLogger.info(LogTags.CERTIFICATE) { "companion_event=export_requested" }
         certificateDownloadJob = viewModelScope.launch {
             try {
                 when (val result = dependencies.downloadCertificate.execute()) {
                     is DownloadCompanionRootCertificateResult.Downloaded -> {
                         if (mutableState.value.activeRegistration?.desktopId != desktopId) return@launch
-                        KNetLogger.info(LogTags.CERTIFICATE) { "companion_event=download_completed" }
                         if (!emitEffect(CompanionEffect.ExportCertificate(desktopId, result.artifact))) {
                             failCertificateExport(desktopId)
                         }
@@ -311,7 +311,7 @@ public class CompanionViewModel(
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
-            } catch (_: Throwable) {
+            } catch (_: Exception) {
                 updateCertificateExportIfCurrent(desktopId, CompanionCertificateExportState.Failed(desktopId))
                 showFailure(unknownFailure())
             }
@@ -321,7 +321,6 @@ public class CompanionViewModel(
     private fun completeCertificateExport(action: CompanionAction.CertificateExportCompleted) {
         val saving = mutableState.value.certificateExport as? CompanionCertificateExportState.Saving ?: return
         if (saving.desktopId != action.desktopId || mutableState.value.activeRegistration?.desktopId != action.desktopId) return
-        KNetLogger.info(LogTags.CERTIFICATE) { "companion_event=export_completed" }
         mutableState.update { current ->
             current.copy(
                 certificateExport = CompanionCertificateExportState.Saved(
@@ -353,7 +352,6 @@ public class CompanionViewModel(
     private fun cancelCertificateExport(desktopId: CompanionDesktopId) {
         val saving = mutableState.value.certificateExport as? CompanionCertificateExportState.Saving ?: return
         if (saving.desktopId != desktopId || mutableState.value.activeRegistration?.desktopId != desktopId) return
-        KNetLogger.info(LogTags.CERTIFICATE) { "companion_event=export_cancelled" }
         mutableState.update { current -> current.copy(certificateExport = CompanionCertificateExportState.Idle) }
     }
 

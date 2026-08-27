@@ -28,12 +28,6 @@ public sealed interface CompanionAction {
     /** Makes one durable desktop registration active. */
     public data class RegistrationSelected(public val desktopId: CompanionDesktopId) : CompanionAction
 
-    /** Connects to the active desktop without starting inspection. */
-    public data object ConnectRequested : CompanionAction
-
-    /** Disconnects from the active desktop. */
-    public data object DisconnectRequested : CompanionAction
-
     /** Starts the inspection workflow, requesting native consent when required. */
     public data object StartInspectionRequested : CompanionAction
 

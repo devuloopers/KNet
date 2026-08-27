@@ -32,7 +32,12 @@ kotlin {
             implementation(libs.kotlinx.coroutines.core)
         }
         androidMain.dependencies {
+            implementation(libs.hevtunnel)
             implementation(libs.ktor.client.okhttp)
+        }
+        getByName("androidHostTest").dependencies {
+            implementation(libs.bouncycastle.pkix)
+            implementation(libs.bouncycastle.prov)
         }
         iosMain.dependencies {
             implementation(libs.ktor.client.darwin)

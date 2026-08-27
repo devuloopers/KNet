@@ -185,8 +185,14 @@ internal val connectivityBindings: Module = module {
     }
     single {
         val proxy: ProxyRuntime = get()
+        val certificates: CertificateRuntimeRepository = get()
+        val identity = certificates.companionTlsIdentity(
+            CompanionControlGateway.TLS_SERVER_NAME,
+        )
         AuthenticatedProxyGateway(
+            bindHost = COMPANION_LAN_BIND_HOST,
             bindPort = AUTHENTICATED_GATEWAY_PORT,
+            serverSocketFactory = identity.serverSocketFactory,
             targetProxy = {
                 (proxy.state.value as? ProxyRuntimeState.Running)
                     ?.handle?.endpoints?.endpoints?.firstOrNull()
@@ -202,7 +208,7 @@ internal val connectivityBindings: Module = module {
             CompanionControlGateway.TLS_SERVER_NAME,
         )
         CompanionControlGateway(
-            bindHost = "0.0.0.0",
+            bindHost = COMPANION_LAN_BIND_HOST,
             bindPort = COMPANION_CONTROL_GATEWAY_PORT,
             serverSocketFactory = identity.serverSocketFactory,
             rootCertificateDer = identity::copyRootCertificate,
@@ -216,6 +222,7 @@ internal val connectivityBindings: Module = module {
 }
 
 private const val SETUP_PORTAL_PORT: Int = 8181
+internal const val COMPANION_LAN_BIND_HOST: String = "0.0.0.0"
 private const val AUTHENTICATED_GATEWAY_PORT: Int = 8182
 private const val COMPANION_CONTROL_GATEWAY_PORT: Int = 8183
 

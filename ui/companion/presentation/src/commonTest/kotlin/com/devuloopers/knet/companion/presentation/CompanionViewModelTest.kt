@@ -28,7 +28,6 @@ import com.devuloopers.knet.companion.application.contract.CompanionTransportRes
 import com.devuloopers.knet.companion.application.contract.InvitationDecodeResult
 import com.devuloopers.knet.companion.application.usecase.AcceptPairingInvitationUseCase
 import com.devuloopers.knet.companion.application.usecase.ConnectCompanionUseCase
-import com.devuloopers.knet.companion.application.usecase.DisconnectCompanionUseCase
 import com.devuloopers.knet.companion.application.usecase.DownloadCompanionRootCertificateUseCase
 import com.devuloopers.knet.companion.application.usecase.ForgetCompanionDesktopUseCase
 import com.devuloopers.knet.companion.application.usecase.ObserveCompanionCertificateStoreChangesUseCase
@@ -510,8 +509,6 @@ class CompanionViewModelTest {
                             ) { 1_000L },
                             observeRegistrations = ObserveCompanionRegistrationsUseCase(repository),
                             selectRegistration = SelectCompanionRegistrationUseCase(repository),
-                            connect = connect,
-                            disconnect = DisconnectCompanionUseCase(transport),
                             observeConnection = ObserveCompanionConnectionUseCase(transport),
                             observeNetwork = ObserveCompanionNetworkUseCase(network),
                             startInspection = StartCompanionInspectionUseCase(

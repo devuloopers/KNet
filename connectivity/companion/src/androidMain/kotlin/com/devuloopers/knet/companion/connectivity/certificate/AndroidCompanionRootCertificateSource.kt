@@ -74,7 +74,6 @@ internal class AndroidCompanionRootCertificateSource(
                 ),
             )
         }
-        KNetLogger.info(LogTags.CERTIFICATE) { "companion_event=root_validated" }
         return CompanionCertificateDownloadResult.Downloaded(
             CompanionCertificateArtifact(response.body, ROOT_CERTIFICATE_FILE_NAME),
         )

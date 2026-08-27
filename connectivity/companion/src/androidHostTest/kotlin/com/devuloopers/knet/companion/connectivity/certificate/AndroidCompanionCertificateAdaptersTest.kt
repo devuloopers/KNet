@@ -4,10 +4,11 @@ import com.devuloopers.knet.companion.application.contract.CompanionCertificateA
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateDownloadResult
 import com.devuloopers.knet.companion.connectivity.http.AndroidCompanionKtorClientProvider
 import com.devuloopers.knet.companion.connectivity.http.KtorCompanionHttpClient
+import com.devuloopers.knet.companion.connectivity.testing.companionRegistrationFixture
 import com.devuloopers.knet.companion.model.CompanionCertificateChallengeNonce
 import com.devuloopers.knet.companion.model.CompanionCertificateProtocol
 import com.devuloopers.knet.companion.model.CompanionCertificateState
-import com.devuloopers.knet.companion.connectivity.testing.companionRegistrationFixture
+import com.devuloopers.knet.companion.model.CompanionFailureCode
 import com.devuloopers.knet.companion.model.CompanionRegistration
 import com.devuloopers.knet.companion.model.CompanionRootCertificate
 import com.devuloopers.knet.companion.model.Sha256Fingerprint
@@ -106,6 +107,7 @@ class AndroidCompanionCertificateAdaptersTest {
         val registration = registration(root)
         val verifier = AndroidCompanionCertificateTrustVerifier(
             client = FakeTlsClient(platformTrusted = AndroidCertificateTlsResult.TrustRejected),
+            trustedCertificates = FakeTrustedCertificateStore(AndroidTrustedCertificateLookupResult.Present),
             nowEpochMillis = { 1_000L },
         )
 
@@ -146,7 +148,11 @@ class AndroidCompanionCertificateAdaptersTest {
                 body = ByteArray(0),
             )
         }
-        val verifier = AndroidCompanionCertificateTrustVerifier(client, nowEpochMillis = { 2_000L })
+        val verifier = AndroidCompanionCertificateTrustVerifier(
+            client = client,
+            trustedCertificates = FakeTrustedCertificateStore(AndroidTrustedCertificateLookupResult.Present),
+            nowEpochMillis = { 2_000L },
+        )
 
         val result = assertIs<CompanionCertificateState.Trusted>(
             verifier.verify(
@@ -173,6 +179,7 @@ class AndroidCompanionCertificateAdaptersTest {
                     body = ByteArray(0),
                 ),
             ),
+            trustedCertificates = FakeTrustedCertificateStore(AndroidTrustedCertificateLookupResult.Present),
             nowEpochMillis = { 2_000L },
         )
 
@@ -185,11 +192,100 @@ class AndroidCompanionCertificateAdaptersTest {
         assertIs<CompanionCertificateState.Rejected>(result)
     }
 
+    @Test
+    fun missingInstalledRootCannotBeBypassedByAReusableTlsSession() = runTest {
+        val root = testCertificate("local-proxy-test-ca.pem")
+        val client = FakeTlsClient(
+            platformTrusted = AndroidCertificateTlsResult.Success(204, emptyMap(), ByteArray(0)),
+        )
+        val verifier = AndroidCompanionCertificateTrustVerifier(
+            client = client,
+            trustedCertificates = FakeTrustedCertificateStore(AndroidTrustedCertificateLookupResult.Absent),
+            nowEpochMillis = { 2_000L },
+        )
+
+        val result = verifier.verify(
+            registration(root),
+            "credential",
+            CompanionCertificateArtifact(root.encoded, "knet-root-ca.crt"),
+        )
+
+        assertIs<CompanionCertificateState.InstallationRequired>(result)
+        assertEquals(0, client.platformTrustedCalls)
+    }
+
+    @Test
+    fun unavailableTrustedCredentialStoreFailsClosedWithoutStartingTlsChallenge() = runTest {
+        val root = testCertificate("local-proxy-test-ca.pem")
+        val client = FakeTlsClient(platformTrusted = AndroidCertificateTlsResult.TrustRejected)
+        val verifier = AndroidCompanionCertificateTrustVerifier(
+            client = client,
+            trustedCertificates = FakeTrustedCertificateStore(AndroidTrustedCertificateLookupResult.Unavailable),
+            nowEpochMillis = { 2_000L },
+        )
+
+        val result = assertIs<CompanionCertificateState.Rejected>(
+            verifier.verify(
+                registration(root),
+                "credential",
+                CompanionCertificateArtifact(root.encoded, "knet-root-ca.crt"),
+            ),
+        )
+
+        assertEquals(CompanionFailureCode.CERTIFICATE_UNAVAILABLE, result.reason.code)
+        assertEquals(0, client.platformTrustedCalls)
+    }
+
+    @Test
+    fun platformStoreReturnsPresenceOnlyForTheExactTrustedCertificate() = runTest {
+        val root = testCertificate("local-proxy-test-ca.pem")
+        val store = PlatformAndroidTrustedCertificateStore(
+            trustedCertificatesLoader = { sequenceOf(root) },
+            ioContext = coroutineContext,
+        )
+
+        assertIs<AndroidTrustedCertificateLookupResult.Present>(
+            store.lookup(root),
+        )
+        assertIs<AndroidTrustedCertificateLookupResult.Absent>(
+            store.lookup(testCertificate("local-proxy-test-leaf.pem")),
+        )
+    }
+
+    @Test
+    fun platformStoreStopsEnumeratingAfterTheExactCertificateIsFound() = runTest {
+        val root = testCertificate("local-proxy-test-ca.pem")
+        val store = PlatformAndroidTrustedCertificateStore(
+            trustedCertificatesLoader = {
+                sequence {
+                    yield(root)
+                    error("certificate enumeration should have stopped")
+                }
+            },
+            ioContext = coroutineContext,
+        )
+
+        assertIs<AndroidTrustedCertificateLookupResult.Present>(store.lookup(root))
+    }
+
+    @Test
+    fun platformStoreConvertsCredentialProviderFailureToUnavailable() = runTest {
+        val store = PlatformAndroidTrustedCertificateStore(
+            trustedCertificatesLoader = { error("credential provider unavailable") },
+            ioContext = coroutineContext,
+        )
+
+        assertIs<AndroidTrustedCertificateLookupResult.Unavailable>(
+            store.lookup(testCertificate("local-proxy-test-ca.pem")),
+        )
+    }
+
     private class FakeTlsClient(
         private val pinned: AndroidCertificateTlsResult = AndroidCertificateTlsResult.Unavailable,
         private val platformTrusted: AndroidCertificateTlsResult = AndroidCertificateTlsResult.Unavailable,
     ) : AndroidCertificateTlsClient {
         var pinnedCalls: Int = 0
+        var platformTrustedCalls: Int = 0
 
         override suspend fun executePinned(
             registration: CompanionRegistration,
@@ -209,7 +305,18 @@ class AndroidCompanionCertificateAdaptersTest {
             challenge: CompanionCertificateChallengeNonce,
             expectedRoot: X509Certificate,
             maximumBodyBytes: Int,
-        ): AndroidCertificateTlsResult = platformTrusted
+        ): AndroidCertificateTlsResult {
+            platformTrustedCalls += 1
+            return platformTrusted
+        }
+    }
+
+    private class FakeTrustedCertificateStore(
+        private val result: AndroidTrustedCertificateLookupResult,
+    ) : AndroidTrustedCertificateStore {
+        override suspend fun lookup(
+            rootCertificate: X509Certificate,
+        ): AndroidTrustedCertificateLookupResult = result
     }
 
     private fun registration(root: X509Certificate): CompanionRegistration {

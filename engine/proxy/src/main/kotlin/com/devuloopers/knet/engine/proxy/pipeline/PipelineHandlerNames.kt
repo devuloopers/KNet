@@ -13,7 +13,7 @@ object PipelineHandlerNames {
     const val WRITE_TIMEOUT = "writeTimeout"
 
     /**
-     * Inbound TLS decryption and outbound TLS encryption handler (`io.netty.handler.ssl.SslHandler`).
+     * Initial SNI selector, replaced in place by Netty's TLS encryption/decryption handler.
      *
      * Positioned first in the pipeline when decrypting HTTPS traffic.
      */

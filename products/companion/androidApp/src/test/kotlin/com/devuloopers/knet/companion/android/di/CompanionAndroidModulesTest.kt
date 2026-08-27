@@ -1,5 +1,6 @@
 package com.devuloopers.knet.companion.android.di
 
+import com.devuloopers.knet.companion.android.inspection.AndroidInspectionRuntimeCoordinator
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateDownloadResult
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateStoreChangeObserver
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateTrustVerifier
@@ -16,8 +17,12 @@ import com.devuloopers.knet.companion.application.contract.CompanionInvitationRe
 import com.devuloopers.knet.companion.application.contract.CompanionNetworkObserver
 import com.devuloopers.knet.companion.application.contract.CompanionRegistrationRepository
 import com.devuloopers.knet.companion.application.contract.CompanionRootCertificateSource
-import com.devuloopers.knet.companion.application.usecase.ConnectCompanionUseCase
+import com.devuloopers.knet.companion.application.usecase.StartCompanionInspectionUseCase
 import com.devuloopers.knet.companion.connectivity.platform.CompanionPlatformAdapters
+import com.devuloopers.knet.companion.connectivity.transport.AndroidCompanionProxyTransport
+import com.devuloopers.knet.companion.connectivity.transport.AndroidSocketProtector
+import com.devuloopers.knet.companion.connectivity.transport.AndroidTunForwarder
+import com.devuloopers.knet.companion.connectivity.transport.AndroidTunForwarderStartResult
 import com.devuloopers.knet.companion.connectivity.fallback.UnavailableCompanionInvitationResolver
 import com.devuloopers.knet.companion.data.ProtectedCompanionCredentialStore
 import com.devuloopers.knet.companion.data.VersionedCompanionInvitationCodec
@@ -65,8 +70,18 @@ class CompanionAndroidModulesTest {
         val recordStore = MemoryRecordStore()
         val secretStore = MemorySecretStore()
         val platformAdapters = FakePlatformAdapters()
+        val transport = AndroidCompanionProxyTransport()
+        val tunForwarder = FakeTunForwarder()
+        val inspectionCoordinator = AndroidInspectionRuntimeCoordinator()
         val modules = CompanionAndroidModules.create(
-            AndroidCompanionBootstrap(recordStore, secretStore, platformAdapters),
+            AndroidCompanionBootstrap(
+                recordStore,
+                secretStore,
+                platformAdapters,
+                transport,
+                tunForwarder,
+                inspectionCoordinator,
+            ),
         )
         val application = koinApplication {
             allowOverride(false)
@@ -85,11 +100,14 @@ class CompanionAndroidModulesTest {
             assertIs<VersionedCompanionInvitationCodec>(application.koin.get<CompanionInvitationCodec>())
             assertSame(platformAdapters.invitationResolver, application.koin.get<CompanionInvitationResolver>())
             assertSame(platformAdapters.controlTransport, application.koin.get<CompanionControlTransport>())
+            assertSame(transport, application.koin.get<com.devuloopers.knet.companion.application.contract.CompanionTransport>())
+            assertSame(tunForwarder, application.koin.get<AndroidTunForwarder>())
+            assertSame(inspectionCoordinator, application.koin.get<AndroidInspectionRuntimeCoordinator>())
             assertNotNull(application.koin.get<CompanionDeviceIdentityProvider>())
             assertNotNull(application.koin.get<CompanionDeviceProofSigner>())
 
             val dependencies = application.koin.get<CompanionViewModelDependencies>()
-            assertSame(application.koin.get<ConnectCompanionUseCase>(), dependencies.connect)
+            assertSame(application.koin.get<StartCompanionInspectionUseCase>(), dependencies.startInspection)
             assertNotNull(application.koin.get<CompanionViewModel>())
         } finally {
             application.close()
@@ -163,6 +181,16 @@ class CompanionAndroidModulesTest {
         override suspend fun start(
             configuration: CompanionInspectionConfiguration,
         ): CompanionInspectionStartResult = CompanionInspectionStartResult.Started
+
+        override suspend fun stop(): Unit = Unit
+    }
+
+    private class FakeTunForwarder : AndroidTunForwarder {
+        override suspend fun start(
+            tunFileDescriptor: Int,
+            configuration: CompanionInspectionConfiguration,
+            protector: AndroidSocketProtector,
+        ): AndroidTunForwarderStartResult = AndroidTunForwarderStartResult.Started
 
         override suspend fun stop(): Unit = Unit
     }

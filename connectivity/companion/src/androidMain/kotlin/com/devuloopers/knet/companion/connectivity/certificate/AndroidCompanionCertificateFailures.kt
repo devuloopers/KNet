@@ -14,3 +14,9 @@ internal fun androidCertificateTransportUnavailable(): CompanionFailure = Compan
     "Unable to reach the paired desktop securely.",
     true,
 )
+
+internal fun androidCertificateStoreUnavailable(): CompanionFailure = CompanionFailure(
+    CompanionFailureCode.CERTIFICATE_UNAVAILABLE,
+    "Android trusted credentials could not be checked.",
+    true,
+)

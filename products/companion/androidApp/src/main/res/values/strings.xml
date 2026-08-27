@@ -8,4 +8,7 @@
     <string name="certificate_guidance_step_install">Choose Install a certificate, then CA certificate.</string>
     <string name="certificate_guidance_step_select">Open Downloads/KNet and select KNet-Root-CA.crt.</string>
     <string name="certificate_guidance_step_confirm">Confirm the Android warning, then return to KNet Companion.</string>
+    <string name="inspection_notification_channel">Network inspection</string>
+    <string name="inspection_notification_title">KNet inspection active</string>
+    <string name="inspection_notification_description">Device traffic is being forwarded to your paired KNet desktop.</string>
 </resources>

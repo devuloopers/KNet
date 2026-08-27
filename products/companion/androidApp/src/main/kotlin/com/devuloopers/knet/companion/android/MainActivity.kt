@@ -11,8 +11,8 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
-import com.devuloopers.knet.companion.presentation.viewmodel.CompanionViewModel
 import com.devuloopers.knet.companion.android.scanner.AndroidCompanionInvitationScanner
+import com.devuloopers.knet.companion.presentation.viewmodel.CompanionViewModel
 import com.devuloopers.knet.companion.sharedui.scanner.CompanionInvitationScanner
 import com.devuloopers.knet.companion.sharedui.KNetCompanionApp
 import com.devuloopers.knet.companion.sharedui.screen.certificate.CertificateInstallationGuidance

@@ -72,7 +72,9 @@ internal class HttpTwoUpstreamConnectionPool(
         streamInitializer: ChannelInitializer<Channel>,
     ): CompletableFuture<Channel> {
         val result = CompletableFuture<Channel>()
-        val key = OriginKey(route.host, route.port)
+        // A transparent CONNECT tunnel can preserve one TLS hostname while routing different
+        // connections to distinct destination IPs. Pooling must retain both identities.
+        val key = OriginKey(route.host, route.resolvedHost, route.port)
         val entry = synchronized(lock) {
             if (closed) {
                 result.completeExceptionally(IOException("HTTP/2 upstream pool is closed."))
@@ -310,7 +312,11 @@ internal class HttpTwoUpstreamConnectionPool(
         }
     }
 
-    private data class OriginKey(val host: String, val port: Int)
+    private data class OriginKey(
+        val host: String,
+        val resolvedHost: String,
+        val port: Int,
+    )
 
     private class PooledConnection(
         val ready: CompletableFuture<Channel>,

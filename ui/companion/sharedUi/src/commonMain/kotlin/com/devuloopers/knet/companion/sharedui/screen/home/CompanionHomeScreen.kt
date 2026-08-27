@@ -16,8 +16,6 @@ import com.devuloopers.knet.companion.sharedui.component.CompanionOnboardingScaf
 import com.devuloopers.knet.companion.sharedui.component.CompanionStatusRow
 import com.devuloopers.knet.companion.sharedui.generated.resources.Res
 import com.devuloopers.knet.companion.sharedui.generated.resources.certificate_trusted
-import com.devuloopers.knet.companion.sharedui.generated.resources.connect_action
-import com.devuloopers.knet.companion.sharedui.generated.resources.disconnect_action
 import com.devuloopers.knet.companion.sharedui.generated.resources.forget_desktop
 import com.devuloopers.knet.companion.sharedui.generated.resources.home_summary
 import com.devuloopers.knet.companion.sharedui.generated.resources.home_title
@@ -128,18 +126,6 @@ internal fun CompanionHomeScreen(state: CompanionUiState, onAction: (CompanionAc
                 loading = state.operationInProgress,
             ) {
                 Text(stringResource(if (running) Res.string.stop_inspection else Res.string.start_inspection))
-            }
-            KNetButton(
-                onClick = {
-                    onAction(
-                        if (connected) CompanionAction.DisconnectRequested else CompanionAction.ConnectRequested,
-                    )
-                },
-                modifier = Modifier.fillMaxWidth(),
-                variant = ButtonVariant.Secondary,
-                enabled = !state.operationInProgress,
-            ) {
-                Text(stringResource(if (connected) Res.string.disconnect_action else Res.string.connect_action))
             }
             KNetButton(
                 onClick = { onAction(CompanionAction.RefreshCredentialRequested) },
