@@ -13,7 +13,9 @@ import com.devuloopers.knet.storage.capture.entity.DeletionOutboxEntity
 import com.devuloopers.knet.storage.capture.entity.DuplexMessageEntity
 import com.devuloopers.knet.storage.capture.entity.InspectionAnnotationEntity
 import com.devuloopers.knet.storage.capture.entity.TrafficConnectionEntity
+import com.devuloopers.knet.storage.capture.model.CanonicalExchangePageRow
 import com.devuloopers.knet.storage.capture.model.CanonicalSessionStorageSummary
+import com.devuloopers.knet.storage.capture.model.CanonicalTrafficFacetRow
 import kotlinx.coroutines.flow.Flow
 
 /** Ordered persistence operations used by one canonical session writer. */
@@ -163,9 +165,39 @@ interface CanonicalCaptureDao {
         protocols: List<String>,
     ): Long
 
+    /**
+     * Computes exact scheme facets while the selected HTTP version matches either proxy leg.
+     */
+    @Query(
+        "SELECT COUNT(*) AS totalCount, " +
+            "COALESCE(SUM(CASE WHEN scheme = 'http' THEN 1 ELSE 0 END), 0) AS httpCount, " +
+            "COALESCE(SUM(CASE WHEN scheme = 'https' THEN 1 ELSE 0 END), 0) AS httpsCount " +
+            "FROM traffic_exchanges WHERE (:sessionId IS NULL OR sessionId = :sessionId) " +
+            "AND (:searchPattern IS NULL OR host LIKE :searchPattern ESCAPE '\\' " +
+            "OR pathAndQuery LIKE :searchPattern ESCAPE '\\' " +
+            "OR method LIKE :searchPattern ESCAPE '\\' " +
+            "OR CAST(responseStatusCode AS TEXT) LIKE :searchPattern ESCAPE '\\') " +
+            "AND (:filterMethods = 0 OR method IN (:methods)) " +
+            "AND (:filterStatuses = 0 OR responseStatusCode IN (:statuses)) " +
+            "AND (:filterProtocols = 0 OR protocol IN (:protocols) OR responseProtocol IN (:protocols))",
+    )
+    suspend fun getTrafficFacetCounts(
+        sessionId: String?,
+        searchPattern: String?,
+        filterMethods: Int,
+        methods: List<String>,
+        filterStatuses: Int,
+        statuses: List<Int>,
+        filterProtocols: Int,
+        protocols: List<String>,
+    ): CanonicalTrafficFacetRow
+
     /** Loads one database-filtered newest-first keyset page across one or every retained session. */
     @Query(
-        "SELECT * FROM traffic_exchanges WHERE (:sessionId IS NULL OR sessionId = :sessionId) " +
+        "SELECT traffic_exchanges.*, " +
+            "(SELECT COUNT(*) FROM traffic_exchanges AS retained_exchange " +
+            "WHERE retained_exchange.captureSequence <= traffic_exchanges.captureSequence) AS historySequence " +
+            "FROM traffic_exchanges WHERE (:sessionId IS NULL OR sessionId = :sessionId) " +
             "AND (:cursorSequence IS NULL OR captureSequence < :cursorSequence) " +
             "AND (:searchPattern IS NULL OR host LIKE :searchPattern ESCAPE '\\' " +
             "OR pathAndQuery LIKE :searchPattern ESCAPE '\\' " +
@@ -190,11 +222,14 @@ interface CanonicalCaptureDao {
         filterProtocols: Int,
         protocols: List<String>,
         limit: Int,
-    ): List<CanonicalExchangeEntity>
+    ): List<CanonicalExchangePageRow>
 
     /** Loads one database-filtered oldest-first keyset page across one or every retained session. */
     @Query(
-        "SELECT * FROM traffic_exchanges WHERE (:sessionId IS NULL OR sessionId = :sessionId) " +
+        "SELECT traffic_exchanges.*, " +
+            "(SELECT COUNT(*) FROM traffic_exchanges AS retained_exchange " +
+            "WHERE retained_exchange.captureSequence <= traffic_exchanges.captureSequence) AS historySequence " +
+            "FROM traffic_exchanges WHERE (:sessionId IS NULL OR sessionId = :sessionId) " +
             "AND (:cursorSequence IS NULL OR captureSequence > :cursorSequence) " +
             "AND (:searchPattern IS NULL OR host LIKE :searchPattern ESCAPE '\\' " +
             "OR pathAndQuery LIKE :searchPattern ESCAPE '\\' " +
@@ -219,7 +254,7 @@ interface CanonicalCaptureDao {
         filterProtocols: Int,
         protocols: List<String>,
         limit: Int,
-    ): List<CanonicalExchangeEntity>
+    ): List<CanonicalExchangePageRow>
 
     /** Attaches response metadata only when the exchange version advances and remains non-terminal. */
     @Query(

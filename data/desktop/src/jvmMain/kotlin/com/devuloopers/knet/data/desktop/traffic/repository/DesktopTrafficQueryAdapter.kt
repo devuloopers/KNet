@@ -4,6 +4,9 @@ import com.devuloopers.knet.application.contract.traffic.BodyChunk
 import com.devuloopers.knet.application.contract.traffic.BodyRange
 import com.devuloopers.knet.application.contract.traffic.BodyStore
 import com.devuloopers.knet.application.contract.traffic.TrafficGeneration
+import com.devuloopers.knet.application.contract.traffic.TrafficFacetCounts
+import com.devuloopers.knet.application.contract.traffic.TrafficFacetQuery
+import com.devuloopers.knet.application.contract.traffic.TrafficFacetReader
 import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePage
 import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePageCursor
 import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePageQuery
@@ -33,7 +36,7 @@ import kotlinx.coroutines.flow.updateAndGet
 class DesktopTrafficQueryAdapter(
     private val dao: CanonicalCaptureDao,
     private val bodyStore: BodyStore,
-) : TrafficQuery, TrafficSessionCatalog, ProtocolMessageQuery {
+) : TrafficQuery, TrafficFacetReader, TrafficSessionCatalog, ProtocolMessageQuery {
     private val generation = MutableStateFlow(0L)
 
     override val generations: Flow<TrafficGeneration> = dao.observeLatestSessionId()
@@ -54,6 +57,9 @@ class DesktopTrafficQueryAdapter(
 
     override suspend fun query(query: TrafficPageQuery): TrafficPage =
         adapter(query.sessionId).query(query)
+
+    override suspend fun queryFacets(query: TrafficFacetQuery): TrafficFacetCounts =
+        adapter(query.sessionId).queryFacets(query)
 
     override suspend fun getExchange(exchangeId: ExchangeId): HttpExchangeSnapshot? {
         val exchange = dao.getExchange(exchangeId.value) ?: return null

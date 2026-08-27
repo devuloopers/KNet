@@ -10,9 +10,10 @@ import com.devuloopers.knet.engine.proxy.mapper.HttpMapper
 import com.devuloopers.knet.engine.proxy.pipeline.PreparedProxyExchange
 import com.devuloopers.knet.engine.proxy.pipeline.ProxyChannelAttributes
 import com.devuloopers.knet.traffic.id.ExchangeId
-import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.HttpResponseSnapshot
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.body.MessageBodyRef
 import io.netty.channel.ChannelDuplexHandler
 import io.netty.channel.ChannelFutureListener
@@ -106,7 +107,10 @@ class KNetInterceptorHandler(
             when (decision) {
                 BreakpointDecision.Drop -> {
                     breakpointGate.releaseExchange(requestContext.exchangeId)
-                    cancelPreparedCapture(context, REQUEST_REJECTED_ERROR)
+                    cancelPreparedCapture(
+                        context,
+                        TrafficTerminationReason.Interception.BREAKPOINT_REQUEST_DROPPED,
+                    )
                     ReferenceCountUtil.release(msg)
                     rejectSelectedTransport(context)
                 }
@@ -216,13 +220,19 @@ class KNetInterceptorHandler(
     }
 
     override fun channelInactive(context: ChannelHandlerContext) {
-        cancelPreparedCapture(context, DOWNSTREAM_CANCELLED_ERROR)
+        cancelPreparedCapture(
+            context,
+            TrafficTerminationReason.Transport.DOWNSTREAM_CANCELLED_BEFORE_FORWARDING,
+        )
         cancelActiveWork()
         super.channelInactive(context)
     }
 
     override fun handlerRemoved(context: ChannelHandlerContext) {
-        cancelPreparedCapture(context, HANDLER_REMOVED_ERROR)
+        cancelPreparedCapture(
+            context,
+            TrafficTerminationReason.Interception.INTERCEPTOR_REMOVED_BEFORE_FORWARDING,
+        )
         cancelActiveWork()
         super.handlerRemoved(context)
     }
@@ -302,14 +312,16 @@ class KNetInterceptorHandler(
     }
 
     /** Cancels a capture that has not yet transferred to the forwarding handler. */
-    private fun cancelPreparedCapture(context: ChannelHandlerContext, errorCode: String) {
+    private fun cancelPreparedCapture(
+        context: ChannelHandlerContext,
+        reason: TrafficTerminationReason,
+    ) {
         val prepared = context.channel().attr(ProxyChannelAttributes.PREPARED_EXCHANGE).getAndSet(null) ?: return
         runCatching {
             prepared.capture?.terminate(
-                state = ExchangeState.CANCELLED,
+                outcome = ExchangeTerminalOutcome.Cancelled(reason),
                 timings = ExchangeTimings(),
                 occurredAtEpochMillis = Clock.System.now().toEpochMilliseconds(),
-                errorCode = errorCode,
             )
         }
     }
@@ -323,11 +335,6 @@ class KNetInterceptorHandler(
         scope.cancel()
     }
 
-    private companion object {
-        const val REQUEST_REJECTED_ERROR: String = "breakpoint_request_dropped"
-        const val DOWNSTREAM_CANCELLED_ERROR: String = "downstream_cancelled_before_forwarding"
-        const val HANDLER_REMOVED_ERROR: String = "interceptor_removed_before_forwarding"
-    }
 }
 
 private class BreakpointResponseRejectedException : java.io.IOException(

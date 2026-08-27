@@ -7,8 +7,10 @@ import com.devuloopers.knet.engine.proxy.capture.ProxyMessageCaptureMetadata
 import com.devuloopers.knet.engine.proxy.inspection.ProxyPayloadSlice
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.TrafficDirection
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.body.ContentEncoding
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import com.devuloopers.knet.traffic.model.http.Authority
@@ -59,7 +61,10 @@ class SseStreamInspectorTest {
         inspector.onDirectionEnd(TrafficDirection.SERVER_TO_CLIENT, 4L)
 
         assertEquals(ProtocolMessageState.FAILED, capture.messages.single().state)
-        assertEquals("sse_record_ended_without_blank_line", capture.messages.single().errorCode)
+        assertEquals(
+            "sse_record_ended_without_blank_line",
+            capture.messages.single().terminationReason?.code?.value,
+        )
     }
 
     @Test
@@ -91,7 +96,7 @@ class SseStreamInspectorTest {
 
         assertEquals(1, capture.messages.size)
         assertEquals(ProtocolMessageState.FAILED, capture.messages.single().state)
-        assertEquals("sse_content_encoding_unsupported", capture.messages.single().errorCode)
+        assertEquals("sse_content_encoding_unsupported", capture.messages.single().terminationReason?.code?.value)
     }
 
     private fun request(): RequestHead = RequestHead(
@@ -146,14 +151,13 @@ private class RecordingExchangeCapture : ProxyExchangeCapture {
         direction: TrafficDirection,
         observedBytes: Long,
         occurredAtEpochMillis: Long,
-        errorCode: String,
+        reason: TrafficTerminationReason,
     ) = Unit
     override fun observeResponse(response: ResponseHead, occurredAtEpochMillis: Long) = Unit
     override fun terminate(
-        state: ExchangeState,
+        outcome: ExchangeTerminalOutcome,
         timings: ExchangeTimings,
         occurredAtEpochMillis: Long,
-        errorCode: String?,
     ) = Unit
 }
 
@@ -163,7 +167,7 @@ private class RecordingMessageCapture(
     override val messageId = metadata.messageId
     private val chunks = mutableListOf<ByteArray>()
     var state: ProtocolMessageState = ProtocolMessageState.IN_PROGRESS
-    var errorCode: String? = null
+    var terminationReason: TrafficTerminationReason? = null
 
     override fun tryReservePayload(requestedBytes: Int): ProxyBodyReservation = object : ProxyBodyReservation {
         override val writableBytes: ByteArray = ByteArray(requestedBytes)
@@ -184,10 +188,10 @@ private class RecordingMessageCapture(
         observedBytes: Long,
         state: ProtocolMessageState,
         occurredAtEpochMillis: Long,
-        errorCode: String?,
+        reason: TrafficTerminationReason?,
     ) {
         this.state = state
-        this.errorCode = errorCode
+        this.terminationReason = reason
     }
 
     fun payload(): ByteArray = chunks.fold(ByteArray(0)) { accumulated, chunk -> accumulated + chunk }

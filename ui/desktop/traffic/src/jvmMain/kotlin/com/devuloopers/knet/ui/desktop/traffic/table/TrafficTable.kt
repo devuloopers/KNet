@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.domain.clientNetwork.decoder.BinaryCategory
 import com.devuloopers.knet.domain.clientNetwork.decoder.MediaTypeInspector
 import com.devuloopers.knet.domain.workspace.model.TrafficTableColumnWidths
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.ui.desktop.traffic.model.TrafficRowUiState
 import com.devuloopers.knet.ui.desktop.traffic.model.TrafficInterceptionUiState
 import com.devuloopers.knet.ui.core.components.table.KNetCell
@@ -423,14 +424,17 @@ private fun TableRowItem(
         }
     }
 
-    val isCompleted = item.formattedTime != "-"
+    val isCompleted = item.terminalOutcome != null || item.formattedTime != "-"
 
     val statusColor = when {
         item.status in 200..299 -> themeColors.semantic.success
         item.status in 300..399 -> themeColors.semantic.warning
         item.status in 400..599 -> themeColors.semantic.error
         item.status == 101 -> themeColors.semantic.info
-        item.statusText.equals("Dropped", ignoreCase = true) -> themeColors.semantic.error
+        item.terminalOutcome is ExchangeTerminalOutcome.Failed ||
+            item.terminalOutcome is ExchangeTerminalOutcome.Dropped -> themeColors.semantic.error
+        item.terminalOutcome is ExchangeTerminalOutcome.Cancelled -> themeColors.semantic.warning
+        item.terminalOutcome is ExchangeTerminalOutcome.Completed -> themeColors.semantic.success
         item.statusText.equals("Timed Out", ignoreCase = true) -> themeColors.textMuted
         isCompleted && item.status == 0 -> themeColors.semantic.error
         !isCompleted && item.status == 0 -> androidx.compose.ui.graphics.Color(0xFFFAB387)
@@ -590,9 +594,8 @@ private fun TableRowItem(
                 Text(
                     text = when {
                         item.status > 0 -> "${item.status}"
-                        item.statusText.equals("Dropped", ignoreCase = true) -> "Dropped"
-                        item.statusText.equals("Timed Out", ignoreCase = true) -> "Timed Out"
-                        isCompleted -> "ERR"
+                        item.terminalOutcome != null -> item.statusText
+                        isCompleted -> item.statusText.ifBlank { "ERR" }
                         else -> "In Progress"
                     },
                     style = typography.codeSmall.copy(color = statusColor, fontWeight = FontWeight.Medium),

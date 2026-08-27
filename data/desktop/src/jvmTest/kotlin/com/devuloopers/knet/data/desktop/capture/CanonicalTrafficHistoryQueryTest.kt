@@ -1,6 +1,7 @@
 package com.devuloopers.knet.data.desktop.capture
 
 import com.devuloopers.knet.application.contract.traffic.TrafficPageQuery
+import com.devuloopers.knet.application.contract.traffic.TrafficFacetQuery
 import com.devuloopers.knet.engine.session.FileBodyStore
 import com.devuloopers.knet.storage.capture.entity.CanonicalExchangeEntity
 import com.devuloopers.knet.storage.capture.entity.CaptureSessionEntity
@@ -55,32 +56,48 @@ class CanonicalTrafficHistoryQueryTest {
             val newestPage = query.query(TrafficPageQuery(limit = 1))
             assertEquals(2L, newestPage.totalCount)
             assertEquals(listOf(2L), newestPage.items.map { item -> item.captureSequence.value })
+            assertEquals(listOf(2L), newestPage.items.map { item -> item.historySequence.value })
             val olderPage = query.query(
                 TrafficPageQuery(limit = 1, cursor = assertNotNull(newestPage.nextCursor)),
             )
             assertEquals(2L, olderPage.totalCount)
             assertEquals(listOf(1L), olderPage.items.map { item -> item.captureSequence.value })
+            assertEquals(listOf(1L), olderPage.items.map { item -> item.historySequence.value })
 
             assertEquals(
                 listOf("new", "old"),
                 query.query(TrafficPageQuery(limit = 20)).items.map { item -> item.exchange.id.value },
             )
-            assertEquals(
-                listOf("old"),
-                query.query(TrafficPageQuery(limit = 20, searchContains = "find-me"))
-                    .items
-                    .map { item -> item.exchange.id.value },
+            val filteredOld = query.query(TrafficPageQuery(limit = 20, searchContains = "find-me"))
+            assertEquals(listOf("old"), filteredOld.items.map { item -> item.exchange.id.value })
+            assertEquals(listOf(1L), filteredOld.items.map { item -> item.historySequence.value })
+
+            val filteredNew = query.query(
+                TrafficPageQuery(
+                    limit = 20,
+                    schemes = setOf(HttpScheme.fromToken("https")),
+                    protocols = setOf(ApplicationProtocol.fromToken("HTTP/2")),
+                ),
             )
-            assertEquals(
-                listOf("new"),
-                query.query(
-                    TrafficPageQuery(
-                        limit = 20,
-                        schemes = setOf(HttpScheme.fromToken("https")),
-                        protocols = setOf(ApplicationProtocol.fromToken("HTTP/2")),
-                    ),
-                ).items.map { item -> item.exchange.id.value },
+            assertEquals(listOf("new"), filteredNew.items.map { item -> item.exchange.id.value })
+            assertEquals(listOf(2L), filteredNew.items.map { item -> item.historySequence.value })
+
+            val facets = query.queryFacets(TrafficFacetQuery())
+            assertEquals(2L, facets.totalCount)
+            assertEquals(1L, facets.httpCount)
+            assertEquals(1L, facets.httpsCount)
+
+            val searchedFacets = query.queryFacets(TrafficFacetQuery(searchContains = "find-me"))
+            assertEquals(1L, searchedFacets.totalCount)
+            assertEquals(1L, searchedFacets.httpCount)
+            assertEquals(0L, searchedFacets.httpsCount)
+
+            val http2Facets = query.queryFacets(
+                TrafficFacetQuery(protocols = setOf(ApplicationProtocol.fromToken("HTTP/2"))),
             )
+            assertEquals(1L, http2Facets.totalCount)
+            assertEquals(0L, http2Facets.httpCount)
+            assertEquals(1L, http2Facets.httpsCount)
         } finally {
             database.close()
             root.deleteRecursively()

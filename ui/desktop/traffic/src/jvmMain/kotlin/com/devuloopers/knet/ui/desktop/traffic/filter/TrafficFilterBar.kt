@@ -20,7 +20,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.desktop.traffic.model.MethodFilter
-import com.devuloopers.knet.ui.desktop.traffic.model.ProtocolFilter
+import com.devuloopers.knet.ui.desktop.traffic.model.HttpVersionFilter
+import com.devuloopers.knet.ui.desktop.traffic.model.SchemeFilter
 import com.devuloopers.knet.ui.desktop.traffic.model.StatusFilter
 import com.devuloopers.knet.ui.core.components.divider.VerticalDivider
 import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdown
@@ -40,13 +41,13 @@ import com.devuloopers.knet.ui.desktop.traffic.model.TrafficColumn
  */
 data class TrafficFilterBarState(
     val searchQuery: String = "",
-    val selectedProtocol: ProtocolFilter = ProtocolFilter.ALL,
+    val selectedScheme: SchemeFilter = SchemeFilter.ALL,
+    val selectedHttpVersion: HttpVersionFilter = HttpVersionFilter.ALL,
     val selectedMethod: MethodFilter = MethodFilter.ALL,
     val selectedStatus: StatusFilter = StatusFilter.ALL,
     val totalCount: Long = 0L,
-    val httpCount: Int = 0,
-    val httpsCount: Int = 0,
-    val http2Count: Int = 0,
+    val httpCount: Long = 0L,
+    val httpsCount: Long = 0L,
     val columnVisibility: ColumnVisibilityState = ColumnVisibilityState()
 )
 
@@ -54,7 +55,8 @@ data class TrafficFilterBarState(
  * Interaction callbacks for [TrafficFilterBar].
  *
  * @property onSearchChange Updates the retained-traffic search query.
- * @property onProtocolSelected Selects the scheme or application-protocol filter.
+ * @property onSchemeSelected Selects the request scheme independently of HTTP version.
+ * @property onHttpVersionSelected Selects the negotiated HTTP version independently of scheme.
  * @property onMethodSelected Selects the canonical HTTP method filter.
  * @property onStatusSelected Selects the HTTP status-family filter.
  * @property onToggleColumn Toggles one optional typed Traffic column.
@@ -62,7 +64,8 @@ data class TrafficFilterBarState(
  */
 data class TrafficFilterBarActions(
     val onSearchChange: (String) -> Unit = {},
-    val onProtocolSelected: (ProtocolFilter) -> Unit = {},
+    val onSchemeSelected: (SchemeFilter) -> Unit = {},
+    val onHttpVersionSelected: (HttpVersionFilter) -> Unit = {},
     val onMethodSelected: (MethodFilter) -> Unit = {},
     val onStatusSelected: (StatusFilter) -> Unit = {},
     val onToggleColumn: (TrafficColumn) -> Unit = {},
@@ -118,40 +121,31 @@ fun TrafficFilterBar(
             FilterCountChip(
                 label = "All",
                 count = state.totalCount,
-                countColor = if (state.selectedProtocol == ProtocolFilter.ALL) {
+                countColor = if (state.selectedScheme == SchemeFilter.ALL) {
                     themeColors.accent
                 } else {
                     themeColors.textSecondary
                 },
-                isSelected = state.selectedProtocol == ProtocolFilter.ALL,
-                onClick = { actions.onProtocolSelected(ProtocolFilter.ALL) }
+                isSelected = state.selectedScheme == SchemeFilter.ALL,
+                onClick = { actions.onSchemeSelected(SchemeFilter.ALL) }
             )
 
             // "HTTP" Chip
             FilterCountChip(
                 label = "HTTP",
-                count = state.httpCount.toLong(),
+                count = state.httpCount,
                 countColor = themeColors.semantic.success,
-                isSelected = state.selectedProtocol == ProtocolFilter.HTTP,
-                onClick = { actions.onProtocolSelected(ProtocolFilter.HTTP) }
+                isSelected = state.selectedScheme == SchemeFilter.HTTP,
+                onClick = { actions.onSchemeSelected(SchemeFilter.HTTP) }
             )
 
             // "HTTPS" Chip
             FilterCountChip(
                 label = "HTTPS",
-                count = state.httpsCount.toLong(),
+                count = state.httpsCount,
                 countColor = themeColors.semantic.info,
-                isSelected = state.selectedProtocol == ProtocolFilter.HTTPS,
-                onClick = { actions.onProtocolSelected(ProtocolFilter.HTTPS) }
-            )
-
-            // HTTP/2 is an application-protocol filter and intentionally separate from HTTPS.
-            FilterCountChip(
-                label = "HTTP/2",
-                count = state.http2Count.toLong(),
-                countColor = themeColors.semantic.warning,
-                isSelected = state.selectedProtocol == ProtocolFilter.HTTP_2,
-                onClick = { actions.onProtocolSelected(ProtocolFilter.HTTP_2) }
+                isSelected = state.selectedScheme == SchemeFilter.HTTPS,
+                onClick = { actions.onSchemeSelected(SchemeFilter.HTTPS) }
             )
 
             // Vertical Divider
@@ -181,12 +175,12 @@ fun TrafficFilterBar(
                 itemText = StatusFilter::label
             )
             KNetDropdown(
-                placeholder = "Protocol",
-                selectedItem = state.selectedProtocol,
-                items = ProtocolFilter.entries,
-                onItemSelected = actions.onProtocolSelected,
+                placeholder = "Version",
+                selectedItem = state.selectedHttpVersion,
+                items = HttpVersionFilter.entries,
+                onItemSelected = actions.onHttpVersionSelected,
                 size = KNetDropdownSize.Compact,
-                itemText = ProtocolFilter::label
+                itemText = HttpVersionFilter::label
             )
         }
 

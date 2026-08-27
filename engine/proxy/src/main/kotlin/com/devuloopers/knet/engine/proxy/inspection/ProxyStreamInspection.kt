@@ -2,7 +2,7 @@ package com.devuloopers.knet.engine.proxy.inspection
 
 import com.devuloopers.knet.engine.proxy.capture.ProxyExchangeCapture
 import com.devuloopers.knet.traffic.id.StreamId
-import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.TrafficDirection
 import com.devuloopers.knet.traffic.model.http.HeaderField
 import com.devuloopers.knet.traffic.model.http.RequestHead
@@ -77,8 +77,7 @@ interface ProxyStreamInspector {
 
     /** Observes the parent exchange terminal state. */
     fun onExchangeTerminated(
-        state: ExchangeState,
+        outcome: ExchangeTerminalOutcome,
         occurredAtEpochMillis: Long,
-        errorCode: String?,
     ) = Unit
 }

@@ -9,8 +9,11 @@ import com.devuloopers.knet.engine.proxy.inspection.ProxyPayloadSlice
 import com.devuloopers.knet.traffic.id.ProtocolMessageId
 import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.TrafficDirection
+import com.devuloopers.knet.traffic.model.TrafficTerminationCode
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.http.ResponseHead
 import com.devuloopers.knet.traffic.model.message.MessageProtocolId
 import com.devuloopers.knet.traffic.model.message.ProtocolMessageKind
@@ -77,10 +80,9 @@ private class WebSocketDuplexInspector(
         directionState(direction)?.accept(owned, occurredAtEpochMillis)
     }
 
-    override fun onTerminated(state: ExchangeState, occurredAtEpochMillis: Long, errorCode: String?) {
-        val terminalCode = errorCode ?: PARENT_TERMINATED
-        clientMessages?.terminate(state, occurredAtEpochMillis, terminalCode)
-        serverMessages?.terminate(state, occurredAtEpochMillis, terminalCode)
+    override fun onTerminated(outcome: ExchangeTerminalOutcome, occurredAtEpochMillis: Long) {
+        clientMessages?.terminate(outcome, occurredAtEpochMillis)
+        serverMessages?.terminate(outcome, occurredAtEpochMillis)
     }
 
     private fun directionState(direction: TrafficDirection): WebSocketCaptureDirection? = when (direction) {
@@ -90,7 +92,6 @@ private class WebSocketDuplexInspector(
 
     private companion object {
         const val EXTENSIONS: String = "sec-websocket-extensions"
-        const val PARENT_TERMINATED: String = "websocket_parent_exchange_terminated"
         const val PER_MESSAGE_DEFLATE: String = "permessage-deflate"
     }
 }
@@ -118,22 +119,27 @@ private class WebSocketCaptureDirection(
     fun accept(input: ByteArray, occurredAtEpochMillis: Long) {
         if (failed) return
         when (val result = decoder.accept(input)) {
-            is WebSocketDecodeResult.Failure -> failActive(occurredAtEpochMillis, result.errorCode)
+            is WebSocketDecodeResult.Failure ->
+                failActive(occurredAtEpochMillis, webSocketCaptureTermination(result.errorCode))
             is WebSocketDecodeResult.Frames -> result.values.forEach { frame ->
                 if (!failed) acceptFrame(frame, occurredAtEpochMillis)
             }
         }
     }
 
-    fun terminate(state: ExchangeState, occurredAtEpochMillis: Long, errorCode: String) {
+    fun terminate(
+        outcome: ExchangeTerminalOutcome,
+        occurredAtEpochMillis: Long,
+    ) {
         if (failed) return
-        val messageState = when (state) {
+        val messageState = when (outcome.state) {
             ExchangeState.COMPLETED -> ProtocolMessageState.TRUNCATED
             ExchangeState.CANCELLED -> ProtocolMessageState.CANCELLED
             ExchangeState.FAILED -> ProtocolMessageState.FAILED
             else -> ProtocolMessageState.CANCELLED
         }
-        activeCapture?.terminate(activeObservedBytes, messageState, occurredAtEpochMillis, errorCode)
+        val reason = outcome.reason ?: webSocketCaptureTermination(WEBSOCKET_PARENT_TERMINATED)
+        activeCapture?.terminate(activeObservedBytes, messageState, occurredAtEpochMillis, reason)
         activeCapture = null
         decoder.clear()
         failed = true
@@ -147,7 +153,10 @@ private class WebSocketCaptureDirection(
         when (frame.opcode) {
             WebSocketOpcode.TEXT, WebSocketOpcode.BINARY -> {
                 if (activeKind != null) {
-                    failActive(occurredAtEpochMillis, UNEXPECTED_DATA_FRAME)
+                    failActive(
+                        occurredAtEpochMillis,
+                        webSocketCaptureTermination(UNEXPECTED_DATA_FRAME),
+                    )
                     return
                 }
                 activeKind = frame.opcode.messageKind()
@@ -163,7 +172,10 @@ private class WebSocketCaptureDirection(
             }
             WebSocketOpcode.CONTINUATION -> {
                 if (activeKind == null) {
-                    failActive(occurredAtEpochMillis, UNEXPECTED_CONTINUATION)
+                    failActive(
+                        occurredAtEpochMillis,
+                        webSocketCaptureTermination(UNEXPECTED_CONTINUATION),
+                    )
                     return
                 }
                 append(frame.payload, occurredAtEpochMillis)
@@ -216,12 +228,12 @@ private class WebSocketCaptureDirection(
         activeObservedBytes = 0L
     }
 
-    private fun failActive(occurredAtEpochMillis: Long, errorCode: String) {
+    private fun failActive(occurredAtEpochMillis: Long, reason: TrafficTerminationReason) {
         activeCapture?.terminate(
             activeObservedBytes,
             ProtocolMessageState.FAILED,
             occurredAtEpochMillis,
-            errorCode,
+            reason,
         )
         activeCapture = null
         activeKind = null
@@ -250,6 +262,14 @@ private class WebSocketCaptureDirection(
         const val UNEXPECTED_DATA_FRAME: String = "websocket_unexpected_data_frame"
     }
 }
+
+private fun webSocketCaptureTermination(code: String): TrafficTerminationReason =
+    TrafficTerminationReason.Protocol(
+        protocol = MessageProtocolId.WEBSOCKET,
+        code = TrafficTerminationCode(code),
+    )
+
+private const val WEBSOCKET_PARENT_TERMINATED: String = "websocket_parent_exchange_terminated"
 
 /** Maps one WebSocket opcode to the stable common child-message kind. */
 internal fun WebSocketOpcode.messageKind(): ProtocolMessageKind = when (this) {

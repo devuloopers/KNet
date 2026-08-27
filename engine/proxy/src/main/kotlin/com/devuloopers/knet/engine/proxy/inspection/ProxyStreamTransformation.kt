@@ -4,6 +4,7 @@ import com.devuloopers.knet.engine.proxy.capture.ProxyExchangeCapture
 import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.TrafficDirection
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.http.HeaderField
 import com.devuloopers.knet.traffic.model.http.ResponseHead
 import java.util.concurrent.CompletionStage
@@ -42,7 +43,7 @@ interface ProxyStreamTransformer {
     ): CompletionStage<ProxyStreamTransformResult>
 
     /** Releases held bytes and pending decisions after stream termination. */
-    fun cancel(errorCode: String?) = Unit
+    fun cancel(reason: TrafficTerminationReason?) = Unit
 }
 
 /** Result of transforming one ordered transport payload input. */
@@ -66,9 +67,5 @@ sealed interface ProxyStreamTransformResult {
     }
 
     /** Cancels only the current child stream/exchange. */
-    data class DropStream(val errorCode: String) : ProxyStreamTransformResult {
-        init {
-            require(errorCode.isNotBlank()) { "Stream drop error code must not be blank." }
-        }
-    }
+    data class DropStream(val reason: TrafficTerminationReason) : ProxyStreamTransformResult
 }

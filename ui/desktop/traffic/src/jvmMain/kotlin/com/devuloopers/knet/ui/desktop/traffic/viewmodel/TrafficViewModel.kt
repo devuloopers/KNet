@@ -14,6 +14,7 @@ import com.devuloopers.knet.application.usecase.traffic.LoadProtocolMessageBodyR
 import com.devuloopers.knet.application.usecase.traffic.PrepareCapturedNetworkRequestResult
 import com.devuloopers.knet.application.usecase.traffic.PrepareCapturedNetworkRequestUseCase
 import com.devuloopers.knet.application.usecase.traffic.QueryTrafficPageUseCase
+import com.devuloopers.knet.application.usecase.traffic.QueryTrafficFacetsUseCase
 import com.devuloopers.knet.application.usecase.traffic.TrafficBodyPreview
 import com.devuloopers.knet.application.usecase.traffic.PauseTrafficCaptureUseCase
 import com.devuloopers.knet.application.usecase.traffic.ResumeTrafficCaptureUseCase
@@ -26,6 +27,7 @@ import com.devuloopers.knet.application.contract.breakpoint.PendingBreakpoint
 import com.devuloopers.knet.application.contract.breakpoint.PendingProtocolMessageBreakpoint
 import com.devuloopers.knet.application.usecase.inspection.ObserveInspectionAnnotationsUseCase
 import com.devuloopers.knet.application.contract.traffic.TrafficPageQuery
+import com.devuloopers.knet.application.contract.traffic.TrafficFacetQuery
 import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePageQuery
 import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
 import com.devuloopers.knet.application.contract.proxy.ProxyStopReason
@@ -69,6 +71,7 @@ import kotlinx.coroutines.sync.withLock
 class TrafficViewModel(
     private val observeLatestTrafficSessionUseCase: ObserveLatestTrafficSessionUseCase,
     private val queryTrafficPageUseCase: QueryTrafficPageUseCase,
+    private val queryTrafficFacetsUseCase: QueryTrafficFacetsUseCase,
     private val observeTrafficGenerationsUseCase: ObserveTrafficGenerationsUseCase,
     private val observeProtocolMessageChangesUseCase: ObserveProtocolMessageChangesUseCase,
     private val queryProtocolMessagesUseCase: QueryProtocolMessagesUseCase,
@@ -570,8 +573,14 @@ class TrafficViewModel(
                 scheduleFilteredPageRefresh()
             }
 
-            is TrafficIntent.FilterByProtocol -> {
-                _uiState.update { current -> current.copy(selectedProtocolFilter = intent.protocol) }
+            is TrafficIntent.FilterByScheme -> {
+                _uiState.update { current -> current.copy(selectedSchemeFilter = intent.scheme) }
+                publishTrafficProjection()
+                scheduleFilteredPageRefresh()
+            }
+
+            is TrafficIntent.FilterByHttpVersion -> {
+                _uiState.update { current -> current.copy(selectedHttpVersionFilter = intent.version) }
                 publishTrafficProjection()
                 scheduleFilteredPageRefresh()
             }
@@ -835,7 +844,8 @@ class TrafficViewModel(
         val ordinarilyFiltered = applyFilters(
             transactions = rows,
             query = current.searchQuery,
-            protocol = current.selectedProtocolFilter,
+            scheme = current.selectedSchemeFilter,
+            httpVersion = current.selectedHttpVersionFilter,
             method = current.selectedMethodFilter,
             status = current.selectedStatusFilter,
         )
@@ -883,20 +893,34 @@ class TrafficViewModel(
                         searchContains = before.searchQuery.trim().takeIf { it.isNotBlank() },
                         methods = before.selectedMethodFilter.toCanonicalMethods(),
                         statuses = before.selectedStatusFilter.toCanonicalStatuses(),
-                        schemes = before.selectedProtocolFilter.toCanonicalSchemes(),
-                        protocols = before.selectedProtocolFilter.toCanonicalProtocols(),
+                        schemes = before.selectedSchemeFilter.toCanonicalSchemes(),
+                        protocols = before.selectedHttpVersionFilter.toCanonicalProtocols(),
                     ),
                 )
+                val facetCounts = if (mode == TrafficPageLoadMode.LOAD_OLDER) {
+                    null
+                } else {
+                    queryTrafficFacetsUseCase.execute(
+                        TrafficFacetQuery(
+                            sessionId = null,
+                            searchContains = before.searchQuery.trim().takeIf { it.isNotBlank() },
+                            methods = before.selectedMethodFilter.toCanonicalMethods(),
+                            statuses = before.selectedStatusFilter.toCanonicalStatuses(),
+                            protocols = before.selectedHttpVersionFilter.toCanonicalProtocols(),
+                        ),
+                    )
+                }
                 val latestState = _uiState.value
                 if (latestState.sessionId != sessionId) return
                 val refreshedRows = page.items.map { item ->
                     item.exchange
-                        .toTrafficRowUiState(item.captureSequence.value)
+                        .toTrafficRowUiState(item.historySequence.value)
                         .withDescriptor(describeRequestUseCase.execute(item.exchange.request))
                 }
                 val sortedRows = mergePageRows(mode, refreshedRows)
                 val filtersStillMatch = latestState.searchQuery == before.searchQuery &&
-                    latestState.selectedProtocolFilter == before.selectedProtocolFilter &&
+                    latestState.selectedSchemeFilter == before.selectedSchemeFilter &&
+                    latestState.selectedHttpVersionFilter == before.selectedHttpVersionFilter &&
                     latestState.selectedMethodFilter == before.selectedMethodFilter &&
                     latestState.selectedStatusFilter == before.selectedStatusFilter
                 if (!filtersStillMatch) return
@@ -915,6 +939,7 @@ class TrafficViewModel(
                             TrafficPageLoadMode.LOAD_OLDER -> current.totalAvailableCount
                         },
                         pageGeneration = maxOf(current.pageGeneration, page.generation),
+                        facetCounts = facetCounts ?: current.facetCounts,
                     )
                 }
                 publishTrafficProjection()
@@ -953,7 +978,8 @@ class TrafficViewModel(
     private fun applyFilters(
         transactions: List<TrafficRowUiState>,
         query: String,
-        protocol: ProtocolFilter,
+        scheme: SchemeFilter,
+        httpVersion: HttpVersionFilter,
         method: MethodFilter,
         status: StatusFilter
     ): List<TrafficRowUiState> {
@@ -965,7 +991,8 @@ class TrafficViewModel(
                     item.displayMethod.contains(query, ignoreCase = true) ||
                     item.status.toString().contains(query)
 
-            val matchesProtocol = protocol.matches(item)
+            val matchesScheme = scheme.matches(item)
+            val matchesHttpVersion = httpVersion.matches(item)
 
             val matchesMethod = when (method) {
                 MethodFilter.ALL -> true
@@ -977,7 +1004,7 @@ class TrafficViewModel(
                 else -> status.range?.contains(item.status) ?: true
             }
 
-            matchesQuery && matchesProtocol && matchesMethod && matchesStatus
+            matchesQuery && matchesScheme && matchesHttpVersion && matchesMethod && matchesStatus
         }
     }
 
@@ -1119,7 +1146,8 @@ class TrafficViewModel(
             captureState = CaptureState.STOPPED,
             engineState = ProxyRuntimeState.Stopped,
             searchQuery = "",
-            selectedProtocolFilter = ProtocolFilter.ALL,
+            selectedSchemeFilter = SchemeFilter.ALL,
+            selectedHttpVersionFilter = HttpVersionFilter.ALL,
             selectedMethodFilter = MethodFilter.ALL,
             selectedStatusFilter = StatusFilter.ALL,
             autoScroll = true,
@@ -1168,28 +1196,34 @@ private fun MethodFilter.toCanonicalMethods(): Set<CanonicalHttpMethod> = when (
 private fun StatusFilter.toCanonicalStatuses(): Set<CanonicalHttpStatus> =
     range?.map(::CanonicalHttpStatus)?.toSet().orEmpty()
 
-private fun ProtocolFilter.toCanonicalSchemes(): Set<HttpScheme> = when (this) {
-    ProtocolFilter.HTTP -> setOf(HttpScheme.Standard(StandardHttpScheme.HTTP))
-    ProtocolFilter.HTTPS -> setOf(HttpScheme.Standard(StandardHttpScheme.HTTPS))
-    ProtocolFilter.ALL,
-    ProtocolFilter.HTTP_2,
-    ProtocolFilter.HTTP_3 -> emptySet()
+private fun SchemeFilter.toCanonicalSchemes(): Set<HttpScheme> = when (this) {
+    SchemeFilter.HTTP -> setOf(HttpScheme.Standard(StandardHttpScheme.HTTP))
+    SchemeFilter.HTTPS -> setOf(HttpScheme.Standard(StandardHttpScheme.HTTPS))
+    SchemeFilter.ALL -> emptySet()
 }
 
-private fun ProtocolFilter.toCanonicalProtocols(): Set<ApplicationProtocol> = when (this) {
-    ProtocolFilter.HTTP_2 -> setOf(ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_2))
-    ProtocolFilter.HTTP_3 -> setOf(ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_3))
-    ProtocolFilter.ALL,
-    ProtocolFilter.HTTP,
-    ProtocolFilter.HTTPS -> emptySet()
+private fun HttpVersionFilter.toCanonicalProtocols(): Set<ApplicationProtocol> = when (this) {
+    HttpVersionFilter.HTTP_1_0 -> setOf(ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_1_0))
+    HttpVersionFilter.HTTP_1_1 -> setOf(ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_1_1))
+    HttpVersionFilter.HTTP_2 -> setOf(ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_2))
+    HttpVersionFilter.HTTP_3 -> setOf(ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_3))
+    HttpVersionFilter.ALL -> emptySet()
 }
 
-private fun ProtocolFilter.matches(row: TrafficRowUiState): Boolean = when (this) {
-    ProtocolFilter.ALL -> true
-    ProtocolFilter.HTTP -> row.scheme == HttpScheme.Standard(StandardHttpScheme.HTTP)
-    ProtocolFilter.HTTPS -> row.scheme == HttpScheme.Standard(StandardHttpScheme.HTTPS)
-    ProtocolFilter.HTTP_2 -> row.clientProtocol == ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_2) ||
+private fun SchemeFilter.matches(row: TrafficRowUiState): Boolean = when (this) {
+    SchemeFilter.ALL -> true
+    SchemeFilter.HTTP -> row.scheme == HttpScheme.Standard(StandardHttpScheme.HTTP)
+    SchemeFilter.HTTPS -> row.scheme == HttpScheme.Standard(StandardHttpScheme.HTTPS)
+}
+
+private fun HttpVersionFilter.matches(row: TrafficRowUiState): Boolean = when (this) {
+    HttpVersionFilter.ALL -> true
+    HttpVersionFilter.HTTP_1_0 -> row.clientProtocol == ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_1_0) ||
+        row.upstreamProtocol == ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_1_0)
+    HttpVersionFilter.HTTP_1_1 -> row.clientProtocol == ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_1_1) ||
+        row.upstreamProtocol == ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_1_1)
+    HttpVersionFilter.HTTP_2 -> row.clientProtocol == ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_2) ||
         row.upstreamProtocol == ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_2)
-    ProtocolFilter.HTTP_3 -> row.clientProtocol == ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_3) ||
+    HttpVersionFilter.HTTP_3 -> row.clientProtocol == ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_3) ||
         row.upstreamProtocol == ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_3)
 }

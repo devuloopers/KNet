@@ -51,7 +51,7 @@ fun OverviewViewPanel(
         )
 
         // 2. Status & Network Metadata Grid
-        val isCompleted = spec.durationMs.isNotBlank() && spec.durationMs != "-"
+        val isCompleted = spec.isTerminal || (spec.durationMs.isNotBlank() && spec.durationMs != "-")
         val isError = isCompleted && (spec.statusCode == 0 || spec.statusCode in 400..599)
 
         val statusValue = when {

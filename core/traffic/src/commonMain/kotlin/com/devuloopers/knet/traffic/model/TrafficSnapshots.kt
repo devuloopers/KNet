@@ -111,6 +111,7 @@ public data class HttpResponseSnapshot(
  * @property response Canonical response snapshot once observed.
  * @property origin Feature or client that initiated the captured exchange.
  * @property state Monotonic exchange lifecycle state.
+ * @property terminalOutcome Typed terminal result when [state] is terminal.
  * @property timings Observed exchange timing values.
  * @property startedAtEpochMillis Wall-clock start time used for display and persistence ordering.
  */
@@ -122,10 +123,17 @@ public data class HttpExchangeSnapshot(
     public val response: HttpResponseSnapshot? = null,
     public val origin: TrafficOrigin = TrafficOrigin.ProxyClient,
     public val state: ExchangeState,
+    public val terminalOutcome: ExchangeTerminalOutcome? = ExchangeTerminalOutcome.fromPersisted(state, null),
     public val timings: ExchangeTimings = ExchangeTimings(),
     public val startedAtEpochMillis: Long,
 ) {
     init {
         require(startedAtEpochMillis >= 0L) { "Exchange start timestamp must not be negative." }
+        require(state.isTerminal == (terminalOutcome != null)) {
+            "Only terminal exchange states may carry a terminal outcome."
+        }
+        require(terminalOutcome == null || terminalOutcome.state == state) {
+            "Exchange terminal outcome must match its lifecycle state."
+        }
     }
 }

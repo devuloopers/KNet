@@ -224,7 +224,7 @@ private fun ProtocolMessageMetadata(
         if (truncated) {
             Text("Preview truncated", style = typography.codeSmall.copy(color = colors.semantic.warning))
         }
-        message.errorCode?.let { error ->
+        message.terminationReason?.code?.value?.let { error ->
             Text(
                 text = error,
                 modifier = Modifier.weight(1f),

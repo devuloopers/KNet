@@ -35,8 +35,9 @@ import com.devuloopers.knet.engine.proxy.inspection.ProxyDuplexTransformer
 import com.devuloopers.knet.engine.proxy.inspection.ProxyDuplexTransformerFactory
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.id.StreamId
-import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.TrafficDirection
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.body.ContentEncoding
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
@@ -119,13 +120,6 @@ internal class KNetStreamingProxyHandler(
     companion object {
         private const val MAX_PIPELINED_REQUESTS: Int = 16
         private const val MAX_ALREADY_DECODED_PIPELINE_BYTES: Long = 1L * 1024L * 1024L
-        private const val UPSTREAM_LIMIT_ERROR: String = "upstream_connection_limit"
-        private const val TLS_HANDSHAKE_ERROR: String = "upstream_tls_handshake_failed"
-        private const val UPSTREAM_CONNECT_ERROR: String = "upstream_connect_failed"
-        private const val UPSTREAM_WRITE_ERROR: String = "upstream_request_write_failed"
-        private const val DOWNSTREAM_CANCELLED: String = "downstream_cancelled"
-        private const val TRANSFORM_ERROR: String = "protocol_stream_transform_failed"
-
     }
 
     private val pendingObjects = ArrayDeque<HttpObject>()
@@ -384,8 +378,8 @@ internal class KNetStreamingProxyHandler(
                         context = context,
                         active = active,
                         status = HttpResponseStatus.BAD_GATEWAY,
-                        errorCode = (result as? ProxyStreamTransformResult.DropStream)?.errorCode
-                            ?: TRANSFORM_ERROR,
+                        reason = (result as? ProxyStreamTransformResult.DropStream)?.reason
+                            ?: TrafficTerminationReason.Interception.PROTOCOL_STREAM_TRANSFORM_FAILED,
                         causeMessage = failure?.message,
                     )
                     return@execute
@@ -493,7 +487,7 @@ internal class KNetStreamingProxyHandler(
                         context = context,
                         active = active,
                         status = HttpResponseStatus.BAD_GATEWAY,
-                        errorCode = UPSTREAM_WRITE_ERROR,
+                        reason = TrafficTerminationReason.Transport.UPSTREAM_REQUEST_WRITE_FAILED,
                         causeMessage = writeFuture.cause()?.message,
                     )
                     return@execute
@@ -587,7 +581,7 @@ internal class KNetStreamingProxyHandler(
                         context = context,
                         active = active,
                         status = HttpResponseStatus.BAD_GATEWAY,
-                        errorCode = UPSTREAM_CONNECT_ERROR,
+                        reason = TrafficTerminationReason.Transport.UPSTREAM_CONNECT_FAILED,
                         causeMessage = cause?.message,
                     )
                 }
@@ -608,7 +602,7 @@ internal class KNetStreamingProxyHandler(
                 context,
                 active,
                 HttpResponseStatus.SERVICE_UNAVAILABLE,
-                UPSTREAM_LIMIT_ERROR,
+                TrafficTerminationReason.Transport.UPSTREAM_CONNECTION_LIMIT,
             )
             return
         }
@@ -643,7 +637,7 @@ internal class KNetStreamingProxyHandler(
                         context = context,
                         active = active,
                         status = HttpResponseStatus.BAD_GATEWAY,
-                        errorCode = UPSTREAM_CONNECT_ERROR,
+                        reason = TrafficTerminationReason.Transport.UPSTREAM_CONNECT_FAILED,
                         causeMessage = future.cause()?.message,
                     )
                 }
@@ -683,7 +677,7 @@ internal class KNetStreamingProxyHandler(
                             context = downstreamContext,
                             active = active,
                             status = HttpResponseStatus.BAD_GATEWAY,
-                            errorCode = TLS_HANDSHAKE_ERROR,
+                            reason = TrafficTerminationReason.Transport.UPSTREAM_TLS_HANDSHAKE_FAILED,
                             causeMessage = handshake.cause()?.message,
                         )
                     }
@@ -796,13 +790,12 @@ internal class KNetStreamingProxyHandler(
         val lifecycle = DuplexRelayLifecycle(
             inspectors = active.duplexInspectors,
             transformer = active.duplexTransformer,
-        ) { state, terminatedAt, errorCode ->
+        ) { outcome, terminatedAt ->
             if (active.exchangeCompleted.compareAndSet(false, true)) {
                 active.capture?.terminate(
-                    state = state,
+                    outcome = outcome,
                     timings = active.timings.getTimings(),
                     occurredAtEpochMillis = terminatedAt,
-                    errorCode = errorCode,
                 )
             }
         }
@@ -1106,13 +1099,13 @@ internal class KNetStreamingProxyHandler(
         context: ChannelHandlerContext,
         active: ActiveStreamingRequest,
         status: HttpResponseStatus,
-        errorCode: String,
+        reason: TrafficTerminationReason,
         causeMessage: String? = null,
     ) {
         if (activeRequest !== active || !active.exchangeCompleted.compareAndSet(false, true)) return
         activeRequest = null
         active.upstreamChannel?.close()
-        active.streamTransformer?.cancel(errorCode)
+        active.streamTransformer?.cancel(reason)
         releaseBodyQueue(active)
         active.transformQueue.clear()
         if (!active.requestEndReceived) {
@@ -1120,7 +1113,7 @@ internal class KNetStreamingProxyHandler(
                 direction = TrafficDirection.CLIENT_TO_SERVER,
                 observedBytes = active.observedRequestBytes,
                 occurredAtEpochMillis = Clock.System.now().toEpochMilliseconds(),
-                errorCode = errorCode,
+                reason = reason,
             )
         }
 
@@ -1138,14 +1131,13 @@ internal class KNetStreamingProxyHandler(
         val now = Clock.System.now().toEpochMilliseconds()
         active.capture?.observeResponse(HttpMapper.mapResponseHead(response), now)
         active.capture?.terminate(
-            state = ExchangeState.FAILED,
+            outcome = ExchangeTerminalOutcome.Failed(reason),
             timings = active.timings.getTimings(),
             occurredAtEpochMillis = now,
-            errorCode = errorCode,
         )
         active.streamInspectors.forEach { inspector ->
             runCatching {
-                inspector.onExchangeTerminated(ExchangeState.FAILED, now, errorCode)
+                inspector.onExchangeTerminated(ExchangeTerminalOutcome.Failed(reason), now)
             }
         }
         context.writeAndFlush(response).addListener { context.close() }
@@ -1169,27 +1161,26 @@ internal class KNetStreamingProxyHandler(
         activeRequest?.let { active ->
             releaseBodyQueue(active)
             active.transformQueue.clear()
-            active.streamTransformer?.cancel(DOWNSTREAM_CANCELLED)
+            val reason = TrafficTerminationReason.Transport.DOWNSTREAM_CANCELLED
+            active.streamTransformer?.cancel(reason)
             active.upstreamChannel?.close()
             if (active.exchangeCompleted.compareAndSet(false, true)) {
                 active.capture?.cancelBody(
                     direction = TrafficDirection.CLIENT_TO_SERVER,
                     observedBytes = active.observedRequestBytes,
                     occurredAtEpochMillis = Clock.System.now().toEpochMilliseconds(),
-                    errorCode = DOWNSTREAM_CANCELLED,
+                    reason = reason,
                 )
                 active.capture?.terminate(
-                    state = ExchangeState.CANCELLED,
+                    outcome = ExchangeTerminalOutcome.Cancelled(reason),
                     timings = active.timings.getTimings(),
                     occurredAtEpochMillis = Clock.System.now().toEpochMilliseconds(),
-                    errorCode = DOWNSTREAM_CANCELLED,
                 )
                 active.streamInspectors.forEach { inspector ->
                     runCatching {
                         inspector.onExchangeTerminated(
-                            ExchangeState.CANCELLED,
+                            ExchangeTerminalOutcome.Cancelled(reason),
                             Clock.System.now().toEpochMilliseconds(),
-                            DOWNSTREAM_CANCELLED,
                         )
                     }
                 }

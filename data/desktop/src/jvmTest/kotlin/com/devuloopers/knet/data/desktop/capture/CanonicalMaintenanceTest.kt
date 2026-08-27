@@ -9,6 +9,8 @@ import com.devuloopers.knet.storage.capture.entity.TrafficConnectionEntity
 import com.devuloopers.knet.storage.capture.entity.DuplexMessageEntity
 import com.devuloopers.knet.storage.database.DatabaseFactory
 import com.devuloopers.knet.traffic.id.BodyId
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.body.BodyCaptureOutcome
 import com.devuloopers.knet.traffic.model.body.MessageBodyRef
 import kotlinx.coroutines.test.runTest
@@ -158,6 +160,9 @@ class CanonicalMaintenanceTest {
             val recoveredExchange = assertNotNull(dao.getExchange(RECOVERY_EXCHANGE_ID))
             assertEquals("FAILED", recoveredExchange.state)
             assertEquals("process-interrupted", recoveredExchange.terminalErrorCode)
+            val recoveredSnapshot = CanonicalCaptureEntityMapper.snapshot(recoveredExchange, emptyMap())
+            val recoveredOutcome = assertIs<ExchangeTerminalOutcome.Failed>(recoveredSnapshot.terminalOutcome)
+            assertEquals(TrafficTerminationReason.Lifecycle.PROCESS_INTERRUPTED, recoveredOutcome.reason)
             val recoveredMessage = assertNotNull(dao.getDuplexMessage(RECOVERY_MESSAGE_ID))
             assertEquals("FAILED", recoveredMessage.state)
             assertEquals("process-interrupted", recoveredMessage.errorCode)

@@ -7,6 +7,7 @@ package com.devuloopers.knet.ui.desktop.httppanel.model
  * @param url Target endpoint URL string.
  * @param statusCode HTTP status code (e.g. 200, 404, 500).
  * @param statusText HTTP status phrase or error detail text.
+ * @param isTerminal Whether capture observed a final outcome even when timing is unavailable.
  * @param clientProtocol Protocol observed on the inspected client-to-KNet request leg.
  * @param upstreamProtocol Protocol observed on the upstream response leg, when available.
  * @param origin Human-readable feature or client that initiated the exchange.
@@ -23,6 +24,7 @@ data class NetworkOverviewSpec(
     val url: String,
     val statusCode: Int,
     val statusText: String,
+    val isTerminal: Boolean = false,
     val clientProtocol: String = "HTTP/1.1",
     val upstreamProtocol: String? = null,
     val origin: String = "Proxy client",

@@ -5,6 +5,7 @@ import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.id.ProtocolMessageId
 import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.model.TrafficDirection
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.body.MessageBodyRef
 
 /** Extension-safe identifier for a framed application protocol. */
@@ -88,7 +89,7 @@ public data class ProtocolMessageSnapshot(
     public val compressionEncoding: String?,
     public val body: MessageBodyRef,
     public val state: ProtocolMessageState,
-    public val errorCode: String? = null,
+    public val terminationReason: TrafficTerminationReason? = null,
 ) {
     init {
         require(sequence >= 0L) { "Protocol message sequence must not be negative." }
@@ -98,6 +99,5 @@ public data class ProtocolMessageSnapshot(
         require(compressionEncoding == null || compressionEncoding.isNotBlank()) {
             "Compression encoding must not be blank."
         }
-        require(errorCode == null || errorCode.isNotBlank()) { "Message error code must not be blank." }
     }
 }

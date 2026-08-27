@@ -6,9 +6,11 @@ import com.devuloopers.knet.domain.request.descriptor.RequestDescriptor
 import com.devuloopers.knet.domain.request.descriptor.RequestKindId
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.HttpExchangeSnapshot
 import com.devuloopers.knet.traffic.model.TrafficOrigin
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.body.MessageBodyRef
 import com.devuloopers.knet.traffic.model.http.RequestTarget
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
@@ -47,8 +49,8 @@ sealed interface TrafficInterceptionUiState {
  * Payload bytes and storage paths are intentionally absent. Selection loads canonical details
  * through the application layer under a separate preview budget.
  *
- * @property sequenceNumber Storage-owned one-based capture sequence. Zero is reserved for a
- * provisional breakpoint row that has not reached canonical storage yet.
+ * @property sequenceNumber One-based ordinal within the currently retained traffic history. Zero
+ * is reserved for a provisional breakpoint row that has not reached canonical storage yet.
  * @property method Actual HTTP transport method retained for filters and request behavior.
  * @property displayMethod Protocol-aware method identity rendered in the table, such as `POST` or `GQL`.
  * @property requestKind Semantic request kind used for stable presentation styling.
@@ -79,6 +81,7 @@ data class TrafficRowUiState(
     val dateGroup: String,
     val contentType: String?,
     val timings: ExchangeTimings,
+    val terminalOutcome: ExchangeTerminalOutcome? = null,
     val interception: TrafficInterceptionUiState = TrafficInterceptionUiState.None,
 ) {
     val fullUrl: String
@@ -172,13 +175,8 @@ internal fun HttpExchangeSnapshot.toTrafficRowUiState(sequenceNumber: Long = 0L)
         path = targetParts.path,
         status = responseHead?.status?.code ?: 0,
         statusText = responseHead?.reasonPhrase?.takeIf { it.isNotBlank() }
-            ?: when {
-                responseHead != null -> responseHead.status.code.defaultReason()
-                state.name == "DROPPED" -> "Dropped"
-                state.name == "FAILED" -> "Failed"
-                state.name == "CANCELLED" -> "Cancelled"
-                else -> "Pending"
-            },
+            ?: responseHead?.status?.code?.defaultReason()
+            ?: terminalOutcome.toTrafficStatusLabel(),
         protocol = responseHead?.protocol ?: request.head.protocol,
         clientProtocol = request.head.protocol,
         upstreamProtocol = responseHead?.protocol,
@@ -195,7 +193,28 @@ internal fun HttpExchangeSnapshot.toTrafficRowUiState(sequenceNumber: Long = 0L)
         contentType = responseHead?.headers?.firstValue("Content-Type")
             ?: request.head.headers.firstValue("Content-Type"),
         timings = timings,
+        terminalOutcome = terminalOutcome,
     )
+}
+
+/** Stable short label for a terminal outcome; new reasons extend here without changing table code. */
+internal fun ExchangeTerminalOutcome?.toTrafficStatusLabel(): String = when (this) {
+    ExchangeTerminalOutcome.Completed -> "Completed"
+    is ExchangeTerminalOutcome.Dropped -> "Dropped"
+    is ExchangeTerminalOutcome.Cancelled -> when (reason) {
+        TrafficTerminationReason.Lifecycle.PROXY_STOPPED -> "Proxy Stopped"
+        TrafficTerminationReason.Lifecycle.CAPTURE_TARGET_ROTATED -> "Capture Cleared"
+        else -> "Cancelled"
+    }
+    is ExchangeTerminalOutcome.Failed -> when (reason) {
+        TrafficTerminationReason.Lifecycle.PROCESS_INTERRUPTED -> "Interrupted"
+        TrafficTerminationReason.Lifecycle.PROXY_ENGINE_FAILED -> "Proxy Failed"
+        TrafficTerminationReason.Transport.READ_TIMED_OUT,
+        TrafficTerminationReason.Transport.WRITE_TIMED_OUT,
+        -> "Timed Out"
+        else -> "Failed"
+    }
+    null -> "Pending"
 }
 
 private data class DisplayTarget(val scheme: HttpScheme, val host: String, val path: String)

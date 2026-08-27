@@ -18,12 +18,17 @@ import com.devuloopers.knet.connectivity.model.ProxyEndpoint
 import com.devuloopers.knet.connectivity.model.ProxyEndpointScope
 import com.devuloopers.knet.connectivity.model.ProxyEndpointSnapshot
 import com.devuloopers.knet.connectivity.model.ProxyEndpointVersion
+import com.devuloopers.knet.core.logger.LogTags
 import com.devuloopers.knet.core.logger.KNetLogger
 import com.devuloopers.knet.data.desktop.capture.CanonicalCaptureSessionFactory
 import com.devuloopers.knet.data.desktop.capture.CaptureSessionRetirementOwner
 import com.devuloopers.knet.data.desktop.capture.StreamingProxyCaptureSession
 import com.devuloopers.knet.data.desktop.capture.SwitchableProxyCaptureSink
 import com.devuloopers.knet.data.desktop.runtime.ProxyRuntimeRepository
+import com.devuloopers.knet.engine.proxy.KNetProxyRuntimePolicy
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,11 +36,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import com.devuloopers.knet.engine.proxy.KNetProxyRuntimePolicy
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicLong
-
-import com.devuloopers.knet.core.logger.LogTags
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -144,7 +144,9 @@ class DesktopProxyRuntimeAdapter(
             withContext(Dispatchers.IO) {
                 proxyRuntimeRepository.stopProxy()
             }
-            runCatching { closeCanonicalCaptureSession() }
+            runCatching {
+                closeCanonicalCaptureSession(TrafficTerminationReason.Lifecycle.PROXY_ENGINE_FAILED)
+            }
                 .onFailure { closeFailure ->
                     KNetLogger.error(tag = LogTags.PROXY, throwable = closeFailure) {
                         "Failed to close canonical capture after proxy startup rollback."
@@ -162,7 +164,7 @@ class DesktopProxyRuntimeAdapter(
     override suspend fun stop(reason: ProxyStopReason): ProxyStopResult = lifecycleMutex.withLock {
         if (_runtimeState.value is ProxyRuntimeState.Stopped) {
             breakpointCaptureAvailability.setCaptureAvailable(false)
-            closeCanonicalCaptureSession()
+            closeCanonicalCaptureSession(TrafficTerminationReason.Lifecycle.PROXY_STOPPED)
             _captureState.value = CaptureSessionState.Inactive
             return@withLock ProxyStopResult.Stopped
         }
@@ -174,13 +176,15 @@ class DesktopProxyRuntimeAdapter(
             withContext(Dispatchers.IO) {
                 proxyRuntimeRepository.stopProxy()
             }
-            canonicalSession?.close()
+            canonicalSession?.close(TrafficTerminationReason.Lifecycle.PROXY_STOPPED)
             _runtimeState.value = ProxyRuntimeState.Stopped
             _captureState.value = CaptureSessionState.Inactive
             KNetLogger.info(tag = LogTags.PROXY) { "Proxy engine stopped for reason ${reason.name}." }
             ProxyStopResult.Stopped
         } catch (failure: Exception) {
-            runCatching { canonicalSession?.close() }
+            runCatching {
+                canonicalSession?.close(TrafficTerminationReason.Lifecycle.PROXY_ENGINE_FAILED)
+            }
                 .onFailure { closeFailure ->
                     KNetLogger.error(tag = LogTags.PROXY, throwable = closeFailure) {
                         "Failed to close canonical capture after proxy shutdown failure."
@@ -310,7 +314,11 @@ class DesktopProxyRuntimeAdapter(
             session
         }
         canonicalSession?.let { session ->
-            if (!session.closeAndAwait(CANONICAL_WRITER_SHUTDOWN_TIMEOUT_MILLIS)) {
+            if (!session.closeAndAwait(
+                    CANONICAL_WRITER_SHUTDOWN_TIMEOUT_MILLIS,
+                    TrafficTerminationReason.Lifecycle.PROXY_STOPPED,
+                )
+            ) {
                 KNetLogger.error(tag = LogTags.PROXY) {
                     "Timed out while closing the canonical capture writer during application shutdown."
                 }
@@ -326,9 +334,11 @@ class DesktopProxyRuntimeAdapter(
     }
 
     /** Closes and forgets the canonical session after proxy callbacks have stopped. */
-    private suspend fun closeCanonicalCaptureSession() {
+    private suspend fun closeCanonicalCaptureSession(
+        reason: TrafficTerminationReason = TrafficTerminationReason.Lifecycle.CAPTURE_SESSION_CLOSED,
+    ) {
         val session = detachCanonicalCaptureSession() ?: return
-        session.close()
+        session.close(reason)
     }
 
     /** Detaches the current canonical target and removes the transport-facing switch. */

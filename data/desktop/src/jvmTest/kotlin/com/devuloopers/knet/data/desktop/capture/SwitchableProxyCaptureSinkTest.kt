@@ -7,11 +7,13 @@ import com.devuloopers.knet.engine.proxy.capture.ProxyConnectionCapture
 import com.devuloopers.knet.engine.proxy.capture.ProxyExchangeCapture
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.IngressContext
 import com.devuloopers.knet.traffic.model.IngressKind
 import com.devuloopers.knet.traffic.model.TrafficDirection
 import com.devuloopers.knet.traffic.model.TrafficEndpoint
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.body.ContentEncoding
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import com.devuloopers.knet.traffic.model.http.Authority
@@ -106,8 +108,8 @@ class SwitchableProxyCaptureSinkTest {
             return RecordingExchange(exchangeId, responseExchangeIds)
         }
 
-        override fun close(errorCode: String?) {
-            closeErrorCode = errorCode
+        override fun close(reason: TrafficTerminationReason?) {
+            closeErrorCode = reason?.code?.value
         }
 
         private companion object {
@@ -135,7 +137,7 @@ class SwitchableProxyCaptureSinkTest {
             direction: TrafficDirection,
             observedBytes: Long,
             occurredAtEpochMillis: Long,
-            errorCode: String,
+            reason: TrafficTerminationReason,
         ) = Unit
 
         override fun observeResponse(response: ResponseHead, occurredAtEpochMillis: Long) {
@@ -143,10 +145,9 @@ class SwitchableProxyCaptureSinkTest {
         }
 
         override fun terminate(
-            state: ExchangeState,
+            outcome: ExchangeTerminalOutcome,
             timings: ExchangeTimings,
             occurredAtEpochMillis: Long,
-            errorCode: String?,
         ) = Unit
     }
 

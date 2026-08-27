@@ -1,10 +1,17 @@
 package com.devuloopers.knet.ui.desktop.traffic.model
 
-/** Scheme/application-protocol filters that the current HTTP capture engine can identify exactly. */
-enum class ProtocolFilter(val label: String) {
+/** Request-scheme filter kept separate from the negotiated HTTP version. */
+enum class SchemeFilter(val label: String) {
     ALL("All"),
     HTTP("HTTP"),
     HTTPS("HTTPS"),
+}
+
+/** HTTP application-version filter matching either observed proxy connection leg. */
+enum class HttpVersionFilter(val label: String) {
+    ALL("Any version"),
+    HTTP_1_0("HTTP/1.0"),
+    HTTP_1_1("HTTP/1.1"),
     HTTP_2("HTTP/2"),
     HTTP_3("HTTP/3"),
 }

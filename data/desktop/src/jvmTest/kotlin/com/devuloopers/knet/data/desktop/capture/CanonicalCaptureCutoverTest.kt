@@ -24,7 +24,7 @@ import com.devuloopers.knet.engine.session.FileBodyStore
 import com.devuloopers.knet.storage.database.DatabaseFactory
 import com.devuloopers.knet.traffic.id.BodyId
 import com.devuloopers.knet.traffic.id.ExchangeId
-import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import com.devuloopers.knet.traffic.model.http.Authority
@@ -181,7 +181,7 @@ class CanonicalCaptureCutoverTest {
                     headers = listOf(HeaderField(HeaderName("Content-Type"), "application/octet-stream")),
                 ),
                 responseBody = responseBody,
-                state = ExchangeState.COMPLETED,
+                outcome = ExchangeTerminalOutcome.Completed,
                 timings = ExchangeTimings(
                     dnsMillis = 1L,
                     connectMillis = 2L,

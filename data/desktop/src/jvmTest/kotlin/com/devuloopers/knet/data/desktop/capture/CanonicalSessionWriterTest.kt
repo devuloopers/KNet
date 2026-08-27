@@ -18,7 +18,7 @@ import com.devuloopers.knet.traffic.id.ConnectionId
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.model.CaptureEvent
-import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.IngressContext
 import com.devuloopers.knet.traffic.model.IngressKind
 import com.devuloopers.knet.traffic.model.TrafficDirection
@@ -150,7 +150,7 @@ class CanonicalSessionWriterTest {
                         occurredAtEpochMillis = 1_005L,
                         exchangeId = EXCHANGE_ID,
                         exchangeVersion = 5L,
-                        state = ExchangeState.COMPLETED,
+                        outcome = ExchangeTerminalOutcome.Completed,
                     )
                 )
             )
@@ -284,7 +284,7 @@ class CanonicalSessionWriterTest {
                         occurredAtEpochMillis = 1_003L,
                         exchangeId = EXCHANGE_ID,
                         exchangeVersion = 3L,
-                        state = ExchangeState.COMPLETED,
+                        outcome = ExchangeTerminalOutcome.Completed,
                     )
                 )
             )

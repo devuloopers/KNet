@@ -8,8 +8,10 @@ import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamInspector
 import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamInspectorFactory
 import com.devuloopers.knet.traffic.id.ProtocolMessageId
 import com.devuloopers.knet.traffic.id.StreamId
-import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.TrafficDirection
+import com.devuloopers.knet.traffic.model.TrafficTerminationCode
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.http.HttpMethod
 import com.devuloopers.knet.traffic.model.http.RequestHead
 import com.devuloopers.knet.traffic.model.http.ResponseHead
@@ -108,17 +110,16 @@ private class GrpcStreamInspector(
     }
 
     override fun onDirectionEnd(direction: TrafficDirection, occurredAtEpochMillis: Long) {
-        deframer(direction).finish(occurredAtEpochMillis, MESSAGE_ENDED_MID_FRAME)
+        deframer(direction).finish(occurredAtEpochMillis, grpcTermination(MESSAGE_ENDED_MID_FRAME))
     }
 
     override fun onExchangeTerminated(
-        state: ExchangeState,
+        outcome: ExchangeTerminalOutcome,
         occurredAtEpochMillis: Long,
-        errorCode: String?,
     ) {
-        val code = errorCode ?: PARENT_EXCHANGE_TERMINATED
-        requestDeframer.cancel(occurredAtEpochMillis, code)
-        responseDeframer.cancel(occurredAtEpochMillis, code)
+        val reason = outcome.reason ?: grpcTermination(PARENT_EXCHANGE_TERMINATED)
+        requestDeframer.cancel(occurredAtEpochMillis, reason)
+        responseDeframer.cancel(occurredAtEpochMillis, reason)
     }
 
     private fun deframer(direction: TrafficDirection): GrpcMessageDeframer = when (direction) {
@@ -192,27 +193,27 @@ private class GrpcMessageDeframer(
         }
     }
 
-    fun finish(occurredAtEpochMillis: Long, errorCode: String) {
+    fun finish(occurredAtEpochMillis: Long, reason: TrafficTerminationReason) {
         if (!enabled || failed) return
         if (prefixBytes == 0 && remainingPayloadBytes == 0L) return
         messageCapture?.terminate(
             observedBytes = observedPayloadBytes,
             state = ProtocolMessageState.FAILED,
             occurredAtEpochMillis = occurredAtEpochMillis,
-            errorCode = errorCode,
+            reason = reason,
         )
         reset()
         failed = true
     }
 
-    fun cancel(occurredAtEpochMillis: Long, errorCode: String) {
+    fun cancel(occurredAtEpochMillis: Long, reason: TrafficTerminationReason) {
         if (!enabled || failed) return
         if (messageCapture != null || prefixBytes > 0) {
             messageCapture?.terminate(
                 observedBytes = observedPayloadBytes,
                 state = ProtocolMessageState.CANCELLED,
                 occurredAtEpochMillis = occurredAtEpochMillis,
-                errorCode = errorCode,
+                reason = reason,
             )
         }
         reset()
@@ -242,11 +243,11 @@ private class GrpcMessageDeframer(
         remainingPayloadBytes = declared
         observedPayloadBytes = 0L
         if (flag != UNCOMPRESSED_FLAG && flag != COMPRESSED_FLAG) {
-            failCurrent(occurredAtEpochMillis, INVALID_COMPRESSION_FLAG)
+            failCurrent(occurredAtEpochMillis, grpcTermination(INVALID_COMPRESSION_FLAG))
         } else if (declared > maximumDeclaredMessageBytes) {
-            failCurrent(occurredAtEpochMillis, DECLARED_LENGTH_LIMIT)
+            failCurrent(occurredAtEpochMillis, grpcTermination(DECLARED_LENGTH_LIMIT))
         } else if (compressed && compressionEncoding.isNullOrBlank()) {
-            failCurrent(occurredAtEpochMillis, MISSING_COMPRESSION_ENCODING)
+            failCurrent(occurredAtEpochMillis, grpcTermination(MISSING_COMPRESSION_ENCODING))
         }
     }
 
@@ -255,12 +256,12 @@ private class GrpcMessageDeframer(
         reset()
     }
 
-    private fun failCurrent(occurredAtEpochMillis: Long, errorCode: String) {
+    private fun failCurrent(occurredAtEpochMillis: Long, reason: TrafficTerminationReason) {
         messageCapture?.terminate(
             observedBytes = observedPayloadBytes,
             state = ProtocolMessageState.FAILED,
             occurredAtEpochMillis = occurredAtEpochMillis,
-            errorCode = errorCode,
+            reason = reason,
         )
         reset()
         failed = true
@@ -282,3 +283,8 @@ private class GrpcMessageDeframer(
         const val MISSING_COMPRESSION_ENCODING: String = "grpc_missing_compression_encoding"
     }
 }
+
+private fun grpcTermination(code: String): TrafficTerminationReason = TrafficTerminationReason.Protocol(
+    protocol = MessageProtocolId.GRPC,
+    code = TrafficTerminationCode(code),
+)

@@ -7,6 +7,7 @@ import com.devuloopers.knet.engine.proxy.capture.ProxyExchangeCapture
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.model.TrafficOrigin
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.http.RequestHead
 
 /**
@@ -63,11 +64,11 @@ internal class SwitchableProxyCaptureSink(initialTarget: ProxyCaptureSink) : Pro
             bindCurrentTarget()?.startExchange(exchangeId, request, occurredAtEpochMillis, origin, streamId)
         }
 
-        override fun close(errorCode: String?) {
+        override fun close(reason: TrafficTerminationReason?) {
             synchronized(lock) {
                 if (closed) return
                 closed = true
-                binding?.capture?.close(errorCode)
+                binding?.capture?.close(reason)
                 binding = null
             }
         }
@@ -77,7 +78,7 @@ internal class SwitchableProxyCaptureSink(initialTarget: ProxyCaptureSink) : Pro
             val selected = currentTarget()
             if (observedTarget === selected) return binding?.capture
 
-            binding?.capture?.close(CAPTURE_TARGET_ROTATED)
+            binding?.capture?.close(TrafficTerminationReason.Lifecycle.CAPTURE_TARGET_ROTATED)
             binding = null
             observedTarget = selected
             val capture = selected.sink?.openConnection(metadata) ?: return null
@@ -90,8 +91,5 @@ internal class SwitchableProxyCaptureSink(initialTarget: ProxyCaptureSink) : Pro
             val capture: ProxyConnectionCapture,
         )
 
-        private companion object {
-            const val CAPTURE_TARGET_ROTATED: String = "capture_target_rotated"
-        }
     }
 }

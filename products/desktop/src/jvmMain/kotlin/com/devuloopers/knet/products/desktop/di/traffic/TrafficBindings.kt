@@ -2,6 +2,7 @@ package com.devuloopers.knet.products.desktop.di.traffic
 
 import com.devuloopers.knet.application.contract.traffic.TrafficMaintenance
 import com.devuloopers.knet.application.contract.traffic.TrafficQuery
+import com.devuloopers.knet.application.contract.traffic.TrafficFacetReader
 import com.devuloopers.knet.application.contract.traffic.ProtocolMessageQuery
 import com.devuloopers.knet.application.contract.traffic.TrafficSessionCatalog
 import com.devuloopers.knet.application.usecase.traffic.ClearTrafficHistoryUseCase
@@ -15,6 +16,7 @@ import com.devuloopers.knet.application.usecase.traffic.PrepareTrafficRequestUse
 import com.devuloopers.knet.application.usecase.traffic.PrepareCapturedNetworkRequestUseCase
 import com.devuloopers.knet.application.usecase.traffic.PauseTrafficCaptureUseCase
 import com.devuloopers.knet.application.usecase.traffic.QueryTrafficPageUseCase
+import com.devuloopers.knet.application.usecase.traffic.QueryTrafficFacetsUseCase
 import com.devuloopers.knet.application.usecase.traffic.ResumeTrafficCaptureUseCase
 import com.devuloopers.knet.data.desktop.traffic.repository.DesktopTrafficMaintenanceAdapter
 import com.devuloopers.knet.data.desktop.traffic.repository.DesktopTrafficQueryAdapter
@@ -40,6 +42,7 @@ internal val trafficBindings: Module = module {
         )
     }
     single<TrafficQuery> { get<DesktopTrafficQueryAdapter>() }
+    single<TrafficFacetReader> { get<DesktopTrafficQueryAdapter>() }
     single<ProtocolMessageQuery> { get<DesktopTrafficQueryAdapter>() }
     single<TrafficSessionCatalog> { get<DesktopTrafficQueryAdapter>() }
 
@@ -47,6 +50,7 @@ internal val trafficBindings: Module = module {
     factory { LoadTrafficExchangeDetailsUseCase(get()) }
     factory { ObserveLatestTrafficSessionUseCase(get()) }
     factory { QueryTrafficPageUseCase(get()) }
+    factory { QueryTrafficFacetsUseCase(get()) }
     factory { ObserveTrafficGenerationsUseCase(get()) }
     factory { ObserveProtocolMessageChangesUseCase(get()) }
     factory { QueryProtocolMessagesUseCase(get()) }
@@ -60,6 +64,7 @@ internal val trafficBindings: Module = module {
         TrafficViewModel(
             observeLatestTrafficSessionUseCase = get(),
             queryTrafficPageUseCase = get(),
+            queryTrafficFacetsUseCase = get(),
             observeTrafficGenerationsUseCase = get(),
             observeProtocolMessageChangesUseCase = get(),
             queryProtocolMessagesUseCase = get(),

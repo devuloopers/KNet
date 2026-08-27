@@ -128,6 +128,7 @@ fun TrafficInspectorPanel(
                                 url = targetUrl,
                                 statusCode = selectedTransaction.status,
                                 statusText = selectedTransaction.statusText,
+                                isTerminal = selectedTransaction.terminalOutcome != null,
                                 clientProtocol = exchange?.request?.head?.protocol?.token
                                     ?: selectedTransaction.clientProtocol.token,
                                 upstreamProtocol = exchange?.response?.head?.protocol?.token

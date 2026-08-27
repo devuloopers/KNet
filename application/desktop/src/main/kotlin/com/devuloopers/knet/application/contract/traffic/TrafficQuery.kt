@@ -74,14 +74,29 @@ public value class TrafficCaptureSequence(public val value: Long) {
 }
 
 /**
+ * One-based ordinal among traffic currently retained by KNet.
+ *
+ * Unlike [TrafficCaptureSequence], this value is presentation-safe: removing all previous traffic
+ * makes the next retained exchange number one without reusing a durable storage identity.
+ */
+@JvmInline
+public value class TrafficHistorySequence(public val value: Long) {
+    init {
+        require(value > 0L) { "Traffic history sequence must be positive." }
+    }
+}
+
+/**
  * One canonical page item with its stable storage ordering metadata.
  *
  * @property captureSequence Durable capture order used for paging and presentation identity.
+ * @property historySequence Stable ordinal among the currently retained traffic history.
  * @property exchange Shared canonical request/response snapshot used by Traffic, API Studio,
  * breakpoints, and protocol inspectors.
  */
 public data class TrafficPageItem(
     public val captureSequence: TrafficCaptureSequence,
+    public val historySequence: TrafficHistorySequence,
     public val exchange: HttpExchangeSnapshot,
 )
 

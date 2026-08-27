@@ -13,12 +13,15 @@ import com.devuloopers.knet.traffic.id.ProtocolMessageId
 import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.TrafficDirection
+import com.devuloopers.knet.traffic.model.TrafficTerminationCode
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.http.HeaderField
 import com.devuloopers.knet.traffic.model.http.HttpMethod
 import com.devuloopers.knet.traffic.model.http.ResponseHead
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import com.devuloopers.knet.traffic.model.http.StandardApplicationProtocol
 import com.devuloopers.knet.traffic.model.message.ProtocolMessageKind
+import com.devuloopers.knet.traffic.model.message.MessageProtocolId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
@@ -142,7 +145,7 @@ private class GrpcMessageBreakpointTransformer(
     ): CompletionStage<ProxyStreamTransformResult> {
         if (cancelled.get()) {
             return CompletableFuture.completedFuture(
-                ProxyStreamTransformResult.DropStream(STREAM_CANCELLED),
+                ProxyStreamTransformResult.DropStream(grpcBreakpointTermination(STREAM_CANCELLED)),
             )
         }
         val future = CompletableFuture<ProxyStreamTransformResult>()
@@ -150,14 +153,14 @@ private class GrpcMessageBreakpointTransformer(
             val result = runCatching {
                 directionGate(direction).transform(payload, endOfDirection, occurredAtEpochMillis)
             }.getOrElse {
-                ProxyStreamTransformResult.DropStream(TRANSFORM_FAILED)
+                ProxyStreamTransformResult.DropStream(grpcBreakpointTermination(TRANSFORM_FAILED))
             }
             future.complete(result)
         }
         return future
     }
 
-    override fun cancel(errorCode: String?) {
+    override fun cancel(reason: TrafficTerminationReason?) {
         if (!cancelled.compareAndSet(false, true)) return
         clientGate.cancel()
         serverGate.cancel()
@@ -205,7 +208,9 @@ private class DirectionMessageGate(
         endOfDirection: Boolean,
         occurredAtEpochMillis: Long,
     ): ProxyStreamTransformResult {
-        if (cancelled) return ProxyStreamTransformResult.DropStream(STREAM_CANCELLED)
+        if (cancelled) {
+            return ProxyStreamTransformResult.DropStream(grpcBreakpointTermination(STREAM_CANCELLED))
+        }
         if (bypass || !transportRecognized) return ProxyStreamTransformResult.Forward(input)
         val output = ByteArrayOutputStream(input.size)
         var inputOffset = 0
@@ -294,7 +299,7 @@ private class DirectionMessageGate(
             is ProtocolMessageBreakpointDecision.Replace ->
                 ProxyStreamTransformResult.Forward(frame(compressed, decision.body.copyBytes()))
             ProtocolMessageBreakpointDecision.DropStream ->
-                ProxyStreamTransformResult.DropStream(MESSAGE_DROPPED)
+                ProxyStreamTransformResult.DropStream(grpcBreakpointTermination(MESSAGE_DROPPED))
         }
         resetFrame()
         return result
@@ -328,3 +333,9 @@ private class DirectionMessageGate(
         }
     }
 }
+
+private fun grpcBreakpointTermination(code: String): TrafficTerminationReason =
+    TrafficTerminationReason.Protocol(
+        protocol = MessageProtocolId.GRPC,
+        code = TrafficTerminationCode(code),
+    )

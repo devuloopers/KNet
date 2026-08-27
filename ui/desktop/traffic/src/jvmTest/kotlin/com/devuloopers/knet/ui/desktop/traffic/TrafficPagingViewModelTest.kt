@@ -5,7 +5,10 @@ import com.devuloopers.knet.application.contract.breakpoint.PendingBreakpoint
 import com.devuloopers.knet.application.contract.traffic.BodyChunk
 import com.devuloopers.knet.application.contract.traffic.BodyRange
 import com.devuloopers.knet.application.contract.traffic.TrafficGeneration
+import com.devuloopers.knet.application.contract.traffic.TrafficFacetCounts
+import com.devuloopers.knet.application.contract.traffic.TrafficFacetReader
 import com.devuloopers.knet.application.contract.traffic.TrafficCaptureSequence
+import com.devuloopers.knet.application.contract.traffic.TrafficHistorySequence
 import com.devuloopers.knet.application.contract.traffic.TrafficPage
 import com.devuloopers.knet.application.contract.traffic.TrafficPageCursor
 import com.devuloopers.knet.application.contract.traffic.TrafficPageItem
@@ -36,6 +39,8 @@ import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria
 import com.devuloopers.knet.domain.request.descriptor.RequestKindId
 import com.devuloopers.knet.ui.desktop.traffic.model.TrafficIntent
+import com.devuloopers.knet.ui.desktop.traffic.model.SchemeFilter
+import com.devuloopers.knet.ui.desktop.traffic.model.HttpVersionFilter
 import com.devuloopers.knet.ui.desktop.traffic.model.TrafficInterceptionUiState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -150,6 +155,44 @@ class TrafficPagingViewModelTest {
         assertEquals(625L, state.transactions.first().sequenceNumber)
         assertEquals(1L, state.transactions.last().sequenceNumber)
         assertEquals(625L, state.totalAvailableCount)
+    }
+
+    @Test
+    fun `empty scheme selection preserves independent scheme and version facets`() = runTest(dispatcher) {
+        val sessionId = CaptureSessionId("fake-session")
+        val httpsH2 = listOf(
+            snapshot("first-h2", 1_000L).withProtocol("HTTP/2"),
+            snapshot("second-h2", 2_000L).withProtocol("HTTP/2"),
+        )
+        val expectedFacets = TrafficFacetCounts(
+            totalCount = 2L,
+            httpCount = 0L,
+            httpsCount = 2L,
+        )
+        val viewModel = FakeTrafficViewModelFactory.create(
+            customTrafficQueryPort = LiveTrafficPort(sessionId, httpsH2, honorFilters = true),
+            customTrafficFacetReader = TrafficFacetReader { expectedFacets },
+        )
+        advanceUntilIdle()
+
+        assertEquals(expectedFacets, viewModel.uiState.value.facetCounts)
+        assertEquals(2L, viewModel.uiState.value.totalAvailableCount)
+
+        viewModel.processIntent(TrafficIntent.FilterByScheme(SchemeFilter.HTTP))
+        advanceUntilIdle()
+
+        val emptyHttp = viewModel.uiState.value
+        assertEquals(0L, emptyHttp.totalAvailableCount)
+        assertTrue(emptyHttp.filteredTransactions.isEmpty())
+        assertEquals(expectedFacets, emptyHttp.facetCounts)
+
+        viewModel.processIntent(TrafficIntent.FilterByScheme(SchemeFilter.HTTPS))
+        viewModel.processIntent(TrafficIntent.FilterByHttpVersion(HttpVersionFilter.HTTP_2))
+        advanceUntilIdle()
+
+        assertEquals(2L, viewModel.uiState.value.totalAvailableCount)
+        assertEquals(2, viewModel.uiState.value.filteredTransactions.size)
+        assertEquals(expectedFacets, viewModel.uiState.value.facetCounts)
     }
 
     @Test
@@ -411,8 +454,10 @@ class TrafficPagingViewModelTest {
             val nextOffset = offset + page.size
             return TrafficPage(
                 items = page.mapIndexed { index, snapshot ->
+                    val historySequence = (snapshots.size - offset - index).toLong()
                     TrafficPageItem(
-                        captureSequence = TrafficCaptureSequence((snapshots.size - offset - index).toLong()),
+                        captureSequence = TrafficCaptureSequence(STORAGE_SEQUENCE_OFFSET + historySequence),
+                        historySequence = TrafficHistorySequence(historySequence),
                         exchange = snapshot,
                     )
                 },
@@ -433,6 +478,7 @@ class TrafficPagingViewModelTest {
     private class LiveTrafficPort(
         private val sessionId: CaptureSessionId,
         initialSnapshots: List<HttpExchangeSnapshot>,
+        private val honorFilters: Boolean = false,
     ) : TrafficQuery {
         private val mutableGenerations = MutableSharedFlow<TrafficGeneration>(extraBufferCapacity = 64)
         private val snapshots = initialSnapshots.toMutableList()
@@ -446,13 +492,27 @@ class TrafficPagingViewModelTest {
             val sequenceById = snapshots.mapIndexed { index, snapshot ->
                 snapshot.id to TrafficCaptureSequence(index + 1L)
             }.toMap()
-            val orderedSnapshots = snapshots.sortedByDescending { it.startedAtEpochMillis }
+            val candidates = if (honorFilters) snapshots.asSequence()
+                .filter { snapshot -> query.schemes.isEmpty() || snapshot.request.head.target.schemeOrNull() in query.schemes }
+                .filter { snapshot -> query.protocols.isEmpty() || snapshot.request.head.protocol in query.protocols || snapshot.response?.head?.protocol in query.protocols }
+                .filter { snapshot -> query.methods.isEmpty() || snapshot.request.head.method in query.methods }
+                .filter { snapshot -> query.statuses.isEmpty() || snapshot.response?.head?.status in query.statuses }
+                .toList()
+            else snapshots
+            val orderedSnapshots = candidates.asSequence()
+                .sortedByDescending { snapshot -> snapshot.startedAtEpochMillis }
+                .toList()
             return TrafficPage(
                 items = orderedSnapshots.map { snapshot ->
-                    TrafficPageItem(sequenceById.getValue(snapshot.id), snapshot)
+                    val sequence = sequenceById.getValue(snapshot.id)
+                    TrafficPageItem(
+                        captureSequence = sequence,
+                        historySequence = TrafficHistorySequence(sequence.value),
+                        exchange = snapshot,
+                    )
                 },
                 nextCursor = null,
-                totalCount = snapshots.size.toLong(),
+                totalCount = candidates.size.toLong(),
                 generation = generation,
             )
         }
@@ -483,6 +543,7 @@ class TrafficPagingViewModelTest {
                 items = snapshots.mapIndexed { index, snapshot ->
                     TrafficPageItem(
                         captureSequence = TrafficCaptureSequence((snapshots.size - index).toLong()),
+                        historySequence = TrafficHistorySequence((snapshots.size - index).toLong()),
                         exchange = snapshot,
                     )
                 },
@@ -500,6 +561,8 @@ class TrafficPagingViewModelTest {
     }
 
     private companion object {
+        const val STORAGE_SEQUENCE_OFFSET: Long = 10_000L
+
         fun snapshot(id: String, timestamp: Long): HttpExchangeSnapshot = HttpExchangeSnapshot(
             id = ExchangeId(id),
             request = HttpRequestSnapshot(
@@ -517,5 +580,15 @@ class TrafficPagingViewModelTest {
             state = ExchangeState.COMPLETED,
             startedAtEpochMillis = timestamp,
         )
+
+        fun HttpExchangeSnapshot.withProtocol(token: String): HttpExchangeSnapshot = copy(
+            request = HttpRequestSnapshot(
+                request.head.copy(protocol = ApplicationProtocol.fromToken(token)),
+                request.body,
+                request.trailers,
+            ),
+        )
+
+        fun RequestTarget.schemeOrNull(): HttpScheme? = (this as? RequestTarget.Absolute)?.scheme
     }
 }

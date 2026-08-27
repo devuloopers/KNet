@@ -7,10 +7,7 @@ import com.devuloopers.knet.traffic.id.CaptureSessionId
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.workspace.model.TrafficTableColumnWidths
 import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
-import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
-import com.devuloopers.knet.traffic.model.http.HttpScheme
-import com.devuloopers.knet.traffic.model.http.StandardApplicationProtocol
-import com.devuloopers.knet.traffic.model.http.StandardHttpScheme
+import com.devuloopers.knet.application.contract.traffic.TrafficFacetCounts
 import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePageCursor
 import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePresentation
 import com.devuloopers.knet.traffic.id.ProtocolMessageId
@@ -102,7 +99,8 @@ private fun ByteArray?.contentEqualsNullable(other: ByteArray?): Boolean = when 
  * @property captureState Current proxy capture lifecycle state.
  * @property engineState Current application-owned proxy runtime state.
  * @property searchQuery Live search filter query text.
- * @property selectedProtocolFilter Active protocol filter chip (e.g., [ProtocolFilter.ALL], [ProtocolFilter.HTTP], [ProtocolFilter.HTTPS]).
+ * @property selectedSchemeFilter Active request-scheme chip.
+ * @property selectedHttpVersionFilter Active negotiated HTTP-version filter.
  * @property selectedMethodFilter Active HTTP method dropdown filter (e.g., [MethodFilter.ALL], [MethodFilter.GET], [MethodFilter.POST]).
  * @property selectedStatusFilter Active HTTP status dropdown filter (e.g., [StatusFilter.ALL], [StatusFilter.STATUS_2XX], [StatusFilter.STATUS_3XX]).
  * @property autoScroll Whether auto-scrolling to newest transaction is enabled.
@@ -127,9 +125,11 @@ data class TrafficState(
     val engineErrorMessage: String? = null,
     val trafficErrorMessage: String? = null,
     val searchQuery: String = "",
-    val selectedProtocolFilter: ProtocolFilter = ProtocolFilter.ALL,
+    val selectedSchemeFilter: SchemeFilter = SchemeFilter.ALL,
+    val selectedHttpVersionFilter: HttpVersionFilter = HttpVersionFilter.ALL,
     val selectedMethodFilter: MethodFilter = MethodFilter.ALL,
     val selectedStatusFilter: StatusFilter = StatusFilter.ALL,
+    val facetCounts: TrafficFacetCounts = TrafficFacetCounts(),
     val autoScroll: Boolean = true,
     val activeInspectorTab: InspectorTab = InspectorTab.OVERVIEW,
     val activeRequestSubTab: InspectorSubTab = InspectorSubTab.BODY,
@@ -153,21 +153,6 @@ data class TrafficState(
             ?: transactions.firstOrNull()
 
     /**
-     * Calculated statistics counts for quick protocol chips.
-     */
-    val httpCount: Int
-        get() = transactions.count { row -> row.scheme.isStandard(StandardHttpScheme.HTTP) }
-
-    val httpsCount: Int
-        get() = transactions.count { row -> row.scheme.isStandard(StandardHttpScheme.HTTPS) }
-
-    val http2Count: Int
-        get() = transactions.count { row ->
-            row.clientProtocol.isStandard(StandardApplicationProtocol.HTTP_2) ||
-                row.upstreamProtocol?.isStandard(StandardApplicationProtocol.HTTP_2) == true
-        }
-
-    /**
      * Calculated total transferred payload size string.
      */
     val formattedVisibleSize: String
@@ -180,9 +165,3 @@ data class TrafficState(
             }
         }
 }
-
-private fun HttpScheme.isStandard(expected: StandardHttpScheme): Boolean =
-    this is HttpScheme.Standard && value == expected
-
-private fun ApplicationProtocol.isStandard(expected: StandardApplicationProtocol): Boolean =
-    this is ApplicationProtocol.Standard && value == expected

@@ -10,8 +10,10 @@ import com.devuloopers.knet.engine.proxy.capture.ProxyConnectionCapture
 import com.devuloopers.knet.engine.proxy.capture.ProxyExchangeCapture
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.TrafficDirection
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.body.ContentEncoding
 import com.devuloopers.knet.traffic.model.http.RequestHead
 import com.devuloopers.knet.traffic.model.http.ResponseHead
@@ -412,7 +414,7 @@ class HttpOneZeroIntegrationTest {
                             direction: TrafficDirection,
                             observedBytes: Long,
                             occurredAtEpochMillis: Long,
-                            errorCode: String,
+                            reason: TrafficTerminationReason,
                         ) = Unit
 
                         override fun observeResponse(response: ResponseHead, occurredAtEpochMillis: Long) {
@@ -420,18 +422,17 @@ class HttpOneZeroIntegrationTest {
                         }
 
                         override fun terminate(
-                            state: ExchangeState,
+                            outcome: ExchangeTerminalOutcome,
                             timings: ExchangeTimings,
                             occurredAtEpochMillis: Long,
-                            errorCode: String?,
                         ) {
-                            this@RecordingCaptureSink.terminalState = state
+                            this@RecordingCaptureSink.terminalState = outcome.state
                             this@RecordingCaptureSink.completed.countDown()
                         }
                     }
                 }
 
-                override fun close(errorCode: String?) = Unit
+                override fun close(reason: TrafficTerminationReason?) = Unit
             }
     }
 }

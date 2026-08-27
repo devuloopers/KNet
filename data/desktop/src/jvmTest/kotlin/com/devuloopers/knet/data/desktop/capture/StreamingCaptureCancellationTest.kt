@@ -5,12 +5,13 @@ import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureConnectionMetadata
 import com.devuloopers.knet.engine.session.FileBodyStore
 import com.devuloopers.knet.storage.database.DatabaseFactory
 import com.devuloopers.knet.traffic.id.ExchangeId
-import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.IngressContext
 import com.devuloopers.knet.traffic.model.IngressKind
 import com.devuloopers.knet.traffic.model.TrafficDirection
 import com.devuloopers.knet.traffic.model.TrafficEndpoint
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import com.devuloopers.knet.traffic.model.http.Authority
 import com.devuloopers.knet.traffic.model.http.HttpMethod
@@ -72,15 +73,16 @@ class StreamingCaptureCancellationTest {
                 direction = TrafficDirection.CLIENT_TO_SERVER,
                 observedBytes = 3L,
                 occurredAtEpochMillis = 4L,
-                errorCode = "downstream_cancelled",
+                reason = TrafficTerminationReason.Transport.DOWNSTREAM_CANCELLED,
             )
             exchange.terminate(
-                state = ExchangeState.CANCELLED,
+                outcome = ExchangeTerminalOutcome.Cancelled(
+                    TrafficTerminationReason.Transport.DOWNSTREAM_CANCELLED,
+                ),
                 timings = ExchangeTimings(totalMillis = 2L),
                 occurredAtEpochMillis = 4L,
-                errorCode = "downstream_cancelled",
             )
-            connection.close("downstream_cancelled")
+            connection.close(TrafficTerminationReason.Transport.DOWNSTREAM_CANCELLED)
             session.close()
 
             val storedExchange = assertNotNull(database.canonicalCaptureDao().getExchange(EXCHANGE_ID))

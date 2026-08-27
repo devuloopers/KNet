@@ -67,24 +67,22 @@ fun TrafficScreen(
 
     val filterBarState = remember(
         state.searchQuery,
-        state.selectedProtocolFilter,
+        state.selectedSchemeFilter,
+        state.selectedHttpVersionFilter,
         state.selectedMethodFilter,
         state.selectedStatusFilter,
-        state.totalAvailableCount,
-        state.httpCount,
-        state.httpsCount,
-        state.http2Count,
+        state.facetCounts,
         state.columnVisibility
     ) {
         TrafficFilterBarState(
             searchQuery = state.searchQuery,
-            selectedProtocol = state.selectedProtocolFilter,
+            selectedScheme = state.selectedSchemeFilter,
+            selectedHttpVersion = state.selectedHttpVersionFilter,
             selectedMethod = state.selectedMethodFilter,
             selectedStatus = state.selectedStatusFilter,
-            totalCount = state.totalAvailableCount,
-            httpCount = state.httpCount,
-            httpsCount = state.httpsCount,
-            http2Count = state.http2Count,
+            totalCount = state.facetCounts.totalCount,
+            httpCount = state.facetCounts.httpCount,
+            httpsCount = state.facetCounts.httpsCount,
             columnVisibility = state.columnVisibility
         )
     }
@@ -92,7 +90,8 @@ fun TrafficScreen(
     val filterBarActions = remember(viewModel) {
         TrafficFilterBarActions(
             onSearchChange = { viewModel.processIntent(TrafficIntent.Search(it)) },
-            onProtocolSelected = { viewModel.processIntent(TrafficIntent.FilterByProtocol(it)) },
+            onSchemeSelected = { viewModel.processIntent(TrafficIntent.FilterByScheme(it)) },
+            onHttpVersionSelected = { viewModel.processIntent(TrafficIntent.FilterByHttpVersion(it)) },
             onMethodSelected = { viewModel.processIntent(TrafficIntent.FilterByMethod(it)) },
             onStatusSelected = { viewModel.processIntent(TrafficIntent.FilterByStatus(it)) },
             onToggleColumn = { viewModel.processIntent(TrafficIntent.ToggleColumn(it)) },

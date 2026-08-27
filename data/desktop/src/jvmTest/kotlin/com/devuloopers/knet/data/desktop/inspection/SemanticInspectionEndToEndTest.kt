@@ -9,7 +9,7 @@ import com.devuloopers.knet.engine.session.FileBodyStore
 import com.devuloopers.knet.storage.database.DatabaseFactory
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.inspection.InspectionAnnotationState
-import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import com.devuloopers.knet.traffic.model.http.Authority
 import com.devuloopers.knet.traffic.model.http.HeaderField
@@ -57,7 +57,7 @@ class SemanticInspectionEndToEndTest {
                     reasonPhrase = "OK",
                     headers = emptyList(),
                 ),
-                state = ExchangeState.COMPLETED,
+                outcome = ExchangeTerminalOutcome.Completed,
                 startedAtEpochMillis = 10L,
                 completedAtEpochMillis = 20L,
             )

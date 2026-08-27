@@ -14,8 +14,10 @@ import com.devuloopers.knet.engine.sse.protocol.SseLimits
 import com.devuloopers.knet.engine.sse.protocol.SseProtocol
 import com.devuloopers.knet.traffic.id.ProtocolMessageId
 import com.devuloopers.knet.traffic.id.StreamId
-import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.TrafficDirection
+import com.devuloopers.knet.traffic.model.TrafficTerminationCode
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.http.RequestHead
 import com.devuloopers.knet.traffic.model.http.ResponseHead
 import com.devuloopers.knet.traffic.model.message.MessageProtocolId
@@ -69,7 +71,7 @@ private class SseStreamInspector(
     ) {
         if (!active || direction != TrafficDirection.SERVER_TO_CLIENT) return
         unavailableReason?.let { reason ->
-            framer.failAndDetach(occurredAtEpochMillis, reason, payload.size.toLong())
+            framer.failAndDetach(occurredAtEpochMillis, sseTermination(reason), payload.size.toLong())
             unavailableReason = null
             return
         }
@@ -78,7 +80,7 @@ private class SseStreamInspector(
             return
         }
         if (payload.size > limits.maximumDecoderInputBytesPerChunk) {
-            framer.failAndDetach(occurredAtEpochMillis, INPUT_LIMIT, payload.size.toLong())
+            framer.failAndDetach(occurredAtEpochMillis, sseTermination(INPUT_LIMIT), payload.size.toLong())
             return
         }
         val ownedInput = ByteArray(payload.size)
@@ -88,7 +90,7 @@ private class SseStreamInspector(
                 decoder?.close()
                 framer.failAndDetach(
                     occurredAtEpochMillis,
-                    result.reason.code,
+                    sseTermination(result.reason.code),
                     payload.size.toLong(),
                 )
             }
@@ -102,7 +104,7 @@ private class SseStreamInspector(
     override fun onDirectionEnd(direction: TrafficDirection, occurredAtEpochMillis: Long) {
         if (!active || direction != TrafficDirection.SERVER_TO_CLIENT) return
         unavailableReason?.let { reason ->
-            framer.failAndDetach(occurredAtEpochMillis, reason, 0L)
+            framer.failAndDetach(occurredAtEpochMillis, sseTermination(reason), 0L)
             unavailableReason = null
             return
         }
@@ -110,7 +112,11 @@ private class SseStreamInspector(
             when (val result = requireNotNull(decoder).accept(ByteArray(0), endOfInput = true)) {
                 is SseContentCodecResult.Failure -> {
                     decoder?.close()
-                    framer.failAndDetach(occurredAtEpochMillis, result.reason.code, 0L)
+                    framer.failAndDetach(
+                        occurredAtEpochMillis,
+                        sseTermination(result.reason.code),
+                        0L,
+                    )
                     return
                 }
                 is SseContentCodecResult.Output -> {
@@ -124,12 +130,14 @@ private class SseStreamInspector(
     }
 
     override fun onExchangeTerminated(
-        state: ExchangeState,
+        outcome: ExchangeTerminalOutcome,
         occurredAtEpochMillis: Long,
-        errorCode: String?,
     ) {
         decoder?.close()
-        framer.cancel(occurredAtEpochMillis, errorCode ?: PARENT_TERMINATED)
+        framer.cancel(
+            occurredAtEpochMillis,
+            outcome.reason ?: sseTermination(PARENT_TERMINATED),
+        )
     }
 
     private companion object {
@@ -246,19 +254,19 @@ private class SseRecordCaptureFramer(
                 observedBytes = observedRecordBytes,
                 state = ProtocolMessageState.FAILED,
                 occurredAtEpochMillis = occurredAtEpochMillis,
-                errorCode = INCOMPLETE_RECORD,
+                reason = sseTermination(INCOMPLETE_RECORD),
             )
             resetRecord()
         }
     }
 
-    fun cancel(occurredAtEpochMillis: Long, errorCode: String) {
+    fun cancel(occurredAtEpochMillis: Long, reason: TrafficTerminationReason) {
         if (recordActive) {
             currentCapture?.terminate(
                 observedBytes = observedRecordBytes,
                 state = ProtocolMessageState.CANCELLED,
                 occurredAtEpochMillis = occurredAtEpochMillis,
-                errorCode = errorCode,
+                reason = reason,
             )
         }
         resetRecord()
@@ -266,14 +274,18 @@ private class SseRecordCaptureFramer(
     }
 
     /** Records one bounded semantic failure and permanently detaches this passive inspector. */
-    fun failAndDetach(occurredAtEpochMillis: Long, errorCode: String, observedBytes: Long) {
+    fun failAndDetach(
+        occurredAtEpochMillis: Long,
+        reason: TrafficTerminationReason,
+        observedBytes: Long,
+    ) {
         if (detached) return
         ensureRecord(occurredAtEpochMillis)
         currentCapture?.terminate(
             observedBytes = observedRecordBytes + observedBytes,
             state = ProtocolMessageState.FAILED,
             occurredAtEpochMillis = occurredAtEpochMillis,
-            errorCode = errorCode,
+            reason = reason,
         )
         resetRecord()
         detached = true
@@ -362,7 +374,7 @@ private class SseRecordCaptureFramer(
                 observedBytes = observedRecordBytes,
                 state = ProtocolMessageState.TRUNCATED,
                 occurredAtEpochMillis = occurredAtEpochMillis,
-                errorCode = RECORD_LIMIT,
+                reason = sseTermination(RECORD_LIMIT),
             )
         } else {
             currentCapture?.complete(observedRecordBytes, occurredAtEpochMillis)
@@ -393,3 +405,8 @@ private class SseRecordCaptureFramer(
         const val RECORD_LIMIT: String = "sse_record_capture_limit"
     }
 }
+
+private fun sseTermination(code: String): TrafficTerminationReason = TrafficTerminationReason.Protocol(
+    protocol = MessageProtocolId.SSE,
+    code = TrafficTerminationCode(code),
+)

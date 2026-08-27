@@ -382,7 +382,7 @@ class CanonicalSessionWriter private constructor(
                     messageId = event.messageId.value,
                     observedBytes = event.observedBytes,
                     state = event.state.name,
-                    errorCode = event.errorCode,
+                    errorCode = event.reason?.code?.value,
                 )
                 messageStarts.remove(event.messageId)
             }
@@ -398,7 +398,7 @@ class CanonicalSessionWriter private constructor(
                 firstByteMillis = event.timings.firstByteMillis,
                 downloadMillis = event.timings.downloadMillis,
                 totalMillis = event.timings.totalMillis,
-                errorCode = event.errorCode,
+                errorCode = event.outcome.reason?.code?.value,
             )
             is CaptureEvent.GapObserved -> dao.insertGap(
                 CaptureGapEntity(
@@ -417,7 +417,7 @@ class CanonicalSessionWriter private constructor(
                 closedAt = event.occurredAtEpochMillis,
                 receivedBytes = event.receivedBytes,
                 sentBytes = event.sentBytes,
-                errorCode = event.errorCode,
+                errorCode = event.reason?.code?.value,
             )
         }
     }

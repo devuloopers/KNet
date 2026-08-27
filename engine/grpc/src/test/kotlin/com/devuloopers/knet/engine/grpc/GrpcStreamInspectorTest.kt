@@ -9,8 +9,10 @@ import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.id.ProtocolMessageId
 import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.TrafficDirection
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.body.ContentEncoding
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import com.devuloopers.knet.traffic.model.http.HeaderField
@@ -82,7 +84,7 @@ class GrpcStreamInspectorTest {
 
         val message = capture.messages.single()
         assertEquals(ProtocolMessageState.FAILED, message.state)
-        assertEquals("grpc_invalid_compression_flag", message.errorCode)
+        assertEquals("grpc_invalid_compression_flag", message.terminationReason?.code?.value)
         assertEquals(0, message.observedBytes)
     }
 
@@ -154,16 +156,15 @@ private class RecordingExchangeCapture : ProxyExchangeCapture {
         direction: TrafficDirection,
         observedBytes: Long,
         occurredAtEpochMillis: Long,
-        errorCode: String,
+        reason: TrafficTerminationReason,
     ) = Unit
 
     override fun observeResponse(response: ResponseHead, occurredAtEpochMillis: Long) = Unit
 
     override fun terminate(
-        state: ExchangeState,
+        outcome: ExchangeTerminalOutcome,
         timings: ExchangeTimings,
         occurredAtEpochMillis: Long,
-        errorCode: String?,
     ) = Unit
 }
 
@@ -173,7 +174,7 @@ private class RecordingMessageCapture(
     override val messageId: ProtocolMessageId = metadata.messageId
     private val chunks = mutableListOf<ByteArray>()
     var state: ProtocolMessageState = ProtocolMessageState.IN_PROGRESS
-    var errorCode: String? = null
+    var terminationReason: TrafficTerminationReason? = null
     var observedBytes: Long = 0L
 
     override fun tryReservePayload(requestedBytes: Int): ProxyBodyReservation = object : ProxyBodyReservation {
@@ -196,11 +197,11 @@ private class RecordingMessageCapture(
         observedBytes: Long,
         state: ProtocolMessageState,
         occurredAtEpochMillis: Long,
-        errorCode: String?,
+        reason: TrafficTerminationReason?,
     ) {
         this.observedBytes = observedBytes
         this.state = state
-        this.errorCode = errorCode
+        this.terminationReason = reason
     }
 
     fun payload(): ByteArray = chunks.fold(ByteArray(0)) { accumulated, chunk -> accumulated + chunk }

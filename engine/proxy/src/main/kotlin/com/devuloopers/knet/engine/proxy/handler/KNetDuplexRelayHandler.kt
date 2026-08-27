@@ -4,8 +4,9 @@ import com.devuloopers.knet.engine.proxy.inspection.NettyPayloadSlice
 import com.devuloopers.knet.engine.proxy.inspection.ProxyDuplexInspector
 import com.devuloopers.knet.engine.proxy.inspection.ProxyDuplexTransformResult
 import com.devuloopers.knet.engine.proxy.inspection.ProxyDuplexTransformer
-import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.TrafficDirection
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.Unpooled
 import io.netty.channel.Channel
@@ -23,19 +24,19 @@ import kotlin.time.Clock
 internal class DuplexRelayLifecycle(
     private val inspectors: List<ProxyDuplexInspector>,
     private val transformer: ProxyDuplexTransformer?,
-    private val onTerminated: (ExchangeState, Long, String?) -> Unit,
+    private val onTerminated: (ExchangeTerminalOutcome, Long) -> Unit,
 ) {
     private val terminated = AtomicBoolean(false)
 
     /** Terminates both protocol extensions and canonical exchange ownership exactly once. */
-    fun terminate(state: ExchangeState, errorCode: String?) {
+    fun terminate(outcome: ExchangeTerminalOutcome) {
         if (!terminated.compareAndSet(false, true)) return
         val occurredAt = Clock.System.now().toEpochMilliseconds()
-        transformer?.cancel(errorCode)
+        transformer?.cancel(outcome.reason)
         inspectors.forEach { inspector ->
-            runCatching { inspector.onTerminated(state, occurredAt, errorCode) }
+            runCatching { inspector.onTerminated(outcome, occurredAt) }
         }
-        onTerminated(state, occurredAt, errorCode)
+        onTerminated(outcome, occurredAt)
     }
 }
 
@@ -71,9 +72,9 @@ internal class KNetDuplexRelayHandler(
             context.executor().execute {
                 transformInProgress = false
                 if (failure != null || result is ProxyDuplexTransformResult.DropConnection) {
-                    val errorCode = (result as? ProxyDuplexTransformResult.DropConnection)?.errorCode
-                        ?: DUPLEX_TRANSFORM_FAILED
-                    lifecycle.terminate(ExchangeState.FAILED, errorCode)
+                    val reason = (result as? ProxyDuplexTransformResult.DropConnection)?.reason
+                        ?: TrafficTerminationReason.Interception.DUPLEX_TRANSFORM_FAILED
+                    lifecycle.terminate(ExchangeTerminalOutcome.Failed(reason))
                     peer.close()
                     context.close()
                     return@execute
@@ -101,13 +102,15 @@ internal class KNetDuplexRelayHandler(
     }
 
     override fun channelInactive(context: ChannelHandlerContext) {
-        lifecycle.terminate(ExchangeState.COMPLETED, null)
+        lifecycle.terminate(ExchangeTerminalOutcome.Completed)
         if (peer.isActive) peer.close()
         super.channelInactive(context)
     }
 
     override fun exceptionCaught(context: ChannelHandlerContext, cause: Throwable) {
-        lifecycle.terminate(ExchangeState.FAILED, DUPLEX_IO_FAILED)
+        lifecycle.terminate(
+            ExchangeTerminalOutcome.Failed(TrafficTerminationReason.Transport.DUPLEX_IO_FAILED),
+        )
         if (peer.isActive) peer.close()
         context.close()
     }
@@ -123,7 +126,9 @@ internal class KNetDuplexRelayHandler(
     private fun writeAndAdvance(context: ChannelHandlerContext, payload: ByteBuf) {
         if (!peer.isActive) {
             payload.release()
-            lifecycle.terminate(ExchangeState.CANCELLED, DUPLEX_PEER_CLOSED)
+            lifecycle.terminate(
+                ExchangeTerminalOutcome.Cancelled(TrafficTerminationReason.Transport.DUPLEX_PEER_CLOSED),
+            )
             context.close()
             return
         }
@@ -132,7 +137,9 @@ internal class KNetDuplexRelayHandler(
                 if (write.isSuccess && context.channel().isActive && peer.isWritable) {
                     context.read()
                 } else if (!write.isSuccess) {
-                    lifecycle.terminate(ExchangeState.FAILED, DUPLEX_WRITE_FAILED)
+                    lifecycle.terminate(
+                        ExchangeTerminalOutcome.Failed(TrafficTerminationReason.Transport.DUPLEX_WRITE_FAILED),
+                    )
                     peer.close()
                     context.close()
                 }
@@ -140,10 +147,4 @@ internal class KNetDuplexRelayHandler(
         }
     }
 
-    private companion object {
-        const val DUPLEX_TRANSFORM_FAILED = "duplex_transform_failed"
-        const val DUPLEX_IO_FAILED = "duplex_io_failed"
-        const val DUPLEX_PEER_CLOSED = "duplex_peer_closed"
-        const val DUPLEX_WRITE_FAILED = "duplex_write_failed"
-    }
 }

@@ -9,6 +9,8 @@ import com.devuloopers.knet.application.contract.proxy.ProxyStopResult
 import com.devuloopers.knet.application.contract.traffic.BodyChunk
 import com.devuloopers.knet.application.contract.traffic.BodyRange
 import com.devuloopers.knet.application.contract.traffic.TrafficGeneration
+import com.devuloopers.knet.application.contract.traffic.TrafficFacetCounts
+import com.devuloopers.knet.application.contract.traffic.TrafficFacetReader
 import com.devuloopers.knet.application.contract.traffic.TrafficPage
 import com.devuloopers.knet.application.contract.traffic.TrafficPageQuery
 import com.devuloopers.knet.application.contract.traffic.TrafficQuery
@@ -45,6 +47,7 @@ import com.devuloopers.knet.application.usecase.traffic.LoadProtocolMessageBodyU
 import com.devuloopers.knet.application.usecase.traffic.PrepareTrafficRequestUseCase
 import com.devuloopers.knet.application.usecase.traffic.PrepareCapturedNetworkRequestUseCase
 import com.devuloopers.knet.application.usecase.traffic.QueryTrafficPageUseCase
+import com.devuloopers.knet.application.usecase.traffic.QueryTrafficFacetsUseCase
 import com.devuloopers.knet.application.usecase.traffic.PauseTrafficCaptureUseCase
 import com.devuloopers.knet.application.usecase.traffic.ResumeTrafficCaptureUseCase
 import com.devuloopers.knet.application.usecase.traffic.ObserveTrafficCaptureStateUseCase
@@ -84,6 +87,7 @@ object FakeTrafficViewModelFactory {
         localIp: String = "127.0.0.1",
         customObserveLocalIpUseCase: ObserveLocalIpUseCase? = null,
         customTrafficQueryPort: TrafficQuery? = null,
+        customTrafficFacetReader: TrafficFacetReader = TrafficFacetReader { TrafficFacetCounts() },
         customSessionCatalogPort: TrafficSessionCatalog? = null,
         customProxyRuntime: ProxyRuntime? = null,
         customCaptureSessionControl: CaptureSessionControl? = null,
@@ -184,6 +188,7 @@ object FakeTrafficViewModelFactory {
                 },
             ),
             queryTrafficPageUseCase = QueryTrafficPageUseCase(fakeTrafficQueryPort),
+            queryTrafficFacetsUseCase = QueryTrafficFacetsUseCase(customTrafficFacetReader),
             observeTrafficGenerationsUseCase = ObserveTrafficGenerationsUseCase(fakeTrafficQueryPort),
             observeProtocolMessageChangesUseCase = ObserveProtocolMessageChangesUseCase(protocolMessages),
             queryProtocolMessagesUseCase = QueryProtocolMessagesUseCase(protocolMessages),

@@ -9,7 +9,7 @@ import com.devuloopers.knet.engine.session.FileBodyStore
 import com.devuloopers.knet.storage.database.DatabaseFactory
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.inspection.InspectionAnnotationState
-import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.http.*
 import java.nio.file.Files
 import kotlinx.coroutines.test.runTest
@@ -41,7 +41,7 @@ class SseSemanticInspectionEndToEndTest {
                     listOf(HeaderField(HeaderName("Content-Type"), "text/event-stream")),
                 ),
                 responseBody = "event: update\ndata: ready\n\n".encodeToByteArray(),
-                state = ExchangeState.COMPLETED,
+                outcome = ExchangeTerminalOutcome.Completed,
                 startedAtEpochMillis = 10L,
                 completedAtEpochMillis = 20L,
             )

@@ -209,13 +209,12 @@ public sealed interface CaptureEvent {
         public val messageId: ProtocolMessageId,
         public val observedBytes: Long,
         public val state: ProtocolMessageState,
-        public val errorCode: String? = null,
+        public val reason: TrafficTerminationReason? = null,
     ) : CaptureEvent {
         init {
             validateEventCoordinates(sequence, occurredAtEpochMillis)
             require(observedBytes >= 0L) { "Observed message bytes must not be negative." }
             require(state != ProtocolMessageState.IN_PROGRESS) { "Message termination requires a terminal state." }
-            require(errorCode == null || errorCode.isNotBlank()) { "Message error code must not be blank." }
         }
     }
 
@@ -224,9 +223,8 @@ public sealed interface CaptureEvent {
      *
      * @property exchangeId Target exchange.
      * @property exchangeVersion Monotonic terminal version.
-     * @property state Terminal exchange state.
+     * @property outcome Strongly typed terminal state and reason.
      * @property timings Final observed timings.
-     * @property errorCode Optional stable safe diagnostic code.
      */
     public data class ExchangeTerminated(
         override val sessionId: CaptureSessionId,
@@ -235,15 +233,14 @@ public sealed interface CaptureEvent {
         override val occurredAtEpochMillis: Long,
         public val exchangeId: ExchangeId,
         public val exchangeVersion: Long,
-        public val state: ExchangeState,
+        public val outcome: ExchangeTerminalOutcome,
         public val timings: ExchangeTimings = ExchangeTimings(),
-        public val errorCode: String? = null,
     ) : CaptureEvent {
+        public val state: ExchangeState get() = outcome.state
+
         init {
             validateEventCoordinates(sequence, occurredAtEpochMillis)
             require(exchangeVersion >= 0L) { "Exchange version must not be negative." }
-            require(state in TERMINAL_EXCHANGE_STATES) { "Exchange termination requires a terminal state." }
-            require(errorCode == null || errorCode.isNotBlank()) { "Error code must not be blank." }
         }
     }
 
@@ -277,7 +274,7 @@ public sealed interface CaptureEvent {
      *
      * @property receivedBytes Total downstream bytes received when known.
      * @property sentBytes Total downstream bytes sent when known.
-     * @property errorCode Optional stable safe diagnostic code.
+     * @property reason Optional strongly typed terminal reason.
      */
     public data class ConnectionClosed(
         override val sessionId: CaptureSessionId,
@@ -286,24 +283,15 @@ public sealed interface CaptureEvent {
         override val occurredAtEpochMillis: Long,
         public val receivedBytes: Long,
         public val sentBytes: Long,
-        public val errorCode: String? = null,
+        public val reason: TrafficTerminationReason? = null,
     ) : CaptureEvent {
         init {
             validateEventCoordinates(sequence, occurredAtEpochMillis)
             require(receivedBytes >= 0L) { "Received bytes must not be negative." }
             require(sentBytes >= 0L) { "Sent bytes must not be negative." }
-            require(errorCode == null || errorCode.isNotBlank()) { "Error code must not be blank." }
         }
     }
 }
-
-/** Terminal exchange states accepted by [CaptureEvent.ExchangeTerminated]. */
-private val TERMINAL_EXCHANGE_STATES: Set<ExchangeState> = setOf(
-    ExchangeState.COMPLETED,
-    ExchangeState.FAILED,
-    ExchangeState.DROPPED,
-    ExchangeState.CANCELLED,
-)
 
 /** Applies shared event ordering and timestamp validation. */
 private fun validateEventCoordinates(sequence: Long, occurredAtEpochMillis: Long) {

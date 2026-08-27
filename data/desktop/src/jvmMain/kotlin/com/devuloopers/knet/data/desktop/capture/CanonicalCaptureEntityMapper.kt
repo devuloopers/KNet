@@ -12,6 +12,7 @@ import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.id.ProtocolMessageId
 import com.devuloopers.knet.traffic.model.CaptureEvent
 import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.HttpExchangeSnapshot
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
@@ -19,6 +20,7 @@ import com.devuloopers.knet.traffic.model.HttpResponseSnapshot
 import com.devuloopers.knet.traffic.model.IngressKind
 import com.devuloopers.knet.traffic.model.TrafficDirection
 import com.devuloopers.knet.traffic.model.TrafficOrigin
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.body.BodyCaptureOutcome
 import com.devuloopers.knet.traffic.model.body.BodyDigest
 import com.devuloopers.knet.traffic.model.body.BodyDigestAlgorithm
@@ -187,7 +189,7 @@ internal object CanonicalCaptureEntityMapper {
         body = messageBody(message.bodyId, bodies),
         state = runCatching { ProtocolMessageState.valueOf(message.state) }
             .getOrDefault(ProtocolMessageState.FAILED),
-        errorCode = message.errorCode,
+        terminationReason = TrafficTerminationReason.fromCode(message.errorCode),
     )
 
     /** Encodes ordered duplicate-preserving headers using a versioned length-prefix format. */
@@ -232,6 +234,7 @@ internal object CanonicalCaptureEntityMapper {
                 trailers = decodeOptionalHeaders(exchange.responseTrailersEncoded),
             )
         }
+        val state = runCatching { ExchangeState.valueOf(exchange.state) }.getOrDefault(ExchangeState.FAILED)
         return HttpExchangeSnapshot(
             id = ExchangeId(exchange.id),
             connectionId = ConnectionId(exchange.connectionId),
@@ -239,7 +242,8 @@ internal object CanonicalCaptureEntityMapper {
             request = request,
             response = response,
             origin = TrafficOrigin.fromToken(exchange.origin),
-            state = runCatching { ExchangeState.valueOf(exchange.state) }.getOrDefault(ExchangeState.FAILED),
+            state = state,
+            terminalOutcome = ExchangeTerminalOutcome.fromPersisted(state, exchange.terminalErrorCode),
             timings = ExchangeTimings(
                 dnsMillis = exchange.timingDnsMillis,
                 connectMillis = exchange.timingConnectMillis,

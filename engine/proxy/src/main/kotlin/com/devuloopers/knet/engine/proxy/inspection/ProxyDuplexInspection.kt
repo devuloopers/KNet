@@ -2,9 +2,10 @@ package com.devuloopers.knet.engine.proxy.inspection
 
 import com.devuloopers.knet.engine.proxy.capture.ProxyExchangeCapture
 import com.devuloopers.knet.traffic.id.StreamId
-import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.TrafficDirection
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.http.ResponseHead
 import java.util.concurrent.CompletionStage
 
@@ -41,9 +42,8 @@ interface ProxyDuplexInspector {
 
     /** Releases protocol state after the upgraded connection reaches a terminal state. */
     fun onTerminated(
-        state: ExchangeState,
+        outcome: ExchangeTerminalOutcome,
         occurredAtEpochMillis: Long,
-        errorCode: String?,
     ) = Unit
 }
 
@@ -75,7 +75,7 @@ interface ProxyDuplexTransformer {
     ): CompletionStage<ProxyDuplexTransformResult>
 
     /** Releases held bytes and pending decisions after the connection terminates. */
-    fun cancel(errorCode: String?) = Unit
+    fun cancel(reason: TrafficTerminationReason?) = Unit
 }
 
 /** Result of transforming one post-upgrade transport payload. */
@@ -94,9 +94,5 @@ sealed interface ProxyDuplexTransformResult {
     }
 
     /** Terminates both directions of the upgraded connection with a stable error code. */
-    data class DropConnection(val errorCode: String) : ProxyDuplexTransformResult {
-        init {
-            require(errorCode.isNotBlank()) { "Duplex connection drop error code must not be blank." }
-        }
-    }
+    data class DropConnection(val reason: TrafficTerminationReason) : ProxyDuplexTransformResult
 }

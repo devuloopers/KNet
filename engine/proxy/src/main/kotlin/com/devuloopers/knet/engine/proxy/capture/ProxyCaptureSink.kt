@@ -3,12 +3,13 @@ package com.devuloopers.knet.engine.proxy.capture
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.id.ProtocolMessageId
 import com.devuloopers.knet.traffic.id.StreamId
-import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.IngressContext
 import com.devuloopers.knet.traffic.model.TrafficDirection
 import com.devuloopers.knet.traffic.model.TrafficEndpoint
 import com.devuloopers.knet.traffic.model.TrafficOrigin
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.body.ContentEncoding
 import com.devuloopers.knet.traffic.model.http.RequestHead
 import com.devuloopers.knet.traffic.model.http.ResponseHead
@@ -48,10 +49,10 @@ interface ProxyConnectionCapture : AutoCloseable {
     ): ProxyExchangeCapture?
 
     /** Closes the capture side output without closing the transport. */
-    fun close(errorCode: String?)
+    fun close(reason: TrafficTerminationReason?)
 
     /** Closes normally. */
-    override fun close(): Unit = close(errorCode = null)
+    override fun close(): Unit = close(reason = null)
 }
 
 /** Exchange-scoped canonical capture side output. */
@@ -77,7 +78,7 @@ interface ProxyExchangeCapture {
         direction: TrafficDirection,
         observedBytes: Long,
         occurredAtEpochMillis: Long,
-        errorCode: String,
+        reason: TrafficTerminationReason,
     )
 
     /** Starts one framed child message, or returns null while forwarding remains unaffected. */
@@ -95,10 +96,9 @@ interface ProxyExchangeCapture {
 
     /** Publishes exactly one terminal exchange state. */
     fun terminate(
-        state: ExchangeState,
+        outcome: ExchangeTerminalOutcome,
         timings: ExchangeTimings,
         occurredAtEpochMillis: Long,
-        errorCode: String? = null,
     )
 }
 
@@ -131,7 +131,7 @@ interface ProxyMessageCapture {
         observedBytes: Long,
         state: ProtocolMessageState,
         occurredAtEpochMillis: Long,
-        errorCode: String? = null,
+        reason: TrafficTerminationReason? = null,
     )
 }
 

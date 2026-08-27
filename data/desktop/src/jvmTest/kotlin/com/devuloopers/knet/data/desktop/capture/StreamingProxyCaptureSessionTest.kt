@@ -5,12 +5,13 @@ import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureConnectionMetadata
 import com.devuloopers.knet.engine.session.FileBodyStore
 import com.devuloopers.knet.storage.database.DatabaseFactory
 import com.devuloopers.knet.traffic.id.ExchangeId
-import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.IngressContext
 import com.devuloopers.knet.traffic.model.IngressKind
 import com.devuloopers.knet.traffic.model.TrafficDirection
 import com.devuloopers.knet.traffic.model.TrafficEndpoint
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import com.devuloopers.knet.traffic.model.http.Authority
 import com.devuloopers.knet.traffic.model.http.HttpMethod
@@ -28,6 +29,50 @@ import kotlin.test.assertNull
 
 /** Verifies streaming reservation, truncation, and canonical terminal ownership. */
 class StreamingProxyCaptureSessionTest {
+
+    @Test
+    fun `session shutdown propagates its typed reason to unfinished exchanges`() = runTest {
+        val root = Files.createTempDirectory("knet-streaming-shutdown-").toFile()
+        val database = DatabaseFactory.create(root.resolve("traffic.db"))
+        val bodyStore = FileBodyStore(root.resolve("bodies"))
+        val session = CanonicalCaptureSessionFactory(database, bodyStore, bodyStore)
+            .openStreamingProxy(localListenerPort = 8080, startedAtEpochMillis = 1L)
+        try {
+            val connection = assertNotNull(
+                session.openConnection(
+                    ProxyCaptureConnectionMetadata(
+                        ingress = IngressContext(IngressKind.Local),
+                        downstream = TrafficEndpoint("127.0.0.1", 50_000),
+                        localListener = TrafficEndpoint("127.0.0.1", 8080),
+                    ),
+                ),
+            )
+            connection.startExchange(
+                exchangeId = ExchangeId(SHUTDOWN_EXCHANGE_ID),
+                request = RequestHead(
+                    method = HttpMethod.fromToken("GET"),
+                    target = RequestTarget.Absolute(
+                        scheme = HttpScheme.fromToken("http"),
+                        authority = Authority("example.test", 80),
+                        pathAndQuery = "/unfinished",
+                    ),
+                    protocol = ApplicationProtocol.fromToken("HTTP/1.1"),
+                    headers = emptyList(),
+                ),
+                occurredAtEpochMillis = 2L,
+            )
+
+            session.close(TrafficTerminationReason.Lifecycle.PROXY_STOPPED)
+
+            val stored = assertNotNull(database.canonicalCaptureDao().getExchange(SHUTDOWN_EXCHANGE_ID))
+            assertEquals("CANCELLED", stored.state)
+            assertEquals("proxy-stopped", stored.terminalErrorCode)
+        } finally {
+            session.close()
+            database.close()
+            root.deleteRecursively()
+        }
+    }
 
     @Test
     fun `capture budget truncates storage without losing observed size or terminal metadata`() = runTest {
@@ -97,7 +142,7 @@ class StreamingProxyCaptureSessionTest {
                 )
             )
             exchange.completeBody(TrafficDirection.SERVER_TO_CLIENT, observedBytes = 6L, occurredAtEpochMillis = 5L)
-            exchange.terminate(ExchangeState.COMPLETED, ExchangeTimings(totalMillis = 3L), 5L)
+            exchange.terminate(ExchangeTerminalOutcome.Completed, ExchangeTimings(totalMillis = 3L), 5L)
             connection.close()
             session.close()
 
@@ -117,5 +162,6 @@ class StreamingProxyCaptureSessionTest {
 
     private companion object {
         const val EXCHANGE_ID: String = "streaming-truncated-exchange"
+        const val SHUTDOWN_EXCHANGE_ID: String = "streaming-shutdown-exchange"
     }
 }

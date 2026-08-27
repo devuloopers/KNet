@@ -4,7 +4,11 @@ import com.devuloopers.knet.application.contract.traffic.BodyChunk
 import com.devuloopers.knet.application.contract.traffic.BodyRange
 import com.devuloopers.knet.application.contract.traffic.BodyStore
 import com.devuloopers.knet.application.contract.traffic.TrafficGeneration
+import com.devuloopers.knet.application.contract.traffic.TrafficFacetCounts
+import com.devuloopers.knet.application.contract.traffic.TrafficFacetQuery
+import com.devuloopers.knet.application.contract.traffic.TrafficFacetReader
 import com.devuloopers.knet.application.contract.traffic.TrafficCaptureSequence
+import com.devuloopers.knet.application.contract.traffic.TrafficHistorySequence
 import com.devuloopers.knet.application.contract.traffic.TrafficPage
 import com.devuloopers.knet.application.contract.traffic.TrafficPageCursor
 import com.devuloopers.knet.application.contract.traffic.TrafficPageItem
@@ -37,7 +41,7 @@ internal class CanonicalTrafficQueryAdapter(
     private val dao: CanonicalCaptureDao,
     private val bodyStore: BodyStore,
     private val currentGeneration: () -> Long = { 0L },
-) : TrafficQuery {
+) : TrafficQuery, TrafficFacetReader {
     private val observedGeneration = MutableStateFlow(0L)
 
     override val generations: Flow<TrafficGeneration> = sessionId?.let { configuredSessionId ->
@@ -110,20 +114,23 @@ internal class CanonicalTrafficQueryAdapter(
                 limit = query.limit + 1,
             )
         }
-        val pageEntities = entities.take(query.limit)
+        val pageRows = entities.take(query.limit)
+        val pageEntities = pageRows.map { row -> row.exchange }
         val bodies = loadBodies(pageEntities)
         val hasMore = entities.size > query.limit
         TrafficPage(
-            items = pageEntities.map { entity ->
+            items = pageRows.map { row ->
+                val entity = row.exchange
                 TrafficPageItem(
                     captureSequence = TrafficCaptureSequence(entity.captureSequence),
+                    historySequence = TrafficHistorySequence(row.historySequence),
                     exchange = CanonicalCaptureEntityMapper.snapshot(entity, bodies),
                 )
             },
-            nextCursor = pageEntities.lastOrNull()?.takeIf { hasMore }?.let { entity ->
+            nextCursor = pageRows.lastOrNull()?.takeIf { hasMore }?.let { row ->
                 CanonicalTrafficCursorCodec.encode(
                     CanonicalPageKey(
-                        captureSequence = entity.captureSequence,
+                        captureSequence = row.exchange.captureSequence,
                         totalCount = totalCount,
                         direction = query.direction,
                     ),
@@ -137,6 +144,31 @@ internal class CanonicalTrafficQueryAdapter(
     override suspend fun getExchange(exchangeId: ExchangeId): HttpExchangeSnapshot? = withContext(Dispatchers.IO) {
         val entity = dao.getExchange(exchangeId.value) ?: return@withContext null
         CanonicalCaptureEntityMapper.snapshot(entity, loadBodies(listOf(entity)))
+    }
+
+    override suspend fun queryFacets(query: TrafficFacetQuery): TrafficFacetCounts = withContext(Dispatchers.IO) {
+        if (sessionId != null && query.sessionId != null && query.sessionId != sessionId) {
+            return@withContext TrafficFacetCounts()
+        }
+        val methods = query.methods.map { method -> method.token }.ifEmpty { listOf(UNUSED_METHOD) }
+        val statuses = query.statuses.map { status -> status.code }.ifEmpty { listOf(UNUSED_STATUS) }
+        val protocols = query.protocols.map { protocol -> protocol.token }.ifEmpty { listOf(UNUSED_PROTOCOL) }
+        val row = dao.getTrafficFacetCounts(
+            sessionId = (query.sessionId ?: sessionId)?.value,
+            searchPattern = query.searchContains?.takeIf { value -> value.isNotBlank() }
+                ?.let(::escapedContainsPattern),
+            filterMethods = if (query.methods.isEmpty()) 0 else 1,
+            methods = methods,
+            filterStatuses = if (query.statuses.isEmpty()) 0 else 1,
+            statuses = statuses,
+            filterProtocols = if (query.protocols.isEmpty()) 0 else 1,
+            protocols = protocols,
+        )
+        TrafficFacetCounts(
+            totalCount = row.totalCount,
+            httpCount = row.httpCount,
+            httpsCount = row.httpsCount,
+        )
     }
 
     override suspend fun readBody(bodyId: BodyId, range: BodyRange): BodyChunk = bodyStore.readBody(bodyId, range)

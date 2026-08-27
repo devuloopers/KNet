@@ -30,4 +30,11 @@ class TrafficQueryModelsTest {
             )
         }
     }
+
+    @Test
+    fun `traffic facet counts reject negative aggregates`() {
+        assertFailsWith<IllegalArgumentException> {
+            TrafficFacetCounts(totalCount = -1L)
+        }
+    }
 }

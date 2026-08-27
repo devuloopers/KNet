@@ -87,11 +87,11 @@ class ProxyEngineStreamingCaptureTest {
                 protocols = emptyList(),
                 limit = 1,
             ).singleOrNull())
-            assertFalse(stored.id.isBlank())
-            assertEquals(KNetProxyServer.DEFAULT_BIND_HOST, stored.host)
-            assertEquals(origin.localPort, stored.port)
-            assertEquals(201, stored.responseStatusCode)
-            assertEquals("COMPLETED", stored.state)
+            assertFalse(stored.exchange.id.isBlank())
+            assertEquals(KNetProxyServer.DEFAULT_BIND_HOST, stored.exchange.host)
+            assertEquals(origin.localPort, stored.exchange.port)
+            assertEquals(201, stored.exchange.responseStatusCode)
+            assertEquals("COMPLETED", stored.exchange.state)
         } finally {
             origin.close()
             originThread.join(1_000L)
@@ -157,7 +157,8 @@ class ProxyEngineStreamingCaptureTest {
                 protocols = emptyList(),
                 limit = 10,
             )
-            assertEquals(listOf("/after-clear"), stored.map { it.pathAndQuery })
+            assertEquals(listOf("/after-clear"), stored.map { it.exchange.pathAndQuery })
+            assertEquals(listOf(1L), stored.map { it.historySequence })
         } finally {
             origin.close()
             originThread.join(1_000L)

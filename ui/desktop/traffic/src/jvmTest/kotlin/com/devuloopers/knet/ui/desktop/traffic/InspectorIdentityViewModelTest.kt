@@ -4,6 +4,7 @@ import com.devuloopers.knet.application.contract.traffic.BodyChunk
 import com.devuloopers.knet.application.contract.traffic.BodyRange
 import com.devuloopers.knet.application.contract.traffic.TrafficGeneration
 import com.devuloopers.knet.application.contract.traffic.TrafficCaptureSequence
+import com.devuloopers.knet.application.contract.traffic.TrafficHistorySequence
 import com.devuloopers.knet.application.contract.traffic.TrafficPage
 import com.devuloopers.knet.application.contract.traffic.TrafficPageItem
 import com.devuloopers.knet.application.contract.traffic.TrafficPageQuery
@@ -99,6 +100,7 @@ class InspectorIdentityViewModelTest {
             items = snapshots.mapIndexed { index, snapshot ->
                 TrafficPageItem(
                     captureSequence = TrafficCaptureSequence((snapshots.size - index).toLong()),
+                    historySequence = TrafficHistorySequence((snapshots.size - index).toLong()),
                     exchange = snapshot,
                 )
             },

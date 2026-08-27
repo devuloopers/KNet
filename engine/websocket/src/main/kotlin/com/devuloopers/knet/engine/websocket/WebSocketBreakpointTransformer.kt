@@ -12,7 +12,10 @@ import com.devuloopers.knet.traffic.id.ProtocolMessageId
 import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.TrafficDirection
+import com.devuloopers.knet.traffic.model.TrafficTerminationCode
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.http.ResponseHead
+import com.devuloopers.knet.traffic.model.message.MessageProtocolId
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 import java.io.ByteArrayOutputStream
@@ -128,21 +131,23 @@ private class WebSocketBreakpointTransformer(
         occurredAtEpochMillis: Long,
     ): CompletionStage<ProxyDuplexTransformResult> {
         if (cancelled.get()) {
-            return CompletableFuture.completedFuture(ProxyDuplexTransformResult.DropConnection(CANCELLED))
+            return CompletableFuture.completedFuture(
+                ProxyDuplexTransformResult.DropConnection(webSocketTermination(CANCELLED)),
+            )
         }
         val future = CompletableFuture<ProxyDuplexTransformResult>()
         scope.launch {
             val result = runCatching {
                 directionGate(direction).transform(payload, occurredAtEpochMillis)
             }.getOrElse {
-                ProxyDuplexTransformResult.DropConnection(TRANSFORM_FAILED)
+                ProxyDuplexTransformResult.DropConnection(webSocketTermination(TRANSFORM_FAILED))
             }
             future.complete(result)
         }
         return future
     }
 
-    override fun cancel(errorCode: String?) {
+    override fun cancel(reason: TrafficTerminationReason?) {
         if (!cancelled.compareAndSet(false, true)) return
         clientGate.cancel()
         serverGate.cancel()
@@ -193,11 +198,13 @@ private class WebSocketDirectionGate(
     }
 
     suspend fun transform(input: ByteArray, occurredAtEpochMillis: Long): ProxyDuplexTransformResult {
-        if (cancelled) return ProxyDuplexTransformResult.DropConnection(CANCELLED)
+        if (cancelled) return ProxyDuplexTransformResult.DropConnection(webSocketTermination(CANCELLED))
         if (!enabled) return ProxyDuplexTransformResult.Forward(input)
-        val selectedDecoder = decoder ?: return ProxyDuplexTransformResult.DropConnection(NOT_ESTABLISHED)
+        val selectedDecoder = decoder
+            ?: return ProxyDuplexTransformResult.DropConnection(webSocketTermination(NOT_ESTABLISHED))
         return when (val result = selectedDecoder.accept(input)) {
-            is WebSocketDecodeResult.Failure -> ProxyDuplexTransformResult.DropConnection(result.errorCode)
+            is WebSocketDecodeResult.Failure ->
+                ProxyDuplexTransformResult.DropConnection(webSocketTermination(result.errorCode))
             is WebSocketDecodeResult.Frames -> {
                 val output = ByteArrayOutputStream(input.size)
                 for (frame in result.values) {
@@ -229,18 +236,20 @@ private class WebSocketDirectionGate(
         }
         when (frame.opcode) {
             WebSocketOpcode.TEXT, WebSocketOpcode.BINARY -> {
-                if (initialFrame != null) return ProxyDuplexTransformResult.DropConnection(UNEXPECTED_DATA)
+                if (initialFrame != null) {
+                    return ProxyDuplexTransformResult.DropConnection(webSocketTermination(UNEXPECTED_DATA))
+                }
                 initialFrame = frame
             }
             WebSocketOpcode.CONTINUATION -> if (initialFrame == null) {
-                return ProxyDuplexTransformResult.DropConnection(UNEXPECTED_CONTINUATION)
+                return ProxyDuplexTransformResult.DropConnection(webSocketTermination(UNEXPECTED_CONTINUATION))
             }
             else -> Unit
         }
         heldFrames += HeldFrame(frame = frame, forwardedWireBytes = null)
         messagePayload.write(frame.payload)
         if (messagePayload.size() > maximumEditableMessageBytes) {
-            return ProxyDuplexTransformResult.DropConnection(MESSAGE_LIMIT)
+            return ProxyDuplexTransformResult.DropConnection(webSocketTermination(MESSAGE_LIMIT))
         }
         if (!frame.final) return ProxyDuplexTransformResult.Forward(ByteArray(0))
 
@@ -252,7 +261,9 @@ private class WebSocketDirectionGate(
             ProtocolMessageBreakpointDecision.ContinueUnchanged -> ProxyDuplexTransformResult.Forward(originalWire)
             is ProtocolMessageBreakpointDecision.Replace -> {
                 if (first.compressed) {
-                    ProxyDuplexTransformResult.DropConnection(COMPRESSED_EDIT_UNSUPPORTED)
+                    ProxyDuplexTransformResult.DropConnection(
+                        webSocketTermination(COMPRESSED_EDIT_UNSUPPORTED),
+                    )
                 } else {
                     ProxyDuplexTransformResult.Forward(
                         heldFrames.rebuildWithReplacement(decision.body.copyBytes()),
@@ -260,7 +271,7 @@ private class WebSocketDirectionGate(
                 }
             }
             ProtocolMessageBreakpointDecision.DropStream ->
-                ProxyDuplexTransformResult.DropConnection(MESSAGE_DROPPED)
+                ProxyDuplexTransformResult.DropConnection(webSocketTermination(MESSAGE_DROPPED))
         }
         resetMessage()
         return result
@@ -280,7 +291,7 @@ private class WebSocketDirectionGate(
             ),
         )
         ProtocolMessageBreakpointDecision.DropStream ->
-            ProxyDuplexTransformResult.DropConnection(MESSAGE_DROPPED)
+            ProxyDuplexTransformResult.DropConnection(webSocketTermination(MESSAGE_DROPPED))
     }
 
     private suspend fun intercept(
@@ -344,6 +355,12 @@ private class WebSocketDirectionGate(
         const val UNEXPECTED_DATA: String = "websocket_unexpected_data_frame"
     }
 }
+
+private fun webSocketTermination(code: String): TrafficTerminationReason =
+    TrafficTerminationReason.Protocol(
+        protocol = MessageProtocolId.WEBSOCKET,
+        code = TrafficTerminationCode(code),
+    )
 
 private data class HeldFrame(
     val frame: WebSocketFrame,

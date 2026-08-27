@@ -3,7 +3,7 @@ package com.devuloopers.knet.data.desktop.capture
 import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureConnectionMetadata
 import com.devuloopers.knet.engine.proxy.capture.ProxyExchangeCapture
 import com.devuloopers.knet.traffic.id.ExchangeId
-import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.IngressContext
 import com.devuloopers.knet.traffic.model.IngressKind
@@ -24,11 +24,10 @@ internal suspend fun StreamingProxyCaptureSession.recordTestProxyExchange(
     requestBody: ByteArray? = null,
     response: ResponseHead? = null,
     responseBody: ByteArray? = null,
-    state: ExchangeState = ExchangeState.COMPLETED,
+    outcome: ExchangeTerminalOutcome = ExchangeTerminalOutcome.Completed,
     timings: ExchangeTimings = ExchangeTimings(),
     startedAtEpochMillis: Long = 10L,
     completedAtEpochMillis: Long = startedAtEpochMillis,
-    errorCode: String? = null,
 ) {
     val connection = checkNotNull(
         openConnection(
@@ -55,7 +54,7 @@ internal suspend fun StreamingProxyCaptureSession.recordTestProxyExchange(
             body = responseBody,
             occurredAtEpochMillis = completedAtEpochMillis,
         )
-        exchange.terminate(state, timings, completedAtEpochMillis, errorCode)
+        exchange.terminate(outcome, timings, completedAtEpochMillis)
     } finally {
         connection.close()
     }

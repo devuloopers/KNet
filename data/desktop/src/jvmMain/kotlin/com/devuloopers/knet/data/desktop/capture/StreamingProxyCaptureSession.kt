@@ -18,10 +18,11 @@ import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.id.ProtocolMessageId
 import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.model.CaptureEvent
-import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.TrafficDirection
 import com.devuloopers.knet.traffic.model.TrafficOrigin
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.body.BodyCaptureOutcome
 import com.devuloopers.knet.traffic.model.body.BodyFailure
 import com.devuloopers.knet.traffic.model.body.ContentEncoding
@@ -72,7 +73,7 @@ class StreamingProxyCaptureSession internal constructor(
         if (!connection.open()) return null
         connections += connection
         if (closed.get()) {
-            connection.close(SESSION_CLOSED)
+            connection.close(TrafficTerminationReason.Lifecycle.CAPTURE_SESSION_CLOSED)
             return null
         }
         return connection
@@ -83,21 +84,28 @@ class StreamingProxyCaptureSession internal constructor(
         ingress.flush()
     }
 
-    /** Terminalizes live connections, drains accepted work, and closes the canonical writer. */
-    suspend fun close() {
+    /** Terminalizes live connections with one semantic reason, drains work, and closes the writer. */
+    suspend fun close(
+        reason: TrafficTerminationReason = TrafficTerminationReason.Lifecycle.CAPTURE_SESSION_CLOSED,
+    ) {
         if (!closed.compareAndSet(false, true)) return
-        connections.toList().forEach { connection -> connection.close(SESSION_CLOSED) }
+        connections.toList().forEach { connection ->
+            connection.close(reason)
+        }
         ingress.close()
         shutdownScope.cancel()
     }
 
     /** Starts asynchronous close and waits for bounded process-shutdown cleanup. */
-    fun closeAndAwait(timeoutMillis: Long): Boolean {
+    fun closeAndAwait(
+        timeoutMillis: Long,
+        reason: TrafficTerminationReason = TrafficTerminationReason.Lifecycle.CAPTURE_SESSION_CLOSED,
+    ): Boolean {
         require(timeoutMillis > 0L) { "Canonical capture shutdown timeout must be positive." }
         val completed = CountDownLatch(1)
         shutdownScope.launch {
             try {
-                close()
+                close(reason)
             } finally {
                 completed.countDown()
             }
@@ -105,9 +113,6 @@ class StreamingProxyCaptureSession internal constructor(
         return completed.await(timeoutMillis, TimeUnit.MILLISECONDS)
     }
 
-    private companion object {
-        const val SESSION_CLOSED: String = "capture_session_closed"
-    }
 }
 
 /** One real downstream connection and its monotonically ordered canonical events. */
@@ -175,9 +180,9 @@ private class StreamingConnectionCapture(
         return exchange
     }
 
-    override fun close(errorCode: String?) {
+    override fun close(reason: TrafficTerminationReason?) {
         if (!closed.compareAndSet(false, true)) return
-        exchanges.values.toList().forEach { exchange -> exchange.cancelForConnectionClose() }
+        exchanges.values.toList().forEach { exchange -> exchange.cancelForConnectionClose(reason) }
         publish(
             CaptureEvent.ConnectionClosed(
                 sessionId = sessionId,
@@ -186,7 +191,7 @@ private class StreamingConnectionCapture(
                 occurredAtEpochMillis = Clock.System.now().toEpochMilliseconds(),
                 receivedBytes = receivedBodyBytes.get(),
                 sentBytes = sentBodyBytes.get(),
-                errorCode = errorCode,
+                reason = reason,
             )
         )
         exchanges.clear()
@@ -318,12 +323,12 @@ private class StreamingExchangeCapture(
         direction: TrafficDirection,
         observedBytes: Long,
         occurredAtEpochMillis: Long,
-        errorCode: String,
+        reason: TrafficTerminationReason,
     ) = finishBody(
         direction = direction,
         observedBytes = observedBytes,
         occurredAtEpochMillis = occurredAtEpochMillis,
-        explicitOutcome = BodyCaptureOutcome.Failed(BodyFailure.Custom(errorCode)),
+        explicitOutcome = BodyCaptureOutcome.Failed(BodyFailure.Custom(reason.code.value)),
     )
 
     /** Finalizes one body with either inferred truncation or an explicit transport failure. */
@@ -410,10 +415,9 @@ private class StreamingExchangeCapture(
     }
 
     override fun terminate(
-        state: ExchangeState,
+        outcome: ExchangeTerminalOutcome,
         timings: ExchangeTimings,
         occurredAtEpochMillis: Long,
-        errorCode: String?,
     ) {
         val terminalVersion = synchronized(lock) {
             if (terminal) return
@@ -428,20 +432,20 @@ private class StreamingExchangeCapture(
                 occurredAtEpochMillis = occurredAtEpochMillis,
                 exchangeId = exchangeId,
                 exchangeVersion = terminalVersion,
-                state = state,
+                outcome = outcome,
                 timings = timings,
-                errorCode = errorCode,
             )
         )
         onTerminated()
     }
 
-    fun cancelForConnectionClose() {
+    fun cancelForConnectionClose(reason: TrafficTerminationReason?) {
         terminate(
-            state = ExchangeState.CANCELLED,
+            outcome = ExchangeTerminalOutcome.Cancelled(
+                reason ?: TrafficTerminationReason.Transport.DOWNSTREAM_CONNECTION_CLOSED,
+            ),
             timings = ExchangeTimings(),
             occurredAtEpochMillis = Clock.System.now().toEpochMilliseconds(),
-            errorCode = CONNECTION_CLOSED,
         )
     }
 
@@ -470,7 +474,6 @@ private class StreamingExchangeCapture(
     )
 
     private companion object {
-        const val CONNECTION_CLOSED: String = "downstream_connection_closed"
         const val BODY_CAPTURE_TRUNCATED: String = "stream_body_capture_truncated"
     }
 }
@@ -546,7 +549,7 @@ private class StreamingMessageCapture(
         observedBytes: Long,
         state: ProtocolMessageState,
         occurredAtEpochMillis: Long,
-        errorCode: String?,
+        reason: TrafficTerminationReason?,
     ) {
         require(observedBytes >= 0L) { "Observed protocol-message bytes must not be negative." }
         require(state != ProtocolMessageState.IN_PROGRESS) { "Protocol-message termination must be terminal." }
@@ -560,7 +563,9 @@ private class StreamingMessageCapture(
                 ProtocolMessageState.COMPLETE -> BodyCaptureOutcome.Complete
                 ProtocolMessageState.TRUNCATED -> BodyCaptureOutcome.Truncated(captured)
                 ProtocolMessageState.FAILED, ProtocolMessageState.CANCELLED ->
-                    BodyCaptureOutcome.Failed(BodyFailure.Custom(errorCode ?: state.name.lowercase()))
+                    BodyCaptureOutcome.Failed(
+                        BodyFailure.Custom(reason?.code?.value ?: state.name.lowercase()),
+                    )
                 ProtocolMessageState.IN_PROGRESS -> error("Unreachable in-progress termination.")
             }
             ingress.tryCompleteMessageBody(
@@ -586,7 +591,7 @@ private class StreamingMessageCapture(
                 messageId = messageId,
                 observedBytes = observedBytes,
                 state = state,
-                errorCode = errorCode,
+                reason = reason,
             )
         )
     }

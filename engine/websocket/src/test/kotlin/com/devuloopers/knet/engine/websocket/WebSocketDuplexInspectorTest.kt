@@ -8,9 +8,11 @@ import com.devuloopers.knet.engine.proxy.inspection.ProxyPayloadSlice
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.id.ProtocolMessageId
 import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.TrafficDirection
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.body.ContentEncoding
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import com.devuloopers.knet.traffic.model.http.Authority
@@ -174,16 +176,15 @@ private class WebSocketRecordingExchangeCapture : ProxyExchangeCapture {
         direction: TrafficDirection,
         observedBytes: Long,
         occurredAtEpochMillis: Long,
-        errorCode: String,
+        reason: TrafficTerminationReason,
     ) = Unit
 
     override fun observeResponse(response: ResponseHead, occurredAtEpochMillis: Long) = Unit
 
     override fun terminate(
-        state: ExchangeState,
+        outcome: ExchangeTerminalOutcome,
         timings: ExchangeTimings,
         occurredAtEpochMillis: Long,
-        errorCode: String?,
     ) = Unit
 }
 
@@ -213,7 +214,7 @@ private class WebSocketRecordingMessageCapture(
         observedBytes: Long,
         state: ProtocolMessageState,
         occurredAtEpochMillis: Long,
-        errorCode: String?,
+        reason: TrafficTerminationReason?,
     ) {
         this.state = state
     }

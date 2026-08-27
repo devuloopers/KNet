@@ -15,7 +15,9 @@ import com.devuloopers.knet.engine.proxy.capture.ProxyExchangeCapture
 import com.devuloopers.knet.engine.proxy.pipeline.ProxyChannelAttributes
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.ExchangeTimings
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.TrafficDirection
 import com.devuloopers.knet.traffic.model.absoluteUrl
 import com.devuloopers.knet.traffic.model.body.ContentEncoding
@@ -336,7 +338,7 @@ class ApplicationBreakpointGateIntegrationTest {
             return exchange
         }
 
-        override fun close(errorCode: String?) = Unit
+        override fun close(reason: TrafficTerminationReason?) = Unit
     }
 
     private class NoOpExchangeCapture : ProxyExchangeCapture {
@@ -359,18 +361,17 @@ class ApplicationBreakpointGateIntegrationTest {
             direction: TrafficDirection,
             observedBytes: Long,
             occurredAtEpochMillis: Long,
-            errorCode: String,
+            reason: TrafficTerminationReason,
         ) = Unit
 
         override fun observeResponse(response: ResponseHead, occurredAtEpochMillis: Long) = Unit
 
         override fun terminate(
-            state: ExchangeState,
+            outcome: ExchangeTerminalOutcome,
             timings: ExchangeTimings,
             occurredAtEpochMillis: Long,
-            errorCode: String?,
         ) {
-            terminalStates += state
+            terminalStates += outcome.state
         }
     }
 }

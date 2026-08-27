@@ -12,9 +12,10 @@ import com.devuloopers.knet.engine.proxy.inspection.NettyPayloadSlice
 import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamInspector
 import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamTransformer
 import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamTransformResult
-import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.TrafficDirection
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.body.ContentEncoding
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import io.netty.buffer.ByteBuf
@@ -268,12 +269,18 @@ internal class KNetOutboundHandler(
                 onUpgradeAccepted(context.channel(), responseHead, observedAt)
             } else {
                 capture?.terminate(
-                    state = ExchangeState.CANCELLED,
+                    outcome = ExchangeTerminalOutcome.Cancelled(
+                        TrafficTerminationReason.Transport.DOWNSTREAM_RESPONSE_REJECTED,
+                    ),
                     timings = timingCollector.getTimings(),
                     occurredAtEpochMillis = observedAt,
-                    errorCode = DOWNSTREAM_RESPONSE_REJECTED,
                 )
-                notifyTermination(ExchangeState.CANCELLED, observedAt, DOWNSTREAM_RESPONSE_REJECTED)
+                notifyTermination(
+                    ExchangeTerminalOutcome.Cancelled(
+                        TrafficTerminationReason.Transport.DOWNSTREAM_RESPONSE_REJECTED,
+                    ),
+                    observedAt,
+                )
                 publishCompletion(false)
                 clientChannel.close()
                 context.close()
@@ -352,8 +359,8 @@ internal class KNetOutboundHandler(
                 if (failure != null || result is ProxyStreamTransformResult.DropStream) {
                     terminateTransformedResponse(
                         context,
-                        (result as? ProxyStreamTransformResult.DropStream)?.errorCode
-                            ?: TRANSFORM_ERROR,
+                        (result as? ProxyStreamTransformResult.DropStream)?.reason
+                            ?: TrafficTerminationReason.Interception.PROTOCOL_STREAM_TRANSFORM_FAILED,
                     )
                     return@execute
                 }
@@ -388,7 +395,10 @@ internal class KNetOutboundHandler(
                 if (future.isSuccess && context.channel().isActive && !responseComplete) {
                     processNextResponseTransform(context)
                 } else if (!future.isSuccess) {
-                    terminateTransformedResponse(context, DOWNSTREAM_RESPONSE_REJECTED)
+                    terminateTransformedResponse(
+                        context,
+                        TrafficTerminationReason.Transport.DOWNSTREAM_RESPONSE_REJECTED,
+                    )
                 }
             }
         }
@@ -486,7 +496,7 @@ internal class KNetOutboundHandler(
         } else {
             KNetLogger.error(OUTBOUND_TAG, cause) { "KNet Outbound Exception: ${cause.message}" }
         }
-        streamTransformer?.cancel(OUTBOUND_FAILURE)
+        streamTransformer?.cancel(TrafficTerminationReason.Transport.UPSTREAM_RESPONSE_FAILED)
 
         if (!responseStarted) {
             sendSyntheticBadGateway("Outbound Proxy Exception: ${cause.message ?: cause::class.simpleName}")
@@ -497,7 +507,7 @@ internal class KNetOutboundHandler(
     }
 
     override fun channelInactive(context: ChannelHandlerContext) {
-        streamTransformer?.cancel(OUTBOUND_FAILURE)
+        streamTransformer?.cancel(TrafficTerminationReason.Transport.UPSTREAM_RESPONSE_FAILED)
         transformQueue.clear()
         if (!responseComplete && !completionPublished.get()) {
             if (responseStarted) {
@@ -537,17 +547,17 @@ internal class KNetOutboundHandler(
         )
         responseComplete = true
         lastClientWrite = clientChannel.writeAndFlush(response).addListener { future ->
+            val outcome = if (future.isSuccess) {
+                ExchangeTerminalOutcome.Failed(TrafficTerminationReason.Transport.UPSTREAM_RESPONSE_FAILED)
+            } else {
+                ExchangeTerminalOutcome.Cancelled(TrafficTerminationReason.Transport.DOWNSTREAM_RESPONSE_REJECTED)
+            }
             capture?.terminate(
-                state = if (future.isSuccess) ExchangeState.FAILED else ExchangeState.CANCELLED,
+                outcome = outcome,
                 timings = timingCollector.getTimings(),
                 occurredAtEpochMillis = failedAt,
-                errorCode = if (future.isSuccess) OUTBOUND_FAILURE else DOWNSTREAM_RESPONSE_REJECTED,
             )
-            notifyTermination(
-                state = if (future.isSuccess) ExchangeState.FAILED else ExchangeState.CANCELLED,
-                occurredAtEpochMillis = failedAt,
-                errorCode = if (future.isSuccess) OUTBOUND_FAILURE else DOWNSTREAM_RESPONSE_REJECTED,
-            )
+            notifyTermination(outcome, failedAt)
             publishCompletion(false)
             clientChannel.close()
         }
@@ -561,39 +571,45 @@ internal class KNetOutboundHandler(
             direction = TrafficDirection.SERVER_TO_CLIENT,
             observedBytes = responseObservedBytes,
             occurredAtEpochMillis = failedAt,
-            errorCode = OUTBOUND_FAILURE,
+            reason = TrafficTerminationReason.Transport.UPSTREAM_RESPONSE_FAILED,
         )
         capture?.terminate(
-            state = ExchangeState.FAILED,
+            outcome = ExchangeTerminalOutcome.Failed(
+                TrafficTerminationReason.Transport.UPSTREAM_RESPONSE_FAILED,
+            ),
             timings = timingCollector.getTimings(),
             occurredAtEpochMillis = failedAt,
-            errorCode = OUTBOUND_FAILURE,
         )
-        notifyTermination(ExchangeState.FAILED, failedAt, OUTBOUND_FAILURE)
+        notifyTermination(
+            ExchangeTerminalOutcome.Failed(TrafficTerminationReason.Transport.UPSTREAM_RESPONSE_FAILED),
+            failedAt,
+        )
         publishCompletion(false)
         clientChannel.close()
     }
 
     /** Terminates only the active exchange/HTTP/2 child stream after a protocol decision drops it. */
-    private fun terminateTransformedResponse(context: ChannelHandlerContext, errorCode: String) {
+    private fun terminateTransformedResponse(
+        context: ChannelHandlerContext,
+        reason: TrafficTerminationReason,
+    ) {
         if (responseComplete || completionPublished.get()) return
         val failedAt = Clock.System.now().toEpochMilliseconds()
         responseComplete = true
         transformQueue.clear()
-        streamTransformer?.cancel(errorCode)
+        streamTransformer?.cancel(reason)
         capture?.cancelBody(
             direction = TrafficDirection.SERVER_TO_CLIENT,
             observedBytes = responseObservedBytes,
             occurredAtEpochMillis = failedAt,
-            errorCode = errorCode,
+            reason = reason,
         )
         capture?.terminate(
-            state = ExchangeState.CANCELLED,
+            outcome = ExchangeTerminalOutcome.Cancelled(reason),
             timings = timingCollector.getTimings(),
             occurredAtEpochMillis = failedAt,
-            errorCode = errorCode,
         )
-        notifyTermination(ExchangeState.CANCELLED, failedAt, errorCode)
+        notifyTermination(ExchangeTerminalOutcome.Cancelled(reason), failedAt)
         publishCompletion(false)
         clientChannel.close()
         context.close()
@@ -605,17 +621,17 @@ internal class KNetOutboundHandler(
         timings: ExchangeTimings,
         occurredAtEpochMillis: Long,
     ) {
+        val outcome = if (delivered) {
+            ExchangeTerminalOutcome.Completed
+        } else {
+            ExchangeTerminalOutcome.Cancelled(TrafficTerminationReason.Transport.DOWNSTREAM_RESPONSE_REJECTED)
+        }
         capture?.terminate(
-            state = if (delivered) ExchangeState.COMPLETED else ExchangeState.CANCELLED,
+            outcome = outcome,
             timings = timings,
             occurredAtEpochMillis = occurredAtEpochMillis,
-            errorCode = if (delivered) null else DOWNSTREAM_RESPONSE_REJECTED,
         )
-        notifyTermination(
-            state = if (delivered) ExchangeState.COMPLETED else ExchangeState.CANCELLED,
-            occurredAtEpochMillis = occurredAtEpochMillis,
-            errorCode = if (delivered) null else DOWNSTREAM_RESPONSE_REJECTED,
-        )
+        notifyTermination(outcome, occurredAtEpochMillis)
     }
 
     /** Delivers a borrowed response slice to additive protocol inspectors. */
@@ -636,12 +652,11 @@ internal class KNetOutboundHandler(
     }
 
     private fun notifyTermination(
-        state: ExchangeState,
+        outcome: ExchangeTerminalOutcome,
         occurredAtEpochMillis: Long,
-        errorCode: String?,
     ) {
         streamInspectors.forEach { inspector ->
-            runCatching { inspector.onExchangeTerminated(state, occurredAtEpochMillis, errorCode) }
+            runCatching { inspector.onExchangeTerminated(outcome, occurredAtEpochMillis) }
         }
     }
 
@@ -658,9 +673,6 @@ internal class KNetOutboundHandler(
     }
 
     private companion object {
-        const val OUTBOUND_FAILURE: String = "upstream_response_failed"
-        const val DOWNSTREAM_RESPONSE_REJECTED: String = "downstream_response_rejected"
-        const val TRANSFORM_ERROR: String = "protocol_stream_transform_failed"
     }
 
     private data class TransformInput(

@@ -21,8 +21,11 @@ import com.devuloopers.knet.traffic.id.ProtocolMessageId
 import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.TrafficDirection
+import com.devuloopers.knet.traffic.model.TrafficTerminationCode
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.http.ResponseHead
 import com.devuloopers.knet.traffic.model.message.ProtocolMessageKind
+import com.devuloopers.knet.traffic.model.message.MessageProtocolId
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
 import java.util.concurrent.atomic.AtomicBoolean
@@ -90,7 +93,9 @@ private class SseBreakpointTransformer(
         occurredAtEpochMillis: Long,
     ): CompletionStage<ProxyStreamTransformResult> {
         if (cancelled.get()) {
-            return CompletableFuture.completedFuture(ProxyStreamTransformResult.DropStream(STREAM_CANCELLED))
+            return CompletableFuture.completedFuture(
+                ProxyStreamTransformResult.DropStream(sseBreakpointTermination(STREAM_CANCELLED)),
+            )
         }
         if (direction != TrafficDirection.SERVER_TO_CLIENT || !recognized || transportBypass) {
             return CompletableFuture.completedFuture(ProxyStreamTransformResult.Forward(payload))
@@ -99,13 +104,15 @@ private class SseBreakpointTransformer(
         scope.launch {
             val result = runCatching {
                 transformResponse(payload, endOfDirection, occurredAtEpochMillis)
-            }.getOrElse { ProxyStreamTransformResult.DropStream(TRANSFORM_FAILED) }
+            }.getOrElse {
+                ProxyStreamTransformResult.DropStream(sseBreakpointTermination(TRANSFORM_FAILED))
+            }
             future.complete(result)
         }
         return future
     }
 
-    override fun cancel(errorCode: String?) {
+    override fun cancel(reason: TrafficTerminationReason?) {
         if (!cancelled.compareAndSet(false, true)) return
         closeCodecs()
         framer.clear()
@@ -120,7 +127,7 @@ private class SseBreakpointTransformer(
         val decoded = when (val result = requireNotNull(decoder).accept(input, endOfDirection)) {
             is SseContentCodecResult.Failure -> {
                 closeCodecs()
-                return ProxyStreamTransformResult.DropStream(result.reason.code)
+                return ProxyStreamTransformResult.DropStream(sseBreakpointTermination(result.reason.code))
             }
             is SseContentCodecResult.Output -> result.copyBytes()
         }
@@ -137,7 +144,7 @@ private class SseBreakpointTransformer(
         ) {
             is SseContentCodecResult.Failure -> {
                 closeCodecs()
-                return ProxyStreamTransformResult.DropStream(result.reason.code)
+                return ProxyStreamTransformResult.DropStream(sseBreakpointTermination(result.reason.code))
             }
             is SseContentCodecResult.Output -> result.copyBytes()
         }
@@ -214,7 +221,8 @@ private class SseBreakpointTransformer(
             ProtocolMessageBreakpointDecision.ContinueUnchanged -> ProxyStreamTransformResult.Forward(original)
             is ProtocolMessageBreakpointDecision.Replace ->
                 ProxyStreamTransformResult.Forward(decision.body.copyBytes())
-            ProtocolMessageBreakpointDecision.DropStream -> ProxyStreamTransformResult.DropStream(RECORD_DROPPED)
+            ProtocolMessageBreakpointDecision.DropStream ->
+                ProxyStreamTransformResult.DropStream(sseBreakpointTermination(RECORD_DROPPED))
         }
     }
 
@@ -224,6 +232,12 @@ private class SseBreakpointTransformer(
         const val RECORD_DROPPED: String = "sse_breakpoint_record_dropped"
     }
 }
+
+private fun sseBreakpointTermination(code: String): TrafficTerminationReason =
+    TrafficTerminationReason.Protocol(
+        protocol = MessageProtocolId.SSE,
+        code = TrafficTerminationCode(code),
+    )
 
 /** Fixed-capacity SSE delimiter framer used only on the opt-in breakpoint path. */
 private class SseBreakpointRecordFramer(maximumRecordBytes: Int) {
