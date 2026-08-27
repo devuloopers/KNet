@@ -78,7 +78,11 @@ internal class PlatformAndroidCertificateTlsClient(
                     endpoint = registration.controlEndpoint,
                     method = if (challenge == null) CompanionHttpMethod.GET else CompanionHttpMethod.POST,
                     path = path,
-                    acceptedMediaType = "application/octet-stream",
+                    acceptedMediaType = if (challenge == null) {
+                        CompanionCertificateProtocol.ROOT_CERTIFICATE_MEDIA_TYPE
+                    } else {
+                        "application/octet-stream"
+                    },
                     authorization = "Bearer ${registration.deviceId.value}:$credential",
                     additionalHeaders = challenge?.let { nonce ->
                         mapOf(CompanionCertificateProtocol.CHALLENGE_HEADER to nonce.value)

@@ -17,6 +17,7 @@ import com.devuloopers.knet.companion.model.CompanionEndpointReconciliationCodec
 import com.devuloopers.knet.companion.model.CompanionPairingCompletionCodec
 import com.devuloopers.knet.companion.model.CompanionPairingGrant
 import com.devuloopers.knet.companion.model.CompanionPairingGrantCodec
+import com.devuloopers.knet.connectivity.desktop.certificate.AppleRootCertificateProfileRenderer
 import com.devuloopers.knet.identity.RegisteredDeviceId
 import com.devuloopers.knet.pairing.DeviceAuthenticationResult
 import com.devuloopers.knet.pairing.DeviceScope
@@ -172,9 +173,30 @@ public class CompanionControlGateway(
                     socket.respond(
                         statusCode = 200,
                         reason = "OK",
-                        mediaType = "application/x-x509-ca-cert",
+                        mediaType = CompanionCertificateProtocol.ROOT_CERTIFICATE_MEDIA_TYPE,
                         body = certificate,
                     )
+                }
+            }
+            request.method == "GET" && request.path == CompanionCertificateProtocol.APPLE_PROFILE_PATH -> {
+                val certificate = rootCertificateDer()
+                if (certificate.isEmpty() || certificate.size > CompanionCertificateProtocol.MAXIMUM_ROOT_CERTIFICATE_BYTES) {
+                    socket.respond(503, "certificate_unavailable")
+                } else {
+                    val profile = AppleRootCertificateProfileRenderer.render(certificate).encodeToByteArray()
+                    if (profile.size > CompanionCertificateProtocol.MAXIMUM_INSTALLATION_ARTIFACT_BYTES) {
+                        socket.respond(503, "certificate_profile_unavailable")
+                    } else {
+                        socket.respond(
+                            statusCode = 200,
+                            reason = "OK",
+                            mediaType = CompanionCertificateProtocol.APPLE_PROFILE_MEDIA_TYPE,
+                            body = profile,
+                            extraHeaders = mapOf(
+                                "Content-Disposition" to "attachment; filename=\"$APPLE_PROFILE_FILE_NAME\"",
+                            ),
+                        )
+                    }
                 }
             }
             request.method == "POST" && request.path == CompanionCertificateProtocol.TRUST_CHALLENGE_PATH -> {
@@ -414,6 +436,7 @@ public class CompanionControlGateway(
         private const val DEFAULT_MAXIMUM_TRACKED_CHALLENGES: Int = 4_096
         private const val MAXIMUM_CONFIGURABLE_TRACKED_CHALLENGES: Int = 65_536
         private const val CHALLENGE_REPLAY_WINDOW_MILLIS: Long = 5L * 60L * 1_000L
+        private const val APPLE_PROFILE_FILE_NAME: String = "knet-ca.mobileconfig"
 
         private fun String.parseAuthorization(): ControlGatewayAuthorization? {
             if (!startsWith("Bearer ", ignoreCase = true)) return null

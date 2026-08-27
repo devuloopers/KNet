@@ -2,6 +2,7 @@ package com.devuloopers.knet.companion.application.usecase
 
 import com.devuloopers.knet.companion.application.contract.CompanionCredentialStore
 import com.devuloopers.knet.companion.application.contract.CompanionDeviceIdentityProvider
+import com.devuloopers.knet.companion.application.contract.CompanionDeviceDisplayNameProvider
 import com.devuloopers.knet.companion.application.contract.CompanionInvitationCodec
 import com.devuloopers.knet.companion.application.contract.CompanionInvitationResolutionResult
 import com.devuloopers.knet.companion.application.contract.CompanionInvitationResolver
@@ -82,20 +83,13 @@ public sealed interface AcceptPairingInvitationResult {
 /** Completes pairing and atomically commits the secret plus its non-secret registration locally. */
 public class PairCompanionDeviceUseCase(
     private val identityProvider: CompanionDeviceIdentityProvider,
+    private val displayNameProvider: CompanionDeviceDisplayNameProvider,
     private val pairingClient: CompanionPairingClient,
     private val credentials: CompanionCredentialStore,
     private val registrations: CompanionRegistrationRepository,
     private val nowEpochMillis: () -> Long,
 ) {
-    public suspend fun execute(
-        invitation: CompanionPairingInvitation,
-        deviceDisplayName: String,
-    ): PairCompanionDeviceResult {
-        if (deviceDisplayName.isBlank() || deviceDisplayName.length > 128) {
-            return PairCompanionDeviceResult.Rejected(
-                CompanionFailure(CompanionFailureCode.PAIRING_REJECTED, "Device name must contain 1 to 128 characters.", false),
-            )
-        }
+    public suspend fun execute(invitation: CompanionPairingInvitation): PairCompanionDeviceResult {
         if (nowEpochMillis() >= invitation.pairing.expiresAtEpochMillis) {
             return PairCompanionDeviceResult.Rejected(
                 CompanionFailure(CompanionFailureCode.INVITATION_EXPIRED, "Pairing invitation expired.", false),
@@ -105,7 +99,8 @@ public class PairCompanionDeviceUseCase(
         val paired: CompanionPairingClientResult
         try {
             identity = identityProvider.getOrCreate()
-            paired = pairingClient.pair(invitation, identity, deviceDisplayName.trim())
+            val displayName = displayNameProvider.resolve(identity.deviceId)
+            paired = pairingClient.pair(invitation, identity, displayName.value)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Throwable) {

@@ -39,6 +39,7 @@ public actual class PlatformCompanionAdapterFactory(
         val desktopDiscovery = AndroidCompanionDesktopDiscovery(applicationContext)
         val httpClient = KtorCompanionHttpClient(AndroidCompanionKtorClientProvider())
         val certificateClient = PlatformAndroidCertificateTlsClient(httpClient)
+        val rootCertificateSource = AndroidCompanionRootCertificateSource(certificateClient)
         val certificateStoreChanges = AndroidCertificateStoreChangeObserver(applicationContext)
         val inspectionController: CompanionInspectionController = inspectionBackend?.let { backend ->
             AndroidCompanionInspectionController(
@@ -52,7 +53,8 @@ public actual class PlatformCompanionAdapterFactory(
             desktopDiscovery = desktopDiscovery,
             invitationResolver = DefaultCompanionInvitationResolver(KtorCompanionBootstrapClient(httpClient)),
             controlTransport = KtorCompanionControlTransport(httpClient),
-            rootCertificateSource = AndroidCompanionRootCertificateSource(certificateClient),
+            rootCertificateSource = rootCertificateSource,
+            certificateInstallationArtifactSource = rootCertificateSource,
             trustVerifier = AndroidCompanionCertificateTrustVerifier(
                 client = certificateClient,
                 trustedCertificates = PlatformAndroidTrustedCertificateStore(),

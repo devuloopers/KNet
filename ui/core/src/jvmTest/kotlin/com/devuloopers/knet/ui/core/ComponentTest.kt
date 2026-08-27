@@ -4,6 +4,7 @@ import androidx.compose.ui.unit.IntRect
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.button.ButtonSize
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
+import com.devuloopers.knet.ui.core.foundation.dimensions.KNetDimensions
 import com.devuloopers.knet.ui.core.components.button.isKNetButtonClickable
 import com.devuloopers.knet.ui.core.components.dropdown.DropdownPopupVerticalPlacement
 import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdownDefaults
@@ -28,7 +29,8 @@ class ComponentTest {
     @Test
     fun buttonVariantsAndSizesRemainExhaustive() {
         assertEquals(5, ButtonVariant.entries.size)
-        assertEquals(3, ButtonSize.entries.size)
+        assertEquals(4, ButtonSize.entries.size)
+        assertEquals(48.dp, KNetDimensions.buttonHeightTouch)
     }
 
     @Test

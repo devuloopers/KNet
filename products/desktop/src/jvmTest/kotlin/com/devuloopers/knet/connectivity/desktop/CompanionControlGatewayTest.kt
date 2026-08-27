@@ -56,6 +56,7 @@ import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
+import kotlin.io.encoding.Base64
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
@@ -166,6 +167,45 @@ class CompanionControlGatewayTest {
             assertEquals(nonce, accepted.headers[CompanionCertificateProtocol.CHALLENGE_HEADER.lowercase()])
             assertEquals(409, replayed.statusCode)
             assertEquals(429, capacityReached.statusCode)
+        } finally {
+            gateway.close()
+        }
+    }
+
+    @Test
+    fun authenticatedTlsGatewayServesAppleProfileContainingTheExactRegisteredRoot() = runTest {
+        val certificateAuthority = CertificateAuthority.generate()
+        val pairing = pairingCoordinator()
+        val credential = pairDevice(pairing)
+        val gateway = CompanionControlGateway(
+            bindHost = "127.0.0.1",
+            bindPort = 0,
+            serverSocketFactory = serverFactory(certificateAuthority),
+            rootCertificateDer = { certificateAuthority.certificate.encoded },
+            pairing = pairing,
+            redeemOnboarding = redemptionUseCase(),
+            nowEpochMillis = { 1_000L },
+        )
+        gateway.start()
+        try {
+            val response = request(
+                requireNotNull(gateway.boundPort),
+                certificateAuthority.certificate,
+                "GET ${CompanionCertificateProtocol.APPLE_PROFILE_PATH} HTTP/1.1\r\n" +
+                    "Host: ${CompanionCertificateProtocol.TLS_SERVER_NAME}\r\n" +
+                    "Authorization: Bearer device-1:$credential\r\nConnection: close\r\n\r\n",
+            )
+
+            assertEquals(200, response.statusCode)
+            assertEquals(CompanionCertificateProtocol.APPLE_PROFILE_MEDIA_TYPE, response.headers["content-type"])
+            assertEquals(
+                "attachment; filename=\"knet-ca.mobileconfig\"",
+                response.headers["content-disposition"],
+            )
+            val profile = response.body.decodeToString()
+            assertTrue("com.apple.security.root" in profile)
+            assertTrue(Base64.encode(certificateAuthority.certificate.encoded) in profile)
+            assertTrue("{{certificateBase64}}" !in profile)
         } finally {
             gateway.close()
         }

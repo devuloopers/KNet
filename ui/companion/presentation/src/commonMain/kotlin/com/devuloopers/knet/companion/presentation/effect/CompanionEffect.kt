@@ -5,9 +5,6 @@ import com.devuloopers.knet.companion.model.CompanionDesktopId
 
 /** One-shot native work containing portable values and no Android or Apple framework types. */
 public sealed interface CompanionEffect {
-    /** Opens a product-owned picker for a previously captured QR image. */
-    public data object RequestInvitationImageImport : CompanionEffect
-
     /** Requests the platform VPN authorization surface. */
     public data object RequestVpnConsent : CompanionEffect
 

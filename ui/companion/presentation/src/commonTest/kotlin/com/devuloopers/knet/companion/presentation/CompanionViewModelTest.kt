@@ -6,11 +6,13 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateArtifact
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateDownloadResult
+import com.devuloopers.knet.companion.application.contract.CompanionCertificateInstallationArtifactSource
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateStoreChangeObserver
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateTrustVerifier
 import com.devuloopers.knet.companion.application.contract.CompanionCredentialRefreshResult
 import com.devuloopers.knet.companion.application.contract.CompanionCredentialStore
 import com.devuloopers.knet.companion.application.contract.CompanionDeviceIdentityProvider
+import com.devuloopers.knet.companion.application.contract.CompanionDeviceDisplayNameProvider
 import com.devuloopers.knet.companion.application.contract.CompanionDesktopDiscovery
 import com.devuloopers.knet.companion.application.contract.CompanionEndpointReconciliationClient
 import com.devuloopers.knet.companion.application.contract.CompanionEndpointReconciliationResult
@@ -54,6 +56,7 @@ import com.devuloopers.knet.companion.model.CompanionConnectionState
 import com.devuloopers.knet.companion.model.CompanionCredentialReference
 import com.devuloopers.knet.companion.model.CompanionDesktopId
 import com.devuloopers.knet.companion.model.CompanionDeviceIdentity
+import com.devuloopers.knet.companion.model.CompanionDeviceDisplayName
 import com.devuloopers.knet.companion.model.CompanionDiscoveryState
 import com.devuloopers.knet.companion.model.CompanionFailure
 import com.devuloopers.knet.companion.model.CompanionFailureCode
@@ -129,10 +132,11 @@ class CompanionViewModelTest {
         val fixture = Fixture()
         val viewModel = fixture.viewModel()
 
-        viewModel.dispatch(CompanionAction.InvitationSubmitted("invitation"))
+        viewModel.dispatch(CompanionAction.ScanInvitationRequested)
+        viewModel.dispatch(CompanionAction.InvitationScanned("invitation"))
         advanceUntilIdle()
 
-        assertEquals("Development Mac", viewModel.state.value.invitationDesktopName)
+        assertEquals(registration().desktopId, viewModel.state.value.activeRegistration?.desktopId)
         assertFalse(viewModel.state.value.toString().contains(INVITATION_SECRET))
         fixture.clearViewModelStore()
     }
@@ -159,27 +163,16 @@ class CompanionViewModelTest {
     }
 
     @Test
-    fun invitationScannerIsAStateDrivenCommonNavigationStage() = runCompanionViewModelTest {
+    fun invitationScannerIsInlineStateWithinTheConnectStage() = runCompanionViewModelTest {
         val fixture = Fixture()
         val viewModel = fixture.viewModel()
 
         viewModel.dispatch(CompanionAction.ScanInvitationRequested)
 
         assertEquals(true, viewModel.state.value.invitationScannerVisible)
-        assertEquals(CompanionFlowStage.SCAN_INVITATION, viewModel.state.value.resolveFlowStage())
+        assertEquals(CompanionFlowStage.CONNECT_DESKTOP, viewModel.state.value.resolveFlowStage())
         viewModel.dispatch(CompanionAction.InvitationScannerDismissed)
         assertEquals(CompanionFlowStage.CONNECT_DESKTOP, viewModel.state.value.resolveFlowStage())
-        fixture.clearViewModelStore()
-    }
-
-    @Test
-    fun invitationImageImportRemainsATypedPlatformEffect() = runCompanionViewModelTest {
-        val fixture = Fixture()
-        val viewModel = fixture.viewModel()
-
-        viewModel.dispatch(CompanionAction.ImportInvitationImageRequested)
-
-        assertIs<CompanionEffect.RequestInvitationImageImport>(viewModel.effects.first())
         fixture.clearViewModelStore()
     }
 
@@ -188,6 +181,7 @@ class CompanionViewModelTest {
         val resolutionStarted = CompletableDeferred<Unit>()
         val releaseResolution = CompletableDeferred<Unit>()
         val fixture = Fixture()
+        fixture.certificateVerification = { CompanionCertificateState.InstallationRequired }
         fixture.invitationResolution = {
             resolutionStarted.complete(Unit)
             releaseResolution.await()
@@ -203,12 +197,12 @@ class CompanionViewModelTest {
         assertEquals(1, fixture.invitationResolutionCalls)
         releaseResolution.complete(Unit)
         advanceUntilIdle()
-        assertEquals(CompanionFlowStage.CONFIRM_DESKTOP, viewModel.state.value.resolveFlowStage())
+        assertEquals(CompanionFlowStage.CERTIFICATE_SETUP, viewModel.state.value.resolveFlowStage())
         fixture.clearViewModelStore()
     }
 
     @Test
-    fun cameraPayloadIsIgnoredWhenTheScannerRouteIsNotActive() = runCompanionViewModelTest {
+    fun cameraPayloadIsIgnoredWhenTheInlineScannerIsNotActive() = runCompanionViewModelTest {
         val fixture = Fixture()
         val viewModel = fixture.viewModel()
 
@@ -238,7 +232,7 @@ class CompanionViewModelTest {
         viewModel.dispatch(CompanionAction.InvitationScanned("invalid"))
         advanceUntilIdle()
 
-        assertEquals(CompanionFlowStage.SCAN_INVITATION, viewModel.state.value.resolveFlowStage())
+        assertEquals(CompanionFlowStage.CONNECT_DESKTOP, viewModel.state.value.resolveFlowStage())
         assertEquals(true, viewModel.state.value.invitationScannerVisible)
         assertEquals(CompanionFailureCode.INVITATION_INVALID, viewModel.state.value.failure?.code)
         fixture.clearViewModelStore()
@@ -268,16 +262,17 @@ class CompanionViewModelTest {
     }
 
     @Test
-    fun dismissingValidatedInvitationReturnsToConnectStageWithoutPersistingPayload() = runCompanionViewModelTest {
+    fun acceptedInvitationPairsAutomaticallyWithoutAConfirmationStage() = runCompanionViewModelTest {
         val fixture = Fixture()
+        fixture.certificateVerification = { CompanionCertificateState.InstallationRequired }
         val viewModel = fixture.viewModel()
-        viewModel.dispatch(CompanionAction.InvitationSubmitted("invitation"))
+        viewModel.dispatch(CompanionAction.ScanInvitationRequested)
+        viewModel.dispatch(CompanionAction.InvitationScanned("invitation"))
         advanceUntilIdle()
-        assertEquals(CompanionFlowStage.CONFIRM_DESKTOP, viewModel.state.value.resolveFlowStage())
 
-        viewModel.dispatch(CompanionAction.InvitationDismissed)
-
-        assertEquals(CompanionFlowStage.CONNECT_DESKTOP, viewModel.state.value.resolveFlowStage())
+        assertEquals(CompanionFlowStage.CERTIFICATE_SETUP, viewModel.state.value.resolveFlowStage())
+        assertEquals(false, viewModel.state.value.invitationScannerVisible)
+        assertEquals("Android test device · ICE1", fixture.pairingClient.pairedDisplayName)
         fixture.clearViewModelStore()
     }
 
@@ -340,6 +335,103 @@ class CompanionViewModelTest {
             assertEquals("Downloads/KNet", saved.locationDescription)
             fixture.clearViewModelStore()
         }
+
+    @Test
+    fun completedCertificateExportTriggersBackgroundTrustVerification() = runCompanionViewModelTest {
+        val registration = registration()
+        val fixture = Fixture(activeRegistration = registration)
+        fixture.credentials.values[registration.credentialReference] = "credential"
+        fixture.certificateVerification = { CompanionCertificateState.InstallationRequired }
+        val viewModel = fixture.viewModel()
+        advanceUntilIdle()
+        val initialVerificationCalls = fixture.certificateVerificationCalls
+        val effect = async { viewModel.effects.first() }
+
+        viewModel.dispatch(CompanionAction.DownloadCertificateRequested)
+        advanceUntilIdle()
+        effect.await()
+        viewModel.dispatch(
+            CompanionAction.CertificateExportCompleted(
+                desktopId = registration.desktopId,
+                fileName = "KNet-Root-CA.crt",
+                locationDescription = "Downloads/KNet",
+            ),
+        )
+        advanceUntilIdle()
+
+        assertEquals(initialVerificationCalls + 1, fixture.certificateVerificationCalls)
+        assertIs<CompanionCertificateState.InstallationRequired>(viewModel.state.value.certificate)
+        fixture.clearViewModelStore()
+    }
+
+    @Test
+    fun continueExplicitlyAcknowledgesDownloadedAndVerifiedCertificateSetup() = runCompanionViewModelTest {
+        val registration = registration()
+        val fixture = Fixture(activeRegistration = registration)
+        fixture.credentials.values[registration.credentialReference] = "credential"
+        val viewModel = fixture.viewModel()
+        advanceUntilIdle()
+        val exportEffect = async { viewModel.effects.first() }
+
+        viewModel.dispatch(CompanionAction.DownloadCertificateRequested)
+        advanceUntilIdle()
+        exportEffect.await()
+        viewModel.dispatch(
+            CompanionAction.CertificateExportCompleted(
+                desktopId = registration.desktopId,
+                fileName = "KNet-Root-CA.crt",
+                locationDescription = "Downloads/KNet",
+            ),
+        )
+        advanceUntilIdle()
+
+        viewModel.dispatch(CompanionAction.ContinueCertificateSetupRequested)
+        advanceUntilIdle()
+
+        assertIs<CompanionCertificateState.Trusted>(viewModel.state.value.certificate)
+        assertEquals(CompanionFlowStage.INSPECTION_HOME, viewModel.state.value.resolveFlowStage())
+        assertFalse(viewModel.state.value.operationInProgress)
+        fixture.clearViewModelStore()
+    }
+
+    @Test
+    fun backgroundTrustRecheckKeepsVerifiedHomeStableUntilItsResultArrives() = runCompanionViewModelTest {
+        val registration = registration()
+        val fixture = Fixture(activeRegistration = registration)
+        fixture.credentials.values[registration.credentialReference] = "credential"
+        val viewModel = fixture.viewModel()
+        advanceUntilIdle()
+        val exportEffect = async { viewModel.effects.first() }
+        viewModel.dispatch(CompanionAction.DownloadCertificateRequested)
+        advanceUntilIdle()
+        exportEffect.await()
+        viewModel.dispatch(
+            CompanionAction.CertificateExportCompleted(
+                desktopId = registration.desktopId,
+                fileName = "KNet-Root-CA.crt",
+                locationDescription = "Downloads/KNet",
+            ),
+        )
+        advanceUntilIdle()
+        viewModel.dispatch(CompanionAction.ContinueCertificateSetupRequested)
+        assertEquals(CompanionFlowStage.INSPECTION_HOME, viewModel.state.value.resolveFlowStage())
+
+        val verificationStarted = CompletableDeferred<Unit>()
+        val releaseVerification = CompletableDeferred<Unit>()
+        fixture.certificateVerification = { activeRegistration ->
+            verificationStarted.complete(Unit)
+            releaseVerification.await()
+            CompanionCertificateState.Trusted(activeRegistration.rootCertificateSha256, 2_000L)
+        }
+        fixture.certificateChanges.emit(Unit)
+        verificationStarted.await()
+
+        assertIs<CompanionCertificateState.Trusted>(viewModel.state.value.certificate)
+        assertEquals(CompanionFlowStage.INSPECTION_HOME, viewModel.state.value.resolveFlowStage())
+        releaseVerification.complete(Unit)
+        advanceUntilIdle()
+        fixture.clearViewModelStore()
+    }
 
     @Test
     fun repeatedCertificateDownloadTapDoesNotStartASecondExport() = runCompanionViewModelTest {
@@ -462,6 +554,9 @@ class CompanionViewModelTest {
                 CompanionCertificateArtifact(byteArrayOf(1), "knet-root-ca.crt"),
             )
         }
+        private val installationArtifacts = CompanionCertificateInstallationArtifactSource { registration, credential ->
+            certificates.download(registration, credential)
+        }
         val certificateChanges = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
         var certificateVerificationCalls: Int = 0
         var certificateVerification: suspend (CompanionRegistration) -> CompanionCertificateState = { registration ->
@@ -474,7 +569,7 @@ class CompanionViewModelTest {
         private val network = CompanionNetworkObserver {
             MutableStateFlow(CompanionNetworkState.Available(metered = false))
         }
-        private val pairingClient = FakePairingClient()
+        val pairingClient = FakePairingClient()
         var invitationResolutionCalls: Int = 0
         var invitationResolution: suspend (CompanionPairingBootstrap) -> CompanionInvitationResolutionResult = {
             CompanionInvitationResolutionResult.Resolved(invitation())
@@ -486,6 +581,9 @@ class CompanionViewModelTest {
                 privateKeyReference = "private-key-reference",
                 proofAlgorithm = DeviceProofAlgorithm.ECDSA_P256_SHA256,
             )
+        }
+        private val displayNameProvider = CompanionDeviceDisplayNameProvider {
+            CompanionDeviceDisplayName("Android test device · ICE1")
         }
 
         fun viewModel(): CompanionViewModel {
@@ -527,6 +625,7 @@ class CompanionViewModelTest {
                             ) { 1_000L },
                             pair = PairCompanionDeviceUseCase(
                                 identityProvider,
+                                displayNameProvider,
                                 pairingClient,
                                 credentials,
                                 repository,
@@ -555,7 +654,7 @@ class CompanionViewModelTest {
                             downloadCertificate = DownloadCompanionRootCertificateUseCase(
                                 repository,
                                 credentials,
-                                certificates,
+                                installationArtifacts,
                                 nowEpochMillis = { 1_000L },
                             ),
                             verifyCertificateTrust = verifyCertificate,
@@ -648,15 +747,20 @@ class CompanionViewModelTest {
     }
 
     private class FakePairingClient : CompanionPairingClient {
+        var pairedDisplayName: String? = null
+
         override suspend fun pair(
             invitation: CompanionPairingInvitation,
             identity: CompanionDeviceIdentity,
             displayName: String,
-        ): CompanionPairingClientResult = CompanionPairingClientResult.Paired(
-            credential = "credential",
-            scopes = setOf(DeviceScope.PROXY_STREAM),
-            credentialExpiresAtEpochMillis = 5_000L,
-        )
+        ): CompanionPairingClientResult {
+            pairedDisplayName = displayName
+            return CompanionPairingClientResult.Paired(
+                credential = "credential",
+                scopes = setOf(DeviceScope.PROXY_STREAM),
+                credentialExpiresAtEpochMillis = 5_000L,
+            )
+        }
 
         override suspend fun refresh(
             registration: CompanionRegistration,

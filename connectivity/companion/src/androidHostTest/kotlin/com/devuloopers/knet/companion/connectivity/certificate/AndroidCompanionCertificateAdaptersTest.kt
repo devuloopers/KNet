@@ -30,7 +30,11 @@ class AndroidCompanionCertificateAdaptersTest {
         val root = testCertificate("local-proxy-test-ca.pem")
         val registration = registration(root)
         val client = FakeTlsClient(
-            pinned = AndroidCertificateTlsResult.Success(200, emptyMap(), root.encoded),
+            pinned = AndroidCertificateTlsResult.Success(
+                200,
+                mapOf("content-type" to CompanionCertificateProtocol.ROOT_CERTIFICATE_MEDIA_TYPE),
+                root.encoded,
+            ),
         )
 
         val result = assertIs<CompanionCertificateDownloadResult.Downloaded>(
@@ -38,6 +42,8 @@ class AndroidCompanionCertificateAdaptersTest {
         )
 
         assertContentEquals(root.encoded, result.artifact.copyBytes())
+        assertEquals(CompanionCertificateProtocol.ROOT_CERTIFICATE_PATH, client.lastPinnedPath)
+        assertEquals("knet-root-ca.crt", result.artifact.suggestedFileName)
         assertEquals(1, client.pinnedCalls)
     }
 
@@ -286,6 +292,7 @@ class AndroidCompanionCertificateAdaptersTest {
     ) : AndroidCertificateTlsClient {
         var pinnedCalls: Int = 0
         var platformTrustedCalls: Int = 0
+        var lastPinnedPath: String? = null
 
         override suspend fun executePinned(
             registration: CompanionRegistration,
@@ -295,6 +302,7 @@ class AndroidCompanionCertificateAdaptersTest {
             maximumBodyBytes: Int,
         ): AndroidCertificateTlsResult {
             pinnedCalls += 1
+            lastPinnedPath = path
             return pinned
         }
 

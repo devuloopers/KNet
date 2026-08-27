@@ -34,7 +34,6 @@ class MainActivity : ComponentActivity() {
         )
         val scanner = AndroidCompanionInvitationScanner(this)
         val certificateInstallationGuidance = CertificateInstallationGuidance(
-            title = getString(R.string.certificate_guidance_title),
             steps = listOf(
                 getString(R.string.certificate_guidance_step_downloads),
                 getString(R.string.certificate_guidance_step_install),

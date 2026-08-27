@@ -20,7 +20,8 @@ enum class ButtonVariant {
 enum class ButtonSize {
     Compact,
     Standard,
-    Large
+    Large,
+    Touch,
 }
 
 /**
@@ -91,6 +92,7 @@ object ButtonDefaults {
             ButtonSize.Compact -> dims.buttonHeightCompact
             ButtonSize.Standard -> dims.buttonHeightStandard
             ButtonSize.Large -> dims.buttonHeightLarge
+            ButtonSize.Touch -> dims.buttonHeightTouch
         }
     }
 }

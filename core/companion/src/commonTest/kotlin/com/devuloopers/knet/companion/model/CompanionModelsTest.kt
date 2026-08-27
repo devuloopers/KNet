@@ -59,6 +59,17 @@ class CompanionModelsTest {
     }
 
     @Test
+    fun companionDeviceDisplayNameIsTrimmedBoundedAndControlCharacterFree() {
+        assertEquals("Pixel 9 · A7F2", CompanionDeviceDisplayName("Pixel 9 · A7F2").value)
+        assertFailsWith<IllegalArgumentException> { CompanionDeviceDisplayName("") }
+        assertFailsWith<IllegalArgumentException> { CompanionDeviceDisplayName(" Pixel") }
+        assertFailsWith<IllegalArgumentException> { CompanionDeviceDisplayName("Pixel\n9") }
+        assertFailsWith<IllegalArgumentException> {
+            CompanionDeviceDisplayName("x".repeat(CompanionDeviceDisplayName.MAXIMUM_LENGTH + 1))
+        }
+    }
+
+    @Test
     fun certificateChallengeNonceAcceptsOnlyBoundedBase64UrlText() {
         assertEquals("a".repeat(43), CompanionCertificateChallengeNonce("a".repeat(43)).value)
         assertFailsWith<IllegalArgumentException> { CompanionCertificateChallengeNonce("a".repeat(31)) }

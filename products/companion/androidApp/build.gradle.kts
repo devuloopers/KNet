@@ -42,8 +42,6 @@ dependencies {
     implementation(libs.koin.compose.viewmodel)
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.mlkit.barcode.scanning)
-    implementation(libs.zxing.core)
-
     testImplementation(libs.kotlin.testJunit)
     testImplementation(libs.kotlinx.coroutines.test)
 }

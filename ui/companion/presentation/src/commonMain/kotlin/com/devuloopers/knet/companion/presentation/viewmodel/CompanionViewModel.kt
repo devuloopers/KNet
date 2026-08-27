@@ -15,6 +15,7 @@ import com.devuloopers.knet.companion.model.CompanionInspectionState
 import com.devuloopers.knet.companion.model.CompanionPairingInvitation
 import com.devuloopers.knet.companion.presentation.state.CompanionUiState
 import com.devuloopers.knet.companion.presentation.state.CompanionCertificateExportState
+import com.devuloopers.knet.companion.presentation.state.CompanionCertificateSetupAcknowledgement
 import com.devuloopers.knet.companion.presentation.action.CompanionAction
 import com.devuloopers.knet.companion.presentation.effect.CompanionEffect
 import com.devuloopers.knet.core.logger.KNetLogger
@@ -53,7 +54,6 @@ public class CompanionViewModel(
     )
     private val activeOperationCount: MutableStateFlow<Int> = MutableStateFlow(0)
     private val effectChannel: Channel<CompanionEffect> = Channel(capacity = Channel.BUFFERED)
-    private var pendingInvitation: CompanionPairingInvitation? = null
     private var invitationResolutionJob: Job? = null
     private var invitationResolutionVersion: Long = 0L
     private var certificateVerificationJob: Job? = null
@@ -81,6 +81,7 @@ public class CompanionViewModel(
                         activeRegistration = registration,
                         certificate = CompanionCertificateState.Unknown,
                         certificateExport = CompanionCertificateExportState.Idle,
+                        certificateSetupAcknowledgement = CompanionCertificateSetupAcknowledgement.REQUIRED,
                     )
                 }
                 if (registration != null) verifyCertificateTrust(showProgress = false)
@@ -129,21 +130,15 @@ public class CompanionViewModel(
             CompanionAction.ScanInvitationRequested -> {
                 mutableState.update { current -> current.copy(invitationScannerVisible = true, failure = null) }
             }
-            CompanionAction.ImportInvitationImageRequested -> {
-                emitEffect(CompanionEffect.RequestInvitationImageImport)
-            }
             is CompanionAction.InvitationScanned -> {
                 if (mutableState.value.invitationScannerVisible && !mutableState.value.operationInProgress) {
-                    acceptInvitation(action.payload, InvitationSource.CAMERA)
+                    acceptInvitation(action.payload)
                 }
             }
             CompanionAction.InvitationScannerDismissed -> {
                 dismissInvitation()
                 mutableState.update { current -> current.copy(failure = null) }
             }
-            is CompanionAction.InvitationSubmitted -> acceptInvitation(action.payload, InvitationSource.ENTRY)
-            CompanionAction.InvitationDismissed -> dismissInvitation()
-            is CompanionAction.PairSubmitted -> pair(action.deviceDisplayName)
             is CompanionAction.RegistrationSelected -> {
                 mutableState.update { current -> current.copy(invitationScannerVisible = false) }
                 launchOperation {
@@ -187,7 +182,9 @@ public class CompanionViewModel(
             is CompanionAction.CertificateExportFailed -> failCertificateExport(action.desktopId)
             is CompanionAction.CertificateExportCancelled -> cancelCertificateExport(action.desktopId)
             CompanionAction.VerifyCertificateTrustRequested -> verifyCertificateTrust(showProgress = true)
+            CompanionAction.ContinueCertificateSetupRequested -> continueCertificateSetup()
             CompanionAction.OpenCertificateTrustSettingsRequested -> {
+                mutableState.update { current -> current.copy(failure = null) }
                 emitEffect(CompanionEffect.OpenCertificateTrustSettings)
             }
 
@@ -203,7 +200,6 @@ public class CompanionViewModel(
     /** Clears presentation-only secrets and effect delivery after lifecycle-owned work has been cancelled. */
     override fun onCleared() {
         endpointMaintenanceJob?.cancel()
-        pendingInvitation = null
         invitationResolutionJob = null
         certificateVerificationJob = null
         certificateDownloadJob = null
@@ -211,7 +207,7 @@ public class CompanionViewModel(
         effectChannel.close()
     }
 
-    private fun acceptInvitation(payload: String, source: InvitationSource) {
+    private fun acceptInvitation(payload: String) {
         invitationResolutionJob?.cancel()
         invitationResolutionVersion += 1L
         val expectedVersion = invitationResolutionVersion
@@ -220,19 +216,12 @@ public class CompanionViewModel(
             try {
                 when (val result = dependencies.acceptInvitation.execute(payload)) {
                     is AcceptPairingInvitationResult.Accepted -> if (expectedVersion == invitationResolutionVersion) {
-                        pendingInvitation = result.invitation
-                        mutableState.update { current ->
-                            current.copy(
-                                invitationDesktopName = result.invitation.desktopDisplayName,
-                                invitationScannerVisible = false,
-                                failure = null,
-                            )
-                        }
+                        completeAutomaticPairing(result.invitation, expectedVersion)
                     }
 
                     is AcceptPairingInvitationResult.Rejected -> if (expectedVersion == invitationResolutionVersion) {
                         dismissInvitation(cancelResolution = false)
-                        restoreScannerAfterRejectedCameraInput(source)
+                        restoreScannerAfterRejectedCameraInput()
                         showFailure(result.failure)
                     }
                 }
@@ -240,7 +229,7 @@ public class CompanionViewModel(
                 throw cancelled
             } catch (_: Exception) {
                 if (expectedVersion == invitationResolutionVersion) {
-                    restoreScannerAfterRejectedCameraInput(source)
+                    restoreScannerAfterRejectedCameraInput()
                     showFailure(unknownFailure())
                 }
             } finally {
@@ -255,40 +244,32 @@ public class CompanionViewModel(
             invitationResolutionJob?.cancel()
             invitationResolutionJob = null
         }
-        pendingInvitation = null
         mutableState.update { current ->
-            current.copy(invitationDesktopName = null, invitationScannerVisible = false)
+            current.copy(invitationScannerVisible = false)
         }
     }
 
-    private fun restoreScannerAfterRejectedCameraInput(source: InvitationSource) {
-        if (source == InvitationSource.CAMERA) {
-            mutableState.update { current -> current.copy(invitationScannerVisible = true) }
-        }
+    private fun restoreScannerAfterRejectedCameraInput() {
+        mutableState.update { current -> current.copy(invitationScannerVisible = true) }
     }
 
-    private fun pair(deviceDisplayName: String) {
-        if (mutableState.value.pairingInProgress) return
-        val invitation = pendingInvitation ?: return showFailure(
-            CompanionFailure(
-                CompanionFailureCode.INVITATION_INVALID,
-                "Scan or paste a valid pairing invitation first.",
-                true,
-            ),
-        )
-        mutableState.update { current -> current.copy(pairingInProgress = true, failure = null) }
-        viewModelScope.launch {
-            try {
-                when (val result = dependencies.pair.execute(invitation, deviceDisplayName)) {
-                    is PairCompanionDeviceResult.Paired -> dismissInvitation()
-                    is PairCompanionDeviceResult.Rejected -> showFailure(result.failure)
+    private suspend fun completeAutomaticPairing(
+        invitation: CompanionPairingInvitation,
+        expectedVersion: Long,
+    ) {
+        when (val result = dependencies.pair.execute(invitation)) {
+            is PairCompanionDeviceResult.Paired -> if (expectedVersion == invitationResolutionVersion) {
+                mutableState.update { current ->
+                    current.copy(
+                        activeRegistration = result.registration,
+                        invitationScannerVisible = false,
+                        failure = null,
+                    )
                 }
-            } catch (cancelled: CancellationException) {
-                throw cancelled
-            } catch (_: Exception) {
-                showFailure(unknownFailure())
-            } finally {
-                mutableState.update { current -> current.copy(pairingInProgress = false) }
+            }
+            is PairCompanionDeviceResult.Rejected -> if (expectedVersion == invitationResolutionVersion) {
+                restoreScannerAfterRejectedCameraInput()
+                showFailure(result.failure)
             }
         }
     }
@@ -351,6 +332,7 @@ public class CompanionViewModel(
                 failure = null,
             )
         }
+        verifyCertificateTrust(showProgress = false)
     }
 
     private fun failCertificateExport(desktopId: CompanionDesktopId) {
@@ -392,7 +374,13 @@ public class CompanionViewModel(
         certificateVerificationJob?.cancel()
         val expectedDesktopId = mutableState.value.activeRegistration?.desktopId
         KNetLogger.info(LogTags.CERTIFICATE) { "companion_event=verification_started" }
-        mutableState.update { current -> current.copy(certificate = CompanionCertificateState.Verifying) }
+        mutableState.update { current ->
+            if (!showProgress && current.certificate is CompanionCertificateState.Trusted) {
+                current
+            } else {
+                current.copy(certificate = CompanionCertificateState.Verifying)
+            }
+        }
         if (showProgress) beginOperation()
         val verificationJob = viewModelScope.launch {
             try {
@@ -400,7 +388,14 @@ public class CompanionViewModel(
                 logCertificateVerificationResult(certificate)
                 mutableState.update { current ->
                     if (current.activeRegistration?.desktopId == expectedDesktopId) {
-                        current.copy(certificate = certificate)
+                        current.copy(
+                            certificate = certificate,
+                            certificateSetupAcknowledgement = if (certificate is CompanionCertificateState.Trusted) {
+                                current.certificateSetupAcknowledgement
+                            } else {
+                                CompanionCertificateSetupAcknowledgement.REQUIRED
+                            },
+                        )
                     } else {
                         current
                     }
@@ -418,6 +413,21 @@ public class CompanionViewModel(
         }
         if (showProgress) verificationJob.invokeOnCompletion { endOperation() }
         certificateVerificationJob = verificationJob
+    }
+
+    private fun continueCertificateSetup() {
+        mutableState.update { current ->
+            val certificateReady = current.certificate is CompanionCertificateState.Trusted &&
+                current.certificateExport is CompanionCertificateExportState.Saved
+            if (certificateReady) {
+                current.copy(
+                    certificateSetupAcknowledgement = CompanionCertificateSetupAcknowledgement.ACKNOWLEDGED,
+                    failure = null,
+                )
+            } else {
+                current
+            }
+        }
     }
 
     private fun logCertificateVerificationResult(certificate: CompanionCertificateState) {
@@ -505,8 +515,4 @@ public class CompanionViewModel(
         recoverable = true,
     )
 
-    private enum class InvitationSource {
-        ENTRY,
-        CAMERA,
-    }
 }

@@ -17,6 +17,7 @@ data class Dimensions(
     val buttonHeightCompact: Dp = 24.dp,
     val buttonHeightStandard: Dp = 28.dp,
     val buttonHeightLarge: Dp = 34.dp,
+    val buttonHeightTouch: Dp = 48.dp,
     val inputHeightCompact: Dp = 26.dp,
     val inputHeightStandard: Dp = 30.dp,
     val iconSizeSmall: Dp = 14.dp,

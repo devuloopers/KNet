@@ -10,13 +10,12 @@ import androidx.navigation3.ui.NavDisplay
 import com.devuloopers.knet.companion.presentation.action.CompanionAction
 import com.devuloopers.knet.companion.presentation.state.CompanionUiState
 import com.devuloopers.knet.companion.presentation.flow.resolveFlowStage
+import com.devuloopers.knet.companion.sharedui.component.CompanionSetupScaffold
+import com.devuloopers.knet.companion.sharedui.component.toCompanionSetupProgress
 import com.devuloopers.knet.companion.sharedui.screen.certificate.CertificateSetupScreen
 import com.devuloopers.knet.companion.sharedui.screen.certificate.CertificateInstallationGuidance
-import com.devuloopers.knet.companion.sharedui.screen.confirm.ConfirmDesktopScreen
 import com.devuloopers.knet.companion.sharedui.screen.connect.ConnectDesktopScreen
 import com.devuloopers.knet.companion.sharedui.screen.home.CompanionHomeScreen
-import com.devuloopers.knet.companion.sharedui.screen.inspection.InspectionPermissionScreen
-import com.devuloopers.knet.companion.sharedui.screen.scanner.InvitationScannerScreen
 import com.devuloopers.knet.companion.sharedui.scanner.CompanionInvitationScanner
 
 /** State-gated Navigation 3 host shared by Android and the future iOS product. */
@@ -43,40 +42,46 @@ internal fun CompanionNavHost(
         listOf(requiredRoute)
     }
 
-    NavDisplay(
-        backStack = visibleBackStack,
-        modifier = Modifier.fillMaxSize(),
-        onBack = {
-            when (requiredRoute) {
-                CompanionRoute.ConfirmDesktop -> onAction(CompanionAction.InvitationDismissed)
-                CompanionRoute.ScanInvitation -> onAction(CompanionAction.InvitationScannerDismissed)
-                CompanionRoute.InspectionPermission -> onAction(CompanionAction.InspectionPermissionDismissed)
-                else -> onExitRequested()
-            }
-        },
-        entryProvider = entryProvider {
-            entry(CompanionRoute.ConnectDesktop) {
-                ConnectDesktopScreen(state = state, onAction = onAction)
-            }
-            entry(CompanionRoute.ScanInvitation) {
-                InvitationScannerScreen(state = state, scanner = invitationScanner, onAction = onAction)
-            }
-            entry(CompanionRoute.ConfirmDesktop) {
-                ConfirmDesktopScreen(state = state, onAction = onAction)
-            }
-            entry(CompanionRoute.CertificateSetup) {
-                CertificateSetupScreen(
-                    state = state,
-                    installationGuidance = certificateInstallationGuidance,
-                    onAction = onAction,
-                )
-            }
-            entry(CompanionRoute.InspectionPermission) {
-                InspectionPermissionScreen(state = state, onAction = onAction)
-            }
-            entry(CompanionRoute.Home) {
-                CompanionHomeScreen(state = state, onAction = onAction)
-            }
-        },
-    )
+    val navigationContent: @Composable () -> Unit = {
+        NavDisplay(
+            backStack = visibleBackStack,
+            modifier = Modifier.fillMaxSize(),
+            onBack = {
+                when (requiredRoute) {
+                    CompanionRoute.ConnectDesktop -> if (state.invitationScannerVisible) {
+                        onAction(CompanionAction.InvitationScannerDismissed)
+                    } else {
+                        onExitRequested()
+                    }
+                    else -> onExitRequested()
+                }
+            },
+            entryProvider = entryProvider {
+                entry(CompanionRoute.ConnectDesktop) {
+                    ConnectDesktopScreen(
+                        state = state,
+                        scanner = invitationScanner,
+                        onAction = onAction,
+                    )
+                }
+                entry(CompanionRoute.CertificateSetup) {
+                    CertificateSetupScreen(
+                        state = state,
+                        installationGuidance = certificateInstallationGuidance,
+                        onAction = onAction,
+                    )
+                }
+                entry(CompanionRoute.InspectionHome) {
+                    CompanionHomeScreen(state = state, onAction = onAction)
+                }
+            },
+        )
+    }
+    if (requiredRoute == CompanionRoute.InspectionHome) {
+        navigationContent()
+    } else {
+        CompanionSetupScaffold(progress = state.toCompanionSetupProgress()) {
+            navigationContent()
+        }
+    }
 }

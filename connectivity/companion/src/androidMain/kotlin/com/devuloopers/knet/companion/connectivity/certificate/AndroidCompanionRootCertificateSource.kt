@@ -2,6 +2,7 @@ package com.devuloopers.knet.companion.connectivity.certificate
 
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateArtifact
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateDownloadResult
+import com.devuloopers.knet.companion.application.contract.CompanionCertificateInstallationArtifactSource
 import com.devuloopers.knet.companion.application.contract.CompanionRootCertificateSource
 import com.devuloopers.knet.companion.model.CompanionCertificateProtocol
 import com.devuloopers.knet.companion.model.CompanionFailure
@@ -13,7 +14,7 @@ import com.devuloopers.knet.core.logger.LogTags
 /** Android authenticated source for the paired desktop's exact public root certificate. */
 internal class AndroidCompanionRootCertificateSource(
     private val client: AndroidCertificateTlsClient,
-) : CompanionRootCertificateSource {
+) : CompanionRootCertificateSource, CompanionCertificateInstallationArtifactSource {
     override suspend fun download(
         registration: CompanionRegistration,
         credential: String,
@@ -48,6 +49,14 @@ internal class AndroidCompanionRootCertificateSource(
             KNetLogger.warn(LogTags.CERTIFICATE) {
                 "companion_event=root_rejected reason=http_status status=${response.statusCode}"
             }
+            return CompanionCertificateDownloadResult.Failed(androidCertificateTransportUnavailable())
+        }
+        val mediaType = response.responseHeaders["content-type"]
+            ?.substringBefore(';')
+            ?.trim()
+            ?.lowercase()
+        if (mediaType != CompanionCertificateProtocol.ROOT_CERTIFICATE_MEDIA_TYPE) {
+            KNetLogger.warn(LogTags.CERTIFICATE) { "companion_event=root_rejected reason=media_type" }
             return CompanionCertificateDownloadResult.Failed(androidCertificateTransportUnavailable())
         }
         val certificate = response.body.parseX509Certificate()

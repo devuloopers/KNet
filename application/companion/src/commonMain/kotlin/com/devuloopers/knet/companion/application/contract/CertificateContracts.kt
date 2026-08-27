@@ -6,20 +6,20 @@ import com.devuloopers.knet.companion.model.CompanionFailure
 import com.devuloopers.knet.companion.model.CompanionRegistration
 import kotlinx.coroutines.flow.Flow
 
-/** Immutable public root-certificate bytes delivered by an authenticated desktop. */
+/** Immutable public certificate-installation artifact delivered by an authenticated desktop. */
 public class CompanionCertificateArtifact(
     bytes: ByteArray,
-    /** Safe file-name suggestion for a platform-owned public certificate export. */
+    /** Safe file-name suggestion for a platform-owned public certificate artifact. */
     public val suggestedFileName: String,
 ) {
     private val content: ByteArray = bytes.copyOf()
 
     init {
-        require(content.size in 1..CompanionCertificateProtocol.MAXIMUM_ROOT_CERTIFICATE_BYTES)
+        require(content.size in 1..CompanionCertificateProtocol.MAXIMUM_INSTALLATION_ARTIFACT_BYTES)
         require(suggestedFileName.isNotBlank())
     }
 
-    /** Returns a defensive copy of the public DER certificate bytes. */
+    /** Returns a defensive copy of the public artifact bytes. */
     public fun copyBytes(): ByteArray = content.copyOf()
 
     override fun equals(other: Any?): Boolean =
@@ -28,6 +28,20 @@ public class CompanionCertificateArtifact(
             content.contentEquals(other.content)
 
     override fun hashCode(): Int = 31 * content.contentHashCode() + suggestedFileName.hashCode()
+}
+
+/** Platform-selected authenticated source for the certificate artifact the user installs. */
+public fun interface CompanionCertificateInstallationArtifactSource {
+    /**
+     * Downloads the native installation artifact after authenticating with the paired credential.
+     *
+     * Android implementations return DER certificate bytes; Darwin implementations return a `.mobileconfig`
+     * profile. Implementations must validate the pinned control identity before transmitting [credential].
+     */
+    public suspend fun download(
+        registration: CompanionRegistration,
+        credential: String,
+    ): CompanionCertificateDownloadResult
 }
 
 /** Authenticated source for the paired desktop's public KNet root certificate. */
@@ -66,9 +80,9 @@ public fun interface CompanionCertificateStoreChangeObserver {
 
 /** Certificate download outcome. */
 public sealed interface CompanionCertificateDownloadResult {
-    /** Authenticated public root material ready for validation or platform installation. */
+    /** Authenticated public certificate material ready for validation or platform installation. */
     public data class Downloaded(public val artifact: CompanionCertificateArtifact) : CompanionCertificateDownloadResult
 
-    /** Typed, presentation-safe reason the root could not be retrieved. */
+    /** Typed, presentation-safe reason the certificate artifact could not be retrieved. */
     public data class Failed(public val failure: CompanionFailure) : CompanionCertificateDownloadResult
 }

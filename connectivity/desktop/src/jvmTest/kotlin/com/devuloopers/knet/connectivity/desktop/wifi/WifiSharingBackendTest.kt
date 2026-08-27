@@ -1,5 +1,6 @@
 package com.devuloopers.knet.connectivity.desktop.wifi
 
+import com.devuloopers.knet.connectivity.desktop.certificate.AppleRootCertificateProfileRenderer
 import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeConfiguration
 import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeHandle
 import com.devuloopers.knet.application.contract.proxy.ProxyRuntime

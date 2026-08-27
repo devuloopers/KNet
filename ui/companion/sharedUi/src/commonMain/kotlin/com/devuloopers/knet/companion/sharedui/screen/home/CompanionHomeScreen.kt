@@ -1,153 +1,178 @@
 package com.devuloopers.knet.companion.sharedui.screen.home
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawingPadding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import com.devuloopers.knet.companion.model.CompanionCertificateState
-import com.devuloopers.knet.companion.model.CompanionConnectionState
-import com.devuloopers.knet.companion.model.CompanionDiscoveryState
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.companion.model.CompanionInspectionState
-import com.devuloopers.knet.companion.model.CompanionNetworkState
 import com.devuloopers.knet.companion.presentation.action.CompanionAction
 import com.devuloopers.knet.companion.presentation.state.CompanionUiState
-import com.devuloopers.knet.companion.sharedui.component.CompanionOnboardingScaffold
-import com.devuloopers.knet.companion.sharedui.component.CompanionStatusRow
+import com.devuloopers.knet.companion.sharedui.component.CompanionBrandHeader
 import com.devuloopers.knet.companion.sharedui.generated.resources.Res
-import com.devuloopers.knet.companion.sharedui.generated.resources.certificate_trusted
-import com.devuloopers.knet.companion.sharedui.generated.resources.forget_desktop
+import com.devuloopers.knet.companion.sharedui.generated.resources.continue_vpn_setup
+import com.devuloopers.knet.companion.sharedui.generated.resources.home_status_failed
+import com.devuloopers.knet.companion.sharedui.generated.resources.home_status_preparing
+import com.devuloopers.knet.companion.sharedui.generated.resources.home_status_running
+import com.devuloopers.knet.companion.sharedui.generated.resources.home_status_stopped
 import com.devuloopers.knet.companion.sharedui.generated.resources.home_summary
 import com.devuloopers.knet.companion.sharedui.generated.resources.home_title
-import com.devuloopers.knet.companion.sharedui.generated.resources.network_ready
-import com.devuloopers.knet.companion.sharedui.generated.resources.network_unavailable
-import com.devuloopers.knet.companion.sharedui.generated.resources.network_unknown
-import com.devuloopers.knet.companion.sharedui.generated.resources.refresh_credential
 import com.devuloopers.knet.companion.sharedui.generated.resources.start_inspection
-import com.devuloopers.knet.companion.sharedui.generated.resources.status_certificate
-import com.devuloopers.knet.companion.sharedui.generated.resources.status_connected
-import com.devuloopers.knet.companion.sharedui.generated.resources.status_connecting
-import com.devuloopers.knet.companion.sharedui.generated.resources.status_connection
-import com.devuloopers.knet.companion.sharedui.generated.resources.status_desktop
-import com.devuloopers.knet.companion.sharedui.generated.resources.status_disconnected
-import com.devuloopers.knet.companion.sharedui.generated.resources.status_failed
-import com.devuloopers.knet.companion.sharedui.generated.resources.status_finding_desktop
-import com.devuloopers.knet.companion.sharedui.generated.resources.status_inspection
-import com.devuloopers.knet.companion.sharedui.generated.resources.status_network
-import com.devuloopers.knet.companion.sharedui.generated.resources.status_preparing
-import com.devuloopers.knet.companion.sharedui.generated.resources.status_running
-import com.devuloopers.knet.companion.sharedui.generated.resources.status_stopped
 import com.devuloopers.knet.companion.sharedui.generated.resources.stop_inspection
-import com.devuloopers.knet.ui.core.components.button.ButtonVariant
+import com.devuloopers.knet.ui.core.components.button.ButtonSize
 import com.devuloopers.knet.ui.core.components.button.KNetButton
-import com.devuloopers.knet.ui.core.components.card.KNetCard
+import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import org.jetbrains.compose.resources.stringResource
 
-/** Ready screen for durable pairing, connection, credential, and inspection controls. */
+/** Functional inspection home shell reached after verified setup; its visual redesign can evolve independently. */
 @Composable
-internal fun CompanionHomeScreen(state: CompanionUiState, onAction: (CompanionAction) -> Unit) {
-    val findingDesktop = state.inspection is CompanionInspectionState.Running &&
-        state.discovery is CompanionDiscoveryState.Searching
-    val connectionText = if (findingDesktop) {
-        stringResource(Res.string.status_finding_desktop)
-    } else {
-        when (state.connection) {
-            is CompanionConnectionState.Connected -> stringResource(Res.string.status_connected)
-            is CompanionConnectionState.Connecting,
-            is CompanionConnectionState.Reconnecting,
-            -> stringResource(Res.string.status_connecting)
-            CompanionConnectionState.Disconnected -> stringResource(Res.string.status_disconnected)
-            is CompanionConnectionState.Failed -> stringResource(Res.string.status_failed)
-        }
-    }
-    val networkText = when (state.network) {
-        is CompanionNetworkState.Available -> stringResource(Res.string.network_ready)
-        CompanionNetworkState.Unavailable -> stringResource(Res.string.network_unavailable)
-        CompanionNetworkState.Unknown -> stringResource(Res.string.network_unknown)
-    }
-    val inspectionText = when (state.inspection) {
-        is CompanionInspectionState.Running -> stringResource(Res.string.status_running)
-        CompanionInspectionState.Stopped -> stringResource(Res.string.status_stopped)
+internal fun CompanionHomeScreen(
+    state: CompanionUiState,
+    onAction: (CompanionAction) -> Unit,
+) {
+    val running = state.inspection is CompanionInspectionState.Running
+    val busy = state.inspection == CompanionInspectionState.Preparing ||
+        state.inspection == CompanionInspectionState.AwaitingVpnConsent ||
+        state.inspection == CompanionInspectionState.Stopping ||
+        state.operationInProgress
+    val status = when (state.inspection) {
+        CompanionInspectionState.Stopped -> stringResource(Res.string.home_status_stopped)
         CompanionInspectionState.Preparing,
         CompanionInspectionState.AwaitingVpnConsent,
         CompanionInspectionState.Stopping,
-        -> stringResource(Res.string.status_preparing)
-        is CompanionInspectionState.Failed -> stringResource(Res.string.status_failed)
+        -> stringResource(Res.string.home_status_preparing)
+        is CompanionInspectionState.Running -> stringResource(Res.string.home_status_running)
+        is CompanionInspectionState.Failed -> stringResource(Res.string.home_status_failed)
     }
-    val connected = state.connection is CompanionConnectionState.Connected
-    val running = state.inspection is CompanionInspectionState.Running
-    val activeRegistration = state.activeRegistration
+    val statusColor = when (state.inspection) {
+        is CompanionInspectionState.Running -> KNetTheme.colors.semantic.success
+        is CompanionInspectionState.Failed -> KNetTheme.colors.semantic.error
+        else -> KNetTheme.colors.accent
+    }
 
-    CompanionOnboardingScaffold(
-        title = stringResource(Res.string.home_title),
-        summary = stringResource(Res.string.home_summary),
-        currentStep = 3,
-        state = state,
-        onAction = onAction,
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(KNetTheme.colors.background)
+            .safeDrawingPadding(),
+        contentAlignment = Alignment.TopCenter,
     ) {
-        KNetCard(modifier = Modifier.fillMaxWidth()) {
-            Column(verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.lg)) {
-                CompanionStatusRow(
-                    label = stringResource(Res.string.status_desktop),
-                    value = activeRegistration?.desktopDisplayName.orEmpty(),
-                    icon = KNetIcons.Info,
-                    positive = activeRegistration != null,
-                )
-                CompanionStatusRow(
-                    label = stringResource(Res.string.status_network),
-                    value = networkText,
-                    icon = KNetIcons.Info,
-                    positive = state.network is CompanionNetworkState.Available,
-                )
-                CompanionStatusRow(
-                    label = stringResource(Res.string.status_connection),
-                    value = connectionText,
-                    icon = if (connected && !findingDesktop) KNetIcons.Check else KNetIcons.Warning,
-                    positive = connected && !findingDesktop,
-                )
-                CompanionStatusRow(
-                    label = stringResource(Res.string.status_certificate),
-                    value = stringResource(Res.string.certificate_trusted),
-                    icon = KNetIcons.Check,
-                    positive = state.certificate is CompanionCertificateState.Trusted,
-                )
-                CompanionStatusRow(
-                    label = stringResource(Res.string.status_inspection),
-                    value = inspectionText,
-                    icon = if (running) KNetIcons.Check else KNetIcons.Info,
-                    positive = running,
-                )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = KNetTheme.spacing.lg, vertical = KNetTheme.spacing.xl),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xxl),
+        ) {
+            CompanionBrandHeader(modifier = Modifier.widthIn(max = 560.dp))
+            KNetSurface(
+                modifier = Modifier.fillMaxWidth().widthIn(max = 560.dp),
+                color = KNetTheme.colors.surface,
+                shape = KNetTheme.shapes.extraLarge,
+                border = BorderStroke(1.dp, KNetTheme.colors.border),
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(KNetTheme.spacing.xxl),
+                    verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xl),
+                ) {
+                    Text(
+                        text = stringResource(Res.string.home_title),
+                        style = KNetTheme.typography.hero,
+                        color = KNetTheme.colors.textPrimary,
+                    )
+                    Text(
+                        text = stringResource(Res.string.home_summary),
+                        style = KNetTheme.typography.bodyLarge,
+                        color = KNetTheme.colors.textSecondary,
+                    )
+                    InspectionStatusRow(
+                        desktopName = state.activeRegistration?.desktopDisplayName.orEmpty(),
+                        status = status,
+                        statusColor = statusColor,
+                    )
+                    KNetButton(
+                        onClick = {
+                            onAction(
+                                when {
+                                    running -> CompanionAction.StopInspectionRequested
+                                    state.inspectionPermissionRequired -> CompanionAction.VpnConsentRequested
+                                    else -> CompanionAction.StartInspectionRequested
+                                },
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        size = ButtonSize.Touch,
+                        loading = busy,
+                    ) {
+                        Icon(
+                            imageVector = if (running) KNetIcons.Pause else KNetIcons.Play,
+                            contentDescription = null,
+                            modifier = Modifier.size(22.dp),
+                        )
+                        Spacer(modifier = Modifier.width(KNetTheme.spacing.sm))
+                        Text(
+                            text = stringResource(
+                                when {
+                                    running -> Res.string.stop_inspection
+                                    state.inspectionPermissionRequired -> Res.string.continue_vpn_setup
+                                    else -> Res.string.start_inspection
+                                },
+                            ),
+                        )
+                    }
+                }
             }
         }
-        Column(verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm)) {
-            KNetButton(
-                onClick = {
-                    onAction(
-                        if (running) CompanionAction.StopInspectionRequested
-                        else CompanionAction.StartInspectionRequested,
-                    )
-                },
-                modifier = Modifier.fillMaxWidth(),
-                loading = state.operationInProgress,
-            ) {
-                Text(stringResource(if (running) Res.string.stop_inspection else Res.string.start_inspection))
-            }
-            KNetButton(
-                onClick = { onAction(CompanionAction.RefreshCredentialRequested) },
-                modifier = Modifier.fillMaxWidth(),
-                variant = ButtonVariant.Ghost,
-                enabled = !state.operationInProgress,
-            ) { Text(stringResource(Res.string.refresh_credential)) }
-            activeRegistration?.let { registration ->
-                KNetButton(
-                    onClick = { onAction(CompanionAction.ForgetDesktopRequested(registration.desktopId)) },
-                    modifier = Modifier.fillMaxWidth(),
-                    variant = ButtonVariant.Danger,
-                    enabled = !state.operationInProgress,
-                ) { Text(stringResource(Res.string.forget_desktop)) }
+    }
+}
+
+@Composable
+private fun InspectionStatusRow(
+    desktopName: String,
+    status: String,
+    statusColor: Color,
+) {
+    KNetSurface(
+        modifier = Modifier.fillMaxWidth(),
+        color = KNetTheme.colors.surfaceVariant.copy(alpha = 0.58f),
+        shape = KNetTheme.shapes.large,
+        border = BorderStroke(1.dp, KNetTheme.colors.border),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(KNetTheme.spacing.lg),
+            horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.md),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = KNetIcons.Shield,
+                contentDescription = null,
+                tint = statusColor,
+                modifier = Modifier.size(34.dp),
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = status, style = KNetTheme.typography.heading, color = statusColor)
+                Text(text = desktopName, style = KNetTheme.typography.bodyMedium, color = KNetTheme.colors.textSecondary)
             }
         }
     }

@@ -106,7 +106,7 @@ fun KNetTheme(
         small = shapes.small,
         medium = shapes.medium,
         large = shapes.large,
-        extraLarge = shapes.large
+        extraLarge = shapes.extraLarge
     )
 
     CompositionLocalProvider(

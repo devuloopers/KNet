@@ -1,6 +1,7 @@
 package com.devuloopers.knet.companion.connectivity.platform
 
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateStoreChangeObserver
+import com.devuloopers.knet.companion.application.contract.CompanionCertificateInstallationArtifactSource
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateTrustVerifier
 import com.devuloopers.knet.companion.application.contract.CompanionControlTransport
 import com.devuloopers.knet.companion.application.contract.CompanionInspectionController
@@ -30,6 +31,9 @@ public interface CompanionPlatformAdapters : AutoCloseable {
 
     /** Retrieves the authenticated KNet root certificate advertised by the paired desktop. */
     public val rootCertificateSource: CompanionRootCertificateSource
+
+    /** Retrieves the native certificate artifact installed by the active mobile platform. */
+    public val certificateInstallationArtifactSource: CompanionCertificateInstallationArtifactSource
 
     /** Proves whether the paired KNet root is trusted by the native platform. */
     public val trustVerifier: CompanionCertificateTrustVerifier

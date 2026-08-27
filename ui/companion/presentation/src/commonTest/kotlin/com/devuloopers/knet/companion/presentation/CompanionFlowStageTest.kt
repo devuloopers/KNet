@@ -10,6 +10,8 @@ import com.devuloopers.knet.companion.model.Sha256Fingerprint
 import com.devuloopers.knet.companion.presentation.flow.CompanionFlowStage
 import com.devuloopers.knet.companion.presentation.flow.resolveFlowStage
 import com.devuloopers.knet.companion.presentation.state.CompanionUiState
+import com.devuloopers.knet.companion.presentation.state.CompanionCertificateExportState
+import com.devuloopers.knet.companion.presentation.state.CompanionCertificateSetupAcknowledgement
 import com.devuloopers.knet.identity.RegisteredDeviceId
 import com.devuloopers.knet.pairing.DeviceScope
 import kotlin.test.Test
@@ -20,20 +22,13 @@ class CompanionFlowStageTest {
     fun `pairing gates take priority over certificate and permission state`() {
         assertEquals(CompanionFlowStage.CONNECT_DESKTOP, CompanionUiState().resolveFlowStage())
         assertEquals(
-            CompanionFlowStage.SCAN_INVITATION,
+            CompanionFlowStage.CONNECT_DESKTOP,
             CompanionUiState(invitationScannerVisible = true).resolveFlowStage(),
-        )
-        assertEquals(
-            CompanionFlowStage.CONFIRM_DESKTOP,
-            CompanionUiState(
-                invitationDesktopName = "Development Mac",
-                invitationScannerVisible = true,
-            ).resolveFlowStage(),
         )
     }
 
     @Test
-    fun `trusted active registration moves through permission to home`() {
+    fun `active registration remains on certificate until verified setup is acknowledged`() {
         val registration = registration()
         val trusted = CompanionCertificateState.Trusted(registration.rootCertificateSha256, 2_000L)
 
@@ -42,7 +37,7 @@ class CompanionFlowStageTest {
             CompanionUiState(activeRegistration = registration).resolveFlowStage(),
         )
         assertEquals(
-            CompanionFlowStage.INSPECTION_PERMISSION,
+            CompanionFlowStage.CERTIFICATE_SETUP,
             CompanionUiState(
                 activeRegistration = registration,
                 certificate = trusted,
@@ -50,8 +45,37 @@ class CompanionFlowStageTest {
             ).resolveFlowStage(),
         )
         assertEquals(
-            CompanionFlowStage.HOME,
+            CompanionFlowStage.CERTIFICATE_SETUP,
             CompanionUiState(activeRegistration = registration, certificate = trusted).resolveFlowStage(),
+        )
+    }
+
+    @Test
+    fun `verified setup enters home only after explicit acknowledgement`() {
+        val registration = registration()
+        val trusted = CompanionCertificateState.Trusted(registration.rootCertificateSha256, 2_000L)
+        val saved = CompanionCertificateExportState.Saved(
+            desktopId = registration.desktopId,
+            fileName = "knet-root-ca.crt",
+            locationDescription = "Downloads",
+        )
+
+        assertEquals(
+            CompanionFlowStage.CERTIFICATE_SETUP,
+            CompanionUiState(
+                activeRegistration = registration,
+                certificate = trusted,
+                certificateExport = saved,
+            ).resolveFlowStage(),
+        )
+        assertEquals(
+            CompanionFlowStage.INSPECTION_HOME,
+            CompanionUiState(
+                activeRegistration = registration,
+                certificate = trusted,
+                certificateExport = saved,
+                certificateSetupAcknowledgement = CompanionCertificateSetupAcknowledgement.ACKNOWLEDGED,
+            ).resolveFlowStage(),
         )
     }
 

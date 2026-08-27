@@ -2,6 +2,7 @@ package com.devuloopers.knet.companion.application.usecase
 
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateArtifact
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateDownloadResult
+import com.devuloopers.knet.companion.application.contract.CompanionCertificateInstallationArtifactSource
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateStoreChangeObserver
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateTrustVerifier
 import com.devuloopers.knet.companion.application.contract.CompanionCredentialStore
@@ -15,14 +16,14 @@ import com.devuloopers.knet.companion.model.CompanionRegistration
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 
-/** Downloads public CA material while keeping credential access inside the application workflow. */
+/** Downloads the platform-native CA installation artifact while keeping credential access inside the workflow. */
 public class DownloadCompanionRootCertificateUseCase(
     private val registrations: CompanionRegistrationRepository,
     private val credentials: CompanionCredentialStore,
-    private val certificates: CompanionRootCertificateSource,
+    private val certificates: CompanionCertificateInstallationArtifactSource,
     private val nowEpochMillis: () -> Long,
 ) {
-    /** Returns verified public root material for the active paired desktop. */
+    /** Returns an authenticated platform-native installation artifact for the active paired desktop. */
     public suspend fun execute(): DownloadCompanionRootCertificateResult {
         val access = when (val result = readCertificateAccess(registrations, credentials, nowEpochMillis)) {
             is CertificateAccessResult.Available -> result.access
@@ -45,7 +46,7 @@ public class DownloadCompanionRootCertificateUseCase(
 
 /** Public certificate download result. */
 public sealed interface DownloadCompanionRootCertificateResult {
-    /** Root material whose bytes match the paired registration fingerprint. */
+    /** Platform-native certificate installation material returned by the paired desktop. */
     public data class Downloaded(public val artifact: CompanionCertificateArtifact) : DownloadCompanionRootCertificateResult
 
     /** Typed, presentation-safe reason the download could not complete. */

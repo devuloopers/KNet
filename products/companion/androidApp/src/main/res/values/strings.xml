@@ -3,7 +3,6 @@
     <string name="app_name">KNet Companion</string>
     <string name="certificate_location_downloads_knet">Downloads/KNet</string>
     <string name="certificate_location_selected_folder">Selected folder</string>
-    <string name="certificate_guidance_title">Install the downloaded CA certificate</string>
     <string name="certificate_guidance_step_downloads">In Settings, open Security and privacy, then More security settings.</string>
     <string name="certificate_guidance_step_install">Choose Install a certificate, then CA certificate.</string>
     <string name="certificate_guidance_step_select">Open Downloads/KNet and select KNet-Root-CA.crt.</string>

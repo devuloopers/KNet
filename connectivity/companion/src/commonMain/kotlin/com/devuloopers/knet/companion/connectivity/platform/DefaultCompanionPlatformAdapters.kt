@@ -1,6 +1,7 @@
 package com.devuloopers.knet.companion.connectivity.platform
 
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateStoreChangeObserver
+import com.devuloopers.knet.companion.application.contract.CompanionCertificateInstallationArtifactSource
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateTrustVerifier
 import com.devuloopers.knet.companion.application.contract.CompanionControlTransport
 import com.devuloopers.knet.companion.application.contract.CompanionInspectionController
@@ -16,6 +17,7 @@ internal class DefaultCompanionPlatformAdapters(
     override val invitationResolver: CompanionInvitationResolver,
     override val controlTransport: CompanionControlTransport,
     override val rootCertificateSource: CompanionRootCertificateSource,
+    override val certificateInstallationArtifactSource: CompanionCertificateInstallationArtifactSource,
     override val trustVerifier: CompanionCertificateTrustVerifier,
     override val certificateStoreChanges: CompanionCertificateStoreChangeObserver,
     override val inspectionController: CompanionInspectionController,

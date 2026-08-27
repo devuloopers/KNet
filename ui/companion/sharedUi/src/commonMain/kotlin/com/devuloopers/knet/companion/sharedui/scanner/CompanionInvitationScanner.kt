@@ -30,11 +30,11 @@ public enum class CompanionInvitationScannerState {
 }
 
 /**
- * Product capability that supplies native camera content to the shared companion scanner screen.
+ * Product capability that supplies native camera content to the shared companion scanner panel.
  *
  * Native context, lifecycle, camera, permission, and image types remain behind this interface. Implementations
  * must deliver at most one non-blank payload for each composed [Preview] session and release preview/analyzer
- * resources when that composition leaves the screen.
+     * resources when that composition leaves the inline scanner panel.
  */
 public interface CompanionInvitationScanner : AutoCloseable {
     /** Current portable permission and camera lifecycle state. */
@@ -50,7 +50,7 @@ public interface CompanionInvitationScanner : AutoCloseable {
      * Renders the native camera preview and begins QR-only analysis for this composition.
      *
      * @param onPayloadDetected receives the first non-blank decoded QR payload.
-     * @param modifier layout modifier supplied by the shared scanner screen.
+     * @param modifier layout modifier supplied by the shared scanner panel.
      */
     @Composable
     public fun Preview(

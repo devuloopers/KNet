@@ -1,5 +1,7 @@
 package com.devuloopers.knet.connectivity.desktop.wifi
 
+import com.devuloopers.knet.companion.model.CompanionCertificateProtocol
+import com.devuloopers.knet.connectivity.desktop.certificate.AppleRootCertificateProfileRenderer
 import com.devuloopers.knet.connectivity.model.ProxyEndpoint
 import com.sun.net.httpserver.HttpExchange
 import com.sun.net.httpserver.HttpServer
@@ -105,7 +107,7 @@ internal class WifiSetupPortal(
             ?: return exchange.respond(503, "text/plain; charset=utf-8", "certificate_unavailable".encodeToByteArray())
         exchange.respond(
             status = 200,
-            mediaType = "application/x-x509-ca-cert",
+            mediaType = CompanionCertificateProtocol.ROOT_CERTIFICATE_MEDIA_TYPE,
             body = certificate,
             filename = "knet-ca.crt",
         )
@@ -116,7 +118,7 @@ internal class WifiSetupPortal(
             ?: return exchange.respond(503, "text/plain; charset=utf-8", "certificate_unavailable".encodeToByteArray())
         exchange.respond(
             status = 200,
-            mediaType = "application/x-apple-aspen-config",
+            mediaType = CompanionCertificateProtocol.APPLE_PROFILE_MEDIA_TYPE,
             body = AppleRootCertificateProfileRenderer.render(certificate).encodeToByteArray(),
             filename = "knet-ca.mobileconfig",
         )

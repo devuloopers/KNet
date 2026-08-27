@@ -6,27 +6,15 @@ import kotlinx.serialization.Serializable
 /** Serializable root destinations supported by the companion setup and readiness flow. */
 @Serializable
 internal sealed interface CompanionRoute : NavKey {
-    /** Invitation entry and existing-desktop selection. */
+    /** Modern QR-only desktop connection flow with its inline scanner. */
     @Serializable
     data object ConnectDesktop : CompanionRoute
-
-    /** In-app camera scanner for a desktop invitation QR code. */
-    @Serializable
-    data object ScanInvitation : CompanionRoute
-
-    /** Confirmation of a validated, still in-memory invitation. */
-    @Serializable
-    data object ConfirmDesktop : CompanionRoute
 
     /** Certificate installation and authoritative trust verification. */
     @Serializable
     data object CertificateSetup : CompanionRoute
 
-    /** Explanation shown before requesting the native VPN authorization surface. */
+    /** Operational home shown only after the user explicitly continues beyond verified setup. */
     @Serializable
-    data object InspectionPermission : CompanionRoute
-
-    /** Paired connection and inspection controls. */
-    @Serializable
-    data object Home : CompanionRoute
+    data object InspectionHome : CompanionRoute
 }

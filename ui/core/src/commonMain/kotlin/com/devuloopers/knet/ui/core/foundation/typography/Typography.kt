@@ -11,6 +11,12 @@ import androidx.compose.ui.unit.sp
  */
 @Immutable
 data class Typography(
+    val hero: TextStyle = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Bold,
+        fontSize = 28.sp,
+        lineHeight = 34.sp,
+    ),
     val display: TextStyle = TextStyle(
         fontFamily = FontFamily.SansSerif,
         fontWeight = FontWeight.Bold,
@@ -46,6 +52,12 @@ data class Typography(
         fontWeight = FontWeight.Normal,
         fontSize = 13.sp,
         lineHeight = 18.sp
+    ),
+    val bodyLarge: TextStyle = TextStyle(
+        fontFamily = FontFamily.SansSerif,
+        fontWeight = FontWeight.Normal,
+        fontSize = 16.sp,
+        lineHeight = 24.sp,
     ),
     val bodySmall: TextStyle = TextStyle(
         fontFamily = FontFamily.SansSerif,

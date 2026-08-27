@@ -3,6 +3,7 @@ package com.devuloopers.knet.companion.connectivity.platform
 import com.devuloopers.knet.companion.connectivity.bootstrap.DefaultCompanionInvitationResolver
 import com.devuloopers.knet.companion.connectivity.bootstrap.KtorCompanionBootstrapClient
 import com.devuloopers.knet.companion.connectivity.control.KtorCompanionControlTransport
+import com.devuloopers.knet.companion.connectivity.certificate.DarwinCompanionCertificateInstallationArtifactSource
 import com.devuloopers.knet.companion.connectivity.fallback.UnavailableCompanionCertificateAdapters
 import com.devuloopers.knet.companion.connectivity.fallback.UnavailableCompanionInspectionController
 import com.devuloopers.knet.companion.connectivity.fallback.UnavailableCompanionNetworkObserver
@@ -14,8 +15,9 @@ import com.devuloopers.knet.companion.connectivity.http.KtorCompanionHttpClient
  * iOS actual factory with qualified Ktor bootstrap/control transport and fail-closed device capabilities.
  *
  * Darwin and Security-framework TLS protect invitation redemption and control requests, while Bonjour supplies
- * identity-filtered rediscovery candidates. Network reachability, certificate installation/readiness, and Network
- * Extension dependencies remain unavailable until their adapters are qualified by a future iOS product root.
+ * identity-filtered rediscovery candidates. The certificate installation source downloads an authenticated Apple
+ * configuration profile; native trust-store readiness and Network Extension dependencies remain fail-closed until
+ * their adapters are qualified by a future iOS product root.
  */
 public actual class PlatformCompanionAdapterFactory : CompanionPlatformAdapterFactory {
     /** Creates an independently owned iOS bundle whose unimplemented device capabilities fail closed. */
@@ -29,6 +31,7 @@ public actual class PlatformCompanionAdapterFactory : CompanionPlatformAdapterFa
             invitationResolver = DefaultCompanionInvitationResolver(KtorCompanionBootstrapClient(httpClient)),
             controlTransport = KtorCompanionControlTransport(httpClient),
             rootCertificateSource = certificates.rootCertificateSource,
+            certificateInstallationArtifactSource = DarwinCompanionCertificateInstallationArtifactSource(httpClient),
             trustVerifier = certificates.trustVerifier,
             certificateStoreChanges = certificates.storeChanges,
             inspectionController = UnavailableCompanionInspectionController(IOS_PLATFORM_NAME),

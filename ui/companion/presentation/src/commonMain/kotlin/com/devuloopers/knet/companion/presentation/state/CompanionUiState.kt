@@ -8,18 +8,23 @@ import com.devuloopers.knet.companion.model.CompanionNetworkState
 import com.devuloopers.knet.companion.model.CompanionRegistration
 import com.devuloopers.knet.companion.model.CompanionDiscoveryState
 
+/** Explicit acknowledgement that lets the user leave certificate setup only after pressing Continue. */
+public enum class CompanionCertificateSetupAcknowledgement {
+    REQUIRED,
+    ACKNOWLEDGED,
+}
+
 /**
  * Immutable companion presentation state rendered by the shared Compose Multiplatform interface.
  *
  * @property registrations durable paired desktops available on this device.
  * @property activeRegistration desktop selected for trust, connection, and inspection workflows.
- * @property invitationDesktopName display name from a validated invitation retained only in memory.
- * @property invitationScannerVisible whether the shared camera-scanner route is currently active.
- * @property pairingInProgress whether the pairing exchange is currently running.
+ * @property invitationScannerVisible whether the Connect screen is displaying its inline camera scanner.
  * @property connection authenticated companion transport state.
  * @property inspection native inspection lifecycle state.
  * @property certificate authoritative certificate trust state for the active registration.
  * @property certificateExport current public-certificate file export lifecycle.
+ * @property certificateSetupAcknowledgement whether the user explicitly continued beyond verified setup.
  * @property network current platform network reachability.
  * @property inspectionPermissionRequired whether the shared VPN explanation must be displayed.
  * @property operationInProgress whether a foreground user operation is currently running.
@@ -28,13 +33,13 @@ import com.devuloopers.knet.companion.model.CompanionDiscoveryState
 public data class CompanionUiState(
     public val registrations: List<CompanionRegistration> = emptyList(),
     public val activeRegistration: CompanionRegistration? = null,
-    public val invitationDesktopName: String? = null,
     public val invitationScannerVisible: Boolean = false,
-    public val pairingInProgress: Boolean = false,
     public val connection: CompanionConnectionState = CompanionConnectionState.Disconnected,
     public val inspection: CompanionInspectionState = CompanionInspectionState.Stopped,
     public val certificate: CompanionCertificateState = CompanionCertificateState.Unknown,
     public val certificateExport: CompanionCertificateExportState = CompanionCertificateExportState.Idle,
+    public val certificateSetupAcknowledgement: CompanionCertificateSetupAcknowledgement =
+        CompanionCertificateSetupAcknowledgement.REQUIRED,
     public val network: CompanionNetworkState = CompanionNetworkState.Unknown,
     public val discovery: CompanionDiscoveryState = CompanionDiscoveryState.Idle,
     public val inspectionPermissionRequired: Boolean = false,

@@ -1,6 +1,7 @@
 package com.devuloopers.knet.companion.connectivity.fallback
 
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateDownloadResult
+import com.devuloopers.knet.companion.application.contract.CompanionCertificateInstallationArtifactSource
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateStoreChangeObserver
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateTrustVerifier
 import com.devuloopers.knet.companion.application.contract.CompanionRootCertificateSource
@@ -15,6 +16,11 @@ internal class UnavailableCompanionCertificateAdapters(platformName: String) {
     val rootCertificateSource: CompanionRootCertificateSource = CompanionRootCertificateSource { _, _ ->
         CompanionCertificateDownloadResult.Failed(retrievalFailure)
     }
+
+    val installationArtifactSource: CompanionCertificateInstallationArtifactSource =
+        CompanionCertificateInstallationArtifactSource { _, _ ->
+            CompanionCertificateDownloadResult.Failed(retrievalFailure)
+        }
 
     val trustVerifier: CompanionCertificateTrustVerifier = CompanionCertificateTrustVerifier { _, _, _ ->
         CompanionCertificateState.Rejected(verificationFailure)

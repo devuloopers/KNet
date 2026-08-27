@@ -8,11 +8,8 @@ internal object CompanionNavigator {
     /** Resolves the only route allowed by [stage]. */
     fun routeFor(stage: CompanionFlowStage): CompanionRoute = when (stage) {
         CompanionFlowStage.CONNECT_DESKTOP -> CompanionRoute.ConnectDesktop
-        CompanionFlowStage.SCAN_INVITATION -> CompanionRoute.ScanInvitation
-        CompanionFlowStage.CONFIRM_DESKTOP -> CompanionRoute.ConfirmDesktop
         CompanionFlowStage.CERTIFICATE_SETUP -> CompanionRoute.CertificateSetup
-        CompanionFlowStage.INSPECTION_PERMISSION -> CompanionRoute.InspectionPermission
-        CompanionFlowStage.HOME -> CompanionRoute.Home
+        CompanionFlowStage.INSPECTION_HOME -> CompanionRoute.InspectionHome
     }
 
     /** Replaces stale restored history so Back cannot expose a screen behind an unmet setup gate. */

@@ -1,10 +1,12 @@
 package com.devuloopers.knet.companion.application.contract
 
 import com.devuloopers.knet.companion.model.CompanionDeviceIdentity
+import com.devuloopers.knet.companion.model.CompanionDeviceDisplayName
 import com.devuloopers.knet.companion.model.CompanionFailure
 import com.devuloopers.knet.companion.model.CompanionPairingInvitation
 import com.devuloopers.knet.companion.model.CompanionPairingBootstrap
 import com.devuloopers.knet.companion.model.CompanionRegistration
+import com.devuloopers.knet.identity.RegisteredDeviceId
 import com.devuloopers.knet.pairing.DeviceScope
 
 /** Decodes a versioned, lightweight QR/deep-link bootstrap payload without persisting it. */
@@ -44,6 +46,11 @@ public sealed interface CompanionInvitationResolutionResult {
 /** Creates or restores the device proof identity from platform-protected key material. */
 public fun interface CompanionDeviceIdentityProvider {
     public suspend fun getOrCreate(): CompanionDeviceIdentity
+}
+
+/** Resolves a platform-appropriate label for a stable proof identity without exposing platform handles. */
+public fun interface CompanionDeviceDisplayNameProvider {
+    public suspend fun resolve(deviceId: RegisteredDeviceId): CompanionDeviceDisplayName
 }
 
 /** Signs one pairing transcript using the platform-protected key referenced by the public identity. */

@@ -4,26 +4,14 @@ import com.devuloopers.knet.companion.model.CompanionDesktopId
 
 /** User intents accepted by the shared companion ViewModel. */
 public sealed interface CompanionAction {
-    /** Opens the shared invitation scanner route. */
+    /** Replaces the Connect illustration with the shared inline invitation scanner. */
     public data object ScanInvitationRequested : CompanionAction
-
-    /** Opens the product-owned QR image picker as a camera-independent fallback. */
-    public data object ImportInvitationImageRequested : CompanionAction
 
     /** Submits the first QR payload detected by the active camera scanner session. */
     public data class InvitationScanned(public val payload: String) : CompanionAction
 
-    /** Leaves the active camera scanner without submitting an invitation. */
+    /** Restores the Connect illustration without submitting an invitation. */
     public data object InvitationScannerDismissed : CompanionAction
-
-    /** Validates one scanned or pasted invitation payload. */
-    public data class InvitationSubmitted(public val payload: String) : CompanionAction
-
-    /** Discards the currently validated invitation without persisting it. */
-    public data object InvitationDismissed : CompanionAction
-
-    /** Completes pairing with a user-visible device name. */
-    public data class PairSubmitted(public val deviceDisplayName: String) : CompanionAction
 
     /** Makes one durable desktop registration active. */
     public data class RegistrationSelected(public val desktopId: CompanionDesktopId) : CompanionAction
@@ -61,6 +49,9 @@ public sealed interface CompanionAction {
 
     /** Rechecks certificate trust through the authoritative TLS challenge. */
     public data object VerifyCertificateTrustRequested : CompanionAction
+
+    /** Explicitly acknowledges verified certificate setup and enters the inspection home. */
+    public data object ContinueCertificateSetupRequested : CompanionAction
 
     /** Opens the native certificate trust guidance surface. */
     public data object OpenCertificateTrustSettingsRequested : CompanionAction

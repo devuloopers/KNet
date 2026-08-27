@@ -23,7 +23,6 @@ internal class AndroidCompanionEffectHandler(
     private val certificateExporter: AndroidDownloadsCertificateExporter =
         AndroidDownloadsCertificateExporter(activity.contentResolver),
 ) {
-    private val qrDecoder = AndroidQrInvitationDecoder(activity.contentResolver)
     private var pendingDocumentExport: CompanionEffect.ExportCertificate? = null
     private val certificateDocument = activity.registerForActivityResult(
         ActivityResultContracts.CreateDocument(AndroidCertificateExportPolicy.MIME_TYPE),
@@ -51,19 +50,9 @@ internal class AndroidCompanionEffectHandler(
     ) { result ->
         onAction(CompanionAction.VpnConsentResolved(result.resultCode == Activity.RESULT_OK))
     }
-    private val qrImagePicker = activity.registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-        if (uri != null) {
-            activity.lifecycleScope.launch {
-                val payload = qrDecoder.decode(uri).orEmpty()
-                onAction(CompanionAction.InvitationSubmitted(payload))
-            }
-        }
-    }
-
     /** Handles one ViewModel effect through a product-owned Android API. */
     fun handle(effect: CompanionEffect) {
         when (effect) {
-            CompanionEffect.RequestInvitationImageImport -> qrImagePicker.launch("image/*")
             CompanionEffect.RequestVpnConsent -> requestVpnConsent()
             is CompanionEffect.ExportCertificate -> exportCertificate(effect)
             CompanionEffect.OpenCertificateTrustSettings -> openCertificateSettings()

@@ -20,7 +20,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
@@ -33,47 +32,60 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 fun KNetContentLoadingPlaceholder(
     modifier: Modifier = Modifier
 ) {
-    val themeColors = KNetTheme.colors
-    val motion = KNetTheme.motion
-
-    val alpha = if (motion.animationsEnabled) {
-        val infiniteTransition = rememberInfiniteTransition()
-        val animatedAlpha by infiniteTransition.animateFloat(
-            initialValue = 0.2f,
-            targetValue = 0.6f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = motion.durationSlow * 3, easing = LinearEasing),
-                repeatMode = RepeatMode.Reverse
-            )
-        )
-        animatedAlpha
-    } else {
-        0.35f
-    }
-
-    val baseColor = themeColors.surfaceVariant
-    val shimmerColor = themeColors.border.copy(alpha = alpha)
-
-    val shimmerBrush = Brush.linearGradient(
-        colors = listOf(baseColor, shimmerColor, baseColor)
-    )
-
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(themeColors.surface)
+            .background(KNetTheme.colors.surface)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         val lineFractions = listOf(0.75f, 0.90f, 0.45f, 0.80f, 0.60f, 0.85f, 0.50f, 0.70f)
         lineFractions.forEach { fraction ->
-            Box(
+            KNetShimmerBox(
                 modifier = Modifier
                     .fillMaxWidth(fraction)
                     .height(16.dp)
-                    .clip(RoundedCornerShape(4.dp))
-                    .background(shimmerBrush)
             )
         }
     }
+}
+
+/** Theme-aware fixed-size shimmer surface for layouts that reserve space while data is loading. */
+@Composable
+fun KNetShimmerBox(
+    modifier: Modifier = Modifier,
+) {
+    Box(
+        modifier = modifier
+            .clip(RoundedCornerShape(4.dp))
+            .background(rememberKNetShimmerBrush()),
+    )
+}
+
+@Composable
+private fun rememberKNetShimmerBrush(): Brush {
+    val colors = KNetTheme.colors
+    val motion = KNetTheme.motion
+    val alpha = if (motion.animationsEnabled) {
+        val transition = rememberInfiniteTransition(label = "KNetShimmer")
+        val animatedAlpha by transition.animateFloat(
+            initialValue = 0.2f,
+            targetValue = 0.6f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = motion.durationSlow * 3, easing = LinearEasing),
+                repeatMode = RepeatMode.Reverse,
+            ),
+            label = "KNetShimmerAlpha",
+        )
+        animatedAlpha
+    } else {
+        0.35f
+    }
+    return Brush.linearGradient(
+        colors = listOf(
+            colors.surfaceVariant,
+            colors.border.copy(alpha = alpha),
+            colors.surfaceVariant,
+        ),
+    )
 }

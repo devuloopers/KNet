@@ -40,4 +40,12 @@ object KNetIcons {
     val Pause: ImageVector = Icons.Default.Pause
     val Visibility: ImageVector = Icons.Default.Visibility
     val VisibilityOff: ImageVector = Icons.Default.VisibilityOff
+    val Hub: ImageVector = Icons.Default.Hub
+    val QrCodeScanner: ImageVector = Icons.Default.QrCodeScanner
+    val Shield: ImageVector = Icons.Default.Shield
+    val Lock: ImageVector = Icons.Default.Lock
+    val Schedule: ImageVector = Icons.Default.Schedule
+    val Wifi: ImageVector = Icons.Default.Wifi
+    val Desktop: ImageVector = Icons.Default.DesktopWindows
+    val Phone: ImageVector = Icons.Default.PhoneAndroid
 }

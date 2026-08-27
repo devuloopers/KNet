@@ -1,140 +1,155 @@
 package com.devuloopers.knet.companion.sharedui.screen.connect
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import com.devuloopers.knet.companion.model.CompanionNetworkState
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.companion.presentation.action.CompanionAction
+import com.devuloopers.knet.companion.presentation.state.CompanionConnectScanState
+import com.devuloopers.knet.companion.presentation.state.CompanionConnectVisualMode
 import com.devuloopers.knet.companion.presentation.state.CompanionUiState
-import com.devuloopers.knet.companion.sharedui.component.CompanionOnboardingScaffold
-import com.devuloopers.knet.companion.sharedui.component.CompanionStatusRow
+import com.devuloopers.knet.companion.presentation.state.toConnectUiState
 import com.devuloopers.knet.companion.sharedui.generated.resources.Res
+import com.devuloopers.knet.companion.sharedui.generated.resources.cancel_scanning
 import com.devuloopers.knet.companion.sharedui.generated.resources.connect_summary
 import com.devuloopers.knet.companion.sharedui.generated.resources.connect_title
-import com.devuloopers.knet.companion.sharedui.generated.resources.continue_action
-import com.devuloopers.knet.companion.sharedui.generated.resources.import_qr
 import com.devuloopers.knet.companion.sharedui.generated.resources.scan_qr
-import com.devuloopers.knet.companion.sharedui.generated.resources.invitation_help
-import com.devuloopers.knet.companion.sharedui.generated.resources.invitation_label
-import com.devuloopers.knet.companion.sharedui.generated.resources.invitation_placeholder
-import com.devuloopers.knet.companion.sharedui.generated.resources.network_ready
-import com.devuloopers.knet.companion.sharedui.generated.resources.network_unavailable
-import com.devuloopers.knet.companion.sharedui.generated.resources.network_unknown
-import com.devuloopers.knet.companion.sharedui.generated.resources.paired_desktops
-import com.devuloopers.knet.companion.sharedui.generated.resources.status_network
-import com.devuloopers.knet.companion.sharedui.generated.resources.use_desktop
+import com.devuloopers.knet.companion.sharedui.scanner.CompanionInvitationScanner
+import com.devuloopers.knet.ui.core.components.button.ButtonSize
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
-import com.devuloopers.knet.ui.core.components.card.KNetCard
-import com.devuloopers.knet.ui.core.components.input.KNetMultilineField
+import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import org.jetbrains.compose.resources.stringResource
 
-/** Invitation entry screen that does not persist secret-bearing payload text. */
+/** Clean QR-only entry screen whose illustration becomes an inline camera without changing routes. */
 @Composable
-internal fun ConnectDesktopScreen(state: CompanionUiState, onAction: (CompanionAction) -> Unit) {
-    var invitation by rememberSaveable { mutableStateOf("") }
-    val networkLabel = when (state.network) {
-        is CompanionNetworkState.Available -> stringResource(Res.string.network_ready)
-        CompanionNetworkState.Unavailable -> stringResource(Res.string.network_unavailable)
-        CompanionNetworkState.Unknown -> stringResource(Res.string.network_unknown)
-    }
-    CompanionOnboardingScaffold(
-        title = stringResource(Res.string.connect_title),
-        summary = stringResource(Res.string.connect_summary),
-        currentStep = 0,
-        state = state,
-        onAction = onAction,
+internal fun ConnectDesktopScreen(
+    state: CompanionUiState,
+    scanner: CompanionInvitationScanner,
+    onAction: (CompanionAction) -> Unit,
+) {
+    val renderState = state.toConnectUiState()
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.TopCenter,
     ) {
-        CompanionStatusRow(
-            label = stringResource(Res.string.status_network),
-            value = networkLabel,
-            icon = KNetIcons.Info,
-            positive = state.network is CompanionNetworkState.Available,
-        )
-        KNetCard(modifier = Modifier.fillMaxWidth()) {
-            Column(verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.md)) {
-                Text(
-                    text = stringResource(Res.string.invitation_label),
-                    style = KNetTheme.typography.titleMedium,
-                    color = KNetTheme.colors.textPrimary,
-                )
-                KNetMultilineField(
-                    value = invitation,
-                    onValueChange = { invitation = it },
-                    placeholder = stringResource(Res.string.invitation_placeholder),
-                    enabled = !state.operationInProgress,
-                )
-                Text(
-                    text = stringResource(Res.string.invitation_help),
-                    style = KNetTheme.typography.caption,
-                    color = KNetTheme.colors.textSecondary,
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm),
-                    verticalAlignment = Alignment.CenterVertically,
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = KNetTheme.spacing.lg, vertical = KNetTheme.spacing.xl),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            KNetSurface(
+                modifier = Modifier.fillMaxWidth().widthIn(max = 560.dp),
+                color = KNetTheme.colors.surface,
+                shape = KNetTheme.shapes.extraLarge,
+                border = BorderStroke(1.dp, KNetTheme.colors.border),
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth().padding(KNetTheme.spacing.xxl),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xxl),
                 ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.md),
+                    ) {
+                        Text(
+                            text = stringResource(Res.string.connect_title),
+                            style = KNetTheme.typography.hero,
+                            color = KNetTheme.colors.textPrimary,
+                            textAlign = TextAlign.Center,
+                        )
+                        Text(
+                            text = stringResource(Res.string.connect_summary),
+                            style = KNetTheme.typography.bodyLarge,
+                            color = KNetTheme.colors.textSecondary,
+                            textAlign = TextAlign.Center,
+                        )
+                    }
+                    ConnectVisualPanel(
+                        mode = renderState.visualMode,
+                        state = state,
+                        scanner = scanner,
+                        onAction = onAction,
+                    )
+                    val scannerVisible = renderState.visualMode == CompanionConnectVisualMode.Scanner
+                    val scanEnabled = renderState.scanState !is CompanionConnectScanState.Disabled
+                    val scanLoading = renderState.scanState is CompanionConnectScanState.Loading
                     KNetButton(
-                        onClick = { onAction(CompanionAction.ScanInvitationRequested) },
-                        modifier = Modifier.weight(1f),
-                    ) { Text(stringResource(Res.string.scan_qr)) }
-                    KNetButton(
-                        onClick = { onAction(CompanionAction.ImportInvitationImageRequested) },
-                        modifier = Modifier.weight(1f),
-                        variant = ButtonVariant.Secondary,
-                    ) { Text(stringResource(Res.string.import_qr)) }
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                ) {
-                    KNetButton(
-                        onClick = { onAction(CompanionAction.InvitationSubmitted(invitation.trim())) },
-                        enabled = invitation.isNotBlank() && !state.operationInProgress,
-                    ) { Text(stringResource(Res.string.continue_action)) }
-                }
-            }
-        }
-        if (state.registrations.isNotEmpty()) {
-            Column(verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm)) {
-                Text(
-                    text = stringResource(Res.string.paired_desktops),
-                    style = KNetTheme.typography.titleMedium,
-                    color = KNetTheme.colors.textPrimary,
-                )
-                state.registrations.forEach { registration ->
-                    KNetCard(modifier = Modifier.fillMaxWidth()) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            Text(
-                                text = registration.desktopDisplayName,
-                                style = KNetTheme.typography.bodyMedium,
-                                color = KNetTheme.colors.textPrimary,
-                                modifier = Modifier.weight(1f).padding(end = KNetTheme.spacing.sm),
-                            )
-                            KNetButton(
-                                onClick = {
-                                    onAction(CompanionAction.RegistrationSelected(registration.desktopId))
+                        onClick = {
+                            onAction(
+                                if (scannerVisible) {
+                                    CompanionAction.InvitationScannerDismissed
+                                } else {
+                                    CompanionAction.ScanInvitationRequested
                                 },
-                                variant = ButtonVariant.Secondary,
-                            ) { Text(stringResource(Res.string.use_desktop)) }
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        variant = if (scannerVisible) ButtonVariant.Secondary else ButtonVariant.Primary,
+                        size = ButtonSize.Touch,
+                        enabled = scannerVisible || scanEnabled,
+                        loading = !scannerVisible && scanLoading,
+                    ) {
+                        Icon(
+                            imageVector = if (scannerVisible) KNetIcons.Close else KNetIcons.QrCodeScanner,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(modifier = Modifier.size(KNetTheme.spacing.sm))
+                        Text(
+                            stringResource(
+                                if (scannerVisible) Res.string.cancel_scanning else Res.string.scan_qr,
+                            ),
+                        )
+                    }
+                    val failure = renderState.failure
+                    val motion = KNetTheme.motion
+                    val failureAnimationDuration = if (motion.animationsEnabled) {
+                        motion.durationNormal
+                    } else {
+                        motion.durationInstant
+                    }
+                    AnimatedVisibility(
+                        visible = failure != null,
+                        enter = fadeIn(tween(failureAnimationDuration)) +
+                            expandVertically(tween(failureAnimationDuration)),
+                        exit = fadeOut(tween(failureAnimationDuration)) +
+                            shrinkVertically(tween(failureAnimationDuration)),
+                    ) {
+                        failure?.let { currentFailure ->
+                            ConnectFailureCard(
+                                failure = currentFailure,
+                                onTryAgain = { onAction(CompanionAction.ClearFailure) },
+                            )
                         }
                     }
+                    ConnectFeedbackCard(feedback = renderState.feedback)
                 }
             }
         }

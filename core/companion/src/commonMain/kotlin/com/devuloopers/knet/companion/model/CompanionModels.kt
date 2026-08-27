@@ -301,6 +301,15 @@ public object CompanionCertificateProtocol {
     /** Authenticated endpoint that returns the exact KNet root certificate as DER bytes. */
     public const val ROOT_CERTIFICATE_PATH: String = "/companion/v1/certificates/root"
 
+    /** Media type of the canonical DER-encoded KNet root certificate. */
+    public const val ROOT_CERTIFICATE_MEDIA_TYPE: String = "application/x-x509-ca-cert"
+
+    /** Authenticated endpoint that returns the KNet root wrapped in an Apple configuration profile. */
+    public const val APPLE_PROFILE_PATH: String = "/companion/v1/certificates/root.mobileconfig"
+
+    /** Media type used by Apple configuration profiles. */
+    public const val APPLE_PROFILE_MEDIA_TYPE: String = "application/x-apple-aspen-config"
+
     /** Authenticated endpoint that echoes a fresh challenge after trusted TLS negotiation. */
     public const val TRUST_CHALLENGE_PATH: String = "/companion/v1/certificates/verify"
 
@@ -309,6 +318,9 @@ public object CompanionCertificateProtocol {
 
     /** Maximum DER root size accepted in a pairing invitation or durable registration. */
     public const val MAXIMUM_ROOT_CERTIFICATE_BYTES: Int = 16 * 1024
+
+    /** Maximum bounded installation artifact, including an Apple configuration-profile envelope. */
+    public const val MAXIMUM_INSTALLATION_ARTIFACT_BYTES: Int = 64 * 1024
 }
 
 /** Authenticated transport lifecycle shared by direct and future relay implementations. */

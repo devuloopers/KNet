@@ -10,6 +10,7 @@ import com.devuloopers.knet.companion.data.VersionedCompanionInvitationCodec
 import com.devuloopers.knet.companion.data.VersionedCompanionRegistrationRepository
 import com.devuloopers.knet.companion.data.android.AndroidKeystoreCompanionDeviceIdentityProvider
 import com.devuloopers.knet.companion.data.android.AndroidKeystoreCompanionDeviceProofSigner
+import com.devuloopers.knet.companion.data.android.AndroidCompanionDeviceDisplayNameProvider
 import com.devuloopers.knet.companion.data.control.DefaultCompanionEndpointReconciliationClient
 import com.devuloopers.knet.companion.data.control.DefaultCompanionPairingClient
 import com.devuloopers.knet.companion.data.store.CompanionRecordStore
@@ -41,6 +42,9 @@ internal object CompanionAndroidModules {
         single<CompanionDesktopDiscovery> { get<CompanionPlatformAdapters>().desktopDiscovery }
         single<CompanionInvitationResolver> { get<CompanionPlatformAdapters>().invitationResolver }
         single<CompanionRootCertificateSource> { get<CompanionPlatformAdapters>().rootCertificateSource }
+        single<CompanionCertificateInstallationArtifactSource> {
+            get<CompanionPlatformAdapters>().certificateInstallationArtifactSource
+        }
         single<CompanionCertificateTrustVerifier> { get<CompanionPlatformAdapters>().trustVerifier }
         single<CompanionCertificateStoreChangeObserver> {
             get<CompanionPlatformAdapters>().certificateStoreChanges
@@ -55,6 +59,7 @@ internal object CompanionAndroidModules {
         single<CompanionCredentialStore> { ProtectedCompanionCredentialStore(get()) }
         single<CompanionInvitationCodec> { VersionedCompanionInvitationCodec() }
         single { AndroidKeystoreCompanionDeviceIdentityProvider() } bind CompanionDeviceIdentityProvider::class
+        single { AndroidCompanionDeviceDisplayNameProvider() } bind CompanionDeviceDisplayNameProvider::class
         single { AndroidKeystoreCompanionDeviceProofSigner() } bind CompanionDeviceProofSigner::class
     }
 
@@ -70,7 +75,7 @@ internal object CompanionAndroidModules {
     private fun applicationBindings(): Module = module {
         single { AcceptPairingInvitationUseCase(get(), get(), System::currentTimeMillis) }
         single {
-            PairCompanionDeviceUseCase(get(), get(), get(), get(), System::currentTimeMillis)
+            PairCompanionDeviceUseCase(get(), get(), get(), get(), get(), System::currentTimeMillis)
         }
         single { ObserveCompanionRegistrationsUseCase(get()) }
         single { SelectCompanionRegistrationUseCase(get()) }
