@@ -13,12 +13,12 @@ internal class Android34CompanionServiceMonitor(
     private val callbackExecutor: Executor,
     private val onServiceUpdated: (generation: Long, serviceInfo: NsdServiceInfo) -> Unit,
     private val onServiceUnavailable: (generation: Long, serviceName: String) -> Unit,
-) {
+) : AndroidCompanionServiceMonitor {
     private val lock = Any()
     private val registrations = linkedMapOf<String, Registration>()
 
     /** Starts monitoring one discovered service; duplicate discovery callbacks remain idempotent. */
-    fun observe(serviceInfo: NsdServiceInfo, generation: Long) {
+    override fun observe(serviceInfo: NsdServiceInfo, generation: Long) {
         val key = serviceInfo.registrationKey()
         val callback = object : NsdManager.ServiceInfoCallback {
             override fun onServiceUpdated(updatedServiceInfo: NsdServiceInfo) {
@@ -52,7 +52,7 @@ internal class Android34CompanionServiceMonitor(
     }
 
     /** Stops monitoring a service that the discovery listener reported as lost. */
-    fun forget(serviceInfo: NsdServiceInfo) {
+    override fun forget(serviceInfo: NsdServiceInfo) {
         val callback = synchronized(lock) {
             registrations.remove(serviceInfo.registrationKey())?.callback
         } ?: return
@@ -60,7 +60,7 @@ internal class Android34CompanionServiceMonitor(
     }
 
     /** Releases every active service-info callback before discovery restarts or stops. */
-    fun clear() {
+    override fun clear() {
         val callbacks = synchronized(lock) {
             registrations.values.map(Registration::callback).also { registrations.clear() }
         }

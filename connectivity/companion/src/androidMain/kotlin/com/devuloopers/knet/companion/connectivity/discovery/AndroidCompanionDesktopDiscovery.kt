@@ -38,7 +38,7 @@ internal class AndroidCompanionDesktopDiscovery(
     private val candidates = linkedMapOf<String, CompanionDiscoveryCandidate>()
     private val pendingResolutions = ArrayDeque<NsdServiceInfo>()
     private var resolving = false
-    private val continuousServiceMonitor: Android34CompanionServiceMonitor? =
+    private val continuousServiceMonitor: AndroidCompanionServiceMonitor? =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             Android34CompanionServiceMonitor(
                 nsdManager = nsdManager,
