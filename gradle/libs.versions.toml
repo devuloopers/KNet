@@ -3,6 +3,7 @@ android-gradle-plugin = "9.1.1"
 android-compile-sdk = "36"
 android-min-sdk = "26"
 androidx-activity = "1.13.0"
+androidx-annotation = "1.9.1"
 androidx-lifecycle = "2.11.0-beta01"
 composeMultiplatform = "1.11.1"
 navigation3 = "1.1.1"
@@ -42,6 +43,7 @@ jmdns = "3.6.3"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity" }
+androidx-annotation = { module = "androidx.annotation:annotation", version.ref = "androidx-annotation" }
 androidx-lifecycle-viewmodel = { module = "org.jetbrains.androidx.lifecycle:lifecycle-viewmodel", version.ref = "androidx-lifecycle" }
 graphql-java = { module = "com.graphql-java:graphql-java", version.ref = "graphql-java" }
 material-icons-extended = { module = "org.jetbrains.compose.material:material-icons-extended", version.ref = "materialIconsExtended" }

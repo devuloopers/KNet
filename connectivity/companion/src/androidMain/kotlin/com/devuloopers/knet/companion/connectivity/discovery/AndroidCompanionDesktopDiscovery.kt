@@ -15,12 +15,12 @@ import com.devuloopers.knet.companion.model.CompanionFailure
 import com.devuloopers.knet.companion.model.CompanionFailureCode
 import com.devuloopers.knet.companion.model.CompanionServiceEndpoint
 import java.net.InetAddress
-import java.util.ArrayDeque
+import kotlin.collections.ArrayDeque
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-/** Android DNS-SD adapter with bounded legacy-resolution serialization and multicast compatibility. */
+/** Android DNS-SD adapter with continuous modern monitoring, serialized legacy resolution, and multicast support. */
 internal class AndroidCompanionDesktopDiscovery(
     context: Context,
     private val txtCodec: CompanionDiscoveryTxtCodec = CompanionDiscoveryTxtCodec(),
@@ -38,6 +38,17 @@ internal class AndroidCompanionDesktopDiscovery(
     private val candidates = linkedMapOf<String, CompanionDiscoveryCandidate>()
     private val pendingResolutions = ArrayDeque<NsdServiceInfo>()
     private var resolving = false
+    private val continuousServiceMonitor: Android34CompanionServiceMonitor? =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            Android34CompanionServiceMonitor(
+                nsdManager = nsdManager,
+                callbackExecutor = applicationContext.mainExecutor,
+                onServiceUpdated = ::acceptServiceUpdate,
+                onServiceUnavailable = ::removeService,
+            )
+        } else {
+            null
+        }
 
     override fun start(targetDesktopIds: Set<CompanionDesktopId>) {
         require(targetDesktopIds.isNotEmpty()) { "At least one paired desktop identity is required." }
@@ -75,6 +86,7 @@ internal class AndroidCompanionDesktopDiscovery(
             generation += 1
             listener?.let { active -> runCatching { nsdManager.stopServiceDiscovery(active) } }
             listener = null
+            continuousServiceMonitor?.clear()
             pendingResolutions.clear()
             resolving = false
             candidates.clear()
@@ -92,14 +104,17 @@ internal class AndroidCompanionDesktopDiscovery(
             override fun onServiceFound(serviceInfo: NsdServiceInfo) {
                 synchronized(lock) {
                     if (generation != activeGeneration || !serviceInfo.serviceType.contains("_knet-companion._tcp")) return
-                    pendingResolutions.addLast(serviceInfo)
-                    resolveNext(activeGeneration)
+                    continuousServiceMonitor?.observe(serviceInfo, activeGeneration) ?: run {
+                        pendingResolutions.addLast(serviceInfo)
+                        resolveNext(activeGeneration)
+                    }
                 }
             }
 
             override fun onServiceLost(serviceInfo: NsdServiceInfo) {
                 synchronized(lock) {
                     if (generation != activeGeneration) return
+                    continuousServiceMonitor?.forget(serviceInfo)
                     candidates.remove(serviceInfo.serviceName)
                     publishCandidates()
                 }
@@ -145,17 +160,30 @@ internal class AndroidCompanionDesktopDiscovery(
         }
     }
 
+    private fun acceptServiceUpdate(activeGeneration: Long, serviceInfo: NsdServiceInfo) {
+        synchronized(lock) {
+            if (generation == activeGeneration) resolved(serviceInfo)
+        }
+    }
+
+    private fun removeService(activeGeneration: Long, serviceName: String) {
+        synchronized(lock) {
+            if (generation != activeGeneration) return
+            candidates.remove(serviceName)
+            publishCandidates()
+        }
+    }
+
     private fun resolved(service: NsdServiceInfo) {
         val attributes = runCatching {
             service.attributes.mapValues { (_, bytes) -> bytes.decodeToString(throwOnInvalidSequence = true) }
         }.getOrNull() ?: return
         val advertisement = runCatching { txtCodec.decode(attributes) }.getOrNull() ?: return
         if (!advertisement.matches(targets)) return
-        val addresses: List<InetAddress> = if (Build.VERSION.SDK_INT >= 34) {
+        val addresses: List<InetAddress> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             service.hostAddresses
         } else {
-            @Suppress("DEPRECATION")
-            listOfNotNull(service.host)
+            legacyHostAddresses(service)
         }
         val endpoints = addresses.mapNotNull { address ->
             val host = address.hostAddress?.substringBefore('%') ?: return@mapNotNull null
@@ -190,6 +218,7 @@ internal class AndroidCompanionDesktopDiscovery(
         mutableState.value = CompanionDiscoveryState.Failed(failure)
         listener?.let { active -> runCatching { nsdManager.stopServiceDiscovery(active) } }
         listener = null
+        continuousServiceMonitor?.clear()
         pendingResolutions.clear()
         resolving = false
         candidates.clear()
@@ -203,6 +232,10 @@ internal class AndroidCompanionDesktopDiscovery(
         message,
         true,
     )
+
+    @Suppress("DEPRECATION")
+    private fun legacyHostAddresses(serviceInfo: NsdServiceInfo): List<InetAddress> =
+        listOfNotNull(serviceInfo.host)
 
     private companion object {
         const val MULTICAST_LOCK_TAG: String = "knet-companion-discovery"

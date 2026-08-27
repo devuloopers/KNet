@@ -32,6 +32,7 @@ kotlin {
             implementation(libs.kotlinx.coroutines.core)
         }
         androidMain.dependencies {
+            implementation(libs.androidx.annotation)
             implementation(libs.hevtunnel)
             implementation(libs.ktor.client.okhttp)
         }
