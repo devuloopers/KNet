@@ -1,5 +1,6 @@
 package com.devuloopers.knet.companion.connectivity.bootstrap
 
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.companion.connectivity.http.CompanionHttpRequest
 import com.devuloopers.knet.companion.connectivity.http.CompanionHttpSecurity
 import com.devuloopers.knet.companion.connectivity.http.KtorCompanionHttpClient
@@ -96,8 +97,8 @@ class KtorCompanionBootstrapClientTest {
         id = CompanionBootstrapId("bootstrap-1"),
         retrievalSecret = CompanionBootstrapSecret("r".repeat(32)),
         expiresAtEpochMillis = 2_000L,
-        rootCertificateEndpoint = CompanionServiceEndpoint("192.0.2.1", 8_181, false),
-        retrievalEndpoint = CompanionServiceEndpoint("192.0.2.1", 8_183, true),
+        rootCertificateEndpoint = CompanionServiceEndpoint("192.0.2.1", 8_181, CompanionEndpointScheme.HTTP),
+        retrievalEndpoint = CompanionServiceEndpoint("192.0.2.1", 8_183, CompanionEndpointScheme.HTTPS),
         transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
         rootCertificateSha256 = Sha256Fingerprint(rootSha256),
     )

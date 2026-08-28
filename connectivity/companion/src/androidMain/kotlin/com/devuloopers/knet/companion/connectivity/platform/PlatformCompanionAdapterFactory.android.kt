@@ -1,5 +1,6 @@
 package com.devuloopers.knet.companion.connectivity.platform
 
+import kotlin.time.Clock
 import android.content.Context
 import com.devuloopers.knet.companion.application.contract.CompanionInspectionController
 import com.devuloopers.knet.companion.connectivity.bootstrap.DefaultCompanionInvitationResolver
@@ -29,7 +30,7 @@ import com.devuloopers.knet.companion.connectivity.network.AndroidCompanionNetwo
 public actual class PlatformCompanionAdapterFactory(
     context: Context,
     private val inspectionBackend: AndroidInspectionBackend? = null,
-    private val nowEpochMillis: () -> Long = System::currentTimeMillis,
+    private val nowEpochMillis: () -> Long = { Clock.System.now().toEpochMilliseconds() },
 ) : CompanionPlatformAdapterFactory {
     private val applicationContext: Context = context.applicationContext
 

@@ -1,5 +1,7 @@
 package com.devuloopers.knet.application.usecase.pairing
 
+import com.devuloopers.knet.companion.model.CompanionDesktopDisplayName
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.application.contract.pairing.CompanionOnboardingStore
 import com.devuloopers.knet.application.contract.pairing.PendingCompanionOnboarding
 import com.devuloopers.knet.application.contract.pairing.PairingCryptography
@@ -79,10 +81,10 @@ class CreatePairingOnboardingUseCaseTest {
 
     private fun environment(): PairingOnboardingEnvironment = PairingOnboardingEnvironment(
         desktopId = CompanionDesktopId("desktop-1"),
-        desktopDisplayName = "KNet Desktop",
-        rootCertificateEndpoint = CompanionServiceEndpoint("192.0.2.10", 8_181, secure = false),
-        controlEndpoint = CompanionServiceEndpoint("192.0.2.10", 8_183, secure = true),
-        proxyEndpoint = CompanionServiceEndpoint("192.0.2.10", 8_182, secure = true),
+        desktopDisplayName = CompanionDesktopDisplayName("KNet Desktop"),
+        rootCertificateEndpoint = CompanionServiceEndpoint("192.0.2.10", 8_181, scheme = CompanionEndpointScheme.HTTP),
+        controlEndpoint = CompanionServiceEndpoint("192.0.2.10", 8_183, scheme = CompanionEndpointScheme.HTTPS),
+        proxyEndpoint = CompanionServiceEndpoint("192.0.2.10", 8_182, scheme = CompanionEndpointScheme.HTTPS),
         transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
         rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
         rootCertificate = CompanionRootCertificate(byteArrayOf(1, 2, 3)),

@@ -1,5 +1,7 @@
 package com.devuloopers.knet.companion.connectivity.bootstrap
 
+import com.devuloopers.knet.companion.model.CompanionDesktopDisplayName
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.companion.application.contract.CompanionInvitationResolutionResult
 import com.devuloopers.knet.companion.connectivity.certificate.validatedBootstrapRoot
 import com.devuloopers.knet.companion.connectivity.certificate.sha256Hex
@@ -87,8 +89,8 @@ class AndroidCompanionInvitationResolverTest {
         id = CompanionBootstrapId("bootstrap-1"),
         retrievalSecret = CompanionBootstrapSecret("r".repeat(32)),
         expiresAtEpochMillis = 2_000L,
-        rootCertificateEndpoint = CompanionServiceEndpoint("192.0.2.1", 8_181, false),
-        retrievalEndpoint = CompanionServiceEndpoint("192.0.2.1", 8_183, true),
+        rootCertificateEndpoint = CompanionServiceEndpoint("192.0.2.1", 8_181, CompanionEndpointScheme.HTTP),
+        retrievalEndpoint = CompanionServiceEndpoint("192.0.2.1", 8_183, CompanionEndpointScheme.HTTPS),
         transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
         rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
     )
@@ -96,15 +98,15 @@ class AndroidCompanionInvitationResolverTest {
     private fun invitation(): CompanionPairingInvitation = CompanionPairingInvitation(
         protocolVersion = CompanionPairingInvitation.CURRENT_PROTOCOL_VERSION,
         desktopId = CompanionDesktopId("desktop-1"),
-        desktopDisplayName = "KNet Desktop",
+        desktopDisplayName = CompanionDesktopDisplayName("KNet Desktop"),
         pairing = PairingInvitation(
             PairingInvitationId("pairing-1"),
             "p".repeat(32),
             2_000L,
             setOf(DeviceScope.PROXY_STREAM),
         ),
-        controlEndpoint = CompanionServiceEndpoint("192.0.2.1", 8_183, true),
-        proxyEndpoint = CompanionServiceEndpoint("192.0.2.1", 8_182, true),
+        controlEndpoint = CompanionServiceEndpoint("192.0.2.1", 8_183, CompanionEndpointScheme.HTTPS),
+        proxyEndpoint = CompanionServiceEndpoint("192.0.2.1", 8_182, CompanionEndpointScheme.HTTPS),
         transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
         rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
         rootCertificate = CompanionRootCertificate(byteArrayOf(1, 2, 3)),

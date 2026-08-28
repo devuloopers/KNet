@@ -17,7 +17,9 @@ import com.devuloopers.knet.application.usecase.pairing.CreatePairingOnboardingU
 import com.devuloopers.knet.application.usecase.pairing.RedeemPairingOnboardingUseCase
 import com.devuloopers.knet.application.usecase.connectivity.wifi.ObserveWifiSharingUseCase
 import com.devuloopers.knet.companion.model.CompanionDesktopId
+import com.devuloopers.knet.companion.model.CompanionDesktopDisplayName
 import com.devuloopers.knet.companion.model.CompanionDesktopRuntimeId
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.companion.model.CompanionBootstrapPayloadCodec
 import com.devuloopers.knet.companion.model.CompanionBootstrapRedemptionCodec
 import com.devuloopers.knet.companion.model.CompanionInvitationResponseCodec
@@ -66,6 +68,7 @@ import java.net.InetSocketAddress
 import java.net.URI
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlin.time.Clock
 import kotlin.uuid.Uuid
 
 /** Pairing, network discovery, setup delivery, and desktop connectivity mechanisms. */
@@ -78,12 +81,12 @@ internal val connectivityBindings: Module = module {
     single { RoomRegisteredDeviceStore(get<KNetDatabase>().registeredDeviceDao()) }
     single<RegisteredDeviceStore> { get<RoomRegisteredDeviceStore>() }
     single<TrustedDeviceStore> { get<RoomRegisteredDeviceStore>() }
-    single { PairingCoordinator(get(), get(), System::currentTimeMillis) }
+    single { PairingCoordinator(get(), get(), ::currentEpochMillis) }
     single<CompanionOnboardingStore> { InMemoryCompanionOnboardingStore() }
     single { CompanionBootstrapPayloadCodec() }
     single { CompanionBootstrapRedemptionCodec() }
     single { CompanionInvitationResponseCodec() }
-    factory { RedeemPairingOnboardingUseCase(get(), get(), System::currentTimeMillis) }
+    factory { RedeemPairingOnboardingUseCase(get(), get(), ::currentEpochMillis) }
 
     single { DesktopNetworkSnapshotMonitor() }
     single { DesktopConnectivityRuntime(get(), get()) }
@@ -166,17 +169,17 @@ internal val connectivityBindings: Module = module {
                 val desktopIdentity = discovery.load()
                 PairingOnboardingEnvironment(
                     desktopId = desktopIdentity.desktopId,
-                    desktopDisplayName = "KNet Desktop",
+                    desktopDisplayName = CompanionDesktopDisplayName("KNet Desktop"),
                     rootCertificateEndpoint = active.session.setupUrl.toRootCertificateEndpoint(),
                     controlEndpoint = CompanionServiceEndpoint(
                         host = active.session.networkAddress.address,
                         port = COMPANION_CONTROL_GATEWAY_PORT,
-                        secure = true,
+                        scheme = CompanionEndpointScheme.HTTPS,
                     ),
                     proxyEndpoint = CompanionServiceEndpoint(
                         host = active.session.networkAddress.address,
                         port = AUTHENTICATED_GATEWAY_PORT,
-                        secure = true,
+                        scheme = CompanionEndpointScheme.HTTPS,
                     ),
                     transportIdentitySha256 = Sha256Fingerprint(identity.transportIdentitySha256),
                     rootCertificateSha256 = Sha256Fingerprint(identity.rootCertificateSha256),
@@ -193,7 +196,7 @@ internal val connectivityBindings: Module = module {
             observeWifiSharing = get(),
             observeApplicationSettings = get(),
             createPairingOnboarding = get(),
-            nowEpochMillis = System::currentTimeMillis,
+            nowEpochMillis = ::currentEpochMillis,
         )
     }
 
@@ -250,7 +253,7 @@ internal val connectivityBindings: Module = module {
             redemptionCodec = get(),
             invitationCodec = get(),
             endpointDescriptor = { discovery.load().endpointDescriptor() },
-            nowEpochMillis = System::currentTimeMillis,
+            nowEpochMillis = ::currentEpochMillis,
         )
     }
 }
@@ -260,11 +263,13 @@ internal const val COMPANION_LAN_BIND_HOST: String = "0.0.0.0"
 private const val AUTHENTICATED_GATEWAY_PORT: Int = 8182
 private const val COMPANION_CONTROL_GATEWAY_PORT: Int = 8183
 
+private fun currentEpochMillis(): Long = Clock.System.now().toEpochMilliseconds()
+
 /** Resolves the active Wi-Fi portal authority instead of assuming its preferred port was available. */
 private fun String.toRootCertificateEndpoint(): CompanionServiceEndpoint {
     val uri = URI(this)
     require(uri.scheme == "http" && !uri.host.isNullOrBlank() && uri.port in 1..65_535) {
         "The active Wi-Fi setup URL cannot publish a companion root endpoint."
     }
-    return CompanionServiceEndpoint(host = uri.host, port = uri.port, secure = false)
+    return CompanionServiceEndpoint(host = uri.host, port = uri.port, scheme = CompanionEndpointScheme.HTTP)
 }

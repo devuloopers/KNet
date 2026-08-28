@@ -1,5 +1,7 @@
 package com.devuloopers.knet.ui.desktop.connectivity
 
+import com.devuloopers.knet.companion.model.CompanionDesktopDisplayName
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.application.contract.connectivity.wifi.WifiSharing
 import com.devuloopers.knet.application.contract.pairing.PairingCryptography
 import com.devuloopers.knet.application.contract.pairing.CompanionOnboardingStore
@@ -235,14 +237,14 @@ class ConnectDeviceViewModelTest {
                     val active = assertIs<WifiSharingState.Active>(wifi.state.value)
                     PairingOnboardingEnvironment(
                         desktopId = CompanionDesktopId("desktop-1"),
-                        desktopDisplayName = "KNet Desktop",
+                        desktopDisplayName = CompanionDesktopDisplayName("KNet Desktop"),
                         rootCertificateEndpoint = CompanionServiceEndpoint(
                             active.session.networkAddress.address,
                             8_181,
                             false,
                         ),
-                        controlEndpoint = CompanionServiceEndpoint(active.session.networkAddress.address, 8_183, true),
-                        proxyEndpoint = CompanionServiceEndpoint(active.session.networkAddress.address, 8_182, true),
+                        controlEndpoint = CompanionServiceEndpoint(active.session.networkAddress.address, 8_183, CompanionEndpointScheme.HTTPS),
+                        proxyEndpoint = CompanionServiceEndpoint(active.session.networkAddress.address, 8_182, CompanionEndpointScheme.HTTPS),
                         transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
                         rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
                         rootCertificate = CompanionRootCertificate(byteArrayOf(1, 2, 3)),

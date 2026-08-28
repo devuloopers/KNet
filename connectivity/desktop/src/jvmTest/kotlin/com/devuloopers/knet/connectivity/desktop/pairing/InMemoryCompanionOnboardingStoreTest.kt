@@ -1,5 +1,7 @@
 package com.devuloopers.knet.connectivity.desktop.pairing
 
+import com.devuloopers.knet.companion.model.CompanionDesktopDisplayName
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.application.contract.pairing.PendingCompanionOnboarding
 import com.devuloopers.knet.companion.model.CompanionBootstrapId
 import com.devuloopers.knet.companion.model.CompanionDesktopId
@@ -58,15 +60,15 @@ class InMemoryCompanionOnboardingStoreTest {
     private fun invitation(expiresAt: Long = 2_000L): CompanionPairingInvitation = CompanionPairingInvitation(
         protocolVersion = CompanionPairingInvitation.CURRENT_PROTOCOL_VERSION,
         desktopId = CompanionDesktopId("desktop-1"),
-        desktopDisplayName = "KNet Desktop",
+        desktopDisplayName = CompanionDesktopDisplayName("KNet Desktop"),
         pairing = PairingInvitation(
             PairingInvitationId("pairing-1"),
             "p".repeat(32),
             expiresAt,
             setOf(DeviceScope.PROXY_STREAM),
         ),
-        controlEndpoint = CompanionServiceEndpoint("192.0.2.1", 8_183, true),
-        proxyEndpoint = CompanionServiceEndpoint("192.0.2.1", 8_182, true),
+        controlEndpoint = CompanionServiceEndpoint("192.0.2.1", 8_183, CompanionEndpointScheme.HTTPS),
+        proxyEndpoint = CompanionServiceEndpoint("192.0.2.1", 8_182, CompanionEndpointScheme.HTTPS),
         transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
         rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
         rootCertificate = CompanionRootCertificate(byteArrayOf(1, 2, 3)),

@@ -21,7 +21,6 @@ import java.net.ServerSocket
 import java.net.Socket
 import java.security.KeyPairGenerator
 import java.security.Signature
-import java.util.Base64
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
@@ -36,11 +35,13 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import kotlin.io.encoding.Base64
+import kotlin.time.Clock
 
 class PairingGatewayEndToEndTest {
     @Test
     fun `authenticated CONNECT preserves destination IP and following TLS ClientHello bytes`() = runBlocking {
-        val pairing = PairingCoordinator(InMemoryTrustedDeviceStore(), JvmPairingCrypto(), System::currentTimeMillis)
+        val pairing = PairingCoordinator(InMemoryTrustedDeviceStore(), JvmPairingCrypto(), ::currentEpochMillis)
         val issued = pair(pairing)
         val internalProxy = ServerSocket(0)
         val tls = testTlsIdentity(CompanionCertificateProtocol.TLS_SERVER_NAME)
@@ -155,7 +156,7 @@ class PairingGatewayEndToEndTest {
 
     @Test
     fun `revocation terminates an already active paired stream`() = runBlocking {
-        val pairing = PairingCoordinator(InMemoryTrustedDeviceStore(), JvmPairingCrypto(), System::currentTimeMillis)
+        val pairing = PairingCoordinator(InMemoryTrustedDeviceStore(), JvmPairingCrypto(), ::currentEpochMillis)
         val issued = pair(pairing)
         val internalProxy = ServerSocket(0)
         val tls = testTlsIdentity(CompanionCertificateProtocol.TLS_SERVER_NAME)
@@ -201,7 +202,7 @@ class PairingGatewayEndToEndTest {
 
     @Test
     fun `gateway rejects duplicate credentials and enforces connection admission`() = runBlocking {
-        val pairing = PairingCoordinator(InMemoryTrustedDeviceStore(), JvmPairingCrypto(), System::currentTimeMillis)
+        val pairing = PairingCoordinator(InMemoryTrustedDeviceStore(), JvmPairingCrypto(), ::currentEpochMillis)
         val issued = pair(pairing)
         val internalProxy = ServerSocket(0)
         val tls = testTlsIdentity(CompanionCertificateProtocol.TLS_SERVER_NAME)
@@ -251,7 +252,7 @@ class PairingGatewayEndToEndTest {
 
     @Test
     fun `readiness probe authenticates and reports proxy availability without opening an upstream stream`() = runBlocking {
-        val pairing = PairingCoordinator(InMemoryTrustedDeviceStore(), JvmPairingCrypto(), System::currentTimeMillis)
+        val pairing = PairingCoordinator(InMemoryTrustedDeviceStore(), JvmPairingCrypto(), ::currentEpochMillis)
         val issued = pair(pairing)
         val tls = testTlsIdentity(CompanionCertificateProtocol.TLS_SERVER_NAME)
         var target: InetSocketAddress? = null
@@ -285,7 +286,7 @@ class PairingGatewayEndToEndTest {
             invitation.secret,
             RegisteredDeviceId("device-e2e"),
             "E2E device",
-            Base64.getUrlEncoder().withoutPadding().encodeToString(keyPair.public.encoded),
+            URL_SAFE_BASE64.encode(keyPair.public.encoded),
             "pending",
         )
         val signature = Signature.getInstance("Ed25519").run {
@@ -294,7 +295,7 @@ class PairingGatewayEndToEndTest {
             sign()
         }
         val request = unsigned.copy(
-            proofSignatureEncoded = Base64.getUrlEncoder().withoutPadding().encodeToString(signature),
+            proofSignatureEncoded = URL_SAFE_BASE64.encode(signature),
         )
         return assertIs<PairingCompletionResult.Paired>(pairing.complete(request)).issued
     }
@@ -421,3 +422,7 @@ class PairingGatewayEndToEndTest {
     }
 
 }
+
+private val URL_SAFE_BASE64: Base64 = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT_OPTIONAL)
+
+private fun currentEpochMillis(): Long = Clock.System.now().toEpochMilliseconds()

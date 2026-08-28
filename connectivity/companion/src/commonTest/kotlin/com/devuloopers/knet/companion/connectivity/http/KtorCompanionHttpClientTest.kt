@@ -1,5 +1,6 @@
 package com.devuloopers.knet.companion.connectivity.http
 
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.companion.model.CompanionBootstrapProtocol
 import com.devuloopers.knet.companion.model.CompanionCertificateProtocol
 import com.devuloopers.knet.companion.model.CompanionRootCertificate
@@ -46,7 +47,7 @@ class KtorCompanionHttpClientTest {
 
         val response = client.execute(
             CompanionHttpRequest(
-                endpoint = CompanionServiceEndpoint("192.0.2.10", 8_183, true),
+                endpoint = CompanionServiceEndpoint("192.0.2.10", 8_183, CompanionEndpointScheme.HTTPS),
                 method = CompanionHttpMethod.POST,
                 path = "/companion/test",
                 requestMediaType = "application/vnd.knet.request",
@@ -79,7 +80,7 @@ class KtorCompanionHttpClientTest {
         assertFailsWith<IllegalArgumentException> {
             client.execute(
                 CompanionHttpRequest(
-                    endpoint = CompanionServiceEndpoint("192.0.2.10", 8_183, true),
+                    endpoint = CompanionServiceEndpoint("192.0.2.10", 8_183, CompanionEndpointScheme.HTTPS),
                     method = CompanionHttpMethod.GET,
                     path = "/companion/test",
                     maximumResponseBytes = 8,
@@ -93,7 +94,7 @@ class KtorCompanionHttpClientTest {
     fun additionalHeadersCannotOverrideTransportOwnedSecurityHeaders() {
         assertFailsWith<IllegalArgumentException> {
             CompanionHttpRequest(
-                endpoint = CompanionServiceEndpoint("192.0.2.10", 8_183, true),
+                endpoint = CompanionServiceEndpoint("192.0.2.10", 8_183, CompanionEndpointScheme.HTTPS),
                 method = CompanionHttpMethod.GET,
                 path = "/companion/test",
                 additionalHeaders = mapOf("Authorization" to "untrusted"),
@@ -106,7 +107,7 @@ class KtorCompanionHttpClientTest {
     @Test
     fun bootstrapCleartextCapabilityAllowsOnlyThePublicRootGet() {
         val request = CompanionHttpRequest(
-            endpoint = CompanionServiceEndpoint("192.0.2.10", 8_181, false),
+            endpoint = CompanionServiceEndpoint("192.0.2.10", 8_181, CompanionEndpointScheme.HTTP),
             method = CompanionHttpMethod.GET,
             path = CompanionBootstrapProtocol.ROOT_CERTIFICATE_PATH,
             acceptedMediaType = CompanionBootstrapProtocol.ROOT_CERTIFICATE_MEDIA_TYPE,
@@ -121,7 +122,7 @@ class KtorCompanionHttpClientTest {
     fun bootstrapCleartextCapabilityRejectsArbitraryAndSecretBearingRequests() {
         assertFailsWith<IllegalArgumentException> {
             CompanionHttpRequest(
-                endpoint = CompanionServiceEndpoint("192.0.2.10", 8_181, false),
+                endpoint = CompanionServiceEndpoint("192.0.2.10", 8_181, CompanionEndpointScheme.HTTP),
                 method = CompanionHttpMethod.GET,
                 path = "/arbitrary",
                 acceptedMediaType = CompanionBootstrapProtocol.ROOT_CERTIFICATE_MEDIA_TYPE,
@@ -131,7 +132,7 @@ class KtorCompanionHttpClientTest {
         }
         assertFailsWith<IllegalArgumentException> {
             CompanionHttpRequest(
-                endpoint = CompanionServiceEndpoint("192.0.2.10", 8_181, false),
+                endpoint = CompanionServiceEndpoint("192.0.2.10", 8_181, CompanionEndpointScheme.HTTP),
                 method = CompanionHttpMethod.POST,
                 path = CompanionBootstrapProtocol.ROOT_CERTIFICATE_PATH,
                 acceptedMediaType = CompanionBootstrapProtocol.ROOT_CERTIFICATE_MEDIA_TYPE,

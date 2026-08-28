@@ -1,7 +1,11 @@
 package com.devuloopers.knet.companion.model
 
 import com.devuloopers.knet.identity.RegisteredDeviceId
-import com.devuloopers.knet.pairing.*
+import com.devuloopers.knet.pairing.DeviceProofAlgorithm
+import com.devuloopers.knet.pairing.DeviceScope
+import com.devuloopers.knet.pairing.PairingCompletionRequest
+import com.devuloopers.knet.pairing.PairingInvitation
+import com.devuloopers.knet.pairing.PairingInvitationId
 import kotlin.io.encoding.Base64
 
 /** Canonical codec for the small secret-bearing `knet://pair/v3` bootstrap QR payload. */
@@ -41,12 +45,12 @@ public class CompanionBootstrapPayloadCodec {
             rootCertificateEndpoint = CompanionServiceEndpoint(
                 host = PairingFormCodec.required(fields, "rootHost"),
                 port = PairingFormCodec.required(fields, "rootPort").toInt(),
-                secure = false,
+                scheme = CompanionEndpointScheme.HTTP,
             ),
             retrievalEndpoint = CompanionServiceEndpoint(
                 host = PairingFormCodec.required(fields, "redeemHost"),
                 port = PairingFormCodec.required(fields, "redeemPort").toInt(),
-                secure = true,
+                scheme = CompanionEndpointScheme.HTTPS,
             ),
             transportIdentitySha256 = Sha256Fingerprint(PairingFormCodec.required(fields, "transportPin")),
             rootCertificateSha256 = Sha256Fingerprint(PairingFormCodec.required(fields, "rootPin")),
@@ -113,7 +117,7 @@ public class CompanionInvitationResponseCodec {
         listOf(
             "version" to invitation.protocolVersion.toString(),
             "desktopId" to invitation.desktopId.value,
-            "desktopName" to invitation.desktopDisplayName,
+            "desktopName" to invitation.desktopDisplayName.value,
             "pairingId" to invitation.pairing.id.value,
             "pairingSecret" to invitation.pairing.secret,
             "expires" to invitation.pairing.expiresAtEpochMillis.toString(),
@@ -149,7 +153,7 @@ public class CompanionInvitationResponseCodec {
         return CompanionPairingInvitation(
             protocolVersion = protocolVersion,
             desktopId = CompanionDesktopId(PairingFormCodec.required(fields, "desktopId")),
-            desktopDisplayName = PairingFormCodec.required(fields, "desktopName"),
+            desktopDisplayName = CompanionDesktopDisplayName(PairingFormCodec.required(fields, "desktopName")),
             pairing = PairingInvitation(
                 id = PairingInvitationId(PairingFormCodec.required(fields, "pairingId")),
                 secret = PairingFormCodec.required(fields, "pairingSecret"),
@@ -159,12 +163,12 @@ public class CompanionInvitationResponseCodec {
             controlEndpoint = CompanionServiceEndpoint(
                 PairingFormCodec.required(fields, "controlHost"),
                 PairingFormCodec.required(fields, "controlPort").toInt(),
-                secure = true,
+                scheme = CompanionEndpointScheme.HTTPS,
             ),
             proxyEndpoint = CompanionServiceEndpoint(
                 PairingFormCodec.required(fields, "proxyHost"),
                 PairingFormCodec.required(fields, "proxyPort").toInt(),
-                secure = true,
+                scheme = CompanionEndpointScheme.HTTPS,
             ),
             transportIdentitySha256 = Sha256Fingerprint(PairingFormCodec.required(fields, "transportPin")),
             rootCertificateSha256 = Sha256Fingerprint(PairingFormCodec.required(fields, "rootPin")),

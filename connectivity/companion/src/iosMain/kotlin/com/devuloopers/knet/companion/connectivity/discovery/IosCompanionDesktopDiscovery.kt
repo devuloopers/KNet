@@ -1,5 +1,6 @@
 package com.devuloopers.knet.companion.connectivity.discovery
 
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.companion.application.contract.CompanionDesktopDiscovery
 import com.devuloopers.knet.companion.model.CompanionDesktopId
 import com.devuloopers.knet.companion.model.CompanionDiscoveryCandidate
@@ -121,7 +122,7 @@ internal class IosCompanionDesktopDiscovery(
         if (!advertisement.matches(targets)) return
         val host = service.hostName?.removeSuffix(".") ?: return
         val endpoint = runCatching {
-            CompanionServiceEndpoint(host, service.port.toInt(), secure = true)
+            CompanionServiceEndpoint(host, service.port.toInt(), scheme = CompanionEndpointScheme.HTTPS)
         }.getOrNull() ?: return
         candidates[service.name] = CompanionDiscoveryCandidate(
             instanceName = service.name,

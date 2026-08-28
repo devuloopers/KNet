@@ -1,5 +1,6 @@
 package com.devuloopers.knet.connectivity.desktop.adb
 
+import kotlin.time.Clock
 import com.devuloopers.knet.connectivity.model.ConnectivityAvailability
 import com.devuloopers.knet.connectivity.model.ConnectivityCapability
 import com.devuloopers.knet.connectivity.model.ConnectivityHealth
@@ -53,7 +54,7 @@ public class JvmProcessCommandAdapter : ProcessCommandPort {
 public class AdbReverseMechanism(
     private val proxyPort: () -> Int?,
     private val commands: ProcessCommandPort = JvmProcessCommandAdapter(),
-    private val nowMillis: () -> Long = System::currentTimeMillis,
+    private val nowMillis: () -> Long = { Clock.System.now().toEpochMilliseconds() },
 ) : ManagedConnectivityMechanism {
     override val id: ConnectivityMechanismId = ConnectivityMechanismId("adb-reverse")
     override val capabilities: Set<ConnectivityCapability> = setOf(

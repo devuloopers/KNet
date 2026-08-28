@@ -1,5 +1,6 @@
 package com.devuloopers.knet.companion.connectivity.control
 
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.companion.application.contract.CompanionControlOperation
 import com.devuloopers.knet.companion.application.contract.CompanionControlRequest
 import com.devuloopers.knet.companion.connectivity.http.AndroidCompanionKtorClientProvider
@@ -28,7 +29,7 @@ class PlatformAndroidCompanionControlTransportTest {
         val root = testCertificate("local-proxy-test-ca.pem")
         val handle = AndroidCompanionKtorClientProvider().create(
             CompanionHttpRequest(
-                endpoint = CompanionServiceEndpoint("192.0.2.10", 8_183, secure = true),
+                endpoint = CompanionServiceEndpoint("192.0.2.10", 8_183, scheme = CompanionEndpointScheme.HTTPS),
                 method = CompanionHttpMethod.GET,
                 path = "/test",
                 maximumResponseBytes = 0,
@@ -52,7 +53,7 @@ class PlatformAndroidCompanionControlTransportTest {
         val root = testCertificate("local-proxy-test-ca.pem")
         val handle = AndroidCompanionKtorClientProvider().create(
             CompanionHttpRequest(
-                endpoint = CompanionServiceEndpoint("192.0.2.10", 8_183, secure = true),
+                endpoint = CompanionServiceEndpoint("192.0.2.10", 8_183, scheme = CompanionEndpointScheme.HTTPS),
                 method = CompanionHttpMethod.POST,
                 path = CompanionCertificateProtocol.TRUST_CHALLENGE_PATH,
                 maximumResponseBytes = 0,
@@ -77,7 +78,7 @@ class PlatformAndroidCompanionControlTransportTest {
     fun mismatchedRootPinIsRejectedBeforeOpeningTheControlConnection() = runTest {
         val root = testCertificate("local-proxy-test-ca.pem")
         val request = CompanionControlRequest(
-            endpoint = CompanionServiceEndpoint("127.0.0.1", 1, secure = true),
+            endpoint = CompanionServiceEndpoint("127.0.0.1", 1, scheme = CompanionEndpointScheme.HTTPS),
             transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
             rootCertificateSha256 = Sha256Fingerprint("0".repeat(64)),
             rootCertificate = CompanionRootCertificate(root.encoded),
@@ -96,7 +97,7 @@ class PlatformAndroidCompanionControlTransportTest {
     fun matchingRootPassesLocalValidationBeforeNetworkAdmission() = runTest {
         val root = testCertificate("local-proxy-test-ca.pem")
         val request = CompanionControlRequest(
-            endpoint = CompanionServiceEndpoint("127.0.0.1", 1, secure = true),
+            endpoint = CompanionServiceEndpoint("127.0.0.1", 1, scheme = CompanionEndpointScheme.HTTPS),
             transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
             rootCertificateSha256 = Sha256Fingerprint(root.sha256Hex()),
             rootCertificate = CompanionRootCertificate(root.encoded),

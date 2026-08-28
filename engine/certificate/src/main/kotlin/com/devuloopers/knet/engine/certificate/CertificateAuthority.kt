@@ -36,6 +36,8 @@ import java.security.cert.X509Certificate
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.Date
+import kotlin.time.Clock
+import kotlin.time.Duration.Companion.days
 
 /**
  * Represents the Certificate Authority (CA) used by KNet to intercept and decrypt HTTPS traffic.
@@ -107,8 +109,9 @@ class CertificateAuthority(
 
             val subjectDN = X500Name("CN=$commonName, O=$org, C=US")
             val serial = BigInteger(160, SecureRandom())
-            val notBefore = Date()
-            val notAfter = Date(kotlin.time.Clock.System.now().toEpochMilliseconds() + validityDays * 24L * 60L * 60L * 1000L)
+            val now = Clock.System.now()
+            val notBefore = Date(now.toEpochMilliseconds())
+            val notAfter = Date((now + validityDays.days).toEpochMilliseconds())
 
             val certBuilder = JcaX509v3CertificateBuilder(
                 subjectDN,

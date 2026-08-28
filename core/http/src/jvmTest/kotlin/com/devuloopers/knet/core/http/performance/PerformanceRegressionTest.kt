@@ -5,20 +5,21 @@ import com.devuloopers.knet.traffic.model.http.HttpMethod
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.time.TimeSource
 
 class PerformanceRegressionTest {
 
     @Test
     fun testLatencyUnderSustainedExecution() = runBlocking {
         val client = KNetApiClient()
-        val start = System.currentTimeMillis()
+        val start = TimeSource.Monotonic.markNow()
 
         repeat(3) {
             client.executeDetailed("https://httpbin.org/get", method = HttpMethod.GET)
         }
 
-        val totalDuration = System.currentTimeMillis() - start
-        assertTrue(totalDuration > 0)
+        val totalDuration = start.elapsedNow()
+        assertTrue(totalDuration.isPositive())
         client.close()
     }
 }

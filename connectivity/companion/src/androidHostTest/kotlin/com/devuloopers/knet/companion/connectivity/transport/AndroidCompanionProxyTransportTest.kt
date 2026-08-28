@@ -1,5 +1,6 @@
 package com.devuloopers.knet.companion.connectivity.transport
 
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.companion.application.contract.CompanionTransportResult
 import com.devuloopers.knet.companion.connectivity.testing.companionRegistrationFixture
 import com.devuloopers.knet.companion.connectivity.certificate.isServedByRoot
@@ -68,7 +69,7 @@ class AndroidCompanionProxyTransportTest {
             rootCertificateSha256 = identity.rootCertificate.encoded.sha256(),
             rootCertificateBytes = identity.rootCertificate.encoded,
         ).copy(
-            proxyEndpoint = CompanionServiceEndpoint("127.0.0.1", listener.localPort, secure = true),
+            proxyEndpoint = CompanionServiceEndpoint("127.0.0.1", listener.localPort, scheme = CompanionEndpointScheme.HTTPS),
             rootCertificate = CompanionRootCertificate(identity.rootCertificate.encoded),
             rootCertificateSha256 = Sha256Fingerprint(identity.rootCertificate.encoded.sha256()),
         )

@@ -4,6 +4,7 @@ import com.devuloopers.knet.engine.certificate.CertificateAuthority
 import com.devuloopers.knet.engine.certificate.CertificateCache
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import kotlin.time.TimeSource
 
 class PerformanceRegressionTest {
 
@@ -12,10 +13,10 @@ class PerformanceRegressionTest {
         val ca = CertificateAuthority.generate()
         val cache = CertificateCache()
 
-        val start = System.currentTimeMillis()
+        val start = TimeSource.Monotonic.markNow()
         cache.get("perf.example.com", ca)
-        val duration = System.currentTimeMillis() - start
+        val duration = start.elapsedNow()
 
-        assertTrue(duration >= 0L)
+        assertTrue(!duration.isNegative())
     }
 }

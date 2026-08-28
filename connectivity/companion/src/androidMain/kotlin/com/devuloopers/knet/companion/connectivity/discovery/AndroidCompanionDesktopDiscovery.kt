@@ -1,5 +1,6 @@
 package com.devuloopers.knet.companion.connectivity.discovery
 
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import android.content.Context
 import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
@@ -191,7 +192,7 @@ internal class AndroidCompanionDesktopDiscovery(
                 CompanionServiceEndpoint(
                     host = host,
                     port = service.port,
-                    secure = true,
+                    scheme = CompanionEndpointScheme.HTTPS,
                 )
             }.getOrNull()
         }.distinct().take(CompanionDiscoveryProtocol.MAXIMUM_ADDRESSES)

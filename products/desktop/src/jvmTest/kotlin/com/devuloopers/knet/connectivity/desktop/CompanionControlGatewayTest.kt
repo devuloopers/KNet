@@ -1,5 +1,7 @@
 package com.devuloopers.knet.connectivity.desktop
 
+import com.devuloopers.knet.companion.model.CompanionDesktopDisplayName
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.application.contract.pairing.PairingCryptography
 import com.devuloopers.knet.application.contract.pairing.CompanionOnboardingStore
 import com.devuloopers.knet.application.contract.pairing.PendingCompanionOnboarding
@@ -459,15 +461,15 @@ class CompanionControlGatewayTest {
     private fun companionInvitation(root: ByteArray): CompanionPairingInvitation = CompanionPairingInvitation(
         protocolVersion = CompanionPairingInvitation.CURRENT_PROTOCOL_VERSION,
         desktopId = CompanionDesktopId("desktop-1"),
-        desktopDisplayName = "KNet Desktop",
+        desktopDisplayName = CompanionDesktopDisplayName("KNet Desktop"),
         pairing = com.devuloopers.knet.pairing.PairingInvitation(
             PairingInvitationId("pairing-1"),
             "p".repeat(32),
             2_000L,
             setOf(DeviceScope.PROXY_STREAM),
         ),
-        controlEndpoint = CompanionServiceEndpoint("127.0.0.1", 8_183, true),
-        proxyEndpoint = CompanionServiceEndpoint("127.0.0.1", 8_182, true),
+        controlEndpoint = CompanionServiceEndpoint("127.0.0.1", 8_183, CompanionEndpointScheme.HTTPS),
+        proxyEndpoint = CompanionServiceEndpoint("127.0.0.1", 8_182, CompanionEndpointScheme.HTTPS),
         transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
         rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
         rootCertificate = CompanionRootCertificate(root),

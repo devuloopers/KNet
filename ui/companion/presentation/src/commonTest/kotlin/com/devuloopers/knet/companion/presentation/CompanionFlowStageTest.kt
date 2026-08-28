@@ -1,5 +1,7 @@
 package com.devuloopers.knet.companion.presentation
 
+import com.devuloopers.knet.companion.model.CompanionDesktopDisplayName
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.companion.model.CompanionCertificateState
 import com.devuloopers.knet.companion.model.CompanionCredentialReference
 import com.devuloopers.knet.companion.model.CompanionDesktopId
@@ -81,10 +83,10 @@ class CompanionFlowStageTest {
 
     private fun registration(): CompanionRegistration = CompanionRegistration(
         desktopId = CompanionDesktopId("desktop-1"),
-        desktopDisplayName = "Development Mac",
+        desktopDisplayName = CompanionDesktopDisplayName("Development Mac"),
         deviceId = RegisteredDeviceId("device-1"),
-        controlEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, true),
-        proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", 8184, true),
+        controlEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, CompanionEndpointScheme.HTTPS),
+        proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", 8184, CompanionEndpointScheme.HTTPS),
         transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
         rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
         rootCertificate = CompanionRootCertificate(byteArrayOf(1, 2, 3)),

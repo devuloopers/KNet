@@ -1,5 +1,6 @@
 package com.devuloopers.knet.connectivity.desktop.gateway
 
+import kotlin.time.Clock
 import com.devuloopers.knet.traffic.model.IngressAttributionLookup
 import com.devuloopers.knet.traffic.model.IngressAttributionRegistration
 import com.devuloopers.knet.traffic.model.IngressContext
@@ -9,7 +10,7 @@ import java.util.concurrent.ConcurrentHashMap
 /** Bounded, expiring, one-shot bridge-socket attribution registry. */
 public class IngressAttributionRegistry(
     private val maximumEntries: Int = 4_096,
-    private val nowMillis: () -> Long = System::currentTimeMillis,
+    private val nowMillis: () -> Long = { Clock.System.now().toEpochMilliseconds() },
 ) : IngressAttributionLookup, IngressAttributionRegistration {
     private data class Entry(val context: IngressContext, val expiresAt: Long)
     private val entries = ConcurrentHashMap<String, Entry>()

@@ -1,5 +1,7 @@
 package com.devuloopers.knet.companion.data
 
+import com.devuloopers.knet.companion.model.CompanionDesktopDisplayName
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.companion.application.contract.CompanionCredentialStore
 import com.devuloopers.knet.companion.application.contract.CompanionInvitationCodec
 import com.devuloopers.knet.companion.application.contract.CompanionRegistrationRepository
@@ -45,7 +47,7 @@ public class VersionedCompanionRegistrationRepository(
         val restored = store.content.value?.let(::decodeEnvelope) ?: PersistedCompanionEnvelope()
         val domain = restored.registrations.mapNotNull(PersistedCompanionRegistration::toDomain)
             .distinctBy { it.desktopId }
-            .sortedBy { it.desktopDisplayName.lowercase() }
+            .sortedBy { it.desktopDisplayName.value.lowercase() }
         mutableRegistrations = MutableStateFlow(domain)
         mutableActiveRegistration = MutableStateFlow(
             domain.firstOrNull { it.desktopId.value == restored.activeDesktopId },
@@ -57,7 +59,7 @@ public class VersionedCompanionRegistrationRepository(
     override suspend fun upsert(registration: CompanionRegistration, makeActive: Boolean) {
         lock.withLock {
             val updated = (mutableRegistrations.value.filterNot { it.desktopId == registration.desktopId } + registration)
-                .sortedBy { it.desktopDisplayName.lowercase() }
+                .sortedBy { it.desktopDisplayName.value.lowercase() }
             val active = if (makeActive) registration else mutableActiveRegistration.value
             persist(updated, active?.desktopId)
         }
@@ -89,7 +91,7 @@ public class VersionedCompanionRegistrationRepository(
         val updated = mutableRegistrations.value
             .filterNot { it.desktopId == previousDesktopId || it.desktopId == registration.desktopId }
             .plus(registration)
-            .sortedBy { it.desktopDisplayName.lowercase() }
+            .sortedBy { it.desktopDisplayName.value.lowercase() }
         val activeId = when {
             makeActive -> registration.desktopId
             mutableActiveRegistration.value?.desktopId == previous.desktopId -> registration.desktopId
@@ -189,10 +191,10 @@ private data class PersistedCompanionRegistration(
     fun toDomain(): CompanionRegistration? = runCatching {
         CompanionRegistration(
             desktopId = CompanionDesktopId(desktopId),
-            desktopDisplayName = desktopDisplayName,
+            desktopDisplayName = CompanionDesktopDisplayName(desktopDisplayName),
             deviceId = RegisteredDeviceId(deviceId),
-            controlEndpoint = CompanionServiceEndpoint(controlHost, controlPort, secure = true),
-            proxyEndpoint = CompanionServiceEndpoint(proxyHost, proxyPort, secure = true),
+            controlEndpoint = CompanionServiceEndpoint(controlHost, controlPort, scheme = CompanionEndpointScheme.HTTPS),
+            proxyEndpoint = CompanionServiceEndpoint(proxyHost, proxyPort, scheme = CompanionEndpointScheme.HTTPS),
             transportIdentitySha256 = Sha256Fingerprint(transportIdentitySha256),
             rootCertificateSha256 = Sha256Fingerprint(rootCertificateSha256),
             rootCertificate = CompanionRootCertificate(ROOT_CERTIFICATE_ENCODING.decode(rootCertificateDerBase64Url)),
@@ -210,7 +212,7 @@ private data class PersistedCompanionRegistration(
         fun fromDomain(registration: CompanionRegistration): PersistedCompanionRegistration =
             PersistedCompanionRegistration(
                 desktopId = registration.desktopId.value,
-                desktopDisplayName = registration.desktopDisplayName,
+                desktopDisplayName = registration.desktopDisplayName.value,
                 deviceId = registration.deviceId.value,
                 controlHost = registration.controlEndpoint.host,
                 controlPort = registration.controlEndpoint.port,

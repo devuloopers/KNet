@@ -161,7 +161,7 @@ class ConnectDeviceViewModel(
                         current.copy(
                             companionInvitation = CompanionInvitationUiState.Ready(
                                 qrPayload = descriptor.qrPayload,
-                                desktopDisplayName = descriptor.desktopDisplayName,
+                                desktopDisplayName = descriptor.desktopDisplayName.value,
                                 host = descriptor.controlEndpoint.host,
                                 controlPort = descriptor.controlEndpoint.port,
                                 expiresAtEpochMillis = descriptor.expiresAtEpochMillis,

@@ -1,5 +1,6 @@
 package com.devuloopers.knet.connectivity.desktop.pairing
 
+import kotlin.time.Clock
 import com.devuloopers.knet.application.contract.pairing.CompanionOnboardingStore
 import com.devuloopers.knet.application.contract.pairing.PendingCompanionOnboarding
 import com.devuloopers.knet.companion.model.CompanionBootstrapId
@@ -16,7 +17,7 @@ import kotlinx.coroutines.sync.withLock
  */
 public class InMemoryCompanionOnboardingStore(
     private val maximumRecords: Int = DEFAULT_MAXIMUM_RECORDS,
-    private val nowEpochMillis: () -> Long = System::currentTimeMillis,
+    private val nowEpochMillis: () -> Long = { Clock.System.now().toEpochMilliseconds() },
 ) : CompanionOnboardingStore {
     private val lock: Mutex = Mutex()
     private val records: MutableMap<CompanionBootstrapId, PendingCompanionOnboarding> = mutableMapOf()

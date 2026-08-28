@@ -24,7 +24,10 @@ class KNetCompanionApplication : Application() {
     private val dependencyInjectionDeferred: Lazy<Deferred<KoinApplication>> =
         lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
             dependencyInjectionScope.async {
-                val bootstrap = AndroidCompanionBootstrap.create(this@KNetCompanionApplication)
+                val bootstrap = AndroidCompanionBootstrap.create(
+                    context = this@KNetCompanionApplication,
+                    persistenceScope = dependencyInjectionScope,
+                )
                 var startedApplication: KoinApplication? = null
                 try {
                     startKoin {

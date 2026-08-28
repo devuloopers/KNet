@@ -45,6 +45,7 @@ import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
+import kotlin.time.Clock
 
 class WifiSharingBackendTest {
     @Test
@@ -122,7 +123,7 @@ class WifiSharingBackendTest {
             bindPort = gatewayPort,
             targetProxy = { InetSocketAddress("127.0.0.1", internalProxy.localPort) },
             attributions = attributions,
-            nowMillis = System::currentTimeMillis,
+            nowMillis = { Clock.System.now().toEpochMilliseconds() },
         )
         try {
             gateway.start()

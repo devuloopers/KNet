@@ -7,9 +7,8 @@ Owns the Compose Multiplatform companion interface shared by Android and future 
 ## Owns
 
 - Common composable screens, responsive layouts, and multiplatform UI resources.
-- Serializable Navigation 3 keys, explicit multiplatform saved-state configuration, state-gated stack
-  reconciliation, and six shared screens covering invitation entry, QR scanning, desktop confirmation, certificate
-  setup, inspection consent, and ready controls.
+- Serializable Navigation 3 keys, explicit multiplatform saved-state configuration, and state-gated stack
+  reconciliation across the inline QR connection flow, certificate setup, and inspection home.
 - A portable scanner capability contract whose state, permission actions, and composable preview slot contain no
   Android or Apple framework type; products retain native camera ownership.
 - Companion use of the shared `:ui:core` theme, semantic colors, spacing, shapes, and Material bridge without a

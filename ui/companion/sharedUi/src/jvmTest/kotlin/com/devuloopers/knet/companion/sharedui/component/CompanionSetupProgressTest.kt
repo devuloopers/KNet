@@ -1,5 +1,7 @@
 package com.devuloopers.knet.companion.sharedui.component
 
+import com.devuloopers.knet.companion.model.CompanionDesktopDisplayName
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.companion.model.CompanionCertificateState
 import com.devuloopers.knet.companion.model.CompanionCredentialReference
 import com.devuloopers.knet.companion.model.CompanionDesktopId
@@ -61,10 +63,10 @@ class CompanionSetupProgressTest {
         val ROOT_FINGERPRINT = Sha256Fingerprint("b".repeat(64))
         val REGISTRATION = CompanionRegistration(
             desktopId = DESKTOP_ID,
-            desktopDisplayName = "Development Mac",
+            desktopDisplayName = CompanionDesktopDisplayName("Development Mac"),
             deviceId = RegisteredDeviceId("device-1"),
-            controlEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, true),
-            proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", 8184, true),
+            controlEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, CompanionEndpointScheme.HTTPS),
+            proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", 8184, CompanionEndpointScheme.HTTPS),
             transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
             rootCertificateSha256 = ROOT_FINGERPRINT,
             rootCertificate = CompanionRootCertificate(byteArrayOf(1, 2, 3)),

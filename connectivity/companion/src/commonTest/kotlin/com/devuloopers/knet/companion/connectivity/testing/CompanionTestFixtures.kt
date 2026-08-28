@@ -1,5 +1,7 @@
 package com.devuloopers.knet.companion.connectivity.testing
 
+import com.devuloopers.knet.companion.model.CompanionDesktopDisplayName
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.companion.application.contract.CompanionInspectionConfiguration
 import com.devuloopers.knet.companion.model.CompanionCredentialReference
 import com.devuloopers.knet.companion.model.CompanionDesktopId
@@ -19,10 +21,10 @@ internal fun companionRegistrationFixture(
     scopes: Set<DeviceScope> = setOf(DeviceScope.PROXY_STREAM),
 ): CompanionRegistration = CompanionRegistration(
     desktopId = CompanionDesktopId("desktop-1"),
-    desktopDisplayName = "Development Mac",
+    desktopDisplayName = CompanionDesktopDisplayName("Development Mac"),
     deviceId = RegisteredDeviceId("device-1"),
-    controlEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, true),
-    proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", 8184, true),
+    controlEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, CompanionEndpointScheme.HTTPS),
+    proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", 8184, CompanionEndpointScheme.HTTPS),
     transportIdentitySha256 = Sha256Fingerprint(transportIdentitySha256),
     rootCertificateSha256 = Sha256Fingerprint(rootCertificateSha256),
     rootCertificate = CompanionRootCertificate(rootCertificateBytes),

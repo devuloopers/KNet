@@ -1,8 +1,24 @@
 package com.devuloopers.knet.companion.application.usecase
 
-import com.devuloopers.knet.companion.application.contract.*
-import com.devuloopers.knet.companion.model.*
-import kotlinx.coroutines.*
+import com.devuloopers.knet.companion.application.contract.CompanionCredentialStore
+import com.devuloopers.knet.companion.application.contract.CompanionDesktopDiscovery
+import com.devuloopers.knet.companion.application.contract.CompanionEndpointReconciliationClient
+import com.devuloopers.knet.companion.application.contract.CompanionEndpointReconciliationResult
+import com.devuloopers.knet.companion.application.contract.CompanionEndpointRecoveryResult
+import com.devuloopers.knet.companion.application.contract.CompanionRegistrationRepository
+import com.devuloopers.knet.companion.model.CompanionDiscoveryCandidate
+import com.devuloopers.knet.companion.model.CompanionDiscoveryState
+import com.devuloopers.knet.companion.model.CompanionEndpointDescriptor
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
+import com.devuloopers.knet.companion.model.CompanionFailure
+import com.devuloopers.knet.companion.model.CompanionFailureCode
+import com.devuloopers.knet.companion.model.CompanionRegistration
+import com.devuloopers.knet.companion.model.CompanionServiceEndpoint
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.flow.first
 import kotlin.time.Duration.Companion.milliseconds
 
@@ -146,12 +162,12 @@ public class RecoverCompanionEndpointUseCase(
             controlEndpoint = CompanionServiceEndpoint(
                 selected.endpoint.host,
                 selected.descriptor.controlPort,
-                secure = true,
+                scheme = CompanionEndpointScheme.HTTPS,
             ),
             proxyEndpoint = CompanionServiceEndpoint(
                 selected.endpoint.host,
                 selected.descriptor.proxyPort,
-                secure = true,
+                scheme = CompanionEndpointScheme.HTTPS,
             ),
         )
         if (updated == registration) {

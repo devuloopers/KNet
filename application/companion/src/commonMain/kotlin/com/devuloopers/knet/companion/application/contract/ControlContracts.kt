@@ -1,6 +1,7 @@
 package com.devuloopers.knet.companion.application.contract
 
 import com.devuloopers.knet.companion.model.CompanionControlProtocol
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.companion.model.CompanionRootCertificate
 import com.devuloopers.knet.companion.model.CompanionServiceEndpoint
 import com.devuloopers.knet.companion.model.Sha256Fingerprint
@@ -67,7 +68,9 @@ public class CompanionControlRequest(
     private val content: ByteArray = body.copyOf()
 
     init {
-        require(endpoint.secure) { "Companion control requests require a secure endpoint." }
+        require(endpoint.scheme == CompanionEndpointScheme.HTTPS) {
+            "Companion control requests require a secure endpoint."
+        }
         require(content.size in 1..CompanionControlProtocol.MAXIMUM_REQUEST_BYTES) {
             "Companion control request body size is invalid."
         }

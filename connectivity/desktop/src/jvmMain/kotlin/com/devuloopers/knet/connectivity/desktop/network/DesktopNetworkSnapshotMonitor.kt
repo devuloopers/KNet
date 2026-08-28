@@ -1,5 +1,6 @@
 package com.devuloopers.knet.connectivity.desktop.network
 
+import kotlin.time.Clock
 import com.devuloopers.knet.connectivity.model.NetworkAddress
 import com.devuloopers.knet.connectivity.model.NetworkAddressFamily
 import com.devuloopers.knet.connectivity.model.NetworkSnapshot
@@ -30,7 +31,7 @@ public fun interface DesktopNetworkScanner {
 public class DesktopNetworkSnapshotMonitor(
     private val scanner: DesktopNetworkScanner = JvmNetworkScanner,
     private val pollIntervalMillis: Long = 2_000L,
-    private val nowMillis: () -> Long = System::currentTimeMillis,
+    private val nowMillis: () -> Long = { Clock.System.now().toEpochMilliseconds() },
     dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) : AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)

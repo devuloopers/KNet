@@ -30,10 +30,10 @@ class CompanionModelsTest {
     @Test
     fun invitationRequiresSecureControlAndProxyEndpoints() {
         assertFailsWith<IllegalArgumentException> {
-            invitation().copy(controlEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, secure = false))
+            invitation().copy(controlEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, scheme = CompanionEndpointScheme.HTTP))
         }
         assertFailsWith<IllegalArgumentException> {
-            invitation().copy(proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", 8184, secure = false))
+            invitation().copy(proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", 8184, scheme = CompanionEndpointScheme.HTTP))
         }
     }
 
@@ -47,7 +47,7 @@ class CompanionModelsTest {
             "desktop.local\n",
         ).forEach { unsafeHost ->
             assertFailsWith<IllegalArgumentException> {
-                CompanionServiceEndpoint(unsafeHost, 8183, secure = true)
+                CompanionServiceEndpoint(unsafeHost, 8183, scheme = CompanionEndpointScheme.HTTPS)
             }
         }
     }
@@ -67,6 +67,29 @@ class CompanionModelsTest {
         assertFailsWith<IllegalArgumentException> {
             CompanionDeviceDisplayName("x".repeat(CompanionDeviceDisplayName.MAXIMUM_LENGTH + 1))
         }
+    }
+
+    @Test
+    fun companionDesktopDisplayNameIsTrimmedBoundedAndControlCharacterFree() {
+        assertEquals("Development Mac", CompanionDesktopDisplayName("Development Mac").value)
+        assertFailsWith<IllegalArgumentException> { CompanionDesktopDisplayName("") }
+        assertFailsWith<IllegalArgumentException> { CompanionDesktopDisplayName(" KNet Desktop") }
+        assertFailsWith<IllegalArgumentException> { CompanionDesktopDisplayName("KNet\nDesktop") }
+        assertFailsWith<IllegalArgumentException> {
+            CompanionDesktopDisplayName("x".repeat(CompanionDesktopDisplayName.MAXIMUM_LENGTH + 1))
+        }
+    }
+
+    @Test
+    fun companionEndpointPreservesItsStronglyTypedScheme() {
+        assertEquals(
+            CompanionEndpointScheme.HTTP,
+            CompanionServiceEndpoint("desktop.local", 8_181, CompanionEndpointScheme.HTTP).scheme,
+        )
+        assertEquals(
+            CompanionEndpointScheme.HTTPS,
+            CompanionServiceEndpoint("desktop.local", 8_183, CompanionEndpointScheme.HTTPS).scheme,
+        )
     }
 
     @Test
@@ -125,19 +148,19 @@ class CompanionModelsTest {
     fun companionBootstrapSeparatesOpenPublicRootDeliveryFromSecureRedemption() {
         assertFailsWith<IllegalArgumentException> {
             bootstrap().copy(
-                rootCertificateEndpoint = CompanionServiceEndpoint("192.168.1.2", 8181, secure = true),
+                rootCertificateEndpoint = CompanionServiceEndpoint("192.168.1.2", 8181, scheme = CompanionEndpointScheme.HTTPS),
             )
         }
         assertFailsWith<IllegalArgumentException> {
             bootstrap().copy(
-                retrievalEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, secure = false),
+                retrievalEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, scheme = CompanionEndpointScheme.HTTP),
             )
         }
     }
 
     @Test
     fun completeInvitationResponseAndRedemptionRequestRoundTripSeparately() {
-        val invitation = invitation().copy(desktopDisplayName = "Development Mac & Lab")
+        val invitation = invitation().copy(desktopDisplayName = CompanionDesktopDisplayName("Development Mac & Lab"))
         val invitationCodec = CompanionInvitationResponseCodec()
         val redemption = CompanionBootstrapRedemptionRequest(bootstrap().id, bootstrap().retrievalSecret)
         val redemptionCodec = CompanionBootstrapRedemptionCodec()
@@ -203,8 +226,8 @@ class CompanionModelsTest {
         id = CompanionBootstrapId("bootstrap-1"),
         retrievalSecret = CompanionBootstrapSecret("r".repeat(32)),
         expiresAtEpochMillis = 2_000L,
-        rootCertificateEndpoint = CompanionServiceEndpoint("192.168.1.2", 8181, secure = false),
-        retrievalEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, secure = true),
+        rootCertificateEndpoint = CompanionServiceEndpoint("192.168.1.2", 8181, scheme = CompanionEndpointScheme.HTTP),
+        retrievalEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, scheme = CompanionEndpointScheme.HTTPS),
         transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
         rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
     )
@@ -212,15 +235,15 @@ class CompanionModelsTest {
     private fun invitation(): CompanionPairingInvitation = CompanionPairingInvitation(
         protocolVersion = CompanionPairingInvitation.CURRENT_PROTOCOL_VERSION,
         desktopId = CompanionDesktopId("desktop-1"),
-        desktopDisplayName = "Development Mac",
+        desktopDisplayName = CompanionDesktopDisplayName("Development Mac"),
         pairing = PairingInvitation(
             id = PairingInvitationId("invitation-1"),
             secret = "s".repeat(32),
             expiresAtEpochMillis = 2_000L,
             scopes = setOf(DeviceScope.PROXY_STREAM),
         ),
-        controlEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, secure = true),
-        proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", 8184, secure = true),
+        controlEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, scheme = CompanionEndpointScheme.HTTPS),
+        proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", 8184, scheme = CompanionEndpointScheme.HTTPS),
         transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
         rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
         rootCertificate = CompanionRootCertificate(byteArrayOf(1, 2, 3)),
@@ -228,10 +251,10 @@ class CompanionModelsTest {
 
     private fun registration(): CompanionRegistration = CompanionRegistration(
         desktopId = CompanionDesktopId("desktop-1"),
-        desktopDisplayName = "Development Mac",
+        desktopDisplayName = CompanionDesktopDisplayName("Development Mac"),
         deviceId = RegisteredDeviceId("device-1"),
-        controlEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, secure = true),
-        proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", 8184, secure = true),
+        controlEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, scheme = CompanionEndpointScheme.HTTPS),
+        proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", 8184, scheme = CompanionEndpointScheme.HTTPS),
         transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
         rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
         rootCertificate = CompanionRootCertificate(byteArrayOf(1, 2, 3)),

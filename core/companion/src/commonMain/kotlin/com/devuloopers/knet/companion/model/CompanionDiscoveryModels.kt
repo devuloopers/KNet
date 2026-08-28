@@ -46,7 +46,9 @@ public data class CompanionDiscoveryCandidate(
         require(endpoints.isNotEmpty() && endpoints.size <= CompanionDiscoveryProtocol.MAXIMUM_ADDRESSES) {
             "Companion discovery candidate must contain a bounded endpoint set."
         }
-        require(endpoints.all { it.secure }) { "Companion discovery endpoints must be secure." }
+        require(endpoints.all { it.scheme == CompanionEndpointScheme.HTTPS }) {
+            "Companion discovery endpoints must be secure."
+        }
     }
 }
 

@@ -8,10 +8,10 @@ import com.devuloopers.knet.companion.connectivity.platform.PlatformCompanionAda
 import com.devuloopers.knet.companion.connectivity.transport.AndroidCompanionProxyTransport
 import com.devuloopers.knet.companion.connectivity.transport.AndroidTunForwarder
 import com.devuloopers.knet.companion.connectivity.transport.PlatformAndroidTunForwarder
-import com.devuloopers.knet.companion.data.android.AndroidCompanionRecordStore
-import com.devuloopers.knet.companion.data.android.AndroidKeystoreCompanionSecretStore
+import com.devuloopers.knet.companion.data.android.AndroidCompanionDataStoreFactory
 import com.devuloopers.knet.companion.data.store.CompanionRecordStore
 import com.devuloopers.knet.companion.data.store.CompanionSecretStore
+import kotlinx.coroutines.CoroutineScope
 
 /** Fully restored Android dependencies that must exist before synchronous Koin definitions are installed. */
 internal data class AndroidCompanionBootstrap(
@@ -24,17 +24,19 @@ internal data class AndroidCompanionBootstrap(
 ) {
     companion object {
         /** Restores disk-backed stores before creating callback-owning platform adapters. */
-        suspend fun create(context: Context): AndroidCompanionBootstrap {
+        suspend fun create(
+            context: Context,
+            persistenceScope: CoroutineScope,
+        ): AndroidCompanionBootstrap {
             val applicationContext = context.applicationContext
-            val recordStore = AndroidCompanionRecordStore.create(applicationContext)
-            val secretStore = AndroidKeystoreCompanionSecretStore.create(applicationContext)
+            val persistence = AndroidCompanionDataStoreFactory.create(applicationContext, persistenceScope)
             val transport = AndroidCompanionProxyTransport()
             val tunForwarder = PlatformAndroidTunForwarder(applicationContext, transport)
             val inspectionCoordinator = AndroidInspectionRuntimeCoordinator()
             val inspectionBackend = AndroidVpnServiceInspectionBackend(applicationContext, inspectionCoordinator)
             return AndroidCompanionBootstrap(
-                recordStore = recordStore,
-                secretStore = secretStore,
+                recordStore = persistence.records,
+                secretStore = persistence.secrets,
                 platformAdapters = PlatformCompanionAdapterFactory(
                     context = applicationContext,
                     inspectionBackend = inspectionBackend,

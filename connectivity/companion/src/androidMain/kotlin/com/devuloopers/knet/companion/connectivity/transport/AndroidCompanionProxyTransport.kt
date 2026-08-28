@@ -1,5 +1,6 @@
 package com.devuloopers.knet.companion.connectivity.transport
 
+import kotlin.time.Clock
 import com.devuloopers.knet.companion.application.contract.CompanionTransport
 import com.devuloopers.knet.companion.application.contract.CompanionTransportResult
 import com.devuloopers.knet.companion.connectivity.certificate.AndroidPairedTlsTrustFactory
@@ -11,6 +12,7 @@ import com.devuloopers.knet.companion.model.CompanionCertificateProtocol
 import com.devuloopers.knet.companion.model.CompanionConnectionState
 import com.devuloopers.knet.companion.model.CompanionFailure
 import com.devuloopers.knet.companion.model.CompanionFailureCode
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.companion.model.CompanionProxyProtocol
 import com.devuloopers.knet.companion.model.CompanionRegistration
 import com.devuloopers.knet.companion.model.CompanionTransportKind
@@ -38,7 +40,7 @@ import kotlinx.coroutines.withContext
  * are opened only by the Android VPN runtime and are protected before connecting, preventing a recursive VPN route.
  */
 public class AndroidCompanionProxyTransport(
-    private val nowEpochMillis: () -> Long = System::currentTimeMillis,
+    private val nowEpochMillis: () -> Long = { Clock.System.now().toEpochMilliseconds() },
 ) : CompanionTransport {
     private val lifecycleLock: Mutex = Mutex()
     private val activeSession: AtomicReference<Session?> = AtomicReference(null)
@@ -234,7 +236,7 @@ public class AndroidCompanionProxyTransport(
 
         companion object {
             fun create(registration: CompanionRegistration, credential: String): Session {
-                require(registration.proxyEndpoint.secure)
+                require(registration.proxyEndpoint.scheme == CompanionEndpointScheme.HTTPS)
                 val root = registration.rootCertificate.copyBytes().parseX509Certificate()
                     ?.takeIf { certificate ->
                         certificate.isValidPairingRoot(registration.rootCertificateSha256.value)

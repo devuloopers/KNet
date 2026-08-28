@@ -1,5 +1,7 @@
 package com.devuloopers.knet.companion.application.usecase
 
+import com.devuloopers.knet.companion.model.CompanionDesktopDisplayName
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.companion.application.contract.CompanionCredentialStore
 import com.devuloopers.knet.companion.application.contract.CompanionDesktopDiscovery
 import com.devuloopers.knet.companion.application.contract.CompanionEndpointReconciliationClient
@@ -292,7 +294,7 @@ class CompanionEndpointDiscoveryUseCasesTest {
                 legacyDesktopIds = legacyIds,
                 runtimeId = runtimeId,
             ),
-            endpoints = listOf(CompanionServiceEndpoint(host, CONTROL_PORT, secure = true)),
+            endpoints = listOf(CompanionServiceEndpoint(host, CONTROL_PORT, scheme = CompanionEndpointScheme.HTTPS)),
         )
 
         fun descriptor(
@@ -309,10 +311,10 @@ class CompanionEndpointDiscoveryUseCasesTest {
 
         fun registration(desktopId: CompanionDesktopId = LEGACY_ID): CompanionRegistration = CompanionRegistration(
             desktopId = desktopId,
-            desktopDisplayName = "Development Mac",
+            desktopDisplayName = CompanionDesktopDisplayName("Development Mac"),
             deviceId = RegisteredDeviceId("device-1"),
-            controlEndpoint = CompanionServiceEndpoint("192.168.1.2", CONTROL_PORT, secure = true),
-            proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", PROXY_PORT, secure = true),
+            controlEndpoint = CompanionServiceEndpoint("192.168.1.2", CONTROL_PORT, scheme = CompanionEndpointScheme.HTTPS),
+            proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", PROXY_PORT, scheme = CompanionEndpointScheme.HTTPS),
             transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
             rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
             rootCertificate = CompanionRootCertificate(byteArrayOf(1, 2, 3)),

@@ -1,5 +1,7 @@
 package com.devuloopers.knet.companion.presentation
 
+import com.devuloopers.knet.companion.model.CompanionDesktopDisplayName
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewmodel.initializer
@@ -811,15 +813,15 @@ class CompanionViewModelTest {
         fun invitation(): CompanionPairingInvitation = CompanionPairingInvitation(
             protocolVersion = CompanionPairingInvitation.CURRENT_PROTOCOL_VERSION,
             desktopId = CompanionDesktopId("desktop-1"),
-            desktopDisplayName = "Development Mac",
+            desktopDisplayName = CompanionDesktopDisplayName("Development Mac"),
             pairing = PairingInvitation(
                 id = PairingInvitationId("invitation-1"),
                 secret = INVITATION_SECRET,
                 expiresAtEpochMillis = 5_000L,
                 scopes = setOf(DeviceScope.PROXY_STREAM),
             ),
-            controlEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, true),
-            proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", 8184, true),
+            controlEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, CompanionEndpointScheme.HTTPS),
+            proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", 8184, CompanionEndpointScheme.HTTPS),
             transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
             rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
             rootCertificate = CompanionRootCertificate(byteArrayOf(1, 2, 3)),
@@ -830,8 +832,8 @@ class CompanionViewModelTest {
             id = CompanionBootstrapId("bootstrap-1"),
             retrievalSecret = CompanionBootstrapSecret("r".repeat(32)),
             expiresAtEpochMillis = 5_000L,
-            rootCertificateEndpoint = CompanionServiceEndpoint("192.168.1.2", 8181, false),
-            retrievalEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, true),
+            rootCertificateEndpoint = CompanionServiceEndpoint("192.168.1.2", 8181, CompanionEndpointScheme.HTTP),
+            retrievalEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, CompanionEndpointScheme.HTTPS),
             transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
             rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
         )
@@ -842,10 +844,10 @@ class CompanionViewModelTest {
             rootFingerprint: String = "b".repeat(64),
         ): CompanionRegistration = CompanionRegistration(
             desktopId = CompanionDesktopId(desktopId),
-            desktopDisplayName = "Development Mac",
+            desktopDisplayName = CompanionDesktopDisplayName("Development Mac"),
             deviceId = RegisteredDeviceId("device-1"),
-            controlEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, true),
-            proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", 8184, true),
+            controlEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, CompanionEndpointScheme.HTTPS),
+            proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", 8184, CompanionEndpointScheme.HTTPS),
             transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
             rootCertificateSha256 = Sha256Fingerprint(rootFingerprint),
             rootCertificate = CompanionRootCertificate(byteArrayOf(1, 2, 3)),

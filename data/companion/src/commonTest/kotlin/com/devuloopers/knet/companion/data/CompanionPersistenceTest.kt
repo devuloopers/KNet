@@ -1,5 +1,7 @@
 package com.devuloopers.knet.companion.data
 
+import com.devuloopers.knet.companion.model.CompanionDesktopDisplayName
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.companion.data.store.CompanionRecordStore
 import com.devuloopers.knet.companion.model.CompanionBootstrapId
 import com.devuloopers.knet.companion.model.CompanionBootstrapSecret
@@ -81,8 +83,8 @@ class CompanionPersistenceTest {
         id = CompanionBootstrapId("bootstrap-1"),
         retrievalSecret = CompanionBootstrapSecret("r".repeat(32)),
         expiresAtEpochMillis = 2_000L,
-        rootCertificateEndpoint = CompanionServiceEndpoint("192.168.1.2", 8_181, secure = false),
-        retrievalEndpoint = CompanionServiceEndpoint("192.168.1.2", 8_183, secure = true),
+        rootCertificateEndpoint = CompanionServiceEndpoint("192.168.1.2", 8_181, scheme = CompanionEndpointScheme.HTTP),
+        retrievalEndpoint = CompanionServiceEndpoint("192.168.1.2", 8_183, scheme = CompanionEndpointScheme.HTTPS),
         transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
         rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
     )
@@ -130,8 +132,8 @@ class CompanionPersistenceTest {
         val legacy = registration("legacy-desktop", "KNet Desktop")
         val canonical = legacy.copy(
             desktopId = CompanionDesktopId("11111111-1111-4111-8111-111111111111"),
-            controlEndpoint = CompanionServiceEndpoint("192.168.1.77", 8183, secure = true),
-            proxyEndpoint = CompanionServiceEndpoint("192.168.1.77", 8182, secure = true),
+            controlEndpoint = CompanionServiceEndpoint("192.168.1.77", 8183, scheme = CompanionEndpointScheme.HTTPS),
+            proxyEndpoint = CompanionServiceEndpoint("192.168.1.77", 8182, scheme = CompanionEndpointScheme.HTTPS),
         )
         repository.upsert(legacy, makeActive = true)
 
@@ -155,15 +157,15 @@ class CompanionPersistenceTest {
     private fun invitation(): CompanionPairingInvitation = CompanionPairingInvitation(
         protocolVersion = CompanionPairingInvitation.CURRENT_PROTOCOL_VERSION,
         desktopId = CompanionDesktopId("desktop-1"),
-        desktopDisplayName = "Development Mac",
+        desktopDisplayName = CompanionDesktopDisplayName("Development Mac"),
         pairing = PairingInvitation(
             id = PairingInvitationId("invitation-1"),
             secret = "s".repeat(32),
             expiresAtEpochMillis = 2_000L,
             scopes = setOf(DeviceScope.PROXY_STREAM),
         ),
-        controlEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, secure = true),
-        proxyEndpoint = CompanionServiceEndpoint("proxy.knet.local", 8184, secure = true),
+        controlEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, scheme = CompanionEndpointScheme.HTTPS),
+        proxyEndpoint = CompanionServiceEndpoint("proxy.knet.local", 8184, scheme = CompanionEndpointScheme.HTTPS),
         transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
         rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
         rootCertificate = CompanionRootCertificate(ROOT_CERTIFICATE_BYTES),
@@ -174,10 +176,10 @@ class CompanionPersistenceTest {
         displayName: String = "Development Mac",
     ): CompanionRegistration = CompanionRegistration(
         desktopId = CompanionDesktopId(desktopId),
-        desktopDisplayName = displayName,
+        desktopDisplayName = CompanionDesktopDisplayName(displayName),
         deviceId = RegisteredDeviceId("device-1"),
-        controlEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, secure = true),
-        proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", 8184, secure = true),
+        controlEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, scheme = CompanionEndpointScheme.HTTPS),
+        proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", 8184, scheme = CompanionEndpointScheme.HTTPS),
         transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
         rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
         rootCertificate = CompanionRootCertificate(ROOT_CERTIFICATE_BYTES),

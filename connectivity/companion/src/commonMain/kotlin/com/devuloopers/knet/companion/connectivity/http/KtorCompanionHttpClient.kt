@@ -13,6 +13,7 @@ import io.ktor.http.HttpMethod
 import io.ktor.http.URLProtocol
 import io.ktor.http.content.ByteArrayContent
 import io.ktor.utils.io.readAvailable
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import kotlin.coroutines.cancellation.CancellationException
 
 /** Shared bounded HTTP exchange used by Android and iOS companion transports. */
@@ -27,7 +28,10 @@ internal class KtorCompanionHttpClient(
             val response = client.request {
                 method = request.method.toKtorMethod()
                 url {
-                    protocol = if (request.endpoint.secure) URLProtocol.HTTPS else URLProtocol.HTTP
+                    protocol = when (request.endpoint.scheme) {
+                        CompanionEndpointScheme.HTTP -> URLProtocol.HTTP
+                        CompanionEndpointScheme.HTTPS -> URLProtocol.HTTPS
+                    }
                     host = requestHost
                     port = request.endpoint.port
                     encodedPathSegments = request.path.removePrefix("/").split('/')

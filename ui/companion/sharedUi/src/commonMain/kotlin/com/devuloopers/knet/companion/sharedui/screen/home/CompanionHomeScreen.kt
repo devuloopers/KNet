@@ -107,7 +107,7 @@ internal fun CompanionHomeScreen(
                         color = KNetTheme.colors.textSecondary,
                     )
                     InspectionStatusRow(
-                        desktopName = state.activeRegistration?.desktopDisplayName.orEmpty(),
+                        desktopName = state.activeRegistration?.desktopDisplayName?.value.orEmpty(),
                         status = status,
                         statusColor = statusColor,
                     )

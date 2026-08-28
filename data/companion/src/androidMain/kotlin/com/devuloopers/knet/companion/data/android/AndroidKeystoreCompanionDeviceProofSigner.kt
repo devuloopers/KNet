@@ -1,11 +1,11 @@
 package com.devuloopers.knet.companion.data.android
 
-import android.util.Base64
 import com.devuloopers.knet.companion.application.contract.CompanionDeviceProofSigner
 import com.devuloopers.knet.companion.model.CompanionDeviceIdentity
 import com.devuloopers.knet.pairing.DeviceProofAlgorithm
 import java.security.KeyStore
 import java.security.Signature
+import kotlin.io.encoding.Base64
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 
@@ -33,11 +33,12 @@ public class AndroidKeystoreCompanionDeviceProofSigner(
                 update(message.encodeToByteArray())
                 sign()
             }
-            Base64.encodeToString(signature, Base64.NO_WRAP or Base64.URL_SAFE).trimEnd('=')
+            URL_SAFE_BASE64.encode(signature)
         }
     }
 
     private companion object {
+        val URL_SAFE_BASE64: Base64 = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT_OPTIONAL)
         const val KEYSTORE_PROVIDER: String = "AndroidKeyStore"
     }
 }

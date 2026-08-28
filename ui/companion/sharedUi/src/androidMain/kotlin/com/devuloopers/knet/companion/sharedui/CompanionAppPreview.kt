@@ -1,5 +1,7 @@
 package com.devuloopers.knet.companion.sharedui
 
+import com.devuloopers.knet.companion.model.CompanionDesktopDisplayName
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import com.devuloopers.knet.companion.model.CompanionCertificateState
@@ -52,10 +54,10 @@ private fun CertificateVerifiedPreview() {
 
 private fun previewRegistration(): CompanionRegistration = CompanionRegistration(
     desktopId = CompanionDesktopId("preview-desktop"),
-    desktopDisplayName = "KNet Desktop",
+    desktopDisplayName = CompanionDesktopDisplayName("KNet Desktop"),
     deviceId = RegisteredDeviceId("preview-device"),
-    controlEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, true),
-    proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", 8184, true),
+    controlEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, CompanionEndpointScheme.HTTPS),
+    proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", 8184, CompanionEndpointScheme.HTTPS),
     transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
     rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
     rootCertificate = CompanionRootCertificate(byteArrayOf(1, 2, 3)),

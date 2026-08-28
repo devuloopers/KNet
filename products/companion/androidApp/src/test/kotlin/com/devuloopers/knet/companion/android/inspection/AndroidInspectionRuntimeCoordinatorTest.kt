@@ -1,5 +1,7 @@
 package com.devuloopers.knet.companion.android.inspection
 
+import com.devuloopers.knet.companion.model.CompanionDesktopDisplayName
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.companion.application.contract.CompanionInspectionConfiguration
 import com.devuloopers.knet.companion.connectivity.inspection.AndroidInspectionBackendResult
 import com.devuloopers.knet.companion.model.CompanionFailureCode
@@ -103,10 +105,10 @@ class AndroidInspectionRuntimeCoordinatorTest {
     private fun configuration(): CompanionInspectionConfiguration = CompanionInspectionConfiguration(
         registration = CompanionRegistration(
             desktopId = CompanionDesktopId("desktop-1"),
-            desktopDisplayName = "Development Mac",
+            desktopDisplayName = CompanionDesktopDisplayName("Development Mac"),
             deviceId = RegisteredDeviceId("device-1"),
-            controlEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, secure = true),
-            proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", 8184, secure = true),
+            controlEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, scheme = CompanionEndpointScheme.HTTPS),
+            proxyEndpoint = CompanionServiceEndpoint("192.168.1.2", 8184, scheme = CompanionEndpointScheme.HTTPS),
             transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
             rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
             rootCertificate = CompanionRootCertificate(byteArrayOf(1, 2, 3)),

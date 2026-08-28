@@ -8,6 +8,8 @@ import com.devuloopers.knet.companion.model.CompanionBootstrapId
 import com.devuloopers.knet.companion.model.CompanionBootstrapPayloadCodec
 import com.devuloopers.knet.companion.model.CompanionBootstrapSecret
 import com.devuloopers.knet.companion.model.CompanionDesktopId
+import com.devuloopers.knet.companion.model.CompanionDesktopDisplayName
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.companion.model.CompanionPairingInvitation
 import com.devuloopers.knet.companion.model.CompanionPairingBootstrap
 import com.devuloopers.knet.companion.model.CompanionRootCertificate
@@ -26,15 +28,16 @@ import com.devuloopers.knet.pairing.PairingInvitation
  * @property qrPayload exact canonical content encoded into the QR image.
  */
 public data class PairingOnboardingDescriptor(
-    public val desktopDisplayName: String,
+    public val desktopDisplayName: CompanionDesktopDisplayName,
     public val controlEndpoint: CompanionServiceEndpoint,
     public val expiresAtEpochMillis: Long,
     public val deepLink: String,
     public val qrPayload: String,
 ) {
     init {
-        require(desktopDisplayName.isNotBlank()) { "Desktop display name must not be blank." }
-        require(controlEndpoint.secure) { "Companion onboarding control endpoint must be secure." }
+        require(controlEndpoint.scheme == CompanionEndpointScheme.HTTPS) {
+            "Companion onboarding control endpoint must be secure."
+        }
         require(expiresAtEpochMillis > 0L) { "Companion onboarding expiry must be positive." }
         require(deepLink.isNotBlank() && qrPayload.isNotBlank()) { "Companion onboarding payload must not be blank." }
     }
@@ -57,7 +60,7 @@ public data class PairingOnboardingDescriptor(
  */
 public data class PairingOnboardingEnvironment(
     public val desktopId: CompanionDesktopId,
-    public val desktopDisplayName: String,
+    public val desktopDisplayName: CompanionDesktopDisplayName,
     public val rootCertificateEndpoint: CompanionServiceEndpoint,
     public val controlEndpoint: CompanionServiceEndpoint,
     public val proxyEndpoint: CompanionServiceEndpoint,
@@ -66,10 +69,9 @@ public data class PairingOnboardingEnvironment(
     public val rootCertificate: CompanionRootCertificate,
 ) {
     init {
-        require(desktopDisplayName.isNotBlank() && desktopDisplayName.length <= 128) {
-            "Desktop display name must contain 1 to 128 characters."
+        require(rootCertificateEndpoint.scheme == CompanionEndpointScheme.HTTP) {
+            "The public root endpoint must use open HTTP."
         }
-        require(!rootCertificateEndpoint.secure) { "The public root endpoint must use open HTTP." }
     }
 }
 

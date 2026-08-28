@@ -2,7 +2,6 @@ package com.devuloopers.knet.companion.data.android
 
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
-import android.util.Base64
 import com.devuloopers.knet.companion.application.contract.CompanionDeviceIdentityProvider
 import com.devuloopers.knet.companion.model.CompanionDeviceIdentity
 import com.devuloopers.knet.identity.RegisteredDeviceId
@@ -11,6 +10,7 @@ import java.security.KeyPairGenerator
 import java.security.KeyStore
 import java.security.MessageDigest
 import java.security.spec.ECGenParameterSpec
+import kotlin.io.encoding.Base64
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 
@@ -43,12 +43,11 @@ public class AndroidKeystoreCompanionDeviceIdentityProvider(
         val publicKey = checkNotNull(loadKeyStore().getCertificate(DEVICE_KEY_ALIAS)?.publicKey) {
             "Android Keystore did not return the companion public key."
         }
-        val publicKeyEncoded = Base64.encodeToString(publicKey.encoded, Base64.NO_WRAP or Base64.URL_SAFE)
-            .trimEnd('=')
+        val publicKeyEncoded = URL_SAFE_BASE64.encode(publicKey.encoded)
         val stableId = MessageDigest.getInstance("SHA-256").digest(publicKey.encoded).copyOf(18)
         CompanionDeviceIdentity(
             deviceId = RegisteredDeviceId(
-                Base64.encodeToString(stableId, Base64.NO_WRAP or Base64.URL_SAFE).trimEnd('='),
+                URL_SAFE_BASE64.encode(stableId),
             ),
             proofAlgorithm = DeviceProofAlgorithm.ECDSA_P256_SHA256,
             publicKeyEncoded = publicKeyEncoded,
@@ -59,6 +58,7 @@ public class AndroidKeystoreCompanionDeviceIdentityProvider(
     private fun loadKeyStore(): KeyStore = KeyStore.getInstance(KEYSTORE_PROVIDER).apply { load(null) }
 
     private companion object {
+        val URL_SAFE_BASE64: Base64 = Base64.UrlSafe.withPadding(Base64.PaddingOption.ABSENT_OPTIONAL)
         const val KEYSTORE_PROVIDER: String = "AndroidKeyStore"
         const val DEVICE_KEY_ALIAS: String = "knet.companion.device-proof.v1"
     }

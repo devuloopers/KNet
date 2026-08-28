@@ -1,5 +1,6 @@
 package com.devuloopers.knet.companion.connectivity.control
 
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.companion.application.contract.CompanionControlAuthorization
 import com.devuloopers.knet.companion.application.contract.CompanionControlOperation
 import com.devuloopers.knet.companion.application.contract.CompanionControlRequest
@@ -55,7 +56,7 @@ class KtorCompanionControlTransportTest {
 
         val response = transport.execute(
             CompanionControlRequest(
-                endpoint = CompanionServiceEndpoint("192.0.2.1", 8_183, true),
+                endpoint = CompanionServiceEndpoint("192.0.2.1", 8_183, CompanionEndpointScheme.HTTPS),
                 transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
                 rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
                 rootCertificate = CompanionRootCertificate(byteArrayOf(1, 2, 3)),

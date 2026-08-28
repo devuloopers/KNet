@@ -1,6 +1,6 @@
 package com.devuloopers.knet.companion.connectivity.certificate
 
-import java.security.MessageDigest
+import com.devuloopers.knet.companion.connectivity.http.sha256Hex
 import java.security.cert.CertificateFactory
 import java.security.cert.X509Certificate
 
@@ -9,7 +9,7 @@ internal fun ByteArray.parseX509Certificate(): X509Certificate? = runCatching {
 }.getOrNull()
 
 internal fun X509Certificate.sha256Hex(): String =
-    MessageDigest.getInstance("SHA-256").digest(encoded).joinToString("") { byte -> "%02x".format(byte) }
+    encoded.sha256Hex()
 
 internal fun X509Certificate.isValidPairingRoot(expectedSha256: String): Boolean = runCatching {
     isValidRootCertificate() && sha256Hex() == expectedSha256

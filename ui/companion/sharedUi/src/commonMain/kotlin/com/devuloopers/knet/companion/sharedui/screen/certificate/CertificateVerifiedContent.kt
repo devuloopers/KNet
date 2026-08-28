@@ -69,7 +69,7 @@ internal fun CertificateVerifiedContent(
         CertificateReadinessRow(
             icon = KNetIcons.Desktop,
             title = stringResource(Res.string.certificate_paired_desktop),
-            value = state.activeRegistration?.desktopDisplayName.orEmpty(),
+            value = state.activeRegistration?.desktopDisplayName?.value.orEmpty(),
         )
         CertificateReadinessRow(
             icon = KNetIcons.Shield,

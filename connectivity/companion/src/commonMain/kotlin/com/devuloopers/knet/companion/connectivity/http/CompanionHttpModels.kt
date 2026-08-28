@@ -1,6 +1,7 @@
 package com.devuloopers.knet.companion.connectivity.http
 
 import com.devuloopers.knet.companion.model.CompanionBootstrapProtocol
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.companion.model.CompanionCertificateProtocol
 import com.devuloopers.knet.companion.model.CompanionRootCertificate
 import com.devuloopers.knet.companion.model.CompanionServiceEndpoint
@@ -70,7 +71,9 @@ internal class CompanionHttpRequest(
         }
         when (security) {
             CompanionHttpSecurity.BootstrapRootOnly -> {
-                require(!endpoint.secure) { "Bootstrap root retrieval requires a non-secure endpoint." }
+                require(endpoint.scheme == CompanionEndpointScheme.HTTP) {
+                    "Bootstrap root retrieval requires a non-secure endpoint."
+                }
                 require(method == CompanionHttpMethod.GET) { "Bootstrap root retrieval must use GET." }
                 require(path == CompanionBootstrapProtocol.ROOT_CERTIFICATE_PATH) {
                     "Bootstrap root retrieval path is invalid."
@@ -90,7 +93,9 @@ internal class CompanionHttpRequest(
             }
             is CompanionHttpSecurity.PinnedRoot,
             is CompanionHttpSecurity.PlatformTrusted,
-                -> require(endpoint.secure) { "Authenticated companion HTTP requires a secure endpoint." }
+                -> require(endpoint.scheme == CompanionEndpointScheme.HTTPS) {
+                    "Authenticated companion HTTP requires a secure endpoint."
+                }
         }
     }
 

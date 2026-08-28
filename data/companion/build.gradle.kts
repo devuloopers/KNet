@@ -25,6 +25,7 @@ kotlin {
             implementation(project(":core:companion"))
             implementation(project(":core:identity"))
             implementation(project(":core:pairing"))
+            implementation(libs.datastore.preferences)
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)
         }
