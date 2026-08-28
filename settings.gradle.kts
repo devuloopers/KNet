@@ -2,11 +2,17 @@ rootProject.name = "KNet"
 
 pluginManagement {
     repositories {
+        maven("https://packages.jetbrains.team/maven/p/cmp/dev") {
+            content {
+                includeGroupByRegex("org\\.jetbrains\\.compose(?:\\..+)?")
+                includeGroup("org.jetbrains.skiko")
+            }
+        }
         google {
             mavenContent {
-                includeGroupAndSubgroups("androidx")
-                includeGroupAndSubgroups("com.android")
-                includeGroupAndSubgroups("com.google")
+                includeGroupByRegex("androidx(?:\\..+)?")
+                includeGroupByRegex("com\\.android(?:\\..+)?")
+                includeGroupByRegex("com\\.google(?:\\..+)?")
             }
         }
         mavenCentral()
@@ -14,13 +20,21 @@ pluginManagement {
     }
 }
 
+// Gradle recommends centralized repositories even though this DSL remains incubating.
+@Suppress("UnstableApiUsage")
 dependencyResolutionManagement {
     repositories {
+        maven("https://packages.jetbrains.team/maven/p/cmp/dev") {
+            content {
+                includeGroupByRegex("org\\.jetbrains\\.compose(?:\\..+)?")
+                includeGroup("org.jetbrains.skiko")
+            }
+        }
         google {
             mavenContent {
-                includeGroupAndSubgroups("androidx")
-                includeGroupAndSubgroups("com.android")
-                includeGroupAndSubgroups("com.google")
+                includeGroupByRegex("androidx(?:\\..+)?")
+                includeGroupByRegex("com\\.android(?:\\..+)?")
+                includeGroupByRegex("com\\.google(?:\\..+)?")
             }
         }
         mavenCentral()

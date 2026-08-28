@@ -51,7 +51,6 @@ dependencies {
     implementation(project(":storage"))
     implementation(project(":ui:core"))
 
-    implementation(compose.desktop.currentOs)
     implementation(libs.datastore.preferences)
     implementation(libs.kotlinx.coroutines.swing)
     implementation(libs.koin.core)

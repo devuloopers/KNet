@@ -52,7 +52,7 @@ protobuf {
     generateProtoTasks {
         all().configureEach {
             plugins {
-                id("grpc")
+                maybeCreate("grpc")
             }
         }
     }
