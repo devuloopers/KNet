@@ -19,6 +19,7 @@ import com.devuloopers.knet.application.usecase.breakpoint.ResolveProtocolMessag
 import com.devuloopers.knet.application.usecase.breakpoint.BreakpointProtocolRuleUseCase
 import com.devuloopers.knet.traffic.model.http.HttpMethod
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
+import com.devuloopers.knet.domain.rules.model.BreakpointPortCriteria
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.rules.repository.RulesRepository
 import com.devuloopers.knet.domain.rules.usecase.DeleteRuleUseCase
@@ -166,8 +167,18 @@ class BreakpointManagerViewModelTest {
     @Test
     fun `rules and global state remain reactive`() = runTest {
         val viewModel = viewModel()
-        viewModel.saveRule(".*stripe.*", HttpMethod.POST, BreakpointPhase.REQUEST, true)
+        viewModel.saveRule(
+            ".*stripe.*",
+            HttpMethod.POST,
+            BreakpointPhase.REQUEST,
+            true,
+            BreakpointPortCriteria.Exact(443),
+        )
         assertEquals(1, viewModel.uiState.value.rules.size)
+        assertEquals(
+            BreakpointPortCriteria.Exact(443),
+            viewModel.uiState.value.rules.single().portCriteria,
+        )
 
         val ruleId = viewModel.uiState.value.rules.single().id
         viewModel.toggleRuleStatus(ruleId)

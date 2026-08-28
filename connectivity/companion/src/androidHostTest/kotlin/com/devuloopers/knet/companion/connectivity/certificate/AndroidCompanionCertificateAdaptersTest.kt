@@ -230,7 +230,7 @@ class AndroidCompanionCertificateAdaptersTest {
             nowEpochMillis = { 2_000L },
         )
 
-        val result = assertIs<CompanionCertificateState.Rejected>(
+        val result = assertIs<CompanionCertificateState.VerificationDeferred>(
             verifier.verify(
                 registration(root),
                 "credential",
@@ -240,6 +240,28 @@ class AndroidCompanionCertificateAdaptersTest {
 
         assertEquals(CompanionFailureCode.CERTIFICATE_UNAVAILABLE, result.reason.code)
         assertEquals(0, client.platformTrustedCalls)
+    }
+
+    @Test
+    fun unavailableDesktopDuringTrustChallengeDefersVerificationWithoutRejectingCertificate() = runTest {
+        val root = testCertificate("local-proxy-test-ca.pem")
+        val client = FakeTlsClient(platformTrusted = AndroidCertificateTlsResult.Unavailable)
+        val verifier = AndroidCompanionCertificateTrustVerifier(
+            client = client,
+            trustedCertificates = FakeTrustedCertificateStore(AndroidTrustedCertificateLookupResult.Present),
+            nowEpochMillis = { 2_000L },
+        )
+
+        val result = assertIs<CompanionCertificateState.VerificationDeferred>(
+            verifier.verify(
+                registration(root),
+                "credential",
+                CompanionCertificateArtifact(root.encoded, "knet-root-ca.crt"),
+            ),
+        )
+
+        assertEquals(CompanionFailureCode.TRANSPORT_UNAVAILABLE, result.reason.code)
+        assertEquals(1, client.platformTrustedCalls)
     }
 
     @Test

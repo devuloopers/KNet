@@ -9,6 +9,7 @@ import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import com.devuloopers.knet.companion.presentation.action.CompanionAction
 import com.devuloopers.knet.companion.presentation.state.CompanionUiState
+import com.devuloopers.knet.companion.presentation.state.toCompanionHomeUiState
 import com.devuloopers.knet.companion.presentation.flow.resolveFlowStage
 import com.devuloopers.knet.companion.sharedui.component.CompanionSetupScaffold
 import com.devuloopers.knet.companion.sharedui.component.toCompanionSetupProgress
@@ -72,7 +73,7 @@ internal fun CompanionNavHost(
                     )
                 }
                 entry(CompanionRoute.InspectionHome) {
-                    CompanionHomeScreen(state = state, onAction = onAction)
+                    CompanionHomeScreen(state = state.toCompanionHomeUiState(), onAction = onAction)
                 }
             },
         )

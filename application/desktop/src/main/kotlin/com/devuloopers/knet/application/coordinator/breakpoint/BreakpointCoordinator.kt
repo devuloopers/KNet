@@ -5,10 +5,13 @@ import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.BreakpointProtocolId
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.rules.model.BreakpointTransportMatcher
+import com.devuloopers.knet.domain.rules.model.BreakpointTransportTarget
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.TrafficDirection
 import com.devuloopers.knet.traffic.model.absoluteUrl
+import com.devuloopers.knet.traffic.model.absoluteUrlWithoutPort
+import com.devuloopers.knet.traffic.model.destinationPort
 import com.devuloopers.knet.traffic.model.http.HeaderField
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -470,7 +473,11 @@ public class BreakpointCoordinator(
 
         fun matchesTransport(request: HttpRequestSnapshot, phase: BreakpointPhase): Boolean =
             transportMatcher.matches(
-                url = request.absoluteUrl(),
+                target = BreakpointTransportTarget(
+                    canonicalUrl = request.absoluteUrl(),
+                    portlessUrl = request.absoluteUrlWithoutPort(),
+                    port = request.destinationPort(),
+                ),
                 method = request.head.method.token,
                 phase = phase,
             )

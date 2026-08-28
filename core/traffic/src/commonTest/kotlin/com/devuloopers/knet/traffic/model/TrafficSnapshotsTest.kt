@@ -6,6 +6,7 @@ import com.devuloopers.knet.traffic.model.body.BodyCaptureOutcome
 import com.devuloopers.knet.traffic.model.body.BodyRef
 import com.devuloopers.knet.traffic.model.body.MessageBodyRef
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
+import com.devuloopers.knet.traffic.model.http.Authority
 import com.devuloopers.knet.traffic.model.http.HeaderField
 import com.devuloopers.knet.traffic.model.http.HeaderName
 import com.devuloopers.knet.traffic.model.http.HttpMethod
@@ -21,6 +22,48 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
 
 class TrafficSnapshotsTest {
+
+    @Test
+    fun `display URL omits only the port matching the standard scheme default`() {
+        fun request(scheme: StandardHttpScheme, port: Int): HttpRequestSnapshot = HttpRequestSnapshot(
+            head = RequestHead(
+                method = HttpMethod.GET,
+                target = RequestTarget.Absolute(
+                    scheme = HttpScheme.Standard(scheme),
+                    authority = Authority("api.example.test", port),
+                    pathAndQuery = "/resource",
+                ),
+                protocol = ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_1_1),
+                headers = emptyList(),
+            ),
+        )
+
+        assertEquals("http://api.example.test/resource", request(StandardHttpScheme.HTTP, 80).displayUrl())
+        assertEquals("https://api.example.test/resource", request(StandardHttpScheme.HTTPS, 443).displayUrl())
+        assertEquals("https://api.example.test:8443/resource", request(StandardHttpScheme.HTTPS, 8443).displayUrl())
+        assertEquals("http://api.example.test:443/resource", request(StandardHttpScheme.HTTP, 443).displayUrl())
+    }
+
+    @Test
+    fun `breakpoint transport representations retain port separately and bracket IPv6`() {
+        val request = HttpRequestSnapshot(
+            head = RequestHead(
+                method = HttpMethod.GET,
+                target = RequestTarget.Absolute(
+                    scheme = HttpScheme.Standard(StandardHttpScheme.HTTPS),
+                    authority = Authority("2001:db8::1", 8443),
+                    pathAndQuery = "/resource",
+                ),
+                protocol = ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_2),
+                headers = emptyList(),
+            ),
+        )
+
+        assertEquals("https://[2001:db8::1]:8443/resource", request.absoluteUrl())
+        assertEquals("https://[2001:db8::1]:8443/resource", request.displayUrl())
+        assertEquals("https://[2001:db8::1]/resource", request.absoluteUrlWithoutPort())
+        assertEquals(8443, request.destinationPort())
+    }
 
     @Test
     fun `ordered repeated headers remain distinct in shared request snapshot`() {

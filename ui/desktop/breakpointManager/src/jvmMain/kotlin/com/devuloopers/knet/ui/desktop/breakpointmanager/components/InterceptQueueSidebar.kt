@@ -24,7 +24,7 @@ import androidx.compose.ui.unit.sp
 import com.devuloopers.knet.application.contract.breakpoint.PendingBreakpoint
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.request.descriptor.RequestDescriptor
-import com.devuloopers.knet.traffic.model.absoluteUrl
+import com.devuloopers.knet.traffic.model.displayUrl
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
@@ -314,7 +314,7 @@ private fun InterceptQueueItemCard(
 /**
  * Extracts display path/URL: formats GraphQL operation names, and shows full URL for standard HTTP requests.
  */
-private fun extractDisplayPath(item: PendingBreakpoint): String = item.candidate.request.absoluteUrl()
+private fun extractDisplayPath(item: PendingBreakpoint): String = item.candidate.request.displayUrl()
 
 /**
  * Formats epoch millisecond timestamp to standard human-readable time string.

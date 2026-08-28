@@ -9,12 +9,14 @@ import com.devuloopers.knet.application.usecase.traffic.LoadTrafficExchangeDetai
 import com.devuloopers.knet.application.usecase.traffic.LoadTrafficExchangeDetailsUseCase
 import com.devuloopers.knet.application.usecase.traffic.TrafficBodyPreview
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
+import com.devuloopers.knet.domain.rules.model.BreakpointPortCriteria
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.HttpResponseSnapshot
-import com.devuloopers.knet.traffic.model.absoluteUrl
+import com.devuloopers.knet.traffic.model.absoluteUrlWithoutPort
+import com.devuloopers.knet.traffic.model.destinationPort
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -89,7 +91,7 @@ public class PrepareBreakpointRuleDraftUseCase(
                 response = source.response,
             ),
         ) ?: ProtocolMatchCriteria.HttpDefault
-        val endpointPattern = source.request.absoluteUrl()
+        val endpointPattern = source.request.absoluteUrlWithoutPort()
             .substringBefore('#')
             .substringBefore('?')
             .ifBlank { "*" }
@@ -97,6 +99,9 @@ public class PrepareBreakpointRuleDraftUseCase(
             id = newRuleId(),
             name = endpointPattern,
             urlPattern = endpointPattern,
+            portCriteria = source.request.destinationPort()
+                ?.let(BreakpointPortCriteria::Exact)
+                ?: BreakpointPortCriteria.Any,
             method = source.request.head.method,
             phase = BreakpointPhase.BOTH,
             enabled = true,

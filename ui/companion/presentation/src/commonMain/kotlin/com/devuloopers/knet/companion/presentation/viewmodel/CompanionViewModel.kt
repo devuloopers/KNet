@@ -4,10 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.companion.application.usecase.AcceptPairingInvitationResult
 import com.devuloopers.knet.companion.application.usecase.DownloadCompanionRootCertificateResult
+import com.devuloopers.knet.companion.application.usecase.CompleteCompanionCertificateEnrollmentResult
 import com.devuloopers.knet.companion.application.usecase.PairCompanionDeviceResult
 import com.devuloopers.knet.companion.application.usecase.RefreshCompanionCredentialResult
 import com.devuloopers.knet.companion.application.usecase.StartCompanionInspectionResult
 import com.devuloopers.knet.companion.model.CompanionCertificateState
+import com.devuloopers.knet.companion.model.CompanionDesktopAvailability
 import com.devuloopers.knet.companion.model.CompanionDesktopId
 import com.devuloopers.knet.companion.model.CompanionFailure
 import com.devuloopers.knet.companion.model.CompanionFailureCode
@@ -15,7 +17,6 @@ import com.devuloopers.knet.companion.model.CompanionInspectionState
 import com.devuloopers.knet.companion.model.CompanionPairingInvitation
 import com.devuloopers.knet.companion.presentation.state.CompanionUiState
 import com.devuloopers.knet.companion.presentation.state.CompanionCertificateExportState
-import com.devuloopers.knet.companion.presentation.state.CompanionCertificateSetupAcknowledgement
 import com.devuloopers.knet.companion.presentation.action.CompanionAction
 import com.devuloopers.knet.companion.presentation.effect.CompanionEffect
 import com.devuloopers.knet.core.logger.KNetLogger
@@ -28,6 +29,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 
@@ -46,6 +50,9 @@ public class CompanionViewModel(
         CompanionUiState(
             registrations = dependencies.observeRegistrations.registrations.value,
             activeRegistration = dependencies.observeRegistrations.activeRegistration.value,
+            certificateEnrollment = dependencies.observeRegistrations.activeRegistration.value?.let { registration ->
+                dependencies.observeCertificateEnrollments.enrollments.value.firstOrNull { it.matches(registration) }
+            },
             connection = dependencies.observeConnection.state.value,
             inspection = dependencies.observeInspection.state.value,
             network = dependencies.observeNetwork.state.value,
@@ -81,10 +88,25 @@ public class CompanionViewModel(
                         activeRegistration = registration,
                         certificate = CompanionCertificateState.Unknown,
                         certificateExport = CompanionCertificateExportState.Idle,
-                        certificateSetupAcknowledgement = CompanionCertificateSetupAcknowledgement.REQUIRED,
+                        certificateEnrollment = registration?.let { active ->
+                            dependencies.observeCertificateEnrollments.enrollments.value.firstOrNull {
+                                it.matches(active)
+                            }
+                        },
                     )
                 }
                 if (registration != null) verifyCertificateTrust(showProgress = false)
+            }
+        }
+        viewModelScope.launch {
+            dependencies.observeCertificateEnrollments.enrollments.collect { enrollments ->
+                mutableState.update { current ->
+                    current.copy(
+                        certificateEnrollment = current.activeRegistration?.let { registration ->
+                            enrollments.firstOrNull { it.matches(registration) }
+                        },
+                    )
+                }
             }
         }
         viewModelScope.launch {
@@ -116,6 +138,26 @@ public class CompanionViewModel(
             dependencies.observeDiscovery.state.collect { discovery ->
                 mutableState.update { current -> current.copy(discovery = discovery) }
             }
+        }
+        viewModelScope.launch {
+            dependencies.monitorDesktopAvailability.state.collect { availability ->
+                mutableState.update { current -> current.copy(desktopAvailability = availability) }
+                if (
+                    availability is CompanionDesktopAvailability.Available &&
+                    mutableState.value.certificate is CompanionCertificateState.VerificationDeferred &&
+                    certificateVerificationJob?.isActive != true
+                ) {
+                    verifyCertificateTrust(showProgress = false)
+                }
+            }
+        }
+        viewModelScope.launch {
+            mutableState
+                .map(::shouldMonitorDesktopAvailability)
+                .distinctUntilChanged()
+                .collectLatest { shouldMonitor ->
+                    if (shouldMonitor) dependencies.monitorDesktopAvailability.execute()
+                }
         }
         viewModelScope.launch {
             dependencies.observeCertificateStoreChanges.changes.collect {
@@ -373,6 +415,7 @@ public class CompanionViewModel(
     private fun verifyCertificateTrust(showProgress: Boolean) {
         certificateVerificationJob?.cancel()
         val expectedDesktopId = mutableState.value.activeRegistration?.desktopId
+        val previouslyTrusted = mutableState.value.certificate as? CompanionCertificateState.Trusted
         KNetLogger.info(LogTags.CERTIFICATE) { "companion_event=verification_started" }
         mutableState.update { current ->
             if (!showProgress && current.certificate is CompanionCertificateState.Trusted) {
@@ -389,11 +432,14 @@ public class CompanionViewModel(
                 mutableState.update { current ->
                     if (current.activeRegistration?.desktopId == expectedDesktopId) {
                         current.copy(
-                            certificate = certificate,
-                            certificateSetupAcknowledgement = if (certificate is CompanionCertificateState.Trusted) {
-                                current.certificateSetupAcknowledgement
+                            certificate = if (
+                                certificate is CompanionCertificateState.VerificationDeferred &&
+                                previouslyTrusted != null &&
+                                previouslyTrusted.rootCertificateSha256 == current.activeRegistration?.rootCertificateSha256
+                            ) {
+                                previouslyTrusted
                             } else {
-                                CompanionCertificateSetupAcknowledgement.REQUIRED
+                                certificate
                             },
                         )
                     } else {
@@ -416,16 +462,30 @@ public class CompanionViewModel(
     }
 
     private fun continueCertificateSetup() {
-        mutableState.update { current ->
-            val certificateReady = current.certificate is CompanionCertificateState.Trusted &&
-                current.certificateExport is CompanionCertificateExportState.Saved
-            if (certificateReady) {
-                current.copy(
-                    certificateSetupAcknowledgement = CompanionCertificateSetupAcknowledgement.ACKNOWLEDGED,
-                    failure = null,
-                )
-            } else {
-                current
+        val current = mutableState.value
+        val desktopId = current.activeRegistration?.desktopId ?: return showFailure(registrationMissingFailure())
+        if (current.certificate !is CompanionCertificateState.Trusted ||
+            current.certificateExport !is CompanionCertificateExportState.Saved
+        ) {
+            return
+        }
+        launchOperation {
+            when (val result = dependencies.completeCertificateEnrollment.execute(desktopId)) {
+                is CompleteCompanionCertificateEnrollmentResult.Completed -> {
+                    mutableState.update { latest ->
+                        if (latest.activeRegistration?.desktopId == desktopId) {
+                            latest.copy(
+                                certificate = result.trust,
+                                certificateEnrollment = result.enrollment,
+                                failure = null,
+                            )
+                        } else {
+                            latest
+                        }
+                    }
+                }
+
+                is CompleteCompanionCertificateEnrollmentResult.Rejected -> showFailure(result.failure)
             }
         }
     }
@@ -440,6 +500,9 @@ public class CompanionViewModel(
             }
             CompanionCertificateState.Verifying -> KNetLogger.debug(LogTags.CERTIFICATE) {
                 "companion_event=verification_completed result=still_verifying"
+            }
+            is CompanionCertificateState.VerificationDeferred -> KNetLogger.info(LogTags.CERTIFICATE) {
+                "companion_event=verification_deferred reason=${certificate.reason.code}"
             }
             is CompanionCertificateState.Trusted -> KNetLogger.info(LogTags.CERTIFICATE) {
                 "companion_event=verification_completed result=trusted"
@@ -514,5 +577,10 @@ public class CompanionViewModel(
         message = "No paired desktop is selected.",
         recoverable = true,
     )
+
+    private fun shouldMonitorDesktopAvailability(state: CompanionUiState): Boolean =
+        state.activeRegistration?.let { state.certificateEnrollment?.matches(it) } == true &&
+            (state.inspection == CompanionInspectionState.Stopped || state.inspection is CompanionInspectionState.Failed) &&
+            !state.operationInProgress
 
 }

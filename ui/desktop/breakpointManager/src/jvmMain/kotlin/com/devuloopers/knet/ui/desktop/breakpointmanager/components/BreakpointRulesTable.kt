@@ -32,6 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
+import com.devuloopers.knet.domain.rules.model.BreakpointPortCriteria
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.ui.core.components.switch.KNetSwitch
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
@@ -81,6 +82,13 @@ fun BreakpointRulesTable(
                 maxLines = 1,
                 softWrap = false,
                 overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "Port",
+                style = typography.caption.copy(color = themeColors.textMuted, fontWeight = FontWeight.Bold),
+                modifier = Modifier.width(70.dp),
+                maxLines = 1,
+                softWrap = false,
             )
             Text(
                 text = "Method",
@@ -159,6 +167,21 @@ fun BreakpointRulesTable(
                                 softWrap = false,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f)
+                            )
+
+                            Text(
+                                text = when (val port = rule.portCriteria) {
+                                    BreakpointPortCriteria.Any -> "Any"
+                                    is BreakpointPortCriteria.Exact -> port.value.toString()
+                                },
+                                style = typography.bodyMedium.copy(
+                                    color = if (rule.enabled) themeColors.textSecondary else themeColors.textMuted,
+                                    fontFamily = FontFamily.Monospace,
+                                    fontSize = 11.sp,
+                                ),
+                                modifier = Modifier.width(70.dp),
+                                maxLines = 1,
+                                softWrap = false,
                             )
 
                             // Method Badge

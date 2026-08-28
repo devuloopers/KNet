@@ -2,6 +2,7 @@ package com.devuloopers.knet.companion.android.di
 
 import com.devuloopers.knet.companion.android.inspection.AndroidInspectionRuntimeCoordinator
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateDownloadResult
+import com.devuloopers.knet.companion.application.contract.CompanionCertificateEnrollmentRepository
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateStoreChangeObserver
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateTrustVerifier
 import com.devuloopers.knet.companion.application.contract.CompanionControlTransport
@@ -29,7 +30,7 @@ import com.devuloopers.knet.companion.connectivity.transport.AndroidTunForwarder
 import com.devuloopers.knet.companion.connectivity.fallback.UnavailableCompanionInvitationResolver
 import com.devuloopers.knet.companion.data.ProtectedCompanionCredentialStore
 import com.devuloopers.knet.companion.data.VersionedCompanionInvitationCodec
-import com.devuloopers.knet.companion.data.VersionedCompanionRegistrationRepository
+import com.devuloopers.knet.companion.data.VersionedCompanionStateRepository
 import com.devuloopers.knet.companion.data.store.CompanionRecordStore
 import com.devuloopers.knet.companion.data.store.CompanionSecretStore
 import com.devuloopers.knet.companion.model.CompanionCertificateState
@@ -98,8 +99,12 @@ class CompanionAndroidModulesTest {
             assertSame(recordStore, application.koin.get<CompanionRecordStore>())
             assertSame(secretStore, application.koin.get<CompanionSecretStore>())
             assertSame(platformAdapters, application.koin.get<CompanionPlatformAdapters>())
-            assertIs<VersionedCompanionRegistrationRepository>(
+            assertIs<VersionedCompanionStateRepository>(
                 application.koin.get<CompanionRegistrationRepository>(),
+            )
+            assertSame<Any>(
+                application.koin.get<CompanionRegistrationRepository>(),
+                application.koin.get<CompanionCertificateEnrollmentRepository>(),
             )
             assertIs<ProtectedCompanionCredentialStore>(application.koin.get<CompanionCredentialStore>())
             assertIs<VersionedCompanionInvitationCodec>(application.koin.get<CompanionInvitationCodec>())

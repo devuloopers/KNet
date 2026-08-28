@@ -12,6 +12,7 @@ data class BreakpointRule(
     val id: String = "",
     val name: String = "",
     val urlPattern: String = "*",
+    val portCriteria: BreakpointPortCriteria = BreakpointPortCriteria.Any,
     val method: HttpMethod? = null,
     val phase: BreakpointPhase = BreakpointPhase.BOTH,
     val enabled: Boolean = true,
@@ -45,11 +46,17 @@ class BreakpointTransportMatcher(private val rule: BreakpointRule) {
      *
      * Protocol-specific criteria must be evaluated separately by the owning extension.
      */
-    fun matches(url: String, method: String, phase: BreakpointPhase): Boolean =
+    public fun matches(target: BreakpointTransportTarget, method: String, phase: BreakpointPhase): Boolean =
         rule.enabled &&
             includes(phase) &&
             (methodToken == null || methodToken.equals(method, ignoreCase = true)) &&
-            urlExpression.containsMatchIn(url)
+            rule.portCriteria.matches(target.port) &&
+            (urlExpression.containsMatchIn(target.canonicalUrl) ||
+                urlExpression.containsMatchIn(target.portlessUrl))
+
+    /** Compatibility convenience for callers whose input has no independent port representation. */
+    public fun matches(url: String, method: String, phase: BreakpointPhase): Boolean =
+        matches(BreakpointTransportTarget(url, url, null), method, phase)
 
     private companion object {
         fun compileUrlExpression(pattern: String): Regex {
@@ -63,4 +70,9 @@ class BreakpointTransportMatcher(private val rule: BreakpointRule) {
                 .getOrElse { Regex(Regex.escape(pattern), RegexOption.IGNORE_CASE) }
         }
     }
+}
+
+private fun BreakpointPortCriteria.matches(port: Int?): Boolean = when (this) {
+    BreakpointPortCriteria.Any -> true
+    is BreakpointPortCriteria.Exact -> value == port
 }

@@ -1,6 +1,7 @@
 package com.devuloopers.knet.domain
 
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
+import com.devuloopers.knet.domain.rules.model.BreakpointPortCriteria
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.rules.model.RulesUiState
 import kotlin.test.Test
@@ -23,6 +24,7 @@ class BreakpointRuleTest {
         assertEquals("Rewrite Auth Header", rule.name)
         assertEquals(BreakpointPhase.REQUEST, rule.phase)
         assertEquals("*/api/*", rule.urlPattern)
+        assertEquals(BreakpointPortCriteria.Any, rule.portCriteria)
         assertEquals(null, rule.method)
         assertTrue(rule.enabled)
     }

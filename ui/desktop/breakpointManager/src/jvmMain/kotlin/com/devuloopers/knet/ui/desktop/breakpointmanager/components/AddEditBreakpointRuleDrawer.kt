@@ -7,6 +7,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -34,6 +35,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -43,6 +45,7 @@ import com.devuloopers.knet.application.contract.breakpoint.BreakpointProtocolDe
 import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaFieldDefinition
 import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaValue
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
+import com.devuloopers.knet.domain.rules.model.BreakpointPortCriteria
 import com.devuloopers.knet.domain.rules.model.BreakpointProtocolId
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.traffic.model.http.HttpMethod
@@ -52,6 +55,7 @@ import com.devuloopers.knet.ui.core.components.button.KNetButton
 import com.devuloopers.knet.ui.core.components.drawer.KNetSideDrawer
 import com.devuloopers.knet.ui.core.components.drawer.KNetSideDrawerSize
 import com.devuloopers.knet.ui.core.components.input.InputFieldConfig
+import com.devuloopers.knet.ui.core.components.input.InputFieldState
 import com.devuloopers.knet.ui.core.components.input.KNetTextField
 import com.devuloopers.knet.ui.core.components.scrollbar.KNetVerticalScrollbar
 import com.devuloopers.knet.ui.core.components.switch.KNetSwitch
@@ -74,6 +78,7 @@ fun AddEditBreakpointRuleDrawer(
     onDismiss: () -> Unit,
     onSave: (
         urlPattern: String,
+        portCriteria: BreakpointPortCriteria,
         method: HttpMethod?,
         phase: BreakpointPhase,
         enabled: Boolean,
@@ -93,6 +98,10 @@ fun AddEditBreakpointRuleDrawer(
         val initialRule = remember { rule }
         val initialIsEditingExistingRule = remember { isEditingExistingRule }
         var urlPattern by remember { mutableStateOf(initialRule?.urlPattern ?: "") }
+        var portInput by remember {
+            mutableStateOf((initialRule?.portCriteria as? BreakpointPortCriteria.Exact)?.value?.toString().orEmpty())
+        }
+        var portWasEdited by remember { mutableStateOf(initialRule != null) }
         var selectedMethod by remember { mutableStateOf(initialRule?.method) }
         var selectedPhase by remember { mutableStateOf(initialRule?.phase ?: BreakpointPhase.BOTH) }
         var enabled by remember { mutableStateOf(initialRule?.enabled ?: true) }
@@ -111,6 +120,9 @@ fun AddEditBreakpointRuleDrawer(
             mutableStateOf(initialProtocolValues)
         }
         val selectedProtocol = protocolDefinitions.firstOrNull { it.protocolId == selectedProtocolId }
+        val parsedPort = portInput.toIntOrNull()?.takeIf { it in 1..65_535 }
+        val isPortValid = portInput.isBlank() || parsedPort != null
+        val portCriteria = parsedPort?.let(BreakpointPortCriteria::Exact) ?: BreakpointPortCriteria.Any
         val drawerTitle = if (initialIsEditingExistingRule) "Edit Breakpoint Rule" else "Add Breakpoint Rule"
 
         Column(
@@ -160,22 +172,53 @@ fun AddEditBreakpointRuleDrawer(
                         .padding(horizontal = 20.dp, vertical = 18.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-            // URL Pattern Input
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(
-                    text = "URL Regex / Wildcard Pattern",
-                    style = typography.caption.copy(color = themeColors.textMuted, fontWeight = FontWeight.SemiBold)
-                )
-                KNetTextField(
-                    value = urlPattern,
-                    onValueChange = { urlPattern = it },
-                    modifier = Modifier.fillMaxWidth(),
-                    config = InputFieldConfig(
-                        placeholder = "e.g. http://stg-04astra.cnbc.com/graphql",
-                        backgroundColor = themeColors.surfaceVariant,
-                        borderColor = themeColors.border
-                    )
-                )
+            // URL and port are authored independently so default ports never become hidden matching behavior.
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val compact = maxWidth < 420.dp
+                val updateUrl: (String) -> Unit = { updated ->
+                    urlPattern = updated
+                    if (!portWasEdited) {
+                        portInput = suggestedPort(updated)?.toString().orEmpty()
+                    }
+                }
+                val updatePort: (String) -> Unit = { updated ->
+                    portWasEdited = true
+                    portInput = updated.filter(Char::isDigit).take(5)
+                }
+                if (compact) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        BreakpointUrlField(
+                            value = urlPattern,
+                            onValueChange = updateUrl,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                        BreakpointPortField(
+                            value = portInput,
+                            hint = suggestedPort(urlPattern) ?: DEFAULT_PORT_HINT,
+                            isValid = isPortValid,
+                            onValueChange = updatePort,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        BreakpointUrlField(
+                            value = urlPattern,
+                            onValueChange = updateUrl,
+                            modifier = Modifier.weight(1f),
+                        )
+                        BreakpointPortField(
+                            value = portInput,
+                            hint = suggestedPort(urlPattern) ?: DEFAULT_PORT_HINT,
+                            isValid = isPortValid,
+                            onValueChange = updatePort,
+                            modifier = Modifier.widthIn(min = 96.dp, max = 112.dp),
+                        )
+                    }
+                }
             }
 
             // Protocol options are supplied by registered extensions rather than hardcoded here.
@@ -326,9 +369,10 @@ fun AddEditBreakpointRuleDrawer(
                 }
                 KNetButton(
                     onClick = {
-                        if (urlPattern.isNotBlank() && selectedProtocol != null) {
+                        if (urlPattern.isNotBlank() && isPortValid && selectedProtocol != null) {
                             onSave(
                                 urlPattern.trim(),
+                                portCriteria,
                                 selectedMethod,
                                 selectedPhase,
                                 enabled,
@@ -338,7 +382,7 @@ fun AddEditBreakpointRuleDrawer(
                         }
                     },
                     variant = ButtonVariant.Primary,
-                    enabled = urlPattern.isNotBlank() && selectedProtocol != null
+                    enabled = urlPattern.isNotBlank() && isPortValid && selectedProtocol != null
                 ) {
                     Text("Save Rule")
                 }
@@ -346,6 +390,75 @@ fun AddEditBreakpointRuleDrawer(
         }
     }
 }
+
+@Composable
+private fun BreakpointUrlField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier,
+) {
+    val colors = KNetTheme.colors
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = "URL Regex / Wildcard Pattern",
+            style = KNetTheme.typography.caption.copy(
+                color = colors.textMuted,
+                fontWeight = FontWeight.SemiBold,
+            ),
+        )
+        KNetTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.fillMaxWidth(),
+            config = InputFieldConfig(
+                placeholder = "e.g. https://api.example.com/graphql",
+                backgroundColor = colors.surfaceVariant,
+                borderColor = colors.border,
+            ),
+        )
+    }
+}
+
+@Composable
+private fun BreakpointPortField(
+    value: String,
+    hint: Int,
+    isValid: Boolean,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier,
+) {
+    val colors = KNetTheme.colors
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            text = "Port",
+            style = KNetTheme.typography.caption.copy(
+                color = colors.textMuted,
+                fontWeight = FontWeight.SemiBold,
+            ),
+        )
+        KNetTextField(
+            value = value,
+            onValueChange = onValueChange,
+            modifier = Modifier.fillMaxWidth(),
+            config = InputFieldConfig(
+                placeholder = hint.toString(),
+                supportingText = if (isValid) null else "Use 1–65535",
+                backgroundColor = colors.surfaceVariant,
+                borderColor = if (isValid) colors.border else null,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = KeyboardType.Number),
+            ),
+            state = InputFieldState(isError = !isValid),
+        )
+    }
+}
+
+private fun suggestedPort(urlPattern: String): Int? = when {
+    urlPattern.trimStart().startsWith("https://", ignoreCase = true) -> 443
+    urlPattern.trimStart().startsWith("http://", ignoreCase = true) -> 80
+    else -> null
+}
+
+private const val DEFAULT_PORT_HINT: Int = 443
 
 @Composable
 private fun ProtocolCriteriaField(

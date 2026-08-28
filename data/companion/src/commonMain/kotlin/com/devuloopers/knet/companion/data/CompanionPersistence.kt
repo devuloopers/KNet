@@ -3,12 +3,14 @@ package com.devuloopers.knet.companion.data
 import com.devuloopers.knet.companion.model.CompanionDesktopDisplayName
 import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.companion.application.contract.CompanionCredentialStore
+import com.devuloopers.knet.companion.application.contract.CompanionCertificateEnrollmentRepository
 import com.devuloopers.knet.companion.application.contract.CompanionInvitationCodec
 import com.devuloopers.knet.companion.application.contract.CompanionRegistrationRepository
 import com.devuloopers.knet.companion.application.contract.InvitationDecodeResult
 import com.devuloopers.knet.companion.data.store.CompanionRecordStore
 import com.devuloopers.knet.companion.data.store.CompanionSecretStore
 import com.devuloopers.knet.companion.model.CompanionCredentialReference
+import com.devuloopers.knet.companion.model.CompanionCertificateEnrollment
 import com.devuloopers.knet.companion.model.CompanionDesktopId
 import com.devuloopers.knet.companion.model.CompanionFailure
 import com.devuloopers.knet.companion.model.CompanionFailureCode
@@ -31,17 +33,19 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import kotlin.io.encoding.Base64
 
-/** Versioned durable registration repository. Invalid or future-version records fail closed to an empty state. */
-public class VersionedCompanionRegistrationRepository(
+/** Versioned durable companion state repository. Invalid or future-version records fail closed to an empty state. */
+public class VersionedCompanionStateRepository(
     private val store: CompanionRecordStore,
     private val json: Json = defaultCompanionJson(),
-) : CompanionRegistrationRepository {
+) : CompanionRegistrationRepository, CompanionCertificateEnrollmentRepository {
     private val lock: Mutex = Mutex()
     private val mutableRegistrations: MutableStateFlow<List<CompanionRegistration>>
     private val mutableActiveRegistration: MutableStateFlow<CompanionRegistration?>
+    private val mutableEnrollments: MutableStateFlow<List<CompanionCertificateEnrollment>>
 
     override val registrations: StateFlow<List<CompanionRegistration>>
     override val activeRegistration: StateFlow<CompanionRegistration?>
+    override val enrollments: StateFlow<List<CompanionCertificateEnrollment>>
 
     init {
         val restored = store.content.value?.let(::decodeEnvelope) ?: PersistedCompanionEnvelope()
@@ -52,8 +56,15 @@ public class VersionedCompanionRegistrationRepository(
         mutableActiveRegistration = MutableStateFlow(
             domain.firstOrNull { it.desktopId.value == restored.activeDesktopId },
         )
+        mutableEnrollments = MutableStateFlow(
+            restored.certificateEnrollments
+                .mapNotNull(PersistedCompanionCertificateEnrollment::toDomain)
+                .distinctBy { it.desktopId }
+                .filter { enrollment -> domain.any(enrollment::matches) },
+        )
         registrations = mutableRegistrations.asStateFlow()
         activeRegistration = mutableActiveRegistration.asStateFlow()
+        enrollments = mutableEnrollments.asStateFlow()
     }
 
     override suspend fun upsert(registration: CompanionRegistration, makeActive: Boolean) {
@@ -61,14 +72,17 @@ public class VersionedCompanionRegistrationRepository(
             val updated = (mutableRegistrations.value.filterNot { it.desktopId == registration.desktopId } + registration)
                 .sortedBy { it.desktopDisplayName.value.lowercase() }
             val active = if (makeActive) registration else mutableActiveRegistration.value
-            persist(updated, active?.desktopId)
+            val updatedEnrollments = mutableEnrollments.value.filterNot { enrollment ->
+                enrollment.desktopId == registration.desktopId && !enrollment.matches(registration)
+            }
+            persist(updated, active?.desktopId, updatedEnrollments)
         }
     }
 
     override suspend fun setActive(desktopId: CompanionDesktopId?): Boolean = lock.withLock {
         val selected = desktopId?.let { id -> mutableRegistrations.value.firstOrNull { it.desktopId == id } }
         if (desktopId != null && selected == null) return@withLock false
-        persist(mutableRegistrations.value, selected?.desktopId)
+        persist(mutableRegistrations.value, selected?.desktopId, mutableEnrollments.value)
         true
     }
 
@@ -78,7 +92,11 @@ public class VersionedCompanionRegistrationRepository(
         val nextActive = mutableActiveRegistration.value
             ?.takeUnless { it.desktopId == desktopId }
             ?: remaining.firstOrNull()
-        persist(remaining, nextActive?.desktopId)
+        persist(
+            updated = remaining,
+            activeDesktopId = nextActive?.desktopId,
+            updatedEnrollments = mutableEnrollments.value.filterNot { it.desktopId == desktopId },
+        )
         removed
     }
 
@@ -97,29 +115,63 @@ public class VersionedCompanionRegistrationRepository(
             mutableActiveRegistration.value?.desktopId == previous.desktopId -> registration.desktopId
             else -> mutableActiveRegistration.value?.desktopId
         }
-        persist(updated, activeId)
+        val migratedEnrollment = mutableEnrollments.value
+            .firstOrNull { it.desktopId == previousDesktopId }
+            ?.takeIf { it.rootCertificateSha256 == registration.rootCertificateSha256 }
+            ?.copy(desktopId = registration.desktopId)
+        val updatedEnrollments = mutableEnrollments.value
+            .filterNot { it.desktopId == previousDesktopId || it.desktopId == registration.desktopId }
+            .let { existing -> migratedEnrollment?.let(existing::plus) ?: existing }
+        persist(updated, activeId, updatedEnrollments)
+        true
+    }
+
+    override suspend fun complete(enrollment: CompanionCertificateEnrollment): Boolean = lock.withLock {
+        val registration = mutableRegistrations.value.firstOrNull { it.desktopId == enrollment.desktopId }
+            ?: return@withLock false
+        if (!enrollment.matches(registration)) return@withLock false
+        val updatedEnrollments = mutableEnrollments.value
+            .filterNot { it.desktopId == enrollment.desktopId }
+            .plus(enrollment)
+        persist(mutableRegistrations.value, mutableActiveRegistration.value?.desktopId, updatedEnrollments)
+        true
+    }
+
+    override suspend fun removeEnrollment(desktopId: CompanionDesktopId): Boolean = lock.withLock {
+        if (mutableEnrollments.value.none { it.desktopId == desktopId }) return@withLock false
+        persist(
+            mutableRegistrations.value,
+            mutableActiveRegistration.value?.desktopId,
+            mutableEnrollments.value.filterNot { it.desktopId == desktopId },
+        )
         true
     }
 
     private suspend fun persist(
         updated: List<CompanionRegistration>,
         activeDesktopId: CompanionDesktopId?,
+        updatedEnrollments: List<CompanionCertificateEnrollment>,
     ) {
         val envelope = PersistedCompanionEnvelope(
             activeDesktopId = activeDesktopId?.value,
             registrations = updated.map(PersistedCompanionRegistration::fromDomain),
+            certificateEnrollments = updatedEnrollments.map(PersistedCompanionCertificateEnrollment::fromDomain),
         )
         store.write(json.encodeToString(envelope))
         mutableRegistrations.value = updated
         mutableActiveRegistration.value = updated.firstOrNull { it.desktopId == activeDesktopId }
+        mutableEnrollments.value = updatedEnrollments
     }
 
     private fun decodeEnvelope(content: String): PersistedCompanionEnvelope = runCatching {
-        json.decodeFromString<PersistedCompanionEnvelope>(content).takeIf { it.schemaVersion == SCHEMA_VERSION }
+        json.decodeFromString<PersistedCompanionEnvelope>(content).takeIf {
+            it.schemaVersion in MINIMUM_SUPPORTED_SCHEMA_VERSION..SCHEMA_VERSION
+        }
     }.getOrNull() ?: PersistedCompanionEnvelope()
 
     private companion object {
-        const val SCHEMA_VERSION: Int = 2
+        const val MINIMUM_SUPPORTED_SCHEMA_VERSION: Int = 2
+        const val SCHEMA_VERSION: Int = 3
     }
 }
 
@@ -166,10 +218,36 @@ public fun defaultCompanionJson(): Json = Json {
 
 @Serializable
 private data class PersistedCompanionEnvelope(
-    @SerialName("schema_version") val schemaVersion: Int = 2,
+    @SerialName("schema_version") val schemaVersion: Int = 3,
     @SerialName("active_desktop_id") val activeDesktopId: String? = null,
     val registrations: List<PersistedCompanionRegistration> = emptyList(),
+    @SerialName("certificate_enrollments")
+    val certificateEnrollments: List<PersistedCompanionCertificateEnrollment> = emptyList(),
 )
+
+@Serializable
+private data class PersistedCompanionCertificateEnrollment(
+    @SerialName("desktop_id") val desktopId: String,
+    @SerialName("root_certificate_sha256") val rootCertificateSha256: String,
+    @SerialName("completed_at_epoch_millis") val completedAtEpochMillis: Long,
+) {
+    fun toDomain(): CompanionCertificateEnrollment? = runCatching {
+        CompanionCertificateEnrollment(
+            desktopId = CompanionDesktopId(desktopId),
+            rootCertificateSha256 = Sha256Fingerprint(rootCertificateSha256),
+            completedAtEpochMillis = completedAtEpochMillis,
+        )
+    }.getOrNull()
+
+    companion object {
+        fun fromDomain(enrollment: CompanionCertificateEnrollment): PersistedCompanionCertificateEnrollment =
+            PersistedCompanionCertificateEnrollment(
+                desktopId = enrollment.desktopId.value,
+                rootCertificateSha256 = enrollment.rootCertificateSha256.value,
+                completedAtEpochMillis = enrollment.completedAtEpochMillis,
+            )
+    }
+}
 
 @Serializable
 private data class PersistedCompanionRegistration(

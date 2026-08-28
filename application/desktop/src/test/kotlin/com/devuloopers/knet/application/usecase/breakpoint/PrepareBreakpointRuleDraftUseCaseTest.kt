@@ -18,6 +18,7 @@ import com.devuloopers.knet.application.contract.traffic.TrafficPageQuery
 import com.devuloopers.knet.application.contract.traffic.TrafficQuery
 import com.devuloopers.knet.application.usecase.traffic.LoadTrafficExchangeDetailsUseCase
 import com.devuloopers.knet.domain.rules.model.BreakpointProtocolId
+import com.devuloopers.knet.domain.rules.model.BreakpointPortCriteria
 import com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria
 import com.devuloopers.knet.traffic.id.BodyId
 import com.devuloopers.knet.traffic.id.ExchangeId
@@ -56,7 +57,8 @@ class PrepareBreakpointRuleDraftUseCaseTest {
         val draft = assertIs<PrepareBreakpointRuleDraftResult.Found>(result).draft
         assertEquals(SMART_PROTOCOL_ID, draft.rule.protocolCriteria.protocolId)
         assertEquals("GetProfile", draft.protocolValues.single().value)
-        assertEquals("https://api.example.test:443/graphql", draft.rule.urlPattern)
+        assertEquals("https://api.example.test/graphql", draft.rule.urlPattern)
+        assertEquals(BreakpointPortCriteria.Exact(443), draft.rule.portCriteria)
         assertEquals(HttpMethod.POST, draft.rule.method)
     }
 
@@ -70,7 +72,8 @@ class PrepareBreakpointRuleDraftUseCaseTest {
         val draft = assertIs<PrepareBreakpointRuleDraftResult.Found>(result).draft
         assertEquals(ProtocolMatchCriteria.HttpDefault, draft.rule.protocolCriteria)
         assertEquals(emptyList(), draft.protocolValues)
-        assertEquals("https://api.example.test:443/accounts/42", draft.rule.urlPattern)
+        assertEquals("https://api.example.test/accounts/42", draft.rule.urlPattern)
+        assertEquals(BreakpointPortCriteria.Exact(443), draft.rule.portCriteria)
     }
 
     private fun useCase(

@@ -7,6 +7,56 @@ import kotlin.test.assertTrue
 
 class BreakpointTransportMatcherTest {
     @Test
+    fun `portless URL pattern matches default port through an exact typed criterion`() {
+        val matcher = BreakpointTransportMatcher(
+            BreakpointRule(
+                id = "default-https",
+                urlPattern = "https://api.example.com/v1/users",
+                portCriteria = BreakpointPortCriteria.Exact(443),
+            ),
+        )
+        val target = BreakpointTransportTarget(
+            canonicalUrl = "https://api.example.com:443/v1/users",
+            portlessUrl = "https://api.example.com/v1/users",
+            port = 443,
+        )
+
+        assertTrue(matcher.matches(target, "GET", BreakpointPhase.REQUEST))
+    }
+
+    @Test
+    fun `exact port criterion rejects another destination port`() {
+        val matcher = BreakpointTransportMatcher(
+            BreakpointRule(
+                id = "custom-port",
+                urlPattern = "https://api.example.com/*",
+                portCriteria = BreakpointPortCriteria.Exact(8443),
+            ),
+        )
+        val target = BreakpointTransportTarget(
+            canonicalUrl = "https://api.example.com:443/v1/users",
+            portlessUrl = "https://api.example.com/v1/users",
+            port = 443,
+        )
+
+        assertFalse(matcher.matches(target, "GET", BreakpointPhase.REQUEST))
+    }
+
+    @Test
+    fun `existing explicit-port URL expressions remain valid`() {
+        val matcher = BreakpointTransportMatcher(
+            BreakpointRule(id = "explicit-port", urlPattern = "https://api.example.com:8443/*"),
+        )
+        val target = BreakpointTransportTarget(
+            canonicalUrl = "https://api.example.com:8443/v1/users",
+            portlessUrl = "https://api.example.com/v1/users",
+            port = 8443,
+        )
+
+        assertTrue(matcher.matches(target, "GET", BreakpointPhase.REQUEST))
+    }
+
+    @Test
     fun `matches typed method phase and exact URL`() {
         val matcher = BreakpointTransportMatcher(
             BreakpointRule(

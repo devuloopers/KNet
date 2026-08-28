@@ -28,6 +28,22 @@ class CompanionModelsTest {
     }
 
     @Test
+    fun certificateEnrollmentMatchesOnlyItsExactDesktopRoot() {
+        val registration = registration()
+        val enrollment = CompanionCertificateEnrollment(
+            registration.desktopId,
+            registration.rootCertificateSha256,
+            completedAtEpochMillis = 1_500L,
+        )
+
+        assertTrue(enrollment.matches(registration))
+        assertFalse(enrollment.matches(registration.copy(rootCertificateSha256 = Sha256Fingerprint("c".repeat(64)))))
+        assertFailsWith<IllegalArgumentException> {
+            enrollment.copy(completedAtEpochMillis = -1L)
+        }
+    }
+
+    @Test
     fun invitationRequiresSecureControlAndProxyEndpoints() {
         assertFailsWith<IllegalArgumentException> {
             invitation().copy(controlEndpoint = CompanionServiceEndpoint("192.168.1.2", 8183, scheme = CompanionEndpointScheme.HTTP))
@@ -115,6 +131,28 @@ class CompanionModelsTest {
             CompanionRootCertificate(ByteArray(CompanionCertificateProtocol.MAXIMUM_ROOT_CERTIFICATE_BYTES + 1))
         }
         assertFalse(certificate == CompanionRootCertificate(byteArrayOf(9, 2, 3)))
+    }
+
+    @Test
+    fun deferredCertificateVerificationAcceptsOnlyRecoverableFailures() {
+        val recoverable = CompanionFailure(
+            code = CompanionFailureCode.TRANSPORT_UNAVAILABLE,
+            message = "The paired desktop is unavailable.",
+            recoverable = true,
+        )
+        val terminal = CompanionFailure(
+            code = CompanionFailureCode.CERTIFICATE_NOT_TRUSTED,
+            message = "The certificate was rejected.",
+            recoverable = false,
+        )
+
+        assertEquals(
+            recoverable,
+            CompanionCertificateState.VerificationDeferred(recoverable).reason,
+        )
+        assertFailsWith<IllegalArgumentException> {
+            CompanionCertificateState.VerificationDeferred(terminal)
+        }
     }
 
     @Test

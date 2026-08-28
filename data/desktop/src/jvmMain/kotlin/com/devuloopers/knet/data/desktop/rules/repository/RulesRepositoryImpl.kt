@@ -1,6 +1,7 @@
 package com.devuloopers.knet.data.desktop.rules.repository
 
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
+import com.devuloopers.knet.domain.rules.model.BreakpointPortCriteria
 import com.devuloopers.knet.domain.rules.model.BreakpointProtocolId
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria
@@ -78,6 +79,7 @@ class RulesRepositoryImpl(
             name = urlPattern,
             phase = BreakpointPhase.fromString(phase),
             urlPattern = urlPattern,
+            portCriteria = port?.let(BreakpointPortCriteria::Exact) ?: BreakpointPortCriteria.Any,
             method = method?.takeIf(String::isNotBlank)?.let(HttpMethod::fromToken),
             enabled = enabled,
             priority = priority,
@@ -89,6 +91,7 @@ class RulesRepositoryImpl(
         return BreakpointRuleEntity(
             id = id,
             urlPattern = urlPattern,
+            port = (portCriteria as? BreakpointPortCriteria.Exact)?.value,
             method = method?.token,
             phase = phase.name,
             enabled = enabled,

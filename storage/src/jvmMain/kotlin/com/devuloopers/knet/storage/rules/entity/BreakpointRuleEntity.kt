@@ -8,6 +8,7 @@ import androidx.room.PrimaryKey
  *
  * @property id Unique identifier of the rule.
  * @property urlPattern Regular expression pattern matching target request URLs.
+ * @property port Exact destination port, or null to match every port.
  * @property method HTTP method filter (e.g. GET, POST, or null for ALL).
  * @property phase Interception phase filter (REQUEST, RESPONSE, BOTH).
  * @property enabled Whether this rule is active.
@@ -19,6 +20,7 @@ import androidx.room.PrimaryKey
 data class BreakpointRuleEntity(
     @PrimaryKey val id: String,
     val urlPattern: String,
+    val port: Int? = null,
     val method: String?,
     val phase: String,
     val enabled: Boolean,

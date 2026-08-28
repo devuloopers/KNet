@@ -94,12 +94,13 @@ fun KNetWorkspaceHost(
                     protocolDefinitions = breakpointState.protocolDefinitions,
                     initialProtocolValues = trafficState.prefilledBreakpointProtocolValues,
                     onDismiss = trafficViewModel::closeBreakpointDrawer,
-                    onSave = { urlPattern, method, phase, enabled, protocolId, protocolValues ->
+                    onSave = { urlPattern, portCriteria, method, phase, enabled, protocolId, protocolValues ->
                         breakpointViewModel.saveRule(
                             urlPattern,
                             method,
                             phase,
                             enabled,
+                            portCriteria,
                             protocolId,
                             protocolValues,
                         )

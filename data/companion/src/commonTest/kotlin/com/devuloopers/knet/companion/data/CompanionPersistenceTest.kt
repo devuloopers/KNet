@@ -6,6 +6,7 @@ import com.devuloopers.knet.companion.data.store.CompanionRecordStore
 import com.devuloopers.knet.companion.model.CompanionBootstrapId
 import com.devuloopers.knet.companion.model.CompanionBootstrapSecret
 import com.devuloopers.knet.companion.model.CompanionCredentialReference
+import com.devuloopers.knet.companion.model.CompanionCertificateEnrollment
 import com.devuloopers.knet.companion.model.CompanionDesktopId
 import com.devuloopers.knet.companion.model.CompanionPairingInvitation
 import com.devuloopers.knet.companion.model.CompanionPairingBootstrap
@@ -92,7 +93,7 @@ class CompanionPersistenceTest {
     @Test
     fun legacyRegistrationSchemaFailsClosed() {
         val legacy = """{"schema_version":1,"active_desktop_id":"desktop-1","registrations":[]}"""
-        val repository = VersionedCompanionRegistrationRepository(MemoryRecordStore(legacy))
+        val repository = VersionedCompanionStateRepository(MemoryRecordStore(legacy))
 
         assertTrue(repository.registrations.value.isEmpty())
         assertNull(repository.activeRegistration.value)
@@ -101,11 +102,11 @@ class CompanionPersistenceTest {
     @Test
     fun repositoryRestoresActiveRegistrationWithoutCredentialMaterial() = runTest {
         val store = MemoryRecordStore()
-        val first = VersionedCompanionRegistrationRepository(store)
+        val first = VersionedCompanionStateRepository(store)
         first.upsert(registration(), makeActive = true)
 
         assertFalse(store.content.value.orEmpty().contains("issued-secret"))
-        val restored = VersionedCompanionRegistrationRepository(store)
+        val restored = VersionedCompanionStateRepository(store)
         assertEquals("desktop-1", restored.activeRegistration.value?.desktopId?.value)
         assertEquals(1, restored.registrations.value.size)
         assertTrue(
@@ -114,9 +115,72 @@ class CompanionPersistenceTest {
     }
 
     @Test
+    fun certificateEnrollmentRestoresForTheSameDesktopRoot() = runTest {
+        val store = MemoryRecordStore()
+        val registration = registration()
+        val first = VersionedCompanionStateRepository(store)
+        first.upsert(registration, makeActive = true)
+        assertTrue(
+            first.complete(
+                CompanionCertificateEnrollment(
+                    desktopId = registration.desktopId,
+                    rootCertificateSha256 = registration.rootCertificateSha256,
+                    completedAtEpochMillis = 1_500L,
+                ),
+            ),
+        )
+
+        val restored = VersionedCompanionStateRepository(store)
+
+        assertEquals(1, restored.enrollments.value.size)
+        assertTrue(restored.enrollments.value.single().matches(registration))
+    }
+
+    @Test
+    fun rotatingDesktopRootInvalidatesPreviousCertificateEnrollment() = runTest {
+        val repository = VersionedCompanionStateRepository(MemoryRecordStore())
+        val registration = registration()
+        repository.upsert(registration, makeActive = true)
+        assertTrue(
+            repository.complete(
+                CompanionCertificateEnrollment(
+                    registration.desktopId,
+                    registration.rootCertificateSha256,
+                    1_500L,
+                ),
+            ),
+        )
+
+        repository.upsert(
+            registration.copy(rootCertificateSha256 = Sha256Fingerprint("c".repeat(64))),
+            makeActive = true,
+        )
+
+        assertTrue(repository.enrollments.value.isEmpty())
+    }
+
+    @Test
+    fun removingRegistrationAlsoRemovesItsCertificateEnrollment() = runTest {
+        val repository = VersionedCompanionStateRepository(MemoryRecordStore())
+        val registration = registration()
+        repository.upsert(registration, makeActive = true)
+        repository.complete(
+            CompanionCertificateEnrollment(
+                registration.desktopId,
+                registration.rootCertificateSha256,
+                1_500L,
+            ),
+        )
+
+        repository.remove(registration.desktopId)
+
+        assertTrue(repository.enrollments.value.isEmpty())
+    }
+
+    @Test
     fun deletingActiveRegistrationSelectsNextRegistration() = runTest {
         val store = MemoryRecordStore()
-        val repository = VersionedCompanionRegistrationRepository(store)
+        val repository = VersionedCompanionStateRepository(store)
         repository.upsert(registration("desktop-1", "First"), makeActive = true)
         repository.upsert(registration("desktop-2", "Second"), makeActive = false)
 
@@ -128,7 +192,7 @@ class CompanionPersistenceTest {
     @Test
     fun authenticatedLegacyIdentityMigrationIsPersistedAsOneActiveCanonicalRecord() = runTest {
         val store = MemoryRecordStore()
-        val repository = VersionedCompanionRegistrationRepository(store)
+        val repository = VersionedCompanionStateRepository(store)
         val legacy = registration("legacy-desktop", "KNet Desktop")
         val canonical = legacy.copy(
             desktopId = CompanionDesktopId("11111111-1111-4111-8111-111111111111"),
@@ -141,7 +205,7 @@ class CompanionPersistenceTest {
 
         assertEquals(listOf(canonical), repository.registrations.value)
         assertEquals(canonical, repository.activeRegistration.value)
-        val restored = VersionedCompanionRegistrationRepository(store)
+        val restored = VersionedCompanionStateRepository(store)
         assertEquals(listOf(canonical), restored.registrations.value)
         assertEquals(canonical, restored.activeRegistration.value)
     }

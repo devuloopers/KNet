@@ -4,6 +4,7 @@ import com.devuloopers.knet.application.coordinator.breakpoint.BreakpointCoordin
 import com.devuloopers.knet.application.contract.breakpoint.BreakpointProtocolRegistry
 import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaValue
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
+import com.devuloopers.knet.domain.rules.model.BreakpointPortCriteria
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.engine.protocol.inspector.graphql.GraphQLBreakpointExtension
 import com.devuloopers.knet.engine.protocol.inspector.graphql.GraphQLBreakpointProtocol
@@ -43,6 +44,7 @@ class RulesRepositoryProtocolCriteriaTest {
             val rule = BreakpointRule(
                 id = "graphql-persisted",
                 urlPattern = "*graphql*",
+                portCriteria = BreakpointPortCriteria.Exact(8443),
                 method = HttpMethod.POST,
                 phase = BreakpointPhase.RESPONSE,
                 protocolCriteria = criteria,
@@ -53,11 +55,13 @@ class RulesRepositoryProtocolCriteriaTest {
             val restored = repository.rulesFlow.first { rules -> rules.any { it.id == rule.id } }.single()
             assertEquals(criteria, restored.protocolCriteria)
             assertEquals(rule.phase, restored.phase)
+            assertEquals(BreakpointPortCriteria.Exact(8443), restored.portCriteria)
             assertTrue(coordinator.requirements.value.hasResponseRules)
 
             val stored = database.breakpointRuleDao().getAllRules().single()
             assertEquals(GraphQLBreakpointProtocol.id.value, stored.protocolCriteriaType)
             assertEquals(criteria.encodedPayload, stored.protocolCriteriaData)
+            assertEquals(8443, stored.port)
         } finally {
             database.close()
             root.deleteRecursively()

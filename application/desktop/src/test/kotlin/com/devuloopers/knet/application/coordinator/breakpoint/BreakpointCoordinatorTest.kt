@@ -16,6 +16,7 @@ import com.devuloopers.knet.traffic.model.http.HttpStatus
 import com.devuloopers.knet.traffic.model.http.HeaderField
 import com.devuloopers.knet.traffic.model.http.HeaderName
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
+import com.devuloopers.knet.domain.rules.model.BreakpointPortCriteria
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.rules.model.BreakpointProtocolId
 import com.devuloopers.knet.domain.rules.model.ProtocolMatchCriteria
@@ -31,6 +32,31 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class BreakpointCoordinatorTest {
+    @Test
+    fun `typed port criterion is enforced independently from portless URL pattern`() = runTest {
+        val coordinator = BreakpointCoordinator()
+        coordinator.replaceRules(
+            listOf(
+                BreakpointRule(
+                    id = "https-default",
+                    phase = BreakpointPhase.REQUEST,
+                    urlPattern = "https://api.example.com/v1/items",
+                    portCriteria = BreakpointPortCriteria.Exact(443),
+                ),
+            ),
+        )
+
+        assertSame(
+            BreakpointDecision.ContinueUnchanged,
+            coordinator.intercept(candidate("wrong-port", byteArrayOf(1), port = 8443)),
+        )
+        val matching = async { coordinator.intercept(candidate("matching-port", byteArrayOf(1), port = 443)) }
+        runCurrent()
+        val pending = coordinator.pendingBreakpoints.value.single()
+        assertTrue(coordinator.resolve(pending.id, BreakpointDecision.ContinueUnchanged))
+        assertSame(BreakpointDecision.ContinueUnchanged, matching.await())
+    }
+
     @Test
     fun `compiled rule publishes bounded pending record and resolves once`() = runTest {
         val coordinator = BreakpointCoordinator(
@@ -252,7 +278,7 @@ class BreakpointCoordinatorTest {
         assertSame(BreakpointDecision.ContinueUnchanged, decision.await())
     }
 
-    private fun candidate(id: String, body: ByteArray) = BreakpointCandidate(
+    private fun candidate(id: String, body: ByteArray, port: Int? = null) = BreakpointCandidate(
         exchangeId = ExchangeId(id),
         phase = BreakpointPhase.REQUEST,
         request = HttpRequestSnapshot(
@@ -260,7 +286,7 @@ class BreakpointCoordinatorTest {
                 method = HttpMethod.fromToken("POST"),
                 target = RequestTarget.Absolute(
                     scheme = HttpScheme.fromToken("https"),
-                    authority = Authority("api.example.com"),
+                    authority = Authority("api.example.com", port),
                     pathAndQuery = "/v1/items",
                 ),
                 protocol = ApplicationProtocol.fromToken("HTTP/1.1"),

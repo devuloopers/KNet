@@ -3,6 +3,7 @@ package com.devuloopers.knet.companion.presentation
 import com.devuloopers.knet.companion.model.CompanionDesktopDisplayName
 import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.companion.model.CompanionCertificateState
+import com.devuloopers.knet.companion.model.CompanionCertificateEnrollment
 import com.devuloopers.knet.companion.model.CompanionCredentialReference
 import com.devuloopers.knet.companion.model.CompanionDesktopId
 import com.devuloopers.knet.companion.model.CompanionRegistration
@@ -12,8 +13,6 @@ import com.devuloopers.knet.companion.model.Sha256Fingerprint
 import com.devuloopers.knet.companion.presentation.flow.CompanionFlowStage
 import com.devuloopers.knet.companion.presentation.flow.resolveFlowStage
 import com.devuloopers.knet.companion.presentation.state.CompanionUiState
-import com.devuloopers.knet.companion.presentation.state.CompanionCertificateExportState
-import com.devuloopers.knet.companion.presentation.state.CompanionCertificateSetupAcknowledgement
 import com.devuloopers.knet.identity.RegisteredDeviceId
 import com.devuloopers.knet.pairing.DeviceScope
 import kotlin.test.Test
@@ -30,7 +29,7 @@ class CompanionFlowStageTest {
     }
 
     @Test
-    fun `active registration remains on certificate until verified setup is acknowledged`() {
+    fun `active registration remains on certificate until onboarding completion is persisted`() {
         val registration = registration()
         val trusted = CompanionCertificateState.Trusted(registration.rootCertificateSha256, 2_000L)
 
@@ -53,13 +52,13 @@ class CompanionFlowStageTest {
     }
 
     @Test
-    fun `verified setup enters home only after explicit acknowledgement`() {
+    fun `matching durable enrollment restores home independently from transient verification`() {
         val registration = registration()
         val trusted = CompanionCertificateState.Trusted(registration.rootCertificateSha256, 2_000L)
-        val saved = CompanionCertificateExportState.Saved(
-            desktopId = registration.desktopId,
-            fileName = "knet-root-ca.crt",
-            locationDescription = "Downloads",
+        val enrollment = CompanionCertificateEnrollment(
+            registration.desktopId,
+            registration.rootCertificateSha256,
+            completedAtEpochMillis = 2_000L,
         )
 
         assertEquals(
@@ -67,16 +66,31 @@ class CompanionFlowStageTest {
             CompanionUiState(
                 activeRegistration = registration,
                 certificate = trusted,
-                certificateExport = saved,
             ).resolveFlowStage(),
         )
         assertEquals(
             CompanionFlowStage.INSPECTION_HOME,
             CompanionUiState(
                 activeRegistration = registration,
-                certificate = trusted,
-                certificateExport = saved,
-                certificateSetupAcknowledgement = CompanionCertificateSetupAcknowledgement.ACKNOWLEDGED,
+                certificate = CompanionCertificateState.Verifying,
+                certificateEnrollment = enrollment,
+            ).resolveFlowStage(),
+        )
+    }
+
+    @Test
+    fun `enrollment for a previous root cannot bypass certificate setup`() {
+        val registration = registration()
+
+        assertEquals(
+            CompanionFlowStage.CERTIFICATE_SETUP,
+            CompanionUiState(
+                activeRegistration = registration,
+                certificateEnrollment = CompanionCertificateEnrollment(
+                    registration.desktopId,
+                    Sha256Fingerprint("c".repeat(64)),
+                    completedAtEpochMillis = 2_000L,
+                ),
             ).resolveFlowStage(),
         )
     }

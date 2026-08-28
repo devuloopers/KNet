@@ -4,10 +4,12 @@ import com.devuloopers.knet.traffic.id.ConnectionId
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.model.body.MessageBodyRef
+import com.devuloopers.knet.traffic.model.http.HeaderField
+import com.devuloopers.knet.traffic.model.http.HttpScheme
 import com.devuloopers.knet.traffic.model.http.RequestHead
 import com.devuloopers.knet.traffic.model.http.RequestTarget
 import com.devuloopers.knet.traffic.model.http.ResponseHead
-import com.devuloopers.knet.traffic.model.http.HeaderField
+import com.devuloopers.knet.traffic.model.http.StandardHttpScheme
 
 /**
  * Monotonic lifecycle state of one logical request/response exchange.
@@ -73,16 +75,62 @@ public data class HttpRequestSnapshot(
 public fun HttpRequestSnapshot.absoluteUrl(): String = when (val target = head.target) {
     is RequestTarget.Absolute -> {
         val port = target.authority.port?.let { ":$it" }.orEmpty()
-        "${target.scheme.token}://${target.authority.host}$port${target.pathAndQuery}"
+        "${target.scheme.token}://${target.authority.urlHost()}$port${target.pathAndQuery}"
     }
     is RequestTarget.Origin -> target.pathAndQuery
     is RequestTarget.AuthorityForm -> {
         val port = target.authority.port?.let { ":$it" }.orEmpty()
-        "${target.authority.host}$port"
+        "${target.authority.urlHost()}$port"
     }
     RequestTarget.Asterisk -> "*"
     is RequestTarget.Custom -> target.value
 }
+
+/**
+ * Renders a user-facing URL while retaining every non-default destination port.
+ *
+ * HTTP `:80` and HTTPS `:443` are redundant presentation details. This formatter removes only
+ * those matching scheme defaults; the canonical request target and its port remain unchanged.
+ */
+public fun HttpRequestSnapshot.displayUrl(): String = when (val target = head.target) {
+    is RequestTarget.Absolute -> {
+        val defaultPort = when (val scheme = target.scheme) {
+            is HttpScheme.Standard -> when (scheme.value) {
+                StandardHttpScheme.HTTP -> 80
+                StandardHttpScheme.HTTPS -> 443
+            }
+            is HttpScheme.Custom -> null
+        }
+        val port = target.authority.port
+            ?.takeUnless { it == defaultPort }
+            ?.let { ":$it" }
+            .orEmpty()
+        "${target.scheme.token}://${target.authority.urlHost()}$port${target.pathAndQuery}"
+    }
+    else -> absoluteUrl()
+}
+
+/** Renders the same canonical request target without an authority port for independent port matching. */
+public fun HttpRequestSnapshot.absoluteUrlWithoutPort(): String = when (val target = head.target) {
+    is RequestTarget.Absolute -> "${target.scheme.token}://${target.authority.urlHost()}${target.pathAndQuery}"
+    is RequestTarget.Origin -> target.pathAndQuery
+    is RequestTarget.AuthorityForm -> target.authority.urlHost()
+    RequestTarget.Asterisk -> "*"
+    is RequestTarget.Custom -> target.value
+}
+
+/** Returns the destination port retained by the typed request target, when one is available. */
+public fun HttpRequestSnapshot.destinationPort(): Int? = when (val target = head.target) {
+    is RequestTarget.Absolute -> target.authority.port
+    is RequestTarget.AuthorityForm -> target.authority.port
+    is RequestTarget.Origin,
+    RequestTarget.Asterisk,
+    is RequestTarget.Custom,
+    -> null
+}
+
+private fun com.devuloopers.knet.traffic.model.http.Authority.urlHost(): String =
+    if (host.contains(':')) "[$host]" else host
 
 /**
  * Canonical immutable HTTP response shared by API Studio, Traffic, Breakpoints, inspectors,

@@ -1,8 +1,5 @@
 package com.devuloopers.knet.companion.presentation.flow
 
-import com.devuloopers.knet.companion.model.CompanionCertificateState
-import com.devuloopers.knet.companion.presentation.state.CompanionCertificateExportState
-import com.devuloopers.knet.companion.presentation.state.CompanionCertificateSetupAcknowledgement
 import com.devuloopers.knet.companion.presentation.state.CompanionUiState
 
 /** Closed set of root companion screens selected from authoritative presentation state. */
@@ -13,21 +10,19 @@ public enum class CompanionFlowStage {
     /** An active desktop still requires certificate download, verification, or explicit continuation. */
     CERTIFICATE_SETUP,
 
-    /** Verified setup was explicitly acknowledged and operational inspection controls may be shown. */
+    /** Certificate onboarding was durably completed for the active desktop root. */
     INSPECTION_HOME,
 }
 
 /**
  * Resolves the only root screen the current state is allowed to display.
  *
- * Pairing and certificate trust take precedence over restored navigation state. Home is allowed only when the
- * expected certificate was saved, authoritatively verified, and explicitly acknowledged by the user.
+ * The durable enrollment controls onboarding navigation. Live certificate verification remains separate and gates
+ * inspection actions, so a temporarily unreachable desktop does not send an already enrolled user through download
+ * setup again.
  */
 public fun CompanionUiState.resolveFlowStage(): CompanionFlowStage = when {
     activeRegistration == null -> CompanionFlowStage.CONNECT_DESKTOP
-    certificateSetupAcknowledgement == CompanionCertificateSetupAcknowledgement.ACKNOWLEDGED &&
-        certificate is CompanionCertificateState.Trusted &&
-        certificateExport is CompanionCertificateExportState.Saved ->
-        CompanionFlowStage.INSPECTION_HOME
+    certificateEnrollment?.matches(activeRegistration) == true -> CompanionFlowStage.INSPECTION_HOME
     else -> CompanionFlowStage.CERTIFICATE_SETUP
 }

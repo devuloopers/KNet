@@ -14,6 +14,7 @@ import com.devuloopers.knet.application.usecase.breakpoint.ResolveBreakpointUseC
 import com.devuloopers.knet.application.usecase.breakpoint.BreakpointProtocolRuleUseCase
 import com.devuloopers.knet.domain.rules.model.BreakpointProtocolId
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
+import com.devuloopers.knet.domain.rules.model.BreakpointPortCriteria
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.rules.usecase.*
 import com.devuloopers.knet.domain.request.descriptor.RequestDescriptorBody
@@ -280,6 +281,7 @@ class BreakpointManagerViewModel(
         method: HttpMethod?,
         phase: BreakpointPhase,
         enabled: Boolean,
+        portCriteria: BreakpointPortCriteria = BreakpointPortCriteria.Any,
         protocolId: BreakpointProtocolId = BreakpointProtocolId.HTTP,
         protocolValues: List<ProtocolCriteriaValue> = emptyList(),
     ) {
@@ -292,6 +294,7 @@ class BreakpointManagerViewModel(
             id = targetId,
             name = urlPattern,
             urlPattern = urlPattern,
+            portCriteria = portCriteria,
             method = method,
             phase = phase,
             enabled = enabled,

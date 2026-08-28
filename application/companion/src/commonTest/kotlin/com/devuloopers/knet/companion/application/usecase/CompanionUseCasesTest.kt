@@ -3,6 +3,7 @@ package com.devuloopers.knet.companion.application.usecase
 import com.devuloopers.knet.companion.model.CompanionDesktopDisplayName
 import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateArtifact
+import com.devuloopers.knet.companion.application.contract.CompanionCertificateEnrollmentRepository
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateDownloadResult
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateInstallationArtifactSource
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateTrustVerifier
@@ -26,6 +27,7 @@ import com.devuloopers.knet.companion.application.contract.CompanionTransport
 import com.devuloopers.knet.companion.application.contract.CompanionTransportResult
 import com.devuloopers.knet.companion.application.contract.InvitationDecodeResult
 import com.devuloopers.knet.companion.model.CompanionCertificateState
+import com.devuloopers.knet.companion.model.CompanionCertificateEnrollment
 import com.devuloopers.knet.companion.model.CompanionBootstrapId
 import com.devuloopers.knet.companion.model.CompanionBootstrapSecret
 import com.devuloopers.knet.companion.model.CompanionConnectionState
@@ -387,6 +389,46 @@ class CompanionUseCasesTest {
     }
 
     @Test
+    fun completingCertificateEnrollmentReverifiesAndPersistsTheExactActiveRoot() = runTest {
+        val active = registration()
+        val repository = FakeRegistrationRepository().apply {
+            mutableRegistrations.value = listOf(active)
+            mutableActive.value = active
+        }
+        val credentials = FakeCredentialStore().apply {
+            values[active.credentialReference] = "issued-secret"
+        }
+        val enrollmentRepository = FakeCertificateEnrollmentRepository(repository)
+        val verify = VerifyCompanionCertificateTrustUseCase(
+            repository,
+            credentials,
+            CompanionRootCertificateSource { _, _ ->
+                CompanionCertificateDownloadResult.Downloaded(
+                    CompanionCertificateArtifact(byteArrayOf(1), "knet-root-ca.crt"),
+                )
+            },
+            CompanionCertificateTrustVerifier { registration, _, _ ->
+                CompanionCertificateState.Trusted(registration.rootCertificateSha256, 1_500L)
+            },
+            nowEpochMillis = { 1_000L },
+        )
+        val useCase = CompleteCompanionCertificateEnrollmentUseCase(
+            repository,
+            enrollmentRepository,
+            verify,
+            nowEpochMillis = { 1_600L },
+        )
+
+        val result = assertIs<CompleteCompanionCertificateEnrollmentResult.Completed>(
+            useCase.execute(active.desktopId),
+        )
+
+        assertEquals(active.rootCertificateSha256, result.enrollment.rootCertificateSha256)
+        assertEquals(1_600L, result.enrollment.completedAtEpochMillis)
+        assertEquals(listOf(result.enrollment), enrollmentRepository.enrollments.value)
+    }
+
+    @Test
     fun certificateDownloadUsesThePlatformInstallationArtifactSource() = runTest {
         val active = registration()
         val repository = FakeRegistrationRepository().apply {
@@ -460,12 +502,48 @@ class CompanionUseCasesTest {
             nowEpochMillis = { 1_000L },
         )
 
-        val result = assertIs<CompanionCertificateState.Rejected>(
+        val result = assertIs<CompanionCertificateState.VerificationDeferred>(
             useCase.execute(CompanionDesktopId("desktop-2")),
         )
 
         assertEquals(CompanionFailureCode.REGISTRATION_NOT_FOUND, result.reason.code)
         assertEquals(0, sourceCalls)
+    }
+
+    @Test
+    fun unavailableDesktopDefersCertificateVerificationWithoutReportingTrustRejection() = runTest {
+        val active = registration()
+        val repository = FakeRegistrationRepository().apply {
+            mutableRegistrations.value = listOf(active)
+            mutableActive.value = active
+        }
+        val credentials = FakeCredentialStore().apply {
+            values[active.credentialReference] = "issued-secret"
+        }
+        var verifierCalls = 0
+        val useCase = VerifyCompanionCertificateTrustUseCase(
+            repository,
+            credentials,
+            CompanionRootCertificateSource { _, _ ->
+                CompanionCertificateDownloadResult.Failed(
+                    CompanionFailure(
+                        CompanionFailureCode.TRANSPORT_UNAVAILABLE,
+                        "Desktop unavailable.",
+                        true,
+                    ),
+                )
+            },
+            CompanionCertificateTrustVerifier { _, _, _ ->
+                verifierCalls += 1
+                error("must not run")
+            },
+            nowEpochMillis = { 1_000L },
+        )
+
+        val result = assertIs<CompanionCertificateState.VerificationDeferred>(useCase.execute())
+
+        assertEquals(CompanionFailureCode.TRANSPORT_UNAVAILABLE, result.reason.code)
+        assertEquals(0, verifierCalls)
     }
 
     private class StartEnvironment(preparation: CompanionInspectionPreparationResult) {
@@ -555,6 +633,30 @@ class CompanionUseCasesTest {
         override suspend fun read(reference: CompanionCredentialReference): String? = values[reference]
         override suspend fun remove(reference: CompanionCredentialReference) {
             values.remove(reference)
+        }
+    }
+
+    private class FakeCertificateEnrollmentRepository(
+        private val registrations: CompanionRegistrationRepository,
+    ) : CompanionCertificateEnrollmentRepository {
+        private val mutableEnrollments = MutableStateFlow<List<CompanionCertificateEnrollment>>(emptyList())
+        override val enrollments: StateFlow<List<CompanionCertificateEnrollment>> = mutableEnrollments
+
+        override suspend fun complete(enrollment: CompanionCertificateEnrollment): Boolean {
+            val registration = registrations.registrations.value.firstOrNull {
+                it.desktopId == enrollment.desktopId
+            } ?: return false
+            if (!enrollment.matches(registration)) return false
+            mutableEnrollments.value = mutableEnrollments.value.filterNot {
+                it.desktopId == enrollment.desktopId
+            } + enrollment
+            return true
+        }
+
+        override suspend fun removeEnrollment(desktopId: CompanionDesktopId): Boolean {
+            val existed = mutableEnrollments.value.any { it.desktopId == desktopId }
+            mutableEnrollments.value = mutableEnrollments.value.filterNot { it.desktopId == desktopId }
+            return existed
         }
     }
 

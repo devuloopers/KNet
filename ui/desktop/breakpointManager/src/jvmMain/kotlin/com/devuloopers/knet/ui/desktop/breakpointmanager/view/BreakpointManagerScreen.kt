@@ -163,12 +163,13 @@ fun BreakpointManagerScreen(
             protocolDefinitions = state.protocolDefinitions,
             initialProtocolValues = state.editingProtocolValues,
             onDismiss = viewModel::closeDrawer,
-            onSave = { urlPattern, method, phase, enabled, protocolId, protocolValues ->
+            onSave = { urlPattern, portCriteria, method, phase, enabled, protocolId, protocolValues ->
                 viewModel.saveRule(
                     urlPattern,
                     method,
                     phase,
                     enabled,
+                    portCriteria,
                     protocolId,
                     protocolValues,
                 )

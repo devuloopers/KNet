@@ -37,7 +37,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.application.contract.breakpoint.PendingProtocolMessageBreakpoint
 import com.devuloopers.knet.traffic.model.TrafficDirection
-import com.devuloopers.knet.traffic.model.absoluteUrl
+import com.devuloopers.knet.traffic.model.displayUrl
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
 import com.devuloopers.knet.ui.core.components.drawer.KNetSideDrawer
@@ -158,7 +158,7 @@ private fun MessageQueue(
                         ),
                     )
                     Text(
-                        text = item.candidate.request.absoluteUrl(),
+                        text = item.candidate.request.displayUrl(),
                         style = KNetTheme.typography.codeSmall.copy(color = colors.textSecondary),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -211,7 +211,7 @@ private fun MessageEditor(
 
         Spacer(Modifier.height(14.dp))
         Text(
-            text = candidate.request.absoluteUrl(),
+            text = candidate.request.displayUrl(),
             style = KNetTheme.typography.codeSmall.copy(color = colors.textPrimary),
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

@@ -5,6 +5,7 @@ import com.devuloopers.knet.application.contract.breakpoint.PendingProtocolMessa
 import com.devuloopers.knet.application.contract.breakpoint.BreakpointProtocolDefinition
 import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaValue
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
+import com.devuloopers.knet.domain.rules.model.BreakpointPortCriteria
 import com.devuloopers.knet.domain.request.descriptor.RequestDescriptor
 
 /**
@@ -50,7 +51,13 @@ data class BreakpointManagerState(
             val query = searchQuery.trim().lowercase()
             return rules.filter { rule ->
                 rule.urlPattern.lowercase().contains(query) ||
+                        rule.portCriteria.searchLabel().contains(query) ||
                         (rule.method?.token?.lowercase()?.contains(query) ?: "all".contains(query))
             }
         }
+}
+
+private fun BreakpointPortCriteria.searchLabel(): String = when (this) {
+    BreakpointPortCriteria.Any -> "any"
+    is BreakpointPortCriteria.Exact -> value.toString()
 }

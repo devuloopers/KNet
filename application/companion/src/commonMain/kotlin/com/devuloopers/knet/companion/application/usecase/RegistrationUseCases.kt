@@ -1,6 +1,7 @@
 package com.devuloopers.knet.companion.application.usecase
 
 import com.devuloopers.knet.companion.application.contract.CompanionCredentialStore
+import com.devuloopers.knet.companion.application.contract.CompanionCertificateEnrollmentRepository
 import com.devuloopers.knet.companion.application.contract.CompanionInspectionController
 import com.devuloopers.knet.companion.application.contract.CompanionRegistrationRepository
 import com.devuloopers.knet.companion.application.contract.CompanionTransport
@@ -26,6 +27,7 @@ public class SelectCompanionRegistrationUseCase(
 /** Removes all local trust for one desktop after stopping active network resources. */
 public class ForgetCompanionDesktopUseCase(
     private val registrations: CompanionRegistrationRepository,
+    private val certificateEnrollments: CompanionCertificateEnrollmentRepository,
     private val credentials: CompanionCredentialStore,
     private val inspection: CompanionInspectionController,
     private val transport: CompanionTransport,
@@ -40,8 +42,8 @@ public class ForgetCompanionDesktopUseCase(
             }
         }
         val removed = registrations.remove(desktopId) ?: return false
+        certificateEnrollments.removeEnrollment(desktopId)
         credentials.remove(removed.credentialReference)
         return true
     }
 }
-

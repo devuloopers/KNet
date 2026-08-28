@@ -25,6 +25,13 @@ public sealed interface CompanionCertificateState {
     public data object InstallationRequired : CompanionCertificateState
     public data object Verifying : CompanionCertificateState
 
+    /** Trust could not be re-evaluated because a recoverable dependency such as the desktop was unavailable. */
+    public data class VerificationDeferred(public val reason: CompanionFailure) : CompanionCertificateState {
+        init {
+            require(reason.recoverable) { "Deferred certificate verification requires a recoverable reason." }
+        }
+    }
+
     /** A successful end-to-end platform trust verification. */
     public data class Trusted(
         public val rootCertificateSha256: Sha256Fingerprint,

@@ -25,7 +25,7 @@ import com.devuloopers.knet.application.contract.breakpoint.BreakpointResponseEd
 import com.devuloopers.knet.application.contract.breakpoint.PendingBreakpoint
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.request.descriptor.RequestDescriptor
-import com.devuloopers.knet.traffic.model.absoluteUrl
+import com.devuloopers.knet.traffic.model.displayUrl
 import com.devuloopers.knet.traffic.model.http.HeaderField
 import com.devuloopers.knet.traffic.model.http.HeaderName
 import com.devuloopers.knet.traffic.model.http.HttpStatus
@@ -317,7 +317,7 @@ fun LiveInterceptDrawer(
 
                         EndpointCard(
                             method = request.head.method.token,
-                            endpoint = request.absoluteUrl(),
+                            endpoint = request.displayUrl(),
                             methodColor = methodColor,
                             modifier = Modifier.fillMaxWidth()
                         )

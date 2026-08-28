@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateArtifact
+import com.devuloopers.knet.companion.application.contract.CompanionCertificateEnrollmentRepository
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateDownloadResult
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateInstallationArtifactSource
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateStoreChangeObserver
@@ -35,10 +36,13 @@ import com.devuloopers.knet.companion.application.contract.CompanionTransportRes
 import com.devuloopers.knet.companion.application.contract.InvitationDecodeResult
 import com.devuloopers.knet.companion.application.usecase.AcceptPairingInvitationUseCase
 import com.devuloopers.knet.companion.application.usecase.ConnectCompanionUseCase
+import com.devuloopers.knet.companion.application.usecase.CompleteCompanionCertificateEnrollmentUseCase
+import com.devuloopers.knet.companion.application.usecase.CompanionDesktopAvailabilityMonitor
 import com.devuloopers.knet.companion.application.usecase.DownloadCompanionRootCertificateUseCase
 import com.devuloopers.knet.companion.application.usecase.MaintainCompanionEndpointUseCase
 import com.devuloopers.knet.companion.application.usecase.ForgetCompanionDesktopUseCase
 import com.devuloopers.knet.companion.application.usecase.ObserveCompanionCertificateStoreChangesUseCase
+import com.devuloopers.knet.companion.application.usecase.ObserveCompanionCertificateEnrollmentsUseCase
 import com.devuloopers.knet.companion.application.usecase.ObserveCompanionConnectionUseCase
 import com.devuloopers.knet.companion.application.usecase.ObserveCompanionInspectionUseCase
 import com.devuloopers.knet.companion.application.usecase.ObserveCompanionNetworkUseCase
@@ -52,11 +56,13 @@ import com.devuloopers.knet.companion.application.usecase.StartCompanionInspecti
 import com.devuloopers.knet.companion.application.usecase.StopCompanionInspectionUseCase
 import com.devuloopers.knet.companion.application.usecase.VerifyCompanionCertificateTrustUseCase
 import com.devuloopers.knet.companion.model.CompanionCertificateState
+import com.devuloopers.knet.companion.model.CompanionCertificateEnrollment
 import com.devuloopers.knet.companion.model.CompanionBootstrapId
 import com.devuloopers.knet.companion.model.CompanionBootstrapSecret
 import com.devuloopers.knet.companion.model.CompanionConnectionState
 import com.devuloopers.knet.companion.model.CompanionCredentialReference
 import com.devuloopers.knet.companion.model.CompanionDesktopId
+import com.devuloopers.knet.companion.model.CompanionDesktopAvailability
 import com.devuloopers.knet.companion.model.CompanionDeviceIdentity
 import com.devuloopers.knet.companion.model.CompanionDeviceDisplayName
 import com.devuloopers.knet.companion.model.CompanionDiscoveryState
@@ -103,6 +109,7 @@ import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.awaitCancellation
 
 @OptIn(ExperimentalCoroutinesApi::class)
 private fun runCompanionViewModelTest(block: suspend TestScope.() -> Unit) = runTest {
@@ -128,6 +135,30 @@ class CompanionViewModelTest {
         assertIs<CompanionNetworkState.Available>(viewModel.state.value.network)
         fixture.clearViewModelStore()
     }
+
+    @Test
+    fun completedCertificateEnrollmentRestoresHomeBeforeBackgroundVerificationRuns() =
+        runCompanionViewModelTest {
+            val activeRegistration = registration()
+            val fixture = Fixture(activeRegistration = activeRegistration)
+            fixture.repository.mutableEnrollments.value = listOf(
+                CompanionCertificateEnrollment(
+                    activeRegistration.desktopId,
+                    activeRegistration.rootCertificateSha256,
+                    completedAtEpochMillis = 900L,
+                ),
+            )
+            fixture.credentials.values[activeRegistration.credentialReference] = "credential"
+
+            val viewModel = fixture.viewModel()
+
+            assertEquals(CompanionFlowStage.INSPECTION_HOME, viewModel.state.value.resolveFlowStage())
+            assertIs<CompanionCertificateState.Unknown>(viewModel.state.value.certificate)
+            advanceUntilIdle()
+            assertIs<CompanionCertificateState.Trusted>(viewModel.state.value.certificate)
+            assertEquals(CompanionFlowStage.INSPECTION_HOME, viewModel.state.value.resolveFlowStage())
+            fixture.clearViewModelStore()
+        }
 
     @Test
     fun invitationSecretNeverEntersObservableUiState() = runCompanionViewModelTest {
@@ -397,7 +428,44 @@ class CompanionViewModelTest {
     }
 
     @Test
-    fun backgroundTrustRecheckKeepsVerifiedHomeStableUntilItsResultArrives() = runCompanionViewModelTest {
+    fun authenticatedAvailabilityMonitorIsOwnedOnlyByIdleOperationalHome() = runCompanionViewModelTest {
+        val registration = registration()
+        val fixture = Fixture(activeRegistration = registration)
+        fixture.credentials.values[registration.credentialReference] = "credential"
+        val viewModel = fixture.viewModel()
+        advanceUntilIdle()
+        assertEquals(0, fixture.desktopAvailabilityMonitor.executeCalls)
+        val exportEffect = async { viewModel.effects.first() }
+
+        viewModel.dispatch(CompanionAction.DownloadCertificateRequested)
+        advanceUntilIdle()
+        exportEffect.await()
+        viewModel.dispatch(
+            CompanionAction.CertificateExportCompleted(
+                desktopId = registration.desktopId,
+                fileName = "KNet-Root-CA.crt",
+                locationDescription = "Downloads/KNet",
+            ),
+        )
+        advanceUntilIdle()
+        viewModel.dispatch(CompanionAction.ContinueCertificateSetupRequested)
+        advanceUntilIdle()
+
+        assertEquals(1, fixture.desktopAvailabilityMonitor.executeCalls)
+        fixture.desktopAvailabilityMonitor.publish(
+            CompanionDesktopAvailability.Available(registration.desktopId, 2_000L),
+        )
+        advanceUntilIdle()
+        assertIs<CompanionDesktopAvailability.Available>(viewModel.state.value.desktopAvailability)
+
+        viewModel.dispatch(CompanionAction.StartInspectionRequested)
+        advanceUntilIdle()
+        assertEquals(1, fixture.desktopAvailabilityMonitor.cancellationCalls)
+        fixture.clearViewModelStore()
+    }
+
+    @Test
+    fun recoverableBackgroundTrustFailureKeepsPreviouslyVerifiedCertificate() = runCompanionViewModelTest {
         val registration = registration()
         val fixture = Fixture(activeRegistration = registration)
         fixture.credentials.values[registration.credentialReference] = "credential"
@@ -416,6 +484,7 @@ class CompanionViewModelTest {
         )
         advanceUntilIdle()
         viewModel.dispatch(CompanionAction.ContinueCertificateSetupRequested)
+        advanceUntilIdle()
         assertEquals(CompanionFlowStage.INSPECTION_HOME, viewModel.state.value.resolveFlowStage())
 
         val verificationStarted = CompletableDeferred<Unit>()
@@ -423,7 +492,13 @@ class CompanionViewModelTest {
         fixture.certificateVerification = { activeRegistration ->
             verificationStarted.complete(Unit)
             releaseVerification.await()
-            CompanionCertificateState.Trusted(activeRegistration.rootCertificateSha256, 2_000L)
+            CompanionCertificateState.VerificationDeferred(
+                CompanionFailure(
+                    CompanionFailureCode.TRANSPORT_UNAVAILABLE,
+                    "Desktop unavailable.",
+                    true,
+                ),
+            )
         }
         fixture.certificateChanges.emit(Unit)
         verificationStarted.await()
@@ -432,6 +507,7 @@ class CompanionViewModelTest {
         assertEquals(CompanionFlowStage.INSPECTION_HOME, viewModel.state.value.resolveFlowStage())
         releaseVerification.complete(Unit)
         advanceUntilIdle()
+        assertIs<CompanionCertificateState.Trusted>(viewModel.state.value.certificate)
         fixture.clearViewModelStore()
     }
 
@@ -587,6 +663,7 @@ class CompanionViewModelTest {
         private val displayNameProvider = CompanionDeviceDisplayNameProvider {
             CompanionDeviceDisplayName("Android test device · ICE1")
         }
+        val desktopAvailabilityMonitor = FakeDesktopAvailabilityMonitor()
 
         fun viewModel(): CompanionViewModel {
             val connect = ConnectCompanionUseCase(
@@ -633,6 +710,7 @@ class CompanionViewModelTest {
                                 repository,
                             ) { 1_000L },
                             observeRegistrations = ObserveCompanionRegistrationsUseCase(repository),
+                            observeCertificateEnrollments = ObserveCompanionCertificateEnrollmentsUseCase(repository),
                             selectRegistration = SelectCompanionRegistrationUseCase(repository),
                             observeConnection = ObserveCompanionConnectionUseCase(transport),
                             observeNetwork = ObserveCompanionNetworkUseCase(network),
@@ -644,6 +722,7 @@ class CompanionViewModelTest {
                                 transport,
                                 connect,
                             ),
+                            monitorDesktopAvailability = desktopAvailabilityMonitor,
                             startInspection = StartCompanionInspectionUseCase(
                                 repository,
                                 connect,
@@ -660,6 +739,12 @@ class CompanionViewModelTest {
                                 nowEpochMillis = { 1_000L },
                             ),
                             verifyCertificateTrust = verifyCertificate,
+                            completeCertificateEnrollment = CompleteCompanionCertificateEnrollmentUseCase(
+                                repository,
+                                repository,
+                                verifyCertificate,
+                                nowEpochMillis = { 1_000L },
+                            ),
                             observeCertificateStoreChanges = ObserveCompanionCertificateStoreChangesUseCase(
                                 CompanionCertificateStoreChangeObserver { certificateChanges },
                             ),
@@ -669,6 +754,7 @@ class CompanionViewModelTest {
                                 pairingClient,
                             ) { 1_000L },
                             forgetDesktop = ForgetCompanionDesktopUseCase(
+                                repository,
                                 repository,
                                 credentials,
                                 inspection,
@@ -686,14 +772,21 @@ class CompanionViewModelTest {
         }
     }
 
-    private class FakeRegistrationRepository(active: CompanionRegistration?) : CompanionRegistrationRepository {
+    private class FakeRegistrationRepository(active: CompanionRegistration?) :
+        CompanionRegistrationRepository,
+        CompanionCertificateEnrollmentRepository {
         val mutableRegistrations = MutableStateFlow(active?.let(::listOf).orEmpty())
+        val mutableEnrollments = MutableStateFlow<List<CompanionCertificateEnrollment>>(emptyList())
         private val mutableActive = MutableStateFlow(active)
         override val registrations: StateFlow<List<CompanionRegistration>> = mutableRegistrations
         override val activeRegistration: StateFlow<CompanionRegistration?> = mutableActive
+        override val enrollments: StateFlow<List<CompanionCertificateEnrollment>> = mutableEnrollments
 
         override suspend fun upsert(registration: CompanionRegistration, makeActive: Boolean) {
             mutableRegistrations.value = mutableRegistrations.value.filterNot { it.desktopId == registration.desktopId } + registration
+            mutableEnrollments.value = mutableEnrollments.value.filterNot {
+                it.desktopId == registration.desktopId && !it.matches(registration)
+            }
             if (makeActive) mutableActive.value = registration
         }
 
@@ -707,8 +800,25 @@ class CompanionViewModelTest {
         override suspend fun remove(desktopId: CompanionDesktopId): CompanionRegistration? {
             val removed = mutableRegistrations.value.firstOrNull { it.desktopId == desktopId } ?: return null
             mutableRegistrations.value = mutableRegistrations.value.filterNot { it.desktopId == desktopId }
+            mutableEnrollments.value = mutableEnrollments.value.filterNot { it.desktopId == desktopId }
             if (mutableActive.value?.desktopId == desktopId) mutableActive.value = null
             return removed
+        }
+
+        override suspend fun complete(enrollment: CompanionCertificateEnrollment): Boolean {
+            val registration = mutableRegistrations.value.firstOrNull { it.desktopId == enrollment.desktopId }
+                ?: return false
+            if (!enrollment.matches(registration)) return false
+            mutableEnrollments.value = mutableEnrollments.value.filterNot {
+                it.desktopId == enrollment.desktopId
+            } + enrollment
+            return true
+        }
+
+        override suspend fun removeEnrollment(desktopId: CompanionDesktopId): Boolean {
+            val existed = mutableEnrollments.value.any { it.desktopId == desktopId }
+            mutableEnrollments.value = mutableEnrollments.value.filterNot { it.desktopId == desktopId }
+            return existed
         }
 
         override suspend fun migrateIdentity(
@@ -745,6 +855,26 @@ class CompanionViewModelTest {
 
         override fun stop() {
             mutableState.value = CompanionDiscoveryState.Idle
+        }
+    }
+
+    private class FakeDesktopAvailabilityMonitor : CompanionDesktopAvailabilityMonitor {
+        private val mutableState = MutableStateFlow<CompanionDesktopAvailability>(CompanionDesktopAvailability.Idle)
+        override val state: StateFlow<CompanionDesktopAvailability> = mutableState
+        var executeCalls: Int = 0
+        var cancellationCalls: Int = 0
+
+        override suspend fun execute(): Nothing {
+            executeCalls += 1
+            try {
+                awaitCancellation()
+            } finally {
+                cancellationCalls += 1
+            }
+        }
+
+        fun publish(availability: CompanionDesktopAvailability) {
+            mutableState.value = availability
         }
     }
 

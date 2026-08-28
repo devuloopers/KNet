@@ -72,24 +72,27 @@ public class VerifyCompanionCertificateTrustUseCase(
             val result = readCertificateAccess(registrations, credentials, nowEpochMillis, expectedDesktopId)
         ) {
             is CertificateAccessResult.Available -> result.access
-            is CertificateAccessResult.Rejected -> return CompanionCertificateState.Rejected(result.failure)
+            is CertificateAccessResult.Rejected -> return result.failure.toCertificateVerificationState()
         }
         val artifact = try {
             when (val result = certificates.download(access.registration, access.credential)) {
                 is CompanionCertificateDownloadResult.Downloaded -> result.artifact
-                is CompanionCertificateDownloadResult.Failed -> return CompanionCertificateState.Rejected(result.failure)
+                is CompanionCertificateDownloadResult.Failed -> return result.failure.toCertificateVerificationState()
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Throwable) {
-            return CompanionCertificateState.Rejected(certificateUnavailable())
+            return CompanionCertificateState.VerificationDeferred(certificateUnavailable())
         }
         return try {
-            verifier.verify(access.registration, access.credential, artifact)
+            when (val result = verifier.verify(access.registration, access.credential, artifact)) {
+                is CompanionCertificateState.Rejected -> result.reason.toCertificateVerificationState()
+                else -> result
+            }
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Throwable) {
-            CompanionCertificateState.Rejected(certificateUnavailable())
+            CompanionCertificateState.VerificationDeferred(certificateUnavailable())
         }
     }
 }
@@ -155,3 +158,10 @@ private fun certificateUnavailable(): CompanionFailure = CompanionFailure(
     "Unable to retrieve or verify the KNet certificate.",
     true,
 )
+
+private fun CompanionFailure.toCertificateVerificationState(): CompanionCertificateState =
+    if (recoverable) {
+        CompanionCertificateState.VerificationDeferred(this)
+    } else {
+        CompanionCertificateState.Rejected(this)
+    }

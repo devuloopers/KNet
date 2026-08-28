@@ -46,7 +46,7 @@ internal class AndroidCompanionCertificateTrustVerifier(
                 KNetLogger.error(LogTags.CERTIFICATE) {
                     "companion_event=trusted_root_lookup result=unavailable"
                 }
-                return CompanionCertificateState.Rejected(androidCertificateStoreUnavailable())
+                return CompanionCertificateState.VerificationDeferred(androidCertificateStoreUnavailable())
             }
         }
         val challenge = CompanionCertificateChallengeNonce(randomChallenge())
@@ -79,7 +79,7 @@ internal class AndroidCompanionCertificateTrustVerifier(
                 rejectedAndroidCertificate("The trusted server identity does not match the paired desktop.")
 
             AndroidCertificateTlsResult.Unavailable ->
-                CompanionCertificateState.Rejected(androidCertificateTransportUnavailable())
+                CompanionCertificateState.VerificationDeferred(androidCertificateTransportUnavailable())
         }
     }
 

@@ -49,7 +49,7 @@ import com.devuloopers.knet.storage.rules.entity.BreakpointRuleEntity
         ApiStudioWorkspaceDocumentEntity::class,
         ApiStudioProtocolSchemaEntity::class,
     ],
-    version = 25,
+    version = 26,
     autoMigrations = [
         AutoMigration(from = 14, to = 15),
         AutoMigration(from = 15, to = 16),
@@ -58,6 +58,7 @@ import com.devuloopers.knet.storage.rules.entity.BreakpointRuleEntity
         AutoMigration(from = 19, to = 20),
         AutoMigration(from = 20, to = 21),
         AutoMigration(from = 21, to = 22),
+        AutoMigration(from = 25, to = 26),
     ],
 )
 abstract class KNetDatabase : RoomDatabase() {

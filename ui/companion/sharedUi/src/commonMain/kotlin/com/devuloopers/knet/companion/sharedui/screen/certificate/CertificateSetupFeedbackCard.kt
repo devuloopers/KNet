@@ -125,6 +125,10 @@ private fun CompanionUiState.toCertificateFeedback(): CertificateFeedback {
             icon = KNetIcons.Shield,
             loading = true,
         )
+        currentCertificate is CompanionCertificateState.VerificationDeferred -> CertificateFeedback(
+            message = currentCertificate.reason.message,
+            icon = KNetIcons.Info,
+        )
         currentCertificate is CompanionCertificateState.Rejected -> CertificateFeedback(
             message = currentCertificate.reason.message,
             icon = KNetIcons.Warning,
