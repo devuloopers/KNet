@@ -239,7 +239,9 @@ private fun desktopColor(status: CompanionHomeDesktopStatus): Color = when (stat
 
 @Composable
 private fun certificateColor(status: CompanionHomeCertificateStatus): Color = when (status) {
-    CompanionHomeCertificateStatus.VERIFIED -> KNetTheme.colors.semantic.success
+    CompanionHomeCertificateStatus.PREVIOUSLY_VERIFIED,
+    CompanionHomeCertificateStatus.VERIFIED,
+    -> KNetTheme.colors.semantic.success
     CompanionHomeCertificateStatus.NEEDS_ATTENTION -> KNetTheme.colors.semantic.error
     CompanionHomeCertificateStatus.CHECKING,
     CompanionHomeCertificateStatus.VERIFICATION_PENDING,
@@ -264,6 +266,7 @@ private fun desktopStatus(value: CompanionHomeDesktopStatus): StringResource = w
 private fun certificateStatus(value: CompanionHomeCertificateStatus): StringResource = when (value) {
     CompanionHomeCertificateStatus.CHECKING -> Res.string.home_certificate_checking
     CompanionHomeCertificateStatus.VERIFICATION_PENDING -> Res.string.home_certificate_pending
+    CompanionHomeCertificateStatus.PREVIOUSLY_VERIFIED -> Res.string.home_certificate_previously_verified
     CompanionHomeCertificateStatus.VERIFIED -> Res.string.home_certificate_verified
     CompanionHomeCertificateStatus.NEEDS_ATTENTION -> Res.string.home_certificate_attention
 }

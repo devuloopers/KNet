@@ -27,10 +27,11 @@ public enum class CompanionHomeDesktopStatus {
     SECURITY_FAILURE,
 }
 
-/** Authoritative certificate state summarized by Home. */
+/** Certificate status combining live trust with durable proof of a previous successful verification. */
 public enum class CompanionHomeCertificateStatus {
     CHECKING,
     VERIFICATION_PENDING,
+    PREVIOUSLY_VERIFIED,
     VERIFIED,
     NEEDS_ATTENTION,
 }
@@ -94,12 +95,24 @@ public data class CompanionHomeUiState(
 
 /** Converts aggregate presentation state into the only state shape Home is permitted to render. */
 public fun CompanionUiState.toCompanionHomeUiState(): CompanionHomeUiState {
+    val hasMatchingCertificateEnrollment = activeRegistration?.let { registration ->
+        certificateEnrollment?.matches(registration)
+    } == true
+    val liveCertificateTrusted = certificate is CompanionCertificateState.Trusted
     val certificateStatus = when (certificate) {
         is CompanionCertificateState.Trusted -> CompanionHomeCertificateStatus.VERIFIED
         CompanionCertificateState.Unknown,
         CompanionCertificateState.Verifying,
-        -> CompanionHomeCertificateStatus.CHECKING
-        is CompanionCertificateState.VerificationDeferred -> CompanionHomeCertificateStatus.VERIFICATION_PENDING
+        -> if (hasMatchingCertificateEnrollment) {
+            CompanionHomeCertificateStatus.PREVIOUSLY_VERIFIED
+        } else {
+            CompanionHomeCertificateStatus.CHECKING
+        }
+        is CompanionCertificateState.VerificationDeferred -> if (hasMatchingCertificateEnrollment) {
+            CompanionHomeCertificateStatus.PREVIOUSLY_VERIFIED
+        } else {
+            CompanionHomeCertificateStatus.VERIFICATION_PENDING
+        }
         CompanionCertificateState.InstallationRequired,
         is CompanionCertificateState.Rejected,
         -> CompanionHomeCertificateStatus.NEEDS_ATTENTION
@@ -129,7 +142,7 @@ public fun CompanionUiState.toCompanionHomeUiState(): CompanionHomeUiState {
         certificateStatus == CompanionHomeCertificateStatus.CHECKING -> CompanionHomeReadiness.CHECKING
         certificateStatus == CompanionHomeCertificateStatus.NEEDS_ATTENTION -> CompanionHomeReadiness.NEEDS_ATTENTION
         desktopStatus == CompanionHomeDesktopStatus.AVAILABLE && network is CompanionNetworkState.Available ->
-            if (certificateStatus == CompanionHomeCertificateStatus.VERIFIED) {
+            if (liveCertificateTrusted) {
                 CompanionHomeReadiness.READY
             } else {
                 CompanionHomeReadiness.CHECKING
@@ -189,7 +202,7 @@ public fun CompanionUiState.toCompanionHomeUiState(): CompanionHomeUiState {
         networkPath = networkPath,
         httpsCapability = if (
             (inspection as? CompanionInspectionState.Running)?.fullHttpsInspection != false &&
-            certificateStatus == CompanionHomeCertificateStatus.VERIFIED
+            liveCertificateTrusted
         ) {
             CompanionHomeHttpsCapability.FULL
         } else {

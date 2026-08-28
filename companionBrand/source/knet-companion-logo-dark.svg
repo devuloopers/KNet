@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 240" width="1000" height="240">
+  <defs>
+    <linearGradient id="companionBlue" x1="96" y1="72" x2="430" y2="438" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4F9CFE"/>
+      <stop offset="0.55" stop-color="#3081FC"/>
+      <stop offset="1" stop-color="#2563EB"/>
+    </linearGradient>
+  </defs>
+  <g fill="none" stroke="url(#companionBlue)" stroke-linecap="round" stroke-linejoin="round" transform="translate(40 22) scale(.38)">
+    <path d="M148 104V408" stroke-width="54"/>
+    <path d="M344 104L178 256L344 408" stroke-width="54"/>
+    <path d="M202 256H366" stroke-width="24"/>
+    <circle cx="408" cy="256" r="31" stroke-width="24"/>
+  </g>
+  <text x="260" y="118" font-family="Inter, sans-serif" font-size="82" font-weight="700" fill="#3081FC">KNet</text>
+  <text x="470" y="118" font-family="Inter, sans-serif" font-size="82" font-weight="600" fill="#FFFFFF">Companion</text>
+  <text x="264" y="166" font-family="Inter, sans-serif" font-size="18" font-weight="600" letter-spacing="2.5" fill="#9AA7BA">SECURE DEVICE CONNECTION · TRAFFIC INSPECTION</text>
+</svg>

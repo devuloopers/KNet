@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>KNet Companion Brand Preview</title>
+  <style>
+    :root { color-scheme: light dark; font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #071525; color: #fff; }
+    main { max-width: 1180px; margin: 0 auto; padding: 48px 24px 72px; }
+    h1 { margin: 0 0 8px; font-size: clamp(32px, 5vw, 56px); }
+    p { margin: 0 0 32px; color: #9aa7ba; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px; }
+    .card { min-height: 320px; border: 1px solid #334155; border-radius: 20px; padding: 28px; display: grid; place-items: center; overflow: hidden; }
+    .light { background: #fff; }
+    .dark { background: #0d1117; }
+    .symbol { width: min(72%, 280px); aspect-ratio: 1; }
+    .wordmark { width: 100%; max-width: 520px; }
+    .sizes { display: flex; align-items: end; justify-content: center; flex-wrap: wrap; gap: 28px; }
+    .sample { display: grid; justify-items: center; gap: 10px; color: #64748b; font: 600 12px/1 ui-monospace, monospace; }
+    .sample img { display: block; }
+    .note { margin-top: 24px; padding: 18px 20px; border: 1px solid #334155; border-radius: 14px; color: #9aa7ba; }
+  </style>
+</head>
+<body>
+<main>
+  <h1>KNet Companion</h1>
+  <p>Standalone connected-K identity — transparent, uncontained, and platform-mask safe.</p>
+  <section class="grid">
+    <article class="card light"><img class="symbol" src="svg/knet-companion-symbol.svg" alt="KNet Companion symbol on light background"></article>
+    <article class="card dark"><img class="symbol" src="svg/knet-companion-symbol.svg" alt="KNet Companion symbol on dark background"></article>
+    <article class="card light"><img class="wordmark" src="svg/knet-companion-logo-light.svg" alt="KNet Companion light wordmark"></article>
+    <article class="card dark"><img class="wordmark" src="svg/knet-companion-logo-dark.svg" alt="KNet Companion dark wordmark"></article>
+  </section>
+  <section class="card light" style="margin-top:20px; min-height:220px">
+    <div class="sizes">
+      <span class="sample"><img src="kit/icon-16.png" width="16" height="16" alt="">16 px</span>
+      <span class="sample"><img src="kit/icon-32.png" width="32" height="32" alt="">32 px</span>
+      <span class="sample"><img src="kit/icon-48.png" width="48" height="48" alt="">48 px</span>
+      <span class="sample"><img src="kit/icon-64.png" width="64" height="64" alt="">64 px</span>
+      <span class="sample"><img src="kit/icon-128.png" width="128" height="128" alt="">128 px</span>
+    </div>
+  </section>
+  <div class="note">The transparent mark is the identity. Rounded launcher shapes belong to Android or iOS packaging and must not be added to the SVG.</div>
+</main>
+</body>
+</html>

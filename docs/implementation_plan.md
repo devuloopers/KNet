@@ -11,9 +11,9 @@
 * Executed `./gradlew :products:desktop:createDistributable` to verify native `jlink` runtime image generation and distribution assembly.
 
 ## Phase 4: Full Multi-Platform Brand & Icon Suite (macOS, Windows, Linux, Web) [COMPLETED]
-* Designed mathematically centered master SVG logos, symbols, and wordmarks with balanced 70.92px horizontal and 81.60px vertical margins in `brand/svg/`.
-* Generated brand kit via LogoLoom MCP (`export_brand_kit`, `optimize_svg`) with 25 web and social assets in `brand/kit/`.
-* Compiled native platform desktop icons: macOS `.icns` (315 KB), Windows 7-layer `.ico` (27 KB), and Linux FreeDesktop `.png` suite in `brand/`.
+* Designed mathematically centered master SVG logos, symbols, and wordmarks with balanced 70.92px horizontal and 81.60px vertical margins in `../desktopBrand/svg/`.
+* Generated brand kit via LogoLoom MCP (`export_brand_kit`, `optimize_svg`) with 25 web and social assets in `../desktopBrand/kit/`.
+* Compiled native platform desktop icons: macOS `.icns` (315 KB), Windows 7-layer `.ico` (27 KB), and Linux FreeDesktop `.png` suite in `../desktopBrand/`.
 * Documented brand standards in `docs/brand_guidelines.md`.
 
 ## Phase 5: Official Brand & Application Icon Adoption [COMPLETED]
@@ -23,7 +23,7 @@
 
 ## Phase 6: Multi-Platform Installer Branding & ARM64 Linux Support [COMPLETED]
 * Configured `TargetFormat.Exe` alongside `TargetFormat.Msi` in `products/desktop/build.gradle.kts` with consistent `upgradeUuid`, `perUserInstall`, and `shortcut` options so Windows setup executables embed `KNet.ico` directly into the PE header.
-* Designed high-DPI Retina installer window background (`brand/dmg/knet-dmg-background.png`, `brand/dmg/knet-dmg-background@2x.png`) with KNet dark theme, logo, and drag-to-Applications layout.
+* Designed high-DPI Retina installer window background (`../desktopBrand/dmg/knet-dmg-background.png`, `../desktopBrand/dmg/knet-dmg-background@2x.png`) with KNet dark theme, logo, and drag-to-Applications layout.
 * Configured `.github/workflows/release.yml` with `create-dmg` post-processing and `fileicon` stamping for macOS branded DMG packaging (`KNet-${VERSION}-mac.dmg`).
 * Added `Package macOS Portable Zip` step (`KNet-${VERSION}-mac.zip`) using Apple's `ditto` utility to preserve native `.app` bundle icon attributes and permissions directly in Finder upon extraction.
 * Added `Package Windows Portable Zip` step (`KNet-${VERSION}-windows-x64.zip`) using PowerShell `Compress-Archive` to provide a zero-installation, non-admin direct-run package for Windows users.

@@ -164,7 +164,7 @@ class KNetInspectionVpnService : VpnService(), AndroidSocketProtector {
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         return Notification.Builder(this, NOTIFICATION_CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_knet_companion)
+            .setSmallIcon(R.drawable.ic_knet_notification)
             .setContentTitle(getString(R.string.inspection_notification_title))
             .setContentText(getString(R.string.inspection_notification_description))
             .setContentIntent(openApplication)
