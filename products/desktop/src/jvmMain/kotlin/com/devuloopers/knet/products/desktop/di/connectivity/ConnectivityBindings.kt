@@ -31,6 +31,7 @@ import com.devuloopers.knet.connectivity.desktop.adb.AdbReverseMechanism
 import com.devuloopers.knet.connectivity.desktop.artifact.SetupArtifactStore
 import com.devuloopers.knet.connectivity.desktop.gateway.AuthenticatedProxyGateway
 import com.devuloopers.knet.connectivity.desktop.gateway.CompanionControlGateway
+import com.devuloopers.knet.connectivity.desktop.gateway.CompanionControlGatewayRuntime
 import com.devuloopers.knet.connectivity.desktop.gateway.IngressAttributionRegistry
 import com.devuloopers.knet.connectivity.desktop.discovery.CompanionDiscoveryPublisher
 import com.devuloopers.knet.connectivity.desktop.network.DesktopNetworkSnapshotMonitor
@@ -132,7 +133,8 @@ internal val connectivityBindings: Module = module {
     single<WifiSharing> { get<DesktopWifiSharingRuntime>() }
     single {
         CompanionDiscoveryPublisher(
-            sharingState = get<DesktopWifiSharingRuntime>().state,
+            networkSnapshots = get<DesktopNetworkSnapshotMonitor>().snapshots,
+            controlGatewayState = get<CompanionControlGatewayRuntime>().state,
             environmentProvider = get(),
         )
     }
@@ -256,6 +258,7 @@ internal val connectivityBindings: Module = module {
             nowEpochMillis = ::currentEpochMillis,
         )
     }
+    single { CompanionControlGatewayRuntime(get<CompanionControlGateway>()) }
 }
 
 private const val SETUP_PORTAL_PORT: Int = 8181

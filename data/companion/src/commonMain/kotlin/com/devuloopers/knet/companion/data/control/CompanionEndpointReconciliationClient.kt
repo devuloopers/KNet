@@ -12,6 +12,7 @@ import com.devuloopers.knet.companion.model.CompanionFailure
 import com.devuloopers.knet.companion.model.CompanionFailureCode
 import com.devuloopers.knet.companion.model.CompanionRegistration
 import com.devuloopers.knet.companion.model.CompanionServiceEndpoint
+import com.devuloopers.knet.core.logger.KNetLogger
 import kotlinx.coroutines.CancellationException
 
 /** Shared endpoint client; native Ktor engines enforce the existing paired TLS pin before sending credentials. */
@@ -24,6 +25,10 @@ public class DefaultCompanionEndpointReconciliationClient(
         candidateEndpoint: CompanionServiceEndpoint,
         credential: String,
     ): CompanionEndpointReconciliationResult = try {
+        KNetLogger.debug(DISCOVERY_TAG) {
+            "companion_event=endpoint_transport_started desktop_id=${registration.desktopId.value} " +
+                "endpoint=${candidateEndpoint.host}:${candidateEndpoint.port}"
+        }
         val response = transport.execute(
             CompanionControlRequest(
                 endpoint = candidateEndpoint,
@@ -36,18 +41,35 @@ public class DefaultCompanionEndpointReconciliationClient(
             ),
         )
         if (response.statusCode !in 200..299) {
+            KNetLogger.warn(DISCOVERY_TAG) {
+                "companion_event=endpoint_transport_rejected desktop_id=${registration.desktopId.value} " +
+                    "endpoint=${candidateEndpoint.host}:${candidateEndpoint.port} status=${response.statusCode}"
+            }
             CompanionEndpointReconciliationResult.Rejected(rejected(identityMismatch = response.statusCode == 409))
         } else {
             val descriptor = codec.decodeDescriptor(response.copyBody())
             if (!descriptor.accepts(registration.desktopId)) {
+                KNetLogger.warn(DISCOVERY_TAG) {
+                    "companion_event=endpoint_transport_rejected desktop_id=${registration.desktopId.value} " +
+                        "endpoint=${candidateEndpoint.host}:${candidateEndpoint.port} reason=desktop_id"
+                }
                 CompanionEndpointReconciliationResult.Rejected(rejected(identityMismatch = true))
             } else {
+                KNetLogger.info(DISCOVERY_TAG) {
+                    "companion_event=endpoint_transport_verified desktop_id=${descriptor.desktopId.value} " +
+                        "runtime_id=${descriptor.runtimeId.value} endpoint=${candidateEndpoint.host}:${candidateEndpoint.port}"
+                }
                 CompanionEndpointReconciliationResult.Verified(descriptor)
             }
         }
     } catch (cancelled: CancellationException) {
         throw cancelled
-    } catch (_: Throwable) {
+    } catch (failure: Throwable) {
+        KNetLogger.error(DISCOVERY_TAG, failure) {
+            "companion_event=endpoint_transport_failed desktop_id=${registration.desktopId.value} " +
+                "endpoint=${candidateEndpoint.host}:${candidateEndpoint.port} " +
+                "reason=${failure::class.simpleName ?: "unknown"}"
+        }
         CompanionEndpointReconciliationResult.Rejected(rejected(identityMismatch = false))
     }
 
@@ -60,4 +82,8 @@ public class DefaultCompanionEndpointReconciliationClient(
         },
         recoverable = !identityMismatch,
     )
+
+    private companion object {
+        const val DISCOVERY_TAG: String = "CompanionDiscovery"
+    }
 }

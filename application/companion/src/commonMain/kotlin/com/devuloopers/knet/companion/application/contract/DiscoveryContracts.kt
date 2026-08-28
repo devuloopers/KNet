@@ -1,7 +1,6 @@
 package com.devuloopers.knet.companion.application.contract
 
 import com.devuloopers.knet.companion.model.CompanionDesktopId
-import com.devuloopers.knet.companion.model.CompanionDiscoveryCandidate
 import com.devuloopers.knet.companion.model.CompanionDiscoveryState
 import com.devuloopers.knet.companion.model.CompanionEndpointDescriptor
 import com.devuloopers.knet.companion.model.CompanionFailure
@@ -39,7 +38,11 @@ public fun interface CompanionEndpointReconciliationClient {
 public sealed interface CompanionEndpointRecoveryResult {
     public data class Recovered(
         public val registration: CompanionRegistration,
-        public val candidate: CompanionDiscoveryCandidate,
     ) : CompanionEndpointRecoveryResult
     public data class Rejected(public val failure: CompanionFailure) : CompanionEndpointRecoveryResult
+}
+
+/** Resolves a paired desktop identity to a currently authenticated local-network endpoint. */
+public fun interface CompanionEndpointResolver {
+    public suspend fun resolve(registration: CompanionRegistration): CompanionEndpointRecoveryResult
 }

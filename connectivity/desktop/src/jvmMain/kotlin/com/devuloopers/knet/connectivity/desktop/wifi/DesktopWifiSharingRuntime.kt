@@ -4,10 +4,10 @@ import com.devuloopers.knet.application.contract.connectivity.wifi.WifiSharing
 import com.devuloopers.knet.application.contract.proxy.ProxyRuntime
 import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
 import com.devuloopers.knet.connectivity.desktop.DesktopConnectivityRuntime
+import com.devuloopers.knet.connectivity.desktop.network.availableLanAddresses
 import com.devuloopers.knet.connectivity.model.ConnectivityContext
 import com.devuloopers.knet.connectivity.model.ConnectivityMechanismId
 import com.devuloopers.knet.connectivity.model.NetworkAddress
-import com.devuloopers.knet.connectivity.model.NetworkAddressFamily
 import com.devuloopers.knet.connectivity.model.ProxyAccessRequirement
 import com.devuloopers.knet.connectivity.model.ProxyEndpoint
 import com.devuloopers.knet.connectivity.model.ProxyEndpointScope
@@ -125,7 +125,7 @@ public class DesktopWifiSharingRuntime(
         publishEnabling: Boolean,
     ): ReconcileOutcome {
         if (closed.get()) return ReconcileOutcome.Settled
-        val addresses = context.network.addresses.availableForSharing()
+        val addresses = context.network.addresses.availableLanAddresses()
         val internalEndpoint = context.proxyEndpoints.endpoints
             .firstOrNull { it.scope == ProxyEndpointScope.LOOPBACK }
         if (internalEndpoint == null) {
@@ -473,7 +473,7 @@ public class DesktopWifiSharingRuntime(
     }
 
     private fun availableAddresses(): List<NetworkAddress> =
-        connectivityRuntime.context.value.network.addresses.availableForSharing()
+        connectivityRuntime.context.value.network.addresses.availableLanAddresses()
 
     override fun close() {
         if (!closed.compareAndSet(false, true)) return
@@ -489,32 +489,7 @@ public class DesktopWifiSharingRuntime(
         }
     }
 
-    private fun List<NetworkAddress>.availableForSharing(): List<NetworkAddress> =
-        filter { address -> !address.loopback && address.family == NetworkAddressFamily.IPV4 }
-            .distinctBy { address -> address.interfaceId to address.address }
-            .sortedWith(
-                compareBy<NetworkAddress> { address -> address.interfaceId.virtualInterfacePriority() }
-                    .thenBy { address -> address.address.privateAddressPriority() }
-                    .thenBy(NetworkAddress::interfaceId)
-                    .thenBy(NetworkAddress::address),
-            )
-
     private fun List<NetworkAddress>.preferredAddress(): NetworkAddress? = firstOrNull()
-
-    private fun String.virtualInterfacePriority(): Int {
-        val normalized = lowercase()
-        return if (VIRTUAL_INTERFACE_PREFIXES.any(normalized::startsWith)) 1 else 0
-    }
-
-    private fun String.privateAddressPriority(): Int {
-        val octets = split('.').mapNotNull(String::toIntOrNull)
-        if (octets.size != 4) return 1
-        val local = octets[0] == 10 ||
-            (octets[0] == 172 && octets[1] in 16..31) ||
-            (octets[0] == 192 && octets[1] == 168) ||
-            (octets[0] == 169 && octets[1] == 254)
-        return if (local) 0 else 1
-    }
 
     private fun setupPortsFor(proxyPort: Int): List<Int> =
         setupPortalPorts.filterNot { it == proxyPort }
@@ -548,16 +523,6 @@ public class DesktopWifiSharingRuntime(
 
     private companion object {
         val MECHANISM_ID: ConnectivityMechanismId = ConnectivityMechanismId("wifi-sharing")
-        val VIRTUAL_INTERFACE_PREFIXES: Set<String> = setOf(
-            "utun",
-            "tun",
-            "tap",
-            "docker",
-            "veth",
-            "bridge",
-            "awdl",
-            "llw",
-        )
         const val RUNTIME_CLOSED: String = "wifi_runtime_closed"
         const val MINIMUM_SETUP_PORT_CANDIDATES: Int = 2
         val DEFAULT_SETUP_PORTS: List<Int> = listOf(8_181, 8_183)

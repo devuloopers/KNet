@@ -19,6 +19,8 @@ import com.devuloopers.knet.companion.application.contract.CompanionDeviceDispla
 import com.devuloopers.knet.companion.application.contract.CompanionDesktopDiscovery
 import com.devuloopers.knet.companion.application.contract.CompanionEndpointReconciliationClient
 import com.devuloopers.knet.companion.application.contract.CompanionEndpointReconciliationResult
+import com.devuloopers.knet.companion.application.contract.CompanionEndpointRecoveryResult
+import com.devuloopers.knet.companion.application.contract.CompanionEndpointResolver
 import com.devuloopers.knet.companion.application.contract.CompanionInspectionConfiguration
 import com.devuloopers.knet.companion.application.contract.CompanionInspectionController
 import com.devuloopers.knet.companion.application.contract.CompanionInspectionPreparationResult
@@ -672,6 +674,11 @@ class CompanionViewModelTest {
                 network,
                 transport,
                 nowEpochMillis = { 1_000L },
+                endpointResolver = CompanionEndpointResolver { registration ->
+                    CompanionEndpointRecoveryResult.Recovered(
+                        registration,
+                    )
+                },
             )
             val discovery = FakeDesktopDiscovery()
             val recoverEndpoint = RecoverCompanionEndpointUseCase(

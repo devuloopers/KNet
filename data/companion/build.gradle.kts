@@ -24,6 +24,7 @@ kotlin {
             api(project(":application:companion"))
             implementation(project(":core:companion"))
             implementation(project(":core:identity"))
+            implementation(project(":core:logger"))
             implementation(project(":core:pairing"))
             implementation(libs.datastore.preferences)
             implementation(libs.kotlinx.coroutines.core)

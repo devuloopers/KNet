@@ -4,7 +4,7 @@ import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import com.devuloopers.knet.connectivity.desktop.DesktopConnectivityRuntime
 import com.devuloopers.knet.connectivity.desktop.gateway.AuthenticatedProxyGateway
-import com.devuloopers.knet.connectivity.desktop.gateway.CompanionControlGateway
+import com.devuloopers.knet.connectivity.desktop.gateway.CompanionControlGatewayRuntime
 import com.devuloopers.knet.connectivity.desktop.discovery.CompanionDiscoveryPublisher
 import com.devuloopers.knet.connectivity.desktop.portal.DedicatedSetupPortal
 import com.devuloopers.knet.connectivity.desktop.wifi.DesktopWifiSharingRuntime
@@ -136,10 +136,10 @@ object DesktopBootstrap {
             }
         })
 
-        val companionControlGateway = koin.get<CompanionControlGateway>()
+        val companionControlGateway = koin.get<CompanionControlGatewayRuntime>()
         runCatching(companionControlGateway::start).onFailure { failure ->
             KNetLogger.warn("DesktopBootstrap") {
-                "Companion control gateway is unavailable: ${failure::class.simpleName}"
+                "Companion control gateway runtime is unavailable: ${failure::class.simpleName}"
             }
         }
         ApplicationLifecycle.registerResource(object : ShutdownAware {

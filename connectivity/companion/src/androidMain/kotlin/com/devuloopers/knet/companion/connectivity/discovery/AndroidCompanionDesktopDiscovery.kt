@@ -15,6 +15,7 @@ import com.devuloopers.knet.companion.model.CompanionDiscoveryTxtCodec
 import com.devuloopers.knet.companion.model.CompanionFailure
 import com.devuloopers.knet.companion.model.CompanionFailureCode
 import com.devuloopers.knet.companion.model.CompanionServiceEndpoint
+import com.devuloopers.knet.core.logger.KNetLogger
 import java.net.InetAddress
 import kotlin.collections.ArrayDeque
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -65,6 +66,12 @@ internal class AndroidCompanionDesktopDiscovery(
                 setReferenceCounted(false)
                 acquire()
             }
+            KNetLogger.info(DISCOVERY_TAG) {
+                "companion_event=discovery_start platform=android api=${Build.VERSION.SDK_INT} " +
+                    "service_type=${CompanionDiscoveryProtocol.SERVICE_TYPE} " +
+                    "targets=${targetDesktopIds.joinToString(",", transform = CompanionDesktopId::value)} " +
+                    "multicast_lock=${multicastLock?.isHeld == true}"
+            }
             val activeGeneration = generation
             val created = discoveryListener(activeGeneration)
             listener = created
@@ -74,9 +81,15 @@ internal class AndroidCompanionDesktopDiscovery(
                     NsdManager.PROTOCOL_DNS_SD,
                     created,
                 )
-            } catch (_: SecurityException) {
+            } catch (failure: SecurityException) {
+                KNetLogger.error(DISCOVERY_TAG, failure) {
+                    "companion_event=discovery_start_failed reason=permission"
+                }
                 fail(discoveryUnavailable("Local-network permission is required to rediscover KNet Desktop."))
-            } catch (_: RuntimeException) {
+            } catch (failure: RuntimeException) {
+                KNetLogger.error(DISCOVERY_TAG, failure) {
+                    "companion_event=discovery_start_failed reason=${failure::class.simpleName ?: "runtime"}"
+                }
                 fail(discoveryUnavailable("Unable to start local KNet desktop discovery."))
             }
         }
@@ -84,6 +97,7 @@ internal class AndroidCompanionDesktopDiscovery(
 
     override fun stop() {
         synchronized(lock) {
+            val wasActive = listener != null || targets.isNotEmpty()
             generation += 1
             listener?.let { active -> runCatching { nsdManager.stopServiceDiscovery(active) } }
             listener = null
@@ -95,18 +109,39 @@ internal class AndroidCompanionDesktopDiscovery(
             multicastLock?.let { active -> if (active.isHeld) active.release() }
             multicastLock = null
             mutableState.value = CompanionDiscoveryState.Idle
+            if (wasActive) {
+                KNetLogger.debug(DISCOVERY_TAG) { "companion_event=discovery_stopped platform=android" }
+            }
         }
     }
 
     private fun discoveryListener(activeGeneration: Long): NsdManager.DiscoveryListener =
         object : NsdManager.DiscoveryListener {
-            override fun onDiscoveryStarted(serviceType: String) = Unit
+            override fun onDiscoveryStarted(serviceType: String) {
+                KNetLogger.info(DISCOVERY_TAG) {
+                    "companion_event=discovery_browse_started service_type=$serviceType"
+                }
+            }
 
             override fun onServiceFound(serviceInfo: NsdServiceInfo) {
                 synchronized(lock) {
-                    if (generation != activeGeneration || !serviceInfo.serviceType.contains("_knet-companion._tcp")) return
+                    if (generation != activeGeneration) return
+                    KNetLogger.info(DISCOVERY_TAG) {
+                        "companion_event=discovery_service_found name=${serviceInfo.serviceName} " +
+                            "service_type=${serviceInfo.serviceType} port=${serviceInfo.port}"
+                    }
+                    if (!serviceInfo.serviceType.contains(CompanionDiscoveryProtocol.SERVICE_TYPE)) {
+                        KNetLogger.debug(DISCOVERY_TAG) {
+                            "companion_event=discovery_service_ignored name=${serviceInfo.serviceName} reason=service_type"
+                        }
+                        return
+                    }
                     continuousServiceMonitor?.observe(serviceInfo, activeGeneration) ?: run {
                         pendingResolutions.addLast(serviceInfo)
+                        KNetLogger.debug(DISCOVERY_TAG) {
+                            "companion_event=discovery_resolution_queued name=${serviceInfo.serviceName} " +
+                                "queue_size=${pendingResolutions.size} mode=legacy"
+                        }
                         resolveNext(activeGeneration)
                     }
                 }
@@ -117,19 +152,37 @@ internal class AndroidCompanionDesktopDiscovery(
                     if (generation != activeGeneration) return
                     continuousServiceMonitor?.forget(serviceInfo)
                     candidates.remove(serviceInfo.serviceName)
+                    KNetLogger.info(DISCOVERY_TAG) {
+                        "companion_event=discovery_service_lost name=${serviceInfo.serviceName}"
+                    }
                     publishCandidates()
                 }
             }
 
-            override fun onDiscoveryStopped(serviceType: String) = Unit
-
-            override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
-                synchronized(lock) {
-                    if (generation == activeGeneration) fail(discoveryUnavailable("Unable to browse for KNet Desktop."))
+            override fun onDiscoveryStopped(serviceType: String) {
+                KNetLogger.debug(DISCOVERY_TAG) {
+                    "companion_event=discovery_browse_stopped service_type=$serviceType"
                 }
             }
 
-            override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) = Unit
+            override fun onStartDiscoveryFailed(serviceType: String, errorCode: Int) {
+                synchronized(lock) {
+                    if (generation == activeGeneration) {
+                        KNetLogger.error(DISCOVERY_TAG) {
+                            "companion_event=discovery_browse_failed operation=start " +
+                                "service_type=$serviceType error_code=$errorCode"
+                        }
+                        fail(discoveryUnavailable("Unable to browse for KNet Desktop."))
+                    }
+                }
+            }
+
+            override fun onStopDiscoveryFailed(serviceType: String, errorCode: Int) {
+                KNetLogger.warn(DISCOVERY_TAG) {
+                    "companion_event=discovery_browse_failed operation=stop " +
+                        "service_type=$serviceType error_code=$errorCode"
+                }
+            }
         }
 
     @Suppress("DEPRECATION")
@@ -138,10 +191,17 @@ internal class AndroidCompanionDesktopDiscovery(
         val service = if (pendingResolutions.isEmpty()) null else pendingResolutions.removeFirst()
         service ?: return
         resolving = true
+        KNetLogger.debug(DISCOVERY_TAG) {
+            "companion_event=discovery_resolution_started name=${service.serviceName} mode=legacy"
+        }
         try {
             nsdManager.resolveService(service, object : NsdManager.ResolveListener {
                 override fun onResolveFailed(serviceInfo: NsdServiceInfo, errorCode: Int) {
                     synchronized(lock) {
+                        KNetLogger.warn(DISCOVERY_TAG) {
+                            "companion_event=discovery_resolution_failed name=${serviceInfo.serviceName} " +
+                                "mode=legacy error_code=$errorCode"
+                        }
                         resolving = false
                         resolveNext(activeGeneration)
                     }
@@ -149,13 +209,20 @@ internal class AndroidCompanionDesktopDiscovery(
 
                 override fun onServiceResolved(serviceInfo: NsdServiceInfo) {
                     synchronized(lock) {
+                        KNetLogger.debug(DISCOVERY_TAG) {
+                            "companion_event=discovery_resolution_completed name=${serviceInfo.serviceName} mode=legacy"
+                        }
                         if (generation == activeGeneration) resolved(serviceInfo)
                         resolving = false
                         resolveNext(activeGeneration)
                     }
                 }
             })
-        } catch (_: RuntimeException) {
+        } catch (failure: RuntimeException) {
+            KNetLogger.error(DISCOVERY_TAG, failure) {
+                "companion_event=discovery_resolution_failed name=${service.serviceName} " +
+                    "mode=legacy reason=${failure::class.simpleName ?: "runtime"}"
+            }
             resolving = false
             resolveNext(activeGeneration)
         }
@@ -163,7 +230,12 @@ internal class AndroidCompanionDesktopDiscovery(
 
     private fun acceptServiceUpdate(activeGeneration: Long, serviceInfo: NsdServiceInfo) {
         synchronized(lock) {
-            if (generation == activeGeneration) resolved(serviceInfo)
+            if (generation == activeGeneration) {
+                KNetLogger.debug(DISCOVERY_TAG) {
+                    "companion_event=discovery_resolution_completed name=${serviceInfo.serviceName} mode=continuous"
+                }
+                resolved(serviceInfo)
+            }
         }
     }
 
@@ -171,16 +243,41 @@ internal class AndroidCompanionDesktopDiscovery(
         synchronized(lock) {
             if (generation != activeGeneration) return
             candidates.remove(serviceName)
+            KNetLogger.info(DISCOVERY_TAG) {
+                "companion_event=discovery_service_unavailable name=$serviceName mode=continuous"
+            }
             publishCandidates()
         }
     }
 
     private fun resolved(service: NsdServiceInfo) {
-        val attributes = runCatching {
+        val attributesResult = runCatching {
             service.attributes.mapValues { (_, bytes) -> bytes.decodeToString(throwOnInvalidSequence = true) }
-        }.getOrNull() ?: return
-        val advertisement = runCatching { txtCodec.decode(attributes) }.getOrNull() ?: return
-        if (!advertisement.matches(targets)) return
+        }
+        val attributes = attributesResult.getOrElse { failure ->
+            KNetLogger.warn(DISCOVERY_TAG) {
+                "companion_event=discovery_candidate_rejected name=${service.serviceName} " +
+                    "reason=txt_decode failure=${failure::class.simpleName ?: "unknown"}"
+            }
+            return
+        }
+        val advertisementResult = runCatching { txtCodec.decode(attributes) }
+        val advertisement = advertisementResult.getOrElse { failure ->
+            KNetLogger.warn(DISCOVERY_TAG) {
+                "companion_event=discovery_candidate_rejected name=${service.serviceName} " +
+                    "reason=txt_contract keys=${attributes.keys.sorted().joinToString(",")} " +
+                    "failure=${failure::class.simpleName ?: "unknown"}"
+            }
+            return
+        }
+        if (!advertisement.matches(targets)) {
+            KNetLogger.info(DISCOVERY_TAG) {
+                "companion_event=discovery_candidate_rejected name=${service.serviceName} reason=desktop_id " +
+                    "advertised_id=${advertisement.desktopId.value} " +
+                    "targets=${targets.joinToString(",", transform = CompanionDesktopId::value)}"
+            }
+            return
+        }
         val addresses: List<InetAddress> = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             service.hostAddresses
         } else {
@@ -196,12 +293,23 @@ internal class AndroidCompanionDesktopDiscovery(
                 )
             }.getOrNull()
         }.distinct().take(CompanionDiscoveryProtocol.MAXIMUM_ADDRESSES)
-        if (endpoints.isEmpty()) return
+        if (endpoints.isEmpty()) {
+            KNetLogger.warn(DISCOVERY_TAG) {
+                "companion_event=discovery_candidate_rejected name=${service.serviceName} reason=no_address " +
+                    "resolved_address_count=${addresses.size} port=${service.port}"
+            }
+            return
+        }
         candidates[service.serviceName] = CompanionDiscoveryCandidate(
             instanceName = service.serviceName,
             advertisement = advertisement,
             endpoints = endpoints,
         )
+        KNetLogger.info(DISCOVERY_TAG) {
+            "companion_event=discovery_candidate_accepted name=${service.serviceName} " +
+                "desktop_id=${advertisement.desktopId.value} runtime_id=${advertisement.runtimeId.value} " +
+                "endpoints=${endpoints.joinToString(",") { endpoint -> "${endpoint.host}:${endpoint.port}" }}"
+        }
         publishCandidates()
     }
 
@@ -211,6 +319,9 @@ internal class AndroidCompanionDesktopDiscovery(
             CompanionDiscoveryState.Searching(desktopId)
         } else {
             CompanionDiscoveryState.Candidates(desktopId, candidates.values.toList())
+        }
+        KNetLogger.debug(DISCOVERY_TAG) {
+            "companion_event=discovery_state target=${desktopId.value} candidate_count=${candidates.size}"
         }
     }
 
@@ -226,6 +337,9 @@ internal class AndroidCompanionDesktopDiscovery(
         targets = emptySet()
         multicastLock?.let { active -> if (active.isHeld) active.release() }
         multicastLock = null
+        KNetLogger.warn(DISCOVERY_TAG) {
+            "companion_event=discovery_failed code=${failure.code} recoverable=${failure.recoverable}"
+        }
     }
 
     private fun discoveryUnavailable(message: String): CompanionFailure = CompanionFailure(
@@ -240,5 +354,6 @@ internal class AndroidCompanionDesktopDiscovery(
 
     private companion object {
         const val MULTICAST_LOCK_TAG: String = "knet-companion-discovery"
+        const val DISCOVERY_TAG: String = "CompanionDiscovery"
     }
 }

@@ -4,6 +4,7 @@ import android.net.nsd.NsdManager
 import android.net.nsd.NsdServiceInfo
 import android.os.Build
 import androidx.annotation.RequiresApi
+import com.devuloopers.knet.core.logger.KNetLogger
 import java.util.concurrent.Executor
 
 /** Continuously monitors resolved DNS-SD service data on Android 14 and newer. */
@@ -22,18 +23,39 @@ internal class Android34CompanionServiceMonitor(
         val key = serviceInfo.registrationKey()
         val callback = object : NsdManager.ServiceInfoCallback {
             override fun onServiceUpdated(updatedServiceInfo: NsdServiceInfo) {
-                if (isCurrent(key, this)) onServiceUpdated(generation, updatedServiceInfo)
+                if (isCurrent(key, this)) {
+                    KNetLogger.debug(DISCOVERY_TAG) {
+                        "companion_event=discovery_service_updated name=${updatedServiceInfo.serviceName} " +
+                            "address_count=${updatedServiceInfo.hostAddresses.size} port=${updatedServiceInfo.port}"
+                    }
+                    onServiceUpdated(generation, updatedServiceInfo)
+                }
             }
 
             override fun onServiceLost() {
-                if (isCurrent(key, this)) onServiceUnavailable(generation, serviceInfo.serviceName)
+                if (isCurrent(key, this)) {
+                    KNetLogger.info(DISCOVERY_TAG) {
+                        "companion_event=discovery_monitor_lost name=${serviceInfo.serviceName}"
+                    }
+                    onServiceUnavailable(generation, serviceInfo.serviceName)
+                }
             }
 
             override fun onServiceInfoCallbackRegistrationFailed(errorCode: Int) {
-                if (removeIfCurrent(key, this)) onServiceUnavailable(generation, serviceInfo.serviceName)
+                if (removeIfCurrent(key, this)) {
+                    KNetLogger.warn(DISCOVERY_TAG) {
+                        "companion_event=discovery_monitor_registration_failed " +
+                            "name=${serviceInfo.serviceName} error_code=$errorCode"
+                    }
+                    onServiceUnavailable(generation, serviceInfo.serviceName)
+                }
             }
 
-            override fun onServiceInfoCallbackUnregistered() = Unit
+            override fun onServiceInfoCallbackUnregistered() {
+                KNetLogger.debug(DISCOVERY_TAG) {
+                    "companion_event=discovery_monitor_unregistered name=${serviceInfo.serviceName}"
+                }
+            }
         }
         val shouldRegister = synchronized(lock) {
             if (key in registrations) {
@@ -45,8 +67,15 @@ internal class Android34CompanionServiceMonitor(
         }
         if (!shouldRegister) return
         try {
+            KNetLogger.debug(DISCOVERY_TAG) {
+                "companion_event=discovery_monitor_registering name=${serviceInfo.serviceName}"
+            }
             nsdManager.registerServiceInfoCallback(serviceInfo, callbackExecutor, callback)
-        } catch (_: RuntimeException) {
+        } catch (failure: RuntimeException) {
+            KNetLogger.error(DISCOVERY_TAG, failure) {
+                "companion_event=discovery_monitor_registration_failed " +
+                    "name=${serviceInfo.serviceName} reason=${failure::class.simpleName ?: "runtime"}"
+            }
             if (removeIfCurrent(key, callback)) onServiceUnavailable(generation, serviceInfo.serviceName)
         }
     }
@@ -83,3 +112,5 @@ internal class Android34CompanionServiceMonitor(
 }
 
 private fun NsdServiceInfo.registrationKey(): String = "$serviceName\u0000$serviceType"
+
+private const val DISCOVERY_TAG: String = "CompanionDiscovery"

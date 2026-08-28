@@ -11,6 +11,8 @@ import com.devuloopers.knet.companion.application.contract.CompanionCredentialRe
 import com.devuloopers.knet.companion.application.contract.CompanionCredentialStore
 import com.devuloopers.knet.companion.application.contract.CompanionDeviceIdentityProvider
 import com.devuloopers.knet.companion.application.contract.CompanionDeviceDisplayNameProvider
+import com.devuloopers.knet.companion.application.contract.CompanionEndpointRecoveryResult
+import com.devuloopers.knet.companion.application.contract.CompanionEndpointResolver
 import com.devuloopers.knet.companion.application.contract.CompanionInspectionConfiguration
 import com.devuloopers.knet.companion.application.contract.CompanionInspectionController
 import com.devuloopers.knet.companion.application.contract.CompanionInspectionPreparationResult
@@ -271,6 +273,9 @@ class CompanionUseCasesTest {
             CompanionNetworkObserver { MutableStateFlow(CompanionNetworkState.Available(metered = false)) },
             transport,
             nowEpochMillis = { 2_000L },
+            endpointResolver = CompanionEndpointResolver {
+                error("Expired credentials must be rejected before discovery.")
+            },
         )
 
         val result = assertIs<ConnectCompanionResult.Rejected>(connect.execute())
@@ -576,6 +581,7 @@ class CompanionUseCasesTest {
             CompanionNetworkObserver { MutableStateFlow(CompanionNetworkState.Available(metered = false)) },
             transport,
             nowEpochMillis = { 1_000L },
+            endpointResolver = passThroughEndpointResolver(),
         )
         val start = StartCompanionInspectionUseCase(repository, connect, verifyCertificate, inspection, transport)
     }
@@ -791,4 +797,10 @@ class CompanionUseCasesTest {
             credentialExpiresAtEpochMillis = 2_000L,
         )
     }
+}
+
+private fun passThroughEndpointResolver(): CompanionEndpointResolver = CompanionEndpointResolver { registration ->
+    CompanionEndpointRecoveryResult.Recovered(
+        registration = registration,
+    )
 }

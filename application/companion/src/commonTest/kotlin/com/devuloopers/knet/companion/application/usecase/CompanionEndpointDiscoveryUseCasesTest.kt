@@ -7,6 +7,7 @@ import com.devuloopers.knet.companion.application.contract.CompanionDesktopDisco
 import com.devuloopers.knet.companion.application.contract.CompanionEndpointReconciliationClient
 import com.devuloopers.knet.companion.application.contract.CompanionEndpointReconciliationResult
 import com.devuloopers.knet.companion.application.contract.CompanionEndpointRecoveryResult
+import com.devuloopers.knet.companion.application.contract.CompanionEndpointResolver
 import com.devuloopers.knet.companion.application.contract.CompanionNetworkObserver
 import com.devuloopers.knet.companion.application.contract.CompanionRegistrationRepository
 import com.devuloopers.knet.companion.application.contract.CompanionTransport
@@ -45,31 +46,29 @@ import kotlinx.coroutines.test.runTest
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class CompanionEndpointDiscoveryUseCasesTest {
     @Test
-    fun availabilityMonitorPublishesOnlyAfterAuthenticatedDirectProbe() = runTest {
+    fun availabilityMonitorPublishesAfterAuthenticatedPersistedEndpoint() = runTest {
         val existing = registration()
         val repository = FakeRegistrationRepository(existing)
         val discovery = FakeDiscovery()
-        val reconciliation = CompanionEndpointReconciliationClient { _, endpoint, credential ->
+        val endpointResolver = recovery(repository, discovery) { _, endpoint, credential ->
             assertEquals(existing.controlEndpoint, endpoint)
             assertEquals("credential", credential)
             CompanionEndpointReconciliationResult.Verified(descriptor())
         }
         val monitor = MonitorCompanionDesktopAvailabilityUseCase(
             repository,
-            FakeCredentialStore(),
             CompanionNetworkObserver { MutableStateFlow(com.devuloopers.knet.companion.model.CompanionNetworkState.Available(false)) },
-            reconciliation,
-            recovery(repository, discovery) { _, _, _ -> error("Recovery must not run after direct authentication") },
+            endpointResolver,
             nowEpochMillis = { 4_000L },
             probeIntervalMillis = 1_000L,
         )
 
         val job = launch { monitor.execute() }
         runCurrent()
-
         val available = assertIs<CompanionDesktopAvailability.Available>(monitor.state.value)
         assertEquals(CANONICAL_ID, available.desktopId)
         assertEquals(4_000L, available.verifiedAtEpochMillis)
+        assertEquals(0, discovery.startCalls)
         job.cancel()
     }
 
@@ -77,16 +76,14 @@ class CompanionEndpointDiscoveryUseCasesTest {
     fun availabilityMonitorDoesNotProbeWhenLocalNetworkIsUnavailable() = runTest {
         val existing = registration()
         val repository = FakeRegistrationRepository(existing)
-        var reconciliationCalls = 0
+        var resolutionCalls = 0
         val monitor = MonitorCompanionDesktopAvailabilityUseCase(
             repository,
-            FakeCredentialStore(),
             CompanionNetworkObserver { MutableStateFlow(com.devuloopers.knet.companion.model.CompanionNetworkState.Unavailable) },
-            CompanionEndpointReconciliationClient { _, _, _ ->
-                reconciliationCalls += 1
-                CompanionEndpointReconciliationResult.Verified(descriptor())
+            CompanionEndpointResolver {
+                resolutionCalls += 1
+                CompanionEndpointRecoveryResult.Rejected(desktopUnavailable())
             },
-            recovery(repository, FakeDiscovery()) { _, _, _ -> error("Recovery must not run without a network") },
             nowEpochMillis = { 4_000L },
             probeIntervalMillis = 1_000L,
         )
@@ -95,7 +92,7 @@ class CompanionEndpointDiscoveryUseCasesTest {
         runCurrent()
 
         assertIs<CompanionDesktopAvailability.Unavailable>(monitor.state.value)
-        assertEquals(0, reconciliationCalls)
+        assertEquals(0, resolutionCalls)
         job.cancel()
     }
 
@@ -106,18 +103,16 @@ class CompanionEndpointDiscoveryUseCasesTest {
         val candidate = candidate(host = "192.168.1.77")
         val discovery = FakeDiscovery(candidate)
         val recovery = recovery(repository, discovery) { _, endpoint, _ ->
-            assertEquals("192.168.1.77", endpoint.host)
-            CompanionEndpointReconciliationResult.Verified(descriptor())
+            if (endpoint == existing.controlEndpoint) {
+                CompanionEndpointReconciliationResult.Rejected(desktopUnavailable())
+            } else {
+                assertEquals("192.168.1.77", endpoint.host)
+                CompanionEndpointReconciliationResult.Verified(descriptor())
+            }
         }
         val monitor = MonitorCompanionDesktopAvailabilityUseCase(
             repository,
-            FakeCredentialStore(),
             CompanionNetworkObserver { MutableStateFlow(com.devuloopers.knet.companion.model.CompanionNetworkState.Available(false)) },
-            CompanionEndpointReconciliationClient { _, _, _ ->
-                CompanionEndpointReconciliationResult.Rejected(
-                    CompanionFailure(CompanionFailureCode.TRANSPORT_UNAVAILABLE, "Unavailable", true),
-                )
-            },
             recovery,
             nowEpochMillis = { 5_000L },
             probeIntervalMillis = 1_000L,
@@ -139,15 +134,11 @@ class CompanionEndpointDiscoveryUseCasesTest {
         val repository = FakeRegistrationRepository(existing)
         val monitor = MonitorCompanionDesktopAvailabilityUseCase(
             repository,
-            FakeCredentialStore(),
             CompanionNetworkObserver {
                 MutableStateFlow(com.devuloopers.knet.companion.model.CompanionNetworkState.Available(false))
             },
-            CompanionEndpointReconciliationClient { _, _, _ ->
-                CompanionEndpointReconciliationResult.Rejected(desktopUnavailable())
-            },
             recovery(repository, FakeDiscovery(), timeoutMillis = 500L) { _, _, _ ->
-                error("Recovery reconciliation must not run without a discovered candidate")
+                CompanionEndpointReconciliationResult.Rejected(desktopUnavailable())
             },
             nowEpochMillis = { 5_000L },
             probeIntervalMillis = 1_000L,
@@ -177,19 +168,15 @@ class CompanionEndpointDiscoveryUseCasesTest {
         var desktopAvailable = false
         val monitor = MonitorCompanionDesktopAvailabilityUseCase(
             repository,
-            FakeCredentialStore(),
             CompanionNetworkObserver {
                 MutableStateFlow(com.devuloopers.knet.companion.model.CompanionNetworkState.Available(false))
             },
-            CompanionEndpointReconciliationClient { _, _, _ ->
+            CompanionEndpointResolver {
                 if (desktopAvailable) {
-                    CompanionEndpointReconciliationResult.Verified(descriptor())
+                    CompanionEndpointRecoveryResult.Recovered(existing)
                 } else {
-                    CompanionEndpointReconciliationResult.Rejected(desktopUnavailable())
+                    CompanionEndpointRecoveryResult.Rejected(desktopUnavailable())
                 }
-            },
-            recovery(repository, FakeDiscovery(), timeoutMillis = 500L) { _, _, _ ->
-                error("Recovery reconciliation must not run without a discovered candidate")
             },
             nowEpochMillis = { 6_000L },
             probeIntervalMillis = 1_000L,
@@ -216,11 +203,15 @@ class CompanionEndpointDiscoveryUseCasesTest {
         val repository = FakeRegistrationRepository(existing)
         val candidate = candidate(host = "192.168.1.44")
         val recovery = recovery(repository, FakeDiscovery(candidate)) { _, endpoint, _ ->
-            assertEquals("192.168.1.44", endpoint.host)
-            CompanionEndpointReconciliationResult.Verified(descriptor())
+            if (endpoint == existing.controlEndpoint) {
+                CompanionEndpointReconciliationResult.Rejected(desktopUnavailable())
+            } else {
+                assertEquals("192.168.1.44", endpoint.host)
+                CompanionEndpointReconciliationResult.Verified(descriptor())
+            }
         }
 
-        val result = assertIs<CompanionEndpointRecoveryResult.Recovered>(recovery.execute(existing))
+        val result = assertIs<CompanionEndpointRecoveryResult.Recovered>(recovery.resolve(existing))
 
         assertEquals(CANONICAL_ID, result.registration.desktopId)
         assertEquals("192.168.1.44", result.registration.controlEndpoint.host)
@@ -253,6 +244,46 @@ class CompanionEndpointDiscoveryUseCasesTest {
     }
 
     @Test
+    fun unreachableMatchingEndpointRemainsATransientTransportFailure() = runTest {
+        val existing = registration()
+        val repository = FakeRegistrationRepository(existing)
+        val recovery = recovery(repository, FakeDiscovery()) { _, _, _ ->
+            CompanionEndpointReconciliationResult.Rejected(desktopUnavailable())
+        }
+
+        val result = assertIs<CompanionEndpointRecoveryResult.Rejected>(
+            recovery.execute(existing, listOf(candidate())),
+        )
+
+        assertEquals(CompanionFailureCode.TRANSPORT_UNAVAILABLE, result.failure.code)
+        assertEquals(true, result.failure.recoverable)
+        assertSame(existing, repository.activeRegistration.value)
+    }
+
+    @Test
+    fun authenticatedIdentityFailureTakesPrecedenceOverAnUnreachableEndpoint() = runTest {
+        val existing = registration()
+        val repository = FakeRegistrationRepository(existing)
+        val unreachable = candidate(host = "192.168.1.44")
+        val wrongIdentity = candidate(host = "192.168.1.45", instanceName = "KNet wrong identity")
+        val recovery = recovery(repository, FakeDiscovery()) { _, endpoint, _ ->
+            if (endpoint.host == unreachable.endpoints.single().host) {
+                CompanionEndpointReconciliationResult.Rejected(desktopUnavailable())
+            } else {
+                CompanionEndpointReconciliationResult.Rejected(identityMismatch())
+            }
+        }
+
+        val result = assertIs<CompanionEndpointRecoveryResult.Rejected>(
+            recovery.execute(existing, listOf(unreachable, wrongIdentity)),
+        )
+
+        assertEquals(CompanionFailureCode.TRANSPORT_IDENTITY_MISMATCH, result.failure.code)
+        assertEquals(false, result.failure.recoverable)
+        assertSame(existing, repository.activeRegistration.value)
+    }
+
+    @Test
     fun spoofedCandidateDoesNotHideALaterAuthenticatedCandidate() = runTest {
         val existing = registration()
         val repository = FakeRegistrationRepository(existing)
@@ -268,11 +299,13 @@ class CompanionEndpointDiscoveryUseCasesTest {
             if (endpoint.host == "192.168.1.44") {
                 CompanionEndpointReconciliationResult.Verified(descriptor())
             } else {
-                CompanionEndpointReconciliationResult.Rejected(identityMismatch())
+                CompanionEndpointReconciliationResult.Rejected(
+                    if (endpoint == existing.controlEndpoint) desktopUnavailable() else identityMismatch(),
+                )
             }
         }
 
-        val result = assertIs<CompanionEndpointRecoveryResult.Recovered>(recovery.execute(existing))
+        val result = assertIs<CompanionEndpointRecoveryResult.Recovered>(recovery.resolve(existing))
 
         assertEquals("192.168.1.44", result.registration.controlEndpoint.host)
     }
@@ -313,7 +346,7 @@ class CompanionEndpointDiscoveryUseCasesTest {
             CompanionNetworkObserver { MutableStateFlow(com.devuloopers.knet.companion.model.CompanionNetworkState.Available(false)) },
             transport,
             nowEpochMillis = { 2_000L },
-            recoverEndpoint = recovery,
+            endpointResolver = recovery,
         )
         val maintain = MaintainCompanionEndpointUseCase(repository, discovery, recovery, transport, connect)
         val job = launch { maintain.execute() }
@@ -331,6 +364,69 @@ class CompanionEndpointDiscoveryUseCasesTest {
         assertEquals("192.168.1.77", repository.activeRegistration.value?.proxyEndpoint?.host)
         assertEquals(1, transport.connectCalls)
         job.cancel()
+    }
+
+    @Test
+    fun connectionUsesAuthenticatedPersistedAddressWithoutDiscovery() = runTest {
+        val existing = registration(desktopId = CANONICAL_ID)
+        val repository = FakeRegistrationRepository(existing)
+        val discovery = FakeDiscovery()
+        val endpointResolver = recovery(repository, discovery) { _, endpoint, credential ->
+            assertEquals(existing.controlEndpoint, endpoint)
+            assertEquals("credential", credential)
+            CompanionEndpointReconciliationResult.Verified(descriptor(legacyIds = emptySet()))
+        }
+        val transport = FakeTransport(existing)
+        val connect = ConnectCompanionUseCase(
+            repository,
+            FakeCredentialStore(),
+            CompanionNetworkObserver {
+                MutableStateFlow(com.devuloopers.knet.companion.model.CompanionNetworkState.Available(false))
+            },
+            transport,
+            nowEpochMillis = { 2_000L },
+            endpointResolver = endpointResolver,
+        )
+
+        assertIs<ConnectCompanionResult.Connected>(connect.execute())
+
+        assertEquals("192.168.1.2", transport.lastRegistration?.controlEndpoint?.host)
+        assertEquals("192.168.1.2", transport.lastRegistration?.proxyEndpoint?.host)
+        assertEquals(0, discovery.startCalls)
+    }
+
+    @Test
+    fun connectionFallsBackToAuthenticatedDiscoveryWhenPersistedAddressIsStale() = runTest {
+        val existing = registration(desktopId = CANONICAL_ID)
+        val repository = FakeRegistrationRepository(existing)
+        val discovered = candidate(host = "192.168.1.77", legacyIds = emptySet())
+        val discovery = FakeDiscovery(discovered)
+        val endpointResolver = recovery(repository, discovery) { _, endpoint, credential ->
+            assertEquals("credential", credential)
+            if (endpoint == existing.controlEndpoint) {
+                CompanionEndpointReconciliationResult.Rejected(desktopUnavailable())
+            } else {
+                CompanionEndpointReconciliationResult.Verified(descriptor(legacyIds = emptySet()))
+            }
+        }
+        val transport = FakeTransport(existing)
+        val connect = ConnectCompanionUseCase(
+            repository,
+            FakeCredentialStore(),
+            CompanionNetworkObserver {
+                MutableStateFlow(com.devuloopers.knet.companion.model.CompanionNetworkState.Available(false))
+            },
+            transport,
+            nowEpochMillis = { 2_000L },
+            endpointResolver = endpointResolver,
+        )
+
+        assertIs<ConnectCompanionResult.Connected>(connect.execute())
+
+        assertEquals("192.168.1.77", transport.lastRegistration?.controlEndpoint?.host)
+        assertEquals("192.168.1.77", transport.lastRegistration?.proxyEndpoint?.host)
+        assertEquals("192.168.1.77", repository.activeRegistration.value?.controlEndpoint?.host)
+        assertEquals(1, discovery.startCalls)
     }
 
     private fun recovery(
@@ -352,8 +448,10 @@ class CompanionEndpointDiscoveryUseCasesTest {
     ) : CompanionDesktopDiscovery {
         private val mutableState = MutableStateFlow<CompanionDiscoveryState>(CompanionDiscoveryState.Idle)
         override val state: StateFlow<CompanionDiscoveryState> = mutableState
+        var startCalls: Int = 0
 
         override fun start(targetDesktopIds: Set<CompanionDesktopId>) {
+            startCalls += 1
             mutableState.value = initialCandidate?.let { candidate ->
                 CompanionDiscoveryState.Candidates(targetDesktopIds.first(), listOf(candidate))
             } ?: CompanionDiscoveryState.Searching(targetDesktopIds.first())
@@ -420,12 +518,14 @@ class CompanionEndpointDiscoveryUseCasesTest {
         )
         override val state: StateFlow<CompanionConnectionState> = mutableState
         var connectCalls: Int = 0
+        var lastRegistration: CompanionRegistration? = null
 
         override suspend fun connect(
             registration: CompanionRegistration,
             credential: String,
         ): CompanionTransportResult {
             connectCalls += 1
+            lastRegistration = registration
             mutableState.value = CompanionConnectionState.Connected(
                 registration.desktopId,
                 CompanionTransportKind.DIRECT_LAN,

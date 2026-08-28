@@ -207,7 +207,7 @@ internal class WifiLanProxyGateway(
         running.set(false)
         runCatching { listener?.close() }
         listener = null
-        activeSockets.toList().forEach { socket -> runCatching(socket::close) }
+        activeSockets.forEach { socket -> runCatching(socket::close) }
         activeSockets.clear()
         sourceAdmission.clear()
         scope.cancel()

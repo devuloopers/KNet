@@ -6,6 +6,7 @@ import com.devuloopers.knet.companion.application.contract.CompanionRegistration
 import com.devuloopers.knet.companion.application.contract.CompanionTransport
 import com.devuloopers.knet.companion.application.contract.CompanionTransportResult
 import com.devuloopers.knet.companion.application.contract.CompanionEndpointRecoveryResult
+import com.devuloopers.knet.companion.application.contract.CompanionEndpointResolver
 import com.devuloopers.knet.companion.model.CompanionConnectionState
 import com.devuloopers.knet.companion.model.CompanionFailure
 import com.devuloopers.knet.companion.model.CompanionFailureCode
@@ -20,25 +21,39 @@ public class ConnectCompanionUseCase(
     private val network: CompanionNetworkObserver,
     private val transport: CompanionTransport,
     private val nowEpochMillis: () -> Long,
-    private val recoverEndpoint: RecoverCompanionEndpointUseCase? = null,
+    private val endpointResolver: CompanionEndpointResolver,
 ) {
     public suspend fun execute(): ConnectCompanionResult {
         val registration = registrations.activeRegistration.value
             ?: return ConnectCompanionResult.Rejected(registrationMissing())
-        if (nowEpochMillis() >= registration.credentialExpiresAtEpochMillis) {
+        connectionPrerequisiteFailure(registration)?.let { failure ->
+            return ConnectCompanionResult.Rejected(failure)
+        }
+        return when (val resolution = endpointResolver.resolve(registration)) {
+            is CompanionEndpointRecoveryResult.Rejected -> ConnectCompanionResult.Rejected(resolution.failure)
+            is CompanionEndpointRecoveryResult.Recovered -> connect(resolution)
+        }
+    }
+
+    /** Reconnects with an endpoint that has already passed authenticated reconciliation. */
+    public suspend fun connect(
+        resolution: CompanionEndpointRecoveryResult.Recovered,
+    ): ConnectCompanionResult = connect(resolution.registration)
+
+    private suspend fun connect(registration: com.devuloopers.knet.companion.model.CompanionRegistration): ConnectCompanionResult {
+        val activeRegistration = registrations.activeRegistration.value
+            ?: return ConnectCompanionResult.Rejected(registrationMissing())
+        if (activeRegistration.desktopId != registration.desktopId) {
             return ConnectCompanionResult.Rejected(
-                CompanionFailure(CompanionFailureCode.CREDENTIAL_EXPIRED, "Paired credential expired.", true),
+                CompanionFailure(
+                    CompanionFailureCode.REGISTRATION_NOT_FOUND,
+                    "The discovered desktop is no longer the active registration.",
+                    true,
+                ),
             )
         }
-        val networkState = try {
-            network.observe().value
-        } catch (_: Throwable) {
-            CompanionNetworkState.Unavailable
-        }
-        if (networkState !is CompanionNetworkState.Available) {
-            return ConnectCompanionResult.Rejected(
-                CompanionFailure(CompanionFailureCode.NETWORK_UNAVAILABLE, "A network connection is required.", true),
-            )
+        connectionPrerequisiteFailure(registration)?.let { failure ->
+            return ConnectCompanionResult.Rejected(failure)
         }
         val credential = try {
             credentials.read(registration.credentialReference)
@@ -48,23 +63,30 @@ public class ConnectCompanionUseCase(
             return ConnectCompanionResult.Rejected(
                 CompanionFailure(CompanionFailureCode.PERSISTENCE_FAILED, "Unable to read the paired credential.", true),
             )
-        }
-            ?: return ConnectCompanionResult.Rejected(
+        } ?: return ConnectCompanionResult.Rejected(
                 CompanionFailure(CompanionFailureCode.CREDENTIAL_NOT_FOUND, "Paired credential is unavailable.", false),
             )
-        val initial = connect(registration, credential)
-        if (initial !is ConnectCompanionResult.Rejected || recoverEndpoint == null) return initial
-        if (
-            initial.failure.code != CompanionFailureCode.TRANSPORT_UNAVAILABLE &&
-            initial.failure.code != CompanionFailureCode.TRANSPORT_IDENTITY_MISMATCH
-        ) return initial
-        return when (val recovery = recoverEndpoint.execute(registration)) {
-            is CompanionEndpointRecoveryResult.Rejected -> ConnectCompanionResult.Rejected(recovery.failure)
-            is CompanionEndpointRecoveryResult.Recovered -> connect(recovery.registration, credential)
-        }
+        return connectTransport(registration, credential)
     }
 
-    private suspend fun connect(
+    private fun connectionPrerequisiteFailure(
+        registration: com.devuloopers.knet.companion.model.CompanionRegistration,
+    ): CompanionFailure? {
+        if (nowEpochMillis() >= registration.credentialExpiresAtEpochMillis) {
+            return CompanionFailure(CompanionFailureCode.CREDENTIAL_EXPIRED, "Paired credential expired.", true)
+        }
+        val networkState = try {
+            network.observe().value
+        } catch (_: Throwable) {
+            CompanionNetworkState.Unavailable
+        }
+        if (networkState !is CompanionNetworkState.Available) {
+            return CompanionFailure(CompanionFailureCode.NETWORK_UNAVAILABLE, "A network connection is required.", true)
+        }
+        return null
+    }
+
+    private suspend fun connectTransport(
         registration: com.devuloopers.knet.companion.model.CompanionRegistration,
         credential: String,
     ): ConnectCompanionResult = try {

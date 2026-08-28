@@ -4,7 +4,9 @@ import com.devuloopers.knet.application.usecase.pairing.CompanionDiscoveryEnviro
 import com.devuloopers.knet.companion.model.CompanionDiscoveryAdvertisement
 import com.devuloopers.knet.companion.model.CompanionDiscoveryProtocol
 import com.devuloopers.knet.companion.model.CompanionDiscoveryTxtCodec
-import com.devuloopers.knet.connectivity.model.WifiSharingState
+import com.devuloopers.knet.connectivity.desktop.gateway.CompanionControlGatewayState
+import com.devuloopers.knet.connectivity.desktop.network.preferredLanAddress
+import com.devuloopers.knet.connectivity.model.NetworkSnapshot
 import com.devuloopers.knet.core.logger.KNetLogger
 import java.net.InetAddress
 import java.util.concurrent.atomic.AtomicBoolean
@@ -17,7 +19,9 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 /** One native DNS-SD registration owned by [CompanionDiscoveryPublisher]. */
@@ -35,7 +39,7 @@ public fun interface CompanionDiscoveryRegistrar {
     ): CompanionDiscoveryRegistration
 }
 
-/** JmDNS registration bound to the exact address published by the active Wi-Fi sharing session. */
+/** JmDNS registration bound to the currently preferred desktop LAN address. */
 public class JmDnsCompanionDiscoveryRegistrar : CompanionDiscoveryRegistrar {
     override fun register(
         address: String,
@@ -72,7 +76,8 @@ public class JmDnsCompanionDiscoveryRegistrar : CompanionDiscoveryRegistrar {
  * with the already-pinned desktop TLS identity before updating any durable registration.
  */
 public class CompanionDiscoveryPublisher(
-    private val sharingState: StateFlow<WifiSharingState>,
+    private val networkSnapshots: StateFlow<NetworkSnapshot>,
+    private val controlGatewayState: StateFlow<CompanionControlGatewayState>,
     private val environmentProvider: CompanionDiscoveryEnvironmentProvider,
     private val registrar: CompanionDiscoveryRegistrar = JmDnsCompanionDiscoveryRegistrar(),
     private val txtCodec: CompanionDiscoveryTxtCodec = CompanionDiscoveryTxtCodec(),
@@ -84,34 +89,48 @@ public class CompanionDiscoveryPublisher(
     private var activeRegistration: CompanionDiscoveryRegistration? = null
     private var publicationJob: Job? = null
 
-    /** Starts observing Wi-Fi sharing once. */
+    /** Starts observing the LAN and companion control listener once, independently of proxy state. */
     public fun start() {
         check(!closed.get()) { "Companion discovery publisher is closed." }
         if (publicationJob != null) return
         publicationJob = scope.launch {
-            sharingState.collectLatest { state ->
-                replaceRegistration(null)
-                val active = state as? WifiSharingState.Active ?: return@collectLatest
-                val environment = environmentProvider.load()
-                val advertisement = CompanionDiscoveryAdvertisement(
-                    protocolVersion = CompanionDiscoveryProtocol.VERSION,
-                    desktopId = environment.desktopId,
-                    legacyDesktopIds = environment.legacyDesktopIds,
-                    runtimeId = environment.runtimeId,
+            combine(networkSnapshots, controlGatewayState) { network, gateway ->
+                PublicationTarget(
+                    address = network.preferredLanAddress()?.address,
+                    port = (gateway as? CompanionControlGatewayState.Listening)?.port,
                 )
-                val instanceName = "KNet-${environment.desktopId.value.take(8)}"
+            }.distinctUntilChanged().collectLatest { target ->
+                replaceRegistration(null)
+                val address = target.address ?: return@collectLatest
+                val port = target.port ?: return@collectLatest
                 runCatching {
-                    registrar.register(
-                        address = active.session.networkAddress.address,
-                        instanceName = instanceName,
-                        port = environment.controlPort,
-                        txt = txtCodec.encode(advertisement),
+                    val environment = environmentProvider.load()
+                    check(environment.controlPort == port) {
+                        "The discovery environment control port does not match the active listener."
+                    }
+                    val advertisement = CompanionDiscoveryAdvertisement(
+                        protocolVersion = CompanionDiscoveryProtocol.VERSION,
+                        desktopId = environment.desktopId,
+                        legacyDesktopIds = environment.legacyDesktopIds,
+                        runtimeId = environment.runtimeId,
                     )
-                }.onSuccess { registration ->
+                    val instanceName = "KNet-${environment.desktopId.value.take(8)}"
+                    registrar.register(
+                        address = address,
+                        instanceName = instanceName,
+                        port = port,
+                        txt = txtCodec.encode(advertisement),
+                    ) to environment.desktopId
+                }.onSuccess { (registration, desktopId) ->
                     replaceRegistration(registration)
+                    KNetLogger.info(tag = DISCOVERY_TAG) {
+                        "companion_event=advertisement_published desktop_id=${desktopId.value} " +
+                            "address=$address port=$port"
+                    }
                 }.onFailure { failure ->
-                    KNetLogger.warn(tag = "CompanionDiscovery") {
-                        "Companion discovery advertisement is unavailable: ${failure::class.simpleName}."
+                    KNetLogger.warn(tag = DISCOVERY_TAG) {
+                        "companion_event=advertisement_failed address=$address port=$port " +
+                            "reason=${failure::class.simpleName ?: "unknown"}"
                     }
                 }
             }
@@ -140,5 +159,14 @@ public class CompanionDiscoveryPublisher(
         }
         registration?.let { active -> runCatching(active::close) }
         scope.cancel()
+    }
+
+    private data class PublicationTarget(
+        val address: String?,
+        val port: Int?,
+    )
+
+    private companion object {
+        const val DISCOVERY_TAG: String = "CompanionDiscovery"
     }
 }

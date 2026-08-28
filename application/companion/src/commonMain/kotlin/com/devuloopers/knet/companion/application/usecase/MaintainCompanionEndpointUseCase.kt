@@ -78,7 +78,7 @@ public class MaintainCompanionEndpointUseCase(
                 val result = recoverEndpoint.execute(registration, settledCandidates)
                 if (result is CompanionEndpointRecoveryResult.Recovered) {
                     val after = result.registration.controlEndpoint to result.registration.proxyEndpoint
-                    if (wasConnected && before != after) reconnect.execute()
+                    if (wasConnected && before != after) reconnect.connect(result)
                 }
             }
         } finally {

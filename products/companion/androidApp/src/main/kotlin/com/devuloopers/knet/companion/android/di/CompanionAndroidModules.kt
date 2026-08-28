@@ -12,6 +12,7 @@ import com.devuloopers.knet.companion.application.contract.CompanionDeviceDispla
 import com.devuloopers.knet.companion.application.contract.CompanionDeviceIdentityProvider
 import com.devuloopers.knet.companion.application.contract.CompanionDeviceProofSigner
 import com.devuloopers.knet.companion.application.contract.CompanionEndpointReconciliationClient
+import com.devuloopers.knet.companion.application.contract.CompanionEndpointResolver
 import com.devuloopers.knet.companion.application.contract.CompanionInspectionController
 import com.devuloopers.knet.companion.application.contract.CompanionInvitationCodec
 import com.devuloopers.knet.companion.application.contract.CompanionInvitationResolver
@@ -124,8 +125,9 @@ internal object CompanionAndroidModules {
         single { ObserveCompanionCertificateEnrollmentsUseCase(get()) }
         single { SelectCompanionRegistrationUseCase(get()) }
         single { RecoverCompanionEndpointUseCase(get(), get(), get(), get()) }
+        single<CompanionEndpointResolver> { get<RecoverCompanionEndpointUseCase>() }
         single<CompanionDesktopAvailabilityMonitor> {
-            MonitorCompanionDesktopAvailabilityUseCase(get(), get(), get(), get(), get(), ::currentEpochMillis)
+            MonitorCompanionDesktopAvailabilityUseCase(get(), get(), get(), ::currentEpochMillis)
         }
         single { MaintainCompanionEndpointUseCase(get(), get(), get(), get(), get()) }
         single { ConnectCompanionUseCase(get(), get(), get(), get(), ::currentEpochMillis, get()) }

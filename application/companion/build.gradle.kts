@@ -19,6 +19,7 @@ kotlin {
             api(project(":core:companion"))
             api(project(":core:identity"))
             api(project(":core:pairing"))
+            implementation(project(":core:logger"))
             api(libs.kotlinx.coroutines.core)
         }
         commonTest.dependencies {

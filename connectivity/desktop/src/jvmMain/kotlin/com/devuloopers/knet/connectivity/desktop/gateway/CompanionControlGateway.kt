@@ -24,6 +24,7 @@ import com.devuloopers.knet.pairing.DeviceScope
 import com.devuloopers.knet.pairing.PairingCompletionResult
 import com.devuloopers.knet.pairing.PairingCredentialRefreshResult
 import java.io.ByteArrayOutputStream
+import java.net.BindException
 import java.net.InetSocketAddress
 import java.net.SocketException
 import java.util.concurrent.ConcurrentHashMap
@@ -37,6 +38,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /**
  * Authenticated TLS listener for bootstrap redemption, pairing, credential rotation, and certificate proofs.
@@ -72,7 +76,7 @@ public class CompanionControlGateway(
     private val nowEpochMillis: () -> Long,
     private val maximumConnections: Int = DEFAULT_MAXIMUM_CONNECTIONS,
     private val maximumTrackedChallenges: Int = DEFAULT_MAXIMUM_TRACKED_CHALLENGES,
-) : AutoCloseable {
+) : CompanionControlGatewayLifecycle {
     private val running: AtomicBoolean = AtomicBoolean(false)
     private val closed: AtomicBoolean = AtomicBoolean(false)
     private val admission: Semaphore = Semaphore(maximumConnections)
@@ -82,6 +86,9 @@ public class CompanionControlGateway(
     private val scope: CoroutineScope = CoroutineScope(
         SupervisorJob() + Dispatchers.IO.limitedParallelism(maximumConnections + 1),
     )
+    private val mutableState: MutableStateFlow<CompanionControlGatewayState> =
+        MutableStateFlow(CompanionControlGatewayState.Stopped)
+    override val state: StateFlow<CompanionControlGatewayState> = mutableState.asStateFlow()
     private var listener: SSLServerSocket? = null
 
     init {
@@ -92,20 +99,31 @@ public class CompanionControlGateway(
     }
 
     /** Starts the TLS listener once; repeated calls while running are idempotent. */
-    public fun start() {
+    override fun start() {
         check(!closed.get()) { "Companion control gateway is already closed." }
         if (!running.compareAndSet(false, true)) return
+        mutableState.value = CompanionControlGatewayState.Starting
+        var created: SSLServerSocket? = null
         try {
-            val created = serverSocketFactory.createServerSocket() as SSLServerSocket
+            created = serverSocketFactory.createServerSocket() as SSLServerSocket
             created.reuseAddress = false
             created.needClientAuth = false
             created.enabledProtocols = created.supportedProtocols.filter { it == "TLSv1.3" || it == "TLSv1.2" }.toTypedArray()
             created.bind(InetSocketAddress(bindHost, bindPort), LISTENER_BACKLOG)
             listener = created
+            mutableState.value = CompanionControlGatewayState.Listening(created.localPort)
             scope.launch { acceptLoop(created) }
         } catch (failure: Throwable) {
+            runCatching { created?.close() }
+            listener = null
             running.set(false)
-            close()
+            mutableState.value = CompanionControlGatewayState.Failed(
+                if (failure is BindException) {
+                    CompanionControlGatewayFailure.BIND_FAILED
+                } else {
+                    CompanionControlGatewayFailure.LISTENER_FAILED
+                },
+            )
             throw failure
         }
     }
@@ -115,24 +133,38 @@ public class CompanionControlGateway(
         get() = listener?.localPort
 
     private fun acceptLoop(server: SSLServerSocket) {
-        while (running.get()) {
-            val socket = try {
-                server.accept() as SSLSocket
-            } catch (_: SocketException) {
-                break
+        var listenerFailure: SocketException? = null
+        try {
+            while (running.get()) {
+                val socket = try {
+                    server.accept() as SSLSocket
+                } catch (failure: SocketException) {
+                    if (running.get()) listenerFailure = failure
+                    break
+                }
+                if (!admission.tryAcquire()) {
+                    runCatching { socket.close() }
+                    continue
+                }
+                activeSockets.add(socket)
+                scope.launch {
+                    try {
+                        handle(socket)
+                    } finally {
+                        runCatching(socket::close)
+                        activeSockets.remove(socket)
+                        admission.release()
+                    }
+                }
             }
-            if (!admission.tryAcquire()) {
-                runCatching { socket.close() }
-                continue
-            }
-            activeSockets.add(socket)
-            scope.launch {
-                try {
-                    handle(socket)
-                } finally {
-                    runCatching(socket::close)
-                    activeSockets.remove(socket)
-                    admission.release()
+        } finally {
+            if (listener === server) listener = null
+            runCatching(server::close)
+            if (running.compareAndSet(true, false)) {
+                mutableState.value = if (listenerFailure == null) {
+                    CompanionControlGatewayState.Stopped
+                } else {
+                    CompanionControlGatewayState.Failed(CompanionControlGatewayFailure.LISTENER_FAILED)
                 }
             }
         }
@@ -394,6 +426,7 @@ public class CompanionControlGateway(
         activeSockets.forEach { socket -> runCatching(socket::close) }
         activeSockets.clear()
         synchronized(challengeLock) { acceptedChallenges.clear() }
+        mutableState.value = CompanionControlGatewayState.Stopped
         scope.cancel()
     }
 
