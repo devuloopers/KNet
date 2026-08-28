@@ -55,6 +55,7 @@
     <string name="certificate_install_title">Install KNet Certificate</string>
     <string name="certificate_install_summary">Follow these steps to install and trust the certificate on this device.</string>
     <string name="certificate_install_illustration_description">A phone confirming the installed KNet root certificate</string>
+    <string name="certificate_verified_illustration_description">A phone, certificate, and shield confirming that the KNet root certificate is trusted</string>
     <string name="certificate_root_name">KNet root certificate</string>
     <string name="certificate_downloaded">Downloaded</string>
     <string name="certificate_install_required">Certificate installation or trust is required</string>

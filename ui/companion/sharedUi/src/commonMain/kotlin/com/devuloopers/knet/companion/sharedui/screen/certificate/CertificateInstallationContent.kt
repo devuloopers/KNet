@@ -76,9 +76,8 @@ internal fun CertificateInstallationContent(
         verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xl),
     ) {
         CertificateInstallationHeading()
-        CertificateDownloadIllustration(
+        CertificateInstallationHeroIllustration(
             contentDescription = stringResource(Res.string.certificate_install_illustration_description),
-            verified = false,
             modifier = Modifier.widthIn(max = 300.dp).fillMaxWidth().aspectRatio(1.54f),
         )
         DownloadedCertificateCard(savedExport = savedExport)

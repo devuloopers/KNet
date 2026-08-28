@@ -28,7 +28,7 @@ import com.devuloopers.knet.companion.presentation.state.CompanionUiState
 import com.devuloopers.knet.companion.sharedui.generated.resources.Res
 import com.devuloopers.knet.companion.sharedui.generated.resources.certificate_continue
 import com.devuloopers.knet.companion.sharedui.generated.resources.certificate_continue_note
-import com.devuloopers.knet.companion.sharedui.generated.resources.certificate_install_illustration_description
+import com.devuloopers.knet.companion.sharedui.generated.resources.certificate_verified_illustration_description
 import com.devuloopers.knet.companion.sharedui.generated.resources.certificate_installed_and_trusted
 import com.devuloopers.knet.companion.sharedui.generated.resources.certificate_paired_desktop
 import com.devuloopers.knet.companion.sharedui.generated.resources.certificate_pinning_note
@@ -56,9 +56,8 @@ internal fun CertificateVerifiedContent(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xl),
     ) {
-        CertificateDownloadIllustration(
-            contentDescription = stringResource(Res.string.certificate_install_illustration_description),
-            verified = true,
+        CertificateVerifiedHeroIllustration(
+            contentDescription = stringResource(Res.string.certificate_verified_illustration_description),
             modifier = Modifier.widthIn(max = 400.dp).fillMaxWidth().aspectRatio(1.54f),
         )
         CertificateScreenHeading(

@@ -120,7 +120,7 @@ private fun CertificateDownloadContent(
             title = stringResource(Res.string.certificate_title),
             summary = stringResource(Res.string.certificate_summary),
         )
-        CertificateDownloadIllustration(
+        CertificateDownloadHeroIllustration(
             contentDescription = stringResource(Res.string.certificate_illustration_description),
             modifier = Modifier.widthIn(max = 400.dp).fillMaxWidth().aspectRatio(1.54f),
         )

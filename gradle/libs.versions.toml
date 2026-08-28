@@ -1,6 +1,7 @@
 [versions]
 android-gradle-plugin = "9.1.1"
-android-compile-sdk = "36"
+android-compile-sdk = "37"
+android-target-sdk = "36"
 android-min-sdk = "26"
 androidx-activity = "1.13.0"
 androidx-annotation = "1.10.0"

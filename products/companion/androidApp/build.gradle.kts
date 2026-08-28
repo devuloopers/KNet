@@ -11,7 +11,7 @@ android {
     defaultConfig {
         applicationId = "com.devuloopers.knet.companion"
         minSdk = libs.versions.android.min.sdk.get().toInt()
-        targetSdk = libs.versions.android.compile.sdk.get().toInt()
+        targetSdk = libs.versions.android.target.sdk.get().toInt()
         versionCode = 1
         versionName = "1.0.0"
     }

@@ -1,21 +1,21 @@
-package com.devuloopers.knet.companion.sharedui.component
+package com.devuloopers.knet.companion.sharedui.screen.certificate
 
 import androidx.compose.foundation.Image
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import com.devuloopers.knet.companion.sharedui.generated.resources.Res
-import com.devuloopers.knet.companion.sharedui.generated.resources.connect_desktop_qr_illustration
+import com.devuloopers.knet.companion.sharedui.generated.resources.certificate_verified_illustration
 import org.jetbrains.compose.resources.painterResource
 
-/** Branded phone-to-desktop QR illustration shared by every companion platform. */
+/** Branded trusted-certificate artwork used only by the verified phase. */
 @Composable
-internal fun DesktopQrScanIllustration(
+internal fun CertificateVerifiedHeroIllustration(
     contentDescription: String,
     modifier: Modifier = Modifier,
 ) {
     Image(
-        painter = painterResource(Res.drawable.connect_desktop_qr_illustration),
+        painter = painterResource(Res.drawable.certificate_verified_illustration),
         contentDescription = contentDescription,
         modifier = modifier,
         contentScale = ContentScale.Fit,
