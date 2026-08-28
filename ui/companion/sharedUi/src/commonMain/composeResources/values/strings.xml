@@ -128,6 +128,7 @@
     <string name="home_certificate_name">KNet root certificate</string>
     <string name="home_certificate_checking">Checking</string>
     <string name="home_certificate_pending">Verification pending</string>
+    <string name="home_certificate_previously_verified">Previously verified</string>
     <string name="home_certificate_verified">Verified</string>
     <string name="home_certificate_attention">Needs attention</string>
     <string name="home_tunnel_label">Secure tunnel</string>

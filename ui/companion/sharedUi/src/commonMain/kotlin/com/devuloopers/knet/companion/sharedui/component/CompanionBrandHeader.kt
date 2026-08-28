@@ -15,8 +15,9 @@ import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.companion.sharedui.generated.resources.Res
 import com.devuloopers.knet.companion.sharedui.generated.resources.brand_companion
 import com.devuloopers.knet.companion.sharedui.generated.resources.brand_knet
-import com.devuloopers.knet.ui.core.foundation.resources.kNetLogoPainter
+import com.devuloopers.knet.companion.sharedui.generated.resources.knet_companion_logo
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import org.jetbrains.compose.resources.painterResource
 import org.jetbrains.compose.resources.stringResource
 
 /** Centered companion product mark reusable across onboarding screens. */
@@ -31,7 +32,7 @@ internal fun CompanionBrandHeader(modifier: Modifier = Modifier) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Image(
-                painter = kNetLogoPainter(),
+                painter = painterResource(Res.drawable.knet_companion_logo),
                 contentDescription = null,
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.size(if (compact) 30.dp else 36.dp),
