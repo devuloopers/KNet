@@ -261,26 +261,34 @@ class KNetProxyServer(
         serverChannel?.close()?.syncUninterruptibly()
         serverChannel = null
 
+        val shutdownDeadlineNanos = System.nanoTime() +
+            TimeUnit.MILLISECONDS.toNanos(runtimePolicy.gracefulShutdownTimeoutMillis)
+        val bossShutdown = bossGroup?.shutdownGracefully(
+            100,
+            runtimePolicy.gracefulShutdownTimeoutMillis,
+            TimeUnit.MILLISECONDS,
+        )
+        val workerShutdown = workerGroup?.shutdownGracefully(
+            100,
+            runtimePolicy.gracefulShutdownTimeoutMillis,
+            TimeUnit.MILLISECONDS,
+        )
         certificateExecutor?.shutdownNow()
         certificateExecutor?.awaitTermination(
-            runtimePolicy.gracefulShutdownTimeoutMillis,
+            remainingShutdownMillis(shutdownDeadlineNanos),
             TimeUnit.MILLISECONDS,
         )
         certificateExecutor = null
 
-        bossGroup?.shutdownGracefully(
-            100,
-            runtimePolicy.gracefulShutdownTimeoutMillis,
-            TimeUnit.MILLISECONDS,
-        )?.syncUninterruptibly()
-        workerGroup?.shutdownGracefully(
-            100,
-            runtimePolicy.gracefulShutdownTimeoutMillis,
-            TimeUnit.MILLISECONDS,
-        )?.syncUninterruptibly()
+        bossShutdown?.awaitUninterruptibly(remainingShutdownMillis(shutdownDeadlineNanos))
+        workerShutdown?.awaitUninterruptibly(remainingShutdownMillis(shutdownDeadlineNanos))
         bossGroup = null
         workerGroup = null
     }
+
+    /** Remaining portion of one shared shutdown budget, kept positive for blocking APIs. */
+    private fun remainingShutdownMillis(deadlineNanos: Long): Long =
+        TimeUnit.NANOSECONDS.toMillis(deadlineNanos - System.nanoTime()).coerceAtLeast(1L)
 
     /** Samples scheduling delay without performing work outside atomic metric updates. */
     private fun startEventLoopLagMonitor(group: EventLoopGroup) {

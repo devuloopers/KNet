@@ -43,6 +43,7 @@ import com.devuloopers.knet.ui.desktop.traffic.model.SchemeFilter
 import com.devuloopers.knet.ui.desktop.traffic.model.HttpVersionFilter
 import com.devuloopers.knet.ui.desktop.traffic.model.TrafficInterceptionUiState
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -52,6 +53,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
@@ -193,6 +195,38 @@ class TrafficPagingViewModelTest {
         assertEquals(2L, viewModel.uiState.value.totalAvailableCount)
         assertEquals(2, viewModel.uiState.value.filteredTransactions.size)
         assertEquals(expectedFacets, viewModel.uiState.value.facetCounts)
+    }
+
+    @Test
+    fun `successful clear resets facet pills before the authoritative reload completes`() = runTest(dispatcher) {
+        val initialFacets = TrafficFacetCounts(totalCount = 3L, httpCount = 1L, httpsCount = 2L)
+        val reloadStarted = CompletableDeferred<Unit>()
+        val allowReload = CompletableDeferred<Unit>()
+        var facetQueryCount = 0
+        val viewModel = FakeTrafficViewModelFactory.create(
+            customTrafficFacetReader = TrafficFacetReader {
+                facetQueryCount += 1
+                if (facetQueryCount > 1) {
+                    reloadStarted.complete(Unit)
+                    allowReload.await()
+                    TrafficFacetCounts()
+                } else {
+                    initialFacets
+                }
+            },
+        )
+        advanceUntilIdle()
+        assertEquals(initialFacets, viewModel.uiState.value.facetCounts)
+
+        viewModel.processIntent(TrafficIntent.ClearFeed)
+        runCurrent()
+
+        assertTrue(reloadStarted.isCompleted)
+        assertEquals(TrafficFacetCounts(), viewModel.uiState.value.facetCounts)
+
+        allowReload.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(TrafficFacetCounts(), viewModel.uiState.value.facetCounts)
     }
 
     @Test

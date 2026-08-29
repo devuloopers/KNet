@@ -28,6 +28,7 @@ import com.devuloopers.knet.application.contract.breakpoint.PendingProtocolMessa
 import com.devuloopers.knet.application.usecase.inspection.ObserveInspectionAnnotationsUseCase
 import com.devuloopers.knet.application.contract.traffic.TrafficPageQuery
 import com.devuloopers.knet.application.contract.traffic.TrafficFacetQuery
+import com.devuloopers.knet.application.contract.traffic.TrafficFacetCounts
 import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePageQuery
 import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
 import com.devuloopers.knet.application.contract.proxy.ProxyStopReason
@@ -536,6 +537,7 @@ class TrafficViewModel(
                                         preparedState = InspectorPreparedState(),
                                         nextPageCursor = null,
                                         pageGeneration = 0L,
+                                        facetCounts = TrafficFacetCounts(),
                                     )
                                 }
                             }

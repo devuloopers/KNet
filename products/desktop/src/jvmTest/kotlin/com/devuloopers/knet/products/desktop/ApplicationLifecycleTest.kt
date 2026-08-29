@@ -2,6 +2,8 @@ package com.devuloopers.knet.products.desktop
 
 import com.devuloopers.knet.products.desktop.lifecycle.ApplicationLifecycle
 import com.devuloopers.knet.products.desktop.lifecycle.ShutdownAware
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import kotlin.test.Test
 import kotlin.test.assertTrue
 
@@ -90,5 +92,28 @@ class ApplicationLifecycleTest {
     fun testShouldIgnoreEmptyLifecycle() {
         // Must complete cleanly without errors when no resources are registered
         ApplicationLifecycle.shutdown()
+    }
+
+    @Test
+    fun `asynchronous shutdown returns before a slow resource closes`() {
+        val closeStarted = CountDownLatch(1)
+        val allowClose = CountDownLatch(1)
+        val closeCompleted = CountDownLatch(1)
+        ApplicationLifecycle.registerResource("slow-test-resource", object : ShutdownAware {
+            override fun close() {
+                closeStarted.countDown()
+                allowClose.await(2L, TimeUnit.SECONDS)
+                closeCompleted.countDown()
+            }
+        })
+
+        val startedAt = System.nanoTime()
+        ApplicationLifecycle.shutdownAsync()
+        val returnedWithinMillis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt)
+
+        assertTrue(returnedWithinMillis < 500L, "Shutdown dispatch must not block the Compose event thread")
+        assertTrue(closeStarted.await(1L, TimeUnit.SECONDS), "Shutdown worker must begin cleanup")
+        allowClose.countDown()
+        assertTrue(closeCompleted.await(1L, TimeUnit.SECONDS), "Shutdown worker must finish cleanup")
     }
 }

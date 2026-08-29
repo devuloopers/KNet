@@ -145,6 +145,42 @@ class CanonicalCaptureCutoverTest {
         }
     }
 
+    /** Verifies an immediate clear waits for asynchronous pause retirement before deleting history. */
+    @Test
+    fun `clear immediately after pause deletes the retired capture session`() = runTest {
+        val root = Files.createTempDirectory("knet-canonical-pause-clear-").toFile()
+        val database = DatabaseFactory.create(root.resolve("traffic.db"))
+        val bodyStore = FileBodyStore(root.resolve("bodies"))
+        val breakpointCoordinator = BreakpointCoordinator()
+        val repository = DesktopProxyRuntimeAdapter(
+            proxyRuntimeRepository = ProxyRuntimeRepository(
+                certificateAuthority = CertificateAuthority.generate(),
+                certificateCache = CertificateCache(),
+                breakpointGate = breakpointCoordinator,
+            ),
+            canonicalCaptureSessionFactory = CanonicalCaptureSessionFactory(database, bodyStore, bodyStore),
+            breakpointCaptureAvailability = breakpointCoordinator,
+        )
+        val maintenance = DesktopTrafficMaintenanceAdapter(database, bodyStore)
+        try {
+            assertIs<ProxyStartResult.Running>(repository.start(configuration(availableLoopbackPort())))
+            val pausedSessionId = assertNotNull(database.canonicalCaptureDao().observeLatestSessionId().first())
+
+            assertEquals(CapturePauseResult.PAUSED, repository.pause())
+            val preparation = ClearTrafficHistoryUseCase(repository, maintenance).execute()
+
+            assertEquals(CaptureClearPreparation.CANONICAL_SESSION_INACTIVE, preparation)
+            assertNull(database.canonicalCaptureDao().getSession(pausedSessionId))
+            assertEquals(0, database.canonicalCaptureDao().countActiveSessions())
+            assertIs<CaptureSessionState.Paused>(repository.captureState.value)
+        } finally {
+            repository.stop(ProxyStopReason.APPLICATION_SHUTDOWN)
+            repository.close()
+            database.close()
+            root.deleteRecursively()
+        }
+    }
+
     /** Verifies canonical selection writes indexed metadata and opaque bounded bodies. */
     @Test
     fun `canonical selection writes queryable metadata and bounded bodies`() = runTest {

@@ -28,6 +28,7 @@ import com.devuloopers.knet.data.desktop.runtime.ProxyRuntimeRepository
 import com.devuloopers.knet.engine.proxy.KNetProxyRuntimePolicy
 import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -200,29 +201,25 @@ class DesktopProxyRuntimeAdapter(
     }
 
     /** Detaches canonical capture while the proxy continues forwarding existing connections. */
-    override suspend fun pause(): CapturePauseResult {
-        var retiringSession: StreamingProxyCaptureSession? = null
-        val result = lifecycleMutex.withLock {
-            if (_runtimeState.value !is ProxyRuntimeState.Running) {
-                _captureState.value = CaptureSessionState.Inactive
-                return@withLock CapturePauseResult.PROXY_INACTIVE
-            }
-            breakpointCaptureAvailability.setCaptureAvailable(false)
-            retiringSession = synchronized(canonicalCallbackLock) {
-                val current = canonicalCaptureSession
-                switchableCaptureSink?.pause()
-                canonicalCaptureSession = null
-                current
-            }
-            _captureState.value = CaptureSessionState.Paused
-            if (retiringSession == null) {
-                CapturePauseResult.ALREADY_PAUSED
-            } else {
-                CapturePauseResult.PAUSED
-            }
+    override suspend fun pause(): CapturePauseResult = lifecycleMutex.withLock {
+        if (_runtimeState.value !is ProxyRuntimeState.Running) {
+            _captureState.value = CaptureSessionState.Inactive
+            return@withLock CapturePauseResult.PROXY_INACTIVE
         }
-        retiringSession?.let { session -> retirementOwner.retire(session) }
-        return result
+        breakpointCaptureAvailability.setCaptureAvailable(false)
+        val retiringSession = synchronized(canonicalCallbackLock) {
+            val current = canonicalCaptureSession
+            switchableCaptureSink?.pause()
+            canonicalCaptureSession = null
+            current
+        }
+        _captureState.value = CaptureSessionState.Paused
+        if (retiringSession == null) {
+            CapturePauseResult.ALREADY_PAUSED
+        } else {
+            retirementOwner.retire(retiringSession)
+            CapturePauseResult.PAUSED
+        }
     }
 
     /** Attaches a fresh canonical capture generation without rebinding the proxy listener. */
@@ -265,6 +262,7 @@ class DesktopProxyRuntimeAdapter(
      * old adapter terminalizes unfinished capture state without closing any client transport channel.
      */
     override suspend fun rotateForTrafficClear(): CaptureClearPreparation = lifecycleMutex.withLock {
+        retirementOwner.awaitDrained()
         val running = _runtimeState.value as? ProxyRuntimeState.Running
         if (running == null) {
             closeCanonicalCaptureSession()
@@ -305,6 +303,8 @@ class DesktopProxyRuntimeAdapter(
     fun close() {
         if (!closed.compareAndSet(false, true)) return
         proxyRuntimeRepository.close()
+        val captureShutdownDeadlineNanos = System.nanoTime() +
+            TimeUnit.MILLISECONDS.toNanos(CANONICAL_WRITER_SHUTDOWN_TIMEOUT_MILLIS)
         val canonicalSession = synchronized(canonicalCallbackLock) {
             val session = canonicalCaptureSession
             switchableCaptureSink?.pause()
@@ -314,7 +314,7 @@ class DesktopProxyRuntimeAdapter(
         }
         canonicalSession?.let { session ->
             if (!session.closeAndAwait(
-                    CANONICAL_WRITER_SHUTDOWN_TIMEOUT_MILLIS,
+                    remainingShutdownMillis(captureShutdownDeadlineNanos),
                     TrafficTerminationReason.Lifecycle.PROXY_STOPPED,
                 )
             ) {
@@ -323,7 +323,7 @@ class DesktopProxyRuntimeAdapter(
                 }
             }
         }
-        if (!retirementOwner.closeAndAwait(CANONICAL_WRITER_SHUTDOWN_TIMEOUT_MILLIS)) {
+        if (!retirementOwner.closeAndAwait(remainingShutdownMillis(captureShutdownDeadlineNanos))) {
             KNetLogger.error(tag = LogTags.PROXY) {
                 "Timed out while draining retired canonical capture writers during application shutdown."
             }
@@ -349,6 +349,10 @@ class DesktopProxyRuntimeAdapter(
             switchableCaptureSink = null
             current
         }
+
+    /** Remaining portion of the shared canonical-writer shutdown budget. */
+    private fun remainingShutdownMillis(deadlineNanos: Long): Long =
+        TimeUnit.NANOSECONDS.toMillis(deadlineNanos - System.nanoTime()).coerceAtLeast(1L)
 
     private companion object {
         private const val CANONICAL_WRITER_SHUTDOWN_TIMEOUT_MILLIS = 5_000L

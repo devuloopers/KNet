@@ -85,28 +85,28 @@ object DesktopBootstrap {
     /** Registers process resources in dependency order so reverse shutdown closes the proxy before storage. */
     private fun registerLifecycleResources(koin: Koin) {
         val database = koin.get<KNetDatabase>()
-        ApplicationLifecycle.registerResource(object : ShutdownAware {
+        ApplicationLifecycle.registerResource("database", object : ShutdownAware {
             override fun close() {
                 database.close()
             }
         })
 
         val rulesRepository = koin.get<RulesRepositoryImpl>()
-        ApplicationLifecycle.registerResource(object : ShutdownAware {
+        ApplicationLifecycle.registerResource("rules-repository", object : ShutdownAware {
             override fun close() {
                 rulesRepository.close()
             }
         })
 
         val proxyRuntime = koin.get<DesktopProxyRuntimeAdapter>()
-        ApplicationLifecycle.registerResource(object : ShutdownAware {
+        ApplicationLifecycle.registerResource("proxy-runtime", object : ShutdownAware {
             override fun close() {
                 proxyRuntime.close()
             }
         })
 
         val inspectionRuntime = koin.get<DesktopSemanticInspectionRuntime>()
-        ApplicationLifecycle.registerResource(object : ShutdownAware {
+        ApplicationLifecycle.registerResource("inspection-runtime", object : ShutdownAware {
             override fun close() {
                 inspectionRuntime.close()
             }
@@ -118,7 +118,7 @@ object DesktopBootstrap {
                 "Dedicated setup portal is unavailable: ${failure::class.simpleName}"
             }
         }
-        ApplicationLifecycle.registerResource(object : ShutdownAware {
+        ApplicationLifecycle.registerResource("setup-portal", object : ShutdownAware {
             override fun close() {
                 setupPortal.close()
             }
@@ -130,7 +130,7 @@ object DesktopBootstrap {
                 "Authenticated companion gateway is unavailable: ${failure::class.simpleName}"
             }
         }
-        ApplicationLifecycle.registerResource(object : ShutdownAware {
+        ApplicationLifecycle.registerResource("authenticated-proxy-gateway", object : ShutdownAware {
             override fun close() {
                 authenticatedGateway.close()
             }
@@ -142,7 +142,7 @@ object DesktopBootstrap {
                 "Companion control gateway runtime is unavailable: ${failure::class.simpleName}"
             }
         }
-        ApplicationLifecycle.registerResource(object : ShutdownAware {
+        ApplicationLifecycle.registerResource("companion-control-gateway", object : ShutdownAware {
             override fun close() {
                 companionControlGateway.close()
             }
@@ -154,21 +154,21 @@ object DesktopBootstrap {
                 "Companion discovery advertisement is unavailable: ${failure::class.simpleName}"
             }
         }
-        ApplicationLifecycle.registerResource(object : ShutdownAware {
+        ApplicationLifecycle.registerResource("companion-discovery", object : ShutdownAware {
             override fun close() {
                 companionDiscovery.close()
             }
         })
 
         val connectivityRuntime = koin.get<DesktopConnectivityRuntime>()
-        ApplicationLifecycle.registerResource(object : ShutdownAware {
+        ApplicationLifecycle.registerResource("connectivity-runtime", object : ShutdownAware {
             override fun close() {
                 connectivityRuntime.close()
             }
         })
 
         val wifiSharingRuntime = koin.get<DesktopWifiSharingRuntime>()
-        ApplicationLifecycle.registerResource(object : ShutdownAware {
+        ApplicationLifecycle.registerResource("wifi-sharing-runtime", object : ShutdownAware {
             override fun close() {
                 wifiSharingRuntime.close()
             }
@@ -178,7 +178,7 @@ object DesktopBootstrap {
     /** Starts process-owned policies once, independently from whether a feature screen is composed. */
     private fun startStartupPolicies(koin: Koin) {
         val policyScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        ApplicationLifecycle.registerResource(object : ShutdownAware {
+        ApplicationLifecycle.registerResource("startup-policy-scope", object : ShutdownAware {
             override fun close() {
                 policyScope.cancel()
             }
@@ -204,7 +204,7 @@ object DesktopBootstrap {
         application {
             Window(
                 onCloseRequest = {
-                    ApplicationLifecycle.shutdown()
+                    ApplicationLifecycle.shutdownAsync()
                     exitApplication()
                 },
                 title = AppMetadata.APP_DISPLAY_TITLE,
