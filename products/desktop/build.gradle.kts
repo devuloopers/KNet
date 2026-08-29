@@ -72,7 +72,10 @@ compose.desktop {
         mainClass = "com.devuloopers.knet.products.desktop.MainKt"
 
         jvmArgs += listOf(
-            "-Dapple.awt.application.name=$appName"
+            "-Dapple.awt.application.name=$appName",
+            "-Dsun.java2d.d3d=true",
+            "-Dsun.java2d.noddraw=true",
+            "-Dsun.java2d.opengl=false"
         )
 
         nativeDistributions {

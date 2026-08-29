@@ -1,7 +1,14 @@
 package com.devuloopers.knet.products.desktop.bootstrap
 
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.window.FrameWindowScope
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
+import androidx.compose.ui.window.rememberWindowState
 import com.devuloopers.knet.connectivity.desktop.DesktopConnectivityRuntime
 import com.devuloopers.knet.connectivity.desktop.gateway.AuthenticatedProxyGateway
 import com.devuloopers.knet.connectivity.desktop.gateway.CompanionControlGatewayRuntime
@@ -21,6 +28,8 @@ import com.devuloopers.knet.products.desktop.lifecycle.ShutdownAware
 import com.devuloopers.knet.products.desktop.runtime.ApplicationSettingsRuntimeSynchronizer
 import com.devuloopers.knet.storage.database.KNetDatabase
 import com.devuloopers.knet.ui.core.foundation.resources.kNetLogoPainter
+import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import com.devuloopers.knet.ui.core.foundation.theme.ThemeMode
 import com.devuloopers.knet.ui.desktop.app.window.MainWindow
 import com.devuloopers.knet.application.usecase.traffic.ClearTrafficHistoryUseCase
 import kotlinx.coroutines.CoroutineScope
@@ -202,16 +211,36 @@ object DesktopBootstrap {
 
     private fun launchDesktopApplication() {
         application {
+            val windowState = rememberWindowState()
             Window(
                 onCloseRequest = {
                     ApplicationLifecycle.shutdownAsync()
                     exitApplication()
                 },
+                state = windowState,
                 title = AppMetadata.APP_DISPLAY_TITLE,
                 icon = kNetLogoPainter()
             ) {
-                MainWindow()
+                KNetTheme(themeMode = ThemeMode.System) {
+                    WindowBackgroundFlashingWorkaround(themeBackground = KNetTheme.colors.background)
+                    MainWindow()
+                }
             }
+        }
+    }
+
+    /**
+     * Synchronizes the native AWT window and contentPane background colors with the active Compose
+     * [themeBackground] to eliminate white flashes and unpainted areas during live window resizing.
+     *
+     * @param themeBackground The active theme background color.
+     */
+    @Composable
+    private fun FrameWindowScope.WindowBackgroundFlashingWorkaround(themeBackground: Color) {
+        val awtColor = remember(themeBackground) { java.awt.Color(themeBackground.toArgb()) }
+        LaunchedEffect(window, awtColor) {
+            window.background = awtColor
+            window.contentPane.background = awtColor
         }
     }
 }

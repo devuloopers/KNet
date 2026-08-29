@@ -35,4 +35,39 @@ class DesktopBootstrapTest {
         assertNotNull(config)
         assertNotNull(config.environment)
     }
+
+    @Test
+    fun testConfigureWindowsRenderingPipelineSetsDefaultOpenGLProperties() {
+        configureWindowsRenderingPipeline(osName = "Windows 11", preferredRenderApi = "OPENGL")
+        kotlin.test.assertEquals("OPENGL", System.getProperty("skiko.renderApi"))
+        kotlin.test.assertEquals("false", System.getProperty("skiko.vsync.enabled"))
+        kotlin.test.assertEquals("true", System.getProperty("sun.java2d.opengl"))
+        kotlin.test.assertEquals("false", System.getProperty("sun.java2d.d3d"))
+        kotlin.test.assertEquals("true", System.getProperty("sun.java2d.noddraw"))
+    }
+
+    @Test
+    fun testConfigureWindowsRenderingPipelineSetsDirectXPropertiesWhenSpecified() {
+        configureWindowsRenderingPipeline(osName = "Windows 11", preferredRenderApi = "DIRECTX")
+        kotlin.test.assertEquals("DIRECTX", System.getProperty("skiko.renderApi"))
+        kotlin.test.assertEquals("false", System.getProperty("skiko.vsync.enabled"))
+        kotlin.test.assertEquals("true", System.getProperty("sun.java2d.d3d"))
+        kotlin.test.assertEquals("false", System.getProperty("sun.java2d.opengl"))
+        kotlin.test.assertEquals("true", System.getProperty("sun.java2d.noddraw"))
+    }
+
+    @Test
+    fun testEnableSynchronousMetalWindowResizeSetsPropertyOnMac() {
+        enableSynchronousMetalWindowResize(osName = "Mac OS X")
+        kotlin.test.assertEquals("true", System.getProperty("skiko.rendering.macos.metalSynchronousLiveResize"))
+    }
+
+    @Test
+    fun testConfigurePlatformRenderingAppliesApplicationName() {
+        configurePlatformRendering(osName = "Windows 10")
+        kotlin.test.assertEquals(
+            com.devuloopers.knet.domain.config.AppMetadata.APP_NAME,
+            System.getProperty("apple.awt.application.name")
+        )
+    }
 }
