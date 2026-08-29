@@ -49,7 +49,6 @@ import kotlin.uuid.Uuid
  * @property canonicalCaptureSessionFactory Factory for the sole canonical persistence authority.
  * @property breakpointCaptureAvailability Runtime switch that prevents uncaptured exchanges from pausing.
  */
-@OptIn(ExperimentalUuidApi::class)
 class DesktopProxyRuntimeAdapter(
     private val proxyRuntimeRepository: ProxyRuntimeRepository,
     private val canonicalCaptureSessionFactory: CanonicalCaptureSessionFactory,

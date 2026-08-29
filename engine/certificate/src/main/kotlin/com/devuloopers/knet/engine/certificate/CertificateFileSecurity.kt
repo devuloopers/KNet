@@ -21,7 +21,7 @@ object CertificateFileSecurity {
      */
     fun secureDirectory(directory: File): Boolean {
         if (!directory.exists() && !directory.mkdirs()) return false
-        val portableSecured = applyPortableOwnerFlags(directory, executable = true)
+        applyPortableOwnerFlags(directory, executable = true)
         val posixSecured = try {
             Files.setPosixFilePermissions(
                 directory.toPath(),
@@ -33,7 +33,7 @@ object CertificateFileSecurity {
         } catch (_: Exception) {
             false
         }
-        return directory.isDirectory && portableSecured && posixSecured
+        return directory.isDirectory && posixSecured
     }
 
     /**
@@ -44,7 +44,7 @@ object CertificateFileSecurity {
      */
     fun secureSecretFile(file: File): Boolean {
         if (!file.exists()) return false
-        val portableSecured = applyPortableOwnerFlags(file, executable = false)
+        applyPortableOwnerFlags(file, executable = false)
         val posixSecured = try {
             Files.setPosixFilePermissions(
                 file.toPath(),
@@ -56,7 +56,7 @@ object CertificateFileSecurity {
         } catch (_: Exception) {
             false
         }
-        return file.isFile && portableSecured && posixSecured
+        return file.isFile && posixSecured
     }
 
     /**
@@ -111,16 +111,13 @@ object CertificateFileSecurity {
         return "$stem.$extension"
     }
 
-    /** Clears broad Java permission flags before granting only owner access. */
-    private fun applyPortableOwnerFlags(file: File, executable: Boolean): Boolean {
-        val results = listOf(
-            file.setReadable(false, false),
-            file.setWritable(false, false),
-            file.setExecutable(false, false),
-            file.setReadable(true, true),
-            file.setWritable(true, true),
-            !executable || file.setExecutable(true, true),
-        )
-        return results.all { it }
+    /** Clears broad Java permission flags before granting owner access on a best-effort basis. */
+    private fun applyPortableOwnerFlags(file: File, executable: Boolean) {
+        file.setReadable(false, false)
+        file.setWritable(false, false)
+        file.setExecutable(false, false)
+        file.setReadable(true, true)
+        file.setWritable(true, true)
+        if (executable) file.setExecutable(true, true)
     }
 }

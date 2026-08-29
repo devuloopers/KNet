@@ -32,14 +32,14 @@ class CertificateFileSecurityTest {
         assertFalse(fileName.contains(".."))
     }
 
-    /** Verifies POSIX-capable filesystems receive owner read-write permissions only. */
+    /** Verifies POSIX-capable filesystems receive owner read-write permissions only and operations succeed. */
     @Test
     fun `secret files are owner only when posix permissions are available`() {
         val directory = Files.createTempDirectory("knet-certificate-security-").toFile()
         val secret = directory.resolve("secret.key").apply { writeText("secret") }
 
-        CertificateFileSecurity.secureDirectory(directory)
-        CertificateFileSecurity.secureSecretFile(secret)
+        assertTrue(CertificateFileSecurity.secureDirectory(directory))
+        assertTrue(CertificateFileSecurity.secureSecretFile(secret))
         val permissions = runCatching { Files.getPosixFilePermissions(secret.toPath()) }.getOrNull()
 
         if (permissions != null) {
