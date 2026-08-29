@@ -68,7 +68,8 @@ contracts.
 
 ### Desktop traffic inspection
 
-- Capture HTTP/1.0 and HTTP/1.1 requests and responses through a Netty-based local proxy.
+- Capture HTTP/1.0, HTTP/1.1, and experimental HTTP/2 traffic through a Netty-based local proxy, including
+  multiplexed H2C and TLS/ALPN streams.
 - Inspect HTTPS traffic through a locally generated KNet root certificate and per-host TLS interception.
 - Search and filter canonical traffic by method, host, path, status, transport, and protocol metadata.
 - Keep request/response headers, timing, source attribution, protocol legs, body metadata, and terminal state together
@@ -105,7 +106,6 @@ contracts.
 
 - Configure browsers and devices through manual proxy details or deterministic PAC output.
 - Generate Apple configuration profiles for supported Apple setup flows.
-- Use ADB-based Android connectivity where appropriate.
 - Share KNet over the active local network interface with typed IPv4/IPv6 network snapshots and background recovery
   across interface changes.
 - Pair KNet Companion using a short-lived QR invitation and authenticated control/data gateways.
@@ -481,7 +481,7 @@ KNet/
 │   └── companion/               Portable companion workflows and contracts
 ├── core/                        Stable domain, traffic, pairing, identity, and connectivity models
 ├── connectivity/
-│   ├── desktop/                 PAC, manual, Apple, ADB, LAN, and pairing adapters
+│   ├── desktop/                 PAC, manual, Apple, LAN, and pairing adapters
 │   └── companion/               Android/iOS network, TLS, certificate, and tunnel adapters
 ├── data/
 │   ├── desktop/                 Desktop repositories and runtime adapters
