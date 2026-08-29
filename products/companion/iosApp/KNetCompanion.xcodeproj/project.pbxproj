@@ -3,7 +3,7 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 71;
 	objects = {
 
 /* Begin PBXBuildFile section */
@@ -178,7 +178,6 @@
 				Base,
 			);
 			mainGroup = A40000000000000000000001;
-			preferredProjectObjectVersion = 77;
 			productRefGroup = A40000000000000000000003 /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -225,7 +224,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "cd \"$SRCROOT/../../..\"\n./gradlew :products:companion:iosApp:embedAndSignAppleFrameworkForXcode\n";
+			shellScript = "if [ \"YES\" = \"$OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED\" ]; then\n  echo \"Skipping Gradle build task invocation due to OVERRIDE_KOTLIN_BUILD_IDE_SUPPORTED environment variable set to \\\"YES\\\"\"\n  exit 0\nfi\ncd \"$SRCROOT/../../..\"\n./gradlew :products:companion:iosApp:embedAndSignAppleFrameworkForXcode";
 		};
 		G70000000000000000000001 /* Build pinned tunnel engine */ = {
 			isa = PBXShellScriptBuildPhase;
@@ -327,6 +326,7 @@
 				CODE_SIGN_ENTITLEMENTS = app/KNetCompanion.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = GTD9X7LAT4;
 				ENABLE_PREVIEWS = YES;
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
 				FRAMEWORK_SEARCH_PATHS = (
@@ -336,9 +336,16 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = app/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
 				MARKETING_VERSION = 1.0.0;
-				OTHER_LDFLAGS = "$(inherited) -framework KNetCompanionIos";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					KNetCompanionIos,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.devuloopers.knet.companion;
 				PRODUCT_NAME = "KNet Companion";
 				SDKROOT = iphoneos;
@@ -357,6 +364,7 @@
 				CODE_SIGN_ENTITLEMENTS = app/KNetCompanion.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = GTD9X7LAT4;
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
@@ -365,9 +373,16 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = app/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
 				MARKETING_VERSION = 1.0.0;
-				OTHER_LDFLAGS = "$(inherited) -framework KNetCompanionIos";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					KNetCompanionIos,
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.devuloopers.knet.companion;
 				PRODUCT_NAME = "KNet Companion";
 				SDKROOT = iphoneos;
@@ -388,6 +403,7 @@
 				CODE_SIGN_ENTITLEMENTS = packetTunnelExtension/KNetPacketTunnel.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = GTD9X7LAT4;
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
@@ -396,9 +412,18 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = packetTunnelExtension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
 				MARKETING_VERSION = 1.0.0;
-				OTHER_LDFLAGS = "$(inherited) -framework KNetPacketTunnelRuntime $(SRCROOT)/build/native/$(SDK_NAME)/libhev-socks5-tunnel.a";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					KNetPacketTunnelRuntime,
+					"$(SRCROOT)/build/native/$(SDK_NAME)/libhev-socks5-tunnel.a",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.devuloopers.knet.companion.PacketTunnel;
 				PRODUCT_NAME = "KNet Packet Tunnel";
 				SDKROOT = iphoneos;
@@ -418,6 +443,7 @@
 				CODE_SIGN_ENTITLEMENTS = packetTunnelExtension/KNetPacketTunnel.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = GTD9X7LAT4;
 				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
 				FRAMEWORK_SEARCH_PATHS = (
 					"$(inherited)",
@@ -426,9 +452,18 @@
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = packetTunnelExtension/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 16.0;
-				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks @executable_path/../../Frameworks";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
 				MARKETING_VERSION = 1.0.0;
-				OTHER_LDFLAGS = "$(inherited) -framework KNetPacketTunnelRuntime $(SRCROOT)/build/native/$(SDK_NAME)/libhev-socks5-tunnel.a";
+				OTHER_LDFLAGS = (
+					"$(inherited)",
+					"-framework",
+					KNetPacketTunnelRuntime,
+					"$(SRCROOT)/build/native/$(SDK_NAME)/libhev-socks5-tunnel.a",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = com.devuloopers.knet.companion.PacketTunnel;
 				PRODUCT_NAME = "KNet Packet Tunnel";
 				SDKROOT = iphoneos;
