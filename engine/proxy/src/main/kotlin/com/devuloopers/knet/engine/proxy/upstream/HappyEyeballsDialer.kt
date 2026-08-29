@@ -1,5 +1,6 @@
 package com.devuloopers.knet.engine.proxy.upstream
 
+import com.devuloopers.knet.core.logger.KNetLogger
 import com.devuloopers.knet.engine.proxy.KNetProxyRuntimePolicy
 import io.netty.bootstrap.Bootstrap
 import io.netty.channel.Channel
@@ -95,7 +96,18 @@ internal class HappyEyeballsDialer(
             staggeredAttempt?.cancel(false)
             staggeredAttempt = null
             val candidate = route.candidates[nextCandidateIndex++]
-            val connectFuture = newBootstrap(eventLoop).connect(candidate.socketAddress)
+            KNetLogger.debug(HAPPY_EYEBALLS_TAG) {
+                "upstream_event=connect_attempt host=${route.host} port=${route.port} " +
+                    "candidate=$nextCandidateIndex/${route.candidates.size} family=${candidate.family} " +
+                    "address=${candidate.socketAddress.address.hostAddress}"
+            }
+            val connectFuture = runCatching {
+                newBootstrap(eventLoop).connect(candidate.socketAddress)
+            }.getOrElse { failure ->
+                recordFailure(candidate, failure.safeDiagnostic())
+                if (nextCandidateIndex < route.candidates.size) startNextCandidate() else completeIfExhausted()
+                return
+            }
             activeAttempts[connectFuture] = candidate
             connectFuture.addListener { completed ->
                 val future = completed as ChannelFuture
@@ -123,6 +135,10 @@ internal class HappyEyeballsDialer(
                 return
             }
             if (future.isSuccess) {
+                KNetLogger.debug(HAPPY_EYEBALLS_TAG) {
+                    "upstream_event=connect_selected host=${route.host} port=${route.port} " +
+                        "family=${candidate.family} address=${candidate.socketAddress.address.hostAddress}"
+                }
                 if (result.complete(ConnectedUpstream(future.channel(), candidate))) {
                     staggeredAttempt?.cancel(false)
                     deadline?.cancel(false)
@@ -135,11 +151,7 @@ internal class HappyEyeballsDialer(
             }
 
             future.channel().close()
-            failures += UpstreamCandidateFailure(
-                family = candidate.family,
-                address = candidate.socketAddress.address.hostAddress,
-                detail = future.cause().safeDiagnostic(),
-            )
+            recordFailure(candidate, future.cause().safeDiagnostic())
             if (nextCandidateIndex < route.candidates.size) {
                 staggeredAttempt?.cancel(false)
                 staggeredAttempt = null
@@ -156,8 +168,22 @@ internal class HappyEyeballsDialer(
         }
 
         private fun failRace(message: String) {
+            KNetLogger.warn(HAPPY_EYEBALLS_TAG) { "upstream_event=connect_failed detail=$message" }
             if (result.completeExceptionally(UpstreamConnectException(failures.toList(), message))) {
                 cancelRace()
+            }
+        }
+
+        private fun recordFailure(candidate: UpstreamAddressCandidate, detail: String) {
+            failures += UpstreamCandidateFailure(
+                family = candidate.family,
+                address = candidate.socketAddress.address.hostAddress,
+                detail = detail,
+            )
+            KNetLogger.debug(HAPPY_EYEBALLS_TAG) {
+                "upstream_event=connect_candidate_failed host=${route.host} port=${route.port} " +
+                    "family=${candidate.family} address=${candidate.socketAddress.address.hostAddress} " +
+                    "reason=$detail"
             }
         }
 
@@ -199,6 +225,7 @@ internal class HappyEyeballsDialer(
         ?: "connection failed"
 
     private companion object {
+        const val HAPPY_EYEBALLS_TAG: String = "ProxyEngine"
         const val MAX_DIAGNOSTIC_FAILURES: Int = 4
         const val MAX_DIAGNOSTIC_DETAIL_LENGTH: Int = 160
     }

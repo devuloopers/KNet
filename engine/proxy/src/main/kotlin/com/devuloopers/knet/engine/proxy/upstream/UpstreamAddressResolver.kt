@@ -1,5 +1,6 @@
 package com.devuloopers.knet.engine.proxy.upstream
 
+import com.devuloopers.knet.core.logger.KNetLogger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -91,9 +92,25 @@ internal class CoroutineUpstreamAddressResolver(
                                     },
                                 )
                             },
-                    )
+                    ).also { route ->
+                        KNetLogger.debug(UPSTREAM_RESOLUTION_TAG) {
+                            "upstream_event=dns_resolved host=${route.host} port=${route.port} " +
+                                "candidates=${route.candidates.joinToString(",") { candidate ->
+                                    "${candidate.family}:${candidate.socketAddress.address.hostAddress}"
+                                }}"
+                        }
+                    }
                 }
-            }.fold(result::complete, result::completeExceptionally)
+            }.fold(
+                onSuccess = result::complete,
+                onFailure = { failure ->
+                    KNetLogger.warn(UPSTREAM_RESOLUTION_TAG) {
+                        "upstream_event=dns_failed host=$host port=$port " +
+                            "reason=${failure.javaClass.simpleName}:${failure.message.orEmpty()}"
+                    }
+                    result.completeExceptionally(failure)
+                },
+            )
         }
         result.whenComplete { _, _ ->
             if (result.isCancelled) resolution.cancel()
@@ -101,6 +118,8 @@ internal class CoroutineUpstreamAddressResolver(
         return result
     }
 }
+
+private const val UPSTREAM_RESOLUTION_TAG: String = "ProxyEngine"
 
 /** Preserves platform preference while placing the alternate family second instead of last. */
 internal fun interleaveAddressFamilies(addresses: List<InetAddress>): List<InetAddress> {
