@@ -1,0 +1,193 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1180" viewBox="0 0 1600 1180" role="img" aria-labelledby="title desc">
+  <title id="title">KNet architecture</title>
+  <desc id="desc">Layered architecture showing the desktop and mobile products, their presentation and application workflows, stable portable core, and replaceable platform implementations.</desc>
+
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07111f"/>
+      <stop offset="0.55" stop-color="#0b1728"/>
+      <stop offset="1" stop-color="#101c31"/>
+    </linearGradient>
+    <linearGradient id="product" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4f9cfe"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="presentation" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8b5cf6"/>
+      <stop offset="1" stop-color="#6d28d9"/>
+    </linearGradient>
+    <linearGradient id="application" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#0284c7"/>
+    </linearGradient>
+    <linearGradient id="core" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#34d399"/>
+      <stop offset="1" stop-color="#059669"/>
+    </linearGradient>
+    <linearGradient id="implementation" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#fbbf24"/>
+      <stop offset="1" stop-color="#d97706"/>
+    </linearGradient>
+    <pattern id="grid" width="44" height="44" patternUnits="userSpaceOnUse">
+      <path d="M 44 0 L 0 0 0 44" fill="none" stroke="#ffffff" stroke-opacity="0.025" stroke-width="1"/>
+    </pattern>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="12" stdDeviation="15" flood-color="#000814" flood-opacity="0.42"/>
+    </filter>
+    <filter id="softGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="26"/>
+    </filter>
+    <marker id="arrow" markerWidth="11" markerHeight="11" refX="9" refY="5.5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L11,5.5 L0,11 Z" fill="#94a3b8"/>
+    </marker>
+    <marker id="arrowDashed" markerWidth="11" markerHeight="11" refX="9" refY="5.5" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L11,5.5 L0,11 Z" fill="#fbbf24"/>
+    </marker>
+    <style>
+      .title { font: 700 48px Inter, ui-sans-serif, system-ui, sans-serif; fill: #f8fafc; letter-spacing: -1.2px; }
+      .subtitle { font: 400 23px Inter, ui-sans-serif, system-ui, sans-serif; fill: #a8b5c8; }
+      .eyebrow { font: 700 15px Inter, ui-sans-serif, system-ui, sans-serif; fill: #8fa1b8; letter-spacing: 2.4px; }
+      .box-title { font: 700 25px Inter, ui-sans-serif, system-ui, sans-serif; fill: #ffffff; }
+      .box-subtitle { font: 500 17px Inter, ui-sans-serif, system-ui, sans-serif; fill: #e6efff; }
+      .module { font: 600 17px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #dce9ff; }
+      .core-title { font: 700 21px Inter, ui-sans-serif, system-ui, sans-serif; fill: #ecfdf5; }
+      .core-module { font: 600 16px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #d1fae5; }
+      .impl-title { font: 700 19px Inter, ui-sans-serif, system-ui, sans-serif; fill: #fff7df; }
+      .impl-subtitle { font: 500 15px Inter, ui-sans-serif, system-ui, sans-serif; fill: #ffefc2; }
+      .note { font: 600 16px Inter, ui-sans-serif, system-ui, sans-serif; fill: #b7c4d6; }
+      .legend { font: 600 14px Inter, ui-sans-serif, system-ui, sans-serif; fill: #c3cfdd; }
+      .flow { fill: none; stroke: #94a3b8; stroke-width: 3; marker-end: url(#arrow); }
+      .adapter-flow { fill: none; stroke: #fbbf24; stroke-width: 2.5; stroke-dasharray: 8 8; marker-end: url(#arrowDashed); opacity: 0.9; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1180" rx="30" fill="url(#background)"/>
+  <rect width="1600" height="1180" rx="30" fill="url(#grid)"/>
+  <circle cx="1450" cy="90" r="180" fill="#2563eb" opacity="0.08" filter="url(#softGlow)"/>
+  <circle cx="170" cy="1080" r="220" fill="#10b981" opacity="0.06" filter="url(#softGlow)"/>
+
+  <g transform="translate(78 66)">
+    <rect width="9" height="74" rx="4.5" fill="url(#product)"/>
+    <text class="title" x="32" y="45">KNet Architecture</text>
+    <text class="subtitle" x="34" y="79">Strongly typed boundaries with inward dependency direction</text>
+  </g>
+
+  <g transform="translate(1110 76)">
+    <path d="M0 13 H70" class="flow"/>
+    <text class="legend" x="88" y="18">depends on</text>
+    <path d="M0 49 H70" class="adapter-flow"/>
+    <text class="legend" x="88" y="54">implements ports</text>
+  </g>
+
+  <text class="eyebrow" x="80" y="205">PRODUCT ROOTS · OWN LIFECYCLE AND DI</text>
+
+  <g filter="url(#shadow)">
+    <rect x="170" y="230" width="430" height="126" rx="22" fill="url(#product)"/>
+    <circle cx="221" cy="278" r="25" fill="#ffffff" opacity="0.17"/>
+    <path d="M209 270 H233 M209 278 H225 M209 286 H233" stroke="#ffffff" stroke-width="3" stroke-linecap="round"/>
+    <text class="box-title" x="260" y="282">KNet Desktop</text>
+    <text class="box-subtitle" x="260" y="315">macOS · Windows · Linux</text>
+
+    <rect x="790" y="230" width="292" height="126" rx="22" fill="url(#product)"/>
+    <circle cx="839" cy="278" r="25" fill="#ffffff" opacity="0.17"/>
+    <rect x="829" y="260" width="20" height="36" rx="4" fill="none" stroke="#ffffff" stroke-width="3"/>
+    <circle cx="839" cy="290" r="1.8" fill="#ffffff"/>
+    <text class="box-title" x="879" y="282">Android</text>
+    <text class="box-subtitle" x="879" y="315">Companion app</text>
+
+    <rect x="1108" y="230" width="322" height="126" rx="22" fill="url(#product)"/>
+    <circle cx="1157" cy="278" r="25" fill="#ffffff" opacity="0.17"/>
+    <rect x="1147" y="260" width="20" height="36" rx="4" fill="none" stroke="#ffffff" stroke-width="3"/>
+    <circle cx="1157" cy="290" r="1.8" fill="#ffffff"/>
+    <text class="box-title" x="1197" y="282">iOS / iPadOS</text>
+    <text class="box-subtitle" x="1197" y="315">App + Packet Tunnel</text>
+  </g>
+
+  <path d="M385 356 V407" class="flow"/>
+  <path d="M936 356 C936 382 1005 382 1005 407" class="flow"/>
+  <path d="M1269 356 C1269 382 1195 382 1195 407" class="flow"/>
+
+  <text class="eyebrow" x="80" y="405">PRESENTATION</text>
+
+  <g filter="url(#shadow)">
+    <rect x="170" y="430" width="430" height="132" rx="22" fill="url(#presentation)"/>
+    <text class="box-title" x="204" y="476">Desktop feature UI</text>
+    <text class="module" x="204" y="510">ui:desktop:*</text>
+    <text class="box-subtitle" x="204" y="539">Traffic · API Studio · Breakpoints · Connectivity</text>
+
+    <rect x="790" y="430" width="640" height="132" rx="22" fill="url(#presentation)"/>
+    <text class="box-title" x="824" y="476">Shared Compose Multiplatform UI</text>
+    <text class="module" x="824" y="510">ui:companion:sharedUi → ui:companion:presentation</text>
+    <text class="box-subtitle" x="824" y="539">One reactive setup, certificate, and inspection experience</text>
+  </g>
+
+  <path d="M385 562 V613" class="flow"/>
+  <path d="M1110 562 V613" class="flow"/>
+
+  <text class="eyebrow" x="80" y="611">APPLICATION WORKFLOWS</text>
+
+  <g filter="url(#shadow)">
+    <rect x="170" y="636" width="430" height="116" rx="22" fill="url(#application)"/>
+    <text class="box-title" x="204" y="682">Desktop workflows and ports</text>
+    <text class="module" x="204" y="718">application:desktop</text>
+
+    <rect x="790" y="636" width="640" height="116" rx="22" fill="url(#application)"/>
+    <text class="box-title" x="824" y="682">Portable companion workflows and ports</text>
+    <text class="module" x="824" y="718">application:companion</text>
+  </g>
+
+  <path d="M385 752 C385 788 530 780 530 815" class="flow"/>
+  <path d="M1110 752 C1110 788 1070 780 1070 815" class="flow"/>
+
+  <text class="eyebrow" x="80" y="813">STABLE PORTABLE CORE · IMMUTABLE MODELS · VERSIONED CODECS</text>
+
+  <g filter="url(#shadow)">
+    <rect x="170" y="838" width="1260" height="174" rx="25" fill="#0c2b29" stroke="#34d399" stroke-opacity="0.68" stroke-width="2"/>
+
+    <rect x="198" y="874" width="277" height="92" rx="17" fill="url(#core)" opacity="0.95"/>
+    <text class="core-title" x="222" y="912">Canonical traffic</text>
+    <text class="core-module" x="222" y="943">core:traffic</text>
+
+    <rect x="493" y="874" width="277" height="92" rx="17" fill="url(#core)" opacity="0.95"/>
+    <text class="core-title" x="517" y="912">Connectivity</text>
+    <text class="core-module" x="517" y="943">core:connectivity</text>
+
+    <rect x="788" y="874" width="277" height="92" rx="17" fill="url(#core)" opacity="0.95"/>
+    <text class="core-title" x="812" y="912">Companion lifecycle</text>
+    <text class="core-module" x="812" y="943">core:companion</text>
+
+    <rect x="1083" y="874" width="319" height="92" rx="17" fill="url(#core)" opacity="0.95"/>
+    <text class="core-title" x="1107" y="912">Pairing and identity</text>
+    <text class="core-module" x="1107" y="943">core:pairing · core:identity</text>
+  </g>
+
+  <path d="M320 1080 V1020" class="adapter-flow"/>
+  <path d="M640 1080 V1020" class="adapter-flow"/>
+  <path d="M960 1080 V1020" class="adapter-flow"/>
+  <path d="M1280 1080 V1020" class="adapter-flow"/>
+
+  <text class="eyebrow" x="80" y="1055">REPLACEABLE IMPLEMENTATIONS</text>
+
+  <g filter="url(#shadow)">
+    <rect x="170" y="1080" width="300" height="74" rx="18" fill="url(#implementation)"/>
+    <text class="impl-title" x="194" y="1111">Proxy and protocols</text>
+    <text class="impl-subtitle" x="194" y="1137">Netty · TLS · inspectors</text>
+
+    <rect x="490" y="1080" width="300" height="74" rx="18" fill="url(#implementation)"/>
+    <text class="impl-title" x="514" y="1111">Desktop data</text>
+    <text class="impl-subtitle" x="514" y="1137">Room · body store · LAN</text>
+
+    <rect x="810" y="1080" width="300" height="74" rx="18" fill="url(#implementation)"/>
+    <text class="impl-title" x="834" y="1111">Companion data</text>
+    <text class="impl-subtitle" x="834" y="1137">DataStore · protected secrets</text>
+
+    <rect x="1130" y="1080" width="300" height="74" rx="18" fill="url(#implementation)"/>
+    <text class="impl-title" x="1154" y="1111">Native adapters</text>
+    <text class="impl-subtitle" x="1154" y="1137">Discovery · trust · VPN/tunnel</text>
+  </g>
+
+  <g transform="translate(1190 1040)">
+    <rect x="-34" y="-24" width="244" height="31" rx="15.5" fill="#16243a" stroke="#334155"/>
+    <text class="note" x="-14" y="-3">No platform APIs in commonMain</text>
+  </g>
+</svg>

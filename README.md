@@ -160,16 +160,13 @@ reactive and state-driven rather than a sequence of platform-specific duplicate 
 
 ### Companion setup flow
 
-```mermaid
-flowchart LR
-    A[Scan KNet QR<br/>or choose QR image] --> B[Verify bootstrap<br/>root fingerprint]
-    B --> C[Pair device<br/>with proof identity]
-    C --> D[Download platform<br/>certificate artifact]
-    D --> E[Install and verify<br/>certificate trust]
-    E --> F[Discover paired<br/>desktop on LAN]
-    F --> G[Start local VPN<br/>or packet tunnel]
-    G --> H[Inspect on<br/>KNet Desktop]
-```
+<p align="center">
+  <a href="docs/assets/knet-companion-setup-flow.svg">
+    <img src="docs/assets/knet-companion-setup-flow.svg" alt="KNet Companion secure setup flow from QR pairing through certificate trust to local traffic inspection" width="1200">
+  </a>
+</p>
+
+<p align="center"><sub>Open the diagram to view it at full resolution.</sub></p>
 
 1. KNet Desktop creates a bounded, expiring `knet://pair/v3` invitation.
 2. The companion scans it with the camera or decodes it from an image selected through the platform photo picker.
@@ -280,55 +277,13 @@ temporarily unavailable, the stable unavailable state remains visible while disc
 KNet uses clean dependency direction: portable contracts and application workflows are inward; engines, storage,
 connectivity adapters, and product shells are outward. Only product roots own dependency-injection declarations.
 
-```mermaid
-flowchart TB
-    subgraph Products
-        Desktop[KNet Desktop]
-        Android[Android Companion]
-        IOS[iOS Companion]
-    end
+<p align="center">
+  <a href="docs/assets/knet-architecture.svg">
+    <img src="docs/assets/knet-architecture.svg" alt="KNet layered architecture: product roots, presentation, application workflows, stable portable core, and replaceable implementations" width="1200">
+  </a>
+</p>
 
-    subgraph Presentation
-        DesktopUI[Desktop feature UI]
-        SharedUI[Companion shared UI]
-        CompanionPresentation[Companion presentation]
-    end
-
-    subgraph Application
-        DesktopApp[application:desktop]
-        CompanionApp[application:companion]
-    end
-
-    subgraph Stable_Core[Stable portable core]
-        Traffic[core:traffic]
-        Connectivity[core:connectivity]
-        Companion[core:companion]
-        Pairing[core:pairing / identity]
-    end
-
-    subgraph Implementations
-        Engines[proxy / certificate / protocol engines]
-        DesktopAdapters[data + desktop connectivity]
-        MobileAdapters[companion data + native connectivity]
-        Storage[Room / body store]
-    end
-
-    Desktop --> DesktopUI --> DesktopApp
-    Android --> SharedUI
-    IOS --> SharedUI
-    SharedUI --> CompanionPresentation --> CompanionApp
-    DesktopApp --> Stable_Core
-    CompanionApp --> Stable_Core
-    Desktop --> Engines
-    Desktop --> DesktopAdapters
-    Desktop --> Storage
-    Android --> MobileAdapters
-    IOS --> MobileAdapters
-    Engines --> Traffic
-    DesktopAdapters --> DesktopApp
-    MobileAdapters --> CompanionApp
-    Storage --> Traffic
-```
+<p align="center"><sub>Open the diagram to view it at full resolution.</sub></p>
 
 ### Three runtime planes
 

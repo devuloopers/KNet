@@ -1,0 +1,174 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="920" viewBox="0 0 1600 920" role="img" aria-labelledby="title desc">
+  <title id="title">KNet Companion secure setup flow</title>
+  <desc id="desc">Three-phase companion setup covering QR pairing, certificate installation and verification, desktop rediscovery, local VPN or packet tunnel startup, and inspection on KNet Desktop.</desc>
+
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07111f"/>
+      <stop offset="0.55" stop-color="#0b1728"/>
+      <stop offset="1" stop-color="#101c31"/>
+    </linearGradient>
+    <linearGradient id="connect" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4f9cfe"/>
+      <stop offset="1" stop-color="#2563eb"/>
+    </linearGradient>
+    <linearGradient id="certificate" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8b5cf6"/>
+      <stop offset="1" stop-color="#6d28d9"/>
+    </linearGradient>
+    <linearGradient id="inspection" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#34d399"/>
+      <stop offset="1" stop-color="#059669"/>
+    </linearGradient>
+    <linearGradient id="track" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#3081fc"/>
+      <stop offset="0.5" stop-color="#7c3aed"/>
+      <stop offset="1" stop-color="#10b981"/>
+    </linearGradient>
+    <pattern id="grid" width="44" height="44" patternUnits="userSpaceOnUse">
+      <path d="M44 0H0V44" fill="none" stroke="#ffffff" stroke-opacity="0.025" stroke-width="1"/>
+    </pattern>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="0" dy="12" stdDeviation="15" flood-color="#000814" flood-opacity="0.42"/>
+    </filter>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="24"/>
+    </filter>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L12,6 L0,12 Z" fill="#8fa1b8"/>
+    </marker>
+    <style>
+      .title { font: 700 46px Inter, ui-sans-serif, system-ui, sans-serif; fill: #f8fafc; letter-spacing: -1px; }
+      .subtitle { font: 400 22px Inter, ui-sans-serif, system-ui, sans-serif; fill: #a8b5c8; }
+      .phase-number { font: 700 25px Inter, ui-sans-serif, system-ui, sans-serif; fill: #ffffff; text-anchor: middle; }
+      .phase-label { font: 700 20px Inter, ui-sans-serif, system-ui, sans-serif; fill: #eaf2ff; text-anchor: middle; }
+      .card-title { font: 700 29px Inter, ui-sans-serif, system-ui, sans-serif; fill: #ffffff; }
+      .card-kicker { font: 700 15px Inter, ui-sans-serif, system-ui, sans-serif; fill: #dbeafe; letter-spacing: 1.8px; }
+      .step-number { font: 700 18px Inter, ui-sans-serif, system-ui, sans-serif; fill: #ffffff; text-anchor: middle; dominant-baseline: middle; }
+      .step-title { font: 700 21px Inter, ui-sans-serif, system-ui, sans-serif; fill: #f8fafc; }
+      .step-copy { font: 400 17px Inter, ui-sans-serif, system-ui, sans-serif; fill: #b9c6d8; }
+      .step-code { font: 600 16px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; fill: #dce9ff; }
+      .footer { font: 600 17px Inter, ui-sans-serif, system-ui, sans-serif; fill: #d8e4f3; text-anchor: middle; }
+      .connector { fill: none; stroke: #8fa1b8; stroke-width: 3; marker-end: url(#arrow); }
+      .divider { stroke: #ffffff; stroke-opacity: 0.09; stroke-width: 1.5; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="920" rx="30" fill="url(#background)"/>
+  <rect width="1600" height="920" rx="30" fill="url(#grid)"/>
+  <circle cx="1460" cy="90" r="190" fill="#2563eb" opacity="0.08" filter="url(#glow)"/>
+  <circle cx="100" cy="860" r="180" fill="#10b981" opacity="0.06" filter="url(#glow)"/>
+
+  <g transform="translate(78 56)">
+    <rect width="9" height="72" rx="4.5" fill="url(#track)"/>
+    <text class="title" x="32" y="43">KNet Companion Setup</text>
+    <text class="subtitle" x="34" y="77">A local, authenticated path from QR invitation to inspected traffic</text>
+  </g>
+
+  <rect x="250" y="186" width="1100" height="5" rx="2.5" fill="#26364b"/>
+  <rect x="250" y="186" width="1100" height="5" rx="2.5" fill="url(#track)" opacity="0.9"/>
+
+  <g filter="url(#shadow)">
+    <circle cx="250" cy="188" r="38" fill="url(#connect)"/>
+    <text class="phase-number" x="250" y="197">1</text>
+    <text class="phase-label" x="250" y="250">Connect</text>
+
+    <circle cx="800" cy="188" r="38" fill="url(#certificate)"/>
+    <text class="phase-number" x="800" y="197">2</text>
+    <text class="phase-label" x="800" y="250">Certificate</text>
+
+    <circle cx="1350" cy="188" r="38" fill="url(#inspection)"/>
+    <text class="phase-number" x="1350" y="197">3</text>
+    <text class="phase-label" x="1350" y="250">Inspection</text>
+  </g>
+
+  <path d="M526 530 H563" class="connector"/>
+  <path d="M1026 530 H1063" class="connector"/>
+
+  <g filter="url(#shadow)">
+    <rect x="80" y="292" width="440" height="500" rx="24" fill="#111f32" stroke="#3081fc" stroke-opacity="0.62" stroke-width="2"/>
+    <rect x="80" y="292" width="440" height="92" rx="24" fill="url(#connect)"/>
+    <path d="M80 360 H520 V384 H80 Z" fill="url(#connect)"/>
+    <text class="card-kicker" x="116" y="326">PHASE 1</text>
+    <text class="card-title" x="116" y="362">Establish trust</text>
+
+    <circle cx="128" cy="438" r="24" fill="#3081fc"/>
+    <text class="step-number" x="128" y="439">1</text>
+    <text class="step-title" x="169" y="429">Scan the KNet invitation</text>
+    <text class="step-copy" x="169" y="457">Use the camera or choose a QR image.</text>
+    <line class="divider" x1="112" y1="493" x2="488" y2="493"/>
+
+    <circle cx="128" cy="548" r="24" fill="#3081fc"/>
+    <text class="step-number" x="128" y="549">2</text>
+    <text class="step-title" x="169" y="539">Verify the bootstrap root</text>
+    <text class="step-copy" x="169" y="567">Match the public root to the QR fingerprint.</text>
+    <line class="divider" x1="112" y1="603" x2="488" y2="603"/>
+
+    <circle cx="128" cy="658" r="24" fill="#3081fc"/>
+    <text class="step-number" x="128" y="659">3</text>
+    <text class="step-title" x="169" y="649">Prove identity and pair</text>
+    <text class="step-copy" x="169" y="677">Commit registration and protected credentials</text>
+    <text class="step-copy" x="169" y="701">atomically through pinned TLS.</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="580" y="292" width="440" height="500" rx="24" fill="#111f32" stroke="#8b5cf6" stroke-opacity="0.62" stroke-width="2"/>
+    <rect x="580" y="292" width="440" height="92" rx="24" fill="url(#certificate)"/>
+    <path d="M580 360 H1020 V384 H580 Z" fill="url(#certificate)"/>
+    <text class="card-kicker" x="616" y="326">PHASE 2</text>
+    <text class="card-title" x="616" y="362">Establish certificate trust</text>
+
+    <circle cx="628" cy="450" r="24" fill="#7c3aed"/>
+    <text class="step-number" x="628" y="451">4</text>
+    <text class="step-title" x="669" y="430">Download the platform artifact</text>
+    <text class="step-code" x="669" y="463">Android .crt</text>
+    <text class="step-copy" x="788" y="463">or</text>
+    <text class="step-code" x="814" y="463">Apple .mobileconfig</text>
+    <line class="divider" x1="612" y1="512" x2="988" y2="512"/>
+
+    <circle cx="628" cy="575" r="24" fill="#7c3aed"/>
+    <text class="step-number" x="628" y="576">5</text>
+    <text class="step-title" x="669" y="556">Install and verify trust</text>
+    <text class="step-copy" x="669" y="589">Complete the system-owned installation steps.</text>
+    <text class="step-copy" x="669" y="617">KNet verifies readiness in the background.</text>
+
+    <rect x="616" y="682" width="368" height="70" rx="16" fill="#251943" stroke="#8b5cf6" stroke-opacity="0.48"/>
+    <circle cx="651" cy="717" r="16" fill="#8b5cf6" opacity="0.32"/>
+    <path d="M644 717 L649 722 L659 711" fill="none" stroke="#c4b5fd" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <text class="step-copy" x="682" y="712">The user explicitly continues after</text>
+    <text class="step-copy" x="682" y="735">certificate verification succeeds.</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="1080" y="292" width="440" height="500" rx="24" fill="#111f32" stroke="#34d399" stroke-opacity="0.62" stroke-width="2"/>
+    <rect x="1080" y="292" width="440" height="92" rx="24" fill="url(#inspection)"/>
+    <path d="M1080 360 H1520 V384 H1080 Z" fill="url(#inspection)"/>
+    <text class="card-kicker" x="1116" y="326">PHASE 3</text>
+    <text class="card-title" x="1116" y="362">Route and inspect</text>
+
+    <circle cx="1128" cy="438" r="24" fill="#10b981"/>
+    <text class="step-number" x="1128" y="439">6</text>
+    <text class="step-title" x="1169" y="429">Rediscover the paired desktop</text>
+    <text class="step-copy" x="1169" y="457">Resolve its current endpoint on the local LAN.</text>
+    <line class="divider" x1="1112" y1="493" x2="1488" y2="493"/>
+
+    <circle cx="1128" cy="548" r="24" fill="#10b981"/>
+    <text class="step-number" x="1128" y="549">7</text>
+    <text class="step-title" x="1169" y="539">Start the local traffic tunnel</text>
+    <text class="step-copy" x="1169" y="567">Android VPN or Apple Packet Tunnel.</text>
+    <line class="divider" x1="1112" y1="603" x2="1488" y2="603"/>
+
+    <circle cx="1128" cy="658" r="24" fill="#10b981"/>
+    <text class="step-number" x="1128" y="659">8</text>
+    <text class="step-title" x="1169" y="649">Inspect on KNet Desktop</text>
+    <text class="step-copy" x="1169" y="677">Send supported traffic through the authenticated</text>
+    <text class="step-copy" x="1169" y="701">local data plane into canonical capture.</text>
+  </g>
+
+  <g transform="translate(80 834)">
+    <rect width="1440" height="54" rx="17" fill="#14243a" stroke="#334155" stroke-width="1.5"/>
+    <circle cx="52" cy="27" r="15" fill="#3081fc" opacity="0.3"/>
+    <path d="M45 27 L50 32 L60 21" fill="none" stroke="#93c5fd" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    <text class="footer" x="760" y="33">Short-lived invitation  ·  pinned TLS  ·  protected credentials  ·  endpoint rediscovery  ·  explicit inspection start</text>
+  </g>
+</svg>
