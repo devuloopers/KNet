@@ -18,6 +18,7 @@ package com.devuloopers.knet.ui.desktop.httppanel.model
  * @param durationMs Formatted duration string (e.g. "45 ms").
  * @param sizeBytes Formatted byte size string (e.g. "2.4 KB").
  * @param contentType Response Content-Type header string (e.g. "application/json").
+ * @param failureCode Stable KNet terminal reason code when the exchange failed.
  */
 data class NetworkOverviewSpec(
     val method: String,
@@ -34,5 +35,6 @@ data class NetworkOverviewSpec(
     val timestamp: String = "",
     val durationMs: String = "",
     val sizeBytes: String = "",
-    val contentType: String = ""
+    val contentType: String = "",
+    val failureCode: String? = null,
 )

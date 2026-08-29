@@ -1126,10 +1126,22 @@ internal class KNetStreamingProxyHandler(
             status,
             Unpooled.wrappedBuffer(bodyBytes),
         )
+        response.headers().set(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=UTF-8")
         response.headers().set(HttpHeaderNames.CONTENT_LENGTH, bodyBytes.size)
         response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE)
         val now = Clock.System.now().toEpochMilliseconds()
         active.capture?.observeResponse(HttpMapper.mapResponseHead(response), now)
+        captureBodyChunk(
+            exchange = active.capture,
+            direction = TrafficDirection.SERVER_TO_CLIENT,
+            content = response.content(),
+            contentEncoding = HttpMapper.contentEncoding(response.headers()),
+        )
+        active.capture?.completeBody(
+            direction = TrafficDirection.SERVER_TO_CLIENT,
+            observedBytes = bodyBytes.size.toLong(),
+            occurredAtEpochMillis = now,
+        )
         active.capture?.terminate(
             outcome = ExchangeTerminalOutcome.Failed(reason),
             timings = active.timings.getTimings(),

@@ -83,6 +83,14 @@ fun OverviewViewPanel(
                     valueColor = themeColors.semantic.error
                 )
             }
+            spec.failureCode?.takeIf(String::isNotBlank)?.let { failureCode ->
+                OverviewGridRow(
+                    label = "KNet Failure",
+                    value = failureCode,
+                    valueColor = themeColors.semantic.error,
+                    isMono = true,
+                )
+            }
             OverviewGridRow(
                 label = "Client Protocol",
                 value = spec.clientProtocol.ifEmpty { "Unknown" },

@@ -140,7 +140,8 @@ fun TrafficInspectorPanel(
                                 timestamp = selectedTransaction.formattedTimestamp,
                                 durationMs = selectedTransaction.formattedTime,
                                 sizeBytes = selectedTransaction.formattedSize,
-                                contentType = contentType
+                                contentType = contentType,
+                                failureCode = selectedTransaction.terminalOutcome?.reason?.code?.value,
                             )
                         }
                         Column(modifier = Modifier.fillMaxSize()) {
