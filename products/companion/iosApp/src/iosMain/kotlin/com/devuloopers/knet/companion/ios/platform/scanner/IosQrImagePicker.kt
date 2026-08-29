@@ -21,7 +21,6 @@ import platform.darwin.dispatch_async
 import platform.darwin.dispatch_get_main_queue
 
 /** Presents the system photo picker and decodes QR codes from the selected image on iOS. */
-@OptIn(ExperimentalForeignApi::class)
 internal class IosQrImagePicker(
     private val dispatch: (CompanionAction) -> Unit,
     private val presenter: () -> UIViewController?,
