@@ -10,6 +10,7 @@ kotlin {
         val jvmMain by getting {
             dependencies {
                 implementation(project(":application:desktop"))
+                implementation(project(":core:connectivity"))
                 implementation(project(":core:domain"))
                 implementation(project(":core:logger"))
                 implementation(project(":core:identity"))

@@ -141,7 +141,7 @@ object FakeTrafficViewModelFactory {
         }
 
         val fakeNetworkRepo = object : NetworkRepository {
-            override fun observeLocalIp(pollIntervalMs: Long): Flow<String> = flowOf(localIp)
+            override fun observeLocalIp(): Flow<String> = flowOf(localIp)
             override suspend fun getLocalIp(): String = localIp
         }
 

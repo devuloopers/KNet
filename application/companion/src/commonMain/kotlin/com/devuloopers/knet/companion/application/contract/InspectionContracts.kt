@@ -16,7 +16,7 @@ public data class CompanionInspectionConfiguration(
 )
 
 /**
- * Platform capture controller. Android implements this with VpnService; iOS later uses Network Extension.
+ * Platform capture controller. Android implements this with VpnService and iOS with a Network Extension.
  * Preparation must not acquire long-lived packet resources, and repeated start/stop calls must be safe.
  */
 public interface CompanionInspectionController {

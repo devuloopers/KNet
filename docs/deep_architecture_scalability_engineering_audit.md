@@ -618,19 +618,19 @@ Because `isPortalRequest()` treats `/setup`, `/ca`, and the certificate paths as
 
 **Recommendation:** Centralize framing normalization: remove conflicting transfer headers, recompute content length only for fully buffered replacements, explicitly re-encode or remove content encoding, and test chunked bodies/trailers/compression/multipart/binary edits end to end.
 
-### F-23 — Network change detection is IPv4 polling and blunt channel invalidation
+### F-23 — Network change detection is IPv4 polling and blunt channel invalidation — Resolved
 
-**Finding:** KNet polls for a local IPv4 address every three seconds and closes all channels when it changes. It does not model route, interface, VPN, DNS, IPv6, portal-address, or connectivity-artifact state.
+**Original finding:** KNet polled for a local IPv4 address independently from the connectivity subsystem and closed all channels when it changed. It did not model interface identity, interface kind, VPN state, or a shared advertised LAN endpoint.
 
-**Evidence:** `LocalIpResolver.kt:30-73` probes 8.8.8.8 and enumerates interfaces, producing IPv4-oriented results. `ProxyEngineRepositoryImpl.kt:64-75` observes changes and flushes active channels. UI/data create related observations independently. No PAC state exists to invalidate.
+**Resolution:** `DesktopNetworkSnapshotMonitor` now publishes one immutable network snapshot with typed physical, virtual, VPN, and unknown interfaces plus one route-aware preferred LAN address. Proxy UI, Wi-Fi sharing, and companion discovery consume that same selection. The selector considers the OS default route, multicast capability, and Windows/macOS/Linux virtual-adapter identities without rejecting legitimate private address ranges such as `172.16.0.0/12`.
 
-**Why it matters:** Wi-Fi/Ethernet/VPN transitions can change usable routes without changing the selected IPv4 value. IPv6-only/dual-stack states and permissions are invisible. Closing all active traffic is a coarse recovery policy.
+**Remaining scope:** The unified selector is intentionally IPv4 for the current proxy and LAN-discovery protocols. IPv6 endpoint publication and finer-grained channel preservation remain future work.
 
-**Impact:** Stale setup instructions, unnecessary disconnects, missed VPN/IPv6 transitions, and inconsistent UI/engine state.
+**Former impact:** Stale setup instructions, missed interface transitions, and inconsistent proxy/Wi-Fi/companion endpoint state.
 
-**Severity:** **P2 — Medium**
+**Original severity:** **P2 — Medium**
 
-**Recommendation:** Build one platform network monitor producing immutable interface/route snapshots and health signals. Application orchestration should derive advertised endpoints, version setup artifacts, invalidate PAC/profile caches, preserve viable channels, and expose explicit degraded/reconnect states.
+**Recommendation:** Keep endpoint derivation centralized in the platform network monitor and extend its typed snapshot when IPv6 publication or additional connectivity artifacts are introduced.
 
 ### F-24 — Logging configuration is nominal and hot-path logging is excessive
 

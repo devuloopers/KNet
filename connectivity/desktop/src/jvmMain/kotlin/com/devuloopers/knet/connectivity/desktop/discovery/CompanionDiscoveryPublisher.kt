@@ -5,7 +5,6 @@ import com.devuloopers.knet.companion.model.CompanionDiscoveryAdvertisement
 import com.devuloopers.knet.companion.model.CompanionDiscoveryProtocol
 import com.devuloopers.knet.companion.model.CompanionDiscoveryTxtCodec
 import com.devuloopers.knet.connectivity.desktop.gateway.CompanionControlGatewayState
-import com.devuloopers.knet.connectivity.desktop.network.preferredLanAddress
 import com.devuloopers.knet.connectivity.model.NetworkSnapshot
 import com.devuloopers.knet.core.logger.KNetLogger
 import java.net.InetAddress
@@ -96,7 +95,7 @@ public class CompanionDiscoveryPublisher(
         publicationJob = scope.launch {
             combine(networkSnapshots, controlGatewayState) { network, gateway ->
                 PublicationTarget(
-                    address = network.preferredLanAddress()?.address,
+                    address = network.preferredLanAddress?.address,
                     port = (gateway as? CompanionControlGatewayState.Listening)?.port,
                 )
             }.distinctUntilChanged().collectLatest { target ->

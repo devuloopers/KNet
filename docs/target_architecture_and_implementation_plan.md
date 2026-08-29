@@ -269,7 +269,7 @@ Future additions are conditional:
 :connectivity:companion          add when desktop companion pairing/tunnel begins
 :connectivity:relay              add when a real relay transport begins
 :products:companion:androidApp   current installable Android product shell/composition
-:products:companion-ios          add only with an iOS product target
+:products:companion:iosApp       current installable iOS product shell/composition
 :engine:proxy-http3              add only if QUIC dependencies justify isolation
 :inspection:<name>               add only when an inspector needs independent dependencies/release
 ```
@@ -1499,18 +1499,16 @@ Shared/mobile foundation and product modules now present in this repository:
 :ui:core                         JVM/Android/iOS Compose design system and adaptive components
 :ui:companion:presentation       shared UI state/actions/effects/ViewModel
 :ui:companion:sharedUi           shared Compose Multiplatform screens/resources using :ui:core
-:connectivity:companion          KMP Android implementation and fail-closed iOS connectivity boundary
+:connectivity:companion          KMP contracts plus Android and iOS connectivity/security implementations
 :products:companion:androidApp   installable Android Compose host and product composition root
+:products:companion:iosApp       installable SwiftUI host and Kotlin/Native product composition root
 ```
 
-Future product/runtime leaves:
+Future optional product/runtime leaves:
 
 ```text
-:ui:companion:sharedUi           complete companion workflow screens added within the existing shared module
-:products:companion-ios          thin iOS Compose host/composition
-:connectivity:companion:android-vpn  concrete Android VPN/TUN packet backend
-:connectivity:companion:ios-vpn      iOS Network Extension adapter
 :connectivity:companion:desktop      desktop control/direct-tunnel implementation if isolated
+:connectivity:relay                  relay carrier when off-LAN connectivity is authorized
 ```
 
 The mobile targets do not depend on `:engine:proxy`, the Room schema, `:application:desktop`, Compose Desktop,

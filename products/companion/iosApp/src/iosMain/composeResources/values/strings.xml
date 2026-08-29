@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bootstrap_loading">Preparing KNet Companion…</string>
+    <string name="bootstrap_failed">Unable to start KNet Companion.</string>
+    <string name="certificate_guidance_open">Open the downloaded KNet configuration profile.</string>
+    <string name="certificate_guidance_install">In Settings, choose Profile Downloaded and select the KNet profile.</string>
+    <string name="certificate_guidance_confirm">Review the profile, then choose Install and confirm.</string>
+    <string name="certificate_guidance_return">Return to KNet Companion after installation completes.</string>
+</resources>

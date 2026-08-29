@@ -13,6 +13,8 @@ import com.devuloopers.knet.connectivity.desktop.gateway.IngressAttributionRegis
 import com.devuloopers.knet.connectivity.desktop.network.DesktopNetworkObservation
 import com.devuloopers.knet.connectivity.desktop.network.DesktopNetworkScanner
 import com.devuloopers.knet.connectivity.desktop.network.DesktopNetworkSnapshotMonitor
+import com.devuloopers.knet.connectivity.desktop.network.DesktopLanAddressSelection
+import com.devuloopers.knet.connectivity.desktop.network.DesktopLanAddressSelectionReason
 import com.devuloopers.knet.connectivity.model.NetworkAddress
 import com.devuloopers.knet.connectivity.model.NetworkAddressFamily
 import com.devuloopers.knet.connectivity.model.ProxyAccessRequirement
@@ -346,7 +348,15 @@ class WifiSharingBackendTest {
     ): WifiRuntimeFixture {
         val monitor = DesktopNetworkSnapshotMonitor(
             scanner = DesktopNetworkScanner {
-                DesktopNetworkObservation(listOf(address), defaultRouteAvailable = true, vpnActive = false)
+                DesktopNetworkObservation(
+                    addresses = listOf(address),
+                    defaultRouteAvailable = true,
+                    vpnActive = false,
+                    selection = DesktopLanAddressSelection(
+                        address,
+                        DesktopLanAddressSelectionReason.DEFAULT_ROUTE,
+                    ),
+                )
             },
             pollIntervalMillis = 60_000L,
             dispatcher = Dispatchers.Unconfined,

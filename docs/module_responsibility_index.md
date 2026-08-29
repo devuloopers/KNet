@@ -93,7 +93,7 @@ Gradle enforces four rules through `verifyArchitectureFoundation`:
 ## Companion presentation
 
 - [`:ui:companion:presentation`](../ui/companion/presentation/MODULE.md) — framework-neutral companion state,
-  actions, native effects, and lifecycle-owned shared ViewModel for Android and future iOS.
+  actions, native effects, and lifecycle-owned shared ViewModel for Android and iOS.
 - [`:ui:companion:sharedUi`](../ui/companion/sharedUi/MODULE.md) — Compose Multiplatform companion screens,
   responsive layout, and shared UI resources hosted by platform products using the `:ui:core` theme.
 
@@ -103,6 +103,11 @@ Gradle enforces four rules through `verifyArchitectureFoundation`:
 - [`:products:companion:androidApp`](../products/companion/androidApp/MODULE.md) — installable Android companion APK,
   manifest, thin Compose host lifecycle, and Android companion composition root; unavailable transport/VPN
   capabilities are not simulated.
+- [`:products:companion:iosApp`](../products/companion/iosApp/MODULE.md) — installable SwiftUI iOS shell,
+  Kotlin/Native composition framework, AVFoundation scanner, and Apple Network Extension entry point.
+- [`:products:companion:iosPacketTunnel`](../products/companion/iosPacketTunnel/MODULE.md) — lean Kotlin/Native
+  packet-tunnel runtime owning validated start options, pinned desktop TLS, local SOCKS5 forwarding,
+  NetworkExtension settings, and the hev engine lifecycle.
 - [`:testingServer`](../testingServer/MODULE.md) — deterministic integration-test server.
 
 ## Shared HTTP model rule

@@ -46,7 +46,7 @@ class BreakpointTransportMatcher(private val rule: BreakpointRule) {
      *
      * Protocol-specific criteria must be evaluated separately by the owning extension.
      */
-    public fun matches(target: BreakpointTransportTarget, method: String, phase: BreakpointPhase): Boolean =
+    fun matches(target: BreakpointTransportTarget, method: String, phase: BreakpointPhase): Boolean =
         rule.enabled &&
             includes(phase) &&
             (methodToken == null || methodToken.equals(method, ignoreCase = true)) &&
@@ -55,7 +55,7 @@ class BreakpointTransportMatcher(private val rule: BreakpointRule) {
                 urlExpression.containsMatchIn(target.portlessUrl))
 
     /** Compatibility convenience for callers whose input has no independent port representation. */
-    public fun matches(url: String, method: String, phase: BreakpointPhase): Boolean =
+    fun matches(url: String, method: String, phase: BreakpointPhase): Boolean =
         matches(BreakpointTransportTarget(url, url, null), method, phase)
 
     private companion object {

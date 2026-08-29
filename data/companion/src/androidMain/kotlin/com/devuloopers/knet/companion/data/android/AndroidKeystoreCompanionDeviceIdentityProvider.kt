@@ -3,12 +3,12 @@ package com.devuloopers.knet.companion.data.android
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import com.devuloopers.knet.companion.application.contract.CompanionDeviceIdentityProvider
+import com.devuloopers.knet.companion.data.crypto.CompanionSha256
 import com.devuloopers.knet.companion.model.CompanionDeviceIdentity
 import com.devuloopers.knet.identity.RegisteredDeviceId
 import com.devuloopers.knet.pairing.DeviceProofAlgorithm
 import java.security.KeyPairGenerator
 import java.security.KeyStore
-import java.security.MessageDigest
 import java.security.spec.ECGenParameterSpec
 import kotlin.io.encoding.Base64
 import kotlinx.coroutines.CoroutineDispatcher
@@ -44,7 +44,7 @@ public class AndroidKeystoreCompanionDeviceIdentityProvider(
             "Android Keystore did not return the companion public key."
         }
         val publicKeyEncoded = URL_SAFE_BASE64.encode(publicKey.encoded)
-        val stableId = MessageDigest.getInstance("SHA-256").digest(publicKey.encoded).copyOf(18)
+        val stableId = CompanionSha256.digest(publicKey.encoded).copyOf(18)
         CompanionDeviceIdentity(
             deviceId = RegisteredDeviceId(
                 URL_SAFE_BASE64.encode(stableId),

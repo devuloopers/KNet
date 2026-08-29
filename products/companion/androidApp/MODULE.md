@@ -7,10 +7,9 @@ Owns the installable Android companion APK, Android manifest, launcher lifecycle
 ## Owns
 
 - Android application identity, permissions, packaging resources, Compose host activity, and process lifecycle.
-- Product-owned Koin modules that bind the implemented registration, protected credential, version 3 invitation,
-  device-identity, proof-signing, pinned-TLS pairing/credential refresh, network-observation, platform-PKIX
-  certificate confirmation, Android trust-verification, trust-store event, authenticated inspection transport,
-  TUN forwarding, application-use-case, and lifecycle ViewModel dependencies.
+- Android Koin prerequisites for restored stores, platform adapters, device identity, proof signing, transport, TUN
+  forwarding, and VPN runtime coordination. Portable repository, client, use-case, and ViewModel definitions come
+  from `:products:companion:di`.
 - A domain-scoped Android network-security policy that permits user-installed anchors only for
   `companion.knet.local`; unrelated application traffic retains platform defaults.
 - Activity `ViewModelStore` ownership, lifecycle-aware state binding, and started-state effect collection for the
@@ -39,6 +38,6 @@ Owns the installable Android companion APK, Android manifest, launcher lifecycle
 
 ## Dependency rule
 
-May depend on companion application, data, presentation, shared UI, Android connectivity, core modules, and the
-repository-standard Koin runtime solely to compose the executable product. Koin definitions remain product-owned;
-no reusable companion module depends on Koin or on this product.
+May depend on companion application, data, presentation, shared UI, Android connectivity, core modules,
+`:products:companion:di`, and the repository-standard Koin runtime solely to compose the executable product. Koin
+definitions remain product-owned; no reusable companion module depends on Koin or on this product.

@@ -1,0 +1,3 @@
+headers = HevBridge.h
+headerFilter = HevBridge.h
+package = com.devuloopers.knet.companion.packettunnel.hev

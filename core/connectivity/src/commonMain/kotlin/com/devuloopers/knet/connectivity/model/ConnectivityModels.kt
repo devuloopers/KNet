@@ -109,22 +109,42 @@ public enum class NetworkAddressFamily {
 }
 
 /**
+ * Platform-neutral classification of the interface publishing a network address.
+ *
+ * Classification is supplied by the platform adapter. Consumers must not infer interface type
+ * from an address range because private ranges such as `172.16.0.0/12` are valid physical LANs.
+ */
+public enum class NetworkInterfaceKind {
+    PHYSICAL,
+    VIRTUAL,
+    VPN,
+    UNKNOWN,
+}
+
+/**
  * Platform-neutral address associated with a stable network interface identifier.
  *
  * @property interfaceId Stable platform adapter identifier for the interface.
  * @property address Address text without an inferred port.
  * @property family Address family.
  * @property loopback Whether the address belongs to a loopback interface.
+ * @property interfaceDisplayName Human-readable platform adapter name for diagnostics and future selection UI.
+ * @property interfaceKind Platform-classified interface kind.
+ * @property multicastSupported Whether the interface can participate in LAN discovery.
  */
 public data class NetworkAddress(
     public val interfaceId: String,
     public val address: String,
     public val family: NetworkAddressFamily,
     public val loopback: Boolean,
+    public val interfaceDisplayName: String = interfaceId,
+    public val interfaceKind: NetworkInterfaceKind = NetworkInterfaceKind.UNKNOWN,
+    public val multicastSupported: Boolean = true,
 ) {
     init {
         require(interfaceId.isNotBlank()) { "Network interface identifier must not be blank." }
         require(address.isNotBlank()) { "Network address must not be blank." }
+        require(interfaceDisplayName.isNotBlank()) { "Network interface display name must not be blank." }
     }
 }
 
@@ -136,6 +156,7 @@ public data class NetworkAddress(
  * @property defaultRouteAvailable Whether a default route is currently known.
  * @property vpnActive Whether the platform adapter observes an active VPN route.
  * @property observedAtEpochMillis Wall-clock observation time.
+ * @property preferredLanAddress Route-aware LAN address selected by the platform adapter.
  */
 public data class NetworkSnapshot(
     public val version: Long,
@@ -143,10 +164,20 @@ public data class NetworkSnapshot(
     public val defaultRouteAvailable: Boolean,
     public val vpnActive: Boolean,
     public val observedAtEpochMillis: Long,
+    public val preferredLanAddress: NetworkAddress? = null,
 ) {
     init {
         require(version >= 0L) { "Network snapshot version must not be negative." }
         require(observedAtEpochMillis >= 0L) { "Network observation timestamp must not be negative." }
+        require(preferredLanAddress == null || preferredLanAddress in addresses) {
+            "Preferred LAN address must belong to the network snapshot."
+        }
+        require(
+            preferredLanAddress == null ||
+                (!preferredLanAddress.loopback && preferredLanAddress.family == NetworkAddressFamily.IPV4),
+        ) {
+            "Preferred LAN address must be a non-loopback IPv4 address."
+        }
     }
 }
 

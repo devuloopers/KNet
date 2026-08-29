@@ -4,6 +4,8 @@ import com.devuloopers.knet.connectivity.desktop.artifact.SetupArtifactStore
 import com.devuloopers.knet.connectivity.desktop.network.DesktopNetworkObservation
 import com.devuloopers.knet.connectivity.desktop.network.DesktopNetworkScanner
 import com.devuloopers.knet.connectivity.desktop.network.DesktopNetworkSnapshotMonitor
+import com.devuloopers.knet.connectivity.desktop.network.DesktopLanAddressSelection
+import com.devuloopers.knet.connectivity.desktop.network.DesktopLanAddressSelectionReason
 import com.devuloopers.knet.connectivity.desktop.portal.DedicatedSetupPortal
 import com.devuloopers.knet.connectivity.desktop.portal.SetupPortalContent
 import com.devuloopers.knet.connectivity.desktop.provider.AppleProfileTemplateRenderer
@@ -94,6 +96,45 @@ class DesktopConnectivityArchitectureTest {
             observation.set(observation.get().copy(vpnActive = true))
             assertEquals(1L, monitor.refresh().version)
             assertEquals(1L, monitor.refresh().version)
+        } finally {
+            monitor.close()
+        }
+    }
+
+    @Test
+    fun `network version and preferred address follow a default route change`() {
+        val ethernet = NetworkAddress("eth0", "10.0.0.2", NetworkAddressFamily.IPV4, false)
+        val wifi = NetworkAddress("wlan0", "192.168.1.2", NetworkAddressFamily.IPV4, false)
+        val observation = AtomicReference(
+            DesktopNetworkObservation(
+                addresses = listOf(ethernet, wifi),
+                defaultRouteAvailable = true,
+                vpnActive = false,
+                selection = DesktopLanAddressSelection(
+                    ethernet,
+                    DesktopLanAddressSelectionReason.DEFAULT_ROUTE,
+                ),
+            ),
+        )
+        val monitor = DesktopNetworkSnapshotMonitor(
+            scanner = DesktopNetworkScanner { observation.get() },
+            pollIntervalMillis = 60_000L,
+            nowMillis = { 10L },
+            dispatcher = Dispatchers.Unconfined,
+        )
+        try {
+            assertEquals(ethernet, monitor.snapshots.value.preferredLanAddress)
+            observation.set(
+                observation.get().copy(
+                    selection = DesktopLanAddressSelection(
+                        wifi,
+                        DesktopLanAddressSelectionReason.DEFAULT_ROUTE,
+                    ),
+                ),
+            )
+
+            assertEquals(1L, monitor.refresh().version)
+            assertEquals(wifi, monitor.snapshots.value.preferredLanAddress)
         } finally {
             monitor.close()
         }

@@ -26,6 +26,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":products:companion:di"))
     implementation(project(":application:companion"))
     implementation(project(":core:companion"))
     implementation(project(":core:logger"))

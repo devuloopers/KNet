@@ -17,7 +17,7 @@ class ObserveLocalIpUseCaseTest {
     @Test
     fun `ObserveLocalIpUseCase executes repository observation flow`() = runTest {
         val fakeRepo = object : NetworkRepository {
-            override fun observeLocalIp(pollIntervalMs: Long): Flow<String> = flowOf("192.168.1.50")
+            override fun observeLocalIp(): Flow<String> = flowOf("192.168.1.50")
             override suspend fun getLocalIp(): String = "192.168.1.50"
         }
 
@@ -29,7 +29,7 @@ class ObserveLocalIpUseCaseTest {
     @Test
     fun `GetLocalIpUseCase returns single-shot IP address`() = runTest {
         val fakeRepo = object : NetworkRepository {
-            override fun observeLocalIp(pollIntervalMs: Long): Flow<String> = flowOf("10.0.0.1")
+            override fun observeLocalIp(): Flow<String> = flowOf("10.0.0.1")
             override suspend fun getLocalIp(): String = "10.0.0.1"
         }
 

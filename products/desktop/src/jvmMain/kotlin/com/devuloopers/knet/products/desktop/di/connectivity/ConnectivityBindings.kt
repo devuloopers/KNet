@@ -55,7 +55,6 @@ import com.devuloopers.knet.data.desktop.runtime.CertificateRuntimeRepository
 import com.devuloopers.knet.domain.network.repository.NetworkRepository
 import com.devuloopers.knet.domain.network.usecase.GetLocalIpUseCase
 import com.devuloopers.knet.domain.network.usecase.ObserveLocalIpUseCase
-import com.devuloopers.knet.engine.proxy.network.LocalIpResolver
 import com.devuloopers.knet.products.desktop.connectivity.DesktopSetupPortalIndex
 import com.devuloopers.knet.storage.database.KNetDatabase
 import com.devuloopers.knet.traffic.model.IngressAttributionLookup
@@ -202,8 +201,7 @@ internal val connectivityBindings: Module = module {
         )
     }
 
-    single { LocalIpResolver() }
-    single<NetworkRepository> { NetworkRepositoryImpl(get()) }
+    single<NetworkRepository> { NetworkRepositoryImpl(get<DesktopNetworkSnapshotMonitor>().snapshots) }
     factory { ObserveLocalIpUseCase(get()) }
     factory { GetLocalIpUseCase(get()) }
 

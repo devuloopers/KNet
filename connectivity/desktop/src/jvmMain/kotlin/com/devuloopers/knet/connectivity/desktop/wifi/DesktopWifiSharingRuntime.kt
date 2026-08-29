@@ -138,7 +138,7 @@ public class DesktopWifiSharingRuntime(
         }
 
         val current = activeSession
-        val selectedAddress = current?.networkAddress?.takeIf { it in addresses } ?: addresses.preferredAddress()
+        val selectedAddress = context.network.preferredLanAddress?.takeIf { it in addresses }
         if (selectedAddress == null) {
             closeActiveResourcesLocked()
             mutableState.value = WifiSharingState.Failed(
@@ -488,8 +488,6 @@ public class DesktopWifiSharingRuntime(
             mutableState.value = WifiSharingState.Disabled(availableAddresses())
         }
     }
-
-    private fun List<NetworkAddress>.preferredAddress(): NetworkAddress? = firstOrNull()
 
     private fun setupPortsFor(proxyPort: Int): List<Int> =
         setupPortalPorts.filterNot { it == proxyPort }

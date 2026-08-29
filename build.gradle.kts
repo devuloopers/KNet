@@ -449,12 +449,14 @@ val allowedArchitectureDependencies = mapOf(
     ":application:companion" to setOf(
         ":core:companion",
         ":core:identity",
+        ":core:logger",
         ":core:pairing",
     ),
     ":data:companion" to setOf(
         ":application:companion",
         ":core:companion",
         ":core:identity",
+        ":core:logger",
         ":core:pairing",
     ),
     ":ui:companion:presentation" to setOf(
@@ -472,12 +474,29 @@ val allowedArchitectureDependencies = mapOf(
         ":core:companion",
         ":core:logger",
     ),
+    ":products:companion:di" to setOf(
+        ":application:companion",
+        ":connectivity:companion",
+        ":data:companion",
+        ":ui:companion:presentation",
+    ),
     ":products:companion:androidApp" to setOf(
         ":application:companion",
         ":connectivity:companion",
         ":core:companion",
         ":core:logger",
         ":data:companion",
+        ":products:companion:di",
+        ":ui:companion:presentation",
+        ":ui:companion:sharedUi",
+    ),
+    ":products:companion:iosApp" to setOf(
+        ":application:companion",
+        ":connectivity:companion",
+        ":core:companion",
+        ":data:companion",
+        ":products:companion:di",
+        ":ui:core",
         ":ui:companion:presentation",
         ":ui:companion:sharedUi",
     ),
@@ -587,7 +606,11 @@ val verifyKotlinFirstSources by tasks.registering(VerifyKotlinFirstSourcesTask::
             "ui/core/src/**/*.kt",
             "ui/desktop/*/src/**/*.kt",
         )
-        exclude("**/build/**")
+        exclude(
+            "**/build/**",
+            "products/companion/di/src/**/*.kt",
+            "products/companion/iosPacketTunnel/src/**/*.kt",
+        )
     })
     allowedAwtClipboardPaths.set(
         listOf("ui/core/src/jvmMain/kotlin/com/devuloopers/knet/ui/core/foundation/clipboard/ClipboardText.jvm.kt"),
@@ -641,6 +664,8 @@ tasks.register("companionFoundationQualification") {
         ":ui:core:compileKotlinIosSimulatorArm64",
         ":connectivity:companion:testAndroidHostTest",
         ":data:companion:testAndroidHostTest",
+        ":products:companion:di:testAndroidHostTest",
+        ":products:companion:di:iosSimulatorArm64Test",
         ":connectivity:companion:compileKotlinIosArm64",
         ":connectivity:companion:compileKotlinIosSimulatorArm64",
         ":connectivity:companion:iosSimulatorArm64Test",
@@ -667,6 +692,16 @@ tasks.register("companionAndroidProductQualification") {
         ":products:companion:androidApp:testDebugUnitTest",
         ":products:companion:androidApp:lintDebug",
         ":products:companion:androidApp:assembleDebug",
+    )
+}
+
+/** Installable iOS companion product gate. It links the simulator framework but never launches an app. */
+tasks.register("companionIosProductQualification") {
+    group = "verification"
+    description = "Runs companion foundations and links the iOS product framework for the simulator."
+    dependsOn(
+        "companionFoundationQualification",
+        ":products:companion:iosApp:linkDebugFrameworkIosSimulatorArm64",
     )
 }
 

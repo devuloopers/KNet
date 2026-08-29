@@ -33,7 +33,7 @@ class TrafficLocalIpTest {
     @Test
     fun `TrafficViewModel collects and updates localIpAddress state from ObserveLocalIpUseCase`() = runTest {
         val fakeNetworkRepo = object : NetworkRepository {
-            override fun observeLocalIp(pollIntervalMs: Long): Flow<String> = flowOf("192.168.1.100")
+            override fun observeLocalIp(): Flow<String> = flowOf("192.168.1.100")
             override suspend fun getLocalIp(): String = "192.168.1.100"
         }
         val observeLocalIpUseCase = ObserveLocalIpUseCase(fakeNetworkRepo)

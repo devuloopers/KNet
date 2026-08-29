@@ -14,9 +14,6 @@ class ObserveLocalIpUseCase(
     /**
      * Executes reactive observation of local IPv4 address.
      *
-     * @param pollIntervalMs Ticker polling interval in milliseconds. Defaults to 3000ms.
      */
-    fun execute(pollIntervalMs: Long = 3000L): Flow<String> {
-        return repository.observeLocalIp(pollIntervalMs)
-    }
+    fun execute(): Flow<String> = repository.observeLocalIp()
 }

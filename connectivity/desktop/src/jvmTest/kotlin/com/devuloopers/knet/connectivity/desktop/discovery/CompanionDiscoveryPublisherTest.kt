@@ -119,14 +119,18 @@ class CompanionDiscoveryPublisherTest {
             proxyPort = 8182,
         )
 
-        fun snapshot(address: String?, version: Long) = NetworkSnapshot(
-            version = version,
-            addresses = address?.let {
-                listOf(NetworkAddress("en0", it, NetworkAddressFamily.IPV4, loopback = false))
-            }.orEmpty(),
-            defaultRouteAvailable = address != null,
-            vpnActive = false,
-            observedAtEpochMillis = version,
-        )
+        fun snapshot(address: String?, version: Long): NetworkSnapshot {
+            val selectedAddress = address?.let {
+                NetworkAddress("en0", it, NetworkAddressFamily.IPV4, loopback = false)
+            }
+            return NetworkSnapshot(
+                version = version,
+                addresses = listOfNotNull(selectedAddress),
+                defaultRouteAvailable = address != null,
+                vpnActive = false,
+                observedAtEpochMillis = version,
+                preferredLanAddress = selectedAddress,
+            )
+        }
     }
 }

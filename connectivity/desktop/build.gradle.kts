@@ -14,6 +14,7 @@ kotlin {
                 implementation(project(":core:connectivity"))
                 implementation(project(":core:companion"))
                 implementation(project(":core:identity"))
+                implementation(project(":core:logger"))
                 implementation(project(":core:traffic"))
                 implementation(project(":core:pairing"))
                 implementation(libs.kotlinx.coroutines.core)

@@ -1,18 +1,23 @@
 package com.devuloopers.knet.companion.connectivity.discovery
 
-import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.companion.application.contract.CompanionDesktopDiscovery
 import com.devuloopers.knet.companion.model.CompanionDesktopId
 import com.devuloopers.knet.companion.model.CompanionDiscoveryCandidate
 import com.devuloopers.knet.companion.model.CompanionDiscoveryProtocol
 import com.devuloopers.knet.companion.model.CompanionDiscoveryState
 import com.devuloopers.knet.companion.model.CompanionDiscoveryTxtCodec
+import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.companion.model.CompanionFailure
 import com.devuloopers.knet.companion.model.CompanionFailureCode
 import com.devuloopers.knet.companion.model.CompanionServiceEndpoint
+import kotlinx.cinterop.ByteVar
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.ObjCSignatureOverride
 import kotlinx.cinterop.addressOf
+import kotlinx.cinterop.allocArray
+import kotlinx.cinterop.memScoped
+import kotlinx.cinterop.reinterpret
+import kotlinx.cinterop.toKString
 import kotlinx.cinterop.usePinned
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -23,13 +28,15 @@ import platform.Foundation.NSNetServiceBrowser
 import platform.Foundation.NSNetServiceBrowserDelegateProtocol
 import platform.Foundation.NSNetServiceDelegateProtocol
 import platform.darwin.NSObject
+import platform.posix.NI_NUMERICHOST
+import platform.posix.getnameinfo
 import platform.posix.memcpy
 
 /**
  * iOS Bonjour adapter. Resolved services remain untrusted until common pinned-TLS reconciliation succeeds.
  *
- * A future iOS product must declare `_knet-companion._tcp` in `NSBonjourServices` and provide an
- * `NSLocalNetworkUsageDescription`; this KMP adapter intentionally does not own product Info.plist policy.
+ * The iOS product declares `_knet-companion._tcp` and its local-network usage text; this reusable adapter does not
+ * own product Info.plist policy.
  */
 @OptIn(ExperimentalForeignApi::class)
 internal class IosCompanionDesktopDiscovery(
@@ -120,14 +127,22 @@ internal class IosCompanionDesktopDiscovery(
             ?.let { values -> runCatching { txtCodec.decode(values) }.getOrNull() }
             ?: return
         if (!advertisement.matches(targets)) return
-        val host = service.hostName?.removeSuffix(".") ?: return
-        val endpoint = runCatching {
-            CompanionServiceEndpoint(host, service.port.toInt(), scheme = CompanionEndpointScheme.HTTPS)
-        }.getOrNull() ?: return
+        // A Packet Tunnel must exclude the paired desktop from its own routes. Publish numeric addresses instead of
+        // the Bonjour host name so the extension can apply that exclusion without recursive DNS or route lookup.
+        val endpoints = service.addresses.orEmpty()
+            .filterIsInstance<NSData>()
+            .mapNotNull { address -> address.numericHost() }
+            .distinct()
+            .mapNotNull { host ->
+                runCatching {
+                    CompanionServiceEndpoint(host, service.port.toInt(), scheme = CompanionEndpointScheme.HTTPS)
+                }.getOrNull()
+            }
+        if (endpoints.isEmpty()) return
         candidates[service.name] = CompanionDiscoveryCandidate(
             instanceName = service.name,
             advertisement = advertisement,
-            endpoints = listOf(endpoint),
+            endpoints = endpoints,
         )
         service.startMonitoring()
         publishCandidates()
@@ -144,7 +159,7 @@ internal class IosCompanionDesktopDiscovery(
 
     private fun fail(message: String) {
         mutableState.value = CompanionDiscoveryState.Failed(
-            CompanionFailure(CompanionFailureCode.PLATFORM_ADAPTER_UNAVAILABLE, message, true),
+            CompanionFailure(CompanionFailureCode.NETWORK_UNAVAILABLE, message, true),
         )
         browser?.apply {
             stop()
@@ -171,6 +186,21 @@ internal class IosCompanionDesktopDiscovery(
 
     private fun NSData.toByteArray(): ByteArray = ByteArray(length.toInt()).also { output ->
         if (output.isNotEmpty()) output.usePinned { pinned -> memcpy(pinned.addressOf(0), bytes, length) }
+    }
+
+    private fun NSData.numericHost(): String? = memScoped {
+        val socketAddress = bytes ?: return@memScoped null
+        val output = allocArray<ByteVar>(NUMERIC_HOST_BUFFER_SIZE)
+        val result = getnameinfo(
+            socketAddress.reinterpret(),
+            length.toUInt(),
+            output,
+            NUMERIC_HOST_BUFFER_SIZE.toUInt(),
+            null,
+            0u,
+            NI_NUMERICHOST,
+        )
+        if (result == 0) output.toKString().takeIf(String::isNotBlank) else null
     }
 
 }
@@ -216,3 +246,4 @@ private class IosBonjourDelegate(
 private const val APPLE_SERVICE_TYPE: String = "${CompanionDiscoveryProtocol.SERVICE_TYPE}."
 private const val APPLE_LOCAL_DOMAIN: String = "local."
 private const val RESOLUTION_TIMEOUT_SECONDS: Double = 5.0
+private const val NUMERIC_HOST_BUFFER_SIZE: Int = 1_025

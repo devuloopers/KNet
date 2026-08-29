@@ -26,12 +26,12 @@ import com.devuloopers.knet.ui.core.foundation.theme.ThemeMode
  */
 @Composable
 public fun KNetCompanionApp(
+    modifier: Modifier = Modifier,
     state: CompanionUiState,
     onAction: (CompanionAction) -> Unit,
     onExitRequested: () -> Unit,
     certificateInstallationGuidance: CertificateInstallationGuidance,
-    invitationScanner: CompanionInvitationScanner = UnavailableCompanionInvitationScanner,
-    modifier: Modifier = Modifier,
+    invitationScanner: CompanionInvitationScanner = UnavailableCompanionInvitationScanner
 ) {
     KNetTheme(themeMode = ThemeMode.System) {
         Surface(

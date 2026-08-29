@@ -21,6 +21,11 @@ products:companion:androidApp
   -> ui:companion:sharedUi -> ui:core + ui:companion:presentation
   -> application:companion
   -> data:companion + connectivity:companion:android
+
+products:companion:iosApp
+  -> ui:companion:sharedUi -> ui:core + ui:companion:presentation
+  -> application:companion
+  -> data:companion + connectivity:companion:ios
 ```
 
 `HttpRequestSnapshot`, `HttpResponseSnapshot`, and `HttpExchangeSnapshot` in `:core:traffic` are the shared immutable HTTP models used by Traffic, API Studio recording/replay preparation, breakpoints, persistence, export, and inspectors. Large body bytes are never embedded in those snapshots; `BodyRef` metadata points to the bounded body-store boundary.
@@ -42,6 +47,7 @@ The proxy forwarding path is independent from Compose, Room, connectivity mechan
 | `:ui:companion:presentation`, `:ui:companion:sharedUi` | Portable companion state and Compose Multiplatform UI |
 | `:products:desktop` | Desktop launcher, all Koin bindings, startup, and shutdown |
 | `:products:companion:androidApp` | Installable Android companion shell and Android product composition root |
+| `:products:companion:iosApp` | Installable SwiftUI shell and iOS Kotlin/Native product composition root |
 
 Every Gradle module has a `MODULE.md` at its root. The complete index is [docs/module_responsibility_index.md](docs/module_responsibility_index.md).
 
@@ -57,11 +63,13 @@ The implemented foundation includes HTTP/1 streaming, experimental HTTP/2 transp
 
 HTTP/2, native gRPC, HTTP/1.1 WebSocket, and modern `graphql-transport-ws` inspection/breakpoints/API Studio have
 completed their local JVM increments but remain `EXPERIMENTAL` until their external platform/device and
-release-soak gates pass. An installable Android companion product shell now hosts shared Compose Multiplatform UI
-and composes the implemented portable foundation plus Android secure-storage, identity, registration, invitation,
-and network adapters. Its pinned transport, certificate-trust flow, VPN packet backend, and complete workflow UI—as well as iOS, relay, HTTP/3, and
-WebSocket over HTTP/2—remain future additive capabilities. They are not presented
-as supported until their implementation and conformance gates pass.
+release-soak gates pass. Installable Android and iOS companion shells host the shared Compose Multiplatform UI.
+Both platforms compose secure persistence, proof identity, QR pairing, certificate verification, paired-desktop
+rediscovery, and device-VPN inspection behind shared contracts. The iOS implementation uses Keychain,
+AVFoundation, Bonjour, Darwin TLS, and a Packet Tunnel extension; a signed physical-device build with Apple's
+Network Extension entitlement remains its release qualification gate. Relay, HTTP/3, and WebSocket over HTTP/2
+remain future additive capabilities. They are not presented as supported until their implementation and
+conformance gates pass.
 
 ## Build and verification
 
@@ -70,6 +78,7 @@ Do not launch the desktop application during automated verification.
 ```bash
 ./gradlew phase18ReleaseGate
 ./gradlew companionAndroidProductQualification
+./gradlew companionIosProductQualification
 ```
 
 For faster focused work, run the affected module tests and desktop compilation first. The release gate enforces architecture checks, module tests, and desktop packaging.
