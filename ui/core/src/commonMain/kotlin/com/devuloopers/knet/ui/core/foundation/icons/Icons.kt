@@ -48,4 +48,5 @@ object KNetIcons {
     val Wifi: ImageVector = Icons.Default.Wifi
     val Desktop: ImageVector = Icons.Default.DesktopWindows
     val Phone: ImageVector = Icons.Default.PhoneAndroid
+    val Image: ImageVector = Icons.Default.Image
 }

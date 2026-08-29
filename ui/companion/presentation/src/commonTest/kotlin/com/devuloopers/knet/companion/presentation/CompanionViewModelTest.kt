@@ -250,6 +250,33 @@ class CompanionViewModelTest {
     }
 
     @Test
+    fun pickInvitationImageRequestedEmitsNativeEffectAndActivatesScanner() = runCompanionViewModelTest {
+        val fixture = Fixture()
+        val viewModel = fixture.viewModel()
+
+        viewModel.dispatch(CompanionAction.PickInvitationImageRequested)
+
+        assertEquals(true, viewModel.state.value.invitationScannerVisible)
+        assertIs<CompanionEffect.PickInvitationImage>(viewModel.effects.first())
+        fixture.clearViewModelStore()
+    }
+
+    @Test
+    fun invitationImageDecodeFailedPresentsRecoverableFailure() = runCompanionViewModelTest {
+        val fixture = Fixture()
+        val viewModel = fixture.viewModel()
+        viewModel.dispatch(CompanionAction.PickInvitationImageRequested)
+
+        viewModel.dispatch(CompanionAction.InvitationImageDecodeFailed("Custom decode failure"))
+        advanceUntilIdle()
+
+        assertEquals(CompanionFlowStage.CONNECT_DESKTOP, viewModel.state.value.resolveFlowStage())
+        assertEquals(CompanionFailureCode.INVITATION_INVALID, viewModel.state.value.failure?.code)
+        assertEquals("Custom decode failure", viewModel.state.value.failure?.message)
+        fixture.clearViewModelStore()
+    }
+
+    @Test
     fun rejectedCameraPayloadReturnsToScannerForAnExplicitRetry() = runCompanionViewModelTest {
         val fixture = Fixture()
         fixture.invitationResolution = {

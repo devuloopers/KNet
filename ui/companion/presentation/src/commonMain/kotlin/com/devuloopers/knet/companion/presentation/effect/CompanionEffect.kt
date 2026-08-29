@@ -16,4 +16,7 @@ public sealed interface CompanionEffect {
 
     /** Opens platform guidance for enabling trust after installation. */
     public data object OpenCertificateTrustSettings : CompanionEffect
+
+    /** Launches the platform-owned media or file picker to select a pairing QR code image. */
+    public data object PickInvitationImage : CompanionEffect
 }

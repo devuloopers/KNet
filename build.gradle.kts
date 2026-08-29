@@ -506,6 +506,7 @@ val allowedArchitectureDependencies = mapOf(
         ":core:traffic",
         ":core:connectivity",
         ":core:identity",
+        ":core:logger",
         ":core:pairing",
     ),
 ).mapValues { (_, paths) -> paths.sorted().joinToString(",") }

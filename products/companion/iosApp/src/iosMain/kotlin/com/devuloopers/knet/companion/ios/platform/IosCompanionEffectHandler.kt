@@ -1,5 +1,6 @@
 package com.devuloopers.knet.companion.ios.platform
 
+import com.devuloopers.knet.companion.ios.platform.scanner.IosQrImagePicker
 import com.devuloopers.knet.companion.presentation.action.CompanionAction
 import com.devuloopers.knet.companion.presentation.effect.CompanionEffect
 import platform.Foundation.NSURL
@@ -14,6 +15,8 @@ internal class IosCompanionEffectHandler(
 ) {
     private val certificateExporter: IosCertificateArtifactExporter =
         IosCertificateArtifactExporter(dispatch, presenter)
+    private val qrImagePicker: IosQrImagePicker =
+        IosQrImagePicker(dispatch, presenter)
 
     fun handle(effect: CompanionEffect) {
         when (effect) {
@@ -26,6 +29,7 @@ internal class IosCompanionEffectHandler(
                 certificateExporter.export(effect.desktopId, effect.artifact)
             }
             CompanionEffect.OpenCertificateTrustSettings -> openApplicationSettings()
+            CompanionEffect.PickInvitationImage -> qrImagePicker.pickImage()
         }
     }
 

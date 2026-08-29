@@ -7,8 +7,14 @@ public sealed interface CompanionAction {
     /** Replaces the Connect illustration with the shared inline invitation scanner. */
     public data object ScanInvitationRequested : CompanionAction
 
-    /** Submits the first QR payload detected by the active camera scanner session. */
+    /** Submits the first QR payload detected by the active camera scanner session or image picker. */
     public data class InvitationScanned(public val payload: String) : CompanionAction
+
+    /** Launches the platform-owned media or file picker to import a local pairing QR image. */
+    public data object PickInvitationImageRequested : CompanionAction
+
+    /** Reports that no readable or valid pairing QR code was detected in the picked image. */
+    public data class InvitationImageDecodeFailed(public val message: String? = null) : CompanionAction
 
     /** Restores the Connect illustration without submitting an invitation. */
     public data object InvitationScannerDismissed : CompanionAction

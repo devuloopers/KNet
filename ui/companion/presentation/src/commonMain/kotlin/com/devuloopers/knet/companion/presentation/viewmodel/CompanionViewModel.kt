@@ -172,10 +172,23 @@ public class CompanionViewModel(
             CompanionAction.ScanInvitationRequested -> {
                 mutableState.update { current -> current.copy(invitationScannerVisible = true, failure = null) }
             }
+            CompanionAction.PickInvitationImageRequested -> {
+                mutableState.update { current -> current.copy(invitationScannerVisible = true, failure = null) }
+                emitEffect(CompanionEffect.PickInvitationImage)
+            }
             is CompanionAction.InvitationScanned -> {
                 if (mutableState.value.invitationScannerVisible && !mutableState.value.operationInProgress) {
                     acceptInvitation(action.payload)
                 }
+            }
+            is CompanionAction.InvitationImageDecodeFailed -> {
+                showFailure(
+                    CompanionFailure(
+                        code = CompanionFailureCode.INVITATION_INVALID,
+                        message = action.message ?: "No valid KNet QR code found in selected image.",
+                        recoverable = true,
+                    ),
+                )
             }
             CompanionAction.InvitationScannerDismissed -> {
                 dismissInvitation()

@@ -2887,3 +2887,12 @@ oversized lengths, duplicate headers, and unsupported transfer encoding. A real-
 request without `Content-Length`; malformed-length, oversized-length, and chunked-framing cases remain rejected.
 Focused desktop gateway tests, Android companion host tests, Android compilation, and lint pass. Existing pairing
 and credential records are unchanged; the running desktop must be restarted before the physical re-test.
+
+## Phase 130: In-App Companion Local QR Code Image Selection [COMPLETED]
+
+Completed on 2026-08-29. Added the capability to select and decode a pairing QR code image from the local photo gallery or file storage on both Android and iOS in the KNet Companion application. The feature preserves Clean Architecture and platform decoupling by routing user intent through the shared MVI Action/Effect pipeline (`CompanionAction.PickInvitationImageRequested`, `CompanionAction.InvitationImageDecodeFailed`, and `CompanionEffect.PickInvitationImage`), and uses platform-native barcode decoders (`AndroidQrImageDecoder` using Google ML Kit on Android, `IosQrImagePicker` using PhotosUI and CoreImage on iOS) without introducing external third-party libraries. Added `KNetIcons.Image` in `:ui:core` and integrated a secondary button on `ConnectDesktopScreen`. Companion presentation unit tests, shared UI tests, Android unit tests, Android lint analysis, iOS Simulator compilation, and architecture verification pass.
+
+## Phase 131: iOS Certificate Installation Guidance Enhancement [COMPLETED]
+
+Completed on 2026-08-29. Updated the platform-owned iOS certificate installation guidance to provide 5 clear, numbered steps that guide users through both required iOS security phases: (1) installing the downloaded profile in Settings > Profile Downloaded (or VPN & Device Management), and (2) navigating to Settings > General > About > Certificate Trust Settings and toggling "Enable full trust for root certificates" ON. Updated `products:companion:iosApp` localized string resources and `CompanionIosApplication.kt` guidance constructor. Passed iOS Simulator compilation (`compileKotlinIosSimulatorArm64`), Kotlin-first and architecture verification, and the 235-task `companionFoundationQualification` suite.
+

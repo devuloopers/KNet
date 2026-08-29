@@ -22,10 +22,11 @@ import androidx.compose.ui.window.ComposeUIViewController
 import com.devuloopers.knet.companion.ios.generated.resources.Res
 import com.devuloopers.knet.companion.ios.generated.resources.bootstrap_failed
 import com.devuloopers.knet.companion.ios.generated.resources.bootstrap_loading
-import com.devuloopers.knet.companion.ios.generated.resources.certificate_guidance_confirm
-import com.devuloopers.knet.companion.ios.generated.resources.certificate_guidance_install
-import com.devuloopers.knet.companion.ios.generated.resources.certificate_guidance_open
-import com.devuloopers.knet.companion.ios.generated.resources.certificate_guidance_return
+import com.devuloopers.knet.companion.ios.generated.resources.certificate_guidance_enable_full_trust
+import com.devuloopers.knet.companion.ios.generated.resources.certificate_guidance_install_profile
+import com.devuloopers.knet.companion.ios.generated.resources.certificate_guidance_open_profile
+import com.devuloopers.knet.companion.ios.generated.resources.certificate_guidance_open_trust_settings
+import com.devuloopers.knet.companion.ios.generated.resources.certificate_guidance_return_app
 import com.devuloopers.knet.companion.ios.bootstrap.IosCompanionBootstrap
 import com.devuloopers.knet.companion.ios.di.CompanionIosModules
 import com.devuloopers.knet.companion.ios.platform.IosCompanionEffectHandler
@@ -136,9 +137,10 @@ private fun BootstrapSurface(failed: Boolean) {
 @Composable
 private fun iosCertificateGuidance(): CertificateInstallationGuidance = CertificateInstallationGuidance(
     steps = listOf(
-        stringResource(Res.string.certificate_guidance_open),
-        stringResource(Res.string.certificate_guidance_install),
-        stringResource(Res.string.certificate_guidance_confirm),
-        stringResource(Res.string.certificate_guidance_return),
-    )
+        stringResource(Res.string.certificate_guidance_open_profile),
+        stringResource(Res.string.certificate_guidance_install_profile),
+        stringResource(Res.string.certificate_guidance_open_trust_settings),
+        stringResource(Res.string.certificate_guidance_enable_full_trust),
+        stringResource(Res.string.certificate_guidance_return_app),
+    ),
 )

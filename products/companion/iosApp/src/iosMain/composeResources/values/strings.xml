@@ -2,8 +2,9 @@
 <resources>
     <string name="bootstrap_loading">Preparing KNet Companion…</string>
     <string name="bootstrap_failed">Unable to start KNet Companion.</string>
-    <string name="certificate_guidance_open">Open the downloaded KNet configuration profile.</string>
-    <string name="certificate_guidance_install">In Settings, choose Profile Downloaded and select the KNet profile.</string>
-    <string name="certificate_guidance_confirm">Review the profile, then choose Install and confirm.</string>
-    <string name="certificate_guidance_return">Return to KNet Companion after installation completes.</string>
+    <string name="certificate_guidance_open_profile">In Settings, choose Profile Downloaded (or General > VPN &amp; Device Management).</string>
+    <string name="certificate_guidance_install_profile">Select the KNet Root Certificate profile, choose Install, and confirm.</string>
+    <string name="certificate_guidance_open_trust_settings">In Settings, navigate to General > About > Certificate Trust Settings.</string>
+    <string name="certificate_guidance_enable_full_trust">Under \"Enable full trust for root certificates\", turn the KNet Root toggle ON.</string>
+    <string name="certificate_guidance_return_app">Return to KNet Companion to finish automatic verification.</string>
 </resources>

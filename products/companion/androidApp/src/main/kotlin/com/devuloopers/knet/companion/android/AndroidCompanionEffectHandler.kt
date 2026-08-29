@@ -5,12 +5,14 @@ import android.content.Intent
 import android.net.VpnService
 import android.provider.Settings
 import androidx.activity.ComponentActivity
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.lifecycle.lifecycleScope
 import com.devuloopers.knet.companion.android.certificate.AndroidCertificateExportLocation
 import com.devuloopers.knet.companion.android.certificate.AndroidCertificateExportPolicy
 import com.devuloopers.knet.companion.android.certificate.AndroidCertificateExportResult
 import com.devuloopers.knet.companion.android.certificate.AndroidDownloadsCertificateExporter
+import com.devuloopers.knet.companion.android.scanner.AndroidQrImageDecoder
 import com.devuloopers.knet.companion.model.CompanionDesktopId
 import com.devuloopers.knet.companion.presentation.action.CompanionAction
 import com.devuloopers.knet.companion.presentation.effect.CompanionEffect
@@ -22,8 +24,23 @@ internal class AndroidCompanionEffectHandler(
     private val onAction: (CompanionAction) -> Unit,
     private val certificateExporter: AndroidDownloadsCertificateExporter =
         AndroidDownloadsCertificateExporter(activity.contentResolver),
+    private val qrImageDecoder: AndroidQrImageDecoder = AndroidQrImageDecoder(),
 ) {
     private var pendingDocumentExport: CompanionEffect.ExportCertificate? = null
+    private val qrImagePicker = activity.registerForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri == null) return@registerForActivityResult
+        activity.lifecycleScope.launch {
+            qrImageDecoder.decode(activity, uri)
+                .onSuccess { payload ->
+                    onAction(CompanionAction.InvitationScanned(payload))
+                }
+                .onFailure { error ->
+                    onAction(CompanionAction.InvitationImageDecodeFailed(error.message))
+                }
+        }
+    }
     private val certificateDocument = activity.registerForActivityResult(
         ActivityResultContracts.CreateDocument(AndroidCertificateExportPolicy.MIME_TYPE),
     ) { destination ->
@@ -56,7 +73,14 @@ internal class AndroidCompanionEffectHandler(
             CompanionEffect.RequestVpnConsent -> requestVpnConsent()
             is CompanionEffect.ExportCertificate -> exportCertificate(effect)
             CompanionEffect.OpenCertificateTrustSettings -> openCertificateSettings()
+            CompanionEffect.PickInvitationImage -> pickInvitationImage()
         }
+    }
+
+    private fun pickInvitationImage() {
+        qrImagePicker.launch(
+            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+        )
     }
 
     private fun exportCertificate(effect: CompanionEffect.ExportCertificate) {

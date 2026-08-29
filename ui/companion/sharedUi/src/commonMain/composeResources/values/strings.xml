@@ -12,7 +12,9 @@
     <string name="connect_title">Connect to KNet Desktop</string>
     <string name="connect_summary">Scan the QR code shown in KNet Desktop to connect this device securely.</string>
     <string name="scan_qr">Scan desktop QR code</string>
+    <string name="select_qr_image">Select QR from gallery</string>
     <string name="cancel_scanning">Cancel scanning</string>
+    <string name="scan_failure_no_qr_in_image">No valid KNet QR code found in selected image.</string>
     <string name="connect_security_note">The QR code securely identifies your KNet Desktop and expires automatically.</string>
     <string name="connect_illustration_description">A phone securely scanning a KNet Desktop invitation</string>
     <string name="checking_local_network">Checking local network…</string>

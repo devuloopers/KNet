@@ -35,6 +35,7 @@ import com.devuloopers.knet.companion.sharedui.generated.resources.cancel_scanni
 import com.devuloopers.knet.companion.sharedui.generated.resources.connect_summary
 import com.devuloopers.knet.companion.sharedui.generated.resources.connect_title
 import com.devuloopers.knet.companion.sharedui.generated.resources.scan_qr
+import com.devuloopers.knet.companion.sharedui.generated.resources.select_qr_image
 import com.devuloopers.knet.companion.sharedui.scanner.CompanionInvitationScanner
 import com.devuloopers.knet.ui.core.components.button.ButtonSize
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
@@ -127,6 +128,21 @@ internal fun ConnectDesktopScreen(
                                 if (scannerVisible) Res.string.cancel_scanning else Res.string.scan_qr,
                             ),
                         )
+                    }
+                    KNetButton(
+                        onClick = { onAction(CompanionAction.PickInvitationImageRequested) },
+                        modifier = Modifier.fillMaxWidth(),
+                        variant = if (scannerVisible) ButtonVariant.Ghost else ButtonVariant.Secondary,
+                        size = ButtonSize.Touch,
+                        enabled = scanEnabled && !state.operationInProgress,
+                    ) {
+                        Icon(
+                            imageVector = KNetIcons.Image,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                        )
+                        Spacer(modifier = Modifier.size(KNetTheme.spacing.sm))
+                        Text(stringResource(Res.string.select_qr_image))
                     }
                     val failure = renderState.failure
                     val motion = KNetTheme.motion
