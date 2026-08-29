@@ -6,6 +6,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Concrete transport limits applied by one [KNetProxyServer].
  *
  * @property connectTimeoutMillis Upstream TCP connect deadline.
+ * @property happyEyeballsDelayMillis Delay before starting the next IPv6/IPv4 candidate.
+ * @property maximumUpstreamAddressCandidates Maximum DNS candidates attempted for one connection.
  * @property tlsHandshakeTimeoutMillis Upstream and downstream TLS handshake deadline.
  * @property readIdleTimeoutMillis Socket read-idle deadline.
  * @property writeIdleTimeoutMillis Socket write-idle deadline.
@@ -21,6 +23,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 data class KNetProxyRuntimePolicy(
     val connectTimeoutMillis: Long = 10_000L,
+    val happyEyeballsDelayMillis: Long = 250L,
+    val maximumUpstreamAddressCandidates: Int = 8,
     val tlsHandshakeTimeoutMillis: Long = 10_000L,
     val readIdleTimeoutMillis: Long = 60_000L,
     val writeIdleTimeoutMillis: Long = 60_000L,
@@ -36,6 +40,12 @@ data class KNetProxyRuntimePolicy(
 ) {
     init {
         require(connectTimeoutMillis > 0L) { "Connect timeout must be positive." }
+        require(happyEyeballsDelayMillis in 1L..connectTimeoutMillis) {
+            "Happy Eyeballs delay must be positive and cannot exceed the connect timeout."
+        }
+        require(maximumUpstreamAddressCandidates > 0) {
+            "Maximum upstream address candidates must be positive."
+        }
         require(tlsHandshakeTimeoutMillis > 0L) { "TLS handshake timeout must be positive." }
         require(readIdleTimeoutMillis > 0L) { "Read-idle timeout must be positive." }
         require(writeIdleTimeoutMillis > 0L) { "Write-idle timeout must be positive." }

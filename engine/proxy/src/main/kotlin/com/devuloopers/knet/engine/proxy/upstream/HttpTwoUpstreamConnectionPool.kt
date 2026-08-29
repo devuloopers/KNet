@@ -7,7 +7,6 @@ import com.devuloopers.knet.engine.proxy.ProxyConnectionAdmissionController
 import com.devuloopers.knet.engine.proxy.pipeline.PipelineHandlerNames
 import com.devuloopers.knet.engine.proxy.ssl.ProxyTrustManager
 import com.devuloopers.knet.engine.proxy.tls.KeyManagerProvider
-import io.netty.bootstrap.Bootstrap
 import io.netty.channel.Channel
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelInboundHandlerAdapter
@@ -15,7 +14,6 @@ import io.netty.channel.ChannelInitializer
 import io.netty.channel.ChannelOption
 import io.netty.channel.EventLoop
 import io.netty.channel.socket.SocketChannel
-import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.handler.codec.http2.Http2FrameCodecBuilder
 import io.netty.handler.codec.http2.Http2GoAwayFrame
 import io.netty.handler.codec.http2.Http2MultiplexHandler
@@ -37,9 +35,11 @@ private const val HTTP_TWO_POOL_TAG: String = "ProxyEngine"
 /** Immutable origin identity used to prevent cross-origin HTTP/2 connection reuse. */
 internal data class HttpTwoUpstreamRoute(
     val host: String,
-    val resolvedHost: String,
-    val port: Int,
-)
+    val resolvedRoute: ResolvedUpstreamRoute,
+) {
+    val port: Int
+        get() = resolvedRoute.port
+}
 
 /** Indicates that an origin completed TLS but selected HTTP/1 instead of HTTP/2. */
 internal class HttpTwoNegotiationUnavailableException(message: String) : IOException(message)
@@ -60,6 +60,7 @@ internal class HttpTwoUpstreamConnectionPool(
     private val admissionController: ProxyConnectionAdmissionController,
     private val keyManagerProvider: KeyManagerProvider?,
     private val verifyUpstreamTls: Boolean,
+    private val happyEyeballsDialer: HappyEyeballsDialer = HappyEyeballsDialer(runtimePolicy),
 ) : AutoCloseable {
     private val lock = Any()
     private val entriesByOrigin = mutableMapOf<OriginKey, MutableList<PooledConnection>>()
@@ -72,9 +73,9 @@ internal class HttpTwoUpstreamConnectionPool(
         streamInitializer: ChannelInitializer<Channel>,
     ): CompletableFuture<Channel> {
         val result = CompletableFuture<Channel>()
-        // A transparent CONNECT tunnel can preserve one TLS hostname while routing different
-        // connections to distinct destination IPs. Pooling must retain both identities.
-        val key = OriginKey(route.host, route.resolvedHost, route.port)
+        // A transparent CONNECT tunnel can preserve one TLS hostname while DNS changes its
+        // candidate set. Pooling retains both identities without depending on response order.
+        val key = OriginKey(route.host, route.resolvedRoute.addressSetKey, route.port)
         val entry = synchronized(lock) {
             if (closed) {
                 result.completeExceptionally(IOException("HTTP/2 upstream pool is closed."))
@@ -149,111 +150,115 @@ internal class HttpTwoUpstreamConnectionPool(
             return entry
         }
 
-        val bootstrap = Bootstrap()
-            .group(eventLoop)
-            .channel(NioSocketChannel::class.java)
-            .option(ChannelOption.AUTO_READ, true)
-            .option(ChannelOption.ALLOW_HALF_CLOSURE, true)
-            .option(
-                ChannelOption.CONNECT_TIMEOUT_MILLIS,
-                runtimePolicy.connectTimeoutMillis.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
-            )
-            .handler(object : ChannelInitializer<SocketChannel>() {
-                override fun initChannel(channel: SocketChannel) {
-                    entry.parent = channel
-                    val pipeline = channel.pipeline()
-                    pipeline.addLast(
-                        PipelineHandlerNames.READ_TIMEOUT,
-                        ReadTimeoutHandler(runtimePolicy.readIdleTimeoutMillis, TimeUnit.MILLISECONDS),
-                    )
-                    pipeline.addLast(
-                        PipelineHandlerNames.WRITE_TIMEOUT,
-                        WriteTimeoutHandler(runtimePolicy.writeIdleTimeoutMillis, TimeUnit.MILLISECONDS),
-                    )
-                    val sslBuilder = SslContextBuilder.forClient()
-                        .trustManager(ProxyTrustManager.getTrustManagerFactory(verifyUpstreamTls))
-                        .applicationProtocolConfig(
-                            ApplicationProtocolConfig(
-                                ApplicationProtocolConfig.Protocol.ALPN,
-                                ApplicationProtocolConfig.SelectorFailureBehavior.NO_ADVERTISE,
-                                ApplicationProtocolConfig.SelectedListenerFailureBehavior.ACCEPT,
-                                ApplicationProtocolNames.HTTP_2,
-                                ApplicationProtocolNames.HTTP_1_1,
-                            ),
-                        )
-                    keyManagerProvider?.getKeyManagerFactory(route.host)?.let(sslBuilder::keyManager)
-                    val sslHandler = sslBuilder.build()
-                        .newHandler(channel.alloc(), route.host, route.port)
-                        .apply { setHandshakeTimeoutMillis(runtimePolicy.tlsHandshakeTimeoutMillis) }
-                    sslHandler.handshakeFuture().addListener { handshake ->
-                        if (!handshake.isSuccess) {
-                            failConnection(
-                                key,
-                                entry,
-                                handshake.cause() ?: IOException("HTTP/2 upstream TLS handshake failed."),
-                            )
-                        }
-                    }
-                    pipeline.addLast(PipelineHandlerNames.SSL, sslHandler)
-                    pipeline.addLast(
-                        PipelineHandlerNames.ALPN,
-                        object : ApplicationProtocolNegotiationHandler(ApplicationProtocolNames.HTTP_1_1) {
-                            override fun configurePipeline(context: ChannelHandlerContext, protocol: String) {
-                                if (protocol != ApplicationProtocolNames.HTTP_2) {
-                                    failConnection(
-                                        key,
-                                        entry,
-                                        HttpTwoNegotiationUnavailableException(
-                                            "Origin ${route.host}:${route.port} negotiated ${protocol.ifBlank { "HTTP/1.1" }}.",
-                                        ),
-                                    )
-                                    return
-                                }
-                                val settings = Http2Settings()
-                                    .pushEnabled(false)
-                                    .maxHeaderListSize(runtimePolicy.maximumHttp2HeaderListBytes)
-                                    .initialWindowSize(runtimePolicy.http2InitialWindowBytes)
-                                val frameCodec = Http2FrameCodecBuilder.forClient()
-                                    .initialSettings(settings)
-                                    .gracefulShutdownTimeoutMillis(runtimePolicy.gracefulShutdownTimeoutMillis)
-                                    .build()
-                                context.pipeline().addAfter(
-                                    PipelineHandlerNames.ALPN,
-                                    PipelineHandlerNames.HTTP2_CODEC,
-                                    frameCodec,
-                                )
-                                context.pipeline().addAfter(
-                                    PipelineHandlerNames.HTTP2_CODEC,
-                                    HTTP_TWO_LIFECYCLE_HANDLER,
-                                    HttpTwoParentLifecycleHandler { markDraining(key, entry) },
-                                )
-                                context.pipeline().addAfter(
-                                    HTTP_TWO_LIFECYCLE_HANDLER,
-                                    PipelineHandlerNames.HTTP2_MULTIPLEX,
-                                    Http2MultiplexHandler(RejectServerPushHandler()),
-                                )
-                                ready.complete(context.channel())
-                            }
-                        },
-                    )
+        happyEyeballsDialer.connect(eventLoop, route.resolvedRoute).whenComplete { connected, failure ->
+            eventLoop.execute {
+                if (entry.ready.isDone) {
+                    connected?.channel?.close()
+                    return@execute
                 }
-            })
-
-        bootstrap.connect(route.resolvedHost, route.port).addListener { connectFuture ->
-            if (!connectFuture.isSuccess) {
-                failConnection(
-                    key,
-                    entry,
-                    connectFuture.cause() ?: IOException("HTTP/2 upstream TCP connection failed."),
-                )
-            } else {
-                entry.parent?.closeFuture()?.addListener {
+                if (failure != null || connected == null) {
+                    failConnection(
+                        key,
+                        entry,
+                        failure ?: IOException("HTTP/2 upstream TCP connection failed."),
+                    )
+                    return@execute
+                }
+                val channel = connected.channel as SocketChannel
+                entry.parent = channel
+                configureConnectedChannel(key, entry, route, channel)
+                channel.closeFuture().addListener {
                     removeConnection(key, entry)
                     ready.completeExceptionally(IOException("HTTP/2 upstream parent closed."))
                 }
+                channel.config().isAutoRead = true
             }
         }
         return entry
+    }
+
+    /** Adds TLS/ALPN only after one dual-stack TCP candidate has won the race. */
+    private fun configureConnectedChannel(
+        key: OriginKey,
+        entry: PooledConnection,
+        route: HttpTwoUpstreamRoute,
+        channel: SocketChannel,
+    ) {
+        val pipeline = channel.pipeline()
+        pipeline.addLast(
+            PipelineHandlerNames.READ_TIMEOUT,
+            ReadTimeoutHandler(runtimePolicy.readIdleTimeoutMillis, TimeUnit.MILLISECONDS),
+        )
+        pipeline.addLast(
+            PipelineHandlerNames.WRITE_TIMEOUT,
+            WriteTimeoutHandler(runtimePolicy.writeIdleTimeoutMillis, TimeUnit.MILLISECONDS),
+        )
+        val sslBuilder = SslContextBuilder.forClient()
+            .trustManager(ProxyTrustManager.getTrustManagerFactory(verifyUpstreamTls))
+            .applicationProtocolConfig(
+                ApplicationProtocolConfig(
+                    ApplicationProtocolConfig.Protocol.ALPN,
+                    ApplicationProtocolConfig.SelectorFailureBehavior.NO_ADVERTISE,
+                    ApplicationProtocolConfig.SelectedListenerFailureBehavior.ACCEPT,
+                    ApplicationProtocolNames.HTTP_2,
+                    ApplicationProtocolNames.HTTP_1_1,
+                ),
+            )
+        keyManagerProvider?.getKeyManagerFactory(route.host)?.let(sslBuilder::keyManager)
+        val sslHandler = sslBuilder.build()
+            .newHandler(channel.alloc(), route.host, route.port)
+            .apply { setHandshakeTimeoutMillis(runtimePolicy.tlsHandshakeTimeoutMillis) }
+        sslHandler.handshakeFuture().addListener { handshake ->
+            if (!handshake.isSuccess) {
+                failConnection(
+                    key,
+                    entry,
+                    handshake.cause() ?: IOException("HTTP/2 upstream TLS handshake failed."),
+                )
+            }
+        }
+        pipeline.addLast(PipelineHandlerNames.SSL, sslHandler)
+        pipeline.addLast(
+            PipelineHandlerNames.ALPN,
+            object : ApplicationProtocolNegotiationHandler(ApplicationProtocolNames.HTTP_1_1) {
+                override fun configurePipeline(context: ChannelHandlerContext, protocol: String) {
+                    if (protocol != ApplicationProtocolNames.HTTP_2) {
+                        failConnection(
+                            key,
+                            entry,
+                            HttpTwoNegotiationUnavailableException(
+                                "Origin ${route.host}:${route.port} negotiated ${protocol.ifBlank { "HTTP/1.1" }}.",
+                            ),
+                        )
+                        return
+                    }
+                    val settings = Http2Settings()
+                        .pushEnabled(false)
+                        .maxHeaderListSize(runtimePolicy.maximumHttp2HeaderListBytes)
+                        .initialWindowSize(runtimePolicy.http2InitialWindowBytes)
+                    val frameCodec = Http2FrameCodecBuilder.forClient()
+                        .initialSettings(settings)
+                        .gracefulShutdownTimeoutMillis(runtimePolicy.gracefulShutdownTimeoutMillis)
+                        .build()
+                    context.pipeline().addAfter(
+                        PipelineHandlerNames.ALPN,
+                        PipelineHandlerNames.HTTP2_CODEC,
+                        frameCodec,
+                    )
+                    context.pipeline().addAfter(
+                        PipelineHandlerNames.HTTP2_CODEC,
+                        HTTP_TWO_LIFECYCLE_HANDLER,
+                        HttpTwoParentLifecycleHandler { markDraining(key, entry) },
+                    )
+                    context.pipeline().addAfter(
+                        HTTP_TWO_LIFECYCLE_HANDLER,
+                        PipelineHandlerNames.HTTP2_MULTIPLEX,
+                        Http2MultiplexHandler(RejectServerPushHandler()),
+                    )
+                    entry.ready.complete(context.channel())
+                }
+            },
+        )
     }
 
     /** Stops assigning new streams after GOAWAY and closes the parent after its last child. */
@@ -314,7 +319,7 @@ internal class HttpTwoUpstreamConnectionPool(
 
     private data class OriginKey(
         val host: String,
-        val resolvedHost: String,
+        val resolvedAddressSet: List<String>,
         val port: Int,
     )
 

@@ -6,6 +6,9 @@ import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureSink
 import com.devuloopers.knet.engine.proxy.pipeline.PipelineHandlerNames
 import com.devuloopers.knet.engine.proxy.pipeline.ProxyChannelAttributes
 import com.devuloopers.knet.engine.proxy.upstream.HttpTwoUpstreamConnectionPool
+import com.devuloopers.knet.engine.proxy.upstream.CoroutineUpstreamAddressResolver
+import com.devuloopers.knet.engine.proxy.upstream.HappyEyeballsDialer
+import com.devuloopers.knet.engine.proxy.upstream.UpstreamAddressResolver
 import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamInspectorFactory
 import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamTransformerFactory
 import com.devuloopers.knet.engine.proxy.inspection.ProxyDuplexInspectorFactory
@@ -120,8 +123,10 @@ class KNetProxyServer(
     private var certificateExecutor: ThreadPoolExecutor? = null
     private var eventLoopLagTask: ScheduledFuture<*>? = null
     private var httpTwoUpstreamPool: HttpTwoUpstreamConnectionPool? = null
+    private var upstreamAddressResolver: UpstreamAddressResolver? = null
     private val activeChannels: ChannelGroup = DefaultChannelGroup(GlobalEventExecutor.INSTANCE)
     private val admissionController = ProxyConnectionAdmissionController(runtimePolicy)
+    private val happyEyeballsDialer = HappyEyeballsDialer(runtimePolicy)
 
     init {
         require(bindHost.isNotBlank()) { "Proxy bind host must not be blank." }
@@ -145,6 +150,10 @@ class KNetProxyServer(
         try {
             val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
             serverScope = scope
+            upstreamAddressResolver = CoroutineUpstreamAddressResolver(
+                scope = scope,
+                maximumCandidates = runtimePolicy.maximumUpstreamAddressCandidates,
+            )
             val cryptoExecutor = createCertificateExecutor()
             certificateExecutor = cryptoExecutor
 
@@ -155,6 +164,7 @@ class KNetProxyServer(
                 admissionController = admissionController,
                 keyManagerProvider = keyManagerProvider,
                 verifyUpstreamTls = verifyUpstreamTls,
+                happyEyeballsDialer = happyEyeballsDialer,
             )
             startEventLoopLagMonitor(workerGroup!!)
 
@@ -242,6 +252,7 @@ class KNetProxyServer(
 
         serverScope?.cancel()
         serverScope = null
+        upstreamAddressResolver = null
         eventLoopLagTask?.cancel(false)
         eventLoopLagTask = null
         closeActiveConnections()
@@ -469,6 +480,10 @@ class KNetProxyServer(
         streamId = streamId,
         downstreamProtocol = downstreamProtocol,
         httpTwoUpstreamPool = httpTwoUpstreamPool,
+        upstreamAddressResolver = checkNotNull(upstreamAddressResolver) {
+            "Upstream address resolver is unavailable while the proxy is stopped."
+        },
+        happyEyeballsDialer = happyEyeballsDialer,
         streamInspectorFactories = streamInspectorFactories,
         streamTransformerFactories = streamTransformerFactories,
         duplexInspectorFactories = duplexInspectorFactories,

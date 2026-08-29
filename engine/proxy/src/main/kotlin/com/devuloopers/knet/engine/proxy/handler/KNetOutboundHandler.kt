@@ -79,6 +79,7 @@ internal class KNetOutboundHandler(
     private val onUpgradeAccepted: (Channel, com.devuloopers.knet.traffic.model.http.ResponseHead, Long) -> Unit =
         { _, _, _ -> },
 ) : SimpleChannelInboundHandler<HttpObject>() {
+    private val requestStarted = AtomicBoolean(false)
     private var responseStarted: Boolean = false
     private var isKeepAlive: Boolean = true
     private val completionPublished = AtomicBoolean(false)
@@ -90,7 +91,19 @@ internal class KNetOutboundHandler(
     private val transformQueue = ArrayDeque<TransformInput>()
     private var transformInProgress: Boolean = false
 
+    override fun handlerAdded(context: ChannelHandlerContext) {
+        // Happy Eyeballs installs the HTTP pipeline only after a bare TCP socket wins. Netty has
+        // already emitted channelActive in that case, so start explicitly from handlerAdded.
+        if (context.channel().isActive) startRequest(context)
+    }
+
     override fun channelActive(context: ChannelHandlerContext) {
+        startRequest(context)
+        context.fireChannelActive()
+    }
+
+    private fun startRequest(context: ChannelHandlerContext) {
+        if (!requestStarted.compareAndSet(false, true)) return
         context.writeAndFlush(request).addListener { writeFuture ->
             if (writeFuture.isSuccess) {
                 timingCollector.markRequestSent()

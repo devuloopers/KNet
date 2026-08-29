@@ -6,7 +6,6 @@ import com.devuloopers.knet.engine.proxy.KNetProxyRuntimePolicy
 import com.devuloopers.knet.engine.proxy.ProxyConnectionAdmissionController
 import com.devuloopers.knet.engine.proxy.capture.ProxyConnectionCapture
 import com.devuloopers.knet.engine.proxy.capture.ProxyExchangeCapture
-import com.devuloopers.knet.engine.proxy.dns.NettyDnsResolver
 import com.devuloopers.knet.engine.proxy.http.AuthorityParseResult
 import com.devuloopers.knet.engine.proxy.http.AuthorityParser
 import com.devuloopers.knet.engine.proxy.http.HttpOneDownstreamPolicy
@@ -23,6 +22,10 @@ import com.devuloopers.knet.engine.proxy.tls.SniTlsContextHandlerFactory
 import com.devuloopers.knet.engine.proxy.upstream.HttpTwoNegotiationUnavailableException
 import com.devuloopers.knet.engine.proxy.upstream.HttpTwoUpstreamConnectionPool
 import com.devuloopers.knet.engine.proxy.upstream.HttpTwoUpstreamRoute
+import com.devuloopers.knet.engine.proxy.upstream.CoroutineUpstreamAddressResolver
+import com.devuloopers.knet.engine.proxy.upstream.HappyEyeballsDialer
+import com.devuloopers.knet.engine.proxy.upstream.ResolvedUpstreamRoute
+import com.devuloopers.knet.engine.proxy.upstream.UpstreamAddressResolver
 import com.devuloopers.knet.engine.proxy.inspection.NettyPayloadSlice
 import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamInspector
 import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamInspectorFactory
@@ -41,15 +44,12 @@ import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.body.ContentEncoding
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
-import io.netty.bootstrap.Bootstrap
 import io.netty.buffer.Unpooled
 import io.netty.channel.Channel
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelInboundHandlerAdapter
 import io.netty.channel.ChannelInitializer
-import io.netty.channel.ChannelOption
 import io.netty.channel.socket.SocketChannel
-import io.netty.channel.socket.nio.NioSocketChannel
 import io.netty.handler.codec.http.DefaultFullHttpResponse
 import io.netty.handler.codec.http.DefaultHttpContent
 import io.netty.handler.codec.http.DefaultHttpRequest
@@ -73,9 +73,7 @@ import io.netty.handler.timeout.ReadTimeoutHandler
 import io.netty.handler.timeout.WriteTimeoutHandler
 import io.netty.util.ReferenceCountUtil
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.launch
 import kotlin.time.Clock
-import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.URI
 import java.util.concurrent.Executor
@@ -110,6 +108,11 @@ internal class KNetStreamingProxyHandler(
     private val streamId: StreamId? = null,
     private val downstreamProtocol: ApplicationProtocol? = null,
     private val httpTwoUpstreamPool: HttpTwoUpstreamConnectionPool? = null,
+    private val upstreamAddressResolver: UpstreamAddressResolver = CoroutineUpstreamAddressResolver(
+        scope = proxyScope,
+        maximumCandidates = runtimePolicy.maximumUpstreamAddressCandidates,
+    ),
+    private val happyEyeballsDialer: HappyEyeballsDialer = HappyEyeballsDialer(runtimePolicy),
     private val installTlsApplicationProtocol: ((io.netty.channel.ChannelPipeline) -> Unit)? = null,
     private val streamInspectorFactories: List<ProxyStreamInspectorFactory> = emptyList(),
     private val streamTransformerFactories: List<ProxyStreamTransformerFactory> = emptyList(),
@@ -498,22 +501,28 @@ internal class KNetStreamingProxyHandler(
         }
     }
 
-    /** Resolves DNS away from the event loop, then selects pooled HTTP/2 or one-shot HTTP/1. */
+    /** Resolves every DNS candidate away from the event loop, then selects HTTP/2 or HTTP/1. */
     private fun connectUpstream(context: ChannelHandlerContext, active: ActiveStreamingRequest) {
-        proxyScope.launch {
-            val resolvedHost = try {
-                InetAddress.getByName(active.target.routeHost).hostAddress.also { active.timings.markDnsEnd() }
-            } catch (_: Exception) {
-                active.timings.markDnsEnd()
-                active.target.routeHost
-            }
-
+        upstreamAddressResolver.resolve(active.target.routeHost, active.target.port)
+            .whenComplete { route, resolutionFailure ->
             context.executor().execute {
                 if (activeRequest !== active || !context.channel().isActive) return@execute
+                active.timings.markDnsEnd()
+                if (resolutionFailure != null || route == null) {
+                    failExchange(
+                        context = context,
+                        active = active,
+                        status = HttpResponseStatus.BAD_GATEWAY,
+                        reason = TrafficTerminationReason.Transport.UPSTREAM_CONNECT_FAILED,
+                        causeMessage = unwrapCompletionFailure(resolutionFailure)?.message
+                            ?: "DNS returned no usable upstream address.",
+                    )
+                    return@execute
+                }
                 if (active.target.isSsl && httpTwoUpstreamPool != null && !active.requestsDuplexUpgrade) {
-                    connectHttpTwo(context, active, resolvedHost)
+                    connectHttpTwo(context, active, route)
                 } else {
-                    connectHttpOne(context, active, resolvedHost)
+                    connectHttpOne(context, active, route)
                 }
             }
         }
@@ -523,7 +532,7 @@ internal class KNetStreamingProxyHandler(
     private fun connectHttpTwo(
         context: ChannelHandlerContext,
         active: ActiveStreamingRequest,
-        resolvedHost: String,
+        resolvedRoute: ResolvedUpstreamRoute,
     ) {
         val pool = checkNotNull(httpTwoUpstreamPool)
         active.timings.markTcpStart()
@@ -533,8 +542,7 @@ internal class KNetStreamingProxyHandler(
             eventLoop = context.channel().eventLoop(),
             route = HttpTwoUpstreamRoute(
                 host = active.target.tlsServerName,
-                resolvedHost = resolvedHost,
-                port = active.target.port,
+                resolvedRoute = resolvedRoute,
             ),
             streamInitializer = object : ChannelInitializer<Channel>() {
                 override fun initChannel(channel: Channel) {
@@ -575,7 +583,7 @@ internal class KNetStreamingProxyHandler(
 
                 val cause = unwrapCompletionFailure(failure)
                 if (cause is HttpTwoNegotiationUnavailableException) {
-                    connectHttpOne(context, active, resolvedHost)
+                    connectHttpOne(context, active, resolvedRoute)
                 } else {
                     failExchange(
                         context = context,
@@ -593,7 +601,7 @@ internal class KNetStreamingProxyHandler(
     private fun connectHttpOne(
         context: ChannelHandlerContext,
         active: ActiveStreamingRequest,
-        resolvedHost: String,
+        resolvedRoute: ResolvedUpstreamRoute,
     ) {
         active.timings.markTcpStart()
         val upstreamLease = admissionController.tryAcquireUpstream()
@@ -607,29 +615,20 @@ internal class KNetStreamingProxyHandler(
             return
         }
 
-        val bootstrap = Bootstrap()
-            .group(context.channel().eventLoop())
-            .channel(NioSocketChannel::class.java)
-            .option(ChannelOption.AUTO_READ, false)
-            .option(ChannelOption.ALLOW_HALF_CLOSURE, true)
-            .option(
-                ChannelOption.CONNECT_TIMEOUT_MILLIS,
-                runtimePolicy.connectTimeoutMillis.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
-            )
-            .resolver(NettyDnsResolver.resolverGroup)
-            .handler(object : ChannelInitializer<SocketChannel>() {
-                override fun initChannel(channel: SocketChannel) {
-                    configureHttpOneUpstreamPipeline(context, active, channel)
-                }
-            })
-
-        val connectFuture = bootstrap.connect(resolvedHost, active.target.port)
-        connectFuture.addListener { future ->
+        happyEyeballsDialer.connect(context.channel().eventLoop(), resolvedRoute)
+            .whenComplete { connected, connectionFailure ->
             context.executor().execute {
                 active.timings.markTcpEnd()
-                if (future.isSuccess) {
-                    active.upstreamChannel = connectFuture.channel()
-                    connectFuture.channel().closeFuture().addListener { upstreamLease.close() }
+                if (activeRequest !== active || !context.channel().isActive) {
+                    connected?.channel?.close()
+                    upstreamLease.close()
+                    return@execute
+                }
+                if (connectionFailure == null && connected != null) {
+                    val upstreamChannel = connected.channel as SocketChannel
+                    configureHttpOneUpstreamPipeline(context, active, upstreamChannel)
+                    active.upstreamChannel = upstreamChannel
+                    upstreamChannel.closeFuture().addListener { upstreamLease.close() }
                     pumpRequestBody(context, active)
                 } else {
                     upstreamLease.close()
@@ -638,7 +637,7 @@ internal class KNetStreamingProxyHandler(
                         active = active,
                         status = HttpResponseStatus.BAD_GATEWAY,
                         reason = TrafficTerminationReason.Transport.UPSTREAM_CONNECT_FAILED,
-                        causeMessage = future.cause()?.message,
+                        causeMessage = unwrapCompletionFailure(connectionFailure)?.message,
                     )
                 }
             }

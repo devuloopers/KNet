@@ -15,6 +15,19 @@ class ProxyConnectionAdmissionControllerTest {
         }
     }
 
+    @Test
+    fun `runtime policy rejects invalid dual stack bounds`() {
+        assertFailsWith<IllegalArgumentException> {
+            KNetProxyRuntimePolicy(happyEyeballsDelayMillis = 0L)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            KNetProxyRuntimePolicy(maximumUpstreamAddressCandidates = 0)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            KNetProxyRuntimePolicy(connectTimeoutMillis = 100L, happyEyeballsDelayMillis = 101L)
+        }
+    }
+
     /** Verifies total and per-client downstream limits recover when leases close. */
     @Test
     fun `downstream limits reject saturation and recover after release`() {
