@@ -1,48 +1,27 @@
 package com.devuloopers.knet.engine.proxy.handler
 
 import com.devuloopers.knet.core.logger.KNetLogger
-import com.devuloopers.knet.engine.proxy.http.ProxyRequestContext
 import com.devuloopers.knet.engine.proxy.KNetProxyRuntimePolicy
 import com.devuloopers.knet.engine.proxy.ProxyConnectionAdmissionController
 import com.devuloopers.knet.engine.proxy.capture.ProxyConnectionCapture
 import com.devuloopers.knet.engine.proxy.capture.ProxyExchangeCapture
-import com.devuloopers.knet.engine.proxy.http.AuthorityParseResult
-import com.devuloopers.knet.engine.proxy.http.AuthorityParser
-import com.devuloopers.knet.engine.proxy.http.HttpOneDownstreamPolicy
-import com.devuloopers.knet.engine.proxy.http.HttpOneRequestViolation
-import com.devuloopers.knet.engine.proxy.http.HttpOneSemantics
-import com.devuloopers.knet.engine.proxy.http.HttpTwoBridgeHeaders
+import com.devuloopers.knet.engine.proxy.http.*
+import com.devuloopers.knet.engine.proxy.inspection.*
 import com.devuloopers.knet.engine.proxy.mapper.HttpMapper
-import com.devuloopers.knet.engine.proxy.pipeline.ProxyChannelAttributes
 import com.devuloopers.knet.engine.proxy.pipeline.PipelineHandlerNames
+import com.devuloopers.knet.engine.proxy.pipeline.ProxyChannelAttributes
 import com.devuloopers.knet.engine.proxy.pipeline.SelectiveHttpObjectAggregator
 import com.devuloopers.knet.engine.proxy.ssl.ProxyTrustManager
 import com.devuloopers.knet.engine.proxy.timing.NetworkTimingCollector
+import com.devuloopers.knet.engine.proxy.tls.ServerTlsContextProvider
 import com.devuloopers.knet.engine.proxy.tls.SniTlsContextHandlerFactory
-import com.devuloopers.knet.engine.proxy.upstream.HttpTwoNegotiationUnavailableException
-import com.devuloopers.knet.engine.proxy.upstream.HttpTwoUpstreamConnectionPool
-import com.devuloopers.knet.engine.proxy.upstream.HttpTwoUpstreamRoute
-import com.devuloopers.knet.engine.proxy.upstream.CoroutineUpstreamAddressResolver
-import com.devuloopers.knet.engine.proxy.upstream.HappyEyeballsDialer
-import com.devuloopers.knet.engine.proxy.upstream.ResolvedUpstreamRoute
-import com.devuloopers.knet.engine.proxy.upstream.UpstreamAddressResolver
-import com.devuloopers.knet.engine.proxy.inspection.NettyPayloadSlice
-import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamInspector
-import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamInspectorFactory
-import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamTransformer
-import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamTransformerFactory
-import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamTransformResult
-import com.devuloopers.knet.engine.proxy.inspection.ProxyDuplexInspector
-import com.devuloopers.knet.engine.proxy.inspection.ProxyDuplexInspectorFactory
-import com.devuloopers.knet.engine.proxy.inspection.ProxyDuplexTransformer
-import com.devuloopers.knet.engine.proxy.inspection.ProxyDuplexTransformerFactory
-import com.devuloopers.knet.traffic.id.ExchangeId
+import com.devuloopers.knet.engine.proxy.upstream.*
 import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
+import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.TrafficDirection
 import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.body.ContentEncoding
-import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import io.netty.buffer.Unpooled
 import io.netty.channel.Channel
@@ -50,38 +29,21 @@ import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelInboundHandlerAdapter
 import io.netty.channel.ChannelInitializer
 import io.netty.channel.socket.SocketChannel
-import io.netty.handler.codec.http.DefaultFullHttpResponse
-import io.netty.handler.codec.http.DefaultHttpContent
-import io.netty.handler.codec.http.DefaultHttpRequest
-import io.netty.handler.codec.http.DefaultLastHttpContent
-import io.netty.handler.codec.http.FullHttpRequest
-import io.netty.handler.codec.http.HttpClientCodec
-import io.netty.handler.codec.http.HttpContent
-import io.netty.handler.codec.http.HttpHeaderNames
-import io.netty.handler.codec.http.HttpHeaderValues
-import io.netty.handler.codec.http.HttpMethod
-import io.netty.handler.codec.http.HttpObject
-import io.netty.handler.codec.http.HttpRequest
-import io.netty.handler.codec.http.HttpResponseStatus
-import io.netty.handler.codec.http.HttpServerCodec
-import io.netty.handler.codec.http.HttpServerUpgradeHandler
-import io.netty.handler.codec.http.HttpVersion
-import io.netty.handler.codec.http.LastHttpContent
+import io.netty.handler.codec.http.*
 import io.netty.handler.codec.http2.Http2StreamFrameToHttpObjectCodec
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.timeout.ReadTimeoutHandler
 import io.netty.handler.timeout.WriteTimeoutHandler
 import io.netty.util.ReferenceCountUtil
 import kotlinx.coroutines.CoroutineScope
-import kotlin.time.Clock
 import java.net.InetSocketAddress
 import java.net.URI
+import java.util.concurrent.CompletionException
 import java.util.concurrent.Executor
 import java.util.concurrent.ForkJoinPool
-import java.util.concurrent.CompletionException
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
-import com.devuloopers.knet.engine.proxy.tls.ServerTlsContextProvider
+import kotlin.time.Clock
 
 private const val STREAMING_TAG = "ProxyEngine"
 
@@ -95,7 +57,7 @@ private const val STREAMING_TAG = "ProxyEngine"
  */
 @Suppress("HttpUrlsUsage")
 internal class KNetStreamingProxyHandler(
-    private val serverTlsContextProvider: ServerTlsContextProvider,
+    serverTlsContextProvider: ServerTlsContextProvider,
     private val proxyScope: CoroutineScope,
     private val keyManagerProvider: com.devuloopers.knet.engine.proxy.tls.KeyManagerProvider? = null,
     private val strictSsl: Boolean = true,
@@ -503,29 +465,33 @@ internal class KNetStreamingProxyHandler(
 
     /** Resolves every DNS candidate away from the event loop, then selects HTTP/2 or HTTP/1. */
     private fun connectUpstream(context: ChannelHandlerContext, active: ActiveStreamingRequest) {
-        upstreamAddressResolver.resolve(active.target.routeHost, active.target.port)
+        upstreamAddressResolver.resolve(
+            host = active.target.routeHost,
+            port = active.target.port,
+            fallbackDnsHost = active.target.fallbackRouteHost,
+        )
             .whenComplete { route, resolutionFailure ->
-            context.executor().execute {
-                if (activeRequest !== active || !context.channel().isActive) return@execute
-                active.timings.markDnsEnd()
-                if (resolutionFailure != null || route == null) {
-                    failExchange(
-                        context = context,
-                        active = active,
-                        status = HttpResponseStatus.BAD_GATEWAY,
-                        reason = TrafficTerminationReason.Transport.UPSTREAM_CONNECT_FAILED,
-                        causeMessage = unwrapCompletionFailure(resolutionFailure)?.message
-                            ?: "DNS returned no usable upstream address.",
-                    )
-                    return@execute
-                }
-                if (active.target.isSsl && httpTwoUpstreamPool != null && !active.requestsDuplexUpgrade) {
-                    connectHttpTwo(context, active, route)
-                } else {
-                    connectHttpOne(context, active, route)
+                context.executor().execute {
+                    if (activeRequest !== active || !context.channel().isActive) return@execute
+                    active.timings.markDnsEnd()
+                    if (resolutionFailure != null || route == null) {
+                        failExchange(
+                            context = context,
+                            active = active,
+                            status = HttpResponseStatus.BAD_GATEWAY,
+                            reason = TrafficTerminationReason.Transport.UPSTREAM_CONNECT_FAILED,
+                            causeMessage = unwrapCompletionFailure(resolutionFailure)?.message
+                                ?: "DNS returned no usable upstream address.",
+                        )
+                        return@execute
+                    }
+                    if (active.target.isSsl && httpTwoUpstreamPool != null && !active.requestsDuplexUpgrade) {
+                        connectHttpTwo(context, active, route)
+                    } else {
+                        connectHttpOne(context, active, route)
+                    }
                 }
             }
-        }
     }
 
     /** Opens an isolated stream on a pooled TLS HTTP/2 parent. */
@@ -617,31 +583,31 @@ internal class KNetStreamingProxyHandler(
 
         happyEyeballsDialer.connect(context.channel().eventLoop(), resolvedRoute)
             .whenComplete { connected, connectionFailure ->
-            context.executor().execute {
-                active.timings.markTcpEnd()
-                if (activeRequest !== active || !context.channel().isActive) {
-                    connected?.channel?.close()
-                    upstreamLease.close()
-                    return@execute
-                }
-                if (connectionFailure == null && connected != null) {
-                    val upstreamChannel = connected.channel as SocketChannel
-                    configureHttpOneUpstreamPipeline(context, active, upstreamChannel)
-                    active.upstreamChannel = upstreamChannel
-                    upstreamChannel.closeFuture().addListener { upstreamLease.close() }
-                    pumpRequestBody(context, active)
-                } else {
-                    upstreamLease.close()
-                    failExchange(
-                        context = context,
-                        active = active,
-                        status = HttpResponseStatus.BAD_GATEWAY,
-                        reason = TrafficTerminationReason.Transport.UPSTREAM_CONNECT_FAILED,
-                        causeMessage = unwrapCompletionFailure(connectionFailure)?.message,
-                    )
+                context.executor().execute {
+                    active.timings.markTcpEnd()
+                    if (activeRequest !== active || !context.channel().isActive) {
+                        connected?.channel?.close()
+                        upstreamLease.close()
+                        return@execute
+                    }
+                    if (connectionFailure == null && connected != null) {
+                        val upstreamChannel = connected.channel as SocketChannel
+                        configureHttpOneUpstreamPipeline(context, active, upstreamChannel)
+                        active.upstreamChannel = upstreamChannel
+                        upstreamChannel.closeFuture().addListener { upstreamLease.close() }
+                        pumpRequestBody(context, active)
+                    } else {
+                        upstreamLease.close()
+                        failExchange(
+                            context = context,
+                            active = active,
+                            status = HttpResponseStatus.BAD_GATEWAY,
+                            reason = TrafficTerminationReason.Transport.UPSTREAM_CONNECT_FAILED,
+                            causeMessage = unwrapCompletionFailure(connectionFailure)?.message,
+                        )
+                    }
                 }
             }
-        }
     }
 
     /** Installs TLS, codecs, optional response-breakpoint aggregation, and response streaming. */
@@ -666,7 +632,7 @@ internal class KNetStreamingProxyHandler(
             keyManagerProvider?.getKeyManagerFactory(active.target.tlsServerName)?.let(sslBuilder::keyManager)
             val sslHandler = sslBuilder.build()
                 .newHandler(channel.alloc(), active.target.tlsServerName, active.target.port)
-                .apply { setHandshakeTimeoutMillis(runtimePolicy.tlsHandshakeTimeoutMillis) }
+                .apply { handshakeTimeoutMillis = runtimePolicy.tlsHandshakeTimeoutMillis }
             sslHandler.handshakeFuture().addListener { handshake ->
                 downstreamContext.executor().execute {
                     if (handshake.isSuccess) {
@@ -846,8 +812,8 @@ internal class KNetStreamingProxyHandler(
         pipeline.toMap().entries
             .filter { (_, handler) ->
                 handler is HttpServerCodec ||
-                    handler is HttpServerUpgradeHandler ||
-                    handler is HttpClientCodec
+                        handler is HttpServerUpgradeHandler ||
+                        handler is HttpClientCodec
             }
             .forEach { (name, _) -> pipeline.get(name)?.let { pipeline.remove(name) } }
     }
@@ -861,7 +827,7 @@ internal class KNetStreamingProxyHandler(
             .flatMap { value -> value.split(',').asSequence() }
             .map(String::trim)
         return connectionTokens.any { token -> token.equals(HttpHeaderValues.UPGRADE.toString(), ignoreCase = true) } &&
-            !request.headers().get(HttpHeaderNames.UPGRADE).isNullOrBlank()
+                !request.headers().get(HttpHeaderNames.UPGRADE).isNullOrBlank()
     }
 
     /**
@@ -985,10 +951,12 @@ internal class KNetStreamingProxyHandler(
                         targetPort = authority.authority.port
                     }
                 }
+
                 null -> if (routeHost == null) {
                     writeBadRequest(context, "Missing or invalid Host authority", request.protocolVersion())
                     return null
                 }
+
                 is AuthorityParseResult.Invalid -> {
                     writeBadRequest(context, "Missing or invalid Host authority", request.protocolVersion())
                     return null
@@ -1007,6 +975,17 @@ internal class KNetStreamingProxyHandler(
             writeBadRequest(context, "Recursive self-proxy connection", request.protocolVersion())
             return null
         }
+        val routeSelection = UpstreamRouteHostSelector.select(
+            connectHost = routeHost,
+            tlsServerName = tlsServerName,
+            isTls = isSsl,
+        )
+        if (routeSelection.fallbackDnsHost != null) {
+            KNetLogger.debug(STREAMING_TAG) {
+                "upstream_event=route_host_fallback_available connect_host=$routeHost " +
+                        "fallback_host=${routeSelection.fallbackDnsHost}"
+            }
+        }
 
         val relativeUri = if (absoluteUri != null) {
             val path = absoluteUri.rawPath.ifEmpty { "/" }
@@ -1015,7 +994,8 @@ internal class KNetStreamingProxyHandler(
             request.uri()
         }
         return ResolvedTarget(
-            routeHost = routeHost,
+            routeHost = routeSelection.primaryHost,
+            fallbackRouteHost = routeSelection.fallbackDnsHost,
             authorityHost = authorityHost,
             tlsServerName = tlsServerName,
             port = targetPort,
@@ -1034,7 +1014,7 @@ internal class KNetStreamingProxyHandler(
         ) {
             val requestVersion = activeRequest?.downstreamPolicy?.version ?: (message as? HttpRequest)
                 ?.protocolVersion()
-                ?: HttpVersion.HTTP_1_1
+            ?: HttpVersion.HTTP_1_1
             ReferenceCountUtil.release(message)
             releasePendingObjects()
             val response = DefaultFullHttpResponse(
@@ -1230,9 +1210,9 @@ internal class KNetStreamingProxyHandler(
     /** Returns whether the request would recursively target KNet's own listener. */
     private fun isSelfTarget(targetHost: String, targetPort: Int, localPort: Int): Boolean {
         val localHost = targetHost == "127.0.0.1" ||
-            targetHost == "localhost" ||
-            targetHost.equals("knet.local", ignoreCase = true) ||
-            isLocalMachineIp(targetHost)
+                targetHost == "localhost" ||
+                targetHost.equals("knet.local", ignoreCase = true) ||
+                isLocalMachineIp(targetHost)
         return localHost && (targetPort == localPort || targetPort == 8080)
     }
 
@@ -1252,6 +1232,7 @@ internal class KNetStreamingProxyHandler(
     /** Immutable route resolved from one downstream request head. */
     private data class ResolvedTarget(
         val routeHost: String,
+        val fallbackRouteHost: String?,
         val authorityHost: String,
         val tlsServerName: String,
         val port: Int,
@@ -1290,5 +1271,25 @@ internal class KNetStreamingProxyHandler(
         val payload: ByteArray,
         val isLast: Boolean,
         val trailers: List<com.devuloopers.knet.traffic.model.http.HeaderField>,
-    )
+    ) {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+
+            other as TransformInput
+
+            if (isLast != other.isLast) return false
+            if (!payload.contentEquals(other.payload)) return false
+            if (trailers != other.trailers) return false
+
+            return true
+        }
+
+        override fun hashCode(): Int {
+            var result = isLast.hashCode()
+            result = 31 * result + payload.contentHashCode()
+            result = 31 * result + trailers.hashCode()
+            return result
+        }
+    }
 }

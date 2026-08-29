@@ -51,7 +51,11 @@ internal data class ResolvedUpstreamRoute(
 
 /** Asynchronously resolves every usable address for one upstream routing hostname. */
 internal fun interface UpstreamAddressResolver {
-    fun resolve(host: String, port: Int): CompletableFuture<ResolvedUpstreamRoute>
+    fun resolve(
+        host: String,
+        port: Int,
+        fallbackDnsHost: String?,
+    ): CompletableFuture<ResolvedUpstreamRoute>
 }
 
 /** JVM resolver that moves blocking platform DNS lookup away from Netty event-loop threads. */
@@ -65,23 +69,46 @@ internal class CoroutineUpstreamAddressResolver(
         require(maximumCandidates > 0) { "Maximum upstream address candidates must be positive." }
     }
 
-    override fun resolve(host: String, port: Int): CompletableFuture<ResolvedUpstreamRoute> {
+    override fun resolve(
+        host: String,
+        port: Int,
+        fallbackDnsHost: String?,
+    ): CompletableFuture<ResolvedUpstreamRoute> {
         require(host.isNotBlank()) { "Upstream route host must not be blank." }
         require(port in 1..65_535) { "Upstream route port must be between 1 and 65535." }
         val result = CompletableFuture<ResolvedUpstreamRoute>()
         val resolution = scope.launch {
             runCatching {
                 withContext(Dispatchers.IO) {
-                    val addresses = lookup(host)
+                    val primaryAddresses = lookup(host)
                         .asSequence()
                         .filter { address -> address is Inet4Address || address is Inet6Address }
                         .distinct()
                         .toList()
-                    require(addresses.isNotEmpty()) { "DNS returned no usable addresses for $host." }
+                    require(primaryAddresses.isNotEmpty()) { "DNS returned no usable addresses for $host." }
+                    val fallbackAddresses = fallbackDnsHost
+                        ?.takeUnless { fallback -> fallback.equals(host, ignoreCase = true) }
+                        ?.let { fallback ->
+                            runCatching {
+                                lookup(fallback)
+                                    .asSequence()
+                                    .filter { address -> address is Inet4Address || address is Inet6Address }
+                                    .distinct()
+                                    .toList()
+                            }.getOrElse { failure ->
+                                KNetLogger.debug(UPSTREAM_RESOLUTION_TAG) {
+                                    "upstream_event=fallback_dns_failed host=$fallback " +
+                                        "reason=${failure.javaClass.simpleName}:${failure.message.orEmpty()}"
+                                }
+                                emptyList()
+                            }
+                        }
+                        .orEmpty()
                     ResolvedUpstreamRoute(
                         host = host,
                         port = port,
-                        candidates = interleaveAddressFamilies(addresses)
+                        candidates = interleaveAddressFamilies(primaryAddresses + fallbackAddresses)
+                            .distinct()
                             .take(maximumCandidates)
                             .map { address ->
                                 UpstreamAddressCandidate(
@@ -95,6 +122,7 @@ internal class CoroutineUpstreamAddressResolver(
                     ).also { route ->
                         KNetLogger.debug(UPSTREAM_RESOLUTION_TAG) {
                             "upstream_event=dns_resolved host=${route.host} port=${route.port} " +
+                                "fallback_host=${fallbackDnsHost.orEmpty()} " +
                                 "candidates=${route.candidates.joinToString(",") { candidate ->
                                     "${candidate.family}:${candidate.socketAddress.address.hostAddress}"
                                 }}"

@@ -41,7 +41,7 @@ class UpstreamAddressResolverTest {
                 scope = scope,
                 maximumCandidates = 2,
                 lookup = { arrayOf(firstIpv6, firstIpv6, ipv4(127, 0, 0, 1), ipv6(2)) },
-            ).resolve("origin.test", 443).get(2, TimeUnit.SECONDS)
+            ).resolve("origin.test", 443, fallbackDnsHost = null).get(2, TimeUnit.SECONDS)
 
             assertEquals("origin.test", route.host)
             assertEquals(443, route.port)
@@ -62,11 +62,75 @@ class UpstreamAddressResolverTest {
                 scope = scope,
                 maximumCandidates = 4,
                 lookup = { emptyArray() },
-            ).resolve("empty.test", 80)
+            ).resolve("empty.test", 80, fallbackDnsHost = null)
 
             assertFailsWith<java.util.concurrent.ExecutionException> {
                 future.get(2, TimeUnit.SECONDS)
             }
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `ipv6 literal route gains an ipv4 candidate from its SNI fallback`() {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val primaryIpv6 = ipv6(1)
+        val fallbackIpv6 = ipv6(2)
+        val fallbackIpv4 = ipv4(23, 41, 120, 10)
+        try {
+            val route = CoroutineUpstreamAddressResolver(
+                scope = scope,
+                maximumCandidates = 4,
+                lookup = { host ->
+                    when (host) {
+                        "2600:140f:6:184::ed2" -> arrayOf(primaryIpv6)
+                        "stg-04astra.cnbc.com" -> arrayOf(fallbackIpv6, fallbackIpv4)
+                        else -> emptyArray()
+                    }
+                },
+            ).resolve(
+                host = "2600:140f:6:184::ed2",
+                port = 443,
+                fallbackDnsHost = "stg-04astra.cnbc.com",
+            ).get(2, TimeUnit.SECONDS)
+
+            assertEquals(
+                listOf(
+                    UpstreamAddressFamily.IPV6,
+                    UpstreamAddressFamily.IPV4,
+                    UpstreamAddressFamily.IPV6,
+                ),
+                route.candidates.map(UpstreamAddressCandidate::family),
+            )
+            assertEquals(primaryIpv6, route.candidates.first().socketAddress.address)
+            assertEquals(fallbackIpv4, route.candidates[1].socketAddress.address)
+        } finally {
+            scope.cancel()
+        }
+    }
+
+    @Test
+    fun `failed SNI fallback lookup preserves the exact CONNECT route`() {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        val primaryIpv4 = ipv4(127, 0, 0, 1)
+        try {
+            val route = CoroutineUpstreamAddressResolver(
+                scope = scope,
+                maximumCandidates = 4,
+                lookup = { host ->
+                    when (host) {
+                        "127.0.0.1" -> arrayOf(primaryIpv4)
+                        else -> error("No DNS record for $host")
+                    }
+                },
+            ).resolve(
+                host = "127.0.0.1",
+                port = 443,
+                fallbackDnsHost = "test-only.invalid",
+            ).get(2, TimeUnit.SECONDS)
+
+            assertEquals(listOf(primaryIpv4), route.candidates.map { it.socketAddress.address })
         } finally {
             scope.cancel()
         }
