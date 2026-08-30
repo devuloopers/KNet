@@ -518,9 +518,8 @@ responsible for complying with applicable laws, organizational policies, and thi
 
 ## License
 
-A top-level open-source license has not yet been committed. Before the public release, add the selected `LICENSE`
-file and update this section. Package metadata alone does not grant permission to use, modify, or distribute the
-source.
+Licensed under the [Apache License, Version 2.0](LICENSE). You may use, modify, and distribute this software in
+compliance with the License. See the [LICENSE](LICENSE) file for the full terms.
 
 ---
 
