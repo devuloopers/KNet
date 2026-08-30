@@ -469,19 +469,13 @@ dependencies may flow.
 
 ## Known limitations
 
-- Advanced protocol implementations remain experimental until their documented physical-device, operating-system,
-  concurrency, and soak evidence is complete.
 - Android Companion and Android VPN inspection are experimental: a physical-device end-to-end smoke test has passed,
   but the broader Android version/OEM, interruption-recovery, and soak matrix is not complete.
-- The iOS/iPadOS companion app is experimental. Its packet-tunnel inspection path remains unavailable for release
-  until it is signed with the required Network Extension entitlement and qualified on physical devices.
+- The iOS/iPadOS companion packet-tunnel inspection requires a paid Apple Developer Program team with the Network
+  Extension entitlement (cannot be signed with a free Apple Personal Team).
 - HTTP/3, WebTransport, and WebSocket over HTTP/2 are not implemented. QUIC/UDP traffic is not inspectable through
   the current HTTP proxy pipeline.
 - Certificate-pinned applications may reject HTTPS interception by design.
-- Direct companion operation currently requires the mobile device and desktop to reach each other on the same
-  local network. A relay transport is modeled as a future additive capability but is not implemented.
-- Full iOS inspection cannot be signed with an Apple Personal Team because Apple restricts the required Network
-  Extension capability.
 - Per-application traffic selection or attribution is intentionally not offered because it cannot be implemented
   consistently across Android and ordinary consumer iOS without managed-device capabilities.
 - Mobile certificate installation remains a platform-owned user action; KNet verifies readiness but does not try to
