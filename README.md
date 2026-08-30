@@ -18,7 +18,7 @@
   <a href="https://github.com/devuloopers/KNet/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/devuloopers/KNet/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-2.4.10-7F52FF?logo=kotlin&logoColor=white">
   <img alt="Compose Multiplatform" src="https://img.shields.io/badge/Compose-Multiplatform-4285F4?logo=jetpackcompose&logoColor=white">
-  <img alt="JDK" src="https://img.shields.io/badge/JDK-17-ED8B00?logo=openjdk&logoColor=white">
+  <img alt="JDK" src="https://img.shields.io/badge/JDK-21-ED8B00?logo=openjdk&logoColor=white">
   <img alt="Platforms" src="https://img.shields.io/badge/Desktop%20%7C%20Android%20%7C%20iOS-0D1117">
 </p>
 
@@ -218,12 +218,12 @@ continues quietly in the background without repeatedly replacing the UI with a c
 
 | Goal | Requirements |
 | --- | --- |
-| Desktop development | Git, JDK 17, macOS/Windows/Linux |
+| Desktop development | Git, JDK 21, macOS/Windows/Linux |
 | Android companion | Android Studio or Android SDK 37; Android 8.0 / API 26 or newer |
 | iOS companion | macOS, Xcode 16 or newer, iOS/iPadOS 16 or newer |
 | Physical iOS inspection | Paid Apple Developer Program team with Network Extension entitlement |
 
-The Gradle Wrapper is included. Repository CI and release workflows currently provision JDK 17; you do not need a
+The Gradle Wrapper is included. Repository CI and release workflows provision JDK 21; you do not need a
 system Gradle installation.
 
 ### Clone and run the desktop application

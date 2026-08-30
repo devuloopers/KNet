@@ -647,10 +647,10 @@ val verifyArchitectureFoundation by tasks.registering {
     )
 }
 
-/** Shared/Android companion foundation gate. It compiles portable iOS consumers and never launches an app. */
-tasks.register("companionFoundationQualification") {
+/** Portable and Android companion gate. It is safe to run on Linux CI and never launches an app. */
+tasks.register("companionSharedQualification") {
     group = "verification"
-    description = "Runs companion models, workflows, persistence, presentation, Android adapters, pairing crypto, and iOS compile gates."
+    description = "Runs companion models, workflows, persistence, presentation, Android adapters, and pairing crypto."
     dependsOn(
         verifyArchitectureFoundation,
         ":application:desktop:test",
@@ -662,17 +662,26 @@ tasks.register("companionFoundationQualification") {
         ":ui:companion:sharedUi:jvmTest",
         ":ui:core:jvmTest",
         ":ui:core:compileAndroidMain",
-        ":ui:core:compileKotlinIosSimulatorArm64",
         ":connectivity:companion:testAndroidHostTest",
         ":data:companion:testAndroidHostTest",
         ":products:companion:di:testAndroidHostTest",
+        ":data:companion:compileAndroidMain",
+        ":ui:companion:presentation:compileAndroidMain",
+        ":ui:companion:sharedUi:compileAndroidMain",
+    )
+}
+
+/** Kotlin/Native companion gate. It must run on macOS and never launches or signs an app. */
+tasks.register("companionIosFoundationQualification") {
+    group = "verification"
+    description = "Compiles and tests companion iOS consumers for device and Simulator targets."
+    dependsOn(
+        verifyArchitectureFoundation,
+        ":ui:core:compileKotlinIosSimulatorArm64",
         ":products:companion:di:iosSimulatorArm64Test",
         ":connectivity:companion:compileKotlinIosArm64",
         ":connectivity:companion:compileKotlinIosSimulatorArm64",
         ":connectivity:companion:iosSimulatorArm64Test",
-        ":data:companion:compileAndroidMain",
-        ":ui:companion:presentation:compileAndroidMain",
-        ":ui:companion:sharedUi:compileAndroidMain",
         ":core:identity:compileKotlinIosSimulatorArm64",
         ":core:pairing:compileKotlinIosSimulatorArm64",
         ":core:connectivity:compileKotlinIosSimulatorArm64",
@@ -684,12 +693,22 @@ tasks.register("companionFoundationQualification") {
     )
 }
 
+/** Complete companion foundation gate for macOS development and release qualification. */
+tasks.register("companionFoundationQualification") {
+    group = "verification"
+    description = "Runs portable, Android, and iOS companion foundation qualification."
+    dependsOn(
+        "companionSharedQualification",
+        "companionIosFoundationQualification",
+    )
+}
+
 /** Installable Android companion product gate. It assembles the APK but never installs or launches it. */
 tasks.register("companionAndroidProductQualification") {
     group = "verification"
     description = "Runs companion foundations, Android product composition tests/lint, and debug APK assembly."
     dependsOn(
-        "companionFoundationQualification",
+        "companionSharedQualification",
         ":products:companion:androidApp:testDebugUnitTest",
         ":products:companion:androidApp:lintDebug",
         ":products:companion:androidApp:assembleDebug",

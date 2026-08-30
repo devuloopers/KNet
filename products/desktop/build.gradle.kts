@@ -122,7 +122,7 @@ compose.desktop {
                 packageName = appName.lowercase()
                 appCategory = "Development;Network;"
                 menuGroup = "Development"
-                debMaintainer = "Devuloopers <devuloopers@gmail.com"
+                debMaintainer = "Devuloopers <devuloopers@gmail.com>"
                 appRelease = "1"
                 rpmLicenseType = "Apache-2.0"
                 shortcut = true

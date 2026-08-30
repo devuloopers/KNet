@@ -1,340 +1,490 @@
 name: Release Packages
 
-'on':
+on:
   push:
     tags:
       - 'v*'
-      - '[0-9]+.*'
-      - '*'
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Release version (e.g. 1.0.0)'
+      tag:
+        description: Existing release tag (for example, v1.0.0)
         required: true
-        default: '1.0.0'
 
 permissions:
-  contents: write
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref_name || inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  JAVA_VERSION: '21'
 
 jobs:
-  build-packages:
-    name: Build (${{ matrix.os_name }})
-    runs-on: ${{ matrix.os }}
+  metadata:
+    name: Validate release metadata
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      android-version-code: ${{ steps.release.outputs.android-version-code }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
+    steps:
+      - name: Check out release revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Validate tag and derive versions
+        id: release
+        shell: bash
+        env:
+          REQUESTED_TAG: ${{ inputs.tag }}
+        run: |
+          TAG="${REQUESTED_TAG:-$GITHUB_REF_NAME}"
+          if [[ ! "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Release tag must use semantic versioning with a v prefix (for example, v1.2.3)." >&2
+            exit 1
+          fi
+          if ! git rev-parse --verify --quiet "refs/tags/$TAG" >/dev/null; then
+            echo "Release tag does not exist in the repository: $TAG" >&2
+            exit 1
+          fi
+
+          VERSION="${TAG#v}"
+          PRERELEASE=false
+          if [[ "$VERSION" == *-* ]]; then
+            PRERELEASE=true
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "android-version-code=$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+
+  release-qualification:
+    name: Release qualification
+    needs: metadata
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
+        with:
+          ref: ${{ needs.metadata.outputs.tag }}
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.2.0
+        with:
+          distribution: zulu
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.0.0
+
+      - name: Run architecture and protocol gates
+        run: >-
+          ./gradlew
+          verifyArchitectureFoundation
+          http2Qualification
+          grpcQualification
+          websocketQualification
+          graphqlWebSocketQualification
+          sseQualification
+          --no-daemon
+          --stacktrace
+
+  ios-qualification:
+    name: iOS companion qualification
+    needs: metadata
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
+        with:
+          ref: ${{ needs.metadata.outputs.tag }}
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.2.0
+        with:
+          distribution: zulu
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.0.0
+
+      - name: Qualify Kotlin iOS targets
+        run: ./gradlew companionIosProductQualification --no-daemon --stacktrace
+
+      - name: Build unsigned release Simulator application
+        run: >-
+          xcodebuild
+          -project products/companion/iosApp/KNetCompanion.xcodeproj
+          -scheme 'KNet Companion'
+          -sdk iphonesimulator
+          -configuration Release
+          -derivedDataPath products/companion/iosApp/build/release-derived-data
+          CODE_SIGNING_ALLOWED=NO
+          build
+
+  android-package:
+    name: Signed Android companion
+    needs: metadata
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: release
+    env:
+      ANDROID_RELEASE_KEYSTORE_FILE: ${{ runner.temp }}/knet-companion-release.p12
+      ANDROID_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+      ANDROID_RELEASE_KEY_ALIAS: ${{ vars.ANDROID_RELEASE_KEY_ALIAS }}
+    steps:
+      - name: Check out release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
+        with:
+          ref: ${{ needs.metadata.outputs.tag }}
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.2.0
+        with:
+          distribution: zulu
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.0.0
+
+      - name: Install Android SDK platform
+        shell: bash
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-37'
+
+      - name: Restore release keystore
+        shell: bash
+        env:
+          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$ANDROID_RELEASE_KEYSTORE_BASE64"
+          test -n "$ANDROID_RELEASE_KEYSTORE_PASSWORD"
+          test -n "$ANDROID_RELEASE_KEY_ALIAS"
+          printf '%s' "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$ANDROID_RELEASE_KEYSTORE_FILE"
+          chmod 600 "$ANDROID_RELEASE_KEYSTORE_FILE"
+
+      - name: Qualify and build signed release APK
+        run: >-
+          ./gradlew
+          companionAndroidProductQualification
+          :products:companion:androidApp:lintRelease
+          :products:companion:androidApp:assembleRelease
+          -Pknet.app.version=${{ needs.metadata.outputs.version }}
+          -Pknet.android.versionCode=${{ needs.metadata.outputs.android-version-code }}
+          --no-daemon
+          --stacktrace
+
+      - name: Verify and stage signed APK
+        shell: bash
+        env:
+          VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          APK='products/companion/androidApp/build/outputs/apk/release/androidApp-release.apk'
+          test -f "$APK"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          mkdir -p dist-packages
+          cp "$APK" "dist-packages/KNet-Companion-${VERSION}-android.apk"
+
+      - name: Remove restored keystore
+        if: always()
+        shell: bash
+        run: rm -f "$ANDROID_RELEASE_KEYSTORE_FILE"
+
+      - name: Upload Android package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: knet-release-android
+          path: dist-packages/*
+          if-no-files-found: error
+          retention-days: 7
+
+  desktop-packages:
+    name: Desktop package (${{ matrix.name }})
+    needs: metadata
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest
-            os_name: macOS
-            artifact_id: macos
-            setup_linux_tools: false
-            setup_windows_tools: false
-            tasks: createDistributable packageDmg
-            create_tarball: false
-
-          - os: windows-latest
-            os_name: Windows
-            artifact_id: windows
-            setup_linux_tools: false
-            setup_windows_tools: true
-            tasks: packageMsi packageExe createDistributable
-            create_tarball: false
-
-          - os: ubuntu-latest
-            os_name: Linux (x64)
-            artifact_id: linux-x64
-            setup_linux_tools: true
-            setup_windows_tools: false
-            tasks: packageDeb packageRpm createDistributable
-            arch_suffix: x64
-            create_tarball: true
-
-          - os: ubuntu-24.04-arm
-            os_name: Linux (ARM64)
-            artifact_id: linux-arm64
-            setup_linux_tools: true
-            setup_windows_tools: false
-            tasks: packageDeb packageRpm createDistributable
-            arch_suffix: arm64
-            create_tarball: true
-
+          - name: macOS Apple Silicon
+            runner: macos-15
+            artifact: macos-arm64
+            platform: macos
+            architecture: arm64
+            tasks: ':products:desktop:createDistributable :products:desktop:packageDmg'
+          - name: macOS Intel
+            runner: macos-15-intel
+            artifact: macos-x64
+            platform: macos
+            architecture: x64
+            tasks: ':products:desktop:createDistributable :products:desktop:packageDmg'
+          - name: Windows x64
+            runner: windows-2025
+            artifact: windows-x64
+            platform: windows
+            architecture: x64
+            tasks: ':products:desktop:createDistributable :products:desktop:packageMsi :products:desktop:packageExe'
+          - name: Linux x64
+            runner: ubuntu-24.04
+            artifact: linux-x64
+            platform: linux
+            architecture: x64
+            tasks: ':products:desktop:createDistributable :products:desktop:packageDeb :products:desktop:packageRpm'
+          - name: Linux ARM64
+            runner: ubuntu-24.04-arm
+            artifact: linux-arm64
+            platform: linux
+            architecture: arm64
+            tasks: ':products:desktop:createDistributable :products:desktop:packageDeb :products:desktop:packageRpm'
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - name: Check out release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
         with:
-          distribution: 'temurin'
-          java-version: '17'
-          cache: 'gradle'
+          ref: ${{ needs.metadata.outputs.tag }}
 
-      - name: Install Linux Packaging Tools (Deb & RPM)
-        if: matrix.setup_linux_tools
+      - name: Set up JDK 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.2.0
+        with:
+          distribution: zulu
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.0.0
+
+      - name: Install Linux packaging tools
+        if: matrix.platform == 'linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y rpm fakeroot binutils
+          sudo apt-get install --yes rpm fakeroot binutils
 
-      - name: Setup WiX Toolset (Windows)
-        if: matrix.setup_windows_tools
+      - name: Ensure WiX Toolset is available
+        if: matrix.platform == 'windows'
         shell: pwsh
         run: |
-          $wix3_11 = "C:\Program Files (x86)\WiX Toolset v3.11\bin"
-          $wix3_14 = "C:\Program Files (x86)\WiX Toolset v3.14\bin"
-          if (Test-Path $wix3_11) {
-            Write-Host "Found WiX Toolset v3.11 at $wix3_11"
-            "$wix3_11" | Out-File -Append -FilePath $env:GITHUB_PATH
-          } elseif (Test-Path $wix3_14) {
-            Write-Host "Found WiX Toolset v3.14 at $wix3_14"
-            "$wix3_14" | Out-File -Append -FilePath $env:GITHUB_PATH
-          } else {
-            Write-Host "Installing WiX Toolset via Chocolatey..."
-            choco install wixtoolset -y --no-progress
-            "$wix3_11" | Out-File -Append -FilePath $env:GITHUB_PATH
+          $wixPaths = @(
+            'C:\Program Files (x86)\WiX Toolset v3.14\bin',
+            'C:\Program Files (x86)\WiX Toolset v3.11\bin'
+          )
+          $wixPath = $wixPaths | Where-Object { Test-Path (Join-Path $_ 'candle.exe') } | Select-Object -First 1
+          if (-not $wixPath) {
+            choco install wixtoolset --yes --no-progress
+            $wixPath = $wixPaths | Where-Object { Test-Path (Join-Path $_ 'candle.exe') } | Select-Object -First 1
           }
+          if (-not $wixPath) { throw 'WiX Toolset 3 was not found after installation.' }
+          $wixPath | Out-File -Append -FilePath $env:GITHUB_PATH
 
-      - name: Extract Release Version
-        id: get_version
+      - name: Build native packages
         shell: bash
+        env:
+          GRADLE_TASKS: ${{ matrix.tasks }}
+          VERSION: ${{ needs.metadata.outputs.version }}
+        run: ./gradlew $GRADLE_TASKS "-Pknet.app.version=$VERSION" --no-daemon --stacktrace
+
+      - name: Build branded macOS DMG
+        if: matrix.platform == 'macos'
+        shell: bash
+        env:
+          VERSION: ${{ needs.metadata.outputs.version }}
+          ARCHITECTURE: ${{ matrix.architecture }}
         run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            VERSION="${{ inputs.version }}"
-          else
-            VERSION="${GITHUB_REF_NAME#v}"
-          fi
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          echo "Building KNet release version: $VERSION"
-
-      - name: Grant execute permission for gradlew
-        shell: bash
-        run: chmod +x gradlew
-
-      - name: Build Native Distribution Packages
-        shell: bash
-        run: ./gradlew ${{ matrix.tasks }} "-Pknet.app.version=${{ steps.get_version.outputs.VERSION }}"
-
-      - name: Build Branded macOS DMG
-        if: runner.os == 'macOS'
-        shell: bash
-        run: |
-          VERSION="${{ steps.get_version.outputs.VERSION }}"
-          echo "Installing create-dmg and fileicon..."
           brew install create-dmg fileicon || true
-
-          APP_PATH="apps/desktop/build/compose/binaries/main/app/KNet.app"
-          ICON_PATH="apps/desktop/src/jvmMain/resources/icons/KNet.icns"
-          BG_PATH="brand/dmg/knet-dmg-background.png"
-          RAW_DMG="apps/desktop/build/compose/binaries/main/dmg/KNet-${VERSION}.dmg"
-          BRANDED_DMG="apps/desktop/build/compose/binaries/main/dmg/KNet-${VERSION}-mac.dmg"
-
-          if [ -d "$APP_PATH" ]; then
-            echo "Creating branded DMG using create-dmg..."
+          APP_PATH='products/desktop/build/compose/binaries/main/app/KNet.app'
+          ICON_PATH='products/desktop/src/jvmMain/resources/icons/KNet.icns'
+          BACKGROUND_PATH='desktopBrand/dmg/knet-dmg-background.png'
+          BRANDED_DMG="products/desktop/build/compose/binaries/main/dmg/KNet-${VERSION}-macos-${ARCHITECTURE}.dmg"
+          rm -f "$BRANDED_DMG"
+          if command -v create-dmg >/dev/null && [[ -d "$APP_PATH" ]]; then
             create-dmg \
-              --volname "KNet ${VERSION}" \
-              --volicon "${ICON_PATH}" \
-              --background "${BG_PATH}" \
+              --volname "KNet $VERSION" \
+              --volicon "$ICON_PATH" \
+              --background "$BACKGROUND_PATH" \
               --window-pos 200 120 \
               --window-size 560 380 \
               --icon-size 96 \
-              --icon "KNet.app" 140 190 \
-              --hide-extension "KNet.app" \
+              --icon 'KNet.app' 140 190 \
+              --hide-extension 'KNet.app' \
               --app-drop-link 420 190 \
               --no-internet-enable \
-              "${BRANDED_DMG}" \
-              "${APP_PATH}" || true
-
-            if [ -f "${BRANDED_DMG}" ]; then
-              echo "Stamping KNet icon onto the DMG file in Finder..."
-              fileicon set "${BRANDED_DMG}" "${ICON_PATH}" || true
-              echo "Branded macOS DMG ready at ${BRANDED_DMG}"
-            else
-              echo "create-dmg failed; stamping icon on the standard Compose DMG as fallback..."
-              fileicon set "${RAW_DMG}" "${ICON_PATH}" || true
-            fi
-
-            # Remove the raw Compose DMG so only one DMG is ever staged and published
-            if [ -f "${RAW_DMG}" ] && [ -f "${BRANDED_DMG}" ]; then
-              rm -f "${RAW_DMG}"
-              echo "Removed raw Compose DMG to prevent duplicate upload."
-            fi
+              "$BRANDED_DMG" \
+              "$APP_PATH" || rm -f "$BRANDED_DMG"
+          fi
+          if [[ -f "$BRANDED_DMG" ]] && command -v fileicon >/dev/null; then
+            fileicon set "$BRANDED_DMG" "$ICON_PATH" || true
           fi
 
-      - name: Package macOS Portable Zip
-        if: runner.os == 'macOS'
+      - name: Create macOS portable archive
+        if: matrix.platform == 'macos'
         shell: bash
+        env:
+          VERSION: ${{ needs.metadata.outputs.version }}
+          ARCHITECTURE: ${{ matrix.architecture }}
         run: |
-          VERSION="${{ steps.get_version.outputs.VERSION }}"
-          APP_DIR="apps/desktop/build/compose/binaries/main/app"
-          if [ -d "$APP_DIR/KNet.app" ]; then
-            echo "Creating macOS portable ZIP with native bundle metadata..."
-            cd "$APP_DIR"
-            ditto -c -k --sequesterRsrc --keepParent "KNet.app" "KNet-${VERSION}-mac.zip"
-            echo "macOS portable ZIP created: KNet-${VERSION}-mac.zip"
-          fi
+          APP_DIR='products/desktop/build/compose/binaries/main/app'
+          test -d "$APP_DIR/KNet.app"
+          ditto -c -k --sequesterRsrc --keepParent "$APP_DIR/KNet.app" "$APP_DIR/KNet-${VERSION}-macos-${ARCHITECTURE}.zip"
 
-      - name: Package Windows Portable Zip
-        if: runner.os == 'Windows'
+      - name: Create Windows portable archive
+        if: matrix.platform == 'windows'
         shell: pwsh
+        env:
+          VERSION: ${{ needs.metadata.outputs.version }}
         run: |
-          $version = "${{ steps.get_version.outputs.VERSION }}"
-          $appPath = "apps/desktop/build/compose/binaries/main/app"
-          if (Test-Path $appPath) {
-            Write-Host "Creating Windows portable ZIP from $appPath..."
-            Compress-Archive -Path "$appPath\*" -DestinationPath "apps/desktop/build/compose/binaries/main/KNet-$version-windows-x64.zip" -Force
-            Write-Host "Windows portable ZIP created: KNet-$version-windows-x64.zip"
-          }
+          $appPath = 'products/desktop/build/compose/binaries/main/app'
+          if (-not (Test-Path $appPath)) { throw "Desktop application directory is missing: $appPath" }
+          Compress-Archive -Path "$appPath\*" -DestinationPath "products/desktop/build/compose/binaries/main/KNet-$env:VERSION-windows-x64.zip" -Force
 
-      - name: Create Linux Portable Tarball
-        if: matrix.create_tarball
+      - name: Create Linux portable archive
+        if: matrix.platform == 'linux'
         shell: bash
+        env:
+          VERSION: ${{ needs.metadata.outputs.version }}
+          ARCHITECTURE: ${{ matrix.architecture }}
         run: |
-          VERSION="${{ steps.get_version.outputs.VERSION }}"
-          ARCH="${{ matrix.arch_suffix }}"
-          APP_DIR="apps/desktop/build/compose/binaries/main/app"
-          ICON_SRC="apps/desktop/src/jvmMain/resources/icons/KNet.png"
+          APP_DIR='products/desktop/build/compose/binaries/main/app'
+          test -d "$APP_DIR"
+          tar -czf "products/desktop/build/compose/binaries/main/KNet-${VERSION}-linux-${ARCHITECTURE}.tar.gz" -C "$APP_DIR" .
 
-          if [ -d "$APP_DIR" ]; then
-            echo "Adding GUI launcher and desktop integration to portable Linux bundle..."
-            cp "$ICON_SRC" "$APP_DIR/knet.png"
-
-            printf "[Desktop Entry]\nName=KNet\nComment=Network Inspector & API Studio\nExec=bin/knet\nIcon=knet\nTerminal=false\nType=Application\nCategories=Development;Network;\nStartupWMClass=com-devuloopers-knet-apps-desktop-MainKt\n" > "$APP_DIR/knet.desktop"
-            chmod +x "$APP_DIR/knet.desktop"
-            chmod +x "$APP_DIR/bin/knet" 2>/dev/null || true
-
-            cd apps/desktop/build/compose/binaries/main
-            tar -czvf "knet-${VERSION}-linux-${ARCH}.tar.gz" -C app .
-            echo "Linux portable tarball created: knet-${VERSION}-linux-${ARCH}.tar.gz"
-          fi
-
-      - name: Stage Release Artifacts
+      - name: Stage desktop packages
         shell: bash
+        env:
+          VERSION: ${{ needs.metadata.outputs.version }}
+          PLATFORM: ${{ matrix.platform }}
+          ARCHITECTURE: ${{ matrix.architecture }}
         run: |
+          set -euo pipefail
+          shopt -s nullglob
+          OUTPUT='products/desktop/build/compose/binaries/main'
           mkdir -p dist-packages
-          VERSION="${{ steps.get_version.outputs.VERSION }}"
 
-          # macOS: Prefer branded DMG; fallback to standard Compose DMG
-          BRANDED="apps/desktop/build/compose/binaries/main/dmg/KNet-${VERSION}-mac.dmg"
-          COMPOSE_DMG="apps/desktop/build/compose/binaries/main/dmg/KNet-${VERSION}.dmg"
-          if [ -f "${BRANDED}" ]; then
-            cp -f "${BRANDED}" dist-packages/
-            echo "Staged branded macOS DMG: ${BRANDED}"
-          elif [ -f "${COMPOSE_DMG}" ]; then
-            cp -f "${COMPOSE_DMG}" dist-packages/
-            echo "Staged standard macOS DMG: ${COMPOSE_DMG}"
+          if [[ "$PLATFORM" == 'macos' ]]; then
+            DMG="$OUTPUT/dmg/KNet-${VERSION}-macos-${ARCHITECTURE}.dmg"
+            if [[ ! -f "$DMG" ]]; then
+              compose_dmgs=("$OUTPUT"/dmg/*.dmg)
+              [[ ${#compose_dmgs[@]} -eq 1 ]]
+              DMG="${compose_dmgs[0]}"
+            fi
+            cp "$DMG" "dist-packages/KNet-${VERSION}-macos-${ARCHITECTURE}.dmg"
+            cp "$OUTPUT/app/KNet-${VERSION}-macos-${ARCHITECTURE}.zip" dist-packages/
+            EXPECTED=2
+          elif [[ "$PLATFORM" == 'windows' ]]; then
+            msi_packages=("$OUTPUT"/msi/*.msi)
+            exe_packages=("$OUTPUT"/exe/*.exe)
+            [[ ${#msi_packages[@]} -eq 1 && ${#exe_packages[@]} -eq 1 ]]
+            cp "${msi_packages[0]}" dist-packages/
+            cp "${exe_packages[0]}" dist-packages/
+            cp "$OUTPUT/KNet-${VERSION}-windows-x64.zip" dist-packages/
+            EXPECTED=3
+          else
+            deb_packages=("$OUTPUT"/deb/*.deb)
+            rpm_packages=("$OUTPUT"/rpm/*.rpm)
+            [[ ${#deb_packages[@]} -eq 1 && ${#rpm_packages[@]} -eq 1 ]]
+            cp "${deb_packages[0]}" dist-packages/
+            cp "${rpm_packages[0]}" dist-packages/
+            cp "$OUTPUT/KNet-${VERSION}-linux-${ARCHITECTURE}.tar.gz" dist-packages/
+            EXPECTED=3
           fi
 
-          # macOS: Portable ZIP
-          MAC_ZIP="apps/desktop/build/compose/binaries/main/app/KNet-${VERSION}-mac.zip"
-          if [ -f "${MAC_ZIP}" ]; then
-            cp -f "${MAC_ZIP}" dist-packages/
-            echo "Staged macOS portable ZIP: ${MAC_ZIP}"
-          fi
+          ACTUAL="$(find dist-packages -maxdepth 1 -type f | wc -l | tr -d ' ')"
+          [[ "$ACTUAL" -eq "$EXPECTED" ]]
+          ls -la dist-packages
 
-          # Windows: Portable ZIP
-          WIN_ZIP="apps/desktop/build/compose/binaries/main/KNet-${VERSION}-windows-x64.zip"
-          if [ -f "${WIN_ZIP}" ]; then
-            cp -f "${WIN_ZIP}" dist-packages/
-            echo "Staged Windows portable ZIP: ${WIN_ZIP}"
-          fi
-
-          # Windows (MSI, EXE) and Linux (DEB, RPM)
-          if [ -d "apps/desktop/build/compose/binaries/main" ]; then
-            for dir in msi exe deb rpm; do
-              if [ -d "apps/desktop/build/compose/binaries/main/$dir" ]; then
-                cp -f apps/desktop/build/compose/binaries/main/$dir/* dist-packages/ 2>/dev/null || true
-              fi
-            done
-            for tarball in apps/desktop/build/compose/binaries/main/*.tar.gz; do
-              if [ -f "$tarball" ]; then
-                cp -f "$tarball" dist-packages/ 2>/dev/null || true
-              fi
-            done
-          fi
-
-          echo "Staged files in dist-packages/ for upload:"
-          ls -la dist-packages/
-
-          STAGED=$(ls -1 dist-packages/ 2>/dev/null | wc -l)
-          if [ "$STAGED" -eq 0 ]; then
-            echo "ERROR: No distribution packages were staged for upload!"
-            exit 1
-          fi
-
-      - name: Upload Staged Release Artifacts
-        uses: actions/upload-artifact@v4
+      - name: Upload desktop packages
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
-          name: knet-release-packages-${{ matrix.artifact_id }}
+          name: knet-release-${{ matrix.artifact }}
           path: dist-packages/*
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 7
 
   publish-release:
-    name: Publish Single GitHub Release
-    needs: build-packages
-    runs-on: ubuntu-latest
+    name: Publish GitHub release
+    needs:
+      - metadata
+      - release-qualification
+      - ios-qualification
+      - android-package
+      - desktop-packages
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Extract Release Version
-        id: get_version
-        shell: bash
-        run: |
-          if [ -n "${{ inputs.version }}" ]; then
-            VERSION="${{ inputs.version }}"
-            TAG_NAME="${{ inputs.version }}"
-          else
-            VERSION="${GITHUB_REF_NAME#v}"
-            TAG_NAME="${GITHUB_REF_NAME}"
-          fi
-          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
-          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_OUTPUT
-          echo "Publishing KNet release version: $VERSION with tag: $TAG_NAME"
-
-      - name: Download All Release Artifacts
-        uses: actions/download-artifact@v4
+      - name: Check out release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
         with:
-          pattern: knet-release-packages-*
+          ref: ${{ needs.metadata.outputs.tag }}
+
+      - name: Download release packages
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          pattern: knet-release-*
           path: release-dist
           merge-multiple: true
 
-      - name: Inspect Downloaded Packages
+      - name: Validate packages and generate checksums
         shell: bash
         run: |
-          echo "All packages ready for publishing in release-dist/:"
-          ls -la release-dist/
+          PACKAGE_COUNT="$(find release-dist -maxdepth 1 -type f | wc -l | tr -d ' ')"
+          if [[ "$PACKAGE_COUNT" -ne 14 ]]; then
+            echo "Expected 14 release packages, found $PACKAGE_COUNT." >&2
+            find release-dist -maxdepth 1 -type f -print | sort
+            exit 1
+          fi
+          (
+            cd release-dist
+            find . -maxdepth 1 -type f -printf '%f\n' | sort | xargs sha256sum > SHA256SUMS
+          )
+          ls -la release-dist
 
-      - name: Generate Formatted Release Distribution Notes
-        shell: bash
-        run: |
-          VERSION="${{ steps.get_version.outputs.VERSION }}"
-          TAG_NAME="${{ steps.get_version.outputs.TAG_NAME }}"
-          REPO="${{ github.repository }}"
-          BASE_URL="https://github.com/${REPO}/releases/download/${TAG_NAME}"
-
-          {
-            echo "### Downloads & Packages"
-            echo ""
-            echo "| Platform | Architecture | Primary Installer | Portable / Alternative |"
-            echo "|:---|:---|:---|:---|"
-            echo "| **macOS** | Universal (Apple Silicon & Intel) | [\`KNet-${VERSION}-mac.dmg\`](${BASE_URL}/KNet-${VERSION}-mac.dmg) | [\`KNet-${VERSION}-mac.zip\`](${BASE_URL}/KNet-${VERSION}-mac.zip) |"
-            echo "| **Windows** | x64 | [\`KNet-${VERSION}.exe\`](${BASE_URL}/KNet-${VERSION}.exe)<br>[\`KNet-${VERSION}.msi\`](${BASE_URL}/KNet-${VERSION}.msi) | [\`KNet-${VERSION}-windows-x64.zip\`](${BASE_URL}/KNet-${VERSION}-windows-x64.zip) |"
-            echo "| **Linux** | x64 (amd64) | [\`knet_${VERSION}-1_amd64.deb\`](${BASE_URL}/knet_${VERSION}-1_amd64.deb)<br>[\`knet-${VERSION}-1.x86_64.rpm\`](${BASE_URL}/knet-${VERSION}-1.x86_64.rpm) | [\`knet-${VERSION}-linux-x64.tar.gz\`](${BASE_URL}/knet-${VERSION}-linux-x64.tar.gz) |"
-            echo "| **Linux** | ARM64 (aarch64) | [\`knet_${VERSION}-1_arm64.deb\`](${BASE_URL}/knet_${VERSION}-1_arm64.deb)<br>[\`knet-${VERSION}-1.aarch64.rpm\`](${BASE_URL}/knet-${VERSION}-1.aarch64.rpm) | [\`knet-${VERSION}-linux-arm64.tar.gz\`](${BASE_URL}/knet-${VERSION}-linux-arm64.tar.gz) |"
-            echo ""
-            echo "---"
-          } > release_body.md
-
-          echo "Generated release_body.md:"
-          cat release_body.md
-
-      - name: Create Single GitHub Release with Changelog
-        uses: softprops/action-gh-release@v2
+      - name: Attest release packages
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.0.0
         with:
-          tag_name: ${{ steps.get_version.outputs.TAG_NAME }}
-          name: KNet v${{ steps.get_version.outputs.VERSION }}
-          body_path: release_body.md
-          files: release-dist/*
-          generate_release_notes: true
+          subject-path: release-dist/*
+
+      - name: Generate release notes header
+        shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          cat > release_body.md <<EOF
+          ## KNet $VERSION packages
+
+          This release includes native desktop packages for macOS (Apple Silicon and Intel), Windows x64, Linux x64/ARM64, and a signed Android companion APK. The iOS companion is source-qualified but is not distributed here because App Store and physical-device Network Extension signing require an eligible Apple Developer team.
+
+          Verify any downloaded package against \`SHA256SUMS\`. GitHub artifact attestations are also attached to this release.
+          EOF
+
+      - name: Create or update GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.metadata.outputs.tag }}
+          VERSION: ${{ needs.metadata.outputs.version }}
+          PRERELEASE: ${{ needs.metadata.outputs.prerelease }}
+        run: |
+          prerelease_args=()
+          if [[ "$PRERELEASE" == 'true' ]]; then
+            prerelease_args+=(--prerelease)
+          fi
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "KNet $VERSION" --notes-file release_body.md "${prerelease_args[@]}"
+            gh release upload "$TAG" release-dist/* --clobber
+          else
+            gh release create "$TAG" release-dist/* \
+              --verify-tag \
+              --title "KNet $VERSION" \
+              --notes-file release_body.md \
+              --generate-notes \
+              "${prerelease_args[@]}"
+          fi

@@ -1,136 +1,167 @@
 name: Continuous Integration
 
 on:
-  push:
-    branches:
-      - main
-      - master
-  pull_request:
-    branches:
-      - main
-      - master
   workflow_dispatch:
 
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  JAVA_VERSION: '21'
+
 jobs:
-  test-and-verify:
-    name: Test & Verify Codebase
-    runs-on: ubuntu-latest
-
+  architecture-and-jvm:
+    name: Architecture and JVM foundations
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.2.0
         with:
-          distribution: 'temurin'
-          java-version: '17'
-          cache: 'gradle'
+          distribution: zulu
+          java-version: ${{ env.JAVA_VERSION }}
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.0.0
 
-      - name: Run Multi-Module Tests & Assemble
-        run: ./gradlew check :products:desktop:assemble --no-daemon
+      - name: Verify architecture
+        run: ./gradlew verifyArchitectureFoundation --no-daemon --stacktrace
 
-  http2-qualification:
-    name: HTTP/2 Qualification (${{ matrix.os_name }})
-    runs-on: ${{ matrix.os }}
+  protocol-qualification:
+    name: Protocol qualification
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.2.0
+        with:
+          distribution: zulu
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.0.0
+
+      - name: Run protocol gates
+        run: >-
+          ./gradlew
+          http2Qualification
+          grpcQualification
+          websocketQualification
+          graphqlWebSocketQualification
+          sseQualification
+          --no-daemon
+          --stacktrace
+
+  desktop-platform:
+    name: Desktop (${{ matrix.name }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest
-            os_name: macOS
-          - os: windows-latest
-            os_name: Windows
-          - os: ubuntu-latest
-            os_name: Linux
-
+          - name: macOS Apple Silicon
+            runner: macos-15
+          - name: macOS Intel
+            runner: macos-15-intel
+          - name: Windows x64
+            runner: windows-2025
+          - name: Linux x64
+            runner: ubuntu-24.04
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.2.0
         with:
-          distribution: 'temurin'
-          java-version: '17'
-          cache: 'gradle'
+          distribution: zulu
+          java-version: ${{ env.JAVA_VERSION }}
 
-      - name: Grant execute permission for gradlew
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.0.0
+
+      - name: Test and assemble desktop application
         shell: bash
-        run: chmod +x gradlew
+        run: >-
+          ./gradlew
+          :connectivity:desktop:jvmTest
+          :engine:proxy:test
+          :products:desktop:test
+          :products:desktop:createDistributable
+          --no-daemon
+          --stacktrace
 
-      - name: Run HTTP/2 qualification gate
-        shell: bash
-        run: ./gradlew http2Qualification --no-daemon
-
-  grpc-qualification:
-    name: gRPC Qualification (${{ matrix.os_name }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            os_name: macOS
-          - os: windows-latest
-            os_name: Windows
-          - os: ubuntu-latest
-            os_name: Linux
-
+  android-companion:
+    name: Android companion
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.2.0
         with:
-          distribution: 'temurin'
-          java-version: '17'
-          cache: 'gradle'
+          distribution: zulu
+          java-version: ${{ env.JAVA_VERSION }}
 
-      - name: Grant execute permission for gradlew
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.0.0
+
+      - name: Install Android SDK platform
         shell: bash
-        run: chmod +x gradlew
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-37'
 
-      - name: Run gRPC qualification gate
-        shell: bash
-        run: ./gradlew grpcQualification --no-daemon
+      - name: Qualify Android companion
+        run: ./gradlew companionAndroidProductQualification --no-daemon --stacktrace
 
-  sse-qualification:
-    name: SSE Qualification (${{ matrix.os_name }})
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-latest
-            os_name: macOS
-          - os: windows-latest
-            os_name: Windows
-          - os: ubuntu-latest
-            os_name: Linux
+      - name: Upload debug APK
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: knet-companion-debug-apk
+          path: products/companion/androidApp/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7
 
+  ios-companion:
+    name: iOS companion
+    runs-on: macos-15
+    timeout-minutes: 60
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.2.0
         with:
-          distribution: 'temurin'
-          java-version: '17'
-          cache: 'gradle'
+          distribution: zulu
+          java-version: ${{ env.JAVA_VERSION }}
 
-      - name: Grant execute permission for gradlew
-        shell: bash
-        run: chmod +x gradlew
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.0.0
 
-      - name: Run SSE qualification gate
-        shell: bash
-        run: ./gradlew sseQualification --no-daemon
+      - name: Qualify Kotlin iOS targets
+        run: ./gradlew companionIosProductQualification --no-daemon --stacktrace
+
+      - name: Build unsigned Simulator application
+        run: >-
+          xcodebuild
+          -project products/companion/iosApp/KNetCompanion.xcodeproj
+          -scheme 'KNet Companion'
+          -sdk iphonesimulator
+          -configuration Debug
+          -derivedDataPath products/companion/iosApp/build/ci-derived-data
+          CODE_SIGNING_ALLOWED=NO
+          build
