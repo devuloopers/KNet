@@ -1,5 +1,10 @@
 # KNet Deep Architecture, Scalability, and Engineering Audit
 
+> [!NOTE]
+> This audit is a historical baseline. Findings such as “not implemented” describe the repository at the audit
+> date and may have been remediated. Use the [documentation map](README.md), current module contracts, and runtime
+> capability catalog for present status.
+
 - **Audit date:** 2026-08-18
 - **Repository scope:** all Gradle modules, production source sets, tests, build configuration, and current documentation
 - **Method:** static dependency reconstruction, end-to-end runtime tracing, ownership and failure-mode analysis, and a clean `check`/desktop assembly verification

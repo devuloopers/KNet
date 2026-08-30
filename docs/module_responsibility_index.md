@@ -1,13 +1,17 @@
 # KNet Module Responsibility Index
 
-This index links the ownership contract stored at every Gradle module root. A module's `MODULE.md` is the local source of truth for what that module owns, what it must not own, its dependency direction, and its current evolution direction. The broader target and sequencing remain defined in [target_architecture_and_implementation_plan.md](target_architecture_and_implementation_plan.md) and [implementation_plan.md](implementation_plan.md).
+This index links the ownership contract stored at every Gradle module root. A module's `MODULE.md` is the local
+source of truth for what that module owns, what it must not own, and its dependency direction. The target and
+implementation-plan documents are dated design/delivery records; current capability maturity comes from the
+runtime catalog and focused qualification documents. See [Documentation map](README.md).
 
 Gradle enforces four rules through `verifyArchitectureFoundation`:
 
 1. Every included module must have a root `MODULE.md`.
 2. Stable architecture modules may only use their approved direct project dependencies.
 3. UI production code cannot import concrete KNet runtimes/storage; the pure formatter library is the only explicit engine-package exception.
-4. Koin binding declarations may exist only in executable product composition roots; reusable application, core, connectivity, data, engine, storage, and UI modules do not assemble the product.
+4. Koin binding declarations may exist only in product-layer composition modules; reusable application, core,
+   connectivity, data, engine, storage, and UI modules do not assemble the product.
 
 ## Grouping projects
 
@@ -39,10 +43,11 @@ Gradle enforces four rules through `verifyArchitectureFoundation`:
 
 - [`:connectivity:desktop`](../connectivity/desktop/MODULE.md) — desktop connectivity mechanism implementations.
 - [`:connectivity:companion`](../connectivity/companion/MODULE.md) — shared bounded Ktor bootstrap/control
-  transports, native Android/Darwin TLS enforcement, qualified Android network/certificate/VPN lifecycle
-  boundaries, and explicit fail-closed iOS device-capability placeholders.
+  transports, native Android/Darwin TLS enforcement, Android network/certificate/VPN lifecycle
+  boundaries, iOS Network/Bonjour/certificate/Network Extension adapters, and authenticated mobile proxy
+  transport boundaries.
 - [`:data:companion`](../data/companion/MODULE.md) — versioned companion registration/credential adapters,
-  invitation codec, shared control client, and Android Keystore implementations.
+  invitation codec, shared control client, Android Keystore implementations, and iOS DataStore/Keychain adapters.
 - [`:data:desktop`](../data/desktop/MODULE.md) — desktop repository, capture-generation, registered-device, and mapping adapters.
 - [`:storage`](../storage/MODULE.md) — durable desktop persistence, schema, and registered/trusted-device rows.
 - [`:engine:certificate`](../engine/certificate/MODULE.md) — CA, certificate, key, and trust implementation.
@@ -101,8 +106,8 @@ Gradle enforces four rules through `verifyArchitectureFoundation`:
 
 - [`:products:desktop`](../products/desktop/MODULE.md) — sole desktop Koin binding/composition root and process lifecycle owner; bindings are grouped by feature under `di/`.
 - [`:products:companion:androidApp`](../products/companion/androidApp/MODULE.md) — installable Android companion APK,
-  manifest, thin Compose host lifecycle, and Android companion composition root; unavailable transport/VPN
-  capabilities are not simulated.
+  manifest, thin Compose host lifecycle, Android companion composition root, `VpnService`, and camera/effect
+  ownership.
 - [`:products:companion:iosApp`](../products/companion/iosApp/MODULE.md) — installable SwiftUI iOS shell,
   Kotlin/Native composition framework, AVFoundation scanner, and Apple Network Extension entry point.
 - [`:products:companion:iosPacketTunnel`](../products/companion/iosPacketTunnel/MODULE.md) — lean Kotlin/Native
@@ -131,5 +136,8 @@ dedicated setup listeners, authenticated companion-ready gateway, and automatica
 gateway live in `:connectivity:desktop`; none is inserted into the proxy pipeline. HTTP/2, native gRPC, and
 HTTP/1.1 WebSocket capture, modern `graphql-transport-ws` semantic inspection/breakpoints/API Studio, and native
 gRPC remain `EXPERIMENTAL` pending external platform/device and release-soak qualification. Legacy `graphql-ws`,
-HTTP/3, WebSocket over HTTP/2, VPN, relay, and mobile applications remain explicitly unavailable rather than
-represented by dormant stubs.
+HTTP/3, WebSocket over HTTP/2, and relay remain unavailable. Android Companion and Android VPN inspection are
+`EXPERIMENTAL` after a manual physical-device end-to-end smoke test. The iOS/iPadOS companion app is
+`EXPERIMENTAL`, while physical iOS packet-tunnel inspection remains `UNAVAILABLE` pending entitlement-signed device
+qualification. ADB reverse code remains an isolated desktop connectivity adapter; it is not presented as a
+supported KNet Companion traffic path in the public product documentation.

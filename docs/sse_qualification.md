@@ -89,4 +89,4 @@ three-hour release-soak evidence.
 
 The live capability catalog remains `EXPERIMENTAL` until the applicable evidence rows pass. None of the pending
 evidence or exclusions requires changing the proxy engine, common HTTP model, persistence schema, Traffic
-architecture, API Studio collections, PAC/manual Wi-Fi setup, or future companion boundaries.
+architecture, API Studio collections, PAC/manual Wi-Fi setup, or companion boundaries.

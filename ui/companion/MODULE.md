@@ -13,4 +13,4 @@ Leaf presentation modules define their own dependencies; this grouping project m
 
 - [`:ui:companion:presentation`](presentation/MODULE.md) owns framework-neutral state and behavior.
 - [`:ui:companion:sharedUi`](sharedUi/MODULE.md) owns Compose Multiplatform screens and UI resources shared by
-  Android and future iOS products.
+  Android and iOS products.

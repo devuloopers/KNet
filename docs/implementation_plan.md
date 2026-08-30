@@ -1,5 +1,10 @@
 # KNet Implementation Plan
 
+> [!NOTE]
+> This chronological ledger preserves the state and verification claims recorded by each delivery phase. Earlier
+> statements are historical, not current capability declarations. Use the [documentation map](README.md), current
+> module contracts, and runtime capability catalog before publishing a support claim.
+
 ## Phase 1: Packaged Desktop App Runtime Module Fix [COMPLETED]
 * Configured `products/desktop/build.gradle.kts` with essential JPMS runtime modules (`jdk.unsupported`, `jdk.crypto.ec`, `jdk.crypto.cryptoki`, `java.sql`, `java.naming`, `java.management`, `java.scripting`, `java.compiler`, `java.instrument`, `java.security.jgss`) to resolve Netty bootstrap (`sun.misc.Unsafe`), SQLite JDBC, and SSL provider dependencies in native `jlink` packaged distributions.
 
@@ -2895,4 +2900,3 @@ Completed on 2026-08-29. Added the capability to select and decode a pairing QR 
 ## Phase 131: iOS Certificate Installation Guidance Enhancement [COMPLETED]
 
 Completed on 2026-08-29. Updated the platform-owned iOS certificate installation guidance to provide 5 clear, numbered steps that guide users through both required iOS security phases: (1) installing the downloaded profile in Settings > Profile Downloaded (or VPN & Device Management), and (2) navigating to Settings > General > About > Certificate Trust Settings and toggling "Enable full trust for root certificates" ON. Updated `products:companion:iosApp` localized string resources and `CompanionIosApplication.kt` guidance constructor. Passed iOS Simulator compilation (`compileKotlinIosSimulatorArm64`), Kotlin-first and architecture verification, and the 235-task `companionFoundationQualification` suite.
-

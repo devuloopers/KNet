@@ -1,5 +1,10 @@
 # KNet Wi-Fi Device Connectivity Implementation Plan
 
+> [!NOTE]
+> This document describes the manual Wi-Fi setup increment and preserves its dated scope. The authenticated Android
+> and iOS companion path was implemented later and remains a separate pre-release capability. Use the
+> [documentation map](README.md) for current status.
+
 - **Status:** Implemented; real Android/iPhone conformance and packaged capacity checks pending
 - **Updated:** 2026-08-19
 - **Scope:** Stock Android, iPhone, and iPad clients on the same local network as KNet Desktop
@@ -20,9 +25,9 @@ Wi-Fi is KNet's primary stock-phone connectivity path:
 7. Restarting the proxy recreates the gateway automatically. If the desktop retains the same LAN address,
    the phone's saved manual proxy configuration continues working without verification.
 
-A companion remains a separate future authenticated path for remote networks, relay transport, and apps
-that ignore the operating system proxy configuration. Companion identity and Room persistence do not
-participate in manual Wi-Fi connectivity.
+The companion is a separate authenticated path for devices that use the companion's local VPN/packet tunnel.
+Companion identity and Room persistence do not participate in manual Wi-Fi connectivity. Remote relay transport
+remains unavailable.
 
 ## 2. Repository changes
 

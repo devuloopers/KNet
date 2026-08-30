@@ -2,7 +2,9 @@
 
 ## Responsibility
 
-Defines KNet's canonical, platform-neutral traffic language. The same HTTP request, response, exchange, body-reference, identity, and ingress models are shared by Traffic UI, API Studio, breakpoints, persistence, export, scripting, protocol inspectors, and future companions.
+Defines KNet's canonical, platform-neutral traffic language. The same HTTP request, response, exchange,
+body-reference, identity, and ingress models are shared by Traffic UI, API Studio, breakpoints, persistence,
+export, scripting, protocol inspectors, and companion ingress.
 
 ## Owns
 

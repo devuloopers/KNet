@@ -2,7 +2,7 @@
 
 ## Responsibility
 
-Defines the portable companion vocabulary shared by Android now and iOS later: desktop registrations,
+Defines the portable companion vocabulary shared by Android and iOS: desktop registrations,
 pairing invitations, pinned endpoints, certificate trust, connection state, inspection state, and policy.
 
 ## Owns

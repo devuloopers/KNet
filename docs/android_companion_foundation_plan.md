@@ -1,5 +1,10 @@
 # Android Companion Foundation
 
+> [!NOTE]
+> This is a dated 2026-08-26 foundation snapshot. The Android and iOS products, certificate adapters, and tunnel
+> implementations were added later. Use the [documentation map](README.md), current module contracts, and runtime
+> capability catalog for present status; companion/VPN remains pre-release until promoted by release evidence.
+
 - **Status:** Shared foundation, Compose Multiplatform Android shell, Android connectivity/certificate boundaries,
   and fail-closed iOS connectivity placeholders implemented; transport, complete workflow UI, and packet/tunnel
   backends not started

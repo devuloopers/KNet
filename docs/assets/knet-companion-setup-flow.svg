@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="920" viewBox="0 0 1600 920" role="img" aria-labelledby="title desc">
   <title id="title">KNet Companion secure setup flow</title>
-  <desc id="desc">Three-phase companion setup covering QR pairing, certificate installation and verification, desktop rediscovery, local VPN or packet tunnel startup, and inspection on KNet Desktop.</desc>
+  <desc id="desc">Implemented pre-release three-phase companion setup covering QR pairing, certificate installation and verification, desktop rediscovery, local VPN or packet tunnel startup, and inspection on KNet Desktop.</desc>
 
   <defs>
     <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
@@ -62,7 +62,7 @@
   <g transform="translate(78 56)">
     <rect width="9" height="72" rx="4.5" fill="url(#track)"/>
     <text class="title" x="32" y="43">KNet Companion Setup</text>
-    <text class="subtitle" x="34" y="77">A local, authenticated path from QR invitation to inspected traffic</text>
+    <text class="subtitle" x="34" y="77">Implemented pre-release path from QR invitation to local inspection</text>
   </g>
 
   <rect x="250" y="186" width="1100" height="5" rx="2.5" fill="#26364b"/>
@@ -161,7 +161,7 @@
     <circle cx="1128" cy="658" r="24" fill="#10b981"/>
     <text class="step-number" x="1128" y="659">8</text>
     <text class="step-title" x="1169" y="649">Inspect on KNet Desktop</text>
-    <text class="step-copy" x="1169" y="677">Send supported traffic through the authenticated</text>
+    <text class="step-copy" x="1169" y="677">Send inspectable traffic through the authenticated</text>
     <text class="step-copy" x="1169" y="701">local data plane into canonical capture.</text>
   </g>
 

@@ -185,8 +185,29 @@ internal val inspectionBindings: Module = module {
                     CapabilityMaturity.SUPPORTED,
                     "PairingGatewayEndToEndTest"
                 ),
-                RuntimeCapability("mobile-companion", "Mobile Companion app", CapabilityMaturity.UNAVAILABLE),
-                RuntimeCapability("vpn", "VPN capture", CapabilityMaturity.UNAVAILABLE),
+                RuntimeCapability(
+                    "companion.android",
+                    "Android Companion app",
+                    CapabilityMaturity.EXPERIMENTAL,
+                    "Android product qualification gate and physical-device VPN inspection smoke test",
+                ),
+                RuntimeCapability(
+                    "companion.android.vpn",
+                    "Android Companion VPN inspection",
+                    CapabilityMaturity.EXPERIMENTAL,
+                    "Android product qualification gate and physical-device VPN inspection smoke test",
+                ),
+                RuntimeCapability(
+                    "companion.ios",
+                    "iOS/iPadOS Companion app",
+                    CapabilityMaturity.EXPERIMENTAL,
+                    "iOS Simulator and Kotlin/Native product qualification gates",
+                ),
+                RuntimeCapability(
+                    "companion.ios.packet-tunnel",
+                    "iOS/iPadOS packet-tunnel inspection",
+                    CapabilityMaturity.UNAVAILABLE,
+                ),
                 RuntimeCapability("relay", "Remote relay", CapabilityMaturity.UNAVAILABLE),
             ),
         )

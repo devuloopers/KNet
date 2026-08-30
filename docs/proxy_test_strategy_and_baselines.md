@@ -83,7 +83,7 @@ The envelope below is an enforced regression contract on the reference machine/J
 | Body durability | Per-body/session/global retention, atomic finalize, deletion outbox, startup recovery, size/digest integrity scrub |
 | Semantic inspection | Four concurrent inspections by default, 1 MiB global body budget, two-second deadline |
 | Breakpoints | Explicit rule/pending-byte/pending-connection/deadline limits; only matched response bodies aggregate under a bound |
-| Connectivity | Manual, PAC, Apple profile, ADB reverse, isolated setup listener, paired standard-proxy gateway |
+| Connectivity | Manual, PAC, Apple profile, isolated setup listener, paired standard-proxy gateway, plus isolated ADB reverse adapter evidence (not a documented public Companion traffic path) |
 
 Experimental HTTP/2 is counted only against its dedicated local real-socket gates; it is not a `SUPPORTED`
 cross-platform product claim until the qualification matrix in `docs/http2_target_and_implementation_plan.md`

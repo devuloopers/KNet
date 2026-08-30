@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1180" viewBox="0 0 1600 1180" role="img" aria-labelledby="title desc">
   <title id="title">KNet architecture</title>
-  <desc id="desc">Layered architecture showing the desktop and mobile products, their presentation and application workflows, stable portable core, and replaceable platform implementations.</desc>
+  <desc id="desc">Representative layered module view showing the desktop and mobile products, their presentation and application workflows, stable portable core, and replaceable platform implementations.</desc>
 
   <defs>
     <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
@@ -69,17 +69,17 @@
   <g transform="translate(78 66)">
     <rect width="9" height="74" rx="4.5" fill="url(#product)"/>
     <text class="title" x="32" y="45">KNet Architecture</text>
-    <text class="subtitle" x="34" y="79">Strongly typed boundaries with inward dependency direction</text>
+    <text class="subtitle" x="34" y="79">Representative module view · strongly typed boundaries with inward dependency direction</text>
   </g>
 
   <g transform="translate(1110 76)">
     <path d="M0 13 H70" class="flow"/>
     <text class="legend" x="88" y="18">depends on</text>
     <path d="M0 49 H70" class="adapter-flow"/>
-    <text class="legend" x="88" y="54">implements ports</text>
+    <text class="legend" x="88" y="54">implements inward ports</text>
   </g>
 
-  <text class="eyebrow" x="80" y="205">PRODUCT ROOTS · OWN LIFECYCLE AND DI</text>
+  <text class="eyebrow" x="80" y="205">PRODUCT LAYER · OWNS LIFECYCLE AND DI</text>
 
   <g filter="url(#shadow)">
     <rect x="170" y="230" width="430" height="126" rx="22" fill="url(#product)"/>
@@ -174,8 +174,8 @@
     <text class="impl-subtitle" x="194" y="1137">Netty · TLS · inspectors</text>
 
     <rect x="490" y="1080" width="300" height="74" rx="18" fill="url(#implementation)"/>
-    <text class="impl-title" x="514" y="1111">Desktop data</text>
-    <text class="impl-subtitle" x="514" y="1137">Room · body store · LAN</text>
+    <text class="impl-title" x="514" y="1111">Desktop adapters</text>
+    <text class="impl-subtitle" x="514" y="1137">Room · body store · connectivity</text>
 
     <rect x="810" y="1080" width="300" height="74" rx="18" fill="url(#implementation)"/>
     <text class="impl-title" x="834" y="1111">Companion data</text>

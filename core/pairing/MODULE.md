@@ -2,7 +2,8 @@
 
 ## Responsibility
 
-Defines platform-neutral pairing, authorization, credential, scope, and trusted-device contracts for authenticated ingress and future companions/relay carriers.
+Defines platform-neutral pairing, authorization, credential, scope, and trusted-device contracts for authenticated
+companion ingress and future relay carriers.
 
 ## Owns
 
@@ -18,4 +19,6 @@ May depend only on the neutral identity types in `:core:identity`; remain indepe
 
 ## Current state
 
-The desktop pairing coordinator and Room-backed registered-device adapter implement these contracts. A registered identity is durable while source-address authorization remains session-only. Direct mobile tunnels and relay carriers are intentionally absent until real product targets exist; they can be added without changing this module's identity, credential, and principal types.
+The desktop pairing coordinator, Room-backed registered-device adapter, and Android/iOS companion products implement
+these contracts. A registered identity is durable while source-address authorization remains session-only. Relay
+carriers remain absent and can be added without changing this module's identity, credential, and principal types.

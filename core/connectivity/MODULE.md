@@ -21,4 +21,5 @@ Remain independent of identity, pairing, engine, UI, data, and platform implemen
 
 ## Migration direction
 
-Desktop Wi-Fi sharing and future mobile mechanisms implement these contracts additively; adding a mechanism must not require modifying proxy or traffic core.
+Desktop Wi-Fi sharing and mobile companion mechanisms implement these contracts additively; adding another
+mechanism must not require modifying proxy or traffic core.

@@ -1,5 +1,10 @@
 # KNet Target Architecture and Implementation Plan
 
+> [!NOTE]
+> This is a dated architecture/delivery record. Some `future` and `unavailable` statements intentionally preserve
+> the state at the time of their phase. Use the [documentation map](README.md), current `MODULE.md` files, focused
+> qualification documents, and runtime capability catalog for present capability truth.
+
 - **Status:** Approved target; mandatory foundation implemented through the standard Phase 18 gate
 - **Date:** 2026-08-26
 - **Basis:** `docs/deep_architecture_scalability_engineering_audit.md` and the actual 33-module repository

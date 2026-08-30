@@ -18,7 +18,7 @@
   <a href="https://github.com/devuloopers/KNet/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/devuloopers/KNet/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="Kotlin" src="https://img.shields.io/badge/Kotlin-2.4.10-7F52FF?logo=kotlin&logoColor=white">
   <img alt="Compose Multiplatform" src="https://img.shields.io/badge/Compose-Multiplatform-4285F4?logo=jetpackcompose&logoColor=white">
-  <img alt="JDK" src="https://img.shields.io/badge/JDK-21-ED8B00?logo=openjdk&logoColor=white">
+  <img alt="JDK" src="https://img.shields.io/badge/JDK-17-ED8B00?logo=openjdk&logoColor=white">
   <img alt="Platforms" src="https://img.shields.io/badge/Desktop%20%7C%20Android%20%7C%20iOS-0D1117">
 </p>
 
@@ -37,6 +37,12 @@ contracts.
 > KNet is under active development. HTTP/1.x capture and the core desktop workflow are the stable foundation.
 > HTTP/2, native gRPC, WebSocket, GraphQL over WebSocket, and live SSE capabilities are implemented and locally
 > qualified as **experimental** until their remaining device-matrix and release-soak gates pass.
+>
+> Android Companion and its VPN-based inspection path are implemented and have been manually verified end to end on
+> a physical Android device. The runtime catalog classifies both as **experimental** until broader Android version,
+> OEM, lifecycle-recovery, and release-soak gates pass. The iOS/iPadOS companion app is also **experimental**, while
+> physical iOS packet-tunnel inspection remains **unavailable for release** until entitlement-signed device
+> qualification is complete.
 
 ## Contents
 
@@ -58,11 +64,11 @@ contracts.
 
 ## What KNet includes
 
-| Product | Platforms | Purpose |
-| --- | --- | --- |
-| **KNet Desktop** | macOS, Windows, Linux | Owns the proxy, TLS interception, canonical traffic history, breakpoints, API Studio, certificates, connectivity, and protocol inspection. |
-| **KNet Companion** | Android 8.0+ and iOS/iPadOS 16+ | Securely pairs a phone or tablet with KNet Desktop, verifies the KNet certificate, and routes supported device traffic through the paired desktop. |
-| **Protocol Lab** | JVM | Provides deterministic local HTTP, HTTP/2, SSE, WebSocket, GraphQL, and native gRPC endpoints for development and qualification. |
+| Product | Platforms | Purpose | Current qualification state |
+| --- | --- | --- | --- |
+| **KNet Desktop** | macOS, Windows, Linux | Owns the proxy, TLS interception, canonical traffic history, breakpoints, API Studio, certificates, connectivity, and protocol inspection. | HTTP/1.x and the core workflow are supported; advanced protocol maturity is listed below. |
+| **KNet Companion** | Android 8.0+ and iOS/iPadOS 16+ | Implements QR pairing, certificate setup, desktop rediscovery, and authenticated local tunnel adapters. | **Experimental:** Android VPN inspection has passed a physical-device smoke test; broader Android qualification and entitlement-signed iOS packet-tunnel device qualification remain. |
+| **Protocol Lab** | JVM | Provides deterministic local HTTP, HTTP/2, SSE, WebSocket, GraphQL, and native gRPC endpoints for development and qualification. | Development and automated-test support. |
 
 ## Features
 
@@ -128,7 +134,7 @@ not enough to call capture, mutation, replay, or export supported.
 | --- | --- | --- | --- | --- |
 | HTTP/1.0 and HTTP/1.1 | Yes | Yes | Yes | **Supported foundation** |
 | HTTPS over HTTP CONNECT | Yes, when the client trusts the KNet CA | Yes | Yes | **Supported foundation** |
-| GraphQL over HTTP | Semantic request inspection | Operation-aware matching | HTTP GraphQL authoring | **Implemented** |
+| GraphQL over HTTP | Semantic request inspection | Operation-aware matching | HTTP GraphQL authoring | **Supported inspection** |
 | SSE bounded post-capture preview | Yes | — | — | **Supported** |
 | Live SSE | Live capture and event persistence | Response-event rules | Streaming execution | **Experimental** |
 | HTTP/2 (H2C and TLS/ALPN) | Multiplexed capture | Stream-isolated interception | Version-aware execution | **Experimental** |
@@ -155,8 +161,9 @@ See the qualification documents for exact evidence and promotion blockers:
   </picture>
 </p>
 
-KNet Companion is a shared Compose Multiplatform product with thin Android and iOS shells. Its setup flow is
-reactive and state-driven rather than a sequence of platform-specific duplicate screens.
+KNet Companion is a pre-release shared Compose Multiplatform product with thin Android and iOS shells. Its setup
+flow is reactive and state-driven rather than a sequence of platform-specific duplicate screens. The table and
+flow below describe code that is present; they do not replace the outstanding physical-device and release gates.
 
 ### Companion setup flow
 
@@ -166,7 +173,7 @@ reactive and state-driven rather than a sequence of platform-specific duplicate 
   </a>
 </p>
 
-<p align="center"><sub>Open the diagram to view it at full resolution.</sub></p>
+<p align="center"><sub>Implemented setup path; release qualification is tracked separately. Open the diagram to view it at full resolution.</sub></p>
 
 1. KNet Desktop creates a bounded, expiring `knet://pair/v3` invitation.
 2. The companion scans it with the camera or decodes it from an image selected through the platform photo picker.
@@ -179,8 +186,8 @@ reactive and state-driven rather than a sequence of platform-specific duplicate 
    not auto-navigate merely because background verification changed.
 7. The app rediscovers the paired desktop on the local network. A previously observed LAN address is not treated as
    durable device identity.
-8. Inspection starts only after explicit user action and routes supported traffic through the authenticated KNet
-   data plane.
+8. Inspection starts only after explicit user action and routes the implemented inspectable path through the
+   authenticated KNet data plane.
 
 ### Platform implementations
 
@@ -211,13 +218,13 @@ continues quietly in the background without repeatedly replacing the UI with a c
 
 | Goal | Requirements |
 | --- | --- |
-| Desktop development | Git, JDK 21, macOS/Windows/Linux |
+| Desktop development | Git, JDK 17, macOS/Windows/Linux |
 | Android companion | Android Studio or Android SDK 37; Android 8.0 / API 26 or newer |
 | iOS companion | macOS, Xcode 16 or newer, iOS/iPadOS 16 or newer |
 | Physical iOS inspection | Paid Apple Developer Program team with Network Extension entitlement |
 
-The Gradle Wrapper is included and the project toolchain is pinned to JDK 21. You do not need a system Gradle
-installation.
+The Gradle Wrapper is included. Repository CI and release workflows currently provision JDK 17; you do not need a
+system Gradle installation.
 
 ### Clone and run the desktop application
 
@@ -260,7 +267,7 @@ the Network Extension entitlement; physical tunnel builds do.
 5. Generate traffic and inspect it in **Traffic**.
 6. Remove the proxy configuration and KNet root certificate when the test is complete.
 
-### KNet Companion
+### KNet Companion development flow
 
 1. Keep the desktop and mobile device on the same trusted local network.
 2. Start the desktop proxy and open **Connect Companion App**.
@@ -269,13 +276,15 @@ the Network Extension entitlement; physical tunnel builds do.
 5. Continue to Home and explicitly start inspection.
 6. Inspect the resulting traffic on KNet Desktop.
 
-The companion can rediscover a paired desktop after application restarts and network changes. If the desktop is
+The current companion implementation can rediscover a paired desktop after application restarts and network
+changes. If the desktop is
 temporarily unavailable, the stable unavailable state remains visible while discovery retries in the background.
 
 ## Architecture
 
 KNet uses clean dependency direction: portable contracts and application workflows are inward; engines, storage,
-connectivity adapters, and product shells are outward. Only product roots own dependency-injection declarations.
+connectivity adapters, and product shells are outward. Dependency-injection declarations remain in the product
+layer, including the shared companion product graph.
 
 <p align="center">
   <a href="docs/assets/knet-architecture.svg">
@@ -283,7 +292,7 @@ connectivity adapters, and product shells are outward. Only product roots own de
   </a>
 </p>
 
-<p align="center"><sub>Open the diagram to view it at full resolution.</sub></p>
+<p align="center"><sub>Representative module view; open the diagram to view it at full resolution.</sub></p>
 
 ### Three runtime planes
 
@@ -303,12 +312,14 @@ not own parsing, canonical storage, body handling, protocol inspection, or Traff
 - Native handles do not cross common contracts through `Any` or generic context wrappers.
 - Platform differences are implemented as narrow adapters in `androidMain`, `iosMain`, or JVM modules.
 - Companion persistence uses Kotlin Multiplatform DataStore; desktop canonical traffic uses Room with bundled SQLite.
-- Koin modules live only in executable product composition roots, keeping reusable modules framework-neutral.
+- Koin modules live only in product-layer composition modules, keeping reusable application, core, connectivity,
+  data, engine, storage, and UI modules framework-neutral.
 - Every Gradle module declares its responsibility and dependency rule in a colocated `MODULE.md`.
 
 The complete module map is maintained in
 [docs/module_responsibility_index.md](docs/module_responsibility_index.md). Architectural decisions live under
-[docs/adr](docs/adr).
+[docs/adr](docs/adr). The [documentation map](docs/README.md) distinguishes current capability truth from dated
+implementation plans and audit records.
 
 ## Security and privacy
 
@@ -374,9 +385,9 @@ their target operating system.
 | Command | Scope |
 | --- | --- |
 | `./gradlew verifyArchitectureFoundation` | Module documentation, dependency direction, UI isolation, Kotlin-first boundaries, product-owned DI, and companion UI ownership. |
-| `./gradlew companionFoundationQualification` | Shared companion compilation and tests across JVM, Android, iOS device, and iOS Simulator targets. |
+| `./gradlew companionFoundationQualification` | Shared companion tests plus Android host tests and Android/iOS production-target compilation; it does not run a mobile app or prove device behavior. |
 | `./gradlew companionAndroidProductQualification` | Companion foundation, Android tests, lint, and debug APK assembly. |
-| `./gradlew companionIosProductQualification` | Companion foundation and iOS Simulator framework linkage. |
+| `./gradlew companionIosProductQualification` | Companion foundation and iOS Simulator framework linkage; it does not build/sign the Xcode app or exercise the packet tunnel. |
 | `./gradlew http2Qualification` | HTTP/2 architecture, transport, storage, UI, and integration evidence. |
 | `./gradlew grpcQualification` | Native gRPC capture, descriptors, breakpoints, API Studio, storage, and protocol-lab evidence. |
 | `./gradlew webSocketQualification` | HTTP/1.1 WebSocket relay, framing, capture, breakpoints, and authoring evidence. |
@@ -460,6 +471,10 @@ dependencies may flow.
 
 - Advanced protocol implementations remain experimental until their documented physical-device, operating-system,
   concurrency, and soak evidence is complete.
+- Android Companion and Android VPN inspection are experimental: a physical-device end-to-end smoke test has passed,
+  but the broader Android version/OEM, interruption-recovery, and soak matrix is not complete.
+- The iOS/iPadOS companion app is experimental. Its packet-tunnel inspection path remains unavailable for release
+  until it is signed with the required Network Extension entitlement and qualified on physical devices.
 - HTTP/3, WebTransport, and WebSocket over HTTP/2 are not implemented. QUIC/UDP traffic is not inspectable through
   the current HTTP proxy pipeline.
 - Certificate-pinned applications may reject HTTPS interception by design.

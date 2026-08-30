@@ -15,7 +15,9 @@ secret protection replaceable per platform.
   material to native transports without implementing TLS policy in common code.
 - Android record, AES-GCM credential vault, non-exportable P-256 device identity, and proof signer adapters in
   `androidMain`; their suspending factories and operations isolate synchronous Android storage and cryptography on
-  an injected worker dispatcher. Future iOS adapters can implement the same small ports.
+  an injected worker dispatcher.
+- iOS DataStore path construction, Keychain-backed credential protection, non-exportable P-256 device identity,
+  proof signing, and device display-name adapters in `iosMain`.
 
 ## Does not own
 
@@ -25,4 +27,5 @@ secret protection replaceable per platform.
 
 Depends on `:application:companion` ports and portable core values. Common code cannot import platform storage
 APIs; credentials and private key material must never enter registration JSON or observable state. Android
-credential ciphertext is bound to its credential reference with AES-GCM additional authenticated data.
+credential ciphertext is bound to its credential reference with AES-GCM additional authenticated data; iOS
+DataStore retains only the opaque Keychain reference marker.

@@ -25,21 +25,26 @@ lifecycle APIs remain in their platform source sets.
 - Secret-free transport, root-validation, and trust-challenge diagnostics under the shared certificate log tag.
 - iOS Darwin-engine TLS configuration using Security-framework policies, request-scoped custom anchors for
   pairing, native system trust for platform-trusted requests, and the same root/identity checks.
-- Fail-closed iOS network, certificate-installation/readiness, and Network Extension capabilities until those
-  native adapters and an iOS product are implemented and qualified.
+- iOS Network.framework reachability, Bonjour rediscovery, authenticated `.mobileconfig` retrieval,
+  Security-framework certificate readiness, app-foreground trust rechecks, and Network Extension lifecycle.
+- iOS pinned companion proxy transport and the start-option boundary into the separately packaged
+  `:products:companion:iosPacketTunnel` runtime.
 - Platform adapter tests and target compilation for Android, iOS device, and iOS Simulator.
 
 ## Package structure
 
 - `connectivity.platform` owns the portable adapter bundle/factory and matching Android/iOS actual factories.
 - `connectivity.http` owns the shared Ktor exchange and Android/Darwin engine security providers.
-- `connectivity.inspection` owns shared lifecycle reduction and Android inspection adaptation.
-- `connectivity.fallback` owns shared deterministic unavailable capabilities.
-- `connectivity.network` owns Android network observation.
+- `connectivity.inspection` owns shared lifecycle reduction and Android/iOS inspection adaptation.
+- `connectivity.fallback` owns deterministic fail-closed capabilities for genuinely unavailable integrations.
+- `connectivity.network` owns Android and iOS network observation.
+- `connectivity.discovery` owns Android DNS-SD/NSD and iOS Bonjour discovery adapters.
 - `connectivity.bootstrap` owns portable public-root pinning and complete-invitation redemption.
 - `connectivity.control` owns portable pinned-TLS pairing and credential-refresh transport.
-- `connectivity.certificate` owns Android certificate retrieval, trust, store observation, X.509, and TLS adapters.
-- `connectivity.transport` owns the Android authenticated carrier, SOCKS ingress, and replaceable TUN forwarder.
+- `connectivity.certificate` owns Android/iOS certificate retrieval, installation artifacts, trust verification,
+  store/lifecycle observation, X.509 helpers, and bounded TLS adapters.
+- `connectivity.transport` owns authenticated Android/iOS carrier boundaries, Android SOCKS ingress, and the
+  replaceable Android TUN forwarder.
 
 Source sets identify the native platform; platform-named packages such as `connectivity.android` or
 `connectivity.ios` are intentionally avoided. Platform suffixes remain on actual filenames for IDE clarity.
@@ -49,7 +54,7 @@ Source sets identify the native platform; platform-named packages such as `conne
 - Shared companion policies, use cases, persistence, presentation state, or Compose UI.
 - Android or iOS product composition roots.
 - Desktop proxy/capture behavior.
-- A production iOS connectivity claim while the shared unavailable capabilities remain active.
+- The Apple packet-tunnel implementation or app-extension entry point; those remain product-owned.
 
 ## Dependency rule
 
@@ -57,4 +62,5 @@ Depends only on shared companion application/core contracts, `:core:logger`, Kto
 engines, and native platform SDK APIs. Android and iOS source sets never depend on one another or on the desktop
 proxy engine. Custom `X509TrustManager` implementations remain prohibited; Android dynamic paired trust uses
 platform trust factories. `commonMain` must not import native APIs, declare a native-context abstraction, or pass a
-platform dependency through `Any`.
+platform dependency through `Any`. Implementation presence does not by itself promote the product-level Mobile
+Companion or VPN capabilities; release maturity remains governed by the runtime catalog and physical-device gates.

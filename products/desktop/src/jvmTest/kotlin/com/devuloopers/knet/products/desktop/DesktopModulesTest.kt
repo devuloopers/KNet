@@ -1,6 +1,8 @@
 package com.devuloopers.knet.products.desktop
 
 import com.devuloopers.knet.application.contract.breakpoint.BreakpointProtocolRegistry
+import com.devuloopers.knet.application.contract.inspection.CapabilityMaturity
+import com.devuloopers.knet.application.contract.inspection.RuntimeCapabilityCatalog
 import com.devuloopers.knet.products.desktop.config.DesktopConfiguration
 import com.devuloopers.knet.products.desktop.di.DesktopModules
 import org.koin.core.context.startKoin
@@ -65,5 +67,13 @@ class DesktopModulesTest {
             breakpointProtocols.map { it.protocolId.value }.toSet(),
         )
         assertEquals(6, breakpointProtocols.size)
+
+        val capabilities = koinApp.koin.get<RuntimeCapabilityCatalog>()
+        assertEquals(CapabilityMaturity.EXPERIMENTAL, capabilities.get("companion.android")?.maturity)
+        assertEquals(CapabilityMaturity.EXPERIMENTAL, capabilities.get("companion.android.vpn")?.maturity)
+        assertEquals(CapabilityMaturity.EXPERIMENTAL, capabilities.get("companion.ios")?.maturity)
+        assertEquals(CapabilityMaturity.UNAVAILABLE, capabilities.get("companion.ios.packet-tunnel")?.maturity)
+        assertTrue(capabilities.get("mobile-companion") == null)
+        assertTrue(capabilities.get("vpn") == null)
     }
 }

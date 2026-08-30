@@ -17,13 +17,13 @@ platform source set to depend on another.
   Android TLS, trust-store callback lifecycles, the authenticated proxy carrier, loopback SOCKS ingress,
   TUN-to-SOCKS forwarding, and the Android `actual` factory. Only this source set accepts Android `Context`, and
   it immediately retains the application context.
-- `iosMain` owns the Darwin Ktor engine and Security-framework trust evaluation used by invitation redemption and
-  control calls. Network observation, certificate installation/readiness, and inspection still use unavailable
-  adapters, publish no synthetic readiness, and must not be registered in a production iOS composition root yet.
+- `iosMain` owns the Darwin Ktor engine and Security-framework trust evaluation, Network.framework reachability,
+  Bonjour rediscovery, authenticated Apple profile retrieval, certificate readiness and foreground rechecks,
+  pinned proxy transport, and Network Extension lifecycle controller.
 - `androidHostTest` preserves the Android inspection and real certificate-chain tests after migration from the
   former Android-only child module.
-- `iosTest` verifies that incomplete device capabilities fail closed while invalid TLS roots are rejected before
-  network access.
+- `iosTest` verifies Darwin trust/pinning behavior and portable failure handling without treating simulator tests as
+  packet-tunnel device evidence.
 
 ## Feature packages
 
@@ -31,15 +31,16 @@ The package hierarchy describes capability ownership rather than repeating the s
 
 - `connectivity.platform`: common adapter/factory contracts and the matching Android/iOS actual factories.
 - `connectivity.http`: one Ktor request/response policy plus Android and Darwin request-scoped engine providers.
-- `connectivity.inspection`: common lifecycle reduction and Android VPN/packet-backend adaptation.
-- `connectivity.fallback`: common fail-closed capabilities used by incomplete native implementations.
-- `connectivity.network`: Android network observation.
+- `connectivity.inspection`: common lifecycle reduction plus Android VPN and iOS Network Extension adaptation.
+- `connectivity.fallback`: common fail-closed capabilities retained for genuinely unavailable integrations.
+- `connectivity.network`: Android and iOS network observation.
+- `connectivity.discovery`: Android DNS-SD/NSD and iOS Bonjour discovery.
 - `connectivity.bootstrap`: portable retrieval of the QR-pinned public root and one-time TLS invitation redemption.
 - `connectivity.control`: portable secret-bearing pairing and credential refresh over the paired-root TLS channel.
-- `connectivity.certificate`: Android certificate retrieval, platform trust proof, store observation, X.509 helpers,
-  paired PKIX construction, and the bounded TLS client.
-- `connectivity.transport`: Android pinned-TLS proxy carrier, bounded SOCKS ingress, protected DNS handling, and
-  the replaceable TUN-to-SOCKS engine boundary.
+- `connectivity.certificate`: Android/iOS certificate and installation-artifact retrieval, platform trust proof,
+  store/lifecycle observation, X.509 helpers, paired trust construction, and bounded TLS clients.
+- `connectivity.transport`: Android/iOS pinned proxy carrier boundaries, Android bounded SOCKS ingress, protected
+  DNS handling, and the replaceable Android TUN-to-SOCKS engine boundary.
 
 The Android TUN path can preserve a destination IP after device DNS resolution even though the originating TLS
 ClientHello still carries the application hostname in SNI. The companion forwards that standard CONNECT tunnel
@@ -86,19 +87,23 @@ parameters in this module, and any future common constructor added to the expect
 
 ## Product boundary
 
-Android application composition remains in `:products:companion:androidApp`. A future iOS application and Network
-Extension product will own their native lifecycles, entitlements, and composition. The future iOS implementation
-will replace the unavailable capabilities with `NWPathMonitor`, certificate installation/readiness, lifecycle
-recheck triggers, and a separately qualified Network Extension packet backend.
+Android application composition remains in `:products:companion:androidApp`. The iOS application owns its SwiftUI
+and Xcode lifecycle in `:products:companion:iosApp`; the lean Kotlin/Native packet runtime lives in
+`:products:companion:iosPacketTunnel`, with Swift limited to the Apple-required extension entry shim. The signed
+app and packet-tunnel targets own their entitlements and native lifecycle.
 
-The module does not own pairing persistence, protected credentials, shared UI, desktop proxy behavior, or product
-service lifecycle. Those concerns remain behind their existing application, data, presentation, desktop, and
-product boundaries. Android and iOS bootstrap/control HTTP transports are implemented. Android has a qualified
-packet adapter wired by the Android product; iOS certificate readiness and its Network Extension packet data plane
-remain explicit future adapters.
+The module does not own pairing persistence, protected credentials, shared UI, desktop proxy behavior, the Apple
+packet-engine implementation, or product service lifecycle. Those concerns remain behind their existing
+application, data, presentation, desktop, and product boundaries. Android and iOS bootstrap/control, certificate,
+discovery, and inspection-controller adapters are implemented. Android Companion and Android VPN inspection have
+passed a manual physical-device end-to-end smoke test and are experimental pending a broader device and lifecycle
+matrix. The iOS/iPadOS app is experimental; physical packet-tunnel inspection remains unavailable pending
+entitlement-signed device qualification.
 
 ## Qualification
 
-The companion foundation gate runs the Android host tests and compiles the iOS Simulator production target.
-Focused Ktor qualification also runs common MockEngine transport tests, Android engine tests, iOS Simulator tests,
-and Android/iOS target compilation. No APK or iOS application is assembled or launched by these checks.
+The companion foundation gate runs portable/JVM tests, Android host tests, iOS Simulator tests, and Android/iOS
+production-target compilation. The Android product gate adds unit tests, lint, and debug APK assembly. The iOS
+product gate links the iOS Simulator framework only: it does not build/sign the Xcode application, launch it, or
+exercise `NEPacketTunnelProvider`. Physical Android behavior and a paid-team, entitlement-signed iOS device build
+remain release gates.
