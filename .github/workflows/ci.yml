@@ -122,8 +122,8 @@ jobs:
       - name: Install Android SDK platform
         shell: bash
         run: >-
-          yes |
           "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          --install
           'platforms;android-37.0'
           'build-tools;37.0.0'
 
