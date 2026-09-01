@@ -22,6 +22,14 @@
   <img alt="Platforms" src="https://img.shields.io/badge/Desktop%20%7C%20Android%20%7C%20iOS-0D1117">
 </p>
 
+<p align="center">
+  <a href="https://github.com/devuloopers/KNet/releases?q=desktop-v"><strong>Latest Desktop release</strong></a>
+  ·
+  <a href="https://github.com/devuloopers/KNet/releases?q=companion-v"><strong>Latest Companion release</strong></a>
+  ·
+  <a href="https://github.com/devuloopers/KNet/releases">All releases</a>
+</p>
+
 ---
 
 KNet is a cross-platform network inspection suite built for developers who need to understand real application
@@ -379,6 +387,31 @@ policy.
 
 Desktop packaging is configured for DMG, MSI, EXE, DEB, and RPM. Native installers should be built and tested on
 their target operating system.
+
+### Independent product releases
+
+KNet Desktop and KNet Companion have independent semantic versions and release tags. The existing `v0.1.4` suite
+release remains unchanged; subsequent releases use product-qualified tags:
+
+```bash
+# Desktop release
+git tag desktop-v0.1.5
+git push origin desktop-v0.1.5
+
+# Android/iOS companion release
+git tag companion-v0.1.5
+git push origin companion-v0.1.5
+```
+
+`desktop-v*` runs the desktop qualification and packaging workflow. `companion-v*` runs Android packaging and iOS
+source qualification. The tag supplies the product's public version; CI derives monotonic Android `versionCode`
+and iOS `CURRENT_PROJECT_VERSION` values from its three numeric components. Local development defaults are
+maintained independently as `knet.desktop.version` and `knet.companion.version` in `gradle.properties`.
+
+The README keeps separate [Desktop release](https://github.com/devuloopers/KNet/releases?q=desktop-v) and
+[Companion release](https://github.com/devuloopers/KNet/releases?q=companion-v) links because GitHub's **Latest**
+marker is repository-wide. The historical combined [`v0.1.4`](https://github.com/devuloopers/KNet/releases/tag/v0.1.4)
+release remains available from the complete releases list.
 
 ### Qualification gates
 

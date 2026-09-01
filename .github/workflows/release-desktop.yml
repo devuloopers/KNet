@@ -1,20 +1,20 @@
-name: Release Packages
+name: Release Desktop Packages
 
 on:
   push:
     tags:
-      - 'v*'
+      - 'desktop-v*'
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing release tag (for example, v1.0.0)
+        description: Existing desktop release tag (for example, desktop-v0.1.5)
         required: true
 
 permissions:
   contents: read
 
 concurrency:
-  group: release-${{ github.ref_name || inputs.tag }}
+  group: desktop-release-${{ github.ref_name || inputs.tag }}
   cancel-in-progress: false
 
 env:
@@ -27,7 +27,6 @@ jobs:
     outputs:
       tag: ${{ steps.release.outputs.tag }}
       version: ${{ steps.release.outputs.version }}
-      android-version-code: ${{ steps.release.outputs.android-version-code }}
       prerelease: ${{ steps.release.outputs.prerelease }}
     steps:
       - name: Check out release revision
@@ -43,8 +42,8 @@ jobs:
           REQUESTED_TAG: ${{ inputs.tag }}
         run: |
           TAG="${REQUESTED_TAG:-$GITHUB_REF_NAME}"
-          if [[ ! "$TAG" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
-            echo "Release tag must use semantic versioning with a v prefix (for example, v1.2.3)." >&2
+          if [[ ! "$TAG" =~ ^desktop-v([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Desktop release tag must use semantic versioning (for example, desktop-v0.1.5)." >&2
             exit 1
           fi
           if ! git rev-parse --verify --quiet "refs/tags/$TAG" >/dev/null; then
@@ -52,7 +51,7 @@ jobs:
             exit 1
           fi
 
-          VERSION="${TAG#v}"
+          VERSION="${TAG#desktop-v}"
           PRERELEASE=false
           if [[ "$VERSION" == *-* ]]; then
             PRERELEASE=true
@@ -60,7 +59,6 @@ jobs:
 
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "android-version-code=$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
           echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
 
   release-qualification:
@@ -94,123 +92,6 @@ jobs:
           sseQualification
           --no-daemon
           --stacktrace
-
-  ios-qualification:
-    name: iOS companion qualification
-    needs: metadata
-    runs-on: macos-15
-    timeout-minutes: 60
-    steps:
-      - name: Check out release tag
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
-        with:
-          ref: ${{ needs.metadata.outputs.tag }}
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.2.0
-        with:
-          distribution: zulu
-          java-version: ${{ env.JAVA_VERSION }}
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.0.0
-
-      - name: Qualify Kotlin iOS targets
-        run: ./gradlew companionIosProductQualification --no-daemon --stacktrace
-
-      - name: Build unsigned release Simulator application
-        run: >-
-          xcodebuild
-          -project products/companion/iosApp/KNetCompanion.xcodeproj
-          -scheme 'KNet Companion'
-          -sdk iphonesimulator
-          -configuration Release
-          -derivedDataPath products/companion/iosApp/build/release-derived-data
-          CODE_SIGNING_ALLOWED=NO
-          build
-
-  android-package:
-    name: Signed Android companion
-    needs: metadata
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
-    environment: release
-    env:
-      ANDROID_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
-      ANDROID_RELEASE_KEY_ALIAS: ${{ vars.ANDROID_RELEASE_KEY_ALIAS }}
-    steps:
-      - name: Check out release tag
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
-        with:
-          ref: ${{ needs.metadata.outputs.tag }}
-
-      - name: Set keystore path
-        run: echo "ANDROID_RELEASE_KEYSTORE_FILE=$RUNNER_TEMP/knet-companion-release.p12" >> "$GITHUB_ENV"
-
-      - name: Set up JDK 21
-        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.2.0
-        with:
-          distribution: zulu
-          java-version: ${{ env.JAVA_VERSION }}
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.0.0
-
-      - name: Install Android SDK platform
-        shell: bash
-        run: >-
-          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
-          --install
-          'platforms;android-37.0'
-          'build-tools;37.0.0'
-
-      - name: Restore release keystore
-        shell: bash
-        env:
-          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
-        run: |
-          test -n "$ANDROID_RELEASE_KEYSTORE_BASE64"
-          test -n "$ANDROID_RELEASE_KEYSTORE_PASSWORD"
-          test -n "$ANDROID_RELEASE_KEY_ALIAS"
-          printf '%s' "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$ANDROID_RELEASE_KEYSTORE_FILE"
-          chmod 600 "$ANDROID_RELEASE_KEYSTORE_FILE"
-
-      - name: Qualify and build signed release APK
-        run: >-
-          ./gradlew
-          companionAndroidProductQualification
-          :products:companion:androidApp:lintRelease
-          :products:companion:androidApp:assembleRelease
-          -Pknet.app.version=${{ needs.metadata.outputs.version }}
-          -Pknet.android.versionCode=${{ needs.metadata.outputs.android-version-code }}
-          --no-daemon
-          --stacktrace
-
-      - name: Verify and stage signed APK
-        shell: bash
-        env:
-          VERSION: ${{ needs.metadata.outputs.version }}
-        run: |
-          APK='products/companion/androidApp/build/outputs/apk/release/androidApp-release.apk'
-          test -f "$APK"
-          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
-          test -x "$APKSIGNER"
-          "$APKSIGNER" verify --verbose --print-certs "$APK"
-          mkdir -p dist-packages
-          cp "$APK" "dist-packages/KNet-Companion-${VERSION}-android.apk"
-
-      - name: Remove restored keystore
-        if: always()
-        shell: bash
-        run: rm -f "$ANDROID_RELEASE_KEYSTORE_FILE"
-
-      - name: Upload Android package
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
-        with:
-          name: knet-release-android
-          path: dist-packages/*
-          if-no-files-found: error
-          retention-days: 7
 
   desktop-packages:
     name: Desktop package (${{ matrix.name }})
@@ -293,7 +174,7 @@ jobs:
         env:
           GRADLE_TASKS: ${{ matrix.tasks }}
           VERSION: ${{ needs.metadata.outputs.version }}
-        run: ./gradlew $GRADLE_TASKS "-Pknet.app.version=$VERSION" --no-daemon --stacktrace
+        run: ./gradlew $GRADLE_TASKS "-Pknet.desktop.version=$VERSION" --no-daemon --stacktrace
 
       - name: Print desktop packaging diagnostics
         if: failure()
@@ -425,8 +306,6 @@ jobs:
     needs:
       - metadata
       - release-qualification
-      - ios-qualification
-      - android-package
       - desktop-packages
     runs-on: ubuntu-24.04
     permissions:
@@ -450,8 +329,8 @@ jobs:
         shell: bash
         run: |
           PACKAGE_COUNT="$(find release-dist -maxdepth 1 -type f | wc -l | tr -d ' ')"
-          if [[ "$PACKAGE_COUNT" -ne 14 ]]; then
-            echo "Expected 14 release packages, found $PACKAGE_COUNT." >&2
+          if [[ "$PACKAGE_COUNT" -ne 13 ]]; then
+            echo "Expected 13 desktop release packages, found $PACKAGE_COUNT." >&2
             find release-dist -maxdepth 1 -type f -print | sort
             exit 1
           fi
@@ -474,7 +353,7 @@ jobs:
         run: |
           RELEASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
           cat > release_body.md <<EOF
-          ## KNet $VERSION packages
+          ## KNet Desktop $VERSION packages
 
           | Platform | Architecture | Downloads | Distribution status |
           | --- | --- | --- | --- |
@@ -483,9 +362,6 @@ jobs:
           | Windows | x64 | [MSI](<${RELEASE_URL}/KNet-${VERSION}-windows-x64.msi>) · [EXE](<${RELEASE_URL}/KNet-${VERSION}-windows-x64.exe>) · [ZIP](<${RELEASE_URL}/KNet-${VERSION}-windows-x64.zip>) | Unsigned development distribution |
           | Linux | x64 | [DEB](<${RELEASE_URL}/KNet-${VERSION}-linux-x64.deb>) · [RPM](<${RELEASE_URL}/KNet-${VERSION}-linux-x64.rpm>) · [TAR.GZ](<${RELEASE_URL}/KNet-${VERSION}-linux-x64.tar.gz>) | Native packages and portable archive |
           | Linux | ARM64 | [DEB](<${RELEASE_URL}/KNet-${VERSION}-linux-arm64.deb>) · [RPM](<${RELEASE_URL}/KNet-${VERSION}-linux-arm64.rpm>) · [TAR.GZ](<${RELEASE_URL}/KNet-${VERSION}-linux-arm64.tar.gz>) | Native packages and portable archive |
-          | Android Companion | Universal APK | [Signed APK](<${RELEASE_URL}/KNet-Companion-${VERSION}-android.apk>) | Signed with the KNet release key |
-          | iOS Companion | Source-qualified | Not distributed | Requires an eligible Apple Developer team for physical-device Network Extension signing |
-
           ### Verify downloads
 
           Verify packages using [SHA256SUMS](<${RELEASE_URL}/SHA256SUMS>). GitHub artifact attestations are attached to this release as additional provenance evidence.
@@ -505,12 +381,12 @@ jobs:
           fi
 
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release edit "$TAG" --title "KNet $VERSION" --notes-file release_body.md "${prerelease_args[@]}"
+            gh release edit "$TAG" --title "KNet Desktop $VERSION" --notes-file release_body.md "${prerelease_args[@]}"
             gh release upload "$TAG" release-dist/* --clobber
           else
             gh release create "$TAG" release-dist/* \
               --verify-tag \
-              --title "KNet $VERSION" \
+              --title "KNet Desktop $VERSION" \
               --notes-file release_body.md \
               --generate-notes \
               "${prerelease_args[@]}"

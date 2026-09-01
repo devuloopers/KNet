@@ -29,12 +29,12 @@
 ## Phase 6: Multi-Platform Installer Branding & ARM64 Linux Support [COMPLETED]
 * Configured `TargetFormat.Exe` alongside `TargetFormat.Msi` in `products/desktop/build.gradle.kts` with consistent `upgradeUuid`, `perUserInstall`, and `shortcut` options so Windows setup executables embed `KNet.ico` directly into the PE header.
 * Designed high-DPI Retina installer window background (`../desktopBrand/dmg/knet-dmg-background.png`, `../desktopBrand/dmg/knet-dmg-background@2x.png`) with KNet dark theme, logo, and drag-to-Applications layout.
-* Configured `.github/workflows/release.yml` with `create-dmg` post-processing and `fileicon` stamping for macOS branded DMG packaging (`KNet-${VERSION}-mac.dmg`).
+* Configured `.github/workflows/release-desktop.yml` with `create-dmg` post-processing and `fileicon` stamping for macOS branded DMG packaging (`KNet-${VERSION}-mac.dmg`).
 * Added `Package macOS Portable Zip` step (`KNet-${VERSION}-mac.zip`) using Apple's `ditto` utility to preserve native `.app` bundle icon attributes and permissions directly in Finder upon extraction.
 * Added `Package Windows Portable Zip` step (`KNet-${VERSION}-windows-x64.zip`) using PowerShell `Compress-Archive` to provide a zero-installation, non-admin direct-run package for Windows users.
 * Embedded `knet.desktop` FreeDesktop launcher entry and `knet.png` application icon into the root of Linux universal portable tarballs (`knet-${VERSION}-linux-x64.tar.gz`, `knet-${VERSION}-linux-arm64.tar.gz`) for single-click GUI execution.
-* Added `ubuntu-24.04-arm` native GitHub runner matrix target in `.github/workflows/release.yml` to build Linux ARM64 packages (`.deb`, `.rpm`, and `knet-${VERSION}-linux-arm64.tar.gz`).
-* Restructured `.github/workflows/release.yml` into a two-stage pipeline (`build-packages` matrix + single `publish-release` aggregator job) generating a structured Markdown distribution table and publishing all multi-platform assets atomically with a single clean changelog.
+* Added `ubuntu-24.04-arm` native GitHub runner matrix target in `.github/workflows/release-desktop.yml` to build Linux ARM64 packages (`.deb`, `.rpm`, and `knet-${VERSION}-linux-arm64.tar.gz`).
+* Restructured `.github/workflows/release-desktop.yml` into a two-stage pipeline (`build-packages` matrix + single `publish-release` aggregator job) generating a structured Markdown distribution table and publishing all multi-platform assets atomically with a single clean changelog.
 * Verified with `./gradlew check :products:desktop:createDistributable` (236 tasks passed).
 
 ## Phase 7: Architecture Foundation and Module Ownership [COMPLETED]

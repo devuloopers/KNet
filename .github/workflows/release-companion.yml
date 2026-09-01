@@ -1,0 +1,296 @@
+name: Release Companion Packages
+
+on:
+  push:
+    tags:
+      - 'companion-v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing companion release tag (for example, companion-v0.1.5)
+        required: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: companion-release-${{ github.ref_name || inputs.tag }}
+  cancel-in-progress: false
+
+env:
+  JAVA_VERSION: '21'
+
+jobs:
+  metadata:
+    name: Validate companion release metadata
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.release.outputs.tag }}
+      version: ${{ steps.release.outputs.version }}
+      android-version-code: ${{ steps.release.outputs.android-version-code }}
+      apple-marketing-version: ${{ steps.release.outputs.apple-marketing-version }}
+      ios-build-number: ${{ steps.release.outputs.ios-build-number }}
+      prerelease: ${{ steps.release.outputs.prerelease }}
+    steps:
+      - name: Check out companion release revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Validate tag and derive companion versions
+        id: release
+        shell: bash
+        env:
+          REQUESTED_TAG: ${{ inputs.tag }}
+        run: |
+          TAG="${REQUESTED_TAG:-$GITHUB_REF_NAME}"
+          if [[ ! "$TAG" =~ ^companion-v([0-9]+)\.([0-9]+)\.([0-9]+)(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Companion release tag must use semantic versioning (for example, companion-v0.1.5)." >&2
+            exit 1
+          fi
+          if ! git rev-parse --verify --quiet "refs/tags/$TAG" >/dev/null; then
+            echo "Companion release tag does not exist in the repository: $TAG" >&2
+            exit 1
+          fi
+
+          VERSION="${TAG#companion-v}"
+          APPLE_MARKETING_VERSION="${VERSION%%[-+]*}"
+          IFS='.' read -r VERSION_MAJOR VERSION_MINOR VERSION_PATCH <<< "$APPLE_MARKETING_VERSION"
+          if (( 10#$VERSION_MINOR > 999 || 10#$VERSION_PATCH > 999 )); then
+            echo "Companion minor and patch versions must be between 0 and 999." >&2
+            exit 1
+          fi
+          BUILD_NUMBER=$((10#$VERSION_MAJOR * 1000000 + 10#$VERSION_MINOR * 1000 + 10#$VERSION_PATCH))
+          if (( BUILD_NUMBER <= 0 || BUILD_NUMBER > 2100000000 )); then
+            echo "Companion version $APPLE_MARKETING_VERSION cannot be represented as a valid mobile build number." >&2
+            exit 1
+          fi
+          PRERELEASE=false
+          if [[ "$VERSION" == *-* ]]; then
+            PRERELEASE=true
+          fi
+
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "android-version-code=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "apple-marketing-version=$APPLE_MARKETING_VERSION" >> "$GITHUB_OUTPUT"
+          echo "ios-build-number=$BUILD_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "prerelease=$PRERELEASE" >> "$GITHUB_OUTPUT"
+
+  ios-qualification:
+    name: iOS companion qualification
+    needs: metadata
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - name: Check out companion release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
+        with:
+          ref: ${{ needs.metadata.outputs.tag }}
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.2.0
+        with:
+          distribution: zulu
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.0.0
+
+      - name: Qualify Kotlin iOS targets
+        run: >-
+          ./gradlew
+          companionIosProductQualification
+          -Pknet.companion.version=${{ needs.metadata.outputs.version }}
+          --no-daemon
+          --stacktrace
+
+      - name: Build unsigned release Simulator application
+        env:
+          GRADLE_OPTS: -Dorg.gradle.project.knet.companion.version=${{ needs.metadata.outputs.version }}
+          APPLE_MARKETING_VERSION: ${{ needs.metadata.outputs.apple-marketing-version }}
+          IOS_BUILD_NUMBER: ${{ needs.metadata.outputs.ios-build-number }}
+        run: >-
+          xcodebuild
+          -project products/companion/iosApp/KNetCompanion.xcodeproj
+          -scheme 'KNet Companion'
+          -sdk iphonesimulator
+          -configuration Release
+          -derivedDataPath products/companion/iosApp/build/release-derived-data
+          MARKETING_VERSION="$APPLE_MARKETING_VERSION"
+          CURRENT_PROJECT_VERSION="$IOS_BUILD_NUMBER"
+          CODE_SIGNING_ALLOWED=NO
+          build
+
+  android-package:
+    name: Signed Android companion
+    needs: metadata
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    environment: release
+    env:
+      ANDROID_RELEASE_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_RELEASE_KEYSTORE_PASSWORD }}
+      ANDROID_RELEASE_KEY_ALIAS: ${{ vars.ANDROID_RELEASE_KEY_ALIAS }}
+    steps:
+      - name: Check out companion release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
+        with:
+          ref: ${{ needs.metadata.outputs.tag }}
+
+      - name: Set keystore path
+        run: echo "ANDROID_RELEASE_KEYSTORE_FILE=$RUNNER_TEMP/knet-companion-release.p12" >> "$GITHUB_ENV"
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.2.0
+        with:
+          distribution: zulu
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.0.0
+
+      - name: Install Android SDK platform
+        shell: bash
+        run: >-
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          --install
+          'platforms;android-37.0'
+          'build-tools;37.0.0'
+
+      - name: Restore release keystore
+        shell: bash
+        env:
+          ANDROID_RELEASE_KEYSTORE_BASE64: ${{ secrets.ANDROID_RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          test -n "$ANDROID_RELEASE_KEYSTORE_BASE64"
+          test -n "$ANDROID_RELEASE_KEYSTORE_PASSWORD"
+          test -n "$ANDROID_RELEASE_KEY_ALIAS"
+          printf '%s' "$ANDROID_RELEASE_KEYSTORE_BASE64" | base64 --decode > "$ANDROID_RELEASE_KEYSTORE_FILE"
+          chmod 600 "$ANDROID_RELEASE_KEYSTORE_FILE"
+
+      - name: Qualify and build signed release APK
+        run: >-
+          ./gradlew
+          companionAndroidProductQualification
+          :products:companion:androidApp:lintRelease
+          :products:companion:androidApp:assembleRelease
+          -Pknet.companion.version=${{ needs.metadata.outputs.version }}
+          -Pknet.android.versionCode=${{ needs.metadata.outputs.android-version-code }}
+          --no-daemon
+          --stacktrace
+
+      - name: Verify and stage signed APK
+        shell: bash
+        env:
+          VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          APK='products/companion/androidApp/build/outputs/apk/release/androidApp-release.apk'
+          test -f "$APK"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs "$APK"
+          mkdir -p dist-packages
+          cp "$APK" "dist-packages/KNet-Companion-${VERSION}-android.apk"
+
+      - name: Remove restored keystore
+        if: always()
+        shell: bash
+        run: rm -f "$ANDROID_RELEASE_KEYSTORE_FILE"
+
+      - name: Upload Android package
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: knet-companion-release-android
+          path: dist-packages/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-release:
+    name: Publish companion GitHub release
+    needs:
+      - metadata
+      - ios-qualification
+      - android-package
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - name: Check out companion release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
+        with:
+          ref: ${{ needs.metadata.outputs.tag }}
+
+      - name: Download companion release packages
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          pattern: knet-companion-release-*
+          path: release-dist
+          merge-multiple: true
+
+      - name: Validate package and generate checksum
+        shell: bash
+        run: |
+          PACKAGE_COUNT="$(find release-dist -maxdepth 1 -type f | wc -l | tr -d ' ')"
+          if [[ "$PACKAGE_COUNT" -ne 1 ]]; then
+            echo "Expected one companion release package, found $PACKAGE_COUNT." >&2
+            find release-dist -maxdepth 1 -type f -print | sort
+            exit 1
+          fi
+          (
+            cd release-dist
+            find . -maxdepth 1 -type f -printf '%f\n' | sort | xargs sha256sum > SHA256SUMS
+          )
+          ls -la release-dist
+
+      - name: Attest companion release package
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.0.0
+        with:
+          subject-path: release-dist/*
+
+      - name: Generate companion release notes header
+        shell: bash
+        env:
+          TAG: ${{ needs.metadata.outputs.tag }}
+          VERSION: ${{ needs.metadata.outputs.version }}
+        run: |
+          RELEASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
+          cat > release_body.md <<EOF
+          ## KNet Companion $VERSION packages
+
+          | Platform | Architecture | Downloads | Distribution status |
+          | --- | --- | --- | --- |
+          | Android | Universal APK | [Signed APK](<${RELEASE_URL}/KNet-Companion-${VERSION}-android.apk>) | Signed with the KNet release key |
+          | iOS | Source-qualified | Not distributed | Requires an eligible Apple Developer team for physical-device Network Extension signing |
+
+          ### Verify downloads
+
+          Verify packages using [SHA256SUMS](<${RELEASE_URL}/SHA256SUMS>). GitHub artifact attestations are attached to this release as additional provenance evidence.
+          EOF
+
+      - name: Create or update companion GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.metadata.outputs.tag }}
+          VERSION: ${{ needs.metadata.outputs.version }}
+          PRERELEASE: ${{ needs.metadata.outputs.prerelease }}
+        run: |
+          prerelease_args=()
+          if [[ "$PRERELEASE" == 'true' ]]; then
+            prerelease_args+=(--prerelease)
+          fi
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "KNet Companion $VERSION" --notes-file release_body.md "${prerelease_args[@]}"
+            gh release upload "$TAG" release-dist/* --clobber
+          else
+            gh release create "$TAG" release-dist/* \
+              --verify-tag \
+              --title "KNet Companion $VERSION" \
+              --notes-file release_body.md \
+              --generate-notes \
+              "${prerelease_args[@]}"
+          fi

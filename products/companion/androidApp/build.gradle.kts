@@ -4,7 +4,7 @@ plugins {
     alias(libs.plugins.composeCompiler)
 }
 
-val appVersion: String = providers.gradleProperty("knet.app.version").getOrElse("1.0.0")
+val appVersion: String = providers.gradleProperty("knet.companion.version").getOrElse("0.1.4")
 val androidVersionCode: Int = providers.gradleProperty("knet.android.versionCode")
     .map { configuredVersionCode ->
         configuredVersionCode.toInt().also { parsedVersionCode ->

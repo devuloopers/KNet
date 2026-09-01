@@ -63,7 +63,7 @@ dependencies {
 }
 
 val appName: String = providers.gradleProperty("knet.app.name").getOrElse("KNet")
-val appVersion: String = providers.gradleProperty("knet.app.version").getOrElse("1.0.0")
+val appVersion: String = providers.gradleProperty("knet.desktop.version").getOrElse("0.1.4")
 val appDescription: String = providers.gradleProperty("knet.app.description").getOrElse("Network Inspector & API Studio")
 val appPackageId: String = providers.gradleProperty("knet.app.packageId").getOrElse("com.devuloopers.knet")
 val nativePackageVersion: String = providers.gradleProperty("knet.desktop.packageVersion").getOrElse(
@@ -98,6 +98,7 @@ compose.desktop {
                 "java.instrument",
                 "java.management",
                 "java.naming",
+                "java.net.http",
                 "java.scripting",
                 "java.sql",
                 "java.security.jgss",
