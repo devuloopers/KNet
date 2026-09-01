@@ -35,8 +35,11 @@ import java.util.concurrent.atomic.AtomicInteger
 @Component
 class Http2TlsLabServer(
     private val properties: Http2TlsLabProperties,
-    private val objectMapper: ObjectMapper,
 ) : SmartLifecycle {
+    // This listener writes directly to Netty and deliberately owns its Jackson 2 mapper. Spring Boot 4 uses
+    // Jackson 3 for WebFlux and therefore no longer publishes a com.fasterxml ObjectMapper bean.
+    private val objectMapper = ObjectMapper()
+
     @Volatile
     private var serverChannel: Channel? = null
 

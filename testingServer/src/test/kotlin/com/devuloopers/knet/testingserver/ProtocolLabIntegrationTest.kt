@@ -23,12 +23,13 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.reactor.awaitSingle
 import kotlinx.coroutines.reactor.awaitSingleOrNull
-import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.springframework.beans.factory.annotation.Autowired
@@ -58,7 +59,6 @@ import kotlin.time.Duration.Companion.seconds
     ],
 )
 class ProtocolLabIntegrationTest {
-    @Autowired
     private lateinit var webClient: WebTestClient
 
     @Autowired
@@ -71,6 +71,14 @@ class ProtocolLabIntegrationTest {
     private var httpPort: Int = 0
 
     private val channels = mutableListOf<io.grpc.ManagedChannel>()
+
+    /** Binds the HTTP client to the real random-port listener created for this test context. */
+    @BeforeEach
+    fun bindWebClient() {
+        webClient = WebTestClient.bindToServer()
+            .baseUrl("http://127.0.0.1:$httpPort")
+            .build()
+    }
 
     /** Releases native client channels after each scenario. */
     @AfterEach
@@ -127,7 +135,7 @@ class ProtocolLabIntegrationTest {
 
     /** Ensures the advertised clear-text HTTP/2 listener negotiates H2C instead of silently using HTTP/1.1. */
     @Test
-    fun `http endpoint negotiates h2c`() = runTest {
+    fun `http endpoint negotiates h2c`() = runBlocking {
         val negotiatedVersion = withContext(Dispatchers.IO) {
             withTimeout(5.seconds) {
                 HttpClient.create()
@@ -274,7 +282,7 @@ class ProtocolLabIntegrationTest {
 
     /** Ensures the GraphQL WebSocket transport executes a named finite subscription. */
     @Test
-    fun `graphql websocket emits subscription events`() = runTest {
+    fun `graphql websocket emits subscription events`() = runBlocking {
         val graphQlClient = WebSocketGraphQlClient.builder(
             "ws://127.0.0.1:$httpPort/lab/v1/graphql/ws",
             ReactorNettyWebSocketClient(),
@@ -309,7 +317,7 @@ class ProtocolLabIntegrationTest {
 
     /** Ensures the real GraphQL listener explicitly selects the modern subprotocol and answers protocol ping. */
     @Test
-    fun `graphql websocket negotiates modern protocol and answers ping`() = runTest {
+    fun `graphql websocket negotiates modern protocol and answers ping`() = runBlocking {
         val selectedProtocol = CompletableDeferred<String?>()
         val receivedMessages = CompletableDeferred<List<String>>()
         val client = ReactorNettyWebSocketClient(
@@ -346,7 +354,7 @@ class ProtocolLabIntegrationTest {
 
     /** Ensures cancellation of one multiplexed operation does not terminate a concurrent sibling. */
     @Test
-    fun `graphql websocket isolates concurrent subscriptions and cancellation`() = runTest {
+    fun `graphql websocket isolates concurrent subscriptions and cancellation`() = runBlocking {
         val graphQlClient = WebSocketGraphQlClient.builder(
             "ws://127.0.0.1:$httpPort/lab/v1/graphql/ws",
             ReactorNettyWebSocketClient(),
@@ -398,7 +406,7 @@ class ProtocolLabIntegrationTest {
 
     /** Ensures stream failures become stable GraphQL error envelopes after any emitted data prefix. */
     @Test
-    fun `graphql websocket exposes typed subscription errors`() = runTest {
+    fun `graphql websocket exposes typed subscription errors`() = runBlocking {
         val graphQlClient = WebSocketGraphQlClient.builder(
             "ws://127.0.0.1:$httpPort/lab/v1/graphql/ws",
             ReactorNettyWebSocketClient(),
@@ -437,7 +445,7 @@ class ProtocolLabIntegrationTest {
 
     /** Ensures raw WebSocket text frames traverse a real upgrade and full-duplex session. */
     @Test
-    fun `websocket endpoint echoes a text frame`() = runTest {
+    fun `websocket endpoint echoes a text frame`() = runBlocking {
         val echoedText = CompletableDeferred<String>()
         val client = ReactorNettyWebSocketClient()
         withContext(Dispatchers.IO) {
@@ -483,7 +491,7 @@ class ProtocolLabIntegrationTest {
 
     /** Ensures native client-streaming and bidirectional RPC cardinalities remain executable. */
     @Test
-    fun `grpc endpoint supports client and bidirectional streams`() = runTest {
+    fun `grpc endpoint supports client and bidirectional streams`() = runBlocking {
         val channel = ManagedChannelBuilder.forAddress("127.0.0.1", grpcServer.boundPort)
             .usePlaintext()
             .build()
@@ -533,7 +541,7 @@ class ProtocolLabIntegrationTest {
 
     /** Qualifies bounded large messages, gzip requests, deadlines, cancellation, and sibling-call isolation. */
     @Test
-    fun `grpc endpoint supports transport pressure and lifecycle scenarios`() = runTest {
+    fun `grpc endpoint supports transport pressure and lifecycle scenarios`() = runBlocking {
         val channel = ManagedChannelBuilder.forAddress("127.0.0.1", grpcServer.boundPort)
             .usePlaintext()
             .build()

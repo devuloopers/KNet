@@ -158,7 +158,11 @@ jobs:
 
       - name: Install Android SDK platform
         shell: bash
-        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-37'
+        run: >-
+          yes |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          'platforms;android-37.0'
+          'build-tools;37.0.0'
 
       - name: Restore release keystore
         shell: bash
@@ -291,6 +295,15 @@ jobs:
           VERSION: ${{ needs.metadata.outputs.version }}
         run: ./gradlew $GRADLE_TASKS "-Pknet.app.version=$VERSION" --no-daemon --stacktrace
 
+      - name: Print desktop packaging diagnostics
+        if: failure()
+        shell: bash
+        run: |
+          log_root='products/desktop/build/compose/logs'
+          if [[ -d "$log_root" ]]; then
+            find "$log_root" -type f \( -name '*-out.txt' -o -name '*-err.txt' \) -print -exec sed -n '1,240p' {} \;
+          fi
+
       - name: Build branded macOS DMG
         if: matrix.platform == 'macos'
         shell: bash
@@ -381,16 +394,16 @@ jobs:
             msi_packages=("$OUTPUT"/msi/*.msi)
             exe_packages=("$OUTPUT"/exe/*.exe)
             [[ ${#msi_packages[@]} -eq 1 && ${#exe_packages[@]} -eq 1 ]]
-            cp "${msi_packages[0]}" dist-packages/
-            cp "${exe_packages[0]}" dist-packages/
+            cp "${msi_packages[0]}" "dist-packages/KNet-${VERSION}-windows-x64.msi"
+            cp "${exe_packages[0]}" "dist-packages/KNet-${VERSION}-windows-x64.exe"
             cp "$OUTPUT/KNet-${VERSION}-windows-x64.zip" dist-packages/
             EXPECTED=3
           else
             deb_packages=("$OUTPUT"/deb/*.deb)
             rpm_packages=("$OUTPUT"/rpm/*.rpm)
             [[ ${#deb_packages[@]} -eq 1 && ${#rpm_packages[@]} -eq 1 ]]
-            cp "${deb_packages[0]}" dist-packages/
-            cp "${rpm_packages[0]}" dist-packages/
+            cp "${deb_packages[0]}" "dist-packages/KNet-${VERSION}-linux-${ARCHITECTURE}.deb"
+            cp "${rpm_packages[0]}" "dist-packages/KNet-${VERSION}-linux-${ARCHITECTURE}.rpm"
             cp "$OUTPUT/KNet-${VERSION}-linux-${ARCHITECTURE}.tar.gz" dist-packages/
             EXPECTED=3
           fi
@@ -456,14 +469,26 @@ jobs:
       - name: Generate release notes header
         shell: bash
         env:
+          TAG: ${{ needs.metadata.outputs.tag }}
           VERSION: ${{ needs.metadata.outputs.version }}
         run: |
+          RELEASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
           cat > release_body.md <<EOF
           ## KNet $VERSION packages
 
-          This release includes native desktop packages for macOS (Apple Silicon and Intel), Windows x64, Linux x64/ARM64, and a signed Android companion APK. The iOS companion is source-qualified but is not distributed here because App Store and physical-device Network Extension signing require an eligible Apple Developer team.
+          | Platform | Architecture | Downloads | Distribution status |
+          | --- | --- | --- | --- |
+          | macOS | Apple Silicon | [DMG](<${RELEASE_URL}/KNet-${VERSION}-macos-arm64.dmg>) · [ZIP](<${RELEASE_URL}/KNet-${VERSION}-macos-arm64.zip>) | Unsigned development distribution |
+          | macOS | Intel | [DMG](<${RELEASE_URL}/KNet-${VERSION}-macos-x64.dmg>) · [ZIP](<${RELEASE_URL}/KNet-${VERSION}-macos-x64.zip>) | Unsigned development distribution |
+          | Windows | x64 | [MSI](<${RELEASE_URL}/KNet-${VERSION}-windows-x64.msi>) · [EXE](<${RELEASE_URL}/KNet-${VERSION}-windows-x64.exe>) · [ZIP](<${RELEASE_URL}/KNet-${VERSION}-windows-x64.zip>) | Unsigned development distribution |
+          | Linux | x64 | [DEB](<${RELEASE_URL}/KNet-${VERSION}-linux-x64.deb>) · [RPM](<${RELEASE_URL}/KNet-${VERSION}-linux-x64.rpm>) · [TAR.GZ](<${RELEASE_URL}/KNet-${VERSION}-linux-x64.tar.gz>) | Native packages and portable archive |
+          | Linux | ARM64 | [DEB](<${RELEASE_URL}/KNet-${VERSION}-linux-arm64.deb>) · [RPM](<${RELEASE_URL}/KNet-${VERSION}-linux-arm64.rpm>) · [TAR.GZ](<${RELEASE_URL}/KNet-${VERSION}-linux-arm64.tar.gz>) | Native packages and portable archive |
+          | Android Companion | Universal APK | [Signed APK](<${RELEASE_URL}/KNet-Companion-${VERSION}-android.apk>) | Signed with the KNet release key |
+          | iOS Companion | Source-qualified | Not distributed | Requires an eligible Apple Developer team for physical-device Network Extension signing |
 
-          Verify any downloaded package against \`SHA256SUMS\`. GitHub artifact attestations are also attached to this release.
+          ### Verify downloads
+
+          Verify packages using [SHA256SUMS](<${RELEASE_URL}/SHA256SUMS>). GitHub artifact attestations are attached to this release as additional provenance evidence.
           EOF
 
       - name: Create or update GitHub release

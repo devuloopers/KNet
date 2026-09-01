@@ -121,7 +121,11 @@ jobs:
 
       - name: Install Android SDK platform
         shell: bash
-        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" 'platforms;android-37'
+        run: >-
+          yes |
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          'platforms;android-37.0'
+          'build-tools;37.0.0'
 
       - name: Qualify Android companion
         run: ./gradlew companionAndroidProductQualification --no-daemon --stacktrace

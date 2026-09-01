@@ -85,7 +85,7 @@ class HttpScenarioController {
         return HttpEchoResponse(
             method = request.method.name(),
             path = request.path.value(),
-            headers = request.headers.mapValues { (_, values) -> values.toList() },
+            headers = request.headers.headerSet().associate { (name, values) -> name to values.toList() },
             query = request.queryParams.mapValues { (_, values) -> values.toList() },
             cookies = request.cookies.mapValues { (_, values) -> values.map { cookie -> cookie.value } },
             bodyText = body,

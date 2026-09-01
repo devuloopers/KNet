@@ -6,7 +6,6 @@ import com.devuloopers.knet.domain.clientNetwork.model.OutboundRequestBody
 import com.devuloopers.knet.testingserver.http2.Http2TlsLabProperties
 import com.devuloopers.knet.testingserver.http2.Http2TlsLabServer
 import com.devuloopers.knet.traffic.model.http.HttpMethod
-import com.fasterxml.jackson.databind.ObjectMapper
 import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.test.runTest
 import java.net.InetSocketAddress
@@ -22,7 +21,6 @@ class HttpTwoExecutionTest {
     fun `exact http two negotiates alpn and reports observed protocol`() = runTest {
         val server = Http2TlsLabServer(
             Http2TlsLabProperties(host = LOOPBACK_HOST, port = 0),
-            ObjectMapper(),
         )
         server.start()
         try {
@@ -83,7 +81,6 @@ class HttpTwoExecutionTest {
     fun `auto negotiates http two and reports observed protocol`() = runTest {
         val server = Http2TlsLabServer(
             Http2TlsLabProperties(host = LOOPBACK_HOST, port = 0),
-            ObjectMapper(),
         )
         server.start()
         try {

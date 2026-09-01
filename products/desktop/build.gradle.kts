@@ -66,6 +66,9 @@ val appName: String = providers.gradleProperty("knet.app.name").getOrElse("KNet"
 val appVersion: String = providers.gradleProperty("knet.app.version").getOrElse("1.0.0")
 val appDescription: String = providers.gradleProperty("knet.app.description").getOrElse("Network Inspector & API Studio")
 val appPackageId: String = providers.gradleProperty("knet.app.packageId").getOrElse("com.devuloopers.knet")
+val nativePackageVersion: String = providers.gradleProperty("knet.desktop.packageVersion").getOrElse(
+    appVersion.toJPackageVersion(isMacOS = System.getProperty("os.name").startsWith("Mac", ignoreCase = true))
+)
 
 compose.desktop {
     application {
@@ -87,7 +90,7 @@ compose.desktop {
                 TargetFormat.Rpm
             )
             packageName = appName
-            packageVersion = appVersion
+            packageVersion = nativePackageVersion
             description = "$appName $appDescription"
 
             modules(
@@ -128,5 +131,25 @@ compose.desktop {
                 shortcut = true
             }
         }
+    }
+}
+
+/**
+ * Converts the public SemVer into the strictly numeric version accepted by jpackage.
+ * The application still exposes [appVersion]; this value is package metadata only.
+ * macOS requires a positive first component, so pre-1.0 releases use a packaging epoch of 1.
+ */
+private fun String.toJPackageVersion(isMacOS: Boolean): String {
+    val coreVersion = substringBefore('-').substringBefore('+')
+    val components = coreVersion.split('.')
+    require(components.size == 3 && components.all { component -> component.toUIntOrNull() != null }) {
+        "Desktop package version must be semantic versioning with three numeric components: $this"
+    }
+
+    val major = components[0].toUInt()
+    return if (isMacOS && major == 0u) {
+        "1.${components[1]}.${components[2]}"
+    } else {
+        coreVersion
     }
 }

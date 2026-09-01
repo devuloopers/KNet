@@ -16,6 +16,8 @@ val coroutinesVersion: String = dependencyVersions.findVersion("kotlinx-coroutin
 // Spring Boot manages coroutines transitively. Override its older BOM value so core, Reactor, and test artifacts
 // resolve to the repository's single version instead of producing binary-incompatible runtime combinations.
 extra["kotlin-coroutines.version"] = coroutinesVersion
+// Generated protobuf classes reject an older runtime. Keep Spring Boot's managed runtime aligned with protoc.
+extra["protobuf-java.version"] = protobufVersion
 
 dependencies {
     implementation(kotlin("reflect"))
@@ -51,6 +53,12 @@ protobuf {
     }
     generateProtoTasks {
         all().configureEach {
+            // protobuf-gradle-plugin 0.10.0 still retains Gradle model objects on these tasks. Gradle's targeted
+            // opt-out keeps configuration caching enabled for the rest of KNet while safely discarding entries
+            // for builds that execute protobuf generation.
+            notCompatibleWithConfigurationCache(
+                "protobuf-gradle-plugin 0.10.0 GenerateProtoTask is not compatible with Gradle 9 configuration cache",
+            )
             plugins {
                 maybeCreate("grpc")
             }

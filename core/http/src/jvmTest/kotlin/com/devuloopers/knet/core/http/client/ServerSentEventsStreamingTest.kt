@@ -6,7 +6,6 @@ import com.devuloopers.knet.domain.clientNetwork.model.HttpVersionPreference
 import com.devuloopers.knet.testingserver.http2.Http2TlsLabProperties
 import com.devuloopers.knet.testingserver.http2.Http2TlsLabServer
 import com.devuloopers.knet.traffic.model.http.HttpMethod
-import com.fasterxml.jackson.databind.ObjectMapper
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.cancelAndJoin
@@ -86,7 +85,6 @@ class ServerSentEventsStreamingTest {
     fun `exact http two streams event frames and reports negotiated protocol`() = runTest {
         val server = Http2TlsLabServer(
             Http2TlsLabProperties(host = "127.0.0.1", port = 0),
-            ObjectMapper(),
         )
         server.start()
         val client = KNetApiClient(

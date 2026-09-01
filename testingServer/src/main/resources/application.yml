@@ -17,7 +17,8 @@ spring:
   main:
     banner-mode: "off"
   graphql:
-    path: /lab/v1/graphql
+    http:
+      path: /lab/v1/graphql
     websocket:
       path: /lab/v1/graphql/ws
     graphiql:
