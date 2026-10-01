@@ -1,5 +1,6 @@
 package com.devuloopers.knet.companion.connectivity.transport
 
+import com.devuloopers.knet.companion.model.PacketConditionConfiguration
 import com.devuloopers.knet.companion.model.UnsupportedTrafficPolicy
 import java.io.ByteArrayOutputStream
 import java.io.InputStream
@@ -15,10 +16,12 @@ import java.net.Socket
 import java.net.SocketException
 import java.util.concurrent.Semaphore
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -31,7 +34,10 @@ internal class LocalSocks5Gateway(
     private val transport: AndroidCompanionProxyTransport,
     private val protector: AndroidSocketProtector,
     private val unsupportedTrafficPolicy: UnsupportedTrafficPolicy,
+    packetConditions: PacketConditionConfiguration = PacketConditionConfiguration.Disabled,
     private val directTcpPorts: Set<Int> = DIRECT_DNS_TCP_PORTS,
+    private val maximumUdpDestinations: Int = MAXIMUM_UDP_DESTINATIONS,
+    private val udpFlowIdleTimeoutNanos: Long = UDP_FLOW_IDLE_TIMEOUT_NANOS,
 ) : AutoCloseable {
     private val running = AtomicBoolean(false)
     private val activeFlows = Semaphore(MAXIMUM_ACTIVE_FLOWS)
@@ -40,6 +46,8 @@ internal class LocalSocks5Gateway(
     )
     private val resourcesLock = Any()
     private val resources: MutableSet<AutoCloseable> = mutableSetOf()
+    private val packetRuntime = AndroidPacketConditionRuntime(packetConditions)
+    private val udpSequence = AtomicLong()
     private var serverSocket: ServerSocket? = null
 
     val port: Int
@@ -241,21 +249,41 @@ internal class LocalSocks5Gateway(
     private fun relayUdp(relay: DatagramSocket) {
         val packetBytes = ByteArray(MAXIMUM_UDP_PACKET_BYTES)
         var clientAddress: InetSocketAddress? = null
-        while (running.get() && !relay.isClosed) {
-            val inbound = DatagramPacket(packetBytes, packetBytes.size)
-            try {
-                relay.receive(inbound)
-            } catch (_: Exception) {
-                return
+        val upstreamFlows = UdpUpstreamFlowRegistry(
+            maximumSize = maximumUdpDestinations,
+            idleTimeoutNanos = udpFlowIdleTimeoutNanos,
+        )
+        try {
+            while (running.get() && !relay.isClosed) {
+                val inbound = DatagramPacket(packetBytes, packetBytes.size)
+                try {
+                    relay.receive(inbound)
+                } catch (_: Exception) {
+                    return
+                }
+                val source = InetSocketAddress(inbound.address, inbound.port)
+                if (clientAddress == null) clientAddress = source
+                if (source != clientAddress) continue
+                val request = parseUdpRequest(inbound.data, inbound.offset, inbound.length) ?: continue
+                if (
+                    request.destination.port != DNS_PORT &&
+                    unsupportedTrafficPolicy == UnsupportedTrafficPolicy.REJECT &&
+                    !packetRuntime.enabled
+                ) {
+                    continue
+                }
+                val responseTarget = clientAddress
+                if (!packetRuntime.tryEnqueue()) continue
+                gatewayScope.launch {
+                    try {
+                        forwardUdp(request, relay, responseTarget, upstreamFlows)
+                    } finally {
+                        packetRuntime.complete()
+                    }
+                }
             }
-            val source = InetSocketAddress(inbound.address, inbound.port)
-            if (clientAddress == null) clientAddress = source
-            if (source != clientAddress) continue
-            val request = parseUdpRequest(inbound.data, inbound.offset, inbound.length) ?: continue
-            if (request.destination.port != DNS_PORT && unsupportedTrafficPolicy == UnsupportedTrafficPolicy.REJECT) {
-                continue
-            }
-            forwardUdp(request, relay, clientAddress)
+        } finally {
+            upstreamFlows.closeAll()
         }
     }
 
@@ -267,27 +295,106 @@ internal class LocalSocks5Gateway(
         synchronized(resourcesLock) { resources.remove(resource) }
     }
 
-    private fun forwardUdp(request: SocksUdpRequest, relay: DatagramSocket, clientAddress: InetSocketAddress) {
+    private suspend fun forwardUdp(
+        request: SocksUdpRequest,
+        relay: DatagramSocket,
+        clientAddress: InetSocketAddress,
+        upstreamFlows: UdpUpstreamFlowRegistry,
+    ) {
+        val conditionsApply = request.destination.port != DNS_PORT
+        val flowKey = request.destination.flowKey
+        val action = if (conditionsApply) {
+            packetRuntime.plan(
+                direction = PacketConditionDirection.UPLOAD,
+                flowKey = flowKey,
+                bytes = request.payload.size,
+                sequence = udpSequence.incrementAndGet(),
+            )
+        } else {
+            PacketConditionAction.Forward(delayMillis = 0L, copies = 1)
+        }
+        if (action is PacketConditionAction.Drop) return
+        action as PacketConditionAction.Forward
+        if (action.delayMillis > 0L) delay(action.delayMillis)
+
+        val acquired = upstreamFlows.getOrCreate(request.destination) {
+            createUdpFlow(request.destination)
+        } ?: return
+        val flow = acquired.flow
+        if (acquired.created) {
+            gatewayScope.launch {
+                receiveUdpResponses(flow, relay, clientAddress, conditionsApply, upstreamFlows)
+            }
+        }
+        repeat(action.copies) {
+            runCatching {
+                flow.touch()
+                flow.socket.send(DatagramPacket(request.payload, request.payload.size))
+            }
+        }
+    }
+
+    private fun createUdpFlow(destination: SocksDestination): UdpUpstreamFlow? {
         val upstream = DatagramSocket()
         if (!protector.protect(upstream)) {
             upstream.close()
-            return
+            return null
         }
-        upstream.soTimeout = UDP_RESPONSE_TIMEOUT_MILLIS
-        try {
-            val destination = InetSocketAddress(request.destination.host, request.destination.port)
-            upstream.send(DatagramPacket(request.payload, request.payload.size, destination))
-            val responseBytes = ByteArray(MAXIMUM_UDP_PACKET_BYTES)
-            val response = DatagramPacket(responseBytes, responseBytes.size)
-            upstream.receive(response)
-            val encoded = encodeUdpResponse(
-                InetSocketAddress(response.address, response.port),
-                response.data.copyOfRange(response.offset, response.offset + response.length),
-            )
-            relay.send(DatagramPacket(encoded, encoded.size, clientAddress))
+        return try {
+            upstream.connect(InetSocketAddress(destination.host, destination.port))
+            UdpUpstreamFlow(destination, upstream)
         } catch (_: Exception) {
-        } finally {
             upstream.close()
+            null
+        }
+    }
+
+    private fun receiveUdpResponses(
+        flow: UdpUpstreamFlow,
+        relay: DatagramSocket,
+        clientAddress: InetSocketAddress,
+        conditionsApply: Boolean,
+        upstreamFlows: UdpUpstreamFlowRegistry,
+    ) {
+        val responseBytes = ByteArray(MAXIMUM_UDP_PACKET_BYTES)
+        try {
+            while (running.get() && !flow.socket.isClosed && !relay.isClosed) {
+                val response = DatagramPacket(responseBytes, responseBytes.size)
+                try {
+                    flow.socket.receive(response)
+                } catch (_: Exception) {
+                    return
+                }
+                flow.touch()
+                val payload = response.data.copyOfRange(response.offset, response.offset + response.length)
+                val responseSource = InetSocketAddress(response.address, response.port)
+                if (!packetRuntime.tryEnqueue()) continue
+                gatewayScope.launch {
+                    try {
+                        val action = if (conditionsApply) {
+                            packetRuntime.plan(
+                                direction = PacketConditionDirection.DOWNLOAD,
+                                flowKey = flow.destination.flowKey,
+                                bytes = payload.size,
+                                sequence = udpSequence.incrementAndGet(),
+                            )
+                        } else {
+                            PacketConditionAction.Forward(delayMillis = 0L, copies = 1)
+                        }
+                        if (action is PacketConditionAction.Drop) return@launch
+                        action as PacketConditionAction.Forward
+                        if (action.delayMillis > 0L) delay(action.delayMillis)
+                        val encoded = encodeUdpResponse(responseSource, payload)
+                        repeat(action.copies) {
+                            runCatching { relay.send(DatagramPacket(encoded, encoded.size, clientAddress)) }
+                        }
+                    } finally {
+                        packetRuntime.complete()
+                    }
+                }
+            }
+        } finally {
+            upstreamFlows.remove(flow)
         }
     }
 
@@ -297,10 +404,11 @@ internal class LocalSocks5Gateway(
         private const val COPY_BUFFER_BYTES: Int = 16 * 1024
         private const val NEGOTIATION_TIMEOUT_MILLIS: Int = 10_000
         private const val INITIAL_PAYLOAD_TIMEOUT_MILLIS: Int = 15_000
-        private const val UDP_RESPONSE_TIMEOUT_MILLIS: Int = 5_000
         private const val DIRECT_CONNECT_TIMEOUT_MILLIS: Int = 10_000
         private const val MAXIMUM_HTTP_HEADER_BYTES: Int = 64 * 1024
         private const val MAXIMUM_UDP_PACKET_BYTES: Int = 65_535
+        private const val MAXIMUM_UDP_DESTINATIONS: Int = 256
+        private const val UDP_FLOW_IDLE_TIMEOUT_NANOS: Long = 120_000_000_000L
         private const val DNS_PORT: Int = 53
         private const val SOCKS_VERSION: Int = 5
         private const val SOCKS_AUTH_NONE: Int = 0
@@ -318,11 +426,80 @@ internal class LocalSocks5Gateway(
 }
 
 private val DIRECT_DNS_TCP_PORTS: Set<Int> = setOf(53, 853)
+private const val UDP_ASSOCIATE_COMMAND: Int = 3
 
 private data class SocksRequest(val command: Int, val destination: SocksDestination)
-private data class SocksDestination(val host: String, val port: Int)
+internal data class SocksDestination(val host: String, val port: Int)
+private val SocksDestination.flowKey: String get() = "$host:$port"
 private data class InitialPayload(val bytes: ByteArray, val isHttpOneHeader: Boolean)
 private data class SocksUdpRequest(val destination: SocksDestination, val payload: ByteArray)
+internal data class UdpUpstreamFlow(
+    val destination: SocksDestination,
+    val socket: DatagramSocket,
+    private val lastUsedNanos: AtomicLong = AtomicLong(System.nanoTime()),
+) {
+    fun touch(nowNanos: Long = System.nanoTime()) = lastUsedNanos.set(nowNanos)
+    fun lastUsedNanos(): Long = lastUsedNanos.get()
+}
+
+/** Bounded, idle-evicting destination table for one SOCKS UDP association. */
+internal class UdpUpstreamFlowRegistry(
+    private val maximumSize: Int,
+    private val idleTimeoutNanos: Long,
+    private val nanoTime: () -> Long = System::nanoTime,
+) {
+    init {
+        require(maximumSize > 0) { "UDP destination limit must be positive." }
+        require(idleTimeoutNanos > 0L) { "UDP flow idle timeout must be positive." }
+    }
+
+    private val flows = mutableMapOf<SocksDestination, UdpUpstreamFlow>()
+
+    @Synchronized
+    fun getOrCreate(
+        destination: SocksDestination,
+        create: () -> UdpUpstreamFlow?,
+    ): Acquired? {
+        val now = nanoTime()
+        evictIdle(now)
+        flows[destination]?.takeUnless { it.socket.isClosed }?.let { existing ->
+            existing.touch(now)
+            return Acquired(existing, created = false)
+        }
+        flows.remove(destination)?.socket?.close()
+        if (flows.size >= maximumSize) {
+            flows.values.minByOrNull(UdpUpstreamFlow::lastUsedNanos)?.let(::remove)
+        }
+        val created = create() ?: return null
+        created.touch(now)
+        flows[destination] = created
+        return Acquired(created, created = true)
+    }
+
+    @Synchronized
+    fun remove(flow: UdpUpstreamFlow) {
+        if (flows[flow.destination] === flow) flows.remove(flow.destination)
+        runCatching(flow.socket::close)
+    }
+
+    @Synchronized
+    fun closeAll() {
+        flows.values.toList().forEach { flow -> runCatching(flow.socket::close) }
+        flows.clear()
+    }
+
+    @Synchronized
+    fun size(): Int = flows.size
+
+    private fun evictIdle(now: Long) {
+        flows.values
+            .filter { flow -> now - flow.lastUsedNanos() >= idleTimeoutNanos }
+            .toList()
+            .forEach(::remove)
+    }
+
+    data class Acquired(val flow: UdpUpstreamFlow, val created: Boolean)
+}
 
 private fun negotiateAuthentication(input: InputStream, output: OutputStream): Boolean {
     if (input.read() != 5) return false
@@ -338,11 +515,12 @@ private fun negotiateAuthentication(input: InputStream, output: OutputStream): B
 private fun readRequest(input: InputStream): SocksRequest? {
     val prefix = input.readExactly(4) ?: return null
     if ((prefix[0].toInt() and 0xFF) != 5 || prefix[2].toInt() != 0) return null
+    val command = prefix[1].toInt() and 0xFF
     val host = readAddress(input, prefix[3].toInt() and 0xFF) ?: return null
     val portBytes = input.readExactly(2) ?: return null
     val port = ((portBytes[0].toInt() and 0xFF) shl 8) or (portBytes[1].toInt() and 0xFF)
-    if (port == 0) return null
-    return SocksRequest(prefix[1].toInt() and 0xFF, SocksDestination(host, port))
+    if (port == 0 && command != UDP_ASSOCIATE_COMMAND) return null
+    return SocksRequest(command, SocksDestination(host, port))
 }
 
 private fun readAddress(input: InputStream, type: Int): String? = when (type) {

@@ -12,6 +12,8 @@ import com.devuloopers.knet.products.desktop.di.request.requestDescriptorBinding
 import com.devuloopers.knet.products.desktop.di.settings.settingsBindings
 import com.devuloopers.knet.products.desktop.di.traffic.trafficBindings
 import com.devuloopers.knet.products.desktop.di.workspace.workspaceBindings
+import com.devuloopers.knet.products.desktop.di.networkconditions.networkConditionsBindings
+import com.devuloopers.knet.products.desktop.di.protectedtraffic.protectedTrafficBindings
 import org.koin.core.module.Module
 
 /**
@@ -31,6 +33,8 @@ object DesktopModules {
         connectivityBindings,
         httpPanelBindings,
         inspectionBindings,
+        networkConditionsBindings,
+        protectedTrafficBindings,
         proxyBindings,
         requestDescriptorBindings,
         settingsBindings,

@@ -9,6 +9,9 @@ import com.devuloopers.knet.companion.application.contract.CompanionCertificateI
 import com.devuloopers.knet.companion.application.contract.CompanionCertificateTrustVerifier
 import com.devuloopers.knet.companion.application.contract.CompanionCredentialRefreshResult
 import com.devuloopers.knet.companion.application.contract.CompanionCredentialStore
+import com.devuloopers.knet.companion.application.contract.CompanionControlOperation
+import com.devuloopers.knet.companion.application.contract.CompanionControlResponse
+import com.devuloopers.knet.companion.application.contract.CompanionControlTransport
 import com.devuloopers.knet.companion.application.contract.CompanionDeviceIdentityProvider
 import com.devuloopers.knet.companion.application.contract.CompanionDeviceDisplayNameProvider
 import com.devuloopers.knet.companion.application.contract.CompanionEndpointRecoveryResult
@@ -48,6 +51,8 @@ import com.devuloopers.knet.companion.model.CompanionRootCertificate
 import com.devuloopers.knet.companion.model.CompanionServiceEndpoint
 import com.devuloopers.knet.companion.model.Sha256Fingerprint
 import com.devuloopers.knet.companion.model.UnsupportedTrafficPolicy
+import com.devuloopers.knet.companion.model.PacketConditionConfiguration
+import com.devuloopers.knet.companion.model.PacketConditionConfigurationCodec
 import com.devuloopers.knet.identity.RegisteredDeviceId
 import com.devuloopers.knet.pairing.DeviceScope
 import com.devuloopers.knet.pairing.DeviceProofAlgorithm
@@ -308,6 +313,24 @@ class CompanionUseCasesTest {
     }
 
     @Test
+    fun startFetchesAuthenticatedDesktopPacketConditionsBeforeStartingTheVpn() = runTest {
+        val packetConditions = PacketConditionConfiguration(
+            enabled = true,
+            downloadBitsPerSecond = 100_000L,
+            latencyMillis = 25L,
+            lossPercent = 3,
+        )
+        val environment = StartEnvironment(
+            CompanionInspectionPreparationResult.Ready,
+            packetConditions,
+        )
+
+        assertIs<StartCompanionInspectionResult.Started>(environment.start.execute())
+
+        assertEquals(packetConditions, environment.inspection.startedConfiguration?.packetConditions)
+    }
+
+    @Test
     fun failedInspectionStartReleasesBackendAndAuthenticatedTransport() = runTest {
         val environment = StartEnvironment(CompanionInspectionPreparationResult.Ready)
         val failure = CompanionFailure(CompanionFailureCode.VPN_START_FAILED, "Could not start.", true)
@@ -551,14 +574,17 @@ class CompanionUseCasesTest {
         assertEquals(0, verifierCalls)
     }
 
-    private class StartEnvironment(preparation: CompanionInspectionPreparationResult) {
+    private class StartEnvironment(
+        preparation: CompanionInspectionPreparationResult,
+        fetchedPacketConditions: PacketConditionConfiguration? = null,
+    ) {
         val repository = FakeRegistrationRepository().apply {
             val registration = registration()
             mutableRegistrations.value = listOf(registration)
             mutableActive.value = registration
         }
         val credentials = FakeCredentialStore().apply {
-            values[registration().credentialReference] = "issued-secret"
+            values[registration().credentialReference] = "issued-secret-123"
         }
         val transport = FakeTransport()
         val inspection = FakeInspectionController(preparation)
@@ -583,7 +609,23 @@ class CompanionUseCasesTest {
             nowEpochMillis = { 1_000L },
             endpointResolver = passThroughEndpointResolver(),
         )
-        val start = StartCompanionInspectionUseCase(repository, connect, verifyCertificate, inspection, transport)
+        private val fetchPacketConditions = fetchedPacketConditions?.let { expected ->
+            FetchCompanionPacketConditionsUseCase(
+                credentials = credentials,
+                control = CompanionControlTransport { request ->
+                    check(request.operation == CompanionControlOperation.FETCH_NETWORK_CONDITIONS)
+                    CompanionControlResponse(200, PacketConditionConfigurationCodec.encode(expected))
+                },
+            )
+        }
+        val start = StartCompanionInspectionUseCase(
+            repository,
+            connect,
+            verifyCertificate,
+            inspection,
+            transport,
+            fetchPacketConditions,
+        )
     }
 
     private class FakeRegistrationRepository(

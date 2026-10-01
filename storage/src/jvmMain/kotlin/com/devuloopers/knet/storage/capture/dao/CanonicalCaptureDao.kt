@@ -12,10 +12,13 @@ import com.devuloopers.knet.storage.capture.entity.CaptureSessionEntity
 import com.devuloopers.knet.storage.capture.entity.DeletionOutboxEntity
 import com.devuloopers.knet.storage.capture.entity.DuplexMessageEntity
 import com.devuloopers.knet.storage.capture.entity.InspectionAnnotationEntity
+import com.devuloopers.knet.storage.capture.entity.OpaqueFlowEntity
 import com.devuloopers.knet.storage.capture.entity.TrafficConnectionEntity
 import com.devuloopers.knet.storage.capture.model.CanonicalExchangePageRow
 import com.devuloopers.knet.storage.capture.model.CanonicalSessionStorageSummary
 import com.devuloopers.knet.storage.capture.model.CanonicalTrafficFacetRow
+import com.devuloopers.knet.storage.capture.model.CanonicalOpaqueFlowPageRow
+import com.devuloopers.knet.storage.capture.model.CanonicalTrafficHistorySequenceRow
 import kotlinx.coroutines.flow.Flow
 
 /** Ordered persistence operations used by one canonical session writer. */
@@ -66,6 +69,14 @@ interface CanonicalCaptureDao {
             "WHERE state NOT IN ('COMPLETED', 'FAILED', 'DROPPED', 'CANCELLED')",
     )
     suspend fun recoverInterruptedExchanges(completedAt: Long): Int
+
+    /** Fails opaque flows left active by a previous process without changing final counters. */
+    @Query(
+        "UPDATE opaque_flows SET version = version + 1, state = 'FAILED', " +
+            "completedAtEpochMillis = :completedAt, terminalErrorCode = 'process-interrupted' " +
+            "WHERE state = 'ACTIVE'",
+    )
+    suspend fun recoverInterruptedOpaqueFlows(completedAt: Long): Int
 
     /** Fails framed messages left in progress by a previous process. */
     @Query(
@@ -136,6 +147,143 @@ interface CanonicalCaptureDao {
     @Query("SELECT * FROM traffic_exchanges WHERE id = :exchangeId")
     suspend fun getExchange(exchangeId: String): CanonicalExchangeEntity?
 
+    /** Creates one payload-opaque flow without replacing an existing lifecycle. */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertOpaqueFlow(flow: OpaqueFlowEntity): Long
+
+    /** Returns one payload-opaque flow for direct lookup and lifecycle tests. */
+    @Query("SELECT * FROM opaque_flows WHERE id = :flowId")
+    suspend fun getOpaqueFlow(flowId: String): OpaqueFlowEntity?
+
+    /** Loads bounded test/detail metadata for opaque flows in one session. */
+    @Query("SELECT * FROM opaque_flows WHERE sessionId = :sessionId ORDER BY captureSequence LIMIT :limit")
+    suspend fun getOpaqueFlows(sessionId: String, limit: Int): List<OpaqueFlowEntity>
+
+    /** Counts opaque flows matching a bounded Traffic search. */
+    @Query(
+        "SELECT COUNT(*) FROM opaque_flows WHERE (:sessionId IS NULL OR sessionId = :sessionId) " +
+            "AND (:searchPattern IS NULL OR destinationHost LIKE :searchPattern ESCAPE '\\' " +
+            "OR serverName LIKE :searchPattern ESCAPE '\\' " +
+            "OR sourceApplicationId LIKE :searchPattern ESCAPE '\\' " +
+            "OR policyRuleId LIKE :searchPattern ESCAPE '\\' OR policyAction LIKE :searchPattern ESCAPE '\\' " +
+            "OR policyGroupId LIKE :searchPattern ESCAPE '\\' " +
+            "OR transport LIKE :searchPattern ESCAPE '\\' OR security LIKE :searchPattern ESCAPE '\\') " +
+            "AND (:recordFilter = 'ALL' " +
+            "OR (:recordFilter = 'TLS_TUNNEL' AND security = 'TLS') " +
+            "OR (:recordFilter = 'OPAQUE_TCP' AND transport = 'TCP' AND security = 'UNKNOWN') " +
+            "OR (:recordFilter = 'UDP_OR_QUIC' AND (transport = 'UDP' OR security = 'QUIC')) " +
+            "OR (:recordFilter = 'PROTECTED' AND (policyAction IS NOT NULL OR policyRuleId IS NOT NULL)) " +
+            "OR (:recordFilter = 'FAILED' AND state = 'FAILED'))",
+    )
+    suspend fun countOpaqueFlowPageMatches(
+        sessionId: String?,
+        searchPattern: String?,
+        recordFilter: String,
+    ): Long
+
+    /** Loads the newest payload-opaque flow window for Traffic's first-page merge. */
+    @Query(
+        "SELECT opaque_flows.*, " +
+            "(SELECT COUNT(*) FROM opaque_flows AS retained_flow " +
+            "WHERE retained_flow.captureSequence <= opaque_flows.captureSequence) AS historySequence " +
+            "FROM opaque_flows WHERE (:sessionId IS NULL OR sessionId = :sessionId) " +
+            "AND (:searchPattern IS NULL OR destinationHost LIKE :searchPattern ESCAPE '\\' " +
+            "OR serverName LIKE :searchPattern ESCAPE '\\' " +
+            "OR sourceApplicationId LIKE :searchPattern ESCAPE '\\' " +
+            "OR policyRuleId LIKE :searchPattern ESCAPE '\\' OR policyAction LIKE :searchPattern ESCAPE '\\' " +
+            "OR policyGroupId LIKE :searchPattern ESCAPE '\\' " +
+            "OR transport LIKE :searchPattern ESCAPE '\\' OR security LIKE :searchPattern ESCAPE '\\') " +
+            "ORDER BY captureSequence DESC LIMIT :limit",
+    )
+    suspend fun getNewestOpaqueFlowPage(
+        sessionId: String?,
+        searchPattern: String?,
+        limit: Int,
+    ): List<CanonicalOpaqueFlowPageRow>
+
+    /** Loads one newest-first opaque-flow page using the shared Traffic chronological cursor. */
+    @Query(
+        "SELECT opaque_flows.*, " +
+            "(SELECT COUNT(*) FROM opaque_flows AS retained_flow " +
+            "WHERE retained_flow.captureSequence <= opaque_flows.captureSequence) AS historySequence " +
+            "FROM opaque_flows WHERE (:sessionId IS NULL OR sessionId = :sessionId) " +
+            "AND (:cursorStartedAt IS NULL OR startedAtEpochMillis < :cursorStartedAt " +
+            "OR (startedAtEpochMillis = :cursorStartedAt AND ('opaque:' || id) < :cursorStableKey)) " +
+            "AND (:searchPattern IS NULL OR destinationHost LIKE :searchPattern ESCAPE '\\' " +
+            "OR serverName LIKE :searchPattern ESCAPE '\\' " +
+            "OR sourceApplicationId LIKE :searchPattern ESCAPE '\\' " +
+            "OR policyRuleId LIKE :searchPattern ESCAPE '\\' OR policyAction LIKE :searchPattern ESCAPE '\\' " +
+            "OR policyGroupId LIKE :searchPattern ESCAPE '\\' " +
+            "OR transport LIKE :searchPattern ESCAPE '\\' OR security LIKE :searchPattern ESCAPE '\\') " +
+            "AND (:recordFilter = 'ALL' " +
+            "OR (:recordFilter = 'TLS_TUNNEL' AND security = 'TLS') " +
+            "OR (:recordFilter = 'OPAQUE_TCP' AND transport = 'TCP' AND security = 'UNKNOWN') " +
+            "OR (:recordFilter = 'UDP_OR_QUIC' AND (transport = 'UDP' OR security = 'QUIC')) " +
+            "OR (:recordFilter = 'PROTECTED' AND (policyAction IS NOT NULL OR policyRuleId IS NOT NULL)) " +
+            "OR (:recordFilter = 'FAILED' AND state = 'FAILED')) " +
+            "ORDER BY startedAtEpochMillis DESC, id DESC LIMIT :limit",
+    )
+    suspend fun getNewestOpaqueFlowChronologicalPage(
+        sessionId: String?,
+        cursorStartedAt: Long?,
+        cursorStableKey: String?,
+        searchPattern: String?,
+        recordFilter: String,
+        limit: Int,
+    ): List<CanonicalOpaqueFlowPageRow>
+
+    /** Loads one oldest-first opaque-flow page using the shared Traffic chronological cursor. */
+    @Query(
+        "SELECT opaque_flows.*, " +
+            "(SELECT COUNT(*) FROM opaque_flows AS retained_flow " +
+            "WHERE retained_flow.captureSequence <= opaque_flows.captureSequence) AS historySequence " +
+            "FROM opaque_flows WHERE (:sessionId IS NULL OR sessionId = :sessionId) " +
+            "AND (:cursorStartedAt IS NULL OR startedAtEpochMillis > :cursorStartedAt " +
+            "OR (startedAtEpochMillis = :cursorStartedAt AND ('opaque:' || id) > :cursorStableKey)) " +
+            "AND (:searchPattern IS NULL OR destinationHost LIKE :searchPattern ESCAPE '\\' " +
+            "OR serverName LIKE :searchPattern ESCAPE '\\' " +
+            "OR sourceApplicationId LIKE :searchPattern ESCAPE '\\' " +
+            "OR policyRuleId LIKE :searchPattern ESCAPE '\\' OR policyAction LIKE :searchPattern ESCAPE '\\' " +
+            "OR policyGroupId LIKE :searchPattern ESCAPE '\\' " +
+            "OR transport LIKE :searchPattern ESCAPE '\\' OR security LIKE :searchPattern ESCAPE '\\') " +
+            "AND (:recordFilter = 'ALL' " +
+            "OR (:recordFilter = 'TLS_TUNNEL' AND security = 'TLS') " +
+            "OR (:recordFilter = 'OPAQUE_TCP' AND transport = 'TCP' AND security = 'UNKNOWN') " +
+            "OR (:recordFilter = 'UDP_OR_QUIC' AND (transport = 'UDP' OR security = 'QUIC')) " +
+            "OR (:recordFilter = 'PROTECTED' AND (policyAction IS NOT NULL OR policyRuleId IS NOT NULL)) " +
+            "OR (:recordFilter = 'FAILED' AND state = 'FAILED')) " +
+            "ORDER BY startedAtEpochMillis ASC, id ASC LIMIT :limit",
+    )
+    suspend fun getOldestOpaqueFlowChronologicalPage(
+        sessionId: String?,
+        cursorStartedAt: Long?,
+        cursorStableKey: String?,
+        searchPattern: String?,
+        recordFilter: String,
+        limit: Int,
+    ): List<CanonicalOpaqueFlowPageRow>
+
+    /** Emits a compact invalidation scalar for one canonical session's opaque flows. */
+    @Query("SELECT COUNT(*) + COALESCE(MAX(version), 0) FROM opaque_flows WHERE sessionId = :sessionId")
+    fun observeOpaqueFlowChangeScalar(sessionId: String): Flow<Long>
+
+    /** Terminates one opaque flow only when its monotonic lifecycle version advances. */
+    @Query(
+        "UPDATE opaque_flows SET version = :version, state = :state, " +
+            "completedAtEpochMillis = :completedAt, uploadedBytes = :uploadedBytes, " +
+            "downloadedBytes = :downloadedBytes, terminalErrorCode = :errorCode " +
+            "WHERE id = :flowId AND version < :version AND state = 'ACTIVE'",
+    )
+    suspend fun terminateOpaqueFlow(
+        flowId: String,
+        version: Long,
+        state: String,
+        completedAt: Long,
+        uploadedBytes: Long,
+        downloadedBytes: Long,
+        errorCode: String?,
+    ): Int
+
     /** Emits a compact invalidation scalar for one canonical session. */
     @Query("SELECT COUNT(*) + COALESCE(MAX(version), 0) FROM traffic_exchanges WHERE sessionId = :sessionId")
     fun observeExchangeChangeScalar(sessionId: String): Flow<Long>
@@ -150,7 +298,8 @@ interface CanonicalCaptureDao {
             "AND (:filterMethods = 0 OR method IN (:methods)) " +
             "AND (:filterStatuses = 0 OR responseStatusCode IN (:statuses)) " +
             "AND (:filterSchemes = 0 OR scheme IN (:schemes)) " +
-            "AND (:filterProtocols = 0 OR protocol IN (:protocols) OR responseProtocol IN (:protocols))",
+            "AND (:filterProtocols = 0 OR protocol IN (:protocols) OR responseProtocol IN (:protocols)) " +
+            "AND (:failedOnly = 0 OR state = 'FAILED')",
     )
     suspend fun countExchangePageMatches(
         sessionId: String?,
@@ -163,6 +312,7 @@ interface CanonicalCaptureDao {
         schemes: List<String>,
         filterProtocols: Int,
         protocols: List<String>,
+        failedOnly: Int,
     ): Long
 
     /**
@@ -255,6 +405,91 @@ interface CanonicalCaptureDao {
         protocols: List<String>,
         limit: Int,
     ): List<CanonicalExchangePageRow>
+
+    /** Loads one newest-first exchange page using the shared Traffic chronological cursor. */
+    @Query(
+        "SELECT traffic_exchanges.*, " +
+            "(SELECT COUNT(*) FROM traffic_exchanges AS retained_exchange " +
+            "WHERE retained_exchange.captureSequence <= traffic_exchanges.captureSequence) AS historySequence " +
+            "FROM traffic_exchanges WHERE (:sessionId IS NULL OR sessionId = :sessionId) " +
+            "AND (:cursorStartedAt IS NULL OR startedAtEpochMillis < :cursorStartedAt " +
+            "OR (startedAtEpochMillis = :cursorStartedAt AND ('http:' || id) < :cursorStableKey)) " +
+            "AND (:searchPattern IS NULL OR host LIKE :searchPattern ESCAPE '\\' " +
+            "OR pathAndQuery LIKE :searchPattern ESCAPE '\\' " +
+            "OR method LIKE :searchPattern ESCAPE '\\' " +
+            "OR CAST(responseStatusCode AS TEXT) LIKE :searchPattern ESCAPE '\\') " +
+            "AND (:filterMethods = 0 OR method IN (:methods)) " +
+            "AND (:filterStatuses = 0 OR responseStatusCode IN (:statuses)) " +
+            "AND (:filterSchemes = 0 OR scheme IN (:schemes)) " +
+            "AND (:filterProtocols = 0 OR protocol IN (:protocols) OR responseProtocol IN (:protocols)) " +
+            "AND (:failedOnly = 0 OR state = 'FAILED') " +
+            "ORDER BY startedAtEpochMillis DESC, id DESC LIMIT :limit",
+    )
+    suspend fun getNewestExchangeChronologicalPage(
+        sessionId: String?,
+        cursorStartedAt: Long?,
+        cursorStableKey: String?,
+        searchPattern: String?,
+        filterMethods: Int,
+        methods: List<String>,
+        filterStatuses: Int,
+        statuses: List<Int>,
+        filterSchemes: Int,
+        schemes: List<String>,
+        filterProtocols: Int,
+        protocols: List<String>,
+        failedOnly: Int,
+        limit: Int,
+    ): List<CanonicalExchangePageRow>
+
+    /** Loads one oldest-first exchange page using the shared Traffic chronological cursor. */
+    @Query(
+        "SELECT traffic_exchanges.*, " +
+            "(SELECT COUNT(*) FROM traffic_exchanges AS retained_exchange " +
+            "WHERE retained_exchange.captureSequence <= traffic_exchanges.captureSequence) AS historySequence " +
+            "FROM traffic_exchanges WHERE (:sessionId IS NULL OR sessionId = :sessionId) " +
+            "AND (:cursorStartedAt IS NULL OR startedAtEpochMillis > :cursorStartedAt " +
+            "OR (startedAtEpochMillis = :cursorStartedAt AND ('http:' || id) > :cursorStableKey)) " +
+            "AND (:searchPattern IS NULL OR host LIKE :searchPattern ESCAPE '\\' " +
+            "OR pathAndQuery LIKE :searchPattern ESCAPE '\\' " +
+            "OR method LIKE :searchPattern ESCAPE '\\' " +
+            "OR CAST(responseStatusCode AS TEXT) LIKE :searchPattern ESCAPE '\\') " +
+            "AND (:filterMethods = 0 OR method IN (:methods)) " +
+            "AND (:filterStatuses = 0 OR responseStatusCode IN (:statuses)) " +
+            "AND (:filterSchemes = 0 OR scheme IN (:schemes)) " +
+            "AND (:filterProtocols = 0 OR protocol IN (:protocols) OR responseProtocol IN (:protocols)) " +
+            "AND (:failedOnly = 0 OR state = 'FAILED') " +
+            "ORDER BY startedAtEpochMillis ASC, id ASC LIMIT :limit",
+    )
+    suspend fun getOldestExchangeChronologicalPage(
+        sessionId: String?,
+        cursorStartedAt: Long?,
+        cursorStableKey: String?,
+        searchPattern: String?,
+        filterMethods: Int,
+        methods: List<String>,
+        filterStatuses: Int,
+        statuses: List<Int>,
+        filterSchemes: Int,
+        schemes: List<String>,
+        filterProtocols: Int,
+        protocols: List<String>,
+        failedOnly: Int,
+        limit: Int,
+    ): List<CanonicalExchangePageRow>
+
+    /** Resolves presentation ordinals across the merged retained HTTP and opaque history. */
+    @Query(
+        "SELECT stableKey, historySequence FROM (" +
+            "SELECT stableKey, ROW_NUMBER() OVER (ORDER BY startedAtEpochMillis ASC, stableKey ASC) AS historySequence " +
+            "FROM (" +
+            "SELECT startedAtEpochMillis, 'http:' || id AS stableKey FROM traffic_exchanges " +
+            "UNION ALL " +
+            "SELECT startedAtEpochMillis, 'opaque:' || id AS stableKey FROM opaque_flows" +
+            ")" +
+            ") WHERE stableKey IN (:stableKeys)",
+    )
+    suspend fun getTrafficHistorySequences(stableKeys: List<String>): List<CanonicalTrafficHistorySequenceRow>
 
     /** Attaches response metadata only when the exchange version advances and remains non-terminal. */
     @Query(
@@ -521,6 +756,10 @@ interface CanonicalCaptureDao {
     @Query("DELETE FROM traffic_exchanges WHERE sessionId = :sessionId")
     suspend fun deleteSessionExchanges(sessionId: String): Int
 
+    /** Deletes payload-opaque flow metadata owned by one session. */
+    @Query("DELETE FROM opaque_flows WHERE sessionId = :sessionId")
+    suspend fun deleteSessionOpaqueFlows(sessionId: String): Int
+
     /** Deletes canonical connection metadata owned by one session. */
     @Query("DELETE FROM traffic_connections WHERE sessionId = :sessionId")
     suspend fun deleteSessionConnections(sessionId: String): Int
@@ -558,6 +797,7 @@ interface CanonicalCaptureDao {
         deleteSessionAnnotations(sessionId)
         deleteSessionMessages(sessionId)
         deleteSessionGaps(sessionId)
+        deleteSessionOpaqueFlows(sessionId)
         deleteSessionExchanges(sessionId)
         deleteSessionConnections(sessionId)
         deleteSessionBodies(sessionId)

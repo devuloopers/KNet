@@ -4,7 +4,46 @@ import com.devuloopers.knet.domain.apistudio.naming.RequestNameOrigin
 import com.devuloopers.knet.domain.collection.model.ApiCollection
 import com.devuloopers.knet.domain.collection.model.CollectionFolder
 import com.devuloopers.knet.domain.request.descriptor.RequestKindId
+import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
+import com.devuloopers.knet.traffic.model.TrafficDirection
+import com.devuloopers.knet.traffic.model.message.ProtocolMessageKind
 import kotlinx.coroutines.flow.Flow
+
+/** One bounded captured child message that may be recovered into a protocol-native authoring editor. */
+public class CapturedApiStudioMessage(
+    public val kind: ProtocolMessageKind,
+    public val direction: TrafficDirection,
+    payload: ByteArray,
+) {
+    private val content: ByteArray = payload.copyOf()
+
+    init {
+        require(content.size <= MAXIMUM_PAYLOAD_BYTES) { "Captured API Studio message is too large." }
+    }
+
+    public fun copyPayload(): ByteArray = content.copyOf()
+
+    public companion object {
+        public const val MAXIMUM_PAYLOAD_BYTES: Int = 1_048_576
+    }
+}
+
+/** Protocol-aware captured request handed from Traffic to the matching API Studio editor. */
+public data class CapturedApiStudioRequest(
+    public val sourceExchangeId: String,
+    public val kind: RequestKindId,
+    public val spec: NetworkRequestSpec,
+    public val messages: List<CapturedApiStudioMessage> = emptyList(),
+) {
+    init {
+        require(sourceExchangeId.isNotBlank()) { "Captured API Studio source ID must not be blank." }
+        require(messages.size <= MAXIMUM_MESSAGES) { "Captured API Studio message count is too large." }
+    }
+
+    public companion object {
+        public const val MAXIMUM_MESSAGES: Int = 16
+    }
+}
 
 /** Open identifier for one API Studio editor implementation, independent from semantic request kind. */
 @JvmInline

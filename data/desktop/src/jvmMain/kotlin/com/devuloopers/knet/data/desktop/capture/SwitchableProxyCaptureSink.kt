@@ -4,9 +4,12 @@ import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureConnectionMetadata
 import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureSink
 import com.devuloopers.knet.engine.proxy.capture.ProxyConnectionCapture
 import com.devuloopers.knet.engine.proxy.capture.ProxyExchangeCapture
+import com.devuloopers.knet.engine.proxy.capture.ProxyOpaqueFlowCapture
+import com.devuloopers.knet.engine.proxy.capture.ProxyOpaqueFlowCaptureMetadata
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.model.TrafficOrigin
+import com.devuloopers.knet.traffic.model.AppliedNetworkCondition
 import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.http.RequestHead
 
@@ -63,6 +66,29 @@ internal class SwitchableProxyCaptureSink(initialTarget: ProxyCaptureSink) : Pro
         ): ProxyExchangeCapture? = synchronized(lock) {
             bindCurrentTarget()?.startExchange(exchangeId, request, occurredAtEpochMillis, origin, streamId)
         }
+
+        override fun startExchange(
+            exchangeId: ExchangeId,
+            request: RequestHead,
+            occurredAtEpochMillis: Long,
+            origin: TrafficOrigin,
+            streamId: StreamId?,
+            appliedNetworkCondition: AppliedNetworkCondition?,
+        ): ProxyExchangeCapture? = synchronized(lock) {
+            bindCurrentTarget()?.startExchange(
+                exchangeId,
+                request,
+                occurredAtEpochMillis,
+                origin,
+                streamId,
+                appliedNetworkCondition,
+            )
+        }
+
+        override fun startOpaqueFlow(metadata: ProxyOpaqueFlowCaptureMetadata): ProxyOpaqueFlowCapture? =
+            synchronized(lock) {
+                bindCurrentTarget()?.startOpaqueFlow(metadata)
+            }
 
         override fun close(reason: TrafficTerminationReason?) {
             synchronized(lock) {

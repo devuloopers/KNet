@@ -94,7 +94,6 @@ private class WebSocketBreakpointTransformer(
     maximumEditableMessageBytes: Int,
 ) : ProxyDuplexTransformer {
     private val cancelled = AtomicBoolean(false)
-    private var compressionAccepted = false
     private var negotiatedSubprotocol: String? = null
     private val clientGate = WebSocketDirectionGate(
         request,
@@ -119,10 +118,9 @@ private class WebSocketBreakpointTransformer(
         negotiatedSubprotocol = WebSocketProtocol.header(response.headers, SUBPROTOCOL)
             ?.trim()
             ?.takeIf(String::isNotEmpty)
-        compressionAccepted = WebSocketProtocol.header(response.headers, EXTENSIONS)
-            ?.contains(PER_MESSAGE_DEFLATE, ignoreCase = true) == true
-        clientGate.establish(compressionAccepted, negotiatedSubprotocol)
-        serverGate.establish(compressionAccepted, negotiatedSubprotocol)
+        val compression = WebSocketPerMessageDeflateNegotiation.fromResponseHeaders(response.headers)
+        clientGate.establish(compression, negotiatedSubprotocol)
+        serverGate.establish(compression, negotiatedSubprotocol)
     }
 
     override fun transform(
@@ -161,8 +159,6 @@ private class WebSocketBreakpointTransformer(
 
     private companion object {
         const val CANCELLED: String = "websocket_breakpoint_cancelled"
-        const val EXTENSIONS: String = "sec-websocket-extensions"
-        const val PER_MESSAGE_DEFLATE: String = "permessage-deflate"
         const val SUBPROTOCOL: String = "sec-websocket-protocol"
         const val TRANSFORM_FAILED: String = "websocket_breakpoint_transform_failed"
     }
@@ -187,14 +183,24 @@ private class WebSocketDirectionGate(
     private var sequence: Long = 0L
     private var cancelled = false
     private var negotiatedSubprotocol: String? = null
+    private var inflater: WebSocketPerMessageDeflateDecoder? = null
 
-    fun establish(compressionAccepted: Boolean, negotiatedSubprotocol: String?) {
+    fun establish(
+        compression: WebSocketPerMessageDeflateNegotiation?,
+        negotiatedSubprotocol: String?,
+    ) {
         this.negotiatedSubprotocol = negotiatedSubprotocol
         decoder = WebSocketFrameDecoder(
             expectsMaskedFrames = direction == TrafficDirection.CLIENT_TO_SERVER,
-            permitsCompression = compressionAccepted,
+            permitsCompression = compression != null,
             maximumFrameBytes = maximumEditableMessageBytes,
         )
+        inflater = compression?.let { negotiation ->
+            WebSocketPerMessageDeflateDecoder(
+                noContextTakeover = negotiation.noContextTakeover(direction),
+                maximumOutputBytes = maximumEditableMessageBytes,
+            )
+        }
     }
 
     suspend fun transform(input: ByteArray, occurredAtEpochMillis: Long): ProxyDuplexTransformResult {
@@ -221,6 +227,7 @@ private class WebSocketDirectionGate(
     fun cancel() {
         cancelled = true
         decoder?.clear()
+        inflater?.close()
         resetMessage()
     }
 
@@ -254,9 +261,22 @@ private class WebSocketDirectionGate(
         if (!frame.final) return ProxyDuplexTransformResult.Forward(ByteArray(0))
 
         val first = checkNotNull(initialFrame)
-        val original = messagePayload.toByteArray()
+        val wirePayload = messagePayload.toByteArray()
         val originalWire = heldFrames.concatenateWireBytes()
-        val decision = intercept(first, original, occurredAtEpochMillis)
+        val logicalPayload = if (first.compressed) {
+            when (val result = inflater?.decode(wirePayload)) {
+                is WebSocketInflateResult.Success -> result.payload
+                is WebSocketInflateResult.Failure -> {
+                    return ProxyDuplexTransformResult.DropConnection(webSocketTermination(result.errorCode))
+                }
+                null -> return ProxyDuplexTransformResult.DropConnection(
+                    webSocketTermination(WebSocketPerMessageDeflateDecoder.INVALID_COMPRESSED_PAYLOAD),
+                )
+            }
+        } else {
+            wirePayload
+        }
+        val decision = intercept(first, logicalPayload, occurredAtEpochMillis)
         val result = when (decision) {
             ProtocolMessageBreakpointDecision.ContinueUnchanged -> ProxyDuplexTransformResult.Forward(originalWire)
             is ProtocolMessageBreakpointDecision.Replace -> {

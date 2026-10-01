@@ -2,13 +2,17 @@ package com.devuloopers.knet.ui.desktop.apistudio.websocket.persistence
 
 import com.devuloopers.knet.application.contract.apistudio.ApiStudioDocumentLocation
 import com.devuloopers.knet.application.contract.apistudio.ApiStudioEditorId
+import com.devuloopers.knet.application.contract.apistudio.CapturedApiStudioMessage
 import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolMetadataEntry
 import com.devuloopers.knet.application.contract.apistudio.ApiStudioWorkspaceContent
 import com.devuloopers.knet.application.contract.apistudio.ApiStudioWorkspaceDocument
 import com.devuloopers.knet.domain.apistudio.naming.RequestNameOrigin
 import com.devuloopers.knet.domain.request.descriptor.RequestKindId
+import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
 import com.devuloopers.knet.ui.desktop.apistudio.websocket.model.WebSocketStudioState
 import com.devuloopers.knet.ui.desktop.apistudio.websocket.model.WebSocketStudioMessageKind
+import com.devuloopers.knet.traffic.model.TrafficDirection
+import com.devuloopers.knet.traffic.model.message.ProtocolMessageKind
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -19,11 +23,57 @@ import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 
 /** Versioned codec for incomplete WebSocket workspace authoring state. */
 class WebSocketWorkspaceDraftCodec(
     private val json: Json = Json { ignoreUnknownKeys = false },
 ) {
+    /** Builds an immediately usable WebSocket draft from a captured HTTP Upgrade request. */
+    @OptIn(ExperimentalEncodingApi::class)
+    fun importedDocument(
+        id: String,
+        spec: NetworkRequestSpec,
+        messages: List<CapturedApiStudioMessage> = emptyList(),
+    ): ApiStudioWorkspaceDocument {
+        val subprotocols = spec.headers
+            .filter { (name, _) -> name.equals(SUBPROTOCOL_HEADER, ignoreCase = true) }
+            .flatMap { (_, value) -> value.split(',') }
+            .map(String::trim)
+            .filter(String::isNotEmpty)
+            .distinct()
+            .joinToString(", ")
+        val headers = spec.headers
+            .filterNot { (name, _) -> name.isGeneratedWebSocketHandshakeHeader() }
+            .map { (name, value) -> ApiStudioProtocolMetadataEntry(name, value) }
+        val authoredMessage = messages
+            .asSequence()
+            .filter { it.direction == TrafficDirection.CLIENT_TO_SERVER }
+            .firstNotNullOfOrNull { message ->
+                when (message.kind) {
+                    ProtocolMessageKind.TEXT -> runCatching {
+                        WebSocketStudioMessageKind.TEXT to
+                            message.copyPayload().decodeToString(throwOnInvalidSequence = true)
+                    }.getOrNull()
+                    ProtocolMessageKind.BINARY -> WebSocketStudioMessageKind.BINARY_BASE64 to
+                        Base64.encode(message.copyPayload())
+                    else -> null
+                }
+            }
+        return unsavedDocument(
+            WebSocketStudioState(
+                documentId = id,
+                url = spec.url.toWebSocketUrl(),
+                subprotocols = subprotocols,
+                headers = headers,
+                messageKind = authoredMessage?.first ?: WebSocketStudioMessageKind.TEXT,
+                messageContent = authoredMessage?.second.orEmpty(),
+                isDirty = false,
+            ),
+        )
+    }
+
     /** Encodes incomplete UI state without requiring a connectable URL. */
     fun encode(state: WebSocketStudioState): ByteArray = buildJsonObject {
         put("url", state.url)
@@ -116,8 +166,21 @@ class WebSocketWorkspaceDraftCodec(
 
         /** Compact sidebar badge for a WebSocket workspace document. */
         const val BADGE_LABEL: String = "WS"
+
+        private const val SUBPROTOCOL_HEADER: String = "sec-websocket-protocol"
     }
 }
+
+private fun String.toWebSocketUrl(): String = when {
+    startsWith("https://", ignoreCase = true) -> "wss://${substring(8)}"
+    startsWith("http://", ignoreCase = true) -> "ws://${substring(7)}"
+    else -> this
+}
+
+private fun String.isGeneratedWebSocketHandshakeHeader(): Boolean =
+    equals("connection", ignoreCase = true) ||
+        equals("upgrade", ignoreCase = true) ||
+        startsWith("sec-websocket-", ignoreCase = true)
 
 private fun JsonObject.stringOrEmpty(name: String): String = this[name]?.jsonPrimitive?.contentOrNull.orEmpty()
 

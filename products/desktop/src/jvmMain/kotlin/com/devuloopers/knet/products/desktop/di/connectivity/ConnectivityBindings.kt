@@ -37,6 +37,8 @@ import com.devuloopers.knet.connectivity.desktop.discovery.CompanionDiscoveryPub
 import com.devuloopers.knet.connectivity.desktop.network.DesktopNetworkSnapshotMonitor
 import com.devuloopers.knet.connectivity.desktop.pairing.JvmPairingCrypto
 import com.devuloopers.knet.connectivity.desktop.pairing.InMemoryCompanionOnboardingStore
+import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionsRepository
+import com.devuloopers.knet.products.desktop.di.networkconditions.toPacketConditionConfiguration
 import com.devuloopers.knet.connectivity.desktop.portal.DedicatedSetupPortal
 import com.devuloopers.knet.connectivity.desktop.portal.SetupPortalContent
 import com.devuloopers.knet.connectivity.desktop.provider.AdbSetupProvider
@@ -253,6 +255,9 @@ internal val connectivityBindings: Module = module {
             redemptionCodec = get(),
             invitationCodec = get(),
             endpointDescriptor = { discovery.load().endpointDescriptor() },
+            packetConditions = {
+                get<NetworkConditionsRepository>().configuration.value.toPacketConditionConfiguration()
+            },
             nowEpochMillis = ::currentEpochMillis,
         )
     }

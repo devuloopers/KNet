@@ -6,6 +6,7 @@ import com.devuloopers.knet.engine.proxy.http.ProxyRequestContext
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
+import com.devuloopers.knet.traffic.model.AppliedNetworkCondition
 import io.netty.util.AttributeKey
 
 /** Capture handle admitted before an optional forwarding gate suspends the exchange. */
@@ -35,6 +36,13 @@ object ProxyChannelAttributes {
 
     /** Connection-scoped non-blocking capture side output supplied by the proxy server. */
     val CONNECTION_CAPTURE: AttributeKey<ProxyConnectionCapture> = AttributeKey.valueOf("knet.connectionCapture")
+
+    /** OS-verified source application supplied only by a trusted ingress adapter. */
+    val SOURCE_APPLICATION_ID: AttributeKey<String> = AttributeKey.valueOf("knet.sourceApplicationId")
+
+    /** Network-condition selection made from the validated destination before forwarding. */
+    val APPLIED_NETWORK_CONDITION: AttributeKey<AppliedNetworkCondition> =
+        AttributeKey.valueOf("knet.appliedNetworkCondition")
 
     /** One-shot exchange capture handoff consumed by the forwarding handler. */
     val PREPARED_EXCHANGE: AttributeKey<PreparedProxyExchange> = AttributeKey.valueOf("knet.preparedExchange")

@@ -19,6 +19,8 @@ kotlin {
                 api(project(":ui:desktop:apiStudio"))
                 api(project(":ui:desktop:certificate"))
                 api(project(":ui:desktop:breakpointManager"))
+                api(project(":ui:desktop:networkConditions"))
+                api(project(":ui:desktop:protectedTraffic"))
                 api(project(":ui:desktop:settings"))
                 implementation(libs.koin.core)
                 implementation(libs.koin.compose)

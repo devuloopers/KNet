@@ -9,7 +9,7 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
+import com.devuloopers.knet.application.contract.apistudio.CapturedApiStudioRequest
 import com.devuloopers.knet.ui.core.components.split.HorizontalSplitPane
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
@@ -25,6 +25,10 @@ import com.devuloopers.knet.ui.desktop.traffic.toolbar.TrafficToolbar
 import com.devuloopers.knet.ui.desktop.traffic.toolbar.TrafficToolbarActions
 import com.devuloopers.knet.ui.desktop.traffic.toolbar.TrafficToolbarState
 import com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficViewModel
+import com.devuloopers.knet.application.usecase.protectedtraffic.ProtectedTrafficQuickRuleScope
+import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficAction
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
 
 /**
  * Top-level Live Traffic Workspace Screen composable bound strictly to :ui:core design tokens and parameter objects.
@@ -32,12 +36,15 @@ import com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficViewModel
 @Composable
 fun TrafficScreen(
     viewModel: TrafficViewModel,
-    onSendToApiStudio: (NetworkRequestSpec) -> Unit = {},
+    onSendToApiStudio: (CapturedApiStudioRequest) -> Unit = {},
+    onAddNetworkCondition: (String) -> Unit = {},
+    onProtectedTrafficAction: (String, ProtectedTrafficAction, ProtectedTrafficQuickRuleScope) -> Unit = { _, _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.uiState.collectAsState()
     val themeColors = KNetTheme.colors
     var inspectorSplitRatio by remember { mutableFloatStateOf(0.65f) }
+    val clipboardManager = LocalClipboardManager.current
 
     val toolbarState =
         remember(
@@ -67,6 +74,7 @@ fun TrafficScreen(
 
     val filterBarState = remember(
         state.searchQuery,
+        state.selectedTypeFilter,
         state.selectedSchemeFilter,
         state.selectedHttpVersionFilter,
         state.selectedMethodFilter,
@@ -76,6 +84,7 @@ fun TrafficScreen(
     ) {
         TrafficFilterBarState(
             searchQuery = state.searchQuery,
+            selectedType = state.selectedTypeFilter,
             selectedScheme = state.selectedSchemeFilter,
             selectedHttpVersion = state.selectedHttpVersionFilter,
             selectedMethod = state.selectedMethodFilter,
@@ -90,6 +99,7 @@ fun TrafficScreen(
     val filterBarActions = remember(viewModel) {
         TrafficFilterBarActions(
             onSearchChange = { viewModel.processIntent(TrafficIntent.Search(it)) },
+            onTypeSelected = { viewModel.processIntent(TrafficIntent.FilterByType(it)) },
             onSchemeSelected = { viewModel.processIntent(TrafficIntent.FilterByScheme(it)) },
             onHttpVersionSelected = { viewModel.processIntent(TrafficIntent.FilterByHttpVersion(it)) },
             onMethodSelected = { viewModel.processIntent(TrafficIntent.FilterByMethod(it)) },
@@ -161,6 +171,11 @@ fun TrafficScreen(
                         totalAvailableCount = state.totalAvailableCount,
                         onSendToApiStudio = handleExportToStudio,
                         onAddBreakpointRule = viewModel::createBreakpointFromTransaction,
+                        onAddNetworkCondition = onAddNetworkCondition,
+                        onProtectedTrafficAction = onProtectedTrafficAction,
+                        onCopyDestination = { destination ->
+                            clipboardManager.setText(AnnotatedString(destination))
+                        },
                         activeRules = state.activeBreakpointRules,
                         canLoadMore = state.nextPageCursor != null && !state.isPageLoading,
                         onLoadMore = { viewModel.processIntent(TrafficIntent.LoadNextPage) },

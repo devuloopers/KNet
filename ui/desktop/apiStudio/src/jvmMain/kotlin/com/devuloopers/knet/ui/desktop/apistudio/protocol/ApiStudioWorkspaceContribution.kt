@@ -5,6 +5,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.devuloopers.knet.application.contract.apistudio.ApiStudioEditorId
 import com.devuloopers.knet.application.contract.apistudio.ApiStudioWorkspaceDocument
+import com.devuloopers.knet.application.contract.apistudio.CapturedApiStudioRequest
 import com.devuloopers.knet.domain.request.descriptor.RequestKindId
 
 /**
@@ -27,6 +28,12 @@ abstract class ApiStudioWorkspaceContribution {
 
     /** Creates an incomplete but persistable draft owned by this editor. */
     abstract fun createInitialDocument(id: String): ApiStudioWorkspaceDocument
+
+    /** Converts a captured handshake into this editor's native draft, when supported. */
+    open fun createImportedDocument(
+        id: String,
+        request: CapturedApiStudioRequest,
+    ): ApiStudioWorkspaceDocument? = null
 
     /**
      * Renders either a durable document or this editor's transient blank authoring state.

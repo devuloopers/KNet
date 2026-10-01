@@ -2,6 +2,9 @@
 
 package com.devuloopers.knet.companion.packettunnel.network
 
+import com.devuloopers.knet.companion.model.CompanionFlowMetadata
+import com.devuloopers.knet.companion.model.CompanionFlowMetadataCodec
+import com.devuloopers.knet.companion.model.CompanionProxyProtocol
 import com.devuloopers.knet.companion.packettunnel.options.TunnelFailure
 import com.devuloopers.knet.companion.packettunnel.options.TunnelStartOptions
 import com.devuloopers.knet.companion.packettunnel.options.sha256Hex
@@ -61,7 +64,12 @@ internal class PinnedDesktopProxy(
         CFRelease(rootCertificate)
     }
 
-    fun openTunnel(host: String, port: UShort, completion: (Result<PinnedProxyTunnel>) -> Unit) {
+    fun openTunnel(
+        host: String,
+        port: UShort,
+        flowMetadata: CompanionFlowMetadata? = null,
+        completion: (Result<PinnedProxyTunnel>) -> Unit,
+    ) {
         if (!host.isSafeAuthorityHost() || port == 0.toUShort()) {
             completion(Result.failure(TunnelFailure.PROXY_CONNECTION_FAILED.exception()))
             return
@@ -76,7 +84,7 @@ internal class PinnedDesktopProxy(
                 nw_connection_state_ready -> if (!completed) {
                     completed = true
                     nw_connection_set_state_changed_handler(connection, null)
-                    sendConnect(connection, host, port, completion)
+                    sendConnect(connection, host, port, flowMetadata, completion)
                 }
                 nw_connection_state_failed, nw_connection_state_cancelled -> if (!completed) {
                     completed = true
@@ -145,6 +153,7 @@ internal class PinnedDesktopProxy(
         connection: nw_connection_t,
         host: String,
         port: UShort,
+        flowMetadata: CompanionFlowMetadata?,
         completion: (Result<PinnedProxyTunnel>) -> Unit,
     ) {
         val authority = if (':' in host) "[$host]:$port" else "$host:$port"
@@ -152,6 +161,12 @@ internal class PinnedDesktopProxy(
             append("CONNECT $authority HTTP/1.1\r\n")
             append("Host: $authority\r\n")
             append("Proxy-Authorization: ${options.authorization}\r\n")
+            if (flowMetadata != null) {
+                append(CompanionProxyProtocol.FLOW_METADATA_HEADER)
+                append(": ")
+                append(CompanionFlowMetadataCodec.encode(flowMetadata))
+                append("\r\n")
+            }
             append("Proxy-Connection: keep-alive\r\n\r\n")
         }
         nw_connection_send(

@@ -30,6 +30,7 @@ kotlin {
                 implementation(project(":engine:protocol"))
                 implementation(project(":engine:formatter"))
                 implementation(project(":engine:script"))
+                implementation(project(":engine:simulator"))
                 implementation(libs.netty.all)
 
                 implementation(libs.datastore.preferences)

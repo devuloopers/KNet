@@ -3,6 +3,7 @@ package com.devuloopers.knet.ui.desktop.apistudio.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
+import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionsRepository
 import com.devuloopers.knet.application.contract.traffic.CaptureSessionState
 import com.devuloopers.knet.application.usecase.apistudio.ExecuteApiStudioRequestUseCase
 import com.devuloopers.knet.application.usecase.apistudio.ApiStudioHttpExecutionEvent
@@ -90,6 +91,7 @@ class ApiStudioViewModel(
     private val ioDispatcher: CoroutineDispatcher,
     private val responseStreamInterpreters: HttpResponseStreamInterpreterRegistry =
         HttpResponseStreamInterpreterRegistry(),
+    private val networkConditionsRepository: NetworkConditionsRepository? = null,
 ) : ViewModel() {
 
     companion object {
@@ -640,7 +642,9 @@ class ApiStudioViewModel(
 
     /** Returns a local route only for a synchronously observed active capture session. */
     private fun activeProxyPort(): Int? {
-        if (captureSessionState.value !is CaptureSessionState.Capturing) return null
+        val captureActive = captureSessionState.value is CaptureSessionState.Capturing
+        val conditionsActive = networkConditionsRepository?.configuration?.value?.enabled == true
+        if (!captureActive && !conditionsActive) return null
         return (proxyRuntimeState.value as? ProxyRuntimeState.Running)
             ?.handle?.endpoints?.endpoints?.firstOrNull()?.port
     }

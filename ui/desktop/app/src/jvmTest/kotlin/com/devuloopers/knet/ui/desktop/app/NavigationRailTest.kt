@@ -23,13 +23,25 @@ class NavigationRailTest {
         val utilityDestinations = utilityNavigationItems.map { it.destination }
         val destinations = primaryDestinations + setupDestinations + utilityDestinations
 
-        assertEquals(6, destinations.size)
+        assertEquals(8, destinations.size)
         assertTrue(destinations.contains(DesktopDestination.Traffic))
         assertTrue(destinations.contains(DesktopDestination.ConnectDevice))
         assertTrue(destinations.contains(DesktopDestination.ApiStudio))
+        assertTrue(destinations.contains(DesktopDestination.NetworkConditions))
+        assertTrue(destinations.contains(DesktopDestination.ProtectedTraffic))
         assertTrue(destinations.contains(DesktopDestination.Breakpoints))
         assertTrue(destinations.contains(DesktopDestination.Certificate))
         assertTrue(destinations.contains(DesktopDestination.Settings))
+        assertEquals(
+            listOf(
+                DesktopDestination.Traffic,
+                DesktopDestination.ApiStudio,
+                DesktopDestination.NetworkConditions,
+                DesktopDestination.ProtectedTraffic,
+                DesktopDestination.Breakpoints,
+            ),
+            primaryDestinations,
+        )
         assertEquals(
             listOf(DesktopDestination.ConnectDevice, DesktopDestination.Certificate),
             setupDestinations

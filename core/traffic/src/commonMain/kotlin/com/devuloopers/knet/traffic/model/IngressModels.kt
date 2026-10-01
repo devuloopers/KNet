@@ -54,11 +54,19 @@ public value class ClientIdentity(public val value: String) {
  *
  * @property kind Typed ingress category.
  * @property clientIdentity Optional authorized client identity.
+ * @property sourceApplicationId Optional OS-verified package or bundle identity for this flow.
  */
 public data class IngressContext(
     public val kind: IngressKind,
     public val clientIdentity: ClientIdentity? = null,
-)
+    public val sourceApplicationId: String? = null,
+) {
+    init {
+        require(sourceApplicationId == null || sourceApplicationId.isNotBlank()) {
+            "Source application identity must not be blank."
+        }
+    }
+}
 
 /** One-shot lookup used by a proxy listener to attribute an already-authorized bridge socket. */
 public fun interface IngressAttributionLookup {

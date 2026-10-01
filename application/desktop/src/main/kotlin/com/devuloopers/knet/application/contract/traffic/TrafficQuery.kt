@@ -2,7 +2,9 @@ package com.devuloopers.knet.application.contract.traffic
 
 import com.devuloopers.knet.traffic.id.CaptureSessionId
 import com.devuloopers.knet.traffic.id.ExchangeId
+import com.devuloopers.knet.traffic.id.OpaqueFlowId
 import com.devuloopers.knet.traffic.model.HttpExchangeSnapshot
+import com.devuloopers.knet.traffic.model.OpaqueFlowSnapshot
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import com.devuloopers.knet.traffic.model.http.HttpMethod
 import com.devuloopers.knet.traffic.model.http.HttpScheme
@@ -29,6 +31,17 @@ public enum class TrafficSortDirection {
     OLDEST_FIRST,
 }
 
+/** Semantic record kind applied by canonical storage before keyset pagination. */
+public enum class TrafficRecordFilter {
+    ALL,
+    DECRYPTED,
+    TLS_TUNNEL,
+    OPAQUE_TCP,
+    UDP_OR_QUIC,
+    PROTECTED,
+    FAILED,
+}
+
 /**
  * Indexed query requested by Traffic or another authorized feature.
  *
@@ -41,6 +54,7 @@ public enum class TrafficSortDirection {
  * @property statuses Optional typed status filter.
  * @property schemes Optional typed request-scheme filter.
  * @property protocols Optional typed effective application-protocol filter.
+ * @property recordFilter Semantic HTTP/opaque record filter executed by the store.
  */
 public data class TrafficPageQuery(
     public val sessionId: CaptureSessionId? = null,
@@ -52,6 +66,7 @@ public data class TrafficPageQuery(
     public val statuses: Set<HttpStatus> = emptySet(),
     public val schemes: Set<HttpScheme> = emptySet(),
     public val protocols: Set<ApplicationProtocol> = emptySet(),
+    public val recordFilter: TrafficRecordFilter = TrafficRecordFilter.ALL,
 ) {
     init {
         require(limit in 1..1_000) { "Traffic page limit must be between 1 and 1000." }
@@ -101,15 +116,30 @@ public data class TrafficPageItem(
 )
 
 /**
+ * One canonical payload-opaque flow with storage-owned ordering metadata.
+ *
+ * @property captureSequence Durable flow-table capture sequence.
+ * @property historySequence Stable ordinal among retained opaque flows.
+ * @property flow Payload-blind canonical transport-flow snapshot.
+ */
+public data class OpaqueTrafficPageItem(
+    public val captureSequence: TrafficCaptureSequence,
+    public val historySequence: TrafficHistorySequence,
+    public val flow: OpaqueFlowSnapshot,
+)
+
+/**
  * One bounded page of canonical exchange snapshots and storage-owned paging metadata.
  *
  * @property items Returned canonical page items.
+ * @property opaqueItems Payload-opaque flows included in the newest page window.
  * @property nextCursor Cursor for the following page, or null at the end.
  * @property totalCount Exact number of records matching the query at first-page evaluation.
  * @property generation Store generation used to detect a stale live page.
  */
 public data class TrafficPage(
     public val items: List<TrafficPageItem>,
+    public val opaqueItems: List<OpaqueTrafficPageItem> = emptyList(),
     public val nextCursor: TrafficPageCursor?,
     public val totalCount: Long,
     public val generation: Long,
@@ -172,4 +202,11 @@ public interface TrafficQuery : BodyAccess {
      * @return Snapshot or null when absent/removed.
      */
     public suspend fun getExchange(exchangeId: ExchangeId): HttpExchangeSnapshot?
+
+    /**
+     * Loads one payload-opaque flow directly by stable identifier.
+     *
+     * The default preserves compatibility for specialized HTTP-only query implementations.
+     */
+    public suspend fun getOpaqueFlow(flowId: OpaqueFlowId): OpaqueFlowSnapshot? = null
 }

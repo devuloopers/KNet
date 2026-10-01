@@ -1,5 +1,7 @@
 package com.devuloopers.knet.companion.connectivity.transport
 
+import com.devuloopers.knet.companion.model.CompanionFlowMetadata
+import com.devuloopers.knet.companion.model.CompanionProxyProtocol
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -33,18 +35,25 @@ class AndroidProxyRequestTransformTest {
     }
 
     @Test
-    fun `carrier replaces an injected proxy authorization header exactly once`() {
+    fun `carrier replaces injected authorization and flow metadata exactly once`() {
         val transformed = addAuthorization(
             (
                 "GET http://example.test/ HTTP/1.1\r\n" +
                     "Proxy-Authorization: Bearer attacker:value\r\n" +
+                    "${CompanionProxyProtocol.FLOW_METADATA_HEADER}: v1.YXR0YWNrZXI\r\n" +
                     "Host: example.test\r\n\r\n"
             ).encodeToByteArray(),
             "Proxy-Authorization: Bearer device:credential\r\n",
+            CompanionFlowMetadata("com.example.streaming"),
         )?.decodeToString().orEmpty()
 
         assertEquals(1, Regex("Proxy-Authorization", RegexOption.IGNORE_CASE).findAll(transformed).count())
+        assertEquals(
+            1,
+            Regex(CompanionProxyProtocol.FLOW_METADATA_HEADER, RegexOption.IGNORE_CASE).findAll(transformed).count(),
+        )
         assertTrue(transformed.contains("Bearer device:credential"))
+        assertTrue(!transformed.contains("attacker"))
     }
 
     @Test

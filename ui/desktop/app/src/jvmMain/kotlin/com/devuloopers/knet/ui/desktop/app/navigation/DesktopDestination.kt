@@ -25,6 +25,12 @@ sealed interface DesktopDestination {
      */
     data object ApiStudio : DesktopDestination
 
+    /** Global and destination-specific bandwidth, latency, and failure simulation. */
+    data object NetworkConditions : DesktopDestination
+
+    /** Rules for preserving, blocking, or explicitly inspecting protected transport flows. */
+    data object ProtectedTraffic : DesktopDestination
+
     /**
      * PKI root certificates and CA trust manager dashboard.
      */

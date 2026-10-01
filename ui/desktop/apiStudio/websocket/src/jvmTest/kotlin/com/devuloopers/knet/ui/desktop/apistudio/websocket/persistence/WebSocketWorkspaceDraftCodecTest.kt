@@ -2,12 +2,16 @@ package com.devuloopers.knet.ui.desktop.apistudio.websocket.persistence
 
 import com.devuloopers.knet.application.contract.apistudio.ApiStudioDocumentLocation
 import com.devuloopers.knet.application.contract.apistudio.ApiStudioEditorId
+import com.devuloopers.knet.application.contract.apistudio.CapturedApiStudioMessage
 import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolMetadataEntry
 import com.devuloopers.knet.application.contract.apistudio.ApiStudioWorkspaceDocument
 import com.devuloopers.knet.domain.apistudio.naming.RequestNameOrigin
 import com.devuloopers.knet.domain.request.descriptor.RequestKindId
+import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
 import com.devuloopers.knet.ui.desktop.apistudio.websocket.model.WebSocketStudioState
 import com.devuloopers.knet.ui.desktop.apistudio.websocket.model.WebSocketStudioMessageKind
+import com.devuloopers.knet.traffic.model.TrafficDirection
+import com.devuloopers.knet.traffic.model.message.ProtocolMessageKind
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
@@ -87,4 +91,41 @@ class WebSocketWorkspaceDraftCodecTest {
         payload = payload,
         location = ApiStudioDocumentLocation.Unsaved,
     )
+
+    @Test
+    fun `captured upgrade imports endpoint subprotocols and only authored headers`() {
+        val document = codec.importedDocument(
+            id = "captured-websocket",
+            spec = NetworkRequestSpec(
+                url = "https://example.test/socket?room=one",
+                headers = listOf(
+                    "Connection" to "Upgrade",
+                    "Upgrade" to "websocket",
+                    "Sec-WebSocket-Key" to "key",
+                    "Sec-WebSocket-Protocol" to "chat, graphql-transport-ws",
+                    "Authorization" to "Bearer token",
+                ),
+            ),
+            messages = listOf(
+                CapturedApiStudioMessage(
+                    kind = ProtocolMessageKind.TEXT,
+                    direction = TrafficDirection.SERVER_TO_CLIENT,
+                    payload = "ignored response".encodeToByteArray(),
+                ),
+                CapturedApiStudioMessage(
+                    kind = ProtocolMessageKind.TEXT,
+                    direction = TrafficDirection.CLIENT_TO_SERVER,
+                    payload = "authored request".encodeToByteArray(),
+                ),
+            ),
+        )
+
+        val restored = codec.decode(document)
+
+        assertEquals("wss://example.test/socket?room=one", restored.url)
+        assertEquals("chat, graphql-transport-ws", restored.subprotocols)
+        assertEquals(listOf(ApiStudioProtocolMetadataEntry("Authorization", "Bearer token")), restored.headers)
+        assertEquals(WebSocketStudioMessageKind.TEXT, restored.messageKind)
+        assertEquals("authored request", restored.messageContent)
+    }
 }

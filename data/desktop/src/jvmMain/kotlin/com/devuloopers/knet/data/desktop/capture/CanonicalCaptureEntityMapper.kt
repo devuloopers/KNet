@@ -4,13 +4,17 @@ import com.devuloopers.knet.application.contract.traffic.BodyStorageKey
 import com.devuloopers.knet.storage.capture.entity.BodyObjectEntity
 import com.devuloopers.knet.storage.capture.entity.CanonicalExchangeEntity
 import com.devuloopers.knet.storage.capture.entity.DuplexMessageEntity
+import com.devuloopers.knet.storage.capture.entity.OpaqueFlowEntity
 import com.devuloopers.knet.storage.capture.entity.TrafficConnectionEntity
 import com.devuloopers.knet.traffic.id.BodyId
 import com.devuloopers.knet.traffic.id.ConnectionId
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.id.ProtocolMessageId
+import com.devuloopers.knet.traffic.id.OpaqueFlowId
 import com.devuloopers.knet.traffic.model.CaptureEvent
+import com.devuloopers.knet.traffic.model.AppliedNetworkCondition
+import com.devuloopers.knet.traffic.model.AppliedNetworkConditionSource
 import com.devuloopers.knet.traffic.model.ExchangeState
 import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.ExchangeTimings
@@ -18,6 +22,10 @@ import com.devuloopers.knet.traffic.model.HttpExchangeSnapshot
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.HttpResponseSnapshot
 import com.devuloopers.knet.traffic.model.IngressKind
+import com.devuloopers.knet.traffic.model.OpaqueFlowSnapshot
+import com.devuloopers.knet.traffic.model.OpaqueFlowState
+import com.devuloopers.knet.traffic.model.OpaqueSecurityProtocol
+import com.devuloopers.knet.traffic.model.OpaqueTransportProtocol
 import com.devuloopers.knet.traffic.model.TrafficDirection
 import com.devuloopers.knet.traffic.model.TrafficOrigin
 import com.devuloopers.knet.traffic.model.TrafficTerminationReason
@@ -86,6 +94,9 @@ internal object CanonicalCaptureEntityMapper {
             pathAndQuery = target.pathAndQuery,
             protocol = event.request.protocol.token,
             origin = event.origin.token,
+            appliedConditionProfileId = event.appliedNetworkCondition?.profileId,
+            appliedConditionRuleId = event.appliedNetworkCondition?.ruleId,
+            appliedConditionSource = event.appliedNetworkCondition?.source?.name,
             requestHeadersEncoded = encodeHeaders(event.request.headers),
             requestTrailersEncoded = null,
             requestBodyId = null,
@@ -102,6 +113,86 @@ internal object CanonicalCaptureEntityMapper {
             timingDownloadMillis = null,
             timingTotalMillis = null,
             terminalErrorCode = null,
+        )
+    }
+
+    /** Maps an opaque-flow start event to its active durable row. */
+    fun opaqueFlow(event: CaptureEvent.OpaqueFlowStarted): OpaqueFlowEntity = OpaqueFlowEntity(
+        id = event.flowId.value,
+        sessionId = event.sessionId.value,
+        connectionId = event.connectionId.value,
+        connectionSequence = event.sequence,
+        version = event.flowVersion,
+        state = OpaqueFlowState.ACTIVE.name,
+        startedAtEpochMillis = event.occurredAtEpochMillis,
+        completedAtEpochMillis = null,
+        destinationHost = event.destination.host,
+        destinationPort = event.destination.port,
+        serverName = event.serverName,
+        transport = event.transport.name,
+        security = event.security.name,
+        sourceApplicationId = event.sourceApplicationId,
+        policyRuleId = event.policyRuleId,
+        policyAction = event.policyAction?.name,
+        policyGroupId = event.policyGroupId,
+        appliedConditionProfileId = event.appliedNetworkCondition?.profileId,
+        appliedConditionRuleId = event.appliedNetworkCondition?.ruleId,
+        appliedConditionSource = event.appliedNetworkCondition?.source?.name,
+        offeredApplicationProtocolsEncoded = event.offeredApplicationProtocols.encodeOpaqueMetadata(),
+        offeredTlsVersionsEncoded = event.offeredTlsVersions.encodeOpaqueMetadata(),
+        uploadedBytes = 0L,
+        downloadedBytes = 0L,
+        terminalErrorCode = null,
+    )
+
+    /** Reconstructs a canonical payload-opaque flow snapshot from one durable row. */
+    fun opaqueFlowSnapshot(flow: OpaqueFlowEntity): OpaqueFlowSnapshot {
+        val state = runCatching { OpaqueFlowState.valueOf(flow.state) }.getOrDefault(OpaqueFlowState.FAILED)
+        val outcome = when (state) {
+            OpaqueFlowState.ACTIVE -> null
+            OpaqueFlowState.COMPLETED -> ExchangeTerminalOutcome.Completed
+            OpaqueFlowState.FAILED -> ExchangeTerminalOutcome.Failed(
+                TrafficTerminationReason.fromCode(flow.terminalErrorCode)
+                    ?: TrafficTerminationReason.Unspecified.FAILURE,
+            )
+            OpaqueFlowState.DROPPED -> ExchangeTerminalOutcome.Dropped(
+                TrafficTerminationReason.fromCode(flow.terminalErrorCode)
+                    ?: TrafficTerminationReason.Unspecified.DROP,
+            )
+            OpaqueFlowState.CANCELLED -> ExchangeTerminalOutcome.Cancelled(
+                TrafficTerminationReason.fromCode(flow.terminalErrorCode)
+                    ?: TrafficTerminationReason.Unspecified.CANCELLATION,
+            )
+        }
+        return OpaqueFlowSnapshot(
+            id = OpaqueFlowId(flow.id),
+            connectionId = ConnectionId(flow.connectionId),
+            destination = com.devuloopers.knet.traffic.model.TrafficEndpoint(
+                flow.destinationHost,
+                flow.destinationPort,
+            ),
+            serverName = flow.serverName,
+            transport = OpaqueTransportProtocol.valueOf(flow.transport),
+            security = OpaqueSecurityProtocol.valueOf(flow.security),
+            sourceApplicationId = flow.sourceApplicationId,
+            policyRuleId = flow.policyRuleId,
+            policyAction = flow.policyAction?.let { stored ->
+                runCatching { com.devuloopers.knet.traffic.model.OpaqueFlowPolicyAction.valueOf(stored) }.getOrNull()
+            },
+            policyGroupId = flow.policyGroupId,
+            appliedNetworkCondition = appliedNetworkCondition(
+                flow.appliedConditionProfileId,
+                flow.appliedConditionRuleId,
+                flow.appliedConditionSource,
+            ),
+            startedAtEpochMillis = flow.startedAtEpochMillis,
+            completedAtEpochMillis = flow.completedAtEpochMillis,
+            uploadedBytes = flow.uploadedBytes,
+            downloadedBytes = flow.downloadedBytes,
+            state = state,
+            terminalOutcome = outcome,
+            offeredApplicationProtocols = flow.offeredApplicationProtocolsEncoded.decodeOpaqueMetadata(),
+            offeredTlsVersions = flow.offeredTlsVersionsEncoded.decodeOpaqueMetadata(),
         )
     }
 
@@ -252,8 +343,29 @@ internal object CanonicalCaptureEntityMapper {
                 downloadMillis = exchange.timingDownloadMillis,
                 totalMillis = exchange.timingTotalMillis,
             ),
+            appliedNetworkCondition = appliedNetworkCondition(
+                exchange.appliedConditionProfileId,
+                exchange.appliedConditionRuleId,
+                exchange.appliedConditionSource,
+            ),
             startedAtEpochMillis = exchange.startedAtEpochMillis,
         )
+    }
+
+    /** Reconstructs optional policy evidence while failing closed for incomplete legacy rows. */
+    private fun appliedNetworkCondition(
+        profileId: String?,
+        ruleId: String?,
+        source: String?,
+    ): AppliedNetworkCondition? {
+        if (profileId == null || source == null) return null
+        return runCatching {
+            AppliedNetworkCondition(
+                profileId = profileId,
+                ruleId = ruleId,
+                source = AppliedNetworkConditionSource.valueOf(source),
+            )
+        }.getOrNull()
     }
 
     /** Decodes the versioned length-prefix header format while preserving order and duplicates. */
@@ -409,3 +521,10 @@ internal object CanonicalCaptureEntityMapper {
     private const val EMPTY_HEADERS = "H1:0:"
     private const val BODY_STATE_FINALIZED = "FINALIZED"
 }
+
+private fun List<String>.encodeOpaqueMetadata(): String = joinToString(OPAQUE_METADATA_SEPARATOR)
+
+private fun String.decodeOpaqueMetadata(): List<String> =
+    takeIf(String::isNotEmpty)?.split(OPAQUE_METADATA_SEPARATOR)?.take(16) ?: emptyList()
+
+private const val OPAQUE_METADATA_SEPARATOR: String = "\u001f"

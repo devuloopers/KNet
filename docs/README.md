@@ -44,6 +44,8 @@ inside them are not current capability claims:
 - [`deep_architecture_scalability_engineering_audit.md`](deep_architecture_scalability_engineering_audit.md)
 - [`target_architecture_and_implementation_plan.md`](target_architecture_and_implementation_plan.md)
 - [`implementation_plan.md`](implementation_plan.md)
+- [`network_conditions_implementation_plan.md`](network_conditions_implementation_plan.md)
+- [`protected_traffic_passthrough_implementation_plan.md`](protected_traffic_passthrough_implementation_plan.md)
 - [`android_companion_foundation_plan.md`](android_companion_foundation_plan.md)
 - [`wifi_connectivity_implementation_plan.md`](wifi_connectivity_implementation_plan.md)
 - protocol target/implementation plans where a separate qualification document now exists

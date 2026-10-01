@@ -35,7 +35,7 @@ class DesktopModulesTest {
         assertNotNull(DesktopModules.platform)
         assertNotNull(DesktopModules.features)
         assertEquals(1, DesktopModules.platform.size)
-        assertEquals(11, DesktopModules.features.size)
+        assertEquals(13, DesktopModules.features.size)
     }
 
     @Test

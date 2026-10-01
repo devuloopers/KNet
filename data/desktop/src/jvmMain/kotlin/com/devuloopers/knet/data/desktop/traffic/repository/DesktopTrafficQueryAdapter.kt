@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.updateAndGet
 
@@ -43,7 +44,10 @@ class DesktopTrafficQueryAdapter(
         .filterNotNull()
         .distinctUntilChanged()
         .flatMapLatest { sessionId ->
-            dao.observeExchangeChangeScalar(sessionId).map {
+            combine(
+                dao.observeExchangeChangeScalar(sessionId),
+                dao.observeOpaqueFlowChangeScalar(sessionId),
+            ) { exchangeScalar, opaqueScalar -> exchangeScalar + opaqueScalar }.map {
                 TrafficGeneration(
                     sessionId = CaptureSessionId(sessionId),
                     generation = generation.updateAndGet { value -> value + 1L },

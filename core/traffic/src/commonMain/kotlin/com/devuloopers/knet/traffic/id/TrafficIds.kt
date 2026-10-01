@@ -37,6 +37,18 @@ public value class ExchangeId(public val value: String) {
 }
 
 /**
+ * Identifies one payload-opaque TCP, TLS, UDP, or QUIC flow independently from HTTP exchanges.
+ *
+ * @property value Stable non-blank identifier generated when the flow is admitted.
+ */
+@JvmInline
+public value class OpaqueFlowId(public val value: String) {
+    init {
+        require(value.isNotBlank()) { "OpaqueFlowId must not be blank." }
+    }
+}
+
+/**
  * Identifies a multiplexed application-protocol stream when the protocol provides one.
  *
  * HTTP/1 exchanges normally omit this value. HTTP/2 and HTTP/3 adapters preserve their

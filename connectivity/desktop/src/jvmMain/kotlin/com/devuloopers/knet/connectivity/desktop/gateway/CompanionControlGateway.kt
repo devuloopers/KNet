@@ -17,6 +17,8 @@ import com.devuloopers.knet.companion.model.CompanionEndpointReconciliationCodec
 import com.devuloopers.knet.companion.model.CompanionPairingCompletionCodec
 import com.devuloopers.knet.companion.model.CompanionPairingGrant
 import com.devuloopers.knet.companion.model.CompanionPairingGrantCodec
+import com.devuloopers.knet.companion.model.PacketConditionConfiguration
+import com.devuloopers.knet.companion.model.PacketConditionConfigurationCodec
 import com.devuloopers.knet.connectivity.desktop.certificate.AppleRootCertificateProfileRenderer
 import com.devuloopers.knet.identity.RegisteredDeviceId
 import com.devuloopers.knet.pairing.DeviceAuthenticationResult
@@ -73,6 +75,7 @@ public class CompanionControlGateway(
     private val pairingGrantCodec: CompanionPairingGrantCodec = CompanionPairingGrantCodec(),
     private val refreshRequestCodec: CompanionCredentialRefreshRequestCodec = CompanionCredentialRefreshRequestCodec(),
     private val refreshGrantCodec: CompanionCredentialRefreshGrantCodec = CompanionCredentialRefreshGrantCodec(),
+    private val packetConditions: () -> PacketConditionConfiguration = { PacketConditionConfiguration.Disabled },
     private val nowEpochMillis: () -> Long,
     private val maximumConnections: Int = DEFAULT_MAXIMUM_CONNECTIONS,
     private val maximumTrackedChallenges: Int = DEFAULT_MAXIMUM_TRACKED_CHALLENGES,
@@ -188,15 +191,32 @@ public class CompanionControlGateway(
         }
         if (request.body.isNotEmpty()) return socket.respond(400, "body_not_allowed")
         val authorization = request.authorization ?: return socket.respond(401, "authorization_required")
+        val requiredScope = if (
+            request.method == "GET" && request.path == CompanionControlProtocol.NETWORK_CONDITIONS_PATH
+        ) {
+            DeviceScope.PROXY_STREAM
+        } else {
+            DeviceScope.SETUP_ARTIFACT_READ
+        }
         val authentication = pairing.authenticate(
             authorization.deviceId,
             authorization.credential,
-            DeviceScope.SETUP_ARTIFACT_READ,
+            requiredScope,
         )
         if (authentication !is DeviceAuthenticationResult.Authenticated) {
             return socket.respond(401, "authorization_rejected")
         }
         when {
+            request.method == "GET" && request.path == CompanionControlProtocol.NETWORK_CONDITIONS_PATH -> {
+                val body = runCatching { PacketConditionConfigurationCodec.encode(packetConditions()) }
+                    .getOrElse { return socket.respond(503, "network_conditions_unavailable") }
+                socket.respond(
+                    statusCode = 200,
+                    reason = "OK",
+                    mediaType = CompanionControlProtocol.NETWORK_CONDITIONS_RESPONSE_MEDIA_TYPE,
+                    body = body,
+                )
+            }
             request.method == "GET" && request.path == CompanionCertificateProtocol.ROOT_CERTIFICATE_PATH -> {
                 val certificate = rootCertificateDer()
                 if (certificate.isEmpty() || certificate.size > CompanionCertificateProtocol.MAXIMUM_ROOT_CERTIFICATE_BYTES) {

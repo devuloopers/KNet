@@ -16,6 +16,7 @@ sealed interface TrafficIntent {
     data object LoadNextPage : TrafficIntent
 
     data class Search(val query: String) : TrafficIntent
+    data class FilterByType(val type: TrafficTypeFilter) : TrafficIntent
     data class FilterByScheme(val scheme: SchemeFilter) : TrafficIntent
     data class FilterByHttpVersion(val version: HttpVersionFilter) : TrafficIntent
     data class FilterByMethod(val method: MethodFilter) : TrafficIntent

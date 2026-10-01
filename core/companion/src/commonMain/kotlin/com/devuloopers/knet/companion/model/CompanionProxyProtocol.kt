@@ -4,4 +4,7 @@ package com.devuloopers.knet.companion.model
 public object CompanionProxyProtocol {
     /** Authenticated readiness probe handled by the gateway without entering the inspected proxy. */
     public const val READINESS_PATH: String = "/companion/v3/proxy/readiness"
+
+    /** Authenticated hop-by-hop header carrying bounded, versioned per-flow metadata. */
+    public const val FLOW_METADATA_HEADER: String = "KNet-Flow-Metadata"
 }

@@ -1,6 +1,7 @@
 package com.devuloopers.knet.connectivity.desktop.gateway
 
 import com.devuloopers.knet.application.coordinator.pairing.PairingCoordinator
+import com.devuloopers.knet.companion.model.CompanionFlowMetadataCodec
 import com.devuloopers.knet.companion.model.CompanionProxyProtocol
 import com.devuloopers.knet.pairing.DeviceAuthenticationResult
 import com.devuloopers.knet.pairing.DeviceScope
@@ -140,6 +141,7 @@ public class AuthenticatedProxyGateway(
                 val attribution = IngressContext(
                     kind = IngressKind.LanPairedDevice,
                     clientIdentity = ClientIdentity(principal.deviceId.value),
+                    sourceApplicationId = parsed.sourceApplicationId,
                 )
                 if (!attributions.register(
                         TrafficEndpoint(local.address.hostAddress, local.port),
@@ -185,6 +187,7 @@ public class AuthenticatedProxyGateway(
         val credential: String,
         val sanitizedHeader: ByteArray,
         val isReadinessProbe: Boolean,
+        val sourceApplicationId: String?,
     )
 
     private fun parseAuthorization(header: ByteArray): AuthorizedHeader? {
@@ -198,8 +201,18 @@ public class AuthenticatedProxyGateway(
         val token = value.substringAfter(' ').trim()
         val device = token.substringBefore(':').takeIf { it.matches(SAFE_CREDENTIAL_TOKEN) } ?: return null
         val credential = token.substringAfter(':', "").takeIf { it.matches(SAFE_CREDENTIAL_TOKEN) } ?: return null
+        val metadataLines = lines.drop(1).filter {
+            it.substringBefore(':').equals(CompanionProxyProtocol.FLOW_METADATA_HEADER, true)
+        }
+        if (metadataLines.size > 1) return null
+        val sourceApplicationId = metadataLines.singleOrNull()?.let { line ->
+            CompanionFlowMetadataCodec.decode(line.substringAfter(':').trim())?.verifiedSourceApplicationId
+                ?: return null
+        }
         val sanitized = (listOf(lines.first()) + lines.drop(1).filterNot {
-            it.substringBefore(':').equals("Proxy-Authorization", true)
+            val name = it.substringBefore(':')
+            name.equals("Proxy-Authorization", true) ||
+                name.equals(CompanionProxyProtocol.FLOW_METADATA_HEADER, true)
         }).joinToString("\r\n", postfix = "\r\n\r\n").encodeToByteArray()
         val readinessTarget = "GET ${CompanionProxyProtocol.READINESS_PATH} HTTP/1.1"
         return AuthorizedHeader(
@@ -207,6 +220,7 @@ public class AuthenticatedProxyGateway(
             credential = credential,
             sanitizedHeader = sanitized,
             isReadinessProbe = lines.first() == readinessTarget,
+            sourceApplicationId = sourceApplicationId,
         )
     }
 

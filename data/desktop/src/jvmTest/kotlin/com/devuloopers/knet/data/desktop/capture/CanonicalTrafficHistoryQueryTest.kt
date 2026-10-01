@@ -1,21 +1,107 @@
 package com.devuloopers.knet.data.desktop.capture
 
 import com.devuloopers.knet.application.contract.traffic.TrafficPageQuery
+import com.devuloopers.knet.application.contract.traffic.TrafficRecordFilter
 import com.devuloopers.knet.application.contract.traffic.TrafficFacetQuery
 import com.devuloopers.knet.engine.session.FileBodyStore
+import com.devuloopers.knet.data.desktop.traffic.repository.DesktopTrafficQueryAdapter
 import com.devuloopers.knet.storage.capture.entity.CanonicalExchangeEntity
 import com.devuloopers.knet.storage.capture.entity.CaptureSessionEntity
 import com.devuloopers.knet.storage.capture.entity.TrafficConnectionEntity
+import com.devuloopers.knet.storage.capture.entity.OpaqueFlowEntity
 import com.devuloopers.knet.storage.database.DatabaseFactory
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import com.devuloopers.knet.traffic.model.http.HttpScheme
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 
 class CanonicalTrafficHistoryQueryTest {
+    @Test
+    fun `opaque flow mutations invalidate the desktop live Traffic generation`() = runBlocking {
+        val root = Files.createTempDirectory("knet-opaque-generation-").toFile()
+        val database = DatabaseFactory.create(root.resolve("traffic.db"))
+        val dao = database.canonicalCaptureDao()
+        try {
+            dao.insertSession(CaptureSessionEntity("session", 1L, null, "ACTIVE", 0L))
+            dao.insertConnection(connection("session"))
+            val query = DesktopTrafficQueryAdapter(dao, FileBodyStore(root.resolve("bodies")))
+            val updates = Channel<com.devuloopers.knet.application.contract.traffic.TrafficGeneration>(
+                capacity = Channel.UNLIMITED,
+            )
+            val collector = launch(Dispatchers.Default) {
+                query.generations.collect { generation -> updates.send(generation) }
+            }
+            withTimeout(5_000L) { updates.receive() }
+
+            dao.insertOpaqueFlow(opaqueFlow("opaque-live", "session", 2_000L))
+
+            assertEquals("session", withTimeout(5_000L) { updates.receive() }.sessionId.value)
+            collector.cancel()
+        } finally {
+            database.close()
+            root.deleteRecursively()
+        }
+    }
+
+    @Test
+    fun `chronological cursor pages across HTTP and opaque rows without omission`() = runTest {
+        val root = Files.createTempDirectory("knet-merged-history-query-").toFile()
+        val database = DatabaseFactory.create(root.resolve("traffic.db"))
+        val dao = database.canonicalCaptureDao()
+        try {
+            dao.insertSession(CaptureSessionEntity("session", 1L, null, "ACTIVE", 0L))
+            dao.insertConnection(connection("session"))
+            dao.insertExchange(exchange("old-http", "session", 1_000L, "https", "HTTP/1.1", "/old"))
+            dao.insertOpaqueFlow(opaqueFlow("middle-opaque", "session", 2_000L))
+            dao.insertExchange(exchange("new-http", "session", 3_000L, "https", "HTTP/1.1", "/new"))
+            val query = CanonicalTrafficQueryAdapter(
+                sessionId = null,
+                dao = dao,
+                bodyStore = FileBodyStore(root.resolve("bodies")),
+            )
+
+            val observed = mutableListOf<String>()
+            val observedHistorySequences = mutableListOf<Long>()
+            var cursor: com.devuloopers.knet.application.contract.traffic.TrafficPageCursor? = null
+            do {
+                val page = query.query(TrafficPageQuery(limit = 1, cursor = cursor))
+                observed += page.items.map { it.exchange.id.value }
+                observed += page.opaqueItems.map { it.flow.id.value }
+                observedHistorySequences += page.items.map { it.historySequence.value }
+                observedHistorySequences += page.opaqueItems.map { it.historySequence.value }
+                assertEquals(3L, page.totalCount)
+                cursor = page.nextCursor
+            } while (cursor != null)
+
+            assertEquals(listOf("new-http", "middle-opaque", "old-http"), observed)
+            assertEquals(listOf(3L, 2L, 1L), observedHistorySequences)
+            assertEquals(
+                listOf("middle-opaque"),
+                query.query(
+                    TrafficPageQuery(limit = 20, recordFilter = TrafficRecordFilter.PROTECTED),
+                ).opaqueItems.map { it.flow.id.value },
+            )
+            assertEquals(
+                listOf("new-http", "old-http"),
+                query.query(
+                    TrafficPageQuery(limit = 20, recordFilter = TrafficRecordFilter.DECRYPTED),
+                ).items.map { it.exchange.id.value },
+            )
+        } finally {
+            database.close()
+            root.deleteRecursively()
+        }
+    }
+
     @Test
     fun `global query preserves retained sessions and applies typed store filters`() = runTest {
         val root = Files.createTempDirectory("knet-history-query-").toFile()
@@ -160,6 +246,27 @@ class CanonicalTrafficHistoryQueryTest {
         timingFirstByteMillis = null,
         timingDownloadMillis = null,
         timingTotalMillis = 1L,
+        terminalErrorCode = null,
+    )
+
+    private fun opaqueFlow(id: String, sessionId: String, timestamp: Long): OpaqueFlowEntity = OpaqueFlowEntity(
+        id = id,
+        sessionId = sessionId,
+        connectionId = "connection-$sessionId",
+        connectionSequence = 2L,
+        version = 1L,
+        state = "COMPLETED",
+        startedAtEpochMillis = timestamp,
+        completedAtEpochMillis = timestamp + 1L,
+        destinationHost = "protected.example",
+        destinationPort = 443,
+        serverName = "protected.example",
+        transport = "TCP",
+        security = "TLS",
+        sourceApplicationId = null,
+        policyRuleId = "protected-rule",
+        uploadedBytes = 10L,
+        downloadedBytes = 20L,
         terminalErrorCode = null,
     )
 }

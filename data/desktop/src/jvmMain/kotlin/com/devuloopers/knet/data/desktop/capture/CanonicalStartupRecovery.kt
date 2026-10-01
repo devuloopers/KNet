@@ -53,6 +53,7 @@ class CanonicalStartupRecovery(
 
         val recoveredMessages = dao.recoverInterruptedDuplexMessages()
         val recoveredExchanges = dao.recoverInterruptedExchanges(recoveredAtEpochMillis)
+        val recoveredOpaqueFlows = dao.recoverInterruptedOpaqueFlows(recoveredAtEpochMillis)
         val recoveredConnections = dao.recoverInterruptedConnections(recoveredAtEpochMillis)
         val recoveredSessions = dao.recoverInterruptedSessions(recoveredAtEpochMillis)
         val temporaryObjectsDeleted = bodyStore.reconcileTemporaryObjects()
@@ -91,6 +92,7 @@ class CanonicalStartupRecovery(
             recoveredSessions = recoveredSessions,
             recoveredConnections = recoveredConnections,
             recoveredExchanges = recoveredExchanges,
+            recoveredOpaqueFlows = recoveredOpaqueFlows,
             recoveredMessages = recoveredMessages,
             temporaryObjectsDeleted = temporaryObjectsDeleted,
             deletionResult = deletionResult,
@@ -175,6 +177,7 @@ private data class OrphanReconciliationResult(
  * @property recoveredSessions Interrupted active sessions transitioned to terminal recovery state.
  * @property recoveredConnections Interrupted open connections transitioned to terminal state.
  * @property recoveredExchanges Interrupted exchanges transitioned to failed terminal state.
+ * @property recoveredOpaqueFlows Interrupted opaque flows transitioned to failed terminal state.
  * @property recoveredMessages Interrupted framed messages transitioned to failed terminal state.
  * @property temporaryObjectsDeleted Abandoned temporary body files removed.
  * @property deletionResult Durable deletion work processed.
@@ -191,6 +194,7 @@ data class CanonicalStartupRecoveryResult(
     val recoveredSessions: Int,
     val recoveredConnections: Int,
     val recoveredExchanges: Int,
+    val recoveredOpaqueFlows: Int,
     val recoveredMessages: Int,
     val temporaryObjectsDeleted: Int,
     val deletionResult: BodyDeletionReconciliationResult,
@@ -208,6 +212,7 @@ data class CanonicalStartupRecoveryResult(
             recoveredSessions >= 0 &&
                 recoveredConnections >= 0 &&
                 recoveredExchanges >= 0 &&
+                recoveredOpaqueFlows >= 0 &&
                 recoveredMessages >= 0 &&
                 temporaryObjectsDeleted >= 0 &&
                 checkedBodies >= 0 &&

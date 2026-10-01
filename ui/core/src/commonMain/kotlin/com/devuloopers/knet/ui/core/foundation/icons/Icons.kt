@@ -46,6 +46,7 @@ object KNetIcons {
     val Lock: ImageVector = Icons.Default.Lock
     val Schedule: ImageVector = Icons.Default.Schedule
     val Wifi: ImageVector = Icons.Default.Wifi
+    val Speed: ImageVector = Icons.Default.Speed
     val Desktop: ImageVector = Icons.Default.DesktopWindows
     val Phone: ImageVector = Icons.Default.PhoneAndroid
     val Image: ImageVector = Icons.Default.Image

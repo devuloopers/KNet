@@ -6,6 +6,8 @@ import com.devuloopers.knet.connectivity.desktop.gateway.AuthenticatedProxyGatew
 import com.devuloopers.knet.connectivity.desktop.gateway.IngressAttributionRegistry
 import com.devuloopers.knet.connectivity.desktop.pairing.JvmPairingCrypto
 import com.devuloopers.knet.companion.model.CompanionCertificateProtocol
+import com.devuloopers.knet.companion.model.CompanionFlowMetadata
+import com.devuloopers.knet.companion.model.CompanionFlowMetadataCodec
 import com.devuloopers.knet.companion.model.CompanionProxyProtocol
 import com.devuloopers.knet.pairing.DeviceScope
 import com.devuloopers.knet.pairing.PairingCompletionRequest
@@ -121,6 +123,7 @@ class PairingGatewayEndToEndTest {
                 observed.complete(attributions.claim(TrafficEndpoint(remote.address.hostAddress, remote.port)))
                 val header = readHeader(socket)
                 assertFalse(header.contains("Proxy-Authorization", ignoreCase = true))
+                assertFalse(header.contains(CompanionProxyProtocol.FLOW_METADATA_HEADER, ignoreCase = true))
                 socket.getOutputStream().write(
                     "HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK".encodeToByteArray(),
                 )
@@ -138,11 +141,18 @@ class PairingGatewayEndToEndTest {
         try {
             gateway.start()
             val gatewayPort = requireNotNull(gateway.boundPort)
-            val response = request(gatewayPort, tls, issued.device.id.value, issued.credential)
+            val response = request(
+                gatewayPort,
+                tls,
+                issued.device.id.value,
+                issued.credential,
+                sourceApplicationId = "com.example.streaming",
+            )
             assertTrue(response.contains("200 OK"))
             val ingress = observed.get(5L, TimeUnit.SECONDS)
             assertIs<IngressKind.LanPairedDevice>(ingress?.kind)
             assertEquals(issued.device.id.value, ingress?.clientIdentity?.value)
+            assertEquals("com.example.streaming", ingress?.sourceApplicationId)
 
             assertTrue(pairing.revoke(issued.device.id))
             val denied = request(gatewayPort, tls, issued.device.id.value, issued.credential)
@@ -300,13 +310,26 @@ class PairingGatewayEndToEndTest {
         return assertIs<PairingCompletionResult.Paired>(pairing.complete(request)).issued
     }
 
-    private fun request(port: Int, tls: TestTlsIdentity, deviceId: String, credential: String): String =
-        rawRequest(port, tls, authorizedHeader(deviceId, credential))
+    private fun request(
+        port: Int,
+        tls: TestTlsIdentity,
+        deviceId: String,
+        credential: String,
+        sourceApplicationId: String? = null,
+    ): String = rawRequest(port, tls, authorizedHeader(deviceId, credential, sourceApplicationId))
 
-    private fun authorizedHeader(deviceId: String, credential: String): ByteArray =
+    private fun authorizedHeader(
+        deviceId: String,
+        credential: String,
+        sourceApplicationId: String? = null,
+    ): ByteArray =
         ("GET http://example.test/ HTTP/1.1\r\n" +
             "Host: example.test\r\n" +
             "Proxy-Authorization: Bearer $deviceId:$credential\r\n" +
+            sourceApplicationId?.let { identity ->
+                val encoded = CompanionFlowMetadataCodec.encode(CompanionFlowMetadata(identity))
+                "${CompanionProxyProtocol.FLOW_METADATA_HEADER}: $encoded\r\n"
+            }.orEmpty() +
             "Connection: close\r\n\r\n").encodeToByteArray()
 
     private fun readinessHeader(deviceId: String, credential: String): ByteArray =

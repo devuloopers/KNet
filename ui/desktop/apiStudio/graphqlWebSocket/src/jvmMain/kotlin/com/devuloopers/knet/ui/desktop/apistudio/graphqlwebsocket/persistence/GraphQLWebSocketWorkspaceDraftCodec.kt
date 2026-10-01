@@ -2,13 +2,17 @@ package com.devuloopers.knet.ui.desktop.apistudio.graphqlwebsocket.persistence
 
 import com.devuloopers.knet.application.contract.apistudio.ApiStudioDocumentLocation
 import com.devuloopers.knet.application.contract.apistudio.ApiStudioEditorId
+import com.devuloopers.knet.application.contract.apistudio.CapturedApiStudioMessage
 import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolMetadataEntry
 import com.devuloopers.knet.application.contract.apistudio.ApiStudioWorkspaceContent
 import com.devuloopers.knet.application.contract.apistudio.ApiStudioWorkspaceDocument
 import com.devuloopers.knet.domain.apistudio.naming.RequestNameOrigin
 import com.devuloopers.knet.domain.request.descriptor.RequestKindId
+import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
 import com.devuloopers.knet.ui.desktop.apistudio.graphqlwebsocket.model.GraphQLWebSocketAuthoringTab
 import com.devuloopers.knet.ui.desktop.apistudio.graphqlwebsocket.model.GraphQLWebSocketStudioState
+import com.devuloopers.knet.traffic.model.TrafficDirection
+import com.devuloopers.knet.traffic.model.message.ProtocolMessageKind
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -24,6 +28,67 @@ import kotlinx.serialization.json.put
 class GraphQLWebSocketWorkspaceDraftCodec(
     private val json: Json = Json { ignoreUnknownKeys = false },
 ) {
+    /** Builds a GraphQL subscription draft from its captured `graphql-transport-ws` handshake. */
+    fun importedDocument(
+        id: String,
+        spec: NetworkRequestSpec,
+        messages: List<CapturedApiStudioMessage> = emptyList(),
+    ): ApiStudioWorkspaceDocument {
+        val recovered = recoverAuthoring(messages)
+        return unsavedDocument(GraphQLWebSocketStudioState(
+            documentId = id,
+            url = spec.url.toWebSocketUrl(),
+            headers = spec.headers
+                .filterNot { (name, _) -> name.isGeneratedWebSocketHandshakeHeader() }
+                .map { (name, value) -> ApiStudioProtocolMetadataEntry(name, value) },
+            connectionParametersJson = recovered.connectionParametersJson,
+            query = recovered.query,
+            operationName = recovered.operationName,
+            variablesJson = recovered.variablesJson,
+            extensionsJson = recovered.extensionsJson,
+            operationId = recovered.operationId,
+            isDirty = false,
+        ))
+    }
+
+    /** Recovers only valid client authoring envelopes; responses and malformed/truncated content are ignored. */
+    private fun recoverAuthoring(messages: List<CapturedApiStudioMessage>): RecoveredAuthoring {
+        val envelopes = messages.asSequence()
+            .filter { message ->
+                message.direction == TrafficDirection.CLIENT_TO_SERVER && message.kind == ProtocolMessageKind.TEXT
+            }
+            .mapNotNull { message ->
+                runCatching {
+                    json.parseToJsonElement(
+                        message.copyPayload().decodeToString(throwOnInvalidSequence = true),
+                    ) as? JsonObject
+                }.getOrNull()
+            }
+            .toList()
+        val connectionParameters = envelopes
+            .firstOrNull { it.stringOrEmpty("type") == "connection_init" }
+            ?.get("payload") as? JsonObject
+        val subscribe = envelopes.firstOrNull { it.stringOrEmpty("type") == "subscribe" }
+        val payload = subscribe?.get("payload") as? JsonObject
+        return RecoveredAuthoring(
+            connectionParametersJson = connectionParameters?.toString().orEmpty(),
+            query = payload?.stringOrEmpty("query").orEmpty(),
+            operationName = payload?.stringOrEmpty("operationName").orEmpty(),
+            variablesJson = payload?.get("variables")?.toString().orEmpty(),
+            extensionsJson = payload?.get("extensions")?.toString().orEmpty(),
+            operationId = subscribe?.stringOrEmpty("id").orEmpty(),
+        )
+    }
+
+    private data class RecoveredAuthoring(
+        val connectionParametersJson: String = "",
+        val query: String = "",
+        val operationName: String = "",
+        val variablesJson: String = "",
+        val extensionsJson: String = "",
+        val operationId: String = "",
+    )
+
     /** Encodes one incomplete draft without requiring a connectable endpoint. */
     fun encode(state: GraphQLWebSocketStudioState): ByteArray = buildJsonObject {
         put("url", state.url)
@@ -139,3 +204,14 @@ class GraphQLWebSocketWorkspaceDraftCodec(
 private fun JsonObject.stringOrEmpty(name: String): String = this[name]?.jsonPrimitive?.contentOrNull.orEmpty()
 
 private fun JsonObject.arrayOrEmpty(name: String): JsonArray = this[name]?.jsonArray ?: JsonArray(emptyList())
+
+private fun String.toWebSocketUrl(): String = when {
+    startsWith("https://", ignoreCase = true) -> "wss://${substring(8)}"
+    startsWith("http://", ignoreCase = true) -> "ws://${substring(7)}"
+    else -> this
+}
+
+private fun String.isGeneratedWebSocketHandshakeHeader(): Boolean =
+    equals("connection", ignoreCase = true) ||
+        equals("upgrade", ignoreCase = true) ||
+        startsWith("sec-websocket-", ignoreCase = true)

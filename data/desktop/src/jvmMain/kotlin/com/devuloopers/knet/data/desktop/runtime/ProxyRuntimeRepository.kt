@@ -14,12 +14,15 @@ import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureSink
 import com.devuloopers.knet.engine.proxy.pipeline.PipelineHandlerNames
 import com.devuloopers.knet.engine.proxy.tls.KeyManagerProvider
 import com.devuloopers.knet.engine.proxy.tls.ServerTlsContextProvider
+import com.devuloopers.knet.engine.proxy.tls.TlsInterceptionPolicy
 import com.devuloopers.knet.data.desktop.certificate.DesktopServerTlsContextProvider
 import com.devuloopers.knet.traffic.model.IngressAttributionLookup
 import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamInspectorFactory
 import com.devuloopers.knet.engine.proxy.inspection.ProxyStreamTransformerFactory
 import com.devuloopers.knet.engine.proxy.inspection.ProxyDuplexInspectorFactory
 import com.devuloopers.knet.engine.proxy.inspection.ProxyDuplexTransformerFactory
+import com.devuloopers.knet.engine.simulator.NetworkConditionChannelHandler
+import com.devuloopers.knet.engine.simulator.NetworkConditionEngine
 
 /**
  * Desktop runtime coordinator managing Netty proxy server lifecycle.
@@ -33,6 +36,8 @@ class ProxyRuntimeRepository(
     private val streamTransformerFactories: List<ProxyStreamTransformerFactory> = emptyList(),
     private val duplexInspectorFactories: List<ProxyDuplexInspectorFactory> = emptyList(),
     private val duplexTransformerFactories: List<ProxyDuplexTransformerFactory> = emptyList(),
+    private val networkConditionEngine: NetworkConditionEngine? = null,
+    private val tlsInterceptionPolicy: TlsInterceptionPolicy = TlsInterceptionPolicy.InspectAll,
 ) {
     constructor(
         certificateAuthority: CertificateAuthority,
@@ -44,6 +49,8 @@ class ProxyRuntimeRepository(
         streamTransformerFactories: List<ProxyStreamTransformerFactory> = emptyList(),
         duplexInspectorFactories: List<ProxyDuplexInspectorFactory> = emptyList(),
         duplexTransformerFactories: List<ProxyDuplexTransformerFactory> = emptyList(),
+        networkConditionEngine: NetworkConditionEngine? = null,
+        tlsInterceptionPolicy: TlsInterceptionPolicy = TlsInterceptionPolicy.InspectAll,
     ) : this(
         serverTlsContextProvider = DesktopServerTlsContextProvider(certificateAuthority, certificateCache),
         keyManagerProvider = keyManagerProvider,
@@ -53,6 +60,8 @@ class ProxyRuntimeRepository(
         streamTransformerFactories = streamTransformerFactories,
         duplexInspectorFactories = duplexInspectorFactories,
         duplexTransformerFactories = duplexTransformerFactories,
+        networkConditionEngine = networkConditionEngine,
+        tlsInterceptionPolicy = tlsInterceptionPolicy,
     )
 
     private val lifecycleLock = Any()
@@ -85,6 +94,9 @@ class ProxyRuntimeRepository(
             KNetLogger.info(tag = LogTags.PROXY) { "Starting Netty proxy server on port $port..." }
 
             val pipelineInitializers = listOf<(io.netty.channel.ChannelPipeline) -> Unit>({ pipeline ->
+                networkConditionEngine?.let { engine ->
+                    pipeline.addLast("knetNetworkConditions", NetworkConditionChannelHandler(engine))
+                }
                 pipeline.addLast(
                     PipelineHandlerNames.SELECTIVE_HTTP_AGGREGATOR,
                     KNetBreakpointRequestAggregator(breakpointGate),
@@ -108,6 +120,7 @@ class ProxyRuntimeRepository(
                 streamTransformerFactories = streamTransformerFactories,
                 duplexInspectorFactories = duplexInspectorFactories,
                 duplexTransformerFactories = duplexTransformerFactories,
+                tlsInterceptionPolicy = tlsInterceptionPolicy,
             )
             server.start()
             proxyServer = server

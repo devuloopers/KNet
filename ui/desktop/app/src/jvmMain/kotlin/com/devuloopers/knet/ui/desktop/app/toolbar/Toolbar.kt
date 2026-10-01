@@ -35,6 +35,8 @@ fun Toolbar(
             DesktopDestination.ConnectDevice -> "Connect Device"
             DesktopDestination.Inspector -> "Inspector"
             DesktopDestination.ApiStudio -> "API Studio"
+            DesktopDestination.NetworkConditions -> "Network Conditions"
+            DesktopDestination.ProtectedTraffic -> "Protected Traffic"
             DesktopDestination.Certificate -> "Certificates Manager"
             DesktopDestination.Breakpoints -> "Intercepts"
             DesktopDestination.Settings -> "Settings"

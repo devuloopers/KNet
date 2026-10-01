@@ -5,6 +5,7 @@ import com.devuloopers.knet.companion.model.CompanionInspectionMode
 import com.devuloopers.knet.companion.model.CompanionInspectionState
 import com.devuloopers.knet.companion.model.CompanionRegistration
 import com.devuloopers.knet.companion.model.UnsupportedTrafficPolicy
+import com.devuloopers.knet.companion.model.PacketConditionConfiguration
 import kotlinx.coroutines.flow.StateFlow
 
 /** Inputs passed to a platform VPN/local-proxy adapter without exposing platform handles. */
@@ -13,6 +14,7 @@ public data class CompanionInspectionConfiguration(
     public val mode: CompanionInspectionMode,
     public val unsupportedTrafficPolicy: UnsupportedTrafficPolicy,
     public val fullHttpsInspection: Boolean,
+    public val packetConditions: PacketConditionConfiguration = PacketConditionConfiguration.Disabled,
 )
 
 /**

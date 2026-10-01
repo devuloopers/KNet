@@ -38,6 +38,7 @@ import com.devuloopers.knet.domain.workspace.model.TrafficTableColumnWidths
 import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.ui.desktop.traffic.model.TrafficRowUiState
 import com.devuloopers.knet.ui.desktop.traffic.model.TrafficInterceptionUiState
+import com.devuloopers.knet.ui.desktop.traffic.model.TrafficRowKind
 import com.devuloopers.knet.ui.core.components.table.KNetCell
 import com.devuloopers.knet.ui.core.components.table.KNetRow
 import com.devuloopers.knet.ui.core.components.table.KNetTableHeader
@@ -54,6 +55,8 @@ import com.devuloopers.knet.ui.desktop.traffic.model.toTrafficHostLabel
 
 import com.devuloopers.knet.ui.core.components.menu.ContextMenuItem
 import com.devuloopers.knet.ui.core.components.menu.KNetContextMenuArea
+import com.devuloopers.knet.application.usecase.protectedtraffic.ProtectedTrafficQuickRuleScope
+import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficAction
 
 private object TrafficTableMetrics {
     val rowHeight = 34.dp
@@ -88,6 +91,8 @@ data class TrafficTableColumnResizeActions(
  * @param columnResizeActions Caller-owned resize, commit, and per-column reset callbacks.
  * @param onSendToApiStudio Requests export of one canonical exchange to API Studio.
  * @param onAddBreakpointRule Requests creation of a rule draft from one canonical exchange.
+ * @param onProtectedTrafficAction Persists a future-flow application or destination policy from an opaque row.
+ * @param onCopyDestination Copies one row's visible destination without exposing payload data.
  * @param activeRules Current authored breakpoint rules used for row decoration.
  * @param canLoadMore Whether another keyset page is available.
  * @param onLoadMore Requests the next keyset page.
@@ -106,6 +111,9 @@ fun TrafficTable(
     columnResizeActions: TrafficTableColumnResizeActions = TrafficTableColumnResizeActions(),
     onSendToApiStudio: (String) -> Unit = {},
     onAddBreakpointRule: (String) -> Unit = {},
+    onAddNetworkCondition: (String) -> Unit = {},
+    onProtectedTrafficAction: (String, ProtectedTrafficAction, ProtectedTrafficQuickRuleScope) -> Unit = { _, _, _ -> },
+    onCopyDestination: (String) -> Unit = {},
     activeRules: List<com.devuloopers.knet.domain.rules.model.BreakpointRule> = emptyList(),
     canLoadMore: Boolean = false,
     onLoadMore: () -> Unit = {},
@@ -134,7 +142,7 @@ fun TrafficTable(
             }
         }
 
-        val newestSequence = transactions.maxOfOrNull(TrafficRowUiState::sequenceNumber)
+        val newestSequence = transactions.maxOfOrNull { row -> maxOf(row.sequenceNumber, row.timestamp) }
         LaunchedEffect(newestSequence, autoScroll) {
             val previousSequence = lastAutoScrollSequence.value
             val wasEnabled = lastAutoScrollEnabled.value
@@ -234,20 +242,81 @@ fun TrafficTable(
                                     key = { it.transactionId }
                                 ) { item ->
                                     val contextMenuItems = remember(item) {
-                                        listOf(
-                                            ContextMenuItem(
-                                                label = "Send to API Studio",
-                                                icon = KNetIcons.Send
-                                            ) {
-                                                onSendToApiStudio(item.transactionId)
-                                            },
-                                            ContextMenuItem(
-                                                label = "Add Breakpoint Rule",
-                                                icon = KNetIcons.Pause
-                                            ) {
-                                                onAddBreakpointRule(item.transactionId)
+                                        buildList {
+                                            if (item.rowKind == TrafficRowKind.HTTP_EXCHANGE) {
+                                                add(
+                                                    ContextMenuItem(
+                                                        label = "Send to API Studio",
+                                                        icon = KNetIcons.Send,
+                                                    ) {
+                                                        onSendToApiStudio(item.transactionId)
+                                                    },
+                                                )
                                             }
-                                        )
+                                            if (item.rowKind == TrafficRowKind.OPAQUE_FLOW) {
+                                                if (item.sourceApplicationId != null) {
+                                                    add(
+                                                        ContextMenuItem(label = "Always tunnel this application") {
+                                                            onProtectedTrafficAction(
+                                                                item.transactionId,
+                                                                ProtectedTrafficAction.TUNNEL,
+                                                                ProtectedTrafficQuickRuleScope.SOURCE_APPLICATION,
+                                                            )
+                                                        },
+                                                    )
+                                                }
+                                                add(
+                                                    ContextMenuItem(label = "Always tunnel this destination") {
+                                                        onProtectedTrafficAction(
+                                                            item.transactionId,
+                                                            ProtectedTrafficAction.TUNNEL,
+                                                            ProtectedTrafficQuickRuleScope.DESTINATION,
+                                                        )
+                                                    },
+                                                )
+                                                add(
+                                                    ContextMenuItem(label = "Attempt inspection next time") {
+                                                        onProtectedTrafficAction(
+                                                            item.transactionId,
+                                                            ProtectedTrafficAction.INSPECT,
+                                                            ProtectedTrafficQuickRuleScope.DESTINATION,
+                                                        )
+                                                    },
+                                                )
+                                                add(
+                                                    ContextMenuItem(label = "Block this destination") {
+                                                        onProtectedTrafficAction(
+                                                            item.transactionId,
+                                                            ProtectedTrafficAction.BLOCK,
+                                                            ProtectedTrafficQuickRuleScope.DESTINATION,
+                                                        )
+                                                    },
+                                                )
+                                                add(
+                                                    ContextMenuItem(label = "Copy destination") {
+                                                        onCopyDestination(item.host)
+                                                    },
+                                                )
+                                            }
+                                            add(
+                                            ContextMenuItem(
+                                                label = "Add to Network Conditions...",
+                                                icon = KNetIcons.Speed
+                                            ) {
+                                                onAddNetworkCondition(item.transactionId)
+                                            },
+                                            )
+                                            if (item.rowKind == TrafficRowKind.HTTP_EXCHANGE) {
+                                                add(
+                                                    ContextMenuItem(
+                                                        label = "Add Breakpoint Rule",
+                                                        icon = KNetIcons.Pause,
+                                                    ) {
+                                                        onAddBreakpointRule(item.transactionId)
+                                                    },
+                                                )
+                                            }
+                                        }
                                     }
 
                                     KNetContextMenuArea(items = contextMenuItems) {

@@ -5,6 +5,10 @@ import com.devuloopers.knet.engine.proxy.KNetProxyRuntimePolicy
 import com.devuloopers.knet.engine.proxy.ProxyConnectionAdmissionController
 import com.devuloopers.knet.engine.proxy.capture.ProxyConnectionCapture
 import com.devuloopers.knet.engine.proxy.capture.ProxyExchangeCapture
+import com.devuloopers.knet.engine.proxy.capture.ProxyOpaqueFlowCapture
+import com.devuloopers.knet.engine.proxy.capture.ProxyOpaqueFlowCaptureMetadata
+import com.devuloopers.knet.engine.proxy.capture.ProxyOpaqueSecurityProtocol
+import com.devuloopers.knet.engine.proxy.capture.ProxyOpaqueTransportProtocol
 import com.devuloopers.knet.engine.proxy.http.*
 import com.devuloopers.knet.engine.proxy.inspection.*
 import com.devuloopers.knet.engine.proxy.mapper.HttpMapper
@@ -15,6 +19,14 @@ import com.devuloopers.knet.engine.proxy.ssl.ProxyTrustManager
 import com.devuloopers.knet.engine.proxy.timing.NetworkTimingCollector
 import com.devuloopers.knet.engine.proxy.tls.ServerTlsContextProvider
 import com.devuloopers.knet.engine.proxy.tls.SniTlsContextHandlerFactory
+import com.devuloopers.knet.engine.proxy.tls.TlsInterceptionDecision
+import com.devuloopers.knet.engine.proxy.tls.TlsInterceptionMode
+import com.devuloopers.knet.engine.proxy.tls.TlsInterceptionPolicy
+import com.devuloopers.knet.engine.proxy.tls.TlsInterceptionRequest
+import com.devuloopers.knet.engine.proxy.tls.TlsInspectionOutcomeHandler
+import com.devuloopers.knet.engine.proxy.tls.TlsSourceApplicationId
+import com.devuloopers.knet.engine.proxy.tls.TlsClientHelloMetadata
+import com.devuloopers.knet.engine.proxy.tls.TlsClientHelloPolicyHandler
 import com.devuloopers.knet.engine.proxy.upstream.*
 import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
@@ -35,6 +47,8 @@ import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.timeout.ReadTimeoutHandler
 import io.netty.handler.timeout.WriteTimeoutHandler
 import io.netty.util.ReferenceCountUtil
+import io.netty.util.concurrent.Future
+import io.netty.util.concurrent.Promise
 import kotlinx.coroutines.CoroutineScope
 import java.net.InetSocketAddress
 import java.net.URI
@@ -80,11 +94,13 @@ internal class KNetStreamingProxyHandler(
     private val streamTransformerFactories: List<ProxyStreamTransformerFactory> = emptyList(),
     private val duplexInspectorFactories: List<ProxyDuplexInspectorFactory> = emptyList(),
     private val duplexTransformerFactories: List<ProxyDuplexTransformerFactory> = emptyList(),
+    private val tlsInterceptionPolicy: TlsInterceptionPolicy = TlsInterceptionPolicy.InspectAll,
 ) : ChannelInboundHandlerAdapter() {
 
     companion object {
         private const val MAX_PIPELINED_REQUESTS: Int = 16
         private const val MAX_ALREADY_DECODED_PIPELINE_BYTES: Long = 1L * 1024L * 1024L
+        private const val TLS_CLIENT_HELLO_POLICY_HANDLER: String = "knetTlsClientHelloPolicy"
     }
 
     private val pendingObjects = ArrayDeque<HttpObject>()
@@ -98,6 +114,7 @@ internal class KNetStreamingProxyHandler(
     private var pendingContentBytes: Long = 0L
     private var activeRequest: ActiveStreamingRequest? = null
     private var discardingConnectContent: Boolean = false
+    private var connectTransitionStarted: Boolean = false
 
     override fun channelRead(context: ChannelHandlerContext, message: Any) {
         val httpObject = message as? HttpObject
@@ -209,6 +226,9 @@ internal class KNetStreamingProxyHandler(
             occurredAtEpochMillis = mappedRequest.startedAtEpochMillis,
             origin = mappedRequest.origin,
             streamId = streamId,
+            appliedNetworkCondition = context.channel()
+                .attr(ProxyChannelAttributes.APPLIED_NETWORK_CONDITION)
+                .get(),
         )
         val streamInspectors = streamInspectorFactories.mapNotNull { factory ->
             runCatching { factory.create(mappedRequest.request.head, streamId, capture) }
@@ -868,6 +888,10 @@ internal class KNetStreamingProxyHandler(
 
     /** Handles CONNECT and defers bounded certificate generation until ClientHello reveals SNI. */
     private fun handleConnect(context: ChannelHandlerContext, request: HttpRequest) {
+        if (connectTransitionStarted) {
+            writeConnectFailure(context, request.protocolVersion(), HttpResponseStatus.CONFLICT)
+            return
+        }
         val parsedAuthority = AuthorityParser.parse(request.uri(), defaultPort = 443)
         if (parsedAuthority !is AuthorityParseResult.Valid) {
             writeBadRequest(context, "Invalid CONNECT authority", request.protocolVersion())
@@ -875,12 +899,269 @@ internal class KNetStreamingProxyHandler(
         }
         val host = parsedAuthority.authority.host
         val port = parsedAuthority.authority.port
+        val requestVersion = request.protocolVersion()
         context.channel().attr(ProxyChannelAttributes.ROUTE_HOST).set(host)
         context.channel().attr(ProxyChannelAttributes.PORT).set(port)
         context.channel().attr(ProxyChannelAttributes.IS_SSL).set(true)
 
+        val decision = runCatching {
+            tlsInterceptionPolicy.decide(
+                TlsInterceptionRequest(
+                    connectHost = host,
+                    connectPort = port,
+                    sourceApplication = sourceApplication(context),
+                ),
+            )
+        }.getOrElse { failure ->
+            KNetLogger.warn(STREAMING_TAG) {
+                "Protected traffic policy failed for $host:$port: ${failure::class.simpleName}"
+            }
+            TlsInterceptionDecision(TlsInterceptionMode.BLOCK)
+        }
+        connectTransitionStarted = true
+        when (decision.mode) {
+            TlsInterceptionMode.INSPECT -> installClassifiedConnect(context, requestVersion, host, port)
+            TlsInterceptionMode.TUNNEL -> openRawTunnel(context, requestVersion, host, port, decision)
+            TlsInterceptionMode.BLOCK -> blockProtectedTraffic(context, requestVersion, host, port, decision)
+        }
+    }
+
+    /** Sends CONNECT success and classifies one bounded ClientHello before certificate generation. */
+    private fun installClassifiedConnect(
+        context: ChannelHandlerContext,
+        requestVersion: HttpVersion,
+        host: String,
+        port: Int,
+    ) {
         val response = DefaultFullHttpResponse(
-            HttpOneSemantics.generatedResponseVersion(request.protocolVersion()),
+            HttpOneSemantics.generatedResponseVersion(requestVersion),
+            HttpResponseStatus(200, "Connection Established"),
+        )
+        response.headers().set("Proxy-Agent", "KNet")
+        context.channel().config().isAutoRead = false
+        context.writeAndFlush(response).addListener { writeFuture ->
+            context.executor().execute {
+                if (!writeFuture.isSuccess || !context.channel().isActive) {
+                    context.close()
+                    return@execute
+                }
+                try {
+                    removeDownstreamHttpHandlers(context.pipeline())
+                    context.pipeline().addBefore(
+                        context.name(),
+                        TLS_CLIENT_HELLO_POLICY_HANDLER,
+                        TlsClientHelloPolicyHandler(
+                            maximumClientHelloBytes = runtimePolicy.maximumTlsClientHelloBytes,
+                            handshakeTimeoutMillis = runtimePolicy.tlsHandshakeTimeoutMillis,
+                            lookupRoute = { classifierContext, metadata ->
+                                prepareClassifiedConnectRoute(classifierContext, host, port, metadata)
+                            },
+                            installRoute = { classifierContext, route, metadata ->
+                                installClassifiedConnectRoute(classifierContext, host, route, metadata)
+                            },
+                        ),
+                    )
+                    context.channel().config().isAutoRead = true
+                } catch (failure: Exception) {
+                    KNetLogger.error(STREAMING_TAG, failure) {
+                        "Failed to install ClientHello classifier for $host:$port"
+                    }
+                    context.close()
+                }
+            }
+        }
+    }
+
+    /** Evaluates SNI-aware policy and completes only after any raw upstream is ready. */
+    private fun prepareClassifiedConnectRoute(
+        context: ChannelHandlerContext,
+        host: String,
+        port: Int,
+        metadata: TlsClientHelloMetadata,
+    ): Future<ClassifiedConnectRoute> {
+        val decision = runCatching {
+            tlsInterceptionPolicy.decide(
+                TlsInterceptionRequest(
+                    connectHost = host,
+                    connectPort = port,
+                    serverName = metadata.serverName,
+                    sourceApplication = sourceApplication(context),
+                ),
+            )
+        }.getOrElse { failure ->
+            KNetLogger.warn(STREAMING_TAG) {
+                "SNI-aware protected traffic policy failed for $host:$port: ${failure::class.simpleName}"
+            }
+            TlsInterceptionDecision(TlsInterceptionMode.BLOCK)
+        }
+        return when (decision.mode) {
+            TlsInterceptionMode.INSPECT -> context.executor().newSucceededFuture(
+                ClassifiedConnectRoute.Inspect(decision),
+            )
+            TlsInterceptionMode.BLOCK -> context.executor().newSucceededFuture(
+                ClassifiedConnectRoute.Block(decision),
+            )
+            TlsInterceptionMode.TUNNEL -> prepareClassifiedRawTunnel(
+                context = context,
+                host = host,
+                port = port,
+                decision = decision,
+                metadata = metadata,
+            )
+        }
+    }
+
+    /** Resolves and dials a raw upstream while the bounded classifier retains the original hello. */
+    private fun prepareClassifiedRawTunnel(
+        context: ChannelHandlerContext,
+        host: String,
+        port: Int,
+        decision: TlsInterceptionDecision,
+        metadata: TlsClientHelloMetadata,
+    ): Future<ClassifiedConnectRoute> {
+        val promise: Promise<ClassifiedConnectRoute> = context.executor().newPromise()
+        val capture = startOpaqueTlsCapture(context, host, port, metadata.serverName, decision, metadata)
+        upstreamAddressResolver.resolve(host, port, fallbackDnsHost = null)
+            .whenComplete { resolvedRoute, resolutionFailure ->
+                context.executor().execute {
+                    if (!context.channel().isActive) {
+                        terminateOpaqueCapture(
+                            capture,
+                            ExchangeTerminalOutcome.Cancelled(
+                                TrafficTerminationReason.Transport.DOWNSTREAM_CANCELLED,
+                            ),
+                        )
+                        promise.tryFailure(IllegalStateException("Downstream closed during protected route lookup."))
+                        return@execute
+                    }
+                    if (resolutionFailure != null || resolvedRoute == null) {
+                        terminateOpaqueCapture(
+                            capture,
+                            ExchangeTerminalOutcome.Failed(
+                                TrafficTerminationReason.Transport.UPSTREAM_CONNECT_FAILED,
+                            ),
+                        )
+                        promise.tryFailure(
+                            resolutionFailure ?: IllegalStateException("Protected route resolution failed."),
+                        )
+                        return@execute
+                    }
+                    val lease = admissionController.tryAcquireUpstream()
+                    if (lease == null) {
+                        terminateOpaqueCapture(
+                            capture,
+                            ExchangeTerminalOutcome.Failed(
+                                TrafficTerminationReason.Transport.UPSTREAM_CONNECTION_LIMIT,
+                            ),
+                        )
+                        promise.tryFailure(IllegalStateException("Protected upstream connection limit reached."))
+                        return@execute
+                    }
+                    happyEyeballsDialer.connect(context.channel().eventLoop(), resolvedRoute)
+                        .whenComplete { connected, connectFailure ->
+                            context.executor().execute {
+                                if (connectFailure != null || connected == null || !context.channel().isActive) {
+                                    connected?.channel?.close()
+                                    lease.close()
+                                    terminateOpaqueCapture(
+                                        capture,
+                                        ExchangeTerminalOutcome.Failed(
+                                            TrafficTerminationReason.Transport.UPSTREAM_CONNECT_FAILED,
+                                        ),
+                                    )
+                                    promise.tryFailure(
+                                        connectFailure ?: IllegalStateException(
+                                            "Protected upstream connection failed.",
+                                        ),
+                                    )
+                                } else {
+                                    connected.channel.closeFuture().addListener { lease.close() }
+                                    promise.trySuccess(ClassifiedConnectRoute.Tunnel(connected.channel, capture))
+                                }
+                            }
+                        }
+                }
+            }
+        return promise
+    }
+
+    /** Atomically replaces the classifier with either TLS interception, raw relay, or policy close. */
+    private fun installClassifiedConnectRoute(
+        context: ChannelHandlerContext,
+        connectHost: String,
+        route: ClassifiedConnectRoute,
+        metadata: TlsClientHelloMetadata,
+    ) {
+        when (route) {
+            is ClassifiedConnectRoute.Inspect -> {
+                context.pipeline().replace(
+                    context.name(),
+                    PipelineHandlerNames.SSL,
+                    sniTlsContextHandlerFactory.create(context, connectHost),
+                )
+                context.pipeline().addAfter(
+                    PipelineHandlerNames.SSL,
+                    PipelineHandlerNames.TLS_INSPECTION_OUTCOME,
+                    TlsInspectionOutcomeHandler {
+                        startOpaqueTlsCapture(
+                            context = context,
+                            host = connectHost,
+                            port = context.channel().attr(ProxyChannelAttributes.PORT).get() ?: 443,
+                            serverName = metadata.serverName,
+                            decision = route.decision,
+                            metadata = metadata,
+                        )?.terminate(
+                            ExchangeTerminalOutcome.Failed(
+                                TrafficTerminationReason.Transport.DOWNSTREAM_TLS_HANDSHAKE_FAILED,
+                            ),
+                            Clock.System.now().toEpochMilliseconds(),
+                        )
+                    },
+                )
+                installDownstreamTlsProtocol(context.pipeline())
+            }
+            is ClassifiedConnectRoute.Tunnel -> installRawTunnelRelay(
+                context = context,
+                upstream = route.upstream,
+                capture = route.capture,
+            )
+            is ClassifiedConnectRoute.Block -> {
+                startOpaqueTlsCapture(
+                    context,
+                    connectHost,
+                    context.channel().attr(ProxyChannelAttributes.PORT).get() ?: 443,
+                    metadata.serverName,
+                    route.decision,
+                    metadata,
+                )?.terminate(
+                    ExchangeTerminalOutcome.Dropped(
+                        TrafficTerminationReason.Interception.PROTECTED_TRAFFIC_BLOCKED,
+                    ),
+                    Clock.System.now().toEpochMilliseconds(),
+                )
+                context.close()
+            }
+        }
+    }
+
+    /** Installs the HTTP object protocol chosen after downstream TLS terminates. */
+    private fun installDownstreamTlsProtocol(pipeline: io.netty.channel.ChannelPipeline) {
+        val tlsProtocolInstaller = installTlsApplicationProtocol
+        if (tlsProtocolInstaller == null) {
+            pipeline.addAfter(PipelineHandlerNames.SSL, PipelineHandlerNames.HTTP_CODEC, HttpServerCodec())
+        } else {
+            tlsProtocolInstaller(pipeline)
+        }
+    }
+
+    /** Installs the existing certificate-generating TLS interception pipeline. */
+    private fun installInterceptedConnect(
+        context: ChannelHandlerContext,
+        requestVersion: HttpVersion,
+        host: String,
+    ) {
+        val response = DefaultFullHttpResponse(
+            HttpOneSemantics.generatedResponseVersion(requestVersion),
             HttpResponseStatus(200, "Connection Established"),
         )
         response.headers().set("Proxy-Agent", "KNet")
@@ -895,16 +1176,7 @@ internal class KNetStreamingProxyHandler(
                 pipeline.get(HttpServerCodec::class.java)?.let(pipeline::remove)
                 pipeline.get(PipelineHandlerNames.HTTP_AGGREGATOR)?.let { pipeline.remove(it) }
                 pipeline.addFirst(PipelineHandlerNames.SSL, sniTlsContextHandlerFactory.create(context, host))
-                val tlsProtocolInstaller = installTlsApplicationProtocol
-                if (tlsProtocolInstaller == null) {
-                    pipeline.addAfter(
-                        PipelineHandlerNames.SSL,
-                        PipelineHandlerNames.HTTP_CODEC,
-                        HttpServerCodec(),
-                    )
-                } else {
-                    tlsProtocolInstaller(pipeline)
-                }
+                installDownstreamTlsProtocol(pipeline)
                 context.channel().config().isAutoRead = true
             } catch (pipelineFailure: Exception) {
                 KNetLogger.error(STREAMING_TAG, pipelineFailure) {
@@ -913,6 +1185,256 @@ internal class KNetStreamingProxyHandler(
                 context.close()
             }
         }
+    }
+
+    /** Opens an end-to-end encrypted raw tunnel without generating a downstream certificate. */
+    private fun openRawTunnel(
+        context: ChannelHandlerContext,
+        requestVersion: HttpVersion,
+        host: String,
+        port: Int,
+        decision: TlsInterceptionDecision,
+    ) {
+        context.channel().config().isAutoRead = false
+        val capture = startOpaqueTlsCapture(context, host, port, serverName = null, decision)
+        upstreamAddressResolver.resolve(host, port, fallbackDnsHost = null)
+            .whenComplete { resolvedRoute, resolutionFailure ->
+                context.executor().execute {
+                    if (!context.channel().isActive) {
+                        capture?.terminate(
+                            ExchangeTerminalOutcome.Cancelled(
+                                TrafficTerminationReason.Transport.DOWNSTREAM_CANCELLED,
+                            ),
+                            Clock.System.now().toEpochMilliseconds(),
+                        )
+                        return@execute
+                    }
+                    if (resolutionFailure != null || resolvedRoute == null) {
+                        capture?.terminate(
+                            ExchangeTerminalOutcome.Failed(
+                                TrafficTerminationReason.Transport.UPSTREAM_CONNECT_FAILED,
+                            ),
+                            Clock.System.now().toEpochMilliseconds(),
+                        )
+                        writeConnectFailure(
+                            context,
+                            requestVersion,
+                            HttpResponseStatus.BAD_GATEWAY,
+                        )
+                        return@execute
+                    }
+                    connectRawTunnel(context, requestVersion, resolvedRoute, capture)
+                }
+            }
+    }
+
+    /** Acquires bounded upstream admission before entering the shared dual-stack dialer. */
+    private fun connectRawTunnel(
+        context: ChannelHandlerContext,
+        requestVersion: HttpVersion,
+        resolvedRoute: ResolvedUpstreamRoute,
+        capture: ProxyOpaqueFlowCapture?,
+    ) {
+        val upstreamLease = admissionController.tryAcquireUpstream()
+        if (upstreamLease == null) {
+            capture?.terminate(
+                ExchangeTerminalOutcome.Failed(
+                    TrafficTerminationReason.Transport.UPSTREAM_CONNECTION_LIMIT,
+                ),
+                Clock.System.now().toEpochMilliseconds(),
+            )
+            writeConnectFailure(context, requestVersion, HttpResponseStatus.SERVICE_UNAVAILABLE)
+            return
+        }
+        happyEyeballsDialer.connect(context.channel().eventLoop(), resolvedRoute)
+            .whenComplete { connected, connectionFailure ->
+                context.executor().execute {
+                    if (!context.channel().isActive) {
+                        connected?.channel?.close()
+                        upstreamLease.close()
+                        capture?.terminate(
+                            ExchangeTerminalOutcome.Cancelled(
+                                TrafficTerminationReason.Transport.DOWNSTREAM_CANCELLED,
+                            ),
+                            Clock.System.now().toEpochMilliseconds(),
+                        )
+                        return@execute
+                    }
+                    if (connectionFailure != null || connected == null) {
+                        upstreamLease.close()
+                        capture?.terminate(
+                            ExchangeTerminalOutcome.Failed(
+                                TrafficTerminationReason.Transport.UPSTREAM_CONNECT_FAILED,
+                            ),
+                            Clock.System.now().toEpochMilliseconds(),
+                        )
+                        writeConnectFailure(
+                            context,
+                            requestVersion,
+                            HttpResponseStatus.BAD_GATEWAY,
+                        )
+                        return@execute
+                    }
+                    val upstream = connected.channel
+                    upstream.closeFuture().addListener { upstreamLease.close() }
+                    installRawTunnel(context, requestVersion, upstream, capture)
+                }
+            }
+    }
+
+    /** Sends CONNECT success through the HTTP encoder, then atomically switches both channels to raw relay. */
+    private fun installRawTunnel(
+        context: ChannelHandlerContext,
+        requestVersion: HttpVersion,
+        upstream: Channel,
+        capture: ProxyOpaqueFlowCapture?,
+    ) {
+        val response = DefaultFullHttpResponse(
+            HttpOneSemantics.generatedResponseVersion(requestVersion),
+            HttpResponseStatus(200, "Connection Established"),
+        )
+        response.headers().set("Proxy-Agent", "KNet")
+        context.writeAndFlush(response).addListener { responseWrite ->
+            context.executor().execute {
+                if (!responseWrite.isSuccess || !context.channel().isActive) {
+                    upstream.close()
+                    capture?.terminate(
+                        ExchangeTerminalOutcome.Failed(
+                            TrafficTerminationReason.Transport.DOWNSTREAM_RESPONSE_REJECTED,
+                        ),
+                        Clock.System.now().toEpochMilliseconds(),
+                    )
+                    context.close()
+                    return@execute
+                }
+
+                installRawTunnelRelay(context, upstream, capture)
+            }
+        }
+    }
+
+    /** Installs both directions of an already-connected protected raw tunnel. */
+    private fun installRawTunnelRelay(
+        context: ChannelHandlerContext,
+        upstream: Channel,
+        capture: ProxyOpaqueFlowCapture?,
+    ) {
+        val lifecycle = RawTunnelLifecycle(capture)
+        val downstreamPipeline = context.pipeline()
+        removeDownstreamHttpHandlers(downstreamPipeline)
+        downstreamPipeline.get(PipelineHandlerNames.PROXY_HANDLER)
+            ?.takeIf { handler -> downstreamPipeline.context(handler)?.name() != context.name() }
+            ?.let(downstreamPipeline::remove)
+        downstreamPipeline.replace(
+            context.name(),
+            PipelineHandlerNames.DUPLEX_RELAY,
+            KNetRawTunnelRelayHandler(
+                peer = upstream,
+                direction = TrafficDirection.CLIENT_TO_SERVER,
+                capture = capture,
+                lifecycle = lifecycle,
+            ),
+        )
+        upstream.pipeline().addLast(
+            PipelineHandlerNames.READ_TIMEOUT,
+            ReadTimeoutHandler(runtimePolicy.readIdleTimeoutMillis, TimeUnit.MILLISECONDS),
+        )
+        upstream.pipeline().addLast(
+            PipelineHandlerNames.WRITE_TIMEOUT,
+            WriteTimeoutHandler(runtimePolicy.writeIdleTimeoutMillis, TimeUnit.MILLISECONDS),
+        )
+        upstream.pipeline().addLast(
+            PipelineHandlerNames.DUPLEX_RELAY,
+            KNetRawTunnelRelayHandler(
+                peer = context.channel(),
+                direction = TrafficDirection.SERVER_TO_CLIENT,
+                capture = capture,
+                lifecycle = lifecycle,
+            ),
+        )
+        upstream.read()
+        context.channel().read()
+    }
+
+    /** Removes HTTP decoders before either TLS or raw ClientHello bytes are forwarded. */
+    private fun removeDownstreamHttpHandlers(pipeline: io.netty.channel.ChannelPipeline) {
+        pipeline.get(PipelineHandlerNames.HTTP_AGGREGATOR)?.let(pipeline::remove)
+        pipeline.get(PipelineHandlerNames.SELECTIVE_HTTP_AGGREGATOR)?.let(pipeline::remove)
+        pipeline.get(PipelineHandlerNames.HTTP_CODEC)?.let(pipeline::remove)
+        pipeline.toMap().entries
+            .filter { (_, handler) -> handler is HttpServerCodec || handler is HttpServerUpgradeHandler }
+            .forEach { (name, _) -> pipeline.get(name)?.let(pipeline::remove) }
+    }
+
+    /** Starts payload-blind TLS-flow capture with exact policy evidence. */
+    private fun startOpaqueTlsCapture(
+        context: ChannelHandlerContext,
+        host: String,
+        port: Int,
+        serverName: String?,
+        decision: TlsInterceptionDecision,
+        metadata: TlsClientHelloMetadata? = null,
+    ): ProxyOpaqueFlowCapture? = connectionCapture?.startOpaqueFlow(
+        ProxyOpaqueFlowCaptureMetadata(
+            destination = com.devuloopers.knet.traffic.model.TrafficEndpoint(host, port),
+            serverName = serverName,
+            transport = ProxyOpaqueTransportProtocol.TCP,
+            security = ProxyOpaqueSecurityProtocol.TLS,
+            policyRuleId = decision.ruleId?.value,
+            policyAction = com.devuloopers.knet.engine.proxy.capture.ProxyOpaquePolicyAction.valueOf(
+                decision.policyAction.name,
+            ),
+            policyGroupId = decision.policyGroupId,
+            sourceApplicationId = context.channel().attr(ProxyChannelAttributes.SOURCE_APPLICATION_ID).get(),
+            appliedNetworkCondition = context.channel()
+                .attr(ProxyChannelAttributes.APPLIED_NETWORK_CONDITION)
+                .get(),
+            occurredAtEpochMillis = Clock.System.now().toEpochMilliseconds(),
+            offeredApplicationProtocols = metadata?.offeredApplicationProtocols.orEmpty(),
+            offeredTlsVersions = metadata?.offeredTlsVersions.orEmpty(),
+        ),
+    )
+
+    /** Returns a validated typed source identity supplied by the trusted ingress boundary. */
+    private fun sourceApplication(context: ChannelHandlerContext): com.devuloopers.knet.engine.proxy.tls.TlsSourceApplicationId? =
+        context.channel().attr(ProxyChannelAttributes.SOURCE_APPLICATION_ID).get()
+            ?.let(::TlsSourceApplicationId)
+
+    /** Publishes one terminal capture result at the current clock boundary. */
+    private fun terminateOpaqueCapture(capture: ProxyOpaqueFlowCapture?, outcome: ExchangeTerminalOutcome) {
+        capture?.terminate(outcome, Clock.System.now().toEpochMilliseconds())
+    }
+
+    /** Records and rejects a policy-blocked protected connection before upstream dialing. */
+    private fun blockProtectedTraffic(
+        context: ChannelHandlerContext,
+        requestVersion: HttpVersion,
+        host: String,
+        port: Int,
+        decision: TlsInterceptionDecision,
+    ) {
+        startOpaqueTlsCapture(context, host, port, serverName = null, decision)?.terminate(
+            ExchangeTerminalOutcome.Dropped(
+                TrafficTerminationReason.Interception.PROTECTED_TRAFFIC_BLOCKED,
+            ),
+            Clock.System.now().toEpochMilliseconds(),
+        )
+        writeConnectFailure(context, requestVersion, HttpResponseStatus.FORBIDDEN)
+    }
+
+    /** Writes a terminal CONNECT response while the HTTP encoder still owns the pipeline. */
+    private fun writeConnectFailure(
+        context: ChannelHandlerContext,
+        requestVersion: HttpVersion,
+        status: HttpResponseStatus,
+    ) {
+        val response = DefaultFullHttpResponse(
+            HttpOneSemantics.generatedResponseVersion(requestVersion),
+            status,
+        )
+        response.headers().set(HttpHeaderNames.CONTENT_LENGTH, 0)
+        response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE)
+        context.writeAndFlush(response).addListener { context.close() }
     }
 
     /** Resolves absolute/origin-form request routing without accepting malformed authorities. */
@@ -1239,6 +1761,21 @@ internal class KNetStreamingProxyHandler(
         val isSsl: Boolean,
         val relativeUri: String,
     )
+
+    /** Prepared result of one bounded ClientHello policy lookup. */
+    private sealed interface ClassifiedConnectRoute {
+        /** Continue through KNet's certificate-backed TLS inspection pipeline. */
+        data class Inspect(val decision: TlsInterceptionDecision) : ClassifiedConnectRoute
+
+        /** Relay the original ClientHello and all following bytes through [upstream]. */
+        data class Tunnel(
+            val upstream: Channel,
+            val capture: ProxyOpaqueFlowCapture?,
+        ) : ClassifiedConnectRoute
+
+        /** Close the already-established CONNECT stream without dialing the destination. */
+        data class Block(val decision: TlsInterceptionDecision) : ClassifiedConnectRoute
+    }
 
     /** Mutable event-loop-confined ownership for one streaming HTTP/1 exchange. */
     private data class ActiveStreamingRequest(

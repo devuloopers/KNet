@@ -8,6 +8,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.application.contract.apistudio.ApiStudioEditorId
+import com.devuloopers.knet.application.contract.apistudio.CapturedApiStudioRequest
 import com.devuloopers.knet.ui.core.components.divider.HorizontalDivider
 import com.devuloopers.knet.ui.core.components.divider.VerticalDivider
 import com.devuloopers.knet.ui.core.components.progress.CircularProgress
@@ -50,6 +51,8 @@ fun ApiStudioScreen(
     viewModel: ApiStudioViewModel,
     collectionsViewModel: CollectionsViewModel,
     protocolContributions: List<ApiStudioWorkspaceContribution> = emptyList(),
+    capturedImport: CapturedApiStudioRequest? = null,
+    onCapturedImportConsumed: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val themeColors = KNetTheme.colors
@@ -93,6 +96,21 @@ fun ApiStudioScreen(
         collectionsViewModel.createWorkspaceDraft(document) {
             selectedEditorId = contribution.editorId
             rememberWorkspaceSelection(contribution.editorId, document.id)
+        }
+    }
+
+    LaunchedEffect(capturedImport?.sourceExchangeId) {
+        val captured = capturedImport ?: return@LaunchedEffect
+        val contribution = protocolContributions.firstOrNull { it.kind == captured.kind }
+        val document = contribution?.createImportedDocument("doc_${Uuid.random()}", captured)
+        if (contribution != null && document != null) {
+            collectionsViewModel.createWorkspaceDraft(document) {
+                selectedEditorId = contribution.editorId
+                rememberWorkspaceSelection(contribution.editorId, document.id)
+                onCapturedImportConsumed()
+            }
+        } else {
+            onCapturedImportConsumed()
         }
     }
 

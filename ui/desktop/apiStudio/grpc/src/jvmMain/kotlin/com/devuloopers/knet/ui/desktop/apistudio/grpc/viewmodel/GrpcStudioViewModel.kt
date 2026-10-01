@@ -17,6 +17,7 @@ import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolRout
 import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolReflectionTarget
 import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolSchemaSource
 import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
+import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionsRepository
 import com.devuloopers.knet.application.contract.traffic.CaptureSessionState
 import com.devuloopers.knet.application.usecase.apistudio.CreateApiStudioProtocolDocumentUseCase
 import com.devuloopers.knet.application.usecase.apistudio.CreateApiStudioWorkspaceDocumentUseCase
@@ -68,6 +69,7 @@ class GrpcStudioViewModel(
     observeTrafficCaptureState: ObserveTrafficCaptureStateUseCase,
     private val draftCodec: GrpcWorkspaceDraftCodec,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val networkConditionsRepository: NetworkConditionsRepository? = null,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(GrpcStudioState(documentId = "", isDirty = false))
     val state: StateFlow<GrpcStudioState> = mutableState.asStateFlow()
@@ -363,7 +365,9 @@ class GrpcStudioViewModel(
     fun selectEvent(index: Int) = mutableState.update { it.copy(selectedEventIndex = index) }
 
     private fun activeRoute(): ApiStudioProtocolRoute {
-        if (captureState.value !is CaptureSessionState.Capturing) return ApiStudioProtocolRoute.Direct
+        val captureActive = captureState.value is CaptureSessionState.Capturing
+        val conditionsActive = networkConditionsRepository?.configuration?.value?.enabled == true
+        if (!captureActive && !conditionsActive) return ApiStudioProtocolRoute.Direct
         val port = (proxyState.value as? ProxyRuntimeState.Running)
             ?.handle?.endpoints?.endpoints?.firstOrNull()?.port
             ?: return ApiStudioProtocolRoute.Direct

@@ -62,6 +62,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import io.netty.util.concurrent.ScheduledFuture
 import com.devuloopers.knet.engine.proxy.tls.ServerTlsContextProvider
+import com.devuloopers.knet.engine.proxy.tls.TlsInterceptionPolicy
 
 
 /**
@@ -85,6 +86,7 @@ import com.devuloopers.knet.engine.proxy.tls.ServerTlsContextProvider
  * switching response. Ordinary HTTP traffic never enters this path.
  * @property duplexTransformerFactories Optional post-upgrade message gates. A connection remains
  * on the zero-copy relay path when no factory claims it.
+ * @property tlsInterceptionPolicy Selects inspected, end-to-end tunnelled, or blocked CONNECT traffic.
  */
 class KNetProxyServer(
     val bindHost: String = DEFAULT_BIND_HOST,
@@ -103,6 +105,7 @@ class KNetProxyServer(
     private val streamTransformerFactories: List<ProxyStreamTransformerFactory> = emptyList(),
     private val duplexInspectorFactories: List<ProxyDuplexInspectorFactory> = emptyList(),
     private val duplexTransformerFactories: List<ProxyDuplexTransformerFactory> = emptyList(),
+    private val tlsInterceptionPolicy: TlsInterceptionPolicy = TlsInterceptionPolicy.InspectAll,
 ) {
 
     companion object {
@@ -183,10 +186,10 @@ class KNetProxyServer(
                             return
                         }
                         channel.closeFuture().addListener { downstreamLease.close() }
+                        val downstream = TrafficEndpoint(remoteAddress.hostString, remoteAddress.port)
+                        val attributedIngress = ingressAttribution?.claim(downstream) ?: ingressContext
                         val connectionCapture = captureSink?.let { sink ->
                             val local = channel.localAddress()
-                            val downstream = TrafficEndpoint(remoteAddress.hostString, remoteAddress.port)
-                            val attributedIngress = ingressAttribution?.claim(downstream) ?: ingressContext
                             runCatching {
                                 sink.openConnection(
                                     ProxyCaptureConnectionMetadata(
@@ -198,6 +201,7 @@ class KNetProxyServer(
                             }.getOrNull()
                         }
                         channel.attr(ProxyChannelAttributes.CONNECTION_CAPTURE).set(connectionCapture)
+                        channel.attr(ProxyChannelAttributes.SOURCE_APPLICATION_ID).set(attributedIngress.sourceApplicationId)
                         channel.closeFuture().addListener { connectionCapture?.close() }
                         activeChannels.add(channel)
                         val pipeline = channel.pipeline()
@@ -382,6 +386,12 @@ class KNetProxyServer(
     ): ChannelInitializer<Channel> = object : ChannelInitializer<Channel>() {
         override fun initChannel(channel: Channel) {
             channel.attr(ProxyChannelAttributes.CONNECTION_CAPTURE).set(connectionCapture)
+            channel.attr(ProxyChannelAttributes.SOURCE_APPLICATION_ID).set(
+                parentChannel.attr(ProxyChannelAttributes.SOURCE_APPLICATION_ID).get(),
+            )
+            channel.attr(ProxyChannelAttributes.APPLIED_NETWORK_CONDITION).set(
+                parentChannel.attr(ProxyChannelAttributes.APPLIED_NETWORK_CONDITION).get(),
+            )
             channel.attr(ProxyChannelAttributes.ROUTE_HOST).set(
                 parentChannel.attr(ProxyChannelAttributes.ROUTE_HOST).get(),
             )
@@ -496,6 +506,7 @@ class KNetProxyServer(
         streamTransformerFactories = streamTransformerFactories,
         duplexInspectorFactories = duplexInspectorFactories,
         duplexTransformerFactories = duplexTransformerFactories,
+        tlsInterceptionPolicy = tlsInterceptionPolicy,
         installTlsApplicationProtocol = { pipeline ->
             pipeline.addAfter(
                 PipelineHandlerNames.SSL,

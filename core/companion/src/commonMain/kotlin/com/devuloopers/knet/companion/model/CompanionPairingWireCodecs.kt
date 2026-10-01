@@ -211,6 +211,9 @@ public object CompanionControlProtocol {
     /** Authenticates a discovered address and returns canonical identity plus current service ports. */
     public const val RECONCILE_PATH: String = "/companion/v1/endpoints/reconcile"
 
+    /** Returns the current bounded packet-condition policy to an authenticated paired companion. */
+    public const val NETWORK_CONDITIONS_PATH: String = "/companion/v1/network-conditions"
+
     /** Media type for a proof-bearing pairing completion request. */
     public const val PAIR_REQUEST_MEDIA_TYPE: String = "application/vnd.knet.companion-pair-request"
 
@@ -225,6 +228,8 @@ public object CompanionControlProtocol {
 
     public const val RECONCILE_REQUEST_MEDIA_TYPE: String = "application/vnd.knet.companion-endpoint-request"
     public const val RECONCILE_RESPONSE_MEDIA_TYPE: String = "application/vnd.knet.companion-endpoint-descriptor"
+    public const val NETWORK_CONDITIONS_RESPONSE_MEDIA_TYPE: String =
+        "application/vnd.knet.companion-network-conditions"
 
     /** Maximum accepted request body across control-plane operations. */
     public const val MAXIMUM_REQUEST_BYTES: Int = 32 * 1024

@@ -11,6 +11,11 @@ import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.HttpExchangeSnapshot
 import com.devuloopers.knet.traffic.model.TrafficOrigin
 import com.devuloopers.knet.traffic.model.TrafficTerminationReason
+import com.devuloopers.knet.traffic.model.OpaqueFlowSnapshot
+import com.devuloopers.knet.traffic.model.OpaqueSecurityProtocol
+import com.devuloopers.knet.traffic.model.OpaqueTransportProtocol
+import com.devuloopers.knet.traffic.model.OpaqueFlowPolicyAction
+import com.devuloopers.knet.traffic.model.AppliedNetworkCondition
 import com.devuloopers.knet.traffic.model.body.MessageBodyRef
 import com.devuloopers.knet.traffic.model.http.RequestTarget
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
@@ -43,6 +48,15 @@ sealed interface TrafficInterceptionUiState {
     }
 }
 
+/** Traffic row semantic kind used to keep HTTP-only actions away from opaque transport flows. */
+enum class TrafficRowKind {
+    /** Decrypted or cleartext canonical HTTP exchange. */
+    HTTP_EXCHANGE,
+
+    /** Payload-opaque TCP, TLS, UDP, or QUIC transport flow. */
+    OPAQUE_FLOW,
+}
+
 /**
  * Bounded row metadata owned by the desktop Traffic presentation.
  *
@@ -54,6 +68,14 @@ sealed interface TrafficInterceptionUiState {
  * @property method Actual HTTP transport method retained for filters and request behavior.
  * @property displayMethod Protocol-aware method identity rendered in the table, such as `POST` or `GQL`.
  * @property requestKind Semantic request kind used for stable presentation styling.
+ * @property rowKind Whether the row represents HTTP semantics or a payload-opaque flow.
+ * @property sourceApplicationId Verified source application identity for an opaque flow.
+ * @property policyRuleId Stable policy evidence for an opaque flow.
+ * @property opaqueSecurity Proven opaque-flow security classification.
+ * @property opaqueTransport Transport of an opaque flow.
+ * @property offeredApplicationProtocols Bounded ClientHello ALPN tokens for an opaque TLS flow.
+ * @property offeredTlsVersions Bounded ClientHello TLS-version tokens for an opaque TLS flow.
+ * @property appliedNetworkCondition Network-condition profile/rule evidence selected for this row.
  */
 data class TrafficRowUiState(
     val sequenceNumber: Long,
@@ -61,6 +83,16 @@ data class TrafficRowUiState(
     val method: String,
     val displayMethod: String = method,
     val requestKind: RequestKindId = RequestKindId.HTTP,
+    val rowKind: TrafficRowKind = TrafficRowKind.HTTP_EXCHANGE,
+    val sourceApplicationId: String? = null,
+    val policyRuleId: String? = null,
+    val policyAction: OpaqueFlowPolicyAction? = null,
+    val policyGroupId: String? = null,
+    val opaqueSecurity: OpaqueSecurityProtocol? = null,
+    val opaqueTransport: OpaqueTransportProtocol? = null,
+    val offeredApplicationProtocols: List<String> = emptyList(),
+    val offeredTlsVersions: List<String> = emptyList(),
+    val appliedNetworkCondition: AppliedNetworkCondition? = null,
     val scheme: HttpScheme,
     val host: String,
     val path: String,
@@ -95,6 +127,59 @@ data class TrafficRowUiState(
     fun withDescriptor(descriptor: RequestDescriptor): TrafficRowUiState = copy(
         displayMethod = descriptor.badgeLabel,
         requestKind = descriptor.kind,
+    )
+}
+
+/** Maps a canonical payload-opaque flow into a body-free Traffic row. */
+internal fun OpaqueFlowSnapshot.toTrafficRowUiState(sequenceNumber: Long): TrafficRowUiState {
+    val durationMillis = completedAtEpochMillis?.minus(startedAtEpochMillis)
+    val displayProtocol = when (security) {
+        OpaqueSecurityProtocol.TLS -> "TLS tunnel"
+        OpaqueSecurityProtocol.QUIC -> "QUIC"
+        OpaqueSecurityProtocol.UNKNOWN -> transport.name
+    }
+    val schemeToken = when (security) {
+        OpaqueSecurityProtocol.TLS,
+        OpaqueSecurityProtocol.QUIC,
+        -> "https"
+        OpaqueSecurityProtocol.UNKNOWN -> transport.name.lowercase()
+    }
+    return TrafficRowUiState(
+        sequenceNumber = sequenceNumber,
+        transactionId = id.value,
+        method = displayProtocol,
+        displayMethod = displayProtocol,
+        rowKind = TrafficRowKind.OPAQUE_FLOW,
+        scheme = HttpScheme.fromToken(schemeToken),
+        host = buildString {
+            append(serverName ?: destination.host)
+            destination.port?.let { append(':').append(it) }
+        },
+        path = "Encrypted payload unavailable",
+        status = 0,
+        statusText = terminalOutcome.toTrafficStatusLabel(),
+        protocol = ApplicationProtocol.fromToken(displayProtocol),
+        clientProtocol = ApplicationProtocol.fromToken(displayProtocol),
+        connectionId = connectionId.value,
+        timestamp = startedAtEpochMillis,
+        formattedTimestamp = KNetDateTime.time(startedAtEpochMillis, includeMilliseconds = true),
+        formattedTime = durationMillis?.let { "$it ms" } ?: "-",
+        transferredBytes = uploadedBytes + downloadedBytes,
+        responseBytes = downloadedBytes,
+        formattedSize = formatBytes(uploadedBytes + downloadedBytes),
+        dateGroup = KNetDateTime.dateKey(startedAtEpochMillis),
+        contentType = null,
+        timings = ExchangeTimings(totalMillis = durationMillis),
+        terminalOutcome = terminalOutcome,
+        sourceApplicationId = sourceApplicationId,
+        policyRuleId = policyRuleId,
+        policyAction = policyAction,
+        policyGroupId = policyGroupId,
+        opaqueSecurity = security,
+        opaqueTransport = transport,
+        offeredApplicationProtocols = offeredApplicationProtocols,
+        offeredTlsVersions = offeredTlsVersions,
+        appliedNetworkCondition = appliedNetworkCondition,
     )
 }
 
@@ -194,6 +279,7 @@ internal fun HttpExchangeSnapshot.toTrafficRowUiState(sequenceNumber: Long = 0L)
             ?: request.head.headers.firstValue("Content-Type"),
         timings = timings,
         terminalOutcome = terminalOutcome,
+        appliedNetworkCondition = appliedNetworkCondition,
     )
 }
 
@@ -212,6 +298,7 @@ internal fun ExchangeTerminalOutcome?.toTrafficStatusLabel(): String = when (thi
         TrafficTerminationReason.Transport.READ_TIMED_OUT,
         TrafficTerminationReason.Transport.WRITE_TIMED_OUT,
         -> "Timed Out"
+        TrafficTerminationReason.Transport.DOWNSTREAM_TLS_HANDSHAKE_FAILED -> "TLS Rejected"
         else -> "Failed"
     }
     null -> "Pending"

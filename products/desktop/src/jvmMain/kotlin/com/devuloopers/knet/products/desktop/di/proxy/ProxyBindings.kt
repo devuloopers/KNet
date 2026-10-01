@@ -27,6 +27,7 @@ import kotlinx.coroutines.SupervisorJob
 import org.koin.core.module.Module
 import org.koin.dsl.bind
 import org.koin.dsl.module
+import com.devuloopers.knet.engine.simulator.NetworkConditionEngine
 
 /** Proxy transport runtime, breakpoint gate, capture session, and proxy-control composition. */
 internal val proxyBindings: Module = module {
@@ -67,6 +68,8 @@ internal val proxyBindings: Module = module {
             ),
             duplexInspectorFactories = listOf(WebSocketDuplexInspectorFactory()),
             duplexTransformerFactories = listOf(get<WebSocketBreakpointTransformerFactory>()),
+            networkConditionEngine = get<NetworkConditionEngine>(),
+            tlsInterceptionPolicy = get(),
         )
     }
     single {

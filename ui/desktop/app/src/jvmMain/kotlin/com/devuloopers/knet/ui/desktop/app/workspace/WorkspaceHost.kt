@@ -13,6 +13,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,6 +44,11 @@ import com.devuloopers.knet.ui.desktop.connectivity.viewmodel.ConnectDeviceViewM
 import com.devuloopers.knet.ui.desktop.traffic.view.TrafficScreen
 import com.devuloopers.knet.ui.desktop.traffic.model.TrafficInterceptionUiState
 import com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficViewModel
+import com.devuloopers.knet.ui.desktop.networkconditions.view.NetworkConditionsScreen
+import com.devuloopers.knet.ui.desktop.networkconditions.viewmodel.NetworkConditionsViewModel
+import com.devuloopers.knet.ui.desktop.protectedtraffic.view.ProtectedTrafficScreen
+import com.devuloopers.knet.ui.desktop.protectedtraffic.viewmodel.ProtectedTrafficViewModel
+import com.devuloopers.knet.domain.request.descriptor.RequestKindId
 import org.koin.compose.viewmodel.koinViewModel
 import org.koin.compose.getKoin
 
@@ -58,9 +65,14 @@ fun KNetWorkspaceHost(
     val collectionsViewModel: CollectionsViewModel = koinViewModel()
     val koin = getKoin()
     val apiStudioProtocolContributions = remember(koin) { koin.getAll<ApiStudioWorkspaceContribution>() }
+    var capturedProtocolImport by remember {
+        mutableStateOf<com.devuloopers.knet.application.contract.apistudio.CapturedApiStudioRequest?>(null)
+    }
     val breakpointViewModel: BreakpointManagerViewModel = koinViewModel()
     val breakpointState by breakpointViewModel.uiState.collectAsState()
     val trafficViewModel: TrafficViewModel = koinViewModel()
+    val networkConditionsViewModel: NetworkConditionsViewModel = koinViewModel()
+    val protectedTrafficViewModel: ProtectedTrafficViewModel = koinViewModel()
     val trafficState by trafficViewModel.uiState.collectAsState()
     val drawerEvent = breakpointState.activeEvent?.takeIf { event ->
         trafficState.transactions.any { row ->
@@ -80,9 +92,23 @@ fun KNetWorkspaceHost(
             DesktopDestination.Traffic -> {
                 TrafficScreen(
                     viewModel = trafficViewModel,
-                    onSendToApiStudio = { spec ->
-                        apiStudioViewModel.importRequestSpec(spec)
+                    onSendToApiStudio = { captured ->
+                        if (captured.kind == RequestKindId.WEBSOCKET ||
+                            captured.kind == RequestKindId.GRAPHQL_WEBSOCKET
+                        ) {
+                            capturedProtocolImport = captured
+                        } else {
+                            apiStudioViewModel.importRequestSpec(captured.spec)
+                        }
                         onNavigateToDestination(DesktopDestination.ApiStudio)
+                    },
+                    onAddNetworkCondition = { exchangeId ->
+                        networkConditionsViewModel.prepareFromTraffic(exchangeId)
+                        onNavigateToDestination(DesktopDestination.NetworkConditions)
+                    },
+                    onProtectedTrafficAction = { flowId, action, scope ->
+                        protectedTrafficViewModel.applyFlowAction(flowId, action, scope)
+                        onNavigateToDestination(DesktopDestination.ProtectedTraffic)
                     },
                     modifier = Modifier.fillMaxSize()
                 )
@@ -122,7 +148,23 @@ fun KNetWorkspaceHost(
                     viewModel = apiStudioViewModel,
                     collectionsViewModel = collectionsViewModel,
                     protocolContributions = apiStudioProtocolContributions,
+                    capturedImport = capturedProtocolImport,
+                    onCapturedImportConsumed = { capturedProtocolImport = null },
                     modifier = Modifier.fillMaxSize()
+                )
+            }
+
+            DesktopDestination.NetworkConditions -> {
+                NetworkConditionsScreen(
+                    viewModel = networkConditionsViewModel,
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
+
+            DesktopDestination.ProtectedTraffic -> {
+                ProtectedTrafficScreen(
+                    viewModel = protectedTrafficViewModel,
+                    modifier = Modifier.fillMaxSize(),
                 )
             }
 

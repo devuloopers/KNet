@@ -29,6 +29,9 @@ kotlin {
     }
 
     sourceSets {
+        iosMain.dependencies {
+            implementation(project(":core:companion"))
+        }
         iosTest.dependencies {
             implementation(kotlin("test"))
         }

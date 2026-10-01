@@ -22,8 +22,21 @@ public sealed interface AndroidTunForwarderStartResult {
     public data object Failed : AndroidTunForwarderStartResult
 }
 
+/** Source-attribution capability exposed by the active Android packet translator. */
+public enum class AndroidSourceAttributionCapability {
+    /** The translator supplies original tuples that can be resolved through Android. */
+    ORIGINAL_FLOW_TUPLE,
+
+    /** The translator exposes only its translated loopback SOCKS socket. */
+    TRANSLATED_SOCKET_ONLY,
+}
+
 /** Replaceable Android TUN forwarding boundary owned by the product's VPN service. */
 public interface AndroidTunForwarder {
+    /** Whether this data plane preserves the original tuple required for package attribution. */
+    public val sourceAttributionCapability: AndroidSourceAttributionCapability
+        get() = AndroidSourceAttributionCapability.TRANSLATED_SOCKET_ONLY
+
     /** Starts one forwarding session over an already-established [tunFileDescriptor]. */
     public suspend fun start(
         tunFileDescriptor: Int,
@@ -46,6 +59,9 @@ public class PlatformAndroidTunForwarder internal constructor(
     private val transport: AndroidCompanionProxyTransport,
     private val engine: AndroidTun2SocksEngine,
 ) : AndroidTunForwarder {
+    override val sourceAttributionCapability: AndroidSourceAttributionCapability =
+        AndroidSourceAttributionCapability.TRANSLATED_SOCKET_ONLY
+
     /** Creates the production Android forwarding adapter. */
     public constructor(
         context: Context,
@@ -74,6 +90,7 @@ public class PlatformAndroidTunForwarder internal constructor(
                 transport = transport,
                 protector = protector,
                 unsupportedTrafficPolicy = configuration.unsupportedTrafficPolicy,
+                packetConditions = configuration.packetConditions,
             )
             var configFile: File? = null
             try {

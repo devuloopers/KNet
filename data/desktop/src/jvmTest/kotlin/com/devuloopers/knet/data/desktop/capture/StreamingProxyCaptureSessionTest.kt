@@ -2,10 +2,16 @@ package com.devuloopers.knet.data.desktop.capture
 
 import com.devuloopers.knet.application.contract.traffic.CaptureIngressLimits
 import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureConnectionMetadata
+import com.devuloopers.knet.engine.proxy.capture.ProxyOpaqueFlowCaptureMetadata
+import com.devuloopers.knet.engine.proxy.capture.ProxyOpaqueSecurityProtocol
+import com.devuloopers.knet.engine.proxy.capture.ProxyOpaqueTransportProtocol
+import com.devuloopers.knet.engine.proxy.capture.ProxyOpaquePolicyAction
 import com.devuloopers.knet.engine.session.FileBodyStore
 import com.devuloopers.knet.storage.database.DatabaseFactory
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
+import com.devuloopers.knet.traffic.model.AppliedNetworkCondition
+import com.devuloopers.knet.traffic.model.AppliedNetworkConditionSource
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.IngressContext
 import com.devuloopers.knet.traffic.model.IngressKind
@@ -26,9 +32,81 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertIs
 
 /** Verifies streaming reservation, truncation, and canonical terminal ownership. */
 class StreamingProxyCaptureSessionTest {
+
+    @Test
+    fun `opaque flow persists metadata counters and exactly one terminal outcome`() = runTest {
+        val root = Files.createTempDirectory("knet-opaque-flow-").toFile()
+        val database = DatabaseFactory.create(root.resolve("traffic.db"))
+        val bodyStore = FileBodyStore(root.resolve("bodies"))
+        val session = CanonicalCaptureSessionFactory(database, bodyStore, bodyStore)
+            .openStreamingProxy(localListenerPort = 8080, startedAtEpochMillis = 1L)
+        try {
+            val connection = assertNotNull(
+                session.openConnection(
+                    ProxyCaptureConnectionMetadata(
+                        ingress = IngressContext(IngressKind.Local),
+                        downstream = TrafficEndpoint("127.0.0.1", 50_000),
+                        localListener = TrafficEndpoint("127.0.0.1", 8080),
+                    ),
+                ),
+            )
+            val flow = assertNotNull(
+                connection.startOpaqueFlow(
+                    ProxyOpaqueFlowCaptureMetadata(
+                        destination = TrafficEndpoint("store.example", 443),
+                        serverName = "store.example",
+                        transport = ProxyOpaqueTransportProtocol.TCP,
+                        security = ProxyOpaqueSecurityProtocol.TLS,
+                        policyRuleId = "pinned-store",
+                        policyAction = ProxyOpaquePolicyAction.TUNNEL,
+                        policyGroupId = "store-compatibility",
+                        sourceApplicationId = "com.example.store",
+                        appliedNetworkCondition = AppliedNetworkCondition(
+                            profileId = "streaming-100-kbps",
+                            ruleId = "store-condition",
+                            source = AppliedNetworkConditionSource.DOMAIN_RULE,
+                        ),
+                        occurredAtEpochMillis = 2L,
+                    ),
+                ),
+            )
+            flow.observeBytes(TrafficDirection.CLIENT_TO_SERVER, 120, 3L)
+            flow.observeBytes(TrafficDirection.SERVER_TO_CLIENT, 450, 4L)
+            flow.terminate(ExchangeTerminalOutcome.Completed, 5L)
+            flow.terminate(
+                ExchangeTerminalOutcome.Failed(TrafficTerminationReason.Transport.DUPLEX_IO_FAILED),
+                6L,
+            )
+            connection.close()
+            session.flush()
+
+            val stored = database.canonicalCaptureDao().getOpaqueFlows(session.sessionId.value, 10).single()
+            assertEquals("COMPLETED", stored.state)
+            assertEquals("store.example", stored.destinationHost)
+            assertEquals("com.example.store", stored.sourceApplicationId)
+            assertEquals("pinned-store", stored.policyRuleId)
+            assertEquals("TUNNEL", stored.policyAction)
+            assertEquals("store-compatibility", stored.policyGroupId)
+            assertEquals("streaming-100-kbps", stored.appliedConditionProfileId)
+            assertEquals("store-condition", stored.appliedConditionRuleId)
+            assertEquals(120L, stored.uploadedBytes)
+            assertEquals(450L, stored.downloadedBytes)
+            assertNull(stored.terminalErrorCode)
+            val snapshot = CanonicalCaptureEntityMapper.opaqueFlowSnapshot(stored)
+            assertIs<ExchangeTerminalOutcome.Completed>(snapshot.terminalOutcome)
+            assertEquals("streaming-100-kbps", snapshot.appliedNetworkCondition?.profileId)
+            assertEquals("TUNNEL", snapshot.policyAction?.name)
+            assertEquals("store-compatibility", snapshot.policyGroupId)
+        } finally {
+            session.close()
+            database.close()
+            root.deleteRecursively()
+        }
+    }
 
     @Test
     fun `session shutdown propagates its typed reason to unfinished exchanges`() = runTest {
@@ -114,6 +192,11 @@ class StreamingProxyCaptureSessionTest {
                         headers = emptyList(),
                     ),
                     occurredAtEpochMillis = 2L,
+                    appliedNetworkCondition = AppliedNetworkCondition(
+                        profileId = "streaming-100-kbps",
+                        ruleId = null,
+                        source = AppliedNetworkConditionSource.GLOBAL,
+                    ),
                 )
             )
             exchange.observeResponse(
@@ -149,6 +232,8 @@ class StreamingProxyCaptureSessionTest {
             val storedExchange = assertNotNull(database.canonicalCaptureDao().getExchange(EXCHANGE_ID))
             assertEquals("COMPLETED", storedExchange.state)
             assertEquals(200, storedExchange.responseStatusCode)
+            assertEquals("streaming-100-kbps", storedExchange.appliedConditionProfileId)
+            assertNull(storedExchange.appliedConditionRuleId)
             val body = assertNotNull(database.canonicalCaptureDao().getBody(assertNotNull(storedExchange.responseBodyId)))
             assertEquals(6L, body.observedBytes)
             assertEquals(4L, body.storedBytes)

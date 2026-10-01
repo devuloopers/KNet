@@ -22,7 +22,9 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Navigation
 import androidx.compose.material.icons.filled.PauseCircle
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.WifiTethering
+import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -49,6 +51,8 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 internal val primaryNavigationItems = listOf(
     NavigationDestinationInfo(DesktopDestination.Traffic, "Traffic", Icons.Default.WifiTethering),
     NavigationDestinationInfo(DesktopDestination.ApiStudio, "API Studio", Icons.Default.Navigation),
+    NavigationDestinationInfo(DesktopDestination.NetworkConditions, "Network Conditions", Icons.Default.Speed),
+    NavigationDestinationInfo(DesktopDestination.ProtectedTraffic, "Protected Traffic", Icons.Default.Security),
     NavigationDestinationInfo(DesktopDestination.Breakpoints, "Intercepts", Icons.Default.PauseCircle)
 )
 

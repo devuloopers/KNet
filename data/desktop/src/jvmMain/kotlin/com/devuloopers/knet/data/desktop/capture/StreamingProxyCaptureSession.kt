@@ -11,16 +11,22 @@ import com.devuloopers.knet.engine.proxy.capture.ProxyConnectionCapture
 import com.devuloopers.knet.engine.proxy.capture.ProxyExchangeCapture
 import com.devuloopers.knet.engine.proxy.capture.ProxyMessageCapture
 import com.devuloopers.knet.engine.proxy.capture.ProxyMessageCaptureMetadata
+import com.devuloopers.knet.engine.proxy.capture.ProxyOpaqueFlowCapture
+import com.devuloopers.knet.engine.proxy.capture.ProxyOpaqueFlowCaptureMetadata
 import com.devuloopers.knet.traffic.id.BodyId
 import com.devuloopers.knet.traffic.id.CaptureSessionId
 import com.devuloopers.knet.traffic.id.ConnectionId
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.id.ProtocolMessageId
+import com.devuloopers.knet.traffic.id.OpaqueFlowId
 import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.model.CaptureEvent
+import com.devuloopers.knet.traffic.model.AppliedNetworkCondition
 import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.TrafficDirection
+import com.devuloopers.knet.traffic.model.OpaqueSecurityProtocol
+import com.devuloopers.knet.traffic.model.OpaqueTransportProtocol
 import com.devuloopers.knet.traffic.model.TrafficOrigin
 import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.traffic.model.body.BodyCaptureOutcome
@@ -129,6 +135,7 @@ private class StreamingConnectionCapture(
     private val receivedBodyBytes = AtomicLong(0L)
     private val sentBodyBytes = AtomicLong(0L)
     private val exchanges = ConcurrentHashMap<ExchangeId, StreamingExchangeCapture>()
+    private val opaqueFlows = ConcurrentHashMap<OpaqueFlowId, StreamingOpaqueFlowCapture>()
 
     fun open(): Boolean = publish(
         CaptureEvent.ConnectionOpened(
@@ -149,6 +156,22 @@ private class StreamingConnectionCapture(
         occurredAtEpochMillis: Long,
         origin: TrafficOrigin,
         streamId: StreamId?,
+    ): ProxyExchangeCapture? = startExchange(
+        exchangeId = exchangeId,
+        request = request,
+        occurredAtEpochMillis = occurredAtEpochMillis,
+        origin = origin,
+        streamId = streamId,
+        appliedNetworkCondition = null,
+    )
+
+    override fun startExchange(
+        exchangeId: ExchangeId,
+        request: RequestHead,
+        occurredAtEpochMillis: Long,
+        origin: TrafficOrigin,
+        streamId: StreamId?,
+        appliedNetworkCondition: AppliedNetworkCondition?,
     ): ProxyExchangeCapture? {
         if (closed.get()) return null
         val exchange = StreamingExchangeCapture(
@@ -173,6 +196,7 @@ private class StreamingConnectionCapture(
                 streamId = streamId,
                 request = request,
                 origin = origin,
+                appliedNetworkCondition = appliedNetworkCondition,
             )
         )
         if (!admitted) return null
@@ -180,9 +204,57 @@ private class StreamingConnectionCapture(
         return exchange
     }
 
+    override fun startOpaqueFlow(metadata: ProxyOpaqueFlowCaptureMetadata): ProxyOpaqueFlowCapture? {
+        if (closed.get()) return null
+        val flowId = OpaqueFlowId("opaque-${Uuid.random()}")
+        val flow = StreamingOpaqueFlowCapture(
+            sessionId = sessionId,
+            connectionId = connectionId,
+            flowId = flowId,
+            ingress = ingress,
+            nextSequence = ::nextSequence,
+            addObservedBytes = ::addObservedBytes,
+            onTerminated = { opaqueFlows.remove(flowId) },
+        )
+        val admitted = publish(
+            CaptureEvent.OpaqueFlowStarted(
+                sessionId = sessionId,
+                connectionId = connectionId,
+                sequence = nextSequence(),
+                occurredAtEpochMillis = metadata.occurredAtEpochMillis,
+                flowId = flowId,
+                flowVersion = 0L,
+                destination = metadata.destination,
+                serverName = metadata.serverName,
+                transport = OpaqueTransportProtocol.valueOf(metadata.transport.name),
+                security = OpaqueSecurityProtocol.valueOf(metadata.security.name),
+                sourceApplicationId = metadata.sourceApplicationId,
+                policyRuleId = metadata.policyRuleId,
+                policyAction = metadata.policyAction?.let { action ->
+                    com.devuloopers.knet.traffic.model.OpaqueFlowPolicyAction.valueOf(action.name)
+                },
+                policyGroupId = metadata.policyGroupId,
+                appliedNetworkCondition = metadata.appliedNetworkCondition,
+                offeredApplicationProtocols = metadata.offeredApplicationProtocols,
+                offeredTlsVersions = metadata.offeredTlsVersions,
+            )
+        )
+        if (!admitted) return null
+        opaqueFlows[flowId] = flow
+        if (closed.get()) {
+            flow.terminate(
+                ExchangeTerminalOutcome.Cancelled(TrafficTerminationReason.Lifecycle.CAPTURE_SESSION_CLOSED),
+                Clock.System.now().toEpochMilliseconds(),
+            )
+            return null
+        }
+        return flow
+    }
+
     override fun close(reason: TrafficTerminationReason?) {
         if (!closed.compareAndSet(false, true)) return
         exchanges.values.toList().forEach { exchange -> exchange.cancelForConnectionClose(reason) }
+        opaqueFlows.values.toList().forEach { flow -> flow.cancelForConnectionClose(reason) }
         publish(
             CaptureEvent.ConnectionClosed(
                 sessionId = sessionId,
@@ -195,6 +267,7 @@ private class StreamingConnectionCapture(
             )
         )
         exchanges.clear()
+        opaqueFlows.clear()
         onClosed(this)
     }
 
@@ -208,6 +281,64 @@ private class StreamingConnectionCapture(
     private fun nextSequence(): Long = sequence.incrementAndGet()
 
     private fun publish(event: CaptureEvent): Boolean = ingress.tryPublish(event) is CapturePublishResult.Accepted
+}
+
+/** Payload-blind atomic counters and exactly-once terminal publication for one opaque flow. */
+private class StreamingOpaqueFlowCapture(
+    private val sessionId: CaptureSessionId,
+    private val connectionId: ConnectionId,
+    private val flowId: OpaqueFlowId,
+    private val ingress: CaptureIngress,
+    private val nextSequence: () -> Long,
+    private val addObservedBytes: (TrafficDirection, Long) -> Unit,
+    private val onTerminated: () -> Unit,
+) : ProxyOpaqueFlowCapture {
+    private val terminal = AtomicBoolean(false)
+    private val uploadedBytes = AtomicLong(0L)
+    private val downloadedBytes = AtomicLong(0L)
+
+    override fun observeBytes(
+        direction: TrafficDirection,
+        byteCount: Int,
+        occurredAtEpochMillis: Long,
+    ) {
+        require(byteCount >= 0) { "Opaque-flow byte observation must not be negative." }
+        require(occurredAtEpochMillis >= 0L) { "Opaque-flow byte timestamp must not be negative." }
+        if (terminal.get() || byteCount == 0) return
+        when (direction) {
+            TrafficDirection.CLIENT_TO_SERVER -> uploadedBytes.addAndGet(byteCount.toLong())
+            TrafficDirection.SERVER_TO_CLIENT -> downloadedBytes.addAndGet(byteCount.toLong())
+        }
+        addObservedBytes(direction, byteCount.toLong())
+    }
+
+    override fun terminate(outcome: ExchangeTerminalOutcome, occurredAtEpochMillis: Long) {
+        require(occurredAtEpochMillis >= 0L) { "Opaque-flow terminal timestamp must not be negative." }
+        if (!terminal.compareAndSet(false, true)) return
+        ingress.tryPublish(
+            CaptureEvent.OpaqueFlowTerminated(
+                sessionId = sessionId,
+                connectionId = connectionId,
+                sequence = nextSequence(),
+                occurredAtEpochMillis = occurredAtEpochMillis,
+                flowId = flowId,
+                flowVersion = 1L,
+                uploadedBytes = uploadedBytes.get(),
+                downloadedBytes = downloadedBytes.get(),
+                outcome = outcome,
+            )
+        )
+        onTerminated()
+    }
+
+    fun cancelForConnectionClose(reason: TrafficTerminationReason?) {
+        terminate(
+            ExchangeTerminalOutcome.Cancelled(
+                reason ?: TrafficTerminationReason.Transport.DOWNSTREAM_CONNECTION_CLOSED,
+            ),
+            Clock.System.now().toEpochMilliseconds(),
+        )
+    }
 }
 
 /** One exchange with independently bounded request and response body ownership. */

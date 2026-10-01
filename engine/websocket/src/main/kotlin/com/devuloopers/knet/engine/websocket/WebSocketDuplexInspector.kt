@@ -18,6 +18,7 @@ import com.devuloopers.knet.traffic.model.http.ResponseHead
 import com.devuloopers.knet.traffic.model.message.MessageProtocolId
 import com.devuloopers.knet.traffic.model.message.ProtocolMessageKind
 import com.devuloopers.knet.traffic.model.message.ProtocolMessageState
+import java.io.ByteArrayOutputStream
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -49,23 +50,19 @@ private class WebSocketDuplexInspector(
     private var serverMessages: WebSocketCaptureDirection? = null
 
     override fun onEstablished(response: ResponseHead, occurredAtEpochMillis: Long) {
-        val compression = WebSocketProtocol.header(response.headers, EXTENSIONS)
-            ?.split(',')
-            ?.any { extension ->
-                extension.substringBefore(';').trim().equals(PER_MESSAGE_DEFLATE, ignoreCase = true)
-            } == true
+        val compression = WebSocketPerMessageDeflateNegotiation.fromResponseHeaders(response.headers)
         clientMessages = WebSocketCaptureDirection(
             direction = TrafficDirection.CLIENT_TO_SERVER,
             streamId = streamId,
             capture = capture,
-            permitsCompression = compression,
+            compression = compression,
             maximumFrameBytes = maximumFrameBytes,
         )
         serverMessages = WebSocketCaptureDirection(
             direction = TrafficDirection.SERVER_TO_CLIENT,
             streamId = streamId,
             capture = capture,
-            permitsCompression = compression,
+            compression = compression,
             maximumFrameBytes = maximumFrameBytes,
         )
     }
@@ -90,10 +87,6 @@ private class WebSocketDuplexInspector(
         TrafficDirection.SERVER_TO_CLIENT -> serverMessages
     }
 
-    private companion object {
-        const val EXTENSIONS: String = "sec-websocket-extensions"
-        const val PER_MESSAGE_DEFLATE: String = "permessage-deflate"
-    }
 }
 
 /** Incremental logical-message capture for one WebSocket traffic direction. */
@@ -102,16 +95,24 @@ private class WebSocketCaptureDirection(
     private val direction: TrafficDirection,
     private val streamId: StreamId?,
     private val capture: ProxyExchangeCapture?,
-    permitsCompression: Boolean,
-    maximumFrameBytes: Int,
+    compression: WebSocketPerMessageDeflateNegotiation?,
+    private val maximumFrameBytes: Int,
 ) {
     private val decoder = WebSocketFrameDecoder(
         expectsMaskedFrames = direction == TrafficDirection.CLIENT_TO_SERVER,
-        permitsCompression = permitsCompression,
+        permitsCompression = compression != null,
         maximumFrameBytes = maximumFrameBytes,
     )
+    private val inflater = compression?.let { negotiation ->
+        WebSocketPerMessageDeflateDecoder(
+            noContextTakeover = negotiation.noContextTakeover(direction),
+            maximumOutputBytes = maximumFrameBytes,
+        )
+    }
+    private val compressedPayload = ByteArrayOutputStream()
     private var activeCapture: ProxyMessageCapture? = null
     private var activeKind: ProtocolMessageKind? = null
+    private var activeCompressed = false
     private var activeObservedBytes: Long = 0L
     private var sequence: Long = 0L
     private var failed = false
@@ -142,6 +143,7 @@ private class WebSocketCaptureDirection(
         activeCapture?.terminate(activeObservedBytes, messageState, occurredAtEpochMillis, reason)
         activeCapture = null
         decoder.clear()
+        inflater?.close()
         failed = true
     }
 
@@ -160,6 +162,7 @@ private class WebSocketCaptureDirection(
                     return
                 }
                 activeKind = frame.opcode.messageKind()
+                activeCompressed = frame.compressed
                 activeObservedBytes = 0L
                 activeCapture = startCapture(
                     kind = checkNotNull(activeKind),
@@ -167,7 +170,7 @@ private class WebSocketCaptureDirection(
                     compressed = frame.compressed,
                     occurredAtEpochMillis = occurredAtEpochMillis,
                 )
-                append(frame.payload, occurredAtEpochMillis)
+                if (!append(frame.payload, occurredAtEpochMillis)) return
                 if (frame.final) completeActive(occurredAtEpochMillis)
             }
             WebSocketOpcode.CONTINUATION -> {
@@ -178,7 +181,7 @@ private class WebSocketCaptureDirection(
                     )
                     return
                 }
-                append(frame.payload, occurredAtEpochMillis)
+                if (!append(frame.payload, occurredAtEpochMillis)) return
                 if (frame.final) completeActive(occurredAtEpochMillis)
             }
             else -> Unit
@@ -216,16 +219,42 @@ private class WebSocketCaptureDirection(
         ),
     )
 
-    private fun append(payload: ByteArray, occurredAtEpochMillis: Long) {
-        copyPayload(activeCapture, payload, occurredAtEpochMillis)
-        activeObservedBytes += payload.size
+    private fun append(payload: ByteArray, occurredAtEpochMillis: Long): Boolean {
+        if (activeCompressed) {
+            if (compressedPayload.size() > maximumFrameBytes - payload.size) {
+                failActive(occurredAtEpochMillis, webSocketCaptureTermination(COMPRESSED_MESSAGE_LIMIT))
+                return false
+            }
+            compressedPayload.write(payload)
+        } else {
+            copyPayload(activeCapture, payload, occurredAtEpochMillis)
+            activeObservedBytes += payload.size
+        }
+        return true
     }
 
     private fun completeActive(occurredAtEpochMillis: Long) {
+        if (activeCompressed) {
+            when (val result = inflater?.decode(compressedPayload.toByteArray())) {
+                is WebSocketInflateResult.Success -> {
+                    copyPayload(activeCapture, result.payload, occurredAtEpochMillis)
+                    activeObservedBytes = result.payload.size.toLong()
+                }
+                is WebSocketInflateResult.Failure -> {
+                    failActive(occurredAtEpochMillis, webSocketCaptureTermination(result.errorCode))
+                    return
+                }
+                null -> {
+                    failActive(
+                        occurredAtEpochMillis,
+                        webSocketCaptureTermination(WebSocketPerMessageDeflateDecoder.INVALID_COMPRESSED_PAYLOAD),
+                    )
+                    return
+                }
+            }
+        }
         activeCapture?.complete(activeObservedBytes, occurredAtEpochMillis)
-        activeCapture = null
-        activeKind = null
-        activeObservedBytes = 0L
+        resetActive()
     }
 
     private fun failActive(occurredAtEpochMillis: Long, reason: TrafficTerminationReason) {
@@ -235,10 +264,18 @@ private class WebSocketCaptureDirection(
             occurredAtEpochMillis,
             reason,
         )
+        resetActive()
+        decoder.clear()
+        inflater?.close()
+        failed = true
+    }
+
+    private fun resetActive() {
         activeCapture = null
         activeKind = null
-        decoder.clear()
-        failed = true
+        activeCompressed = false
+        compressedPayload.reset()
+        activeObservedBytes = 0L
     }
 
     private fun copyPayload(
@@ -258,6 +295,7 @@ private class WebSocketCaptureDirection(
 
     private companion object {
         const val PER_MESSAGE_DEFLATE: String = "permessage-deflate"
+        const val COMPRESSED_MESSAGE_LIMIT: String = "websocket_compressed_message_limit"
         const val UNEXPECTED_CONTINUATION: String = "websocket_unexpected_continuation"
         const val UNEXPECTED_DATA_FRAME: String = "websocket_unexpected_data_frame"
     }

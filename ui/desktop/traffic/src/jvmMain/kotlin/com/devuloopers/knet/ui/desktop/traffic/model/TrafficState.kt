@@ -100,6 +100,7 @@ private fun ByteArray?.contentEqualsNullable(other: ByteArray?): Boolean = when 
  * @property engineState Current application-owned proxy runtime state.
  * @property searchQuery Live search filter query text.
  * @property selectedSchemeFilter Active request-scheme chip.
+ * @property selectedTypeFilter Active decrypted/opaque/protected semantic filter.
  * @property selectedHttpVersionFilter Active negotiated HTTP-version filter.
  * @property selectedMethodFilter Active HTTP method dropdown filter (e.g., [MethodFilter.ALL], [MethodFilter.GET], [MethodFilter.POST]).
  * @property selectedStatusFilter Active HTTP status dropdown filter (e.g., [StatusFilter.ALL], [StatusFilter.STATUS_2XX], [StatusFilter.STATUS_3XX]).
@@ -125,6 +126,7 @@ data class TrafficState(
     val engineErrorMessage: String? = null,
     val trafficErrorMessage: String? = null,
     val searchQuery: String = "",
+    val selectedTypeFilter: TrafficTypeFilter = TrafficTypeFilter.ALL,
     val selectedSchemeFilter: SchemeFilter = SchemeFilter.ALL,
     val selectedHttpVersionFilter: HttpVersionFilter = HttpVersionFilter.ALL,
     val selectedMethodFilter: MethodFilter = MethodFilter.ALL,

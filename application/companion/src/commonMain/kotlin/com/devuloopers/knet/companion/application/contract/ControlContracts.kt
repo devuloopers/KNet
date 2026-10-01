@@ -17,6 +17,9 @@ public enum class CompanionControlOperation {
 
     /** Resolve canonical identity and current ports after DNS-SD supplied only an untrusted address. */
     RECONCILE_ENDPOINTS,
+
+    /** Read the desktop's current VPN/TUN packet-condition configuration. */
+    FETCH_NETWORK_CONDITIONS,
 }
 
 /** Device credential transmitted only after the pinned desktop TLS identity is authenticated. */
@@ -71,8 +74,11 @@ public class CompanionControlRequest(
         require(endpoint.scheme == CompanionEndpointScheme.HTTPS) {
             "Companion control requests require a secure endpoint."
         }
-        require(content.size in 1..CompanionControlProtocol.MAXIMUM_REQUEST_BYTES) {
+        require(content.size in 0..CompanionControlProtocol.MAXIMUM_REQUEST_BYTES) {
             "Companion control request body size is invalid."
+        }
+        require(operation == CompanionControlOperation.FETCH_NETWORK_CONDITIONS || content.isNotEmpty()) {
+            "This companion control operation requires a request body."
         }
         require(operation != CompanionControlOperation.PAIR || authorization == null) {
             "Pairing requests must not carry an existing device credential."
@@ -82,6 +88,9 @@ public class CompanionControlRequest(
         }
         require(operation != CompanionControlOperation.RECONCILE_ENDPOINTS || authorization != null) {
             "Endpoint reconciliation requests require device authorization."
+        }
+        require(operation != CompanionControlOperation.FETCH_NETWORK_CONDITIONS || authorization != null) {
+            "Network condition requests require device authorization."
         }
     }
 

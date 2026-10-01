@@ -13,6 +13,8 @@ import com.devuloopers.knet.companion.model.CompanionConnectionState
 import com.devuloopers.knet.companion.model.CompanionFailure
 import com.devuloopers.knet.companion.model.CompanionFailureCode
 import com.devuloopers.knet.companion.model.CompanionEndpointScheme
+import com.devuloopers.knet.companion.model.CompanionFlowMetadata
+import com.devuloopers.knet.companion.model.CompanionFlowMetadataCodec
 import com.devuloopers.knet.companion.model.CompanionProxyProtocol
 import com.devuloopers.knet.companion.model.CompanionRegistration
 import com.devuloopers.knet.companion.model.CompanionTransportKind
@@ -105,6 +107,7 @@ public class AndroidCompanionProxyTransport(
         authorityHost: String,
         authorityPort: Int,
         protector: AndroidSocketProtector,
+        flowMetadata: CompanionFlowMetadata? = null,
     ): AndroidProxyStream? {
         val session = activeSession.get() ?: return null
         if (!isSafeAuthorityHost(authorityHost) || authorityPort !in 1..65_535) return null
@@ -114,6 +117,7 @@ public class AndroidCompanionProxyTransport(
                 append("CONNECT ${formatAuthority(authorityHost, authorityPort)} HTTP/1.1\r\n")
                 append("Host: ${formatAuthority(authorityHost, authorityPort)}\r\n")
                 append(session.authorizationHeader())
+                appendFlowMetadata(flowMetadata)
                 append("Proxy-Connection: keep-alive\r\n\r\n")
             }.encodeToByteArray()
             socket.outputStream.write(request)
@@ -131,9 +135,10 @@ public class AndroidCompanionProxyTransport(
     internal fun openHttpForward(
         requestHeader: ByteArray,
         protector: AndroidSocketProtector,
+        flowMetadata: CompanionFlowMetadata? = null,
     ): AndroidProxyStream? {
         val session = activeSession.get() ?: return null
-        val authorized = addAuthorization(requestHeader, session.authorizationHeader()) ?: return null
+        val authorized = addAuthorization(requestHeader, session.authorizationHeader(), flowMetadata) ?: return null
         val socket = session.openSocket(protector) ?: return null
         return try {
             socket.outputStream.write(authorized)
@@ -280,7 +285,11 @@ private class TransportUnavailableException : Exception()
 
 private fun String.statusCode(): Int? = split(' ').getOrNull(1)?.toIntOrNull()
 
-internal fun addAuthorization(header: ByteArray, authorizationHeader: String): ByteArray? {
+internal fun addAuthorization(
+    header: ByteArray,
+    authorizationHeader: String,
+    flowMetadata: CompanionFlowMetadata? = null,
+): ByteArray? {
     if (header.size > 64 * 1024) return null
     val text = runCatching { header.decodeToString(throwOnInvalidSequence = true) }.getOrNull() ?: return null
     if (!text.endsWith("\r\n\r\n")) return null
@@ -288,13 +297,25 @@ internal fun addAuthorization(header: ByteArray, authorizationHeader: String): B
     if (lines.isEmpty() || lines.first().isBlank()) return null
     if (lines.drop(1).any { line -> line.startsWith(' ') || line.startsWith('\t') }) return null
     val sanitized = lines.filterIndexed { index, line ->
-        index == 0 || !line.substringBefore(':').equals("Proxy-Authorization", ignoreCase = true)
+        index == 0 || line.substringBefore(':').let { name ->
+            !name.equals("Proxy-Authorization", ignoreCase = true) &&
+                !name.equals(CompanionProxyProtocol.FLOW_METADATA_HEADER, ignoreCase = true)
+        }
     }
     return buildString {
         sanitized.forEach { line -> append(line).append("\r\n") }
         append(authorizationHeader)
+        appendFlowMetadata(flowMetadata)
         append("\r\n")
     }.encodeToByteArray()
+}
+
+private fun StringBuilder.appendFlowMetadata(metadata: CompanionFlowMetadata?) {
+    if (metadata == null) return
+    append(CompanionProxyProtocol.FLOW_METADATA_HEADER)
+    append(": ")
+    append(CompanionFlowMetadataCodec.encode(metadata))
+    append("\r\n")
 }
 
 private fun readHeader(socket: Socket, maximumBytes: Int): ByteArray? {

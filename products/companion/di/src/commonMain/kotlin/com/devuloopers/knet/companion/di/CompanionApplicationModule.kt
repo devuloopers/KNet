@@ -8,6 +8,7 @@ import com.devuloopers.knet.companion.application.usecase.ConnectCompanionUseCas
 import com.devuloopers.knet.companion.application.usecase.DisconnectCompanionUseCase
 import com.devuloopers.knet.companion.application.usecase.DownloadCompanionRootCertificateUseCase
 import com.devuloopers.knet.companion.application.usecase.ForgetCompanionDesktopUseCase
+import com.devuloopers.knet.companion.application.usecase.FetchCompanionPacketConditionsUseCase
 import com.devuloopers.knet.companion.application.usecase.MaintainCompanionEndpointUseCase
 import com.devuloopers.knet.companion.application.usecase.MonitorCompanionDesktopAvailabilityUseCase
 import com.devuloopers.knet.companion.application.usecase.ObserveCompanionCertificateEnrollmentsUseCase
@@ -50,7 +51,8 @@ internal fun companionApplicationModule(): Module = module {
     single { VerifyCompanionCertificateTrustUseCase(get(), get(), get(), get(), ::currentEpochMillis) }
     single { CompleteCompanionCertificateEnrollmentUseCase(get(), get(), get(), ::currentEpochMillis) }
     single { ObserveCompanionCertificateStoreChangesUseCase(get()) }
-    single { StartCompanionInspectionUseCase(get(), get(), get(), get(), get()) }
+    single { FetchCompanionPacketConditionsUseCase(get(), get()) }
+    single { StartCompanionInspectionUseCase(get(), get(), get(), get(), get(), get()) }
     single { StopCompanionInspectionUseCase(get(), get()) }
     single { ObserveCompanionInspectionUseCase(get()) }
     single { RefreshCompanionCredentialUseCase(get(), get(), get(), ::currentEpochMillis) }

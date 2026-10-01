@@ -4,6 +4,7 @@ import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.id.ProtocolMessageId
 import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
+import com.devuloopers.knet.traffic.model.AppliedNetworkCondition
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.model.IngressContext
 import com.devuloopers.knet.traffic.model.TrafficDirection
@@ -48,11 +49,111 @@ interface ProxyConnectionCapture : AutoCloseable {
         streamId: StreamId? = null,
     ): ProxyExchangeCapture?
 
+    /** Starts one exchange and stamps the Network Conditions selection made before forwarding. */
+    fun startExchange(
+        exchangeId: ExchangeId,
+        request: RequestHead,
+        occurredAtEpochMillis: Long,
+        origin: TrafficOrigin = TrafficOrigin.ProxyClient,
+        streamId: StreamId? = null,
+        appliedNetworkCondition: AppliedNetworkCondition?,
+    ): ProxyExchangeCapture? = startExchange(exchangeId, request, occurredAtEpochMillis, origin, streamId)
+
+    /** Starts one payload-opaque transport flow, or returns `null` while forwarding continues. */
+    fun startOpaqueFlow(metadata: ProxyOpaqueFlowCaptureMetadata): ProxyOpaqueFlowCapture? = null
+
     /** Closes the capture side output without closing the transport. */
     fun close(reason: TrafficTerminationReason?)
 
     /** Closes normally. */
     override fun close(): Unit = close(reason = null)
+}
+
+/** Transport protocol represented by an opaque flow without inventing application semantics. */
+enum class ProxyOpaqueTransportProtocol {
+    /** Ordered byte-stream transport. */
+    TCP,
+
+    /** Datagram transport. */
+    UDP,
+}
+
+/** Security classification retained for an opaque transport flow. */
+enum class ProxyOpaqueSecurityProtocol {
+    /** End-to-end TLS carried without interception. */
+    TLS,
+
+    /** Payload-opaque transport with no proven security protocol. */
+    UNKNOWN,
+}
+
+/** Exact protected-traffic action selected before this opaque flow was admitted. */
+enum class ProxyOpaquePolicyAction {
+    INSPECT,
+    TUNNEL,
+    BLOCK,
+    BYPASS,
+}
+
+/**
+ * Immutable metadata supplied when a payload-opaque flow is admitted.
+ *
+ * @property destination Validated remote transport endpoint.
+ * @property serverName Visible TLS server name, or `null` when unavailable.
+ * @property transport Ordered-stream or datagram transport.
+ * @property security Proven security classification without payload inference.
+ * @property policyRuleId Stable rule evidence, or `null` for the global default.
+ * @property sourceApplicationId Verified source package/signing identity, when available.
+ * @property appliedNetworkCondition Network-condition profile/rule evidence selected for this flow.
+ * @property offeredApplicationProtocols Bounded ALPN tokens offered by the client.
+ * @property offeredTlsVersions Bounded TLS-version tokens offered by the client.
+ * @property occurredAtEpochMillis Flow admission time on the Unix epoch.
+ */
+data class ProxyOpaqueFlowCaptureMetadata(
+    val destination: TrafficEndpoint,
+    val serverName: String?,
+    val transport: ProxyOpaqueTransportProtocol,
+    val security: ProxyOpaqueSecurityProtocol,
+    val policyRuleId: String?,
+    val policyAction: ProxyOpaquePolicyAction? = null,
+    val policyGroupId: String? = null,
+    val sourceApplicationId: String? = null,
+    val appliedNetworkCondition: AppliedNetworkCondition? = null,
+    val occurredAtEpochMillis: Long,
+    val offeredApplicationProtocols: List<String> = emptyList(),
+    val offeredTlsVersions: List<String> = emptyList(),
+) {
+    init {
+        require(policyRuleId == null || policyRuleId.isNotBlank()) { "Opaque-flow rule ID must not be blank." }
+        require(policyGroupId == null || policyGroupId.isNotBlank()) { "Opaque-flow policy group ID must not be blank." }
+        require(sourceApplicationId == null || sourceApplicationId.isNotBlank()) {
+            "Opaque-flow source application ID must not be blank."
+        }
+        require(occurredAtEpochMillis >= 0L) { "Opaque-flow timestamp must not be negative." }
+        require(offeredApplicationProtocols.size <= MAXIMUM_TLS_METADATA_VALUES)
+        require(offeredTlsVersions.size <= MAXIMUM_TLS_METADATA_VALUES)
+        require((offeredApplicationProtocols + offeredTlsVersions).all { it.isNotBlank() && it.length <= 255 })
+    }
+
+    private companion object {
+        const val MAXIMUM_TLS_METADATA_VALUES: Int = 16
+    }
+}
+
+/** Non-blocking counter and lifecycle side output for one payload-opaque flow. */
+interface ProxyOpaqueFlowCapture {
+    /** Records bytes accepted from one side without copying or retaining their payload. */
+    fun observeBytes(
+        direction: TrafficDirection,
+        byteCount: Int,
+        occurredAtEpochMillis: Long,
+    )
+
+    /** Publishes exactly one terminal state for the opaque flow. */
+    fun terminate(
+        outcome: ExchangeTerminalOutcome,
+        occurredAtEpochMillis: Long,
+    )
 }
 
 /** Exchange-scoped canonical capture side output. */

@@ -79,6 +79,9 @@ class KNetInterceptorHandler(
                 occurredAtEpochMillis = requestContext.startedAtEpochMillis,
                 origin = requestContext.origin,
                 streamId = context.channel().attr(ProxyChannelAttributes.STREAM_ID).get(),
+                appliedNetworkCondition = context.channel()
+                    .attr(ProxyChannelAttributes.APPLIED_NETWORK_CONDITION)
+                    .get(),
             )
         }.getOrNull()
         context.channel().attr(ProxyChannelAttributes.PREPARED_EXCHANGE).set(

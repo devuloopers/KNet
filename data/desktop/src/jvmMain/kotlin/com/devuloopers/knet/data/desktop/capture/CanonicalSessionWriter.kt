@@ -350,6 +350,16 @@ class CanonicalSessionWriter private constructor(
         when (event) {
             is CaptureEvent.ConnectionOpened -> dao.insertConnection(CanonicalCaptureEntityMapper.connection(event))
             is CaptureEvent.ExchangeStarted -> dao.insertExchange(CanonicalCaptureEntityMapper.exchange(event))
+            is CaptureEvent.OpaqueFlowStarted -> dao.insertOpaqueFlow(CanonicalCaptureEntityMapper.opaqueFlow(event))
+            is CaptureEvent.OpaqueFlowTerminated -> dao.terminateOpaqueFlow(
+                flowId = event.flowId.value,
+                version = event.flowVersion,
+                state = event.outcome.state.name,
+                completedAt = event.occurredAtEpochMillis,
+                uploadedBytes = event.uploadedBytes,
+                downloadedBytes = event.downloadedBytes,
+                errorCode = event.outcome.reason?.code?.value,
+            )
             is CaptureEvent.ResponseObserved -> dao.updateResponse(
                 exchangeId = event.exchangeId.value,
                 version = event.exchangeVersion,

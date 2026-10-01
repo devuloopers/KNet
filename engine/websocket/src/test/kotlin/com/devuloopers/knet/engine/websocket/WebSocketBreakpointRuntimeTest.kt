@@ -36,6 +36,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import java.util.concurrent.TimeUnit
+import java.io.ByteArrayOutputStream
+import java.util.zip.Deflater
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -45,6 +47,27 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class WebSocketBreakpointRuntimeTest {
+    @Test
+    fun `compressed messages are decompressed before interception and unchanged wire is preserved`() {
+        val gate = RecordingWebSocketGate()
+        val transformer = assertNotNull(factory(gate).create(request(), null, Capture()))
+        transformer.onEstablished(switchingResponse("permessage-deflate; client_no_context_takeover"), 0L)
+        val logical = "subscription payload".encodeToByteArray()
+        val compressed = deflate(logical)
+        val wire = WebSocketFrameDecoder.encode(
+            WebSocketOpcode.TEXT,
+            compressed,
+            compressed = true,
+            maskingKey = byteArrayOf(1, 2, 3, 4),
+        )
+
+        val forwarded = transformer.transformClient(wire, 1L)
+
+        assertContentEquals(wire, forwarded)
+        assertContentEquals(logical, gate.candidates.single().body.copyBytes())
+        assertTrue(gate.candidates.single().compressed)
+    }
+
     @Test
     fun `fragmented message with interleaved control frame retains exact wire order`() {
         val gate = RecordingWebSocketGate()
@@ -177,14 +200,34 @@ class WebSocketBreakpointRuntimeTest {
         body = BreakpointBody("hello".encodeToByteArray()),
     )
 
-    private fun switchingResponse() = ResponseHead(
+    private fun switchingResponse(extension: String? = null) = ResponseHead(
         status = HttpStatus(101),
         protocol = ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_1_1),
-        headers = listOf(
-            HeaderField(HeaderName("connection"), "Upgrade"),
-            HeaderField(HeaderName("upgrade"), "websocket"),
-        ),
+        headers = buildList {
+            add(HeaderField(HeaderName("connection"), "Upgrade"))
+            add(HeaderField(HeaderName("upgrade"), "websocket"))
+            extension?.let {
+                add(HeaderField(HeaderName("sec-websocket-extensions"), it))
+            }
+        },
     )
+}
+
+private fun deflate(payload: ByteArray): ByteArray {
+    val deflater = Deflater(Deflater.DEFAULT_COMPRESSION, true)
+    return try {
+        deflater.setInput(payload)
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(256)
+        do {
+            val count = deflater.deflate(buffer, 0, buffer.size, Deflater.SYNC_FLUSH)
+            output.write(buffer, 0, count)
+        } while (!deflater.needsInput())
+        val withTail = output.toByteArray()
+        withTail.copyOf(withTail.size - 4)
+    } finally {
+        deflater.end()
+    }
 }
 
 private fun com.devuloopers.knet.engine.proxy.inspection.ProxyDuplexTransformer.transformClient(

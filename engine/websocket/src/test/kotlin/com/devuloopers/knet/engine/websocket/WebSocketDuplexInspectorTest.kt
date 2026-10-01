@@ -28,6 +28,8 @@ import com.devuloopers.knet.traffic.model.http.StandardApplicationProtocol
 import com.devuloopers.knet.traffic.model.http.StandardHttpScheme
 import com.devuloopers.knet.traffic.model.message.ProtocolMessageKind
 import com.devuloopers.knet.traffic.model.message.ProtocolMessageState
+import java.io.ByteArrayOutputStream
+import java.util.zip.Deflater
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -35,6 +37,85 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 class WebSocketDuplexInspectorTest {
+    @Test
+    fun `negotiated permessage deflate is captured as readable fragmented text`() {
+        val capture = WebSocketRecordingExchangeCapture()
+        val inspector = assertNotNull(WebSocketDuplexInspectorFactory(1_024).create(request(), null, capture))
+        inspector.onEstablished(
+            switchingResponse(
+                "permessage-deflate; client_no_context_takeover; server_no_context_takeover",
+            ),
+            1L,
+        )
+        val compressed = deflateMessages(listOf("streaming response".encodeToByteArray())).single()
+        val split = compressed.size / 2
+        val first = WebSocketFrameDecoder.encode(
+            opcode = WebSocketOpcode.TEXT,
+            payload = compressed.copyOfRange(0, split),
+            final = false,
+            compressed = true,
+            maskingKey = byteArrayOf(1, 2, 3, 4),
+        )
+        val last = WebSocketFrameDecoder.encode(
+            opcode = WebSocketOpcode.CONTINUATION,
+            payload = compressed.copyOfRange(split, compressed.size),
+            maskingKey = byteArrayOf(5, 6, 7, 8),
+        )
+
+        inspector.onPayload(TrafficDirection.CLIENT_TO_SERVER, WebSocketSlice(first), 2L)
+        inspector.onPayload(TrafficDirection.CLIENT_TO_SERVER, WebSocketSlice(last), 3L)
+
+        assertEquals(1, capture.messages.size)
+        assertEquals(true, capture.messages.single().metadata.compressed)
+        assertEquals("permessage-deflate", capture.messages.single().metadata.compressionEncoding)
+        assertEquals(ProtocolMessageState.COMPLETE, capture.messages.single().state)
+        assertContentEquals("streaming response".encodeToByteArray(), capture.messages.single().payload())
+    }
+
+    @Test
+    fun `permessage deflate context takeover is preserved across logical messages`() {
+        val capture = WebSocketRecordingExchangeCapture()
+        val inspector = assertNotNull(WebSocketDuplexInspectorFactory(4_096).create(request(), null, capture))
+        inspector.onEstablished(switchingResponse("permessage-deflate"), 1L)
+        val source = listOf(
+            "repeated streaming message repeated streaming message".encodeToByteArray(),
+            "repeated streaming message repeated streaming message again".encodeToByteArray(),
+        )
+        val compressed = deflateMessages(source)
+
+        compressed.forEachIndexed { index, payload ->
+            val frame = WebSocketFrameDecoder.encode(
+                opcode = WebSocketOpcode.TEXT,
+                payload = payload,
+                compressed = true,
+                maskingKey = byteArrayOf(1, 2, 3, (4 + index).toByte()),
+            )
+            inspector.onPayload(TrafficDirection.CLIENT_TO_SERVER, WebSocketSlice(frame), 2L + index)
+        }
+
+        assertEquals(2, capture.messages.size)
+        assertContentEquals(source[0], capture.messages[0].payload())
+        assertContentEquals(source[1], capture.messages[1].payload())
+    }
+
+    @Test
+    fun `inflated payload is rejected at the configured capture bound`() {
+        val capture = WebSocketRecordingExchangeCapture()
+        val inspector = assertNotNull(WebSocketDuplexInspectorFactory(32).create(request(), null, capture))
+        inspector.onEstablished(switchingResponse("permessage-deflate; client_no_context_takeover"), 1L)
+        val compressed = deflateMessages(listOf(ByteArray(128) { 'a'.code.toByte() })).single()
+        val frame = WebSocketFrameDecoder.encode(
+            opcode = WebSocketOpcode.TEXT,
+            payload = compressed,
+            compressed = true,
+            maskingKey = byteArrayOf(1, 2, 3, 4),
+        )
+
+        inspector.onPayload(TrafficDirection.CLIENT_TO_SERVER, WebSocketSlice(frame), 2L)
+
+        assertEquals(ProtocolMessageState.FAILED, capture.messages.single().state)
+    }
+
     @Test
     fun `fragmented data and interleaved control frames become bounded logical messages`() {
         val capture = WebSocketRecordingExchangeCapture()
@@ -132,13 +213,37 @@ class WebSocketDuplexInspectorTest {
         ),
     )
 
-    private fun switchingResponse() = ResponseHead(
+    private fun switchingResponse(extension: String? = null) = ResponseHead(
         status = HttpStatus(101),
         protocol = ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_1_1),
-        headers = listOf(header("connection", "Upgrade"), header("upgrade", "websocket")),
+        headers = buildList {
+            add(header("connection", "Upgrade"))
+            add(header("upgrade", "websocket"))
+            extension?.let { add(header("sec-websocket-extensions", it)) }
+        },
     )
 
     private fun header(name: String, value: String) = HeaderField(HeaderName(name), value)
+}
+
+private fun deflateMessages(messages: List<ByteArray>): List<ByteArray> {
+    val deflater = Deflater(Deflater.DEFAULT_COMPRESSION, true)
+    return try {
+        messages.map { message ->
+            deflater.setInput(message)
+            val output = ByteArrayOutputStream()
+            val buffer = ByteArray(256)
+            do {
+                val count = deflater.deflate(buffer, 0, buffer.size, Deflater.SYNC_FLUSH)
+                output.write(buffer, 0, count)
+            } while (!deflater.needsInput())
+            val withTail = output.toByteArray()
+            check(withTail.size >= 4)
+            withTail.copyOf(withTail.size - 4)
+        }
+    } finally {
+        deflater.end()
+    }
 }
 
 private class WebSocketSlice(private val bytes: ByteArray) : ProxyPayloadSlice {

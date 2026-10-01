@@ -161,6 +161,7 @@ public data class HttpResponseSnapshot(
  * @property state Monotonic exchange lifecycle state.
  * @property terminalOutcome Typed terminal result when [state] is terminal.
  * @property timings Observed exchange timing values.
+ * @property appliedNetworkCondition Policy evidence selected before forwarding, when conditions were enabled.
  * @property startedAtEpochMillis Wall-clock start time used for display and persistence ordering.
  */
 public data class HttpExchangeSnapshot(
@@ -173,6 +174,7 @@ public data class HttpExchangeSnapshot(
     public val state: ExchangeState,
     public val terminalOutcome: ExchangeTerminalOutcome? = ExchangeTerminalOutcome.fromPersisted(state, null),
     public val timings: ExchangeTimings = ExchangeTimings(),
+    public val appliedNetworkCondition: AppliedNetworkCondition? = null,
     public val startedAtEpochMillis: Long,
 ) {
     init {

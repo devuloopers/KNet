@@ -39,6 +39,7 @@ public sealed interface TrafficTerminationReason {
     public enum class Transport(override val code: TrafficTerminationCode) : TrafficTerminationReason {
         UPSTREAM_CONNECTION_LIMIT(TrafficTerminationCode("upstream_connection_limit")),
         UPSTREAM_TLS_HANDSHAKE_FAILED(TrafficTerminationCode("upstream_tls_handshake_failed")),
+        DOWNSTREAM_TLS_HANDSHAKE_FAILED(TrafficTerminationCode("downstream_tls_handshake_failed")),
         UPSTREAM_CONNECT_FAILED(TrafficTerminationCode("upstream_connect_failed")),
         UPSTREAM_REQUEST_WRITE_FAILED(TrafficTerminationCode("upstream_request_write_failed")),
         UPSTREAM_RESPONSE_FAILED(TrafficTerminationCode("upstream_response_failed")),
@@ -60,6 +61,7 @@ public sealed interface TrafficTerminationReason {
         BREAKPOINT_REQUEST_DROPPED(TrafficTerminationCode("breakpoint_request_dropped")),
         BREAKPOINT_ABANDONED(TrafficTerminationCode("breakpoint_abandoned")),
         INTERCEPTOR_REMOVED_BEFORE_FORWARDING(TrafficTerminationCode("interceptor_removed_before_forwarding")),
+        PROTECTED_TRAFFIC_BLOCKED(TrafficTerminationCode("protected_traffic_blocked")),
     }
 
     /** Compatibility reason for an old terminal record that did not persist a reason. */

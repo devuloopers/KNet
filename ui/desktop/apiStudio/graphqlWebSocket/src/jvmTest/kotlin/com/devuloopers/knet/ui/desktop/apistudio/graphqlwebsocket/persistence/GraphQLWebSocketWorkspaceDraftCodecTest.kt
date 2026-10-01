@@ -1,8 +1,12 @@
 package com.devuloopers.knet.ui.desktop.apistudio.graphqlwebsocket.persistence
 
+import com.devuloopers.knet.application.contract.apistudio.CapturedApiStudioMessage
 import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolMetadataEntry
+import com.devuloopers.knet.traffic.model.TrafficDirection
+import com.devuloopers.knet.traffic.model.message.ProtocolMessageKind
 import com.devuloopers.knet.ui.desktop.apistudio.graphqlwebsocket.model.GraphQLWebSocketAuthoringTab
 import com.devuloopers.knet.ui.desktop.apistudio.graphqlwebsocket.model.GraphQLWebSocketStudioState
+import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -71,4 +75,43 @@ class GraphQLWebSocketWorkspaceDraftCodecTest {
 
         assertEquals(state.copy(isDirty = false), restored)
     }
+
+    @Test
+    fun `captured graphql websocket handshake imports native endpoint and headers`() {
+        val document = codec.importedDocument(
+            id = "captured-graphql-websocket",
+            spec = NetworkRequestSpec(
+                url = "http://example.test/graphql",
+                headers = listOf(
+                    "Connection" to "Upgrade",
+                    "Upgrade" to "websocket",
+                    "Sec-WebSocket-Protocol" to "graphql-transport-ws",
+                    "Authorization" to "Bearer token",
+                ),
+            ),
+            messages = listOf(
+                capturedText("""{"type":"connection_init","payload":{"Authorization":"Bearer socket"}}"""),
+                capturedText(
+                    """{"id":"prices","type":"subscribe","payload":{"query":"subscription Prices { prices }","operationName":"Prices","variables":{"market":"IN"},"extensions":{"trace":true}}}""",
+                ),
+            ),
+        )
+
+        val restored = codec.decode(document)
+
+        assertEquals("ws://example.test/graphql", restored.url)
+        assertEquals(listOf(ApiStudioProtocolMetadataEntry("Authorization", "Bearer token")), restored.headers)
+        assertEquals("{\"Authorization\":\"Bearer socket\"}", restored.connectionParametersJson)
+        assertEquals("subscription Prices { prices }", restored.query)
+        assertEquals("Prices", restored.operationName)
+        assertEquals("{\"market\":\"IN\"}", restored.variablesJson)
+        assertEquals("{\"trace\":true}", restored.extensionsJson)
+        assertEquals("prices", restored.operationId)
+    }
+
+    private fun capturedText(payload: String) = CapturedApiStudioMessage(
+        kind = ProtocolMessageKind.TEXT,
+        direction = TrafficDirection.CLIENT_TO_SERVER,
+        payload = payload.encodeToByteArray(),
+    )
 }

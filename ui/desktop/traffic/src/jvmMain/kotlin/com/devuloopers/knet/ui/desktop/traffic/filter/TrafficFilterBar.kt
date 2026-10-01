@@ -23,6 +23,7 @@ import com.devuloopers.knet.ui.desktop.traffic.model.MethodFilter
 import com.devuloopers.knet.ui.desktop.traffic.model.HttpVersionFilter
 import com.devuloopers.knet.ui.desktop.traffic.model.SchemeFilter
 import com.devuloopers.knet.ui.desktop.traffic.model.StatusFilter
+import com.devuloopers.knet.ui.desktop.traffic.model.TrafficTypeFilter
 import com.devuloopers.knet.ui.core.components.divider.VerticalDivider
 import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdown
 import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdownDefaults
@@ -41,6 +42,7 @@ import com.devuloopers.knet.ui.desktop.traffic.model.TrafficColumn
  */
 data class TrafficFilterBarState(
     val searchQuery: String = "",
+    val selectedType: TrafficTypeFilter = TrafficTypeFilter.ALL,
     val selectedScheme: SchemeFilter = SchemeFilter.ALL,
     val selectedHttpVersion: HttpVersionFilter = HttpVersionFilter.ALL,
     val selectedMethod: MethodFilter = MethodFilter.ALL,
@@ -55,6 +57,7 @@ data class TrafficFilterBarState(
  * Interaction callbacks for [TrafficFilterBar].
  *
  * @property onSearchChange Updates the retained-traffic search query.
+ * @property onTypeSelected Selects decrypted, opaque, protected, or failed rows.
  * @property onSchemeSelected Selects the request scheme independently of HTTP version.
  * @property onHttpVersionSelected Selects the negotiated HTTP version independently of scheme.
  * @property onMethodSelected Selects the canonical HTTP method filter.
@@ -64,6 +67,7 @@ data class TrafficFilterBarState(
  */
 data class TrafficFilterBarActions(
     val onSearchChange: (String) -> Unit = {},
+    val onTypeSelected: (TrafficTypeFilter) -> Unit = {},
     val onSchemeSelected: (SchemeFilter) -> Unit = {},
     val onHttpVersionSelected: (HttpVersionFilter) -> Unit = {},
     val onMethodSelected: (MethodFilter) -> Unit = {},
@@ -157,6 +161,14 @@ fun TrafficFilterBar(
             )
 
             // Dropdowns — KNetDropdown from :ui:core with category placeholder headers
+            KNetDropdown(
+                placeholder = "Type",
+                selectedItem = state.selectedType,
+                items = TrafficTypeFilter.entries,
+                onItemSelected = actions.onTypeSelected,
+                size = KNetDropdownSize.Compact,
+                itemText = TrafficTypeFilter::label,
+            )
             KNetDropdown(
                 placeholder = "Method",
                 selectedItem = state.selectedMethod,

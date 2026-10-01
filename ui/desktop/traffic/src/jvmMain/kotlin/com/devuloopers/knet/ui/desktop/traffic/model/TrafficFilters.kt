@@ -1,5 +1,35 @@
 package com.devuloopers.knet.ui.desktop.traffic.model
 
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
+import com.devuloopers.knet.traffic.model.OpaqueSecurityProtocol
+import com.devuloopers.knet.traffic.model.OpaqueTransportProtocol
+
+/** Semantic Traffic row filter spanning decrypted exchanges and payload-opaque flows. */
+enum class TrafficTypeFilter(val label: String) {
+    ALL("All traffic"),
+    DECRYPTED("Decrypted"),
+    TLS_TUNNEL("TLS tunnel"),
+    OPAQUE_TCP("Opaque TCP"),
+    UDP_QUIC("UDP / QUIC"),
+    PROTECTED("Protected"),
+    FAILED("Failed"),
+    ;
+
+    /** Returns whether [row] belongs to this semantic category. */
+    fun matches(row: TrafficRowUiState): Boolean = when (this) {
+        ALL -> true
+        DECRYPTED -> row.rowKind == TrafficRowKind.HTTP_EXCHANGE
+        TLS_TUNNEL -> row.opaqueSecurity == OpaqueSecurityProtocol.TLS
+        OPAQUE_TCP -> row.opaqueTransport == OpaqueTransportProtocol.TCP &&
+            row.opaqueSecurity == OpaqueSecurityProtocol.UNKNOWN
+        UDP_QUIC -> row.opaqueTransport == OpaqueTransportProtocol.UDP ||
+            row.opaqueSecurity == OpaqueSecurityProtocol.QUIC
+        PROTECTED -> row.rowKind == TrafficRowKind.OPAQUE_FLOW &&
+            (row.policyAction != null || row.policyRuleId != null)
+        FAILED -> row.terminalOutcome is ExchangeTerminalOutcome.Failed
+    }
+}
+
 /** Request-scheme filter kept separate from the negotiated HTTP version. */
 enum class SchemeFilter(val label: String) {
     ALL("All"),

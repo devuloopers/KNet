@@ -171,12 +171,13 @@ internal fun LazyCodeBody(
         Unit
     }
 
-    LaunchedEffect(mode, selection, isSelectionGestureActive) {
-        when {
-            mode != LazyCodeBodyMode.Editable -> selectionInputOwnsFocus = false
-            isSelectionGestureActive -> selectionInputOwnsFocus = false
-            selection != null -> selectionInputOwnsFocus = true
-        }
+    LaunchedEffect(mode, selection, isSelectionGestureActive, shouldRequestEditorFocus) {
+        selectionInputOwnsFocus = shouldSelectionInputBridgeOwnFocus(
+            isEditable = mode == LazyCodeBodyMode.Editable,
+            hasSelection = selection != null,
+            isSelectionGestureActive = isSelectionGestureActive,
+            editorMayRequestFocus = shouldRequestEditorFocus,
+        )
     }
     val contextMenuItems = rememberEditorContextMenuItems(
         snapshot = snapshot,
@@ -365,3 +366,16 @@ internal fun shouldRevealCaretForSelection(
     val range = selection?.range ?: return true
     return range.start != EditorPosition(0, 0) || range.end != documentEnd
 }
+
+/**
+ * Resolves whether the invisible document-selection input may own focus.
+ *
+ * Search and other editor-owned controls set [editorMayRequestFocus] to false. A programmatic
+ * selection update must never steal focus from those controls while results are recomputed.
+ */
+internal fun shouldSelectionInputBridgeOwnFocus(
+    isEditable: Boolean,
+    hasSelection: Boolean,
+    isSelectionGestureActive: Boolean,
+    editorMayRequestFocus: Boolean,
+): Boolean = isEditable && hasSelection && !isSelectionGestureActive && editorMayRequestFocus

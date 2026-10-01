@@ -193,6 +193,7 @@ internal val apiStudioBindings: Module = module {
             observeTrafficCaptureState = get(),
             draftCodec = get(),
             ioDispatcher = Dispatchers.IO,
+            networkConditionsRepository = get(),
         )
     }
     viewModel {
@@ -206,6 +207,7 @@ internal val apiStudioBindings: Module = module {
             observeTrafficCaptureState = get(),
             draftCodec = get(),
             ioDispatcher = Dispatchers.IO,
+            networkConditionsRepository = get(),
         )
     }
     viewModel {
@@ -219,6 +221,7 @@ internal val apiStudioBindings: Module = module {
             observeTrafficCaptureState = get(),
             draftCodec = get(),
             ioDispatcher = Dispatchers.IO,
+            networkConditionsRepository = get(),
         )
     }
     viewModel {
@@ -239,6 +242,7 @@ internal val apiStudioBindings: Module = module {
             saveRequestToCollectionUseCase = get(),
             ioDispatcher = Dispatchers.IO,
             responseStreamInterpreters = get(),
+            networkConditionsRepository = get(),
         )
     }
     viewModel {

@@ -4,7 +4,9 @@ import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class SelectionTextInputBridgeTest {
     @Test
@@ -29,5 +31,45 @@ class SelectionTextInputBridgeTest {
     @Test
     fun emptyInputDoesNotCreateAnEditorMutation() {
         assertNull(committedSelectionInput(TextFieldValue()))
+    }
+
+    @Test
+    fun searchControlOwnershipPreventsSelectionBridgeFromStealingFocus() {
+        assertFalse(
+            shouldSelectionInputBridgeOwnFocus(
+                isEditable = true,
+                hasSelection = true,
+                isSelectionGestureActive = false,
+                editorMayRequestFocus = false,
+            )
+        )
+        assertTrue(
+            shouldSelectionInputBridgeOwnFocus(
+                isEditable = true,
+                hasSelection = true,
+                isSelectionGestureActive = false,
+                editorMayRequestFocus = true,
+            )
+        )
+    }
+
+    @Test
+    fun selectionBridgeReleasesFocusWhenSelectionClearsOrDragBegins() {
+        assertFalse(
+            shouldSelectionInputBridgeOwnFocus(
+                isEditable = true,
+                hasSelection = false,
+                isSelectionGestureActive = false,
+                editorMayRequestFocus = true,
+            )
+        )
+        assertFalse(
+            shouldSelectionInputBridgeOwnFocus(
+                isEditable = true,
+                hasSelection = true,
+                isSelectionGestureActive = true,
+                editorMayRequestFocus = true,
+            )
+        )
     }
 }

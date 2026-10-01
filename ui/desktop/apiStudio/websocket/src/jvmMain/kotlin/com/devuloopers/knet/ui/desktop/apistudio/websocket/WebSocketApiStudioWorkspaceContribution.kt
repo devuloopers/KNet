@@ -7,6 +7,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
 import com.devuloopers.knet.application.contract.apistudio.ApiStudioEditorId
 import com.devuloopers.knet.application.contract.apistudio.ApiStudioWorkspaceDocument
+import com.devuloopers.knet.application.contract.apistudio.CapturedApiStudioRequest
 import com.devuloopers.knet.domain.request.descriptor.RequestKindId
 import com.devuloopers.knet.ui.desktop.apistudio.protocol.ApiStudioWorkspaceContribution
 import com.devuloopers.knet.ui.desktop.apistudio.protocol.ApiStudioWorkspaceRenderState
@@ -26,6 +27,13 @@ class WebSocketApiStudioWorkspaceContribution(
 
     override fun createInitialDocument(id: String): ApiStudioWorkspaceDocument =
         draftCodec.unsavedDocument(WebSocketStudioState(documentId = id))
+
+    override fun createImportedDocument(
+        id: String,
+        request: CapturedApiStudioRequest,
+    ): ApiStudioWorkspaceDocument? = request
+        .takeIf { it.kind == RequestKindId.WEBSOCKET }
+        ?.let { draftCodec.importedDocument(id, it.spec, it.messages) }
 
     @Composable
     protected override fun rememberWorkspaceContent(

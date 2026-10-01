@@ -19,7 +19,7 @@ internal class KtorCompanionControlTransport(
         val response = httpClient.execute(
             CompanionHttpRequest(
                 endpoint = request.endpoint,
-                method = CompanionHttpMethod.POST,
+                method = operation.method,
                 path = operation.path,
                 requestMediaType = operation.requestMediaType,
                 acceptedMediaType = operation.responseMediaType,
@@ -45,25 +45,35 @@ internal class KtorCompanionControlTransport(
 
     private fun CompanionControlOperation.toWireOperation(): ControlWireOperation = when (this) {
         CompanionControlOperation.PAIR -> ControlWireOperation(
+            method = CompanionHttpMethod.POST,
             path = CompanionControlProtocol.PAIR_PATH,
             requestMediaType = CompanionControlProtocol.PAIR_REQUEST_MEDIA_TYPE,
             responseMediaType = CompanionControlProtocol.PAIR_RESPONSE_MEDIA_TYPE,
         )
         CompanionControlOperation.REFRESH_CREDENTIAL -> ControlWireOperation(
+            method = CompanionHttpMethod.POST,
             path = CompanionControlProtocol.REFRESH_PATH,
             requestMediaType = CompanionControlProtocol.REFRESH_REQUEST_MEDIA_TYPE,
             responseMediaType = CompanionControlProtocol.REFRESH_RESPONSE_MEDIA_TYPE,
         )
         CompanionControlOperation.RECONCILE_ENDPOINTS -> ControlWireOperation(
+            method = CompanionHttpMethod.POST,
             path = CompanionControlProtocol.RECONCILE_PATH,
             requestMediaType = CompanionControlProtocol.RECONCILE_REQUEST_MEDIA_TYPE,
             responseMediaType = CompanionControlProtocol.RECONCILE_RESPONSE_MEDIA_TYPE,
         )
+        CompanionControlOperation.FETCH_NETWORK_CONDITIONS -> ControlWireOperation(
+            method = CompanionHttpMethod.GET,
+            path = CompanionControlProtocol.NETWORK_CONDITIONS_PATH,
+            requestMediaType = null,
+            responseMediaType = CompanionControlProtocol.NETWORK_CONDITIONS_RESPONSE_MEDIA_TYPE,
+        )
     }
 
     private data class ControlWireOperation(
+        val method: CompanionHttpMethod,
         val path: String,
-        val requestMediaType: String,
+        val requestMediaType: String?,
         val responseMediaType: String,
     )
 }

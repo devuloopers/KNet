@@ -12,6 +12,7 @@ import com.devuloopers.knet.companion.model.CompanionFailureCode
 import com.devuloopers.knet.companion.model.CompanionInspectionMode
 import com.devuloopers.knet.companion.model.CompanionInspectionState
 import com.devuloopers.knet.companion.model.UnsupportedTrafficPolicy
+import com.devuloopers.knet.companion.model.PacketConditionConfiguration
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.StateFlow
 
@@ -51,10 +52,12 @@ public class StartCompanionInspectionUseCase(
     private val verifyCertificateTrust: VerifyCompanionCertificateTrustUseCase,
     private val inspection: CompanionInspectionController,
     private val transport: CompanionTransport,
+    private val fetchPacketConditions: FetchCompanionPacketConditionsUseCase? = null,
 ) {
     public suspend fun execute(
         mode: CompanionInspectionMode = CompanionInspectionMode.DEVICE_VPN,
         unsupportedTrafficPolicy: UnsupportedTrafficPolicy = UnsupportedTrafficPolicy.REJECT,
+        packetConditions: PacketConditionConfiguration? = null,
     ): StartCompanionInspectionResult {
         registrations.activeRegistration.value
             ?: return StartCompanionInspectionResult.Rejected(registrationMissing())
@@ -91,6 +94,9 @@ public class StartCompanionInspectionUseCase(
                     mode = mode,
                     unsupportedTrafficPolicy = unsupportedTrafficPolicy,
                     fullHttpsInspection = certificateState is CompanionCertificateState.Trusted,
+                    packetConditions = packetConditions
+                        ?: fetchPacketConditions?.execute(registration)
+                        ?: PacketConditionConfiguration.Disabled,
                 )
                 val started = try {
                     inspection.start(configuration)

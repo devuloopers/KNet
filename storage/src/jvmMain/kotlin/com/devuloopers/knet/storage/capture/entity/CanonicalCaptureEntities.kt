@@ -88,6 +88,7 @@ data class TrafficConnectionEntity(
         Index(value = ["sessionId", "method", "captureSequence"], name = "index_exchange_session_method_sequence"),
         Index(value = ["sessionId", "responseStatusCode", "captureSequence"], name = "index_exchange_session_status_sequence"),
         Index(value = ["sessionId", "protocol", "captureSequence"], name = "index_exchange_session_protocol_sequence"),
+        Index(value = ["startedAtEpochMillis", "id"], name = "index_exchange_chronological_id"),
         Index(value = ["connectionId", "connectionSequence"], name = "index_exchange_connection_sequence"),
     ],
 )
@@ -110,6 +111,9 @@ data class CanonicalExchangeEntity(
     val protocol: String,
     @ColumnInfo(defaultValue = "'proxy-client'")
     val origin: String = "proxy-client",
+    val appliedConditionProfileId: String? = null,
+    val appliedConditionRuleId: String? = null,
+    val appliedConditionSource: String? = null,
     val requestHeadersEncoded: String,
     val requestTrailersEncoded: String? = null,
     val requestBodyId: String?,
@@ -125,6 +129,71 @@ data class CanonicalExchangeEntity(
     val timingFirstByteMillis: Long?,
     val timingDownloadMillis: Long?,
     val timingTotalMillis: Long?,
+    val terminalErrorCode: String?,
+)
+
+/**
+ * Durable metadata and final counters for one payload-opaque transport flow.
+ *
+ * @property captureSequence Storage-owned chronological sequence.
+ * @property id Stable flow identity.
+ * @property sessionId Owning capture session.
+ * @property connectionId Owning admitted connection.
+ * @property connectionSequence Flow-start order within the connection.
+ * @property version Monotonic lifecycle version.
+ * @property state Active or terminal lifecycle token.
+ * @property startedAtEpochMillis Flow start timestamp.
+ * @property completedAtEpochMillis Terminal timestamp, when available.
+ * @property destinationHost Remote host or address.
+ * @property destinationPort Remote transport port.
+ * @property serverName Visible TLS server name, when available.
+ * @property transport Ordered-stream or datagram transport token.
+ * @property security Proven security classification token.
+ * @property sourceApplicationId Verified source identity, when available.
+ * @property policyRuleId Stable selected rule evidence.
+ * @property offeredApplicationProtocolsEncoded Bounded delimiter-encoded ALPN tokens.
+ * @property offeredTlsVersionsEncoded Bounded delimiter-encoded TLS-version tokens.
+ * @property uploadedBytes Final client-to-destination byte count.
+ * @property downloadedBytes Final destination-to-client byte count.
+ * @property terminalErrorCode Optional stable typed termination code.
+ */
+@Entity(
+    tableName = "opaque_flows",
+    indices = [
+        Index(value = ["id"], unique = true, name = "index_opaque_flow_id"),
+        Index(value = ["sessionId", "captureSequence"], name = "index_opaque_flow_session_sequence"),
+        Index(value = ["sessionId", "destinationHost", "captureSequence"], name = "index_opaque_flow_session_host_sequence"),
+        Index(value = ["startedAtEpochMillis", "id"], name = "index_opaque_flow_chronological_id"),
+        Index(value = ["connectionId", "connectionSequence"], name = "index_opaque_flow_connection_sequence"),
+        Index(value = ["sessionId", "state"], name = "index_opaque_flow_session_state"),
+    ],
+)
+data class OpaqueFlowEntity(
+    @PrimaryKey(autoGenerate = true) val captureSequence: Long = 0L,
+    val id: String,
+    val sessionId: String,
+    val connectionId: String,
+    val connectionSequence: Long,
+    val version: Long,
+    val state: String,
+    val startedAtEpochMillis: Long,
+    val completedAtEpochMillis: Long?,
+    val destinationHost: String,
+    val destinationPort: Int?,
+    val serverName: String?,
+    val transport: String,
+    val security: String,
+    val sourceApplicationId: String?,
+    val policyRuleId: String?,
+    val policyAction: String? = null,
+    val policyGroupId: String? = null,
+    val appliedConditionProfileId: String? = null,
+    val appliedConditionRuleId: String? = null,
+    val appliedConditionSource: String? = null,
+    @ColumnInfo(defaultValue = "''") val offeredApplicationProtocolsEncoded: String = "",
+    @ColumnInfo(defaultValue = "''") val offeredTlsVersionsEncoded: String = "",
+    val uploadedBytes: Long,
+    val downloadedBytes: Long,
     val terminalErrorCode: String?,
 )
 

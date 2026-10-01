@@ -27,6 +27,7 @@ import com.devuloopers.knet.application.contract.breakpoint.PendingBreakpoint
 import com.devuloopers.knet.application.contract.breakpoint.PendingProtocolMessageBreakpoint
 import com.devuloopers.knet.application.usecase.inspection.ObserveInspectionAnnotationsUseCase
 import com.devuloopers.knet.application.contract.traffic.TrafficPageQuery
+import com.devuloopers.knet.application.contract.traffic.TrafficRecordFilter
 import com.devuloopers.knet.application.contract.traffic.TrafficFacetQuery
 import com.devuloopers.knet.application.contract.traffic.TrafficFacetCounts
 import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePageQuery
@@ -50,6 +51,10 @@ import com.devuloopers.knet.domain.settings.usecase.ObserveApplicationSettingsUs
 import com.devuloopers.knet.domain.workspace.model.TrafficTableColumnWidths
 import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
 import com.devuloopers.knet.domain.workspace.usecase.UpdateWorkspaceLayoutUseCase
+import com.devuloopers.knet.application.contract.apistudio.CapturedApiStudioRequest
+import com.devuloopers.knet.application.contract.apistudio.CapturedApiStudioMessage
+import com.devuloopers.knet.traffic.model.http.HeaderField
+import com.devuloopers.knet.traffic.model.http.HeaderName
 
 import com.devuloopers.knet.ui.desktop.traffic.model.*
 import kotlinx.coroutines.*
@@ -142,7 +147,7 @@ class TrafficViewModel(
      */
     fun exportToStudioSpec(
         transactionId: String,
-        onSpecReady: (com.devuloopers.knet.domain.network.model.NetworkRequestSpec) -> Unit
+        onSpecReady: (CapturedApiStudioRequest) -> Unit
     ) {
         viewModelScope.launch(backgroundDispatcher) {
             val spec = when (val result = prepareCapturedNetworkRequestUseCase.execute(ExchangeId(transactionId))) {
@@ -153,16 +158,69 @@ class TrafficViewModel(
                 is PrepareCapturedNetworkRequestResult.BodyTooLarge -> null
             }
             if (spec != null) {
+                val descriptor = describeRequestUseCase.execute(
+                    RequestDescriptorInput(
+                        transportMethod = spec.method,
+                        absoluteUrl = spec.url,
+                        headers = spec.headers.mapNotNull { (name, value) ->
+                            name.trim().takeIf(String::isNotEmpty)?.let { HeaderField(HeaderName(it), value) }
+                        },
+                        body = spec.bodyPayload.encodeToByteArray()
+                            .takeIf(ByteArray::isNotEmpty)
+                            ?.copyOf(minOf(spec.bodyPayload.encodeToByteArray().size, RequestDescriptorBody.MAXIMUM_BYTES))
+                            ?.let(::RequestDescriptorBody),
+                        bodyComplete = spec.bodyPayload.encodeToByteArray().size <= RequestDescriptorBody.MAXIMUM_BYTES,
+                    ),
+                )
                 KNetLogger.info("TrafficViewModel") {
-                    "[EXPORT TO STUDIO] Successfully built spec for transactionId=$transactionId method=${spec.method}"
+                    "[EXPORT TO STUDIO] Successfully built spec for transactionId=$transactionId " +
+                        "method=${spec.method} kind=${descriptor.kind.value}"
+                }
+                val capturedMessages = if (
+                    descriptor.kind == RequestKindId.WEBSOCKET ||
+                    descriptor.kind == RequestKindId.GRAPHQL_WEBSOCKET
+                ) {
+                    recoverStudioMessages(ExchangeId(transactionId))
+                } else {
+                    emptyList()
                 }
                 withContext(Dispatchers.Main) {
-                    onSpecReady(spec)
+                    onSpecReady(
+                        CapturedApiStudioRequest(
+                            sourceExchangeId = transactionId,
+                            kind = descriptor.kind,
+                            spec = spec,
+                            messages = capturedMessages,
+                        ),
+                    )
                 }
             } else {
                 KNetLogger.warn("TrafficViewModel") {
                     "[EXPORT TO STUDIO FAILED] Spec could not be resolved for transactionId=$transactionId"
                 }
+            }
+        }
+    }
+
+    /** Recovers a small complete message prefix without making API Studio depend on Traffic storage. */
+    private suspend fun recoverStudioMessages(exchangeId: ExchangeId): List<CapturedApiStudioMessage> {
+        val page = runCatching {
+            queryProtocolMessagesUseCase.execute(
+                ProtocolMessagePageQuery(exchangeId = exchangeId, limit = CapturedApiStudioRequest.MAXIMUM_MESSAGES),
+            )
+        }.getOrNull() ?: return emptyList()
+        return page.items.mapNotNull { message ->
+            when (val body = runCatching { loadProtocolMessageBodyUseCase.execute(message) }.getOrNull()) {
+                is LoadProtocolMessageBodyResult.Available -> body
+                    .takeUnless { it.truncated }
+                    ?.let {
+                        CapturedApiStudioMessage(
+                            kind = message.kind,
+                            direction = message.direction,
+                            payload = it.bytes,
+                        )
+                    }
+                else -> null
             }
         }
     }
@@ -575,6 +633,12 @@ class TrafficViewModel(
                 scheduleFilteredPageRefresh()
             }
 
+            is TrafficIntent.FilterByType -> {
+                _uiState.update { current -> current.copy(selectedTypeFilter = intent.type) }
+                publishTrafficProjection()
+                scheduleFilteredPageRefresh()
+            }
+
             is TrafficIntent.FilterByScheme -> {
                 _uiState.update { current -> current.copy(selectedSchemeFilter = intent.scheme) }
                 publishTrafficProjection()
@@ -846,6 +910,7 @@ class TrafficViewModel(
         val ordinarilyFiltered = applyFilters(
             transactions = rows,
             query = current.searchQuery,
+            type = current.selectedTypeFilter,
             scheme = current.selectedSchemeFilter,
             httpVersion = current.selectedHttpVersionFilter,
             method = current.selectedMethodFilter,
@@ -897,6 +962,7 @@ class TrafficViewModel(
                         statuses = before.selectedStatusFilter.toCanonicalStatuses(),
                         schemes = before.selectedSchemeFilter.toCanonicalSchemes(),
                         protocols = before.selectedHttpVersionFilter.toCanonicalProtocols(),
+                        recordFilter = before.selectedTypeFilter.toCanonicalRecordFilter(),
                     ),
                 )
                 val facetCounts = if (mode == TrafficPageLoadMode.LOAD_OLDER) {
@@ -914,13 +980,22 @@ class TrafficViewModel(
                 }
                 val latestState = _uiState.value
                 if (latestState.sessionId != sessionId) return
-                val refreshedRows = page.items.map { item ->
+                val httpRows = page.items.map { item ->
                     item.exchange
                         .toTrafficRowUiState(item.historySequence.value)
                         .withDescriptor(describeRequestUseCase.execute(item.exchange.request))
                 }
+                val opaqueRows = page.opaqueItems.map { item ->
+                    item.flow.toTrafficRowUiState(item.historySequence.value)
+                }
+                val refreshedRows = (httpRows + opaqueRows).sortedWith(
+                    compareByDescending<TrafficRowUiState>(TrafficRowUiState::timestamp)
+                        .thenByDescending(TrafficRowUiState::sequenceNumber)
+                        .thenByDescending(TrafficRowUiState::transactionId),
+                )
                 val sortedRows = mergePageRows(mode, refreshedRows)
                 val filtersStillMatch = latestState.searchQuery == before.searchQuery &&
+                    latestState.selectedTypeFilter == before.selectedTypeFilter &&
                     latestState.selectedSchemeFilter == before.selectedSchemeFilter &&
                     latestState.selectedHttpVersionFilter == before.selectedHttpVersionFilter &&
                     latestState.selectedMethodFilter == before.selectedMethodFilter &&
@@ -966,8 +1041,8 @@ class TrafficViewModel(
         val pageIds = pageRows.asSequence().map(TrafficRowUiState::transactionId).toHashSet()
         val sorted = (pageRows + durableTransactions.filterNot { row -> row.transactionId in pageIds })
             .sortedWith(
-                compareByDescending<TrafficRowUiState> { row -> row.sequenceNumber }
-                    .thenByDescending { row -> row.timestamp }
+                compareByDescending<TrafficRowUiState> { row -> row.timestamp }
+                    .thenByDescending { row -> row.sequenceNumber }
                     .thenByDescending(TrafficRowUiState::transactionId),
             )
         return when (mode) {
@@ -980,6 +1055,7 @@ class TrafficViewModel(
     private fun applyFilters(
         transactions: List<TrafficRowUiState>,
         query: String,
+        type: TrafficTypeFilter,
         scheme: SchemeFilter,
         httpVersion: HttpVersionFilter,
         method: MethodFilter,
@@ -991,9 +1067,16 @@ class TrafficViewModel(
                     item.path.contains(query, ignoreCase = true) ||
                     item.method.contains(query, ignoreCase = true) ||
                     item.displayMethod.contains(query, ignoreCase = true) ||
-                    item.status.toString().contains(query)
+                    item.status.toString().contains(query) ||
+                    item.sourceApplicationId?.contains(query, ignoreCase = true) == true ||
+                    item.policyRuleId?.contains(query, ignoreCase = true) == true ||
+                    item.policyAction?.name?.contains(query, ignoreCase = true) == true ||
+                    item.policyGroupId?.contains(query, ignoreCase = true) == true ||
+                    item.opaqueTransport?.name?.contains(query, ignoreCase = true) == true ||
+                    item.opaqueSecurity?.name?.contains(query, ignoreCase = true) == true
 
             val matchesScheme = scheme.matches(item)
+            val matchesType = type.matches(item)
             val matchesHttpVersion = httpVersion.matches(item)
 
             val matchesMethod = when (method) {
@@ -1006,7 +1089,7 @@ class TrafficViewModel(
                 else -> status.range?.contains(item.status) ?: true
             }
 
-            matchesQuery && matchesScheme && matchesHttpVersion && matchesMethod && matchesStatus
+            matchesQuery && matchesType && matchesScheme && matchesHttpVersion && matchesMethod && matchesStatus
         }
     }
 
@@ -1065,6 +1148,7 @@ class TrafficViewModel(
     private fun observeDurableRequestKinds() {
         durableAnnotationJob?.cancel()
         val exchangeIds = durableTransactions.asSequence()
+            .filter { row -> row.rowKind == TrafficRowKind.HTTP_EXCHANGE }
             .take(MAXIMUM_ANNOTATION_OBSERVATION_ROWS)
             .map { ExchangeId(it.transactionId) }
             .toSet()
@@ -1148,6 +1232,7 @@ class TrafficViewModel(
             captureState = CaptureState.STOPPED,
             engineState = ProxyRuntimeState.Stopped,
             searchQuery = "",
+            selectedTypeFilter = TrafficTypeFilter.ALL,
             selectedSchemeFilter = SchemeFilter.ALL,
             selectedHttpVersionFilter = HttpVersionFilter.ALL,
             selectedMethodFilter = MethodFilter.ALL,
@@ -1197,6 +1282,16 @@ private fun MethodFilter.toCanonicalMethods(): Set<CanonicalHttpMethod> = when (
 
 private fun StatusFilter.toCanonicalStatuses(): Set<CanonicalHttpStatus> =
     range?.map(::CanonicalHttpStatus)?.toSet().orEmpty()
+
+private fun TrafficTypeFilter.toCanonicalRecordFilter(): TrafficRecordFilter = when (this) {
+    TrafficTypeFilter.ALL -> TrafficRecordFilter.ALL
+    TrafficTypeFilter.DECRYPTED -> TrafficRecordFilter.DECRYPTED
+    TrafficTypeFilter.TLS_TUNNEL -> TrafficRecordFilter.TLS_TUNNEL
+    TrafficTypeFilter.OPAQUE_TCP -> TrafficRecordFilter.OPAQUE_TCP
+    TrafficTypeFilter.UDP_QUIC -> TrafficRecordFilter.UDP_OR_QUIC
+    TrafficTypeFilter.PROTECTED -> TrafficRecordFilter.PROTECTED
+    TrafficTypeFilter.FAILED -> TrafficRecordFilter.FAILED
+}
 
 private fun SchemeFilter.toCanonicalSchemes(): Set<HttpScheme> = when (this) {
     SchemeFilter.HTTP -> setOf(HttpScheme.Standard(StandardHttpScheme.HTTP))

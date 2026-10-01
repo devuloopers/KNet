@@ -5,6 +5,7 @@ import com.devuloopers.knet.traffic.id.ConnectionId
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.id.StreamId
 import com.devuloopers.knet.traffic.id.ProtocolMessageId
+import com.devuloopers.knet.traffic.id.OpaqueFlowId
 import com.devuloopers.knet.traffic.model.body.BodyRef
 import com.devuloopers.knet.traffic.model.http.RequestHead
 import com.devuloopers.knet.traffic.model.http.ResponseHead
@@ -86,6 +87,7 @@ public sealed interface CaptureEvent {
      * @property streamId Optional multiplexed stream identifier.
      * @property request Canonical request metadata without body bytes.
      * @property origin Feature or client that initiated the exchange.
+     * @property appliedNetworkCondition Network-condition policy evidence selected before forwarding.
      */
     public data class ExchangeStarted(
         override val sessionId: CaptureSessionId,
@@ -97,10 +99,90 @@ public sealed interface CaptureEvent {
         public val streamId: StreamId? = null,
         public val request: RequestHead,
         public val origin: TrafficOrigin = TrafficOrigin.ProxyClient,
+        public val appliedNetworkCondition: AppliedNetworkCondition? = null,
     ) : CaptureEvent {
         init {
             validateEventCoordinates(sequence, occurredAtEpochMillis)
             require(exchangeVersion >= 0L) { "Exchange version must not be negative." }
+        }
+    }
+
+    /**
+     * Starts one payload-opaque transport flow without fabricating HTTP semantics.
+     *
+     * @property flowId Stable flow identity.
+     * @property flowVersion Initial monotonic flow version.
+     * @property destination Remote transport endpoint.
+     * @property serverName Visible TLS server name, when available.
+     * @property transport Ordered-stream or datagram transport.
+     * @property security Proven security protocol classification.
+     * @property sourceApplicationId Verified source identity, when available.
+     * @property policyRuleId Stable selected policy-rule evidence.
+     * @property appliedNetworkCondition Network-condition policy evidence selected for this flow.
+     * @property offeredApplicationProtocols Bounded offered ALPN tokens.
+     * @property offeredTlsVersions Bounded offered TLS-version tokens.
+     */
+    public data class OpaqueFlowStarted(
+        override val sessionId: CaptureSessionId,
+        override val connectionId: ConnectionId,
+        override val sequence: Long,
+        override val occurredAtEpochMillis: Long,
+        public val flowId: OpaqueFlowId,
+        public val flowVersion: Long,
+        public val destination: TrafficEndpoint,
+        public val serverName: String?,
+        public val transport: OpaqueTransportProtocol,
+        public val security: OpaqueSecurityProtocol,
+        public val sourceApplicationId: String?,
+        public val policyRuleId: String?,
+        public val policyAction: OpaqueFlowPolicyAction? = null,
+        public val policyGroupId: String? = null,
+        public val appliedNetworkCondition: AppliedNetworkCondition? = null,
+        public val offeredApplicationProtocols: List<String> = emptyList(),
+        public val offeredTlsVersions: List<String> = emptyList(),
+    ) : CaptureEvent {
+        init {
+            validateEventCoordinates(sequence, occurredAtEpochMillis)
+            require(flowVersion >= 0L) { "Opaque-flow version must not be negative." }
+            require(serverName == null || serverName.isNotBlank()) { "Opaque-flow server name must not be blank." }
+            require(sourceApplicationId == null || sourceApplicationId.isNotBlank()) {
+                "Opaque-flow source application ID must not be blank."
+            }
+            require(policyRuleId == null || policyRuleId.isNotBlank()) { "Opaque-flow rule ID must not be blank." }
+            require(policyGroupId == null || policyGroupId.isNotBlank()) {
+                "Opaque-flow policy group ID must not be blank."
+            }
+            require(offeredApplicationProtocols.size <= 16 && offeredTlsVersions.size <= 16)
+            require((offeredApplicationProtocols + offeredTlsVersions).all { it.isNotBlank() && it.length <= 255 })
+        }
+    }
+
+    /**
+     * Terminates one payload-opaque flow with final monotonic counters.
+     *
+     * @property flowId Stable target flow identity.
+     * @property flowVersion Monotonic terminal version.
+     * @property uploadedBytes Total client-to-destination bytes.
+     * @property downloadedBytes Total destination-to-client bytes.
+     * @property outcome Typed terminal outcome.
+     */
+    public data class OpaqueFlowTerminated(
+        override val sessionId: CaptureSessionId,
+        override val connectionId: ConnectionId,
+        override val sequence: Long,
+        override val occurredAtEpochMillis: Long,
+        public val flowId: OpaqueFlowId,
+        public val flowVersion: Long,
+        public val uploadedBytes: Long,
+        public val downloadedBytes: Long,
+        public val outcome: ExchangeTerminalOutcome,
+    ) : CaptureEvent {
+        init {
+            validateEventCoordinates(sequence, occurredAtEpochMillis)
+            require(flowVersion > 0L) { "Terminal opaque-flow version must be positive." }
+            require(uploadedBytes >= 0L && downloadedBytes >= 0L) {
+                "Opaque-flow counters must not be negative."
+            }
         }
     }
 

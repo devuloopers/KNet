@@ -198,8 +198,30 @@ fun KNetCodeEditor(
             onCollapseAll = { collapsedFoldStarts = foldRegions.mapTo(mutableSetOf(), FoldRegion::startLine) }
         )
 
-        Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
-            LazyCodeBody(
+        Column(modifier = Modifier.weight(1f).fillMaxWidth()) {
+            if (state.isSearchVisible && configuration.isSearchEnabled) {
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    EditorSearchPanel(
+                        options = state.searchOptions,
+                        replacement = state.searchReplacement,
+                        result = state.searchResult,
+                        activeMatchIndex = state.activeSearchMatchIndex,
+                        isEditable = configuration.mode == EditorMode.Editable,
+                        strings = configuration.strings,
+                        onOptionsChange = state::updateSearchOptions,
+                        onReplacementChange = state::updateSearchReplacement,
+                        onPrevious = { state.previousSearchMatch() },
+                        onNext = { state.nextSearchMatch() },
+                        onReplace = { state.replaceActiveSearchMatch(state.searchReplacement) },
+                        onReplaceAll = { state.replaceAllSearchMatches(state.searchReplacement) },
+                        onClose = state::closeSearch,
+                        modifier = Modifier.align(androidx.compose.ui.Alignment.TopEnd)
+                    )
+                }
+            }
+
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                LazyCodeBody(
                 snapshot = snapshot,
                 mode = if (configuration.mode == EditorMode.Editable) {
                     LazyCodeBodyMode.Editable
@@ -285,44 +307,26 @@ fun KNetCodeEditor(
                 shouldRequestEditorFocus = !state.isSearchVisible,
                 onOpenSearch = if (configuration.isSearchEnabled) state::openSearch else null,
                 onCloseSearch = if (state.isSearchVisible) state::closeSearch else null,
-                modifier = Modifier.fillMaxSize()
-            )
-
-            if (state.isSearchVisible && configuration.isSearchEnabled) {
-                EditorSearchPanel(
-                    options = state.searchOptions,
-                    replacement = state.searchReplacement,
-                    result = state.searchResult,
-                    activeMatchIndex = state.activeSearchMatchIndex,
-                    isEditable = configuration.mode == EditorMode.Editable,
-                    strings = configuration.strings,
-                    onOptionsChange = state::updateSearchOptions,
-                    onReplacementChange = state::updateSearchReplacement,
-                    onPrevious = { state.previousSearchMatch() },
-                    onNext = { state.nextSearchMatch() },
-                    onReplace = { state.replaceActiveSearchMatch(state.searchReplacement) },
-                    onReplaceAll = { state.replaceAllSearchMatches(state.searchReplacement) },
-                    onClose = state::closeSearch,
-                    modifier = Modifier.align(androidx.compose.ui.Alignment.TopEnd)
+                    modifier = Modifier.fillMaxSize()
                 )
-            }
 
-            if (
-                configuration.mode == EditorMode.Editable &&
-                snapshot.lineCount == 1 &&
-                snapshot.line(0).isEmpty() &&
-                configuration.placeholder.isNotEmpty()
-            ) {
-                Text(
-                    text = configuration.placeholder,
-                    color = EditorColors.TextSecondary.copy(alpha = 0.4f),
-                    fontFamily = FontFamily.Monospace,
-                    style = CodeEditorTokens.editorTextStyle(style.fontSize, style.lineHeight),
-                    modifier = Modifier.padding(
-                        start = CodeEditorTokens.PlaceholderStartPadding,
-                        top = CodeEditorTokens.PlaceholderTopPadding
+                if (
+                    configuration.mode == EditorMode.Editable &&
+                    snapshot.lineCount == 1 &&
+                    snapshot.line(0).isEmpty() &&
+                    configuration.placeholder.isNotEmpty()
+                ) {
+                    Text(
+                        text = configuration.placeholder,
+                        color = EditorColors.TextSecondary.copy(alpha = 0.4f),
+                        fontFamily = FontFamily.Monospace,
+                        style = CodeEditorTokens.editorTextStyle(style.fontSize, style.lineHeight),
+                        modifier = Modifier.padding(
+                            start = CodeEditorTokens.PlaceholderStartPadding,
+                            top = CodeEditorTokens.PlaceholderTopPadding
+                        )
                     )
-                )
+                }
             }
         }
     }

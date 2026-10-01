@@ -17,6 +17,7 @@ import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.toByteArray
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
@@ -25,6 +26,46 @@ import kotlin.test.assertIs
 import kotlinx.coroutines.test.runTest
 
 class KtorCompanionControlTransportTest {
+    @Test
+    fun packetConditionsUseAuthenticatedBodylessGet() = runTest {
+        val responseBody = "version=1".encodeToByteArray()
+        val provider = MockCompanionKtorClientProvider {
+            MockEngine { request ->
+                assertEquals(HttpMethod.Get, request.method)
+                assertEquals(CompanionControlProtocol.NETWORK_CONDITIONS_PATH, request.url.encodedPath)
+                assertEquals("Bearer device-1:${"c".repeat(32)}", request.headers[HttpHeaders.Authorization])
+                assertContentEquals(ByteArray(0), request.body.toByteArray())
+                respond(
+                    content = responseBody,
+                    status = HttpStatusCode.OK,
+                    headers = responseHeaders(
+                        CompanionControlProtocol.NETWORK_CONDITIONS_RESPONSE_MEDIA_TYPE,
+                        responseBody.size,
+                    ),
+                )
+            }
+        }
+        val transport = KtorCompanionControlTransport(KtorCompanionHttpClient(provider))
+
+        val response = transport.execute(
+            CompanionControlRequest(
+                endpoint = CompanionServiceEndpoint("192.0.2.1", 8_183, CompanionEndpointScheme.HTTPS),
+                transportIdentitySha256 = Sha256Fingerprint("a".repeat(64)),
+                rootCertificateSha256 = Sha256Fingerprint("b".repeat(64)),
+                rootCertificate = CompanionRootCertificate(byteArrayOf(1, 2, 3)),
+                operation = CompanionControlOperation.FETCH_NETWORK_CONDITIONS,
+                body = ByteArray(0),
+                authorization = CompanionControlAuthorization(
+                    deviceId = RegisteredDeviceId("device-1"),
+                    credential = "c".repeat(32),
+                ),
+            ),
+        )
+
+        assertEquals(200, response.statusCode)
+        assertContentEquals(responseBody, response.copyBody())
+    }
+
     @Test
     fun credentialRefreshUsesTypedPathMediaAndAuthorization() = runTest {
         val requestBody = "refresh-request".encodeToByteArray()

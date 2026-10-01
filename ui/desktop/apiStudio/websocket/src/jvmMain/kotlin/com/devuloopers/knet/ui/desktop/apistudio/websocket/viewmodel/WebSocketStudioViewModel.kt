@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.application.contract.apistudio.*
 import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
+import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionsRepository
 import com.devuloopers.knet.application.contract.traffic.CaptureSessionState
 import com.devuloopers.knet.application.usecase.apistudio.*
 import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUseCase
@@ -27,6 +28,7 @@ class WebSocketStudioViewModel(
     observeTrafficCaptureState: ObserveTrafficCaptureStateUseCase,
     private val draftCodec: WebSocketWorkspaceDraftCodec,
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
+    private val networkConditionsRepository: NetworkConditionsRepository? = null,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(WebSocketStudioState(documentId = "", isDirty = false))
 
@@ -237,7 +239,9 @@ class WebSocketStudioViewModel(
     }
 
     private fun activeRoute(): ApiStudioProtocolRoute {
-        if (captureState.value !is CaptureSessionState.Capturing) return ApiStudioProtocolRoute.Direct
+        val captureActive = captureState.value is CaptureSessionState.Capturing
+        val conditionsActive = networkConditionsRepository?.configuration?.value?.enabled == true
+        if (!captureActive && !conditionsActive) return ApiStudioProtocolRoute.Direct
         val port = (proxyState.value as? ProxyRuntimeState.Running)
             ?.handle?.endpoints?.endpoints?.firstOrNull()?.port
             ?: return ApiStudioProtocolRoute.Direct

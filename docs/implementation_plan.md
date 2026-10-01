@@ -2900,3 +2900,171 @@ Completed on 2026-08-29. Added the capability to select and decode a pairing QR 
 ## Phase 131: iOS Certificate Installation Guidance Enhancement [COMPLETED]
 
 Completed on 2026-08-29. Updated the platform-owned iOS certificate installation guidance to provide 5 clear, numbered steps that guide users through both required iOS security phases: (1) installing the downloaded profile in Settings > Profile Downloaded (or VPN & Device Management), and (2) navigating to Settings > General > About > Certificate Trust Settings and toggling "Enable full trust for root certificates" ON. Updated `products:companion:iosApp` localized string resources and `CompanionIosApplication.kt` guidance constructor. Passed iOS Simulator compilation (`compileKotlinIosSimulatorArm64`), Kotlin-first and architecture verification, and the 235-task `companionFoundationQualification` suite.
+
+## Phase 132: Editor Search and WebSocket Workflow Reliability [COMPLETED]
+
+Completed on 2026-10-01. The shared editor now lays out find/replace above the scrollable code viewport, so an
+active match cannot sit underneath the search controls, and the invisible selection input bridge yields ownership
+while a search field is focused. WebSocket capture and breakpoint presentation now decode negotiated bounded
+`permessage-deflate` messages with fragmentation, direction-specific context takeover, and fail-safe forwarding.
+Traffic-to-API-Studio transfer now selects HTTP, WebSocket, or GraphQL WebSocket workspaces, restores the native
+`ws`/`wss` endpoint and authored handshake headers, and carries a bounded captured client-message prefix so a
+recoverable GraphQL `connection_init` and `subscribe` operation populate their native fields.
+
+Focused editor, WebSocket compression/fragmentation, WebSocket and GraphQL WebSocket import, affected desktop
+module tests, `webSocketQualification`, `graphQLWebSocketQualification`, `verifyArchitectureFoundation`, and
+`git diff --check` pass.
+
+Track and resolve the following confirmed desktop defects without introducing feature-specific forks in the shared
+editor or Traffic-to-API-Studio boundaries:
+
+- Keep every active code-editor search match fully visible instead of allowing the top-right find/replace panel to
+  cover it. The shared fix must apply to API Studio editors, Traffic request/response viewers, HTTP and protocol
+  interception drawers, and every other `KNetCodeEditor` consumer.
+- Preserve find/replace input focus while search-result selection changes. The editor's invisible selection input
+  bridge must not steal focus after the first search character or after subsequent result recomputation in editable
+  surfaces such as the interception drawer and API Studio request editors.
+- Present negotiated `permessage-deflate` WebSocket text messages as bounded decompressed logical payloads instead
+  of decoding compressed wire bytes as UTF-8. The implementation must handle fragmentation and negotiated
+  direction/context-takeover behavior safely, preserve binary payload handling, and keep forwarding independent
+  from presentation failures.
+- Make Traffic-to-API-Studio transfer protocol-aware. Captured WebSocket upgrades must open and populate the
+  WebSocket workspace using `ws`/`wss` targets and applicable handshake details; negotiated
+  `graphql-transport-ws` traffic must open and populate the GraphQL WebSocket workspace, including recoverable
+  operation data, rather than being imported as a generic HTTP request.
+
+Completion requires focused shared-editor layout/focus regressions, compressed and fragmented WebSocket message
+tests, raw and GraphQL WebSocket transfer tests, affected module tests, `webSocketQualification`,
+`graphQLWebSocketQualification`, `verifyArchitectureFoundation`, and `git diff --check`.
+
+## Phase 133: Network Conditions [IMPLEMENTED — EXPERIMENTAL QUALIFICATION]
+
+Implemented on 2026-10-01 for KNet's desktop proxy path. The product now has the dedicated sidebar destination,
+persisted global and exact/wildcard host/port rules, built-in and custom profiles, Traffic one-click quick-add,
+API Studio routing through the local proxy while conditions are active, bounded aggregate asymmetric shaping,
+latency/jitter/fault behavior, virtual-MTU chunking, live safe changes, bounded queues, runtime counters, and the
+streaming-first **Download 100 kbps / Upload unlimited** preset. Room schema 27 persists the new state and fails
+closed on invalid references.
+
+Automated domain-policy, persistence/restart, UI/ViewModel, aggregate 100 kbps, live-rate, disable/recovery,
+queue-bound, incremental MTU, protocol, product-DI, and architecture tests pass. Capability promotion and a full
+Charles-parity claim remain deliberately pending the plan's manual macOS streaming measurements, named timed
+scenarios, import/export and authenticated automation, and the remaining large-load/protocol
+qualification matrix. Room schema 30 now also stamps the applied profile/rule/source on decrypted exchanges and
+opaque flows and exposes that evidence in Traffic.
+
+Hardening audit completed on 2026-10-01: HTTP and opaque rows now share one live invalidation stream, one retained
+history ordinal, and store-side semantic pagination/search; page counts are evaluated only for the first keyset
+page. Live enable/profile/rule edits replan already queued proxy bytes, MTU-only profiles are active, and the
+Network Conditions screen owns full add/edit domain-rule controls. Android UDP destination sockets are idle-evicted
+and capacity-bounded, duplicated datagrams consume bandwidth for every emitted copy, and focused regressions cover
+these paths.
+
+Add Network Conditions as a separate primary-sidebar destination immediately before Intercepts/Breakpoints. The
+feature will provide independently enabled global and exact/wildcard domain conditions with deterministic
+host/port precedence, asymmetric upload/download limits, latency, jitter, utilization, virtual MTU, explicit
+offline/timeout/reset behaviour, persisted presets/custom profiles, and observable applied-profile metadata.
+
+Traffic gains an **Add to Network Conditions...** context action that resolves the selected canonical destination,
+navigates to the new screen, and opens a duplicate-aware rule editor prefilled with its normalized host and port;
+the user never needs to copy or retype a URL. Direct API Studio and captured proxy traffic ultimately share the
+same runtime policy, while KNet's control plane is always excluded.
+
+Delivery replaces the dormant single-profile simulator prototype with bounded bidirectional shaping, integrates
+at protocol-safe flow/stream boundaries, and qualifies HTTP/1.1, HTTP/2, WebSocket, GraphQL WebSocket, gRPC, SSE,
+CONNECT/TLS, paired-device, and API Studio behaviour. See
+[`network_conditions_implementation_plan.md`](network_conditions_implementation_plan.md) for product decisions,
+module ownership, delivery slices, non-goals, and promotion gates.
+
+The completed Phase 133 targets Charles throttling parity for KNet-supported proxy traffic: global and
+selected-host rules, exact/wildcard/port matching, asymmetric rates, arbitrary bandwidth/latency, utilization,
+virtual MTU, profiles/presets, unstable-network behaviour, startup activation, and authenticated automation.
+Parity must not be claimed at the Phase 133.3 UI milestone; protocol qualification in 133.4 and fidelity/automation
+in 133.5 are required. KNet-specific extensions include Traffic quick-add, API Studio application, applied-profile
+evidence, protocol-aware stream qualification, and paired-device integration. Kernel-level packet loss, TCP
+reordering/congestion emulation, UDP, QUIC, and HTTP/3 remain outside the Phase 133 proxy implementation.
+
+The primary streaming gate is a smooth aggregate download limit such as 100 kbps shared across parallel requests
+and streams, with upload independently unlimited, no whole-segment buffering, live observed-throughput/queue
+visibility, and immediate changes to active flows. Timed scenarios must exercise high bandwidth, 100 kbps,
+Offline, and recovery transitions against HLS, DASH, progressive HTTP, and long-lived streams.
+
+## Phase 134: Packet-Level Streaming Network Conditions [EXPERIMENTAL — ANDROID GLOBAL UDP IMPLEMENTED]
+
+Implemented on 2026-10-01 as an experimental Android Companion path. At VPN start the companion fetches the active
+global profile over the existing pinned, paired-device-authenticated control channel. Its UDP relay keeps a stable
+protected socket per association/destination and applies aggregate upload/download rate, latency, deterministic
+jitter, loss, duplication, bounded reordering, queue limits, offline behavior, and recovery to opaque UDP flows.
+This covers the data-plane mechanism needed by WebRTC, QUIC/HTTP/3 HLS/DASH, and custom UDP without claiming
+payload decryption or semantic HTTP/3 inspection; proxy-owned TCP remains outside that UDP shaper.
+
+Deterministic runtime, queue, stable-source-port, non-DNS UDP, codec, control-transport, and desktop gateway tests
+pass. Per-domain/IP/CIDR packet rules, live policy refresh after VPN start, IPv6/fragment/migration field evidence,
+real WebRTC and HTTP/3 workloads, signed Android device qualification, entitlement-signed iOS packet tunnelling,
+and a desktop OS packet adapter remain explicit promotion TODOs. iOS and desktop packet shaping therefore remain
+unavailable rather than being advertised as complete.
+
+Extend Phase 133 conditions through a separately qualified VPN/TUN packet data plane for WebRTC media over UDP,
+HLS/DASH delivered over HTTP/3 and QUIC, and custom UDP streaming protocols. Reuse the shared profile, persistence,
+rule, scenario, and observability model while adding protocol/IP/CIDR/port flow scopes, aggregate UDP bandwidth,
+latency, jitter, packet loss, duplication, bounded reordering, offline, and recovery.
+
+WebRTC DTLS/SRTP and custom UDP payloads may remain opaque: the supported claim is faithful network-condition
+application, not media decryption. QUIC shaping must test application adaptation without falsely claiming decoded
+HTTP/3 Traffic details; semantic HTTP/3 capture remains dependent on the separate protocol transport roadmap.
+Existing Android `VpnService`/TUN and iOS packet-tunnel boundaries are integration inputs, not completion evidence.
+
+Completion requires no double-shaping of proxy traffic, bounded packet queues, IPv4/IPv6 and DNS continuity,
+control-plane/tunnel recursion exclusion, ICE and QUIC migration handling, custom UDP and concurrent-flow tests,
+real WebRTC and HTTP/3 streaming workloads, Android physical-device qualification, entitlement-signed iOS device
+qualification, platform-specific desktop evidence, architecture verification, and `git diff --check`. Each
+platform/transport remains experimental or unavailable until its own evidence passes.
+
+## Phase 135: Protected Traffic Passthrough and Opaque Flow Capture [IN PROGRESS]
+
+Implementation checkpoint (2026-10-01): policy persistence and management UI, bounded ClientHello classification,
+raw TLS tunnel/block behavior, canonical opaque capture, mixed HTTP/opaque paging, Traffic details/actions, built-in
+Google/Apple compatibility groups, and the authenticated versioned companion source-metadata trust boundary are in
+place with targeted automated tests. Android can resolve a unique package from an original API 29+ flow tuple, but
+the active HEV TUN-to-SOCKS adapter currently reports `TRANSLATED_SOCKET_ONLY` and cannot safely supply that tuple.
+iOS carries verified metadata when available but remains destination-only with the current packet translator.
+Physical Play Billing/StoreKit, signed Apple Network Extension paths, UDP/QUIC lifecycle reporting, protected-tunnel
+physical 100 kbps qualification, broader resilience matrices, and opaque export remain open. Semantic Traffic
+filters, protected-tunnel 100 kbps automated coverage, applied-condition evidence, and typed failed-interception
+guidance are now implemented; the phase must not be promoted before the remaining independent gates pass.
+
+The 2026-10-01 hardening audit also made protected selector precedence fully additive, persisted the exact
+`INSPECT`/`TUNNEL`/`BLOCK`/`BYPASS` action and compatibility-group evidence on opaque rows, and updated the Traffic
+inspector so blocked, tunneled, bypass-mapped, and failed-inspection records no longer share a misleading message.
+Room schema 31 adds that evidence non-destructively. Explicit migrations now cover every retained schema from v13,
+the blanket destructive fallback is removed, and migration tests prove canonical sessions survive representative
+v13, v18, v22, v24, and v30 upgrades.
+
+Add an explicit transport policy for `INSPECT`, `TUNNEL`, `BLOCK`, and last-resort `BYPASS` behavior so
+certificate-pinned, system-owned, mutually authenticated, and otherwise non-decryptable traffic remains functional
+and visible. A protected `TUNNEL` preserves end-to-end TLS, records application/destination/TLS/timing/byte/error
+metadata as a first-class opaque Traffic row, and participates in eligible Network Conditions without claiming
+headers, bodies, status codes, or protocol semantics KNet cannot observe.
+
+Google Play Billing is the first physical qualification workload, not a one-off domain exception. Android must
+retain the Play Store inside the VPN, attribute the source UID/package where the platform permits it, pass the
+authenticated identity to the desktop, and select a built-in Google Play `TUNNEL` rule before KNet generates a
+certificate. The tested application's own backend calls remain eligible for normal inspection. A failed intercepted
+TLS connection is recorded with a typed likely-pinning diagnostic and an explicit rule action; KNet does not silently
+downgrade or replay it.
+
+Delivery includes bounded ClientHello classification, a backpressure-aware raw TCP/TLS relay, canonical opaque-flow
+persistence, Traffic filters/details/actions, application and destination policy management, Android application
+attribution, UDP/QUIC metadata reporting, network-condition integration, and conservative platform capability
+reporting. Completion requires pinned TLS/mTLS/ALPN and malformed-input tests, long-flow and shutdown resilience,
+Android UID attribution evidence, authenticated companion metadata validation, a physical Play-enabled Billing test,
+and independent promotion for each platform/transport.
+
+Darwin delivery is explicit rather than inferred from shared code. iOS/iPadOS extend the existing entitled
+`NEPacketTunnelProvider` product with destination-based protected-flow visibility, capability-gated source attribution,
+StoreKit/App Store qualification, and packet Network Conditions. macOS separately qualifies the JVM explicit proxy
+and a signed native Network Extension plus authenticated local bridge for transparent system capture. Simulator
+linking, a shared Darwin kernel, or a JVM desktop build is not evidence for an entitled physical packet path.
+
+See [`protected_traffic_passthrough_implementation_plan.md`](protected_traffic_passthrough_implementation_plan.md)
+for product decisions, ownership, delivery slices, security/privacy invariants, and acceptance gates.

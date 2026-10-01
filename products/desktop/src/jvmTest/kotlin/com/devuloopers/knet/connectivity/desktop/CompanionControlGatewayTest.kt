@@ -28,6 +28,8 @@ import com.devuloopers.knet.companion.model.CompanionInvitationResponseCodec
 import com.devuloopers.knet.companion.model.CompanionPairingInvitation
 import com.devuloopers.knet.companion.model.CompanionPairingCompletionCodec
 import com.devuloopers.knet.companion.model.CompanionPairingGrantCodec
+import com.devuloopers.knet.companion.model.PacketConditionConfiguration
+import com.devuloopers.knet.companion.model.PacketConditionConfigurationCodec
 import com.devuloopers.knet.companion.model.CompanionRootCertificate
 import com.devuloopers.knet.companion.model.CompanionServiceEndpoint
 import com.devuloopers.knet.companion.model.Sha256Fingerprint
@@ -64,6 +66,49 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 
 class CompanionControlGatewayTest {
+    @Test
+    fun authenticatedCompanionReadsTheCurrentBoundedPacketConditions() = runTest {
+        val certificateAuthority = CertificateAuthority.generate()
+        val pairing = pairingCoordinator()
+        val credential = pairDevice(pairing, setOf(DeviceScope.PROXY_STREAM))
+        val expected = PacketConditionConfiguration(
+            enabled = true,
+            downloadBitsPerSecond = 100_000L,
+            latencyMillis = 25L,
+            lossPercent = 5,
+        )
+        val gateway = CompanionControlGateway(
+            bindHost = "127.0.0.1",
+            bindPort = 0,
+            serverSocketFactory = serverFactory(certificateAuthority),
+            rootCertificateDer = { certificateAuthority.certificate.encoded },
+            pairing = pairing,
+            redeemOnboarding = redemptionUseCase(),
+            packetConditions = { expected },
+            nowEpochMillis = { 1_000L },
+        )
+        gateway.start()
+        try {
+            val response = request(
+                requireNotNull(gateway.boundPort),
+                certificateAuthority.certificate,
+                getRequest(
+                    CompanionControlProtocol.NETWORK_CONDITIONS_PATH,
+                    CompanionControlProtocol.NETWORK_CONDITIONS_RESPONSE_MEDIA_TYPE,
+                    "Bearer device-1:$credential",
+                ),
+            )
+            assertEquals(200, response.statusCode)
+            assertEquals(
+                CompanionControlProtocol.NETWORK_CONDITIONS_RESPONSE_MEDIA_TYPE,
+                response.headers["content-type"],
+            )
+            assertEquals(expected, PacketConditionConfigurationCodec.decode(response.body))
+        } finally {
+            gateway.close()
+        }
+    }
+
     @Test
     fun endpointReconciliationRequiresCredentialAndAcceptsOnlyCanonicalOrLegacyIdentity() = runTest {
         val certificateAuthority = CertificateAuthority.generate()
@@ -430,8 +475,11 @@ class CompanionControlGatewayTest {
         append(body.decodeToString())
     }
 
-    private suspend fun pairDevice(pairing: PairingCoordinator): String {
-        val invitation = pairing.createInvitation(setOf(DeviceScope.SETUP_ARTIFACT_READ))
+    private suspend fun pairDevice(
+        pairing: PairingCoordinator,
+        scopes: Set<DeviceScope> = setOf(DeviceScope.SETUP_ARTIFACT_READ),
+    ): String {
+        val invitation = pairing.createInvitation(scopes)
         val result = pairing.complete(
             PairingCompletionRequest(
                 invitationId = invitation.id,
@@ -444,6 +492,14 @@ class CompanionControlGatewayTest {
             ),
         )
         return (result as PairingCompletionResult.Paired).issued.credential
+    }
+
+    private fun getRequest(path: String, mediaType: String, authorization: String): String = buildString {
+        append("GET $path HTTP/1.1\r\n")
+        append("Host: ${CompanionCertificateProtocol.TLS_SERVER_NAME}\r\n")
+        append("Accept: $mediaType\r\n")
+        append("Authorization: $authorization\r\n")
+        append("Content-Length: 0\r\nConnection: close\r\n\r\n")
     }
 
     private fun pairingCoordinator(): PairingCoordinator = PairingCoordinator(
