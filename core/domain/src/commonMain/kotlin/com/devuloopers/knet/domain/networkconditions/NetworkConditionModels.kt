@@ -18,6 +18,69 @@ value class NetworkConditionRuleId(val value: String) {
     }
 }
 
+/** Stable identity of a semantic protocol understood by a Network Conditions extension. */
+@JvmInline
+value class NetworkConditionProtocolId(val value: String) {
+    init {
+        require(value.isNotBlank()) { "Network condition protocol ID must not be blank." }
+        require(value == value.trim().lowercase()) {
+            "Network condition protocol ID must be a normalized lowercase token."
+        }
+        require(value.first().isLetter() && value.all { it.isLetterOrDigit() || it == '-' || it == '.' }) {
+            "Network condition protocol ID contains unsupported characters."
+        }
+    }
+
+    companion object {
+        /** Payload-blind destination matching used by ordinary domain rules and opaque traffic. */
+        val TRANSPORT: NetworkConditionProtocolId = NetworkConditionProtocolId("transport")
+
+        /** HTTP requests matched by method and canonical path without retaining a request body. */
+        val HTTP: NetworkConditionProtocolId = NetworkConditionProtocolId("http")
+
+        /** GraphQL operations delivered in an HTTP request body or query string. */
+        val GRAPHQL_HTTP: NetworkConditionProtocolId = NetworkConditionProtocolId("graphql")
+
+        /** Native gRPC exchanges matched by canonical service and method identity. */
+        val GRPC: NetworkConditionProtocolId = NetworkConditionProtocolId("grpc")
+
+        /** Framed WebSocket messages matched independently from an application subprotocol. */
+        val WEBSOCKET: NetworkConditionProtocolId = NetworkConditionProtocolId("websocket")
+
+        /** Modern `graphql-transport-ws` messages correlated by multiplexed operation identity. */
+        val GRAPHQL_WEBSOCKET: NetworkConditionProtocolId = NetworkConditionProtocolId("graphql-websocket")
+    }
+}
+
+/**
+ * Persistable extension-owned semantic selector for one Network Conditions rule.
+ *
+ * The payload is opaque outside the extension identified by [protocolId]. Unknown or invalid semantic criteria
+ * fail closed and therefore cannot accidentally broaden a rule to every request on its destination.
+ */
+data class NetworkConditionProtocolCriteria(
+    val protocolId: NetworkConditionProtocolId = NetworkConditionProtocolId.TRANSPORT,
+    val encodedPayload: String = "",
+) {
+    init {
+        require(encodedPayload.length <= MAXIMUM_ENCODED_PAYLOAD_CHARACTERS) {
+            "Network condition protocol criteria are too large."
+        }
+    }
+
+    /** Whether this selector relies only on destination information. */
+    val isTransportOnly: Boolean
+        get() = protocolId == NetworkConditionProtocolId.TRANSPORT && encodedPayload.isBlank()
+
+    companion object {
+        /** Default selector for exact/wildcard host and optional-port rules. */
+        val TransportDefault: NetworkConditionProtocolCriteria = NetworkConditionProtocolCriteria()
+
+        /** Persistence and editor safety bound for extension-owned criteria. */
+        const val MAXIMUM_ENCODED_PAYLOAD_CHARACTERS: Int = 4_096
+    }
+}
+
 /** One directional application/proxy-layer traffic budget. */
 data class NetworkDirectionCondition(
     val bitsPerSecond: Long? = null,
@@ -142,7 +205,28 @@ data class NetworkConditionRule(
     val target: NetworkConditionTarget,
     val profileId: NetworkConditionProfileId,
     val enabled: Boolean = true,
-)
+    val priority: Int = 0,
+    val protocolCriteria: NetworkConditionProtocolCriteria = NetworkConditionProtocolCriteria.TransportDefault,
+) {
+    init {
+        require(priority in MINIMUM_PRIORITY..MAXIMUM_PRIORITY) {
+            "Network condition rule priority must be between $MINIMUM_PRIORITY and $MAXIMUM_PRIORITY."
+        }
+        require(protocolCriteria.protocolId != NetworkConditionProtocolId.TRANSPORT ||
+            protocolCriteria.encodedPayload.isBlank()
+        ) {
+            "Transport-only network condition criteria cannot contain an encoded payload."
+        }
+    }
+
+    companion object {
+        /** Lowest user-authored precedence value. */
+        const val MINIMUM_PRIORITY: Int = 0
+
+        /** Highest user-authored precedence value. */
+        const val MAXIMUM_PRIORITY: Int = 10_000
+    }
+}
 
 data class NetworkConditionConfiguration(
     val enabled: Boolean = false,
@@ -159,7 +243,9 @@ data class NetworkConditionConfiguration(
         require(customProfileIds.distinct().size == customProfiles.size) { "Profile IDs must be unique." }
         require(customProfileIds.none(builtInProfileIds::contains)) { "Custom profile IDs cannot replace built-in profiles." }
         require(rules.map { it.id }.distinct().size == rules.size) { "Rule IDs must be unique." }
-        require(rules.map { it.target }.distinct().size == rules.size) { "Equal network condition targets are not allowed." }
+        require(rules.map { it.target to it.protocolCriteria }.distinct().size == rules.size) {
+            "Equivalent network condition targets and protocol criteria are not allowed."
+        }
         require(globalProfileId == null || globalProfileId in allProfileIds) { "Global profile is missing." }
         require(lastQuickAddProfileId == null || lastQuickAddProfileId in allProfileIds) {
             "Quick-add profile is missing."
@@ -178,31 +264,59 @@ data class EffectiveNetworkCondition(
     val ruleId: NetworkConditionRuleId?,
     val source: Source,
 ) {
-    enum class Source { DOMAIN_RULE, GLOBAL }
+    /** Origin used for Traffic evidence and deterministic policy diagnostics. */
+    enum class Source {
+        /** Payload-blind exact/wildcard host and optional-port rule. */
+        DOMAIN_RULE,
+
+        /** Protocol-aware rule selected using bounded semantic inspection. */
+        PROTOCOL_RULE,
+
+        /** Enabled global profile used after no rule matched. */
+        GLOBAL,
+    }
 }
 
 /** Pure deterministic precedence matcher shared by the proxy and packet adapters. */
 object NetworkConditionMatcher {
+    /**
+     * Resolves one effective profile using explicit priority, semantic specificity, and destination specificity.
+     *
+     * [matchesProtocol] is invoked only for semantic rules. Omitting it deliberately excludes those rules, which
+     * preserves safe destination/global fallback for opaque transports and unavailable protocol inspectors.
+     */
     fun resolve(
         configuration: NetworkConditionConfiguration,
         host: String,
         port: Int,
+        matchesProtocol: ((NetworkConditionProtocolCriteria) -> Boolean)? = null,
     ): EffectiveNetworkCondition? {
         if (!configuration.enabled) return null
         val match = configuration.rules.asSequence()
             .filter(NetworkConditionRule::enabled)
             .filter { it.target.matches(host, port) }
+            .filter { rule ->
+                rule.protocolCriteria.isTransportOnly ||
+                    matchesProtocol?.invoke(rule.protocolCriteria) == true
+            }
             .sortedWith(
-                compareByDescending<NetworkConditionRule> { !it.target.wildcard }
+                compareByDescending<NetworkConditionRule>(NetworkConditionRule::priority)
+                    .thenByDescending { !it.protocolCriteria.isTransportOnly }
+                    .thenByDescending { !it.target.wildcard }
                     .thenByDescending { it.target.port != null }
-                    .thenByDescending { it.target.normalizedHost.length },
+                    .thenByDescending { it.target.normalizedHost.length }
+                    .thenBy { it.id.value },
             )
             .firstOrNull()
         if (match != null) {
             return EffectiveNetworkCondition(
                 profile = checkNotNull(configuration.profile(match.profileId)),
                 ruleId = match.id,
-                source = EffectiveNetworkCondition.Source.DOMAIN_RULE,
+                source = if (match.protocolCriteria.isTransportOnly) {
+                    EffectiveNetworkCondition.Source.DOMAIN_RULE
+                } else {
+                    EffectiveNetworkCondition.Source.PROTOCOL_RULE
+                },
             )
         }
         val global = configuration.profile(configuration.globalProfileId) ?: return null

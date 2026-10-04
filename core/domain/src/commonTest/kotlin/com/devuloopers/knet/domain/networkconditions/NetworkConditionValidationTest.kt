@@ -59,6 +59,14 @@ class NetworkConditionValidationTest {
         assertFailsWith<IllegalArgumentException> { NetworkConditionProfileId("-bad") }
         assertFailsWith<IllegalArgumentException> { NetworkConditionProfileId("bad/") }
         assertFailsWith<IllegalArgumentException> { NetworkConditionRuleId("  ") }
+        assertFailsWith<IllegalArgumentException> { NetworkConditionProtocolId("GraphQL") }
+        assertFailsWith<IllegalArgumentException> { NetworkConditionProtocolId("bad protocol") }
+        assertFailsWith<IllegalArgumentException> {
+            NetworkConditionProtocolCriteria(
+                NetworkConditionProtocolId.GRAPHQL_HTTP,
+                "x".repeat(NetworkConditionProtocolCriteria.MAXIMUM_ENCODED_PAYLOAD_CHARACTERS + 1),
+            )
+        }
         assertFailsWith<IllegalArgumentException> { profile(name = " ") }
 
         val custom = profile(id = "custom")
@@ -95,6 +103,33 @@ class NetworkConditionValidationTest {
         }
         assertFailsWith<IllegalArgumentException> {
             NetworkConditionConfiguration(customProfiles = listOf(custom.copy(builtIn = true)))
+        }
+        assertFailsWith<IllegalArgumentException> {
+            rule("priority", "one.example").copy(priority = NetworkConditionRule.MAXIMUM_PRIORITY + 1)
+        }
+        assertFailsWith<IllegalArgumentException> {
+            rule("transport-payload", "one.example").copy(
+                protocolCriteria = NetworkConditionProtocolCriteria(
+                    NetworkConditionProtocolId.TRANSPORT,
+                    "unexpected",
+                ),
+            )
+        }
+
+        val semantic = NetworkConditionProtocolCriteria(NetworkConditionProtocolId.GRAPHQL_HTTP, "one")
+        NetworkConditionConfiguration(
+            rules = listOf(
+                rule("transport", "same.example"),
+                rule("semantic", "same.example").copy(protocolCriteria = semantic),
+            ),
+        )
+        assertFailsWith<IllegalArgumentException> {
+            NetworkConditionConfiguration(
+                rules = listOf(
+                    rule("semantic-one", "same.example").copy(protocolCriteria = semantic),
+                    rule("semantic-two", "same.example").copy(protocolCriteria = semantic),
+                ),
+            )
         }
     }
 

@@ -68,7 +68,7 @@ import com.devuloopers.knet.storage.protectedtraffic.entity.ProtectedTrafficSett
         ProtectedTrafficRuleEntity::class,
         ProtectedServiceGroupEntity::class,
     ],
-    version = 31,
+    version = 32,
     autoMigrations = [
         AutoMigration(from = 13, to = 14, spec = Migration13To14::class),
         AutoMigration(from = 14, to = 15),
@@ -86,6 +86,7 @@ import com.devuloopers.knet.storage.protectedtraffic.entity.ProtectedTrafficSett
         AutoMigration(from = 28, to = 29),
         AutoMigration(from = 29, to = 30),
         AutoMigration(from = 30, to = 31),
+        AutoMigration(from = 31, to = 32),
     ],
 )
 abstract class KNetDatabase : RoomDatabase() {

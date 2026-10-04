@@ -1,12 +1,20 @@
 package com.devuloopers.knet.application.usecase.networkconditions
 
+import com.devuloopers.knet.application.contract.inspection.InspectionAnnotationStore
+import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionBody
+import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionHttpInspectionInput
+import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolRegistry
 import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionsRepository
+import com.devuloopers.knet.application.contract.traffic.TrafficQuery
+import com.devuloopers.knet.application.usecase.traffic.LoadTrafficExchangeDetailsResult
+import com.devuloopers.knet.application.usecase.traffic.LoadTrafficExchangeDetailsUseCase
+import com.devuloopers.knet.application.usecase.traffic.TrafficBodyPreview
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionConfiguration
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionProfileId
+import com.devuloopers.knet.domain.networkconditions.NetworkConditionProtocolCriteria
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionRule
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionRuleId
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionTarget
-import com.devuloopers.knet.application.contract.traffic.TrafficQuery
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.id.OpaqueFlowId
 import com.devuloopers.knet.traffic.model.http.RequestTarget
@@ -37,6 +45,7 @@ public sealed interface PrepareNetworkConditionRuleResult {
         public val target: NetworkConditionTarget,
         public val existingRuleId: NetworkConditionRuleId?,
         public val suggestedProfileId: NetworkConditionProfileId,
+        public val protocolCriteria: NetworkConditionProtocolCriteria,
     ) : PrepareNetworkConditionRuleResult
 
     public data object MissingExchange : PrepareNetworkConditionRuleResult
@@ -47,6 +56,10 @@ public sealed interface PrepareNetworkConditionRuleResult {
 public class PrepareNetworkConditionRuleUseCase(
     private val trafficQuery: TrafficQuery,
     private val repository: NetworkConditionsRepository,
+    private val loadTrafficExchangeDetails: LoadTrafficExchangeDetailsUseCase =
+        LoadTrafficExchangeDetailsUseCase(trafficQuery),
+    private val protocolRegistry: NetworkConditionProtocolRegistry = NetworkConditionProtocolRegistry(),
+    private val inspectionAnnotations: InspectionAnnotationStore? = null,
 ) {
     public suspend fun execute(exchangeId: ExchangeId): PrepareNetworkConditionRuleResult {
         val exchange = trafficQuery.getExchange(exchangeId)
@@ -74,10 +87,51 @@ public class PrepareNetworkConditionRuleUseCase(
             NetworkConditionTarget.parse(destination.first, destination.second)
         }.getOrElse { return PrepareNetworkConditionRuleResult.DestinationUnavailable }
         val configuration = repository.configuration.value
-        val existing = configuration.rules.firstOrNull { it.target == conditionTarget }
+        val protocolCriteria = exchange?.let { captured ->
+            when (val loaded = loadTrafficExchangeDetails.execute(exchangeId)) {
+                is LoadTrafficExchangeDetailsResult.Found -> protocolRegistry.suggestCriteria(
+                    NetworkConditionHttpInspectionInput(
+                        request = captured.request,
+                        requestBody = loaded.details.requestBody.toNetworkConditionBody(),
+                        requestBodyComplete = loaded.details.requestBody.isComplete(),
+                        trafficAnnotations = loadAnnotations(exchangeId),
+                    ),
+                )
+                LoadTrafficExchangeDetailsResult.Missing -> null
+            }
+        } ?: NetworkConditionProtocolCriteria.TransportDefault
+        val existing = configuration.rules.firstOrNull { rule ->
+            rule.target == conditionTarget && rule.protocolCriteria == protocolCriteria
+        }
         val suggested = existing?.profileId
-            ?: configuration.lastQuickAddProfileId
-            ?: com.devuloopers.knet.domain.networkconditions.NetworkConditionBuiltIns.STREAMING_100_KBPS.id
-        return PrepareNetworkConditionRuleResult.Ready(conditionTarget, existing?.id, suggested)
+            ?: com.devuloopers.knet.domain.networkconditions.NetworkConditionBuiltIns.NO_THROTTLING.id
+        return PrepareNetworkConditionRuleResult.Ready(
+            target = conditionTarget,
+            existingRuleId = existing?.id,
+            suggestedProfileId = suggested,
+            protocolCriteria = protocolCriteria,
+        )
     }
+
+    private suspend fun loadAnnotations(exchangeId: ExchangeId) = try {
+        inspectionAnnotations?.get(exchangeId).orEmpty()
+    } catch (_: Exception) {
+        emptyList()
+    }
+}
+
+private fun TrafficBodyPreview.toNetworkConditionBody(): NetworkConditionBody? = when (this) {
+    TrafficBodyPreview.Empty -> NetworkConditionBody(ByteArray(0))
+    is TrafficBodyPreview.Available -> NetworkConditionBody(chunk.copyBytes())
+    is TrafficBodyPreview.Unavailable,
+    TrafficBodyPreview.ReadFailed,
+    -> null
+}
+
+private fun TrafficBodyPreview.isComplete(): Boolean = when (this) {
+    TrafficBodyPreview.Empty -> true
+    is TrafficBodyPreview.Available -> chunk.endOfBody
+    is TrafficBodyPreview.Unavailable,
+    TrafficBodyPreview.ReadFailed,
+    -> false
 }

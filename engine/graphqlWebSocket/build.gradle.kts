@@ -8,6 +8,7 @@ dependencies {
     implementation(project(":core:traffic"))
     implementation(project(":engine:protocol"))
     implementation(project(":engine:websocket"))
+    implementation(project(":engine:simulator"))
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
 

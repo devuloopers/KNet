@@ -2,6 +2,7 @@ package com.devuloopers.knet.ui.desktop.networkconditions.view
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -42,8 +43,13 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaFieldDefinition
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaFieldId
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaOption
+import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolDefinition
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionProfile
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionProfileId
+import com.devuloopers.knet.domain.networkconditions.NetworkConditionProtocolId
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionRule
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionRuleId
 import com.devuloopers.knet.domain.networkconditions.NetworkDirectionCondition
@@ -60,6 +66,7 @@ import com.devuloopers.knet.ui.core.components.divider.HorizontalDivider
 import com.devuloopers.knet.ui.core.components.input.InputFieldConfig
 import com.devuloopers.knet.ui.core.components.input.InputFieldState
 import com.devuloopers.knet.ui.core.components.input.KNetTextField
+import com.devuloopers.knet.ui.core.components.scrollbar.KNetHorizontalScrollbar
 import com.devuloopers.knet.ui.core.components.scrollbar.KNetVerticalScrollbar
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.components.switch.KNetSwitch
@@ -150,10 +157,14 @@ fun NetworkConditionsScreen(
         RuleDialog(
             draft = draft,
             profiles = state.configuration.profiles,
+            protocolDefinitions = state.protocolDefinitions,
             onHostChange = viewModel::updateDraftHostPattern,
             onPortChange = viewModel::updateDraftPort,
+            onPriorityChange = viewModel::updateDraftPriority,
             onEnabledChange = viewModel::updateDraftEnabled,
             onProfileSelected = viewModel::selectDraftProfile,
+            onProtocolSelected = viewModel::selectDraftProtocol,
+            onProtocolValueChange = viewModel::updateDraftProtocolValue,
             onDismiss = viewModel::dismissRuleDraft,
             onSave = viewModel::confirmRuleDraft,
         )
@@ -714,9 +725,9 @@ private fun DomainRulesSection(
 ) {
     val rules = state.configuration.rules
     SectionHeader(
-        title = "Domain rules",
-        subtitle = "Override the global profile for an exact host, wildcard domain, or port.",
-        actionText = "Add domain rule",
+        title = "Condition rules",
+        subtitle = "Target a domain, GraphQL operation, or multiplexed GraphQL WebSocket message.",
+        actionText = "Add condition rule",
         onAction = onAdd,
     )
     if (rules.isEmpty()) {
@@ -727,6 +738,9 @@ private fun DomainRulesSection(
                 RuleRow(
                     rule = rule,
                     profile = state.configuration.profile(rule.profileId),
+                    protocolDisplayName = state.protocolDefinitions
+                        .firstOrNull { definition -> definition.protocolId == rule.protocolCriteria.protocolId }
+                        ?.displayName,
                     onEnabledChange = { enabled -> onEnabledChange(rule, enabled) },
                     onEdit = { onEdit(rule) },
                     onDelete = { onDelete(rule.id) },
@@ -759,7 +773,7 @@ private fun EmptyRulesCard(onAdd: () -> Unit) {
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    "No domain overrides",
+                    "No condition overrides",
                     style = KNetTheme.typography.titleSmall.copy(color = colors.textPrimary),
                 )
                 Text(
@@ -778,6 +792,7 @@ private fun EmptyRulesCard(onAdd: () -> Unit) {
 private fun RuleRow(
     rule: NetworkConditionRule,
     profile: NetworkConditionProfile?,
+    protocolDisplayName: String?,
     onEnabledChange: (Boolean) -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
@@ -811,9 +826,15 @@ private fun RuleRow(
                         overflow = TextOverflow.Ellipsis,
                     )
                     if (profile != null) KNetBadge(profile.name)
+                    if (!rule.protocolCriteria.isTransportOnly) {
+                        KNetBadge(protocolDisplayName ?: rule.protocolCriteria.protocolId.value)
+                    }
                 }
                 Text(
-                    text = profile?.let(::compactProfileSummary) ?: "Missing profile",
+                    text = buildString {
+                        append(profile?.let(::compactProfileSummary) ?: "Missing profile")
+                        if (rule.priority > 0) append("  ·  Priority ${rule.priority}")
+                    },
                     style = KNetTheme.typography.bodySmall.copy(color = colors.textSecondary),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -987,65 +1008,198 @@ private fun SectionLabel(text: String) {
 private fun RuleDialog(
     draft: NetworkConditionRuleDraft,
     profiles: List<NetworkConditionProfile>,
+    protocolDefinitions: List<NetworkConditionProtocolDefinition>,
     onHostChange: (String) -> Unit,
     onPortChange: (String) -> Unit,
+    onPriorityChange: (String) -> Unit,
     onEnabledChange: (Boolean) -> Unit,
     onProfileSelected: (NetworkConditionProfileId) -> Unit,
+    onProtocolSelected: (NetworkConditionProtocolId) -> Unit,
+    onProtocolValueChange: (ProtocolCriteriaFieldId, String) -> Unit,
     onDismiss: () -> Unit,
     onSave: () -> Unit,
 ) {
+    val dialogScrollState = rememberScrollState()
     KNetDialog(
         onDismissRequest = onDismiss,
-        title = if (draft.existingRuleId == null) "Add domain condition" else "Edit domain condition",
+        title = if (draft.existingRuleId == null) "Add network condition" else "Edit network condition",
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.lg),
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(max = 720.dp),
         ) {
-            LabeledTextField(
-                label = "Host or wildcard",
-                value = draft.hostPattern,
-                onValueChange = onHostChange,
-                placeholder = "api.example.com or *.example.com",
-                supportingText = "Use a wildcard to include every subdomain.",
-            )
-            LabeledTextField(
-                label = "Port",
-                value = draft.port,
-                onValueChange = onPortChange,
-                placeholder = "Any port",
-                supportingText = "Leave blank to match every destination port.",
-            )
-            KNetSwitch(
-                checked = draft.enabled,
-                onCheckedChange = onEnabledChange,
-                label = "Rule enabled",
-            )
-            HorizontalDivider()
-            Column(verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm)) {
-                Text(
-                    "Condition profile",
-                    style = KNetTheme.typography.labelMedium.copy(color = KNetTheme.colors.textPrimary),
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(dialogScrollState)
+                    .padding(end = KNetTheme.spacing.sm),
+                verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.lg),
+            ) {
+                LabeledTextField(
+                    label = "Host or wildcard",
+                    value = draft.hostPattern,
+                    onValueChange = onHostChange,
+                    placeholder = "api.example.com or *.example.com",
+                    supportingText = "Use a wildcard to include every subdomain.",
                 )
-                Row(
-                    modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm),
-                ) {
-                    profiles.forEach { profile ->
-                        KNetChip(
-                            text = profile.name,
-                            selected = draft.profileId == profile.id,
-                            onClick = { onProfileSelected(profile.id) },
-                        )
-                    }
+                LabeledTextField(
+                    label = "Port",
+                    value = draft.port,
+                    onValueChange = onPortChange,
+                    placeholder = "Any port",
+                    supportingText = "Leave blank to match every destination port.",
+                )
+                LabeledTextField(
+                    label = "Priority",
+                    value = draft.priority,
+                    onValueChange = onPriorityChange,
+                    placeholder = "0",
+                    supportingText = "Higher priority wins before protocol and destination specificity.",
+                )
+                KNetSwitch(
+                    checked = draft.enabled,
+                    onCheckedChange = onEnabledChange,
+                    label = "Rule enabled",
+                )
+                HorizontalDivider()
+                Column(verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm)) {
+                    Text(
+                        "Match scope",
+                        style = KNetTheme.typography.labelMedium.copy(color = KNetTheme.colors.textPrimary),
+                    )
+                    ScrollableChipSelector(
+                        items = protocolDefinitions,
+                        text = NetworkConditionProtocolDefinition::displayName,
+                        selected = { definition -> draft.protocolId == definition.protocolId },
+                        onSelected = { definition -> onProtocolSelected(definition.protocolId) },
+                    )
+                    protocolDefinitions.firstOrNull { definition -> definition.protocolId == draft.protocolId }
+                        ?.fields
+                        ?.forEach { field ->
+                            NetworkConditionProtocolField(
+                                field = field,
+                                value = draft.protocolValues.firstOrNull { value -> value.fieldId == field.id }
+                                    ?.value
+                                    .orEmpty(),
+                                onValueChange = { value -> onProtocolValueChange(field.id, value) },
+                            )
+                        }
                 }
+                HorizontalDivider()
+                ConditionProfileSelector(
+                    profiles = profiles,
+                    selectedProfileId = draft.profileId,
+                    onProfileSelected = onProfileSelected,
+                )
+                DialogActions(
+                    confirmText = "Save rule",
+                    confirmEnabled = draft.hostPattern.isNotBlank(),
+                    onDismiss = onDismiss,
+                    onConfirm = onSave,
+                )
             }
-            DialogActions(
-                confirmText = "Save rule",
-                confirmEnabled = draft.hostPattern.isNotBlank(),
-                onDismiss = onDismiss,
-                onConfirm = onSave,
+            KNetVerticalScrollbar(
+                scrollState = dialogScrollState,
+                modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
             )
+        }
+    }
+}
+
+@Composable
+private fun ConditionProfileSelector(
+    profiles: List<NetworkConditionProfile>,
+    selectedProfileId: NetworkConditionProfileId,
+    onProfileSelected: (NetworkConditionProfileId) -> Unit,
+) {
+    val profileScrollState = rememberScrollState()
+    Column(verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm)) {
+        Text(
+            "Condition profile",
+            style = KNetTheme.typography.labelMedium.copy(color = KNetTheme.colors.textPrimary),
+        )
+        ScrollableChipSelector(
+            items = profiles,
+            text = NetworkConditionProfile::name,
+            selected = { profile -> selectedProfileId == profile.id },
+            onSelected = { profile -> onProfileSelected(profile.id) },
+            scrollState = profileScrollState,
+        )
+    }
+}
+
+@Composable
+private fun <T> ScrollableChipSelector(
+    items: List<T>,
+    text: (T) -> String,
+    selected: (T) -> Boolean,
+    onSelected: (T) -> Unit,
+    scrollState: ScrollState = rememberScrollState(),
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xs),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth().horizontalScroll(scrollState),
+            horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm),
+        ) {
+            items.forEach { item ->
+                KNetChip(
+                    text = text(item),
+                    selected = selected(item),
+                    onClick = { onSelected(item) },
+                )
+            }
+        }
+        KNetHorizontalScrollbar(
+            scrollState = scrollState,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+private fun NetworkConditionProtocolField(
+    field: ProtocolCriteriaFieldDefinition,
+    value: String,
+    onValueChange: (String) -> Unit,
+) {
+    when (field) {
+        is ProtocolCriteriaFieldDefinition.Text -> LabeledTextField(
+            label = field.label,
+            value = value,
+            onValueChange = onValueChange,
+            placeholder = field.placeholder,
+            supportingText = field.description,
+        )
+
+        is ProtocolCriteriaFieldDefinition.Choice -> Column(
+            verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xs),
+        ) {
+            Text(
+                text = field.label,
+                style = KNetTheme.typography.labelMedium.copy(color = KNetTheme.colors.textPrimary),
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis,
+            )
+            ScrollableChipSelector(
+                items = field.options,
+                text = ProtocolCriteriaOption::label,
+                selected = { option -> value == option.value },
+                onSelected = { option -> onValueChange(option.value) },
+            )
+            field.description?.let { description ->
+                Text(
+                    text = description,
+                    style = KNetTheme.typography.caption.copy(color = KNetTheme.colors.textMuted),
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
 }

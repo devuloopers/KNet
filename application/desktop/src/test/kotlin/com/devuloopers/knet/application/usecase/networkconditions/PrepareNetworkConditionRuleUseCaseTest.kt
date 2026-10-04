@@ -1,6 +1,15 @@
 package com.devuloopers.knet.application.usecase.networkconditions
 
+import com.devuloopers.knet.application.contract.inspection.InspectionAnnotationStore
 import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionsRepository
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaValue
+import com.devuloopers.knet.application.contract.networkconditions.CompiledNetworkConditionProtocolCriteria
+import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionHttpInspectionInput
+import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionInterceptionUnit
+import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolDefinition
+import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolExtension
+import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolObservation
+import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolRegistry
 import com.devuloopers.knet.application.contract.traffic.BodyChunk
 import com.devuloopers.knet.application.contract.traffic.BodyRange
 import com.devuloopers.knet.application.contract.traffic.TrafficGeneration
@@ -11,10 +20,13 @@ import com.devuloopers.knet.domain.networkconditions.NetworkConditionBuiltIns
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionConfiguration
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionProfile
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionProfileId
+import com.devuloopers.knet.domain.networkconditions.NetworkConditionProtocolCriteria
+import com.devuloopers.knet.domain.networkconditions.NetworkConditionProtocolId
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionRule
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionRuleId
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionTarget
 import com.devuloopers.knet.traffic.id.BodyId
+import com.devuloopers.knet.traffic.id.CaptureSessionId
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.id.ConnectionId
 import com.devuloopers.knet.traffic.id.OpaqueFlowId
@@ -32,9 +44,14 @@ import com.devuloopers.knet.traffic.model.http.HttpMethod
 import com.devuloopers.knet.traffic.model.http.HttpScheme
 import com.devuloopers.knet.traffic.model.http.RequestHead
 import com.devuloopers.knet.traffic.model.http.RequestTarget
+import com.devuloopers.knet.traffic.inspection.InspectionAnnotation
+import com.devuloopers.knet.traffic.inspection.InspectionAnnotationState
+import com.devuloopers.knet.traffic.inspection.InspectionDocument
+import com.devuloopers.knet.traffic.inspection.InspectorId
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -42,7 +59,7 @@ import kotlin.test.assertIs
 
 class PrepareNetworkConditionRuleUseCaseTest {
     @Test
-    fun `traffic quick-add uses canonical authority and remembers the selected profile`() = runTest {
+    fun `traffic quick-add uses canonical authority and defaults a new rule to no throttling`() = runTest {
         val remembered = NetworkConditionBuiltIns.FAST_3G.id
         val repository = FakeRepository(
             NetworkConditionConfiguration(lastQuickAddProfileId = remembered),
@@ -60,7 +77,7 @@ class PrepareNetworkConditionRuleUseCaseTest {
         )
 
         assertEquals("video.example.test:443", result.target.displayValue)
-        assertEquals(remembered, result.suggestedProfileId)
+        assertEquals(NetworkConditionBuiltIns.NO_THROTTLING.id, result.suggestedProfileId)
         assertEquals(null, result.existingRuleId)
     }
 
@@ -133,6 +150,54 @@ class PrepareNetworkConditionRuleUseCaseTest {
         assertEquals("video.example.test:443", result.target.displayValue)
     }
 
+    @Test
+    fun `traffic quick-add passes stored annotations to the semantic suggestion and finds its equivalent rule`() = runTest {
+        val protocolId = NetworkConditionProtocolId("test-http-semantic")
+        val semanticCriteria = NetworkConditionProtocolCriteria(protocolId, "LoadFeed")
+        val target = NetworkConditionTarget.parse("video.example.test", 443)
+        val transportRule = NetworkConditionRule(
+            NetworkConditionRuleId("transport"),
+            target,
+            NetworkConditionBuiltIns.SLOW_3G.id,
+        )
+        val semanticRule = NetworkConditionRule(
+            NetworkConditionRuleId("semantic"),
+            target,
+            NetworkConditionBuiltIns.FAST_3G.id,
+            protocolCriteria = semanticCriteria,
+        )
+        val repository = FakeRepository(NetworkConditionConfiguration(rules = listOf(transportRule, semanticRule)))
+        val exchange = exchange(RequestTarget.Absolute(
+            HttpScheme.fromToken("https"),
+            Authority("video.example.test"),
+            "/graphql",
+        ))
+        val query = FakeTrafficQuery(exchange)
+        val annotation = InspectionAnnotation(
+            exchangeId = exchange.id,
+            inspectorId = InspectorId("graphql"),
+            schemaVersion = 1L,
+            state = InspectionAnnotationState.COMPLETED,
+            document = InspectionDocument(kind = "graphql", title = "GraphQL query: LoadFeed"),
+            createdAtEpochMillis = 1L,
+        )
+
+        val result = assertIs<PrepareNetworkConditionRuleResult.Ready>(
+            PrepareNetworkConditionRuleUseCase(
+                trafficQuery = query,
+                repository = repository,
+                protocolRegistry = NetworkConditionProtocolRegistry(
+                    listOf(SuggestionExtension(protocolId, semanticCriteria, annotation.inspectorId)),
+                ),
+                inspectionAnnotations = FakeAnnotationStore(listOf(annotation)),
+            ).execute(exchange.id),
+        )
+
+        assertEquals(semanticCriteria, result.protocolCriteria)
+        assertEquals(semanticRule.id, result.existingRuleId)
+        assertEquals(semanticRule.profileId, result.suggestedProfileId)
+    }
+
     private fun exchange(target: RequestTarget): HttpExchangeSnapshot = HttpExchangeSnapshot(
         id = ExchangeId("exchange"),
         request = HttpRequestSnapshot(
@@ -172,5 +237,60 @@ class PrepareNetworkConditionRuleUseCaseTest {
         override suspend fun deleteRule(ruleId: NetworkConditionRuleId) = Unit
         override suspend fun setLastQuickAddProfile(profileId: NetworkConditionProfileId?) = Unit
         override suspend fun resetShaping() = Unit
+    }
+
+    private class SuggestionExtension(
+        private val id: NetworkConditionProtocolId,
+        private val suggestion: NetworkConditionProtocolCriteria,
+        private val requiredAnnotationInspectorId: InspectorId? = null,
+    ) : NetworkConditionProtocolExtension {
+        override val definition = NetworkConditionProtocolDefinition(
+            protocolId = id,
+            displayName = "Test semantic",
+            criteriaVersion = 1,
+            interceptionUnit = NetworkConditionInterceptionUnit.HTTP_EXCHANGE,
+            fields = emptyList(),
+        )
+
+        override fun compile(
+            criteria: NetworkConditionProtocolCriteria,
+        ): CompiledNetworkConditionProtocolCriteria? = criteria.takeIf { it == suggestion }?.let {
+            object : CompiledNetworkConditionProtocolCriteria {
+                override val protocolId: NetworkConditionProtocolId = id
+                override fun matches(observation: NetworkConditionProtocolObservation?): Boolean = true
+            }
+        }
+
+        override fun editorValues(criteria: NetworkConditionProtocolCriteria): List<ProtocolCriteriaValue> = emptyList()
+
+        override fun createCriteria(values: List<ProtocolCriteriaValue>): NetworkConditionProtocolCriteria = suggestion
+
+        override fun suggestCriteria(
+            input: NetworkConditionHttpInspectionInput,
+        ): NetworkConditionProtocolCriteria? = suggestion.takeIf {
+            requiredAnnotationInspectorId == null ||
+                input.trafficAnnotations.any { annotation ->
+                    annotation.inspectorId == requiredAnnotationInspectorId
+                }
+        }
+    }
+
+    private class FakeAnnotationStore(
+        private val annotations: List<InspectionAnnotation>,
+    ) : InspectionAnnotationStore {
+        override suspend fun put(sessionId: CaptureSessionId, annotation: InspectionAnnotation) = Unit
+
+        override suspend fun get(exchangeId: ExchangeId): List<InspectionAnnotation> =
+            annotations.filter { annotation -> annotation.exchangeId == exchangeId }
+
+        override fun observe(exchangeId: ExchangeId): Flow<List<InspectionAnnotation>> =
+            flowOf(annotations.filter { annotation -> annotation.exchangeId == exchangeId })
+
+        override fun observe(
+            exchangeIds: Set<ExchangeId>,
+        ): Flow<Map<ExchangeId, List<InspectionAnnotation>>> = flowOf(
+            annotations.filter { annotation -> annotation.exchangeId in exchangeIds }
+                .groupBy(InspectionAnnotation::exchangeId),
+        )
     }
 }

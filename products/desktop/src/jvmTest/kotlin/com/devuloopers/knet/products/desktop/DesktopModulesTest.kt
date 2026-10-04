@@ -3,6 +3,7 @@ package com.devuloopers.knet.products.desktop
 import com.devuloopers.knet.application.contract.breakpoint.BreakpointProtocolRegistry
 import com.devuloopers.knet.application.contract.inspection.CapabilityMaturity
 import com.devuloopers.knet.application.contract.inspection.RuntimeCapabilityCatalog
+import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolRegistry
 import com.devuloopers.knet.products.desktop.config.DesktopConfiguration
 import com.devuloopers.knet.products.desktop.di.DesktopModules
 import org.koin.core.context.startKoin
@@ -67,6 +68,12 @@ class DesktopModulesTest {
             breakpointProtocols.map { it.protocolId.value }.toSet(),
         )
         assertEquals(6, breakpointProtocols.size)
+
+        val conditionProtocols = koinApp.koin.get<NetworkConditionProtocolRegistry>().definitions
+        assertEquals(
+            listOf("transport", "http", "graphql", "grpc", "websocket", "graphql-websocket"),
+            conditionProtocols.map { definition -> definition.protocolId.value },
+        )
 
         val capabilities = koinApp.koin.get<RuntimeCapabilityCatalog>()
         assertEquals(CapabilityMaturity.EXPERIMENTAL, capabilities.get("companion.android")?.maturity)

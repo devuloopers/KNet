@@ -136,6 +136,61 @@ class NetworkConditionMatcherTest {
         )
     }
 
+    @Test
+    fun `matching semantic rule outranks an equally prioritized destination fallback`() {
+        val graphQL = NetworkConditionProtocolCriteria(
+            NetworkConditionProtocolId.GRAPHQL_HTTP,
+            "{\"version\":1,\"operationName\":\"LoadFeed\"}",
+        )
+        val configuration = NetworkConditionConfiguration(
+            enabled = true,
+            rules = listOf(
+                rule("domain", "api.example.com", bypass),
+                rule("operation", "api.example.com", slow).copy(protocolCriteria = graphQL),
+            ),
+        )
+
+        val semantic = NetworkConditionMatcher.resolve(configuration, "api.example.com", 443) { it == graphQL }
+        val opaque = NetworkConditionMatcher.resolve(configuration, "api.example.com", 443)
+
+        assertEquals("operation", semantic?.ruleId?.value)
+        assertEquals(EffectiveNetworkCondition.Source.PROTOCOL_RULE, semantic?.source)
+        assertEquals("domain", opaque?.ruleId?.value)
+        assertEquals(EffectiveNetworkCondition.Source.DOMAIN_RULE, opaque?.source)
+    }
+
+    @Test
+    fun `explicit priority is evaluated before semantic and destination specificity`() {
+        val graphQL = NetworkConditionProtocolCriteria(NetworkConditionProtocolId.GRAPHQL_HTTP, "valid")
+        val configuration = NetworkConditionConfiguration(
+            enabled = true,
+            rules = listOf(
+                rule("semantic", "api.example.com", slow).copy(protocolCriteria = graphQL),
+                rule("priority", "*.example.com", bypass).copy(priority = 50),
+            ),
+        )
+
+        assertEquals(
+            "priority",
+            NetworkConditionMatcher.resolve(configuration, "api.example.com", 443) { true }?.ruleId?.value,
+        )
+    }
+
+    @Test
+    fun `invalid or unavailable semantic match falls through without broadening the rule`() {
+        val graphQL = NetworkConditionProtocolCriteria(NetworkConditionProtocolId.GRAPHQL_HTTP, "invalid")
+        val configuration = NetworkConditionConfiguration(
+            enabled = true,
+            globalProfileId = NetworkConditionBuiltIns.HIGH_LATENCY.id,
+            rules = listOf(rule("semantic", "api.example.com", slow).copy(protocolCriteria = graphQL)),
+        )
+
+        val effective = NetworkConditionMatcher.resolve(configuration, "api.example.com", 443) { false }
+
+        assertEquals(EffectiveNetworkCondition.Source.GLOBAL, effective?.source)
+        assertEquals(NetworkConditionBuiltIns.HIGH_LATENCY.id, effective?.profile?.id)
+    }
+
     private fun rule(
         id: String,
         host: String,

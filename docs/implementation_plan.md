@@ -2939,6 +2939,54 @@ tests, raw and GraphQL WebSocket transfer tests, affected module tests, `webSock
 
 ## Phase 133: Network Conditions [IMPLEMENTED — EXPERIMENTAL QUALIFICATION]
 
+### Phase 133.8: HTTP, gRPC, and WebSocket semantic conditions [IMPLEMENTED]
+
+Implemented on 2026-10-04. The fail-closed protocol registry now exposes the ordered scopes **All traffic**,
+**HTTP**, **GraphQL**, **gRPC**, **WebSocket**, and **GraphQL WebSocket**. HTTP rules select an optional normalized
+method plus an exact or segment-aware prefix path without query data. Native gRPC rules select the canonical
+protobuf service and method once per HTTP/2 exchange/stream. Generic WebSocket rules select the queryless handshake
+path, optional negotiated subprotocol, logical-message direction, and text/binary/control kind.
+
+Traffic quick-add chooses GraphQL WebSocket, gRPC, generic WebSocket, GraphQL HTTP, or generic HTTP in descending
+semantic specificity and never requires the user to copy a URL. SSE endpoints reuse HTTP method/path matching.
+Header-only HTTP and gRPC rules do not aggregate request bodies; GraphQL alone can request bounded body inspection,
+and its header preflight excludes unrelated streaming media types on the same host. One WebSocket-owned frame
+shaper handles generic and GraphQL rules after bounded fragmentation/compression decoding, preventing double
+application. UDP, QUIC/HTTP/3, and WebRTC remain global packet-condition scopes rather than semantic match scopes.
+
+Coverage includes editor/registry ordering, body-inspection eligibility, exact/prefix HTTP behavior and query
+exclusion, native-gRPC recognition and service/method isolation, generic WebSocket path/subprotocol/direction/kind,
+ambiguous quick-add inputs, malformed/versioned criteria, streaming non-aggregation, ordinary fragmented WebSocket
+runtime shaping, GraphQL WebSocket compression/correlation, product DI, API Studio proxy routing, and the extended
+Network Conditions qualification gate with dedicated gRPC and WebSocket engine suites.
+
+### Phase 133.7: Protocol-aware GraphQL conditions [IMPLEMENTED]
+
+Implemented on 2026-10-04. Destination rules now carry separately persisted semantic criteria so one GraphQL HTTP
+operation or multiplexed `graphql-transport-ws` operation can select a profile without affecting every request to
+the same endpoint. The editor exposes Domain/transport, GraphQL, and GraphQL WebSocket scopes plus explicit rule
+priority; Traffic quick-add suggests a bounded semantic rule when captured request evidence is sufficient. Room
+schema 32 preserves priority, protocol identity, and the extension-owned criteria payload.
+
+The runtime aggregates only eligible bounded GraphQL HTTP requests, resolves a condition once per exchange, and
+retains the selection for its response. Modern `graphql-transport-ws` messages are shaped only after complete frame
+reassembly and optional `permessage-deflate` decoding, with bounded subscribe-to-next/error/complete correlation.
+Breakpoint transforms remain independent and execute before message shaping. Invalid, oversized, unavailable, or
+opaque semantic data cannot broaden a protocol rule and instead follows the ordinary destination/global fallback.
+
+Automated coverage now includes deterministic priority and semantic precedence, extension failure isolation,
+Traffic quick-add and duplicate detection, HTTP/1.1 plus HTTP/2 bridge selection, aggregation bounds, schema
+31-to-32 migration/defaults, semantic persistence restart, editor persistence, WebSocket multiplexing, compression,
+live enable, timeout/delay cancellation, and ordered breakpoint/condition transformer composition. Full protocol
+timing matrices and physical streaming qualification remain tracked in the Network Conditions test-gap report.
+
+The add/edit popup now exposes KNet-styled vertical overflow chrome and a visible horizontal scrollbar for the
+Condition profile strip. Every newly created manual or Traffic-prefilled rule starts on **No throttling**, while an
+equivalent existing rule continues to open with its persisted profile. View-model and application-use-case tests
+lock both defaulting and existing-rule preservation. Horizontal scrollbar separation is owned by the reusable
+`:ui:core` component using the shared small spacing token; all current certificate, Traffic, breakpoint, and
+Network Conditions consumers place that component after their scrollable content for identical spacing.
+
 Implemented on 2026-10-01 for KNet's desktop proxy path. The product now has the dedicated sidebar destination,
 persisted global and exact/wildcard host/port rules, built-in and custom profiles, Traffic one-click quick-add,
 API Studio routing through the local proxy while conditions are active, bounded aggregate asymmetric shaping,

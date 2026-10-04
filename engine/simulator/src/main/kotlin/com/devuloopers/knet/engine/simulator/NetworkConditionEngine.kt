@@ -97,6 +97,9 @@ class NetworkConditionEngine(
 
     internal fun conditionsEnabled(): Boolean = configuration().enabled
 
+    /** Returns the current immutable policy snapshot for protocol-boundary resolvers. */
+    fun configurationSnapshot(): NetworkConditionConfiguration = configuration()
+
     /** Notifies active channel handlers so queued bytes are replanned against a live edit. */
     internal fun observeConfigurationChanges(listener: () -> Unit): AutoCloseable {
         configurationListeners += listener
@@ -105,21 +108,33 @@ class NetworkConditionEngine(
 
     internal fun appliedCondition(host: String, port: Int): AppliedNetworkCondition? =
         NetworkConditionMatcher.resolve(configuration(), host, port)?.let { effective ->
-            AppliedNetworkCondition(
-                profileId = effective.profile.id.value,
-                ruleId = effective.ruleId?.value,
-                source = when (effective.source) {
-                    EffectiveNetworkCondition.Source.DOMAIN_RULE -> AppliedNetworkConditionSource.DOMAIN_RULE
-                    EffectiveNetworkCondition.Source.GLOBAL -> AppliedNetworkConditionSource.GLOBAL
-                },
-            )
+            appliedCondition(effective)
         }
+
+    /** Maps a resolved rule selection to payload-free Traffic evidence. */
+    fun appliedCondition(effective: EffectiveNetworkCondition?): AppliedNetworkCondition? = effective?.let {
+        AppliedNetworkCondition(
+            profileId = it.profile.id.value,
+            ruleId = it.ruleId?.value,
+            source = when (it.source) {
+                EffectiveNetworkCondition.Source.DOMAIN_RULE -> AppliedNetworkConditionSource.DOMAIN_RULE
+                EffectiveNetworkCondition.Source.PROTOCOL_RULE -> AppliedNetworkConditionSource.PROTOCOL_RULE
+                EffectiveNetworkCondition.Source.GLOBAL -> AppliedNetworkConditionSource.GLOBAL
+            },
+        )
+    }
 
     internal fun virtualMtu(host: String, port: Int): Int? =
         NetworkConditionMatcher.resolve(configuration(), host, port)
             ?.profile
             ?.takeUnless(NetworkConditionProfile::isPassThrough)
             ?.virtualMtuBytes
+
+    /** Returns the active virtual MTU for an already resolved semantic or destination selection. */
+    fun virtualMtu(effective: EffectiveNetworkCondition?): Int? = effective
+        ?.profile
+        ?.takeUnless(NetworkConditionProfile::isPassThrough)
+        ?.virtualMtuBytes
 
     fun openFlow(): AutoCloseable {
         activeFlows.incrementAndGet()
@@ -140,6 +155,17 @@ class NetworkConditionEngine(
     ): NetworkConditionPlan {
         val effective = NetworkConditionMatcher.resolve(configuration(), host, port)
             ?: return NetworkConditionPlan.PassThrough
+        return plan(effective, direction, bytes, flowSequence)
+    }
+
+    /** Plans one protocol-safe unit against an already resolved semantic selection. */
+    fun plan(
+        effective: EffectiveNetworkCondition?,
+        direction: NetworkConditionDirection,
+        bytes: Int,
+        flowSequence: Long,
+    ): NetworkConditionPlan {
+        effective ?: return NetworkConditionPlan.PassThrough
         val profile = effective.profile
         if (profile.isPassThrough) return NetworkConditionPlan.PassThrough
         if (shouldFail(profile.failure, effective, flowSequence)) {

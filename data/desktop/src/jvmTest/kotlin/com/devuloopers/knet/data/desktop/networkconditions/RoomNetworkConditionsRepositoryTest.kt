@@ -2,6 +2,8 @@ package com.devuloopers.knet.data.desktop.networkconditions
 
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionProfile
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionProfileId
+import com.devuloopers.knet.domain.networkconditions.NetworkConditionProtocolCriteria
+import com.devuloopers.knet.domain.networkconditions.NetworkConditionProtocolId
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionRule
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionRuleId
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionTarget
@@ -41,6 +43,11 @@ class RoomNetworkConditionsRepositoryTest {
             id = NetworkConditionRuleId("rule-video"),
             target = NetworkConditionTarget.parse("*.video.example", 443),
             profileId = profile.id,
+            priority = 42,
+            protocolCriteria = NetworkConditionProtocolCriteria(
+                NetworkConditionProtocolId.GRAPHQL_HTTP,
+                "{\"version\":1,\"operationName\":\"LiveFeed\",\"operationType\":\"query\"}",
+            ),
         )
         val firstDatabase = DatabaseFactory.create(file)
         val firstScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)

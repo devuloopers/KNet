@@ -3,6 +3,15 @@ package com.devuloopers.knet.ui.desktop.networkconditions.viewmodel
 import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionRuntimeSnapshot
 import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionRuntimeTelemetry
 import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionsRepository
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaFieldDefinition
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaFieldId
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaValue
+import com.devuloopers.knet.application.contract.networkconditions.CompiledNetworkConditionProtocolCriteria
+import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionInterceptionUnit
+import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolDefinition
+import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolExtension
+import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolObservation
+import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolRegistry
 import com.devuloopers.knet.application.contract.traffic.BodyChunk
 import com.devuloopers.knet.application.contract.traffic.BodyRange
 import com.devuloopers.knet.application.contract.traffic.TrafficGeneration
@@ -10,10 +19,13 @@ import com.devuloopers.knet.application.contract.traffic.TrafficPage
 import com.devuloopers.knet.application.contract.traffic.TrafficPageQuery
 import com.devuloopers.knet.application.contract.traffic.TrafficQuery
 import com.devuloopers.knet.application.usecase.networkconditions.PrepareNetworkConditionRuleUseCase
+import com.devuloopers.knet.application.usecase.networkconditions.NetworkConditionProtocolRuleUseCase
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionBuiltIns
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionConfiguration
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionProfile
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionProfileId
+import com.devuloopers.knet.domain.networkconditions.NetworkConditionProtocolCriteria
+import com.devuloopers.knet.domain.networkconditions.NetworkConditionProtocolId
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionRule
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionRuleId
 import com.devuloopers.knet.traffic.id.BodyId
@@ -56,7 +68,7 @@ class NetworkConditionsViewModelTest {
     fun tearDown() = Dispatchers.resetMain()
 
     @Test
-    fun `traffic quick add prepares confirms and remembers a canonical domain rule`() = runTest(dispatcher) {
+    fun `traffic quick add defaults a new canonical domain rule to no throttling`() = runTest(dispatcher) {
         val repository = FakeRepository()
         val exchange = exchange()
         val viewModel = NetworkConditionsViewModel(
@@ -72,7 +84,7 @@ class NetworkConditionsViewModelTest {
         val draft = assertNotNull(viewModel.state.value.ruleDraft)
         assertEquals("video.example.test", draft.hostPattern)
         assertEquals("443", draft.port)
-        assertEquals(NetworkConditionBuiltIns.STREAMING_100_KBPS.id, draft.profileId)
+        assertEquals(NetworkConditionBuiltIns.NO_THROTTLING.id, draft.profileId)
 
         viewModel.selectDraftProfile(NetworkConditionBuiltIns.SLOW_3G.id)
         viewModel.confirmRuleDraft()
@@ -82,6 +94,28 @@ class NetworkConditionsViewModelTest {
         assertEquals(NetworkConditionBuiltIns.SLOW_3G.id, repository.configuration.value.lastQuickAddProfileId)
         assertEquals("video.example.test:443", repository.configuration.value.rules.single().target.displayValue)
         assertEquals(NetworkConditionBuiltIns.SLOW_3G.id, repository.configuration.value.rules.single().profileId)
+    }
+
+    @Test
+    fun `manual add defaults to no throttling even when a prior profile is remembered`() = runTest(dispatcher) {
+        val repository = FakeRepository(
+            initial = NetworkConditionConfiguration(
+                lastQuickAddProfileId = NetworkConditionBuiltIns.FAST_3G.id,
+            ),
+        )
+        val viewModel = NetworkConditionsViewModel(
+            repository = repository,
+            runtimeTelemetry = FakeTelemetry(),
+            prepareRule = PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository),
+        )
+        advanceUntilIdle()
+
+        viewModel.beginAddRule()
+
+        assertEquals(
+            NetworkConditionBuiltIns.NO_THROTTLING.id,
+            assertNotNull(viewModel.state.value.ruleDraft).profileId,
+        )
     }
 
     @Test
@@ -286,6 +320,37 @@ class NetworkConditionsViewModelTest {
         assertEquals(false, viewModel.state.value.throughput.currentSampleIsValid)
     }
 
+    @Test
+    fun `semantic rule editor persists protocol criteria and priority`() = runTest(dispatcher) {
+        val repository = FakeRepository()
+        val protocolId = NetworkConditionProtocolId("test-semantic")
+        val fieldId = ProtocolCriteriaFieldId("operation")
+        val extension = EditorExtension(protocolId, fieldId)
+        val viewModel = NetworkConditionsViewModel(
+            repository = repository,
+            runtimeTelemetry = FakeTelemetry(),
+            prepareRule = PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository),
+            protocolRules = NetworkConditionProtocolRuleUseCase(
+                NetworkConditionProtocolRegistry(listOf(extension)),
+            ),
+        )
+        advanceUntilIdle()
+
+        viewModel.beginAddRule()
+        viewModel.updateDraftHostPattern("api.example.test")
+        viewModel.updateDraftPort("443")
+        viewModel.updateDraftPriority("25")
+        viewModel.selectDraftProtocol(protocolId)
+        viewModel.updateDraftProtocolValue(fieldId, "LoadFeed")
+        viewModel.confirmRuleDraft()
+        advanceUntilIdle()
+
+        val rule = repository.configuration.value.rules.single()
+        assertEquals(25, rule.priority)
+        assertEquals(protocolId, rule.protocolCriteria.protocolId)
+        assertEquals("LoadFeed", rule.protocolCriteria.encodedPayload)
+    }
+
     private fun exchange(): HttpExchangeSnapshot = HttpExchangeSnapshot(
         id = ExchangeId("exchange"),
         request = HttpRequestSnapshot(
@@ -359,5 +424,44 @@ class NetworkConditionsViewModelTest {
         override suspend fun resetShaping() {
             configuration.value = configuration.value.copy(enabled = false, globalProfileId = null)
         }
+    }
+
+    private class EditorExtension(
+        private val id: NetworkConditionProtocolId,
+        private val fieldId: ProtocolCriteriaFieldId,
+    ) : NetworkConditionProtocolExtension {
+        override val definition = NetworkConditionProtocolDefinition(
+            protocolId = id,
+            displayName = "Test semantic",
+            criteriaVersion = 1,
+            interceptionUnit = NetworkConditionInterceptionUnit.HTTP_EXCHANGE,
+            fields = listOf(ProtocolCriteriaFieldDefinition.Text(
+                id = fieldId,
+                label = "Operation",
+                description = "Operation name",
+                placeholder = "LoadFeed",
+            )),
+        )
+
+        override fun compile(
+            criteria: NetworkConditionProtocolCriteria,
+        ): CompiledNetworkConditionProtocolCriteria? = criteria
+            .takeIf { value -> value.protocolId == id && value.encodedPayload.isNotBlank() }
+            ?.let {
+                object : CompiledNetworkConditionProtocolCriteria {
+                    override val protocolId: NetworkConditionProtocolId = id
+                    override fun matches(observation: NetworkConditionProtocolObservation?): Boolean = true
+                }
+            }
+
+        override fun editorValues(criteria: NetworkConditionProtocolCriteria): List<ProtocolCriteriaValue> =
+            listOf(ProtocolCriteriaValue(fieldId, criteria.encodedPayload))
+
+        override fun createCriteria(values: List<ProtocolCriteriaValue>): NetworkConditionProtocolCriteria? =
+            values.singleOrNull { value -> value.fieldId == fieldId }
+                ?.value
+                ?.trim()
+                ?.takeIf(String::isNotEmpty)
+                ?.let { value -> NetworkConditionProtocolCriteria(id, value) }
     }
 }

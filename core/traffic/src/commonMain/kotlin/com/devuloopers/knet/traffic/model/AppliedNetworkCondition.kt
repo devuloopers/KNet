@@ -5,6 +5,9 @@ public enum class AppliedNetworkConditionSource {
     /** A destination rule selected the profile. */
     DOMAIN_RULE,
 
+    /** A bounded protocol-aware rule selected the profile for one request, stream, or message. */
+    PROTOCOL_RULE,
+
     /** The enabled global condition selected the profile. */
     GLOBAL,
 }
@@ -14,7 +17,7 @@ public enum class AppliedNetworkConditionSource {
  *
  * @property profileId Stable profile identity used when the traffic was admitted.
  * @property ruleId Stable destination-rule identity, or `null` for a global selection.
- * @property source Whether a destination rule or the global fallback selected the profile.
+ * @property source Whether a destination rule, protocol-aware rule, or global fallback selected the profile.
  */
 public data class AppliedNetworkCondition(
     public val profileId: String,

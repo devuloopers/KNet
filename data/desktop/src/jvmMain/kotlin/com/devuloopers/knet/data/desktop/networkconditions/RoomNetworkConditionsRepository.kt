@@ -4,6 +4,8 @@ import com.devuloopers.knet.application.contract.networkconditions.NetworkCondit
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionConfiguration
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionProfile
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionProfileId
+import com.devuloopers.knet.domain.networkconditions.NetworkConditionProtocolCriteria
+import com.devuloopers.knet.domain.networkconditions.NetworkConditionProtocolId
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionRule
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionRuleId
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionTarget
@@ -81,7 +83,9 @@ class RoomNetworkConditionsRepository(
         val state = persistentConfiguration()
         require(state.profile(rule.profileId) != null) { "Unknown rule profile." }
         val candidate = state.rules.filterNot { it.id == rule.id } + rule
-        require(candidate.map { it.target }.distinct().size == candidate.size) { "An equivalent rule already exists." }
+        require(candidate.map { it.target to it.protocolCriteria }.distinct().size == candidate.size) {
+            "An equivalent rule already exists."
+        }
         dao.upsertRule(rule.toEntity())
     }
 
@@ -174,6 +178,9 @@ private fun NetworkConditionRule.toEntity() = NetworkConditionRuleEntity(
     port = target.port,
     profileId = profileId.value,
     enabled = enabled,
+    priority = priority,
+    protocolId = protocolCriteria.protocolId.value,
+    protocolCriteriaPayload = protocolCriteria.encodedPayload,
 )
 
 private fun NetworkConditionRuleEntity.toDomain() = NetworkConditionRule(
@@ -181,4 +188,9 @@ private fun NetworkConditionRuleEntity.toDomain() = NetworkConditionRule(
     target = NetworkConditionTarget.parse((if (wildcard) "*." else "") + normalizedHost, port),
     profileId = NetworkConditionProfileId(profileId),
     enabled = enabled,
+    priority = priority,
+    protocolCriteria = NetworkConditionProtocolCriteria(
+        protocolId = NetworkConditionProtocolId(protocolId),
+        encodedPayload = protocolCriteriaPayload,
+    ),
 )

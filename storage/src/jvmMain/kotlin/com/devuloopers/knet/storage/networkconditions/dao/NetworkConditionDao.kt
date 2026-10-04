@@ -22,10 +22,10 @@ interface NetworkConditionDao {
     @Query("SELECT * FROM network_condition_profiles ORDER BY name COLLATE NOCASE, id")
     suspend fun getProfiles(): List<NetworkConditionProfileEntity>
 
-    @Query("SELECT * FROM network_condition_rules ORDER BY normalizedHost, port, id")
+    @Query("SELECT * FROM network_condition_rules ORDER BY priority DESC, normalizedHost, port, protocolId, id")
     fun observeRules(): Flow<List<NetworkConditionRuleEntity>>
 
-    @Query("SELECT * FROM network_condition_rules ORDER BY normalizedHost, port, id")
+    @Query("SELECT * FROM network_condition_rules ORDER BY priority DESC, normalizedHost, port, protocolId, id")
     suspend fun getRules(): List<NetworkConditionRuleEntity>
 
     @Upsert

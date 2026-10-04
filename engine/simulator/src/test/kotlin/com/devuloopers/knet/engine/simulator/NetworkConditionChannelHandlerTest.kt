@@ -35,6 +35,25 @@ import kotlin.test.assertTrue
 
 class NetworkConditionChannelHandlerTest {
     @Test
+    fun `request without a trustworthy destination bypasses the global condition`() {
+        val configuration = NetworkConditionConfiguration(
+            enabled = true,
+            globalProfileId = NetworkConditionBuiltIns.OFFLINE.id,
+        )
+        val channel = EmbeddedChannel(
+            NetworkConditionChannelHandler(NetworkConditionEngine(configuration = { configuration })),
+        )
+        val request = DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/relative")
+
+        channel.writeInbound(request)
+
+        assertSame(request, channel.readInbound<DefaultHttpRequest>())
+        assertNull(channel.attr(ProxyChannelAttributes.APPLIED_NETWORK_CONDITION).get())
+        assertTrue(channel.isActive)
+        channel.finishAndReleaseAll()
+    }
+
+    @Test
     fun `http payload is forwarded incrementally after the aggregate bandwidth reservation`() {
         val configuration = NetworkConditionConfiguration(
             enabled = true,

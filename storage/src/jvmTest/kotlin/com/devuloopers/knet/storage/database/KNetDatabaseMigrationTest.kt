@@ -15,7 +15,7 @@ import kotlin.test.assertEquals
 class KNetDatabaseMigrationTest {
     @Test
     fun `every retained schema generation migrates without deleting canonical sessions`() {
-        listOf(13, 18, 22, 24, 27, 28, 29, 30).forEach { version ->
+        listOf(13, 18, 22, 24, 27, 28, 29, 30, 31).forEach { version ->
             val root = Files.createTempDirectory("knet-v$version-migration-").toFile()
             val databaseFile = root.resolve("traffic.db")
             try {
@@ -110,6 +110,9 @@ class KNetDatabaseMigrationTest {
                         assertEquals(true, rule.wildcard)
                         assertEquals(443, rule.port)
                         assertEquals("migrated-profile", rule.profileId)
+                        assertEquals(0, rule.priority)
+                        assertEquals("transport", rule.protocolId)
+                        assertEquals("", rule.protocolCriteriaPayload)
                     }
                 } finally {
                     database.close()

@@ -64,6 +64,10 @@ fun interface ProxyDuplexTransformerFactory {
  * directions and transport reads remain paused until the returned stage completes.
  */
 interface ProxyDuplexTransformer {
+    /** Whether this transformer owns Network Conditions after the HTTP upgrade completes. */
+    val handlesNetworkConditions: Boolean
+        get() = false
+
     /** Supplies the successful switching response before the first transformation. */
     fun onEstablished(response: ResponseHead, occurredAtEpochMillis: Long) = Unit
 
@@ -76,6 +80,63 @@ interface ProxyDuplexTransformer {
 
     /** Releases held bytes and pending decisions after the connection terminates. */
     fun cancel(reason: TrafficTerminationReason?) = Unit
+}
+
+/**
+ * Composes independently registered duplex transforms while preserving their declared order.
+ *
+ * A dropped connection short-circuits later transforms. Forwarded bytes are defensively transferred to the next
+ * stage so breakpoint edits can run before protocol-aware Network Conditions without shared mutable arrays.
+ */
+internal class CompositeProxyDuplexTransformer(
+    private val transformers: List<ProxyDuplexTransformer>,
+) : ProxyDuplexTransformer {
+    init {
+        require(transformers.isNotEmpty()) { "A composite duplex transformer requires at least one child." }
+    }
+
+    override val handlesNetworkConditions: Boolean = transformers.any(ProxyDuplexTransformer::handlesNetworkConditions)
+
+    override fun onEstablished(response: ResponseHead, occurredAtEpochMillis: Long) {
+        transformers.forEach { transformer -> transformer.onEstablished(response, occurredAtEpochMillis) }
+    }
+
+    override fun transform(
+        direction: TrafficDirection,
+        payload: ByteArray,
+        occurredAtEpochMillis: Long,
+    ): CompletionStage<ProxyDuplexTransformResult> {
+        var stage: CompletionStage<ProxyDuplexTransformResult> = java.util.concurrent.CompletableFuture.completedFuture(
+            ProxyDuplexTransformResult.Forward(payload),
+        )
+        transformers.forEach { transformer ->
+            stage = stage.thenCompose { result ->
+                when (result) {
+                    is ProxyDuplexTransformResult.DropConnection ->
+                        java.util.concurrent.CompletableFuture.completedFuture(result)
+                    is ProxyDuplexTransformResult.Forward -> transformer.transform(
+                        direction = direction,
+                        payload = result.copyPayload(),
+                        occurredAtEpochMillis = occurredAtEpochMillis,
+                    )
+                }
+            }
+        }
+        return stage
+    }
+
+    override fun cancel(reason: TrafficTerminationReason?) {
+        transformers.asReversed().forEach { transformer -> transformer.cancel(reason) }
+    }
+}
+
+/** Returns null, one unchanged transformer, or an ordered composite for [transformers]. */
+internal fun composeProxyDuplexTransformers(
+    transformers: List<ProxyDuplexTransformer>,
+): ProxyDuplexTransformer? = when (transformers.size) {
+    0 -> null
+    1 -> transformers.single()
+    else -> CompositeProxyDuplexTransformer(transformers)
 }
 
 /** Result of transforming one post-upgrade transport payload. */

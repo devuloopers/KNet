@@ -174,6 +174,61 @@ decorative configured curve, the two overview cards are visually equal at deskto
 all eligible forwarding paths exactly once, memory remains bounded independently of run duration, and the required
 automated and JVM allocation checks pass. No Vico, KoalaPlot, or other chart dependency is introduced.
 
+## HTTP, gRPC, and WebSocket semantic rule checkpoint — 2026-10-04
+
+Status: **IMPLEMENTED; AUTOMATED QUALIFICATION PASSES**
+
+The shared protocol-extension model now covers HTTP method/queryless-path rules, native gRPC service/method rules,
+generic WebSocket handshake and logical-message rules, GraphQL HTTP operations, and modern GraphQL WebSocket
+operations. The editor presents those scopes in a stable order after **All traffic**, with the shared visible
+horizontal scrollbar used by profile and criteria chip strips. Traffic quick-add chooses the highest-confidence
+protocol suggestion: GraphQL WebSocket before generic WebSocket, gRPC before HTTP, and GraphQL HTTP before HTTP.
+
+HTTP and gRPC selection is header-only and retained for the correlated response, including an independent HTTP/2
+child stream. HTTP supports optional exact method plus exact or segment-aware path-prefix selection. gRPC requires a
+native media type, `POST`, and the canonical `/service/method` path. SSE does not need a separate semantic scope;
+its HTTP request method/path can be selected while the response remains incrementally streamed.
+
+The WebSocket engine owns one bounded complete-message shaper for every valid upgrade. It reassembles fragments,
+decodes negotiated per-message deflate before semantic inspection, retains original wire bytes for forwarding, and
+resolves generic path/subprotocol/direction/kind rules together with GraphQL operation rules. Because this one
+transformer owns the Network Conditions boundary, overlapping generic and GraphQL rules cannot double-shape a
+message. Invalid criteria and unsupported traffic fail closed to the ordinary destination/global fallback.
+
+GraphQL remains the only HTTP condition extension that may request bounded complete-body aggregation. A header
+preflight avoids buffering unrelated gRPC, WebSocket, SSE, and explicit non-GraphQL media on the same host. Generic
+HTTP and gRPC streams therefore preserve streaming semantics even when a GraphQL condition exists for that domain.
+
+## Protocol-aware GraphQL rule checkpoint — 2026-10-04
+
+Status: **IMPLEMENTED; AUTOMATED QUALIFICATION PASSES**
+
+Delivered:
+
+- independently persisted rule priority and semantic criteria in Room schema 32, while existing schema-31 rules
+  migrate to priority `0` and the payload-blind `transport` scope;
+- a generic application-layer protocol-extension registry that owns validation, compact editor fields, bounded
+  inspection, quick-add suggestions, and fail-closed matching without exposing scheduling or persistence details;
+- GraphQL HTTP selectors for operation name and query/mutation/subscription type, resolved once per bounded request
+  and retained for its correlated response on HTTP/1.1 and HTTP/2 stream pipelines;
+- modern `graphql-transport-ws` selectors for direction, message type, operation name, and operation ID, with
+  bounded multiplexed-operation correlation and complete-message shaping after fragmentation/compression decoding;
+- one ordered upgraded-connection transform chain, so breakpoint edits run before Network Conditions and GraphQL
+  WebSocket traffic is not shaped once by the raw channel and again by the message boundary;
+- KNet-themed generic rule controls, friendly protocol badges, explicit priority, and Traffic one-click semantic
+  prefill that prefers the completed Traffic annotation before bounded raw-body fallback, without adding
+  protocol-specific presentation dependencies;
+- domain, application, HTTP runtime, GraphQL HTTP, GraphQL WebSocket, persistence/migration, ViewModel, proxy
+  composition, product-DI, and qualification-gate tests.
+
+The semantic claim is intentionally bounded. GraphQL HTTP matching requires a decrypted request whose relevant body
+fits the one-mebibyte inspection limit, and GraphQL WebSocket matching requires the negotiated modern
+`graphql-transport-ws` subprotocol. Invalid, missing, oversized, encrypted, or unsupported payloads use the normal
+destination/global fallback; they never silently turn a semantic rule into a whole-domain rule. Raw WebSocket now
+has its own path/subprotocol/direction/kind condition scope. Legacy `graphql-ws` remains eligible for generic
+WebSocket matching but does not receive modern GraphQL operation correlation. Opaque TLS, QUIC/HTTP/3, and custom
+UDP remain destination/packet-scoped until separately implemented and qualified.
+
 ## Outcome
 
 Add a first-class **Network Conditions** feature to KNet. It will be a separate desktop destination immediately
@@ -219,10 +274,11 @@ The Traffic row context menu gains **Add to Network Conditions...** next to **Ad
 3. navigates to Network Conditions;
 4. opens a prefilled rule editor for that exact destination.
 
-The user chooses or accepts the remembered quick-add profile and confirms **Add condition**. No URL, scheme, path,
-query, or host needs to be copied. Confirmation is deliberate because enabling a rule changes live traffic. Later,
-a context submenu may offer literal immediate application of a named preset, but that is not required for the first
-release.
+Every new rule opens with **No throttling** selected so adding a destination cannot unexpectedly degrade traffic
+before the user deliberately chooses a simulation profile. The user chooses a different profile when needed and
+confirms **Add condition**. No URL, scheme, path, query, or host needs to be copied. Confirmation is deliberate
+because enabling a rule changes live traffic. Later, a context submenu may offer literal immediate application of
+a named preset, but that is not required for the first release.
 
 If an equivalent rule already exists, quick-add opens that rule for editing instead of creating a duplicate. If
 the selected row has no trustworthy network destination, the action is disabled with a presentation-safe reason.
@@ -333,7 +389,8 @@ Persist versioned condition state transactionally:
 - master enabled state and global profile selection;
 - custom profiles;
 - normalized domain rules and selected profile references;
-- the last quick-add profile preference;
+- the legacy last quick-add profile value for storage compatibility, although new editors ignore it and default to
+  No throttling;
 - schema version/migration data.
 
 Deleting a referenced custom profile must either be rejected with its dependants or update all dependants in one
@@ -449,7 +506,7 @@ Transport-specific outcomes are:
 - Add `DesktopDestination.NetworkConditions` before Breakpoints/Intercepts.
 - Add the dedicated UI module, screen, MVI state, profile editor, global control, and domain-rule management.
 - Add the Traffic context-menu action and prefilled, duplicate-aware editor flow.
-- Persist master state, rule edits, and last quick-add profile.
+- Persist master state and rule edits; preserve the legacy last quick-add profile field for storage compatibility.
 
 ### 133.4 — Protocol and API Studio parity
 

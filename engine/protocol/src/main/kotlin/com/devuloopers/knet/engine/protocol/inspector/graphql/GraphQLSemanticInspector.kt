@@ -8,12 +8,24 @@ import com.devuloopers.knet.traffic.inspection.InspectorId
 import com.devuloopers.knet.traffic.model.HttpExchangeSnapshot
 import com.devuloopers.knet.traffic.model.http.RequestTarget
 
+/** Stable generic annotation identities shared by GraphQL Traffic presentation and rule suggestions. */
+internal object GraphQLInspectionSchema {
+    val inspectorId: InspectorId = InspectorId("graphql")
+    const val VERSION: Long = 1L
+    const val DOCUMENT_KIND: String = "graphql"
+    const val OPERATION_TYPE_FIELD: String = "Operation type"
+    const val OPERATION_NAME_FIELD: String = "Operation name"
+    const val BATCH_SIZE_FIELD: String = "Batch size"
+    const val REQUEST_TARGET_FIELD: String = "Request target"
+    const val BODY_FIELD: String = "Body"
+}
+
 /** Asynchronous bounded GraphQL semantic inspector for captured HTTP exchanges. */
 class GraphQLSemanticInspector(
     private val parser: GraphQLDocumentParser = GraphQLDocumentParser(),
 ) : SemanticInspector {
-    override val id: InspectorId = InspectorId("graphql")
-    override val schemaVersion: Long = 1L
+    override val id: InspectorId = GraphQLInspectionSchema.inspectorId
+    override val schemaVersion: Long = GraphQLInspectionSchema.VERSION
     override val priority: Int = 100
     override val bodyBudgetBytes: Int = 1_048_576
 
@@ -52,7 +64,7 @@ class GraphQLSemanticInspector(
             return if (target.contains("graphql", ignoreCase = true) ||
                 contentType.contains("graphql", ignoreCase = true)
             ) {
-                InspectionDocument(kind = "graphql", title = "GraphQL request")
+                InspectionDocument(kind = GraphQLInspectionSchema.DOCUMENT_KIND, title = "GraphQL request")
             } else {
                 null
             }
@@ -67,17 +79,19 @@ class GraphQLSemanticInspector(
             operationName?.let { "GraphQL $operationType: $it" } ?: "GraphQL $operationType"
         }
         return InspectionDocument(
-            kind = "graphql",
+            kind = GraphQLInspectionSchema.DOCUMENT_KIND,
             title = title,
             summary = primary.summary,
             fields = listOfNotNull(
-                InspectionField("Operation type", operationType),
-                operationName?.let { InspectionField("Operation name", it) },
+                InspectionField(GraphQLInspectionSchema.OPERATION_TYPE_FIELD, operationType),
+                operationName?.let { InspectionField(GraphQLInspectionSchema.OPERATION_NAME_FIELD, it) },
                 document.operations.size.takeIf { it > 1 }?.let {
-                    InspectionField("Batch size", it.toString())
+                    InspectionField(GraphQLInspectionSchema.BATCH_SIZE_FIELD, it.toString())
                 },
-                InspectionField("Request target", target),
-                input.requestBody?.truncated?.takeIf { it }?.let { InspectionField("Body", "Preview truncated") },
+                InspectionField(GraphQLInspectionSchema.REQUEST_TARGET_FIELD, target),
+                input.requestBody?.truncated?.takeIf { it }?.let {
+                    InspectionField(GraphQLInspectionSchema.BODY_FIELD, "Preview truncated")
+                },
             ),
         )
     }

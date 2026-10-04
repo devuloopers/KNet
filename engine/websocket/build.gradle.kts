@@ -8,6 +8,7 @@ dependencies {
 
     implementation(project(":core:domain"))
     implementation(project(":application:desktop"))
+    implementation(project(":engine:simulator"))
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
 

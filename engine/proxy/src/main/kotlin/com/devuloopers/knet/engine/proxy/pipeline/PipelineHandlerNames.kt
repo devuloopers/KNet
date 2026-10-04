@@ -53,6 +53,12 @@ object PipelineHandlerNames {
     /** Overflow-safe selective aggregation installed by an optional inspection adapter. */
     const val SELECTIVE_HTTP_AGGREGATOR = "selectiveHttpAggregator"
 
+    /** Bounded request aggregator installed only for protocol-aware Network Conditions candidates. */
+    const val NETWORK_CONDITION_AGGREGATOR = "networkConditionAggregator"
+
+    /** Bidirectional proxy-layer bandwidth, delay, and fault scheduler. */
+    const val NETWORK_CONDITIONS = "knetNetworkConditions"
+
     /**
      * Primary proxy inbound request handler (streaming or bounded breakpoint variant).
      *

@@ -244,7 +244,7 @@ private fun MessageEditor(
             )
         }
         val actionScrollState = rememberScrollState()
-        Box(modifier = Modifier.fillMaxWidth().padding(top = 14.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().padding(top = 14.dp)) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -263,7 +263,7 @@ private fun MessageEditor(
             }
             KNetHorizontalScrollbar(
                 scrollState = actionScrollState,
-                modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth(),
             )
         }
     }

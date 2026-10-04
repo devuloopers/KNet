@@ -257,7 +257,7 @@ internal class KNetStreamingProxyHandler(
                 }
                 .getOrNull()
         }
-        val duplexTransformer = duplexTransformerFactories.firstNotNullOfOrNull { factory ->
+        val duplexTransformer = composeProxyDuplexTransformers(duplexTransformerFactories.mapNotNull { factory ->
             runCatching { factory.create(mappedRequest.request, streamId, capture) }
                 .onFailure { failure ->
                     KNetLogger.warn(STREAMING_TAG) {
@@ -265,7 +265,7 @@ internal class KNetStreamingProxyHandler(
                     }
                 }
                 .getOrNull()
-        }
+        })
         val outboundHead = DefaultHttpRequest(
             request.protocolVersion(),
             request.method(),
@@ -785,6 +785,11 @@ internal class KNetStreamingProxyHandler(
             }
         }
         val downstream = downstreamContext.channel()
+        if (active.duplexTransformer?.handlesNetworkConditions == true) {
+            downstream.pipeline().get(PipelineHandlerNames.NETWORK_CONDITIONS)?.let(downstream.pipeline()::remove)
+            downstream.pipeline().get(PipelineHandlerNames.NETWORK_CONDITION_AGGREGATOR)
+                ?.let(downstream.pipeline()::remove)
+        }
         downstream.config().isAutoRead = false
         upstreamChannel.config().isAutoRead = false
 

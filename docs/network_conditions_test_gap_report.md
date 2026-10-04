@@ -39,8 +39,9 @@ The following consolidated verification completed successfully on 2026-10-04:
 ./gradlew networkConditionsQualification --rerun-tasks
 ```
 
-Result: `BUILD SUCCESSFUL`, 264 actionable tasks. The gate is declared in the root build and includes architecture,
-domain, storage, repository, application, simulator, Network Conditions UI, API Studio plus its WebSocket, GraphQL
+Result: `BUILD SUCCESSFUL`. The gate is declared in the root build and includes architecture, domain, storage,
+repository, application, proxy composition, protocol semantics, simulator, GraphQL WebSocket runtime, Network
+Conditions UI, dedicated gRPC and generic WebSocket condition suites, API Studio plus its WebSocket, GraphQL
 WebSocket, and gRPC editors, Traffic, desktop app, companion codec/application, Android host, and desktop product
 tests.
 
@@ -57,7 +58,7 @@ case. Everything not named remains open at the priority shown in the matrix.
 
 - Domain and matching: NC-DOM-001 through NC-DOM-010, including the invalid-host corpus, normalized profile-token
   validation, complete precedence categories, apex/suffix boundaries, and packet-only profiles.
-- Persistence: NC-DB-001, NC-DB-003, and NC-DB-004, including schemas 27-30, disabled-rule protection, and the
+- Persistence: NC-DB-001, NC-DB-003, and NC-DB-004, including schemas 27-32, disabled-rule protection, and the
   quick-add-only deletion cleanup contract.
 - Engine: NC-ENG-004, NC-ENG-005, NC-ENG-007 through NC-ENG-019, NC-ENG-022, NC-ENG-023, and NC-ENG-024. This
   includes latency/jitter edits, timeout/reset
@@ -65,6 +66,11 @@ case. Everything not named remains open at the priority shown in the matrix.
   handler removal, bidirectional queues, and repeated enable/disable cycles.
 - API Studio and Traffic: NC-PROTO-008, NC-PROTO-009, NC-TRAF-001, and NC-TRAF-002. HTTP, WebSocket, GraphQL
   WebSocket, and gRPC now share one conditions-aware, fail-closed proxy-routing decision.
+- Protocol-aware rules: priority and semantic precedence, invalid-extension fallback, GraphQL HTTP operation/type
+  matching, bounded aggregation, HTTP/2 bridge metadata, stored-Traffic-annotation-first semantic quick-add,
+  GraphQL WebSocket multiplexed
+  subscribe/next/complete correlation, compression, live enable, timeout/delay cancellation, and ordered
+  breakpoint-plus-condition transform composition.
 - ViewModel/presentation: NC-UI-001, NC-UI-002, NC-UI-003, NC-UI-006, NC-UI-012, NC-UI-013, and NC-UI-015.
 - Telemetry and Android host policy: NC-TEL-002, NC-TEL-003, NC-TEL-004, NC-TEL-005, NC-AND-001, NC-AND-002,
   and NC-AND-003.
@@ -87,6 +93,12 @@ built-ins.
   application-shutdown integration assertion remains open.
 - NC-PROTO-003 has generic binary WebSocket frame identity/order coverage. Its complete frame/control/lifecycle
   matrix remains open.
+- NC-PROTO-004 now covers operation isolation, subscribe-to-next/complete correlation, compressed messages, live
+  enable, timeout holding, delayed-message cancellation, and destination fallback. Error termination, fragmented
+  semantic messages, long-running bandwidth timing, rapid rule churn, and peer-close races remain open.
+- NC-PROTO-001 and NC-PROTO-002 now cover semantic request selection and fail-closed oversized-body fallback,
+  including HTTP/2 bridge metadata. Their full streaming, multiplexing, cancellation, and timing matrices remain
+  open.
 - NC-TEL-001 now proves the sampler derives exactly 100 kbps from released byte deltas, but a single real shaper-to-
   graph integration test remains open.
 
@@ -119,6 +131,10 @@ boundary or failure mode:
 - Android host-side aggregate UDP bandwidth, independent directions, deterministic loss/duplication/reordering,
   duplicate-aware bandwidth accounting, bounded queues, stable protected UDP flows, and idle socket eviction;
 - navigation presence and desktop product packet-policy mapping.
+- semantic condition registry ordering and body-inspection eligibility; HTTP exact/segment-prefix paths with query
+  exclusion; native-gRPC service/method identity; generic WebSocket path, subprotocol, direction, and message kind;
+  fail-closed malformed criteria; streaming requests that remain unaggregated beside GraphQL rules; and a bounded
+  fragmented ordinary-WebSocket runtime path.
 
 ## Priority definitions
 
@@ -148,7 +164,7 @@ boundary or failure mode:
 
 | ID | Priority | Missing or partial case | Required assertion |
 | --- | --- | --- | --- |
-| NC-DB-001 | P0 | Room migration into current schema 31 | Open representative databases from every supported upgrade origin, especially the schema where Network Conditions tables first appeared and versions 29, 30, and 31. Preserve valid settings, profiles, rules, and indexes. |
+| NC-DB-001 | P0 | Room migration into current schema 32 | Open representative databases from every supported upgrade origin, especially the schema where Network Conditions tables first appeared and versions 29, 30, and 31 into 32. Preserve valid settings, profiles, rules, semantic criteria, priorities, and indexes. |
 | NC-DB-002 | P0 | Fresh database versus migrated database equivalence | Both paths must expose equivalent defaults, constraints, indexes, and repository snapshots. |
 | NC-DB-003 | P0 | Atomic profile deletion protection | A profile referenced by the global selection or any enabled/disabled rule must not be deleted. A quick-add-only reference must be cleared safely when its profile is deleted, without exposing an invalid snapshot. |
 | NC-DB-004 | P1 | Reset persistence contract | Reset must disable shaping and clear the global selection while retaining saved custom profiles and domain rules across restart. |

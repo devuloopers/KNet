@@ -43,59 +43,58 @@ fun CertificateMetricsBar(
     val metricsScrollState = rememberScrollState()
     val colors = KNetTheme.colors
 
-    Box(modifier = modifier.fillMaxWidth()) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(metricsScrollState)
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-            .padding(bottom = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        MetricCard(
-            value = totalCerts.toString(),
-            title = "Certificates",
-            subtitle = "Total imported certificates",
-            icon = Icons.Default.WorkspacePremium,
-            iconBgColor = colors.semantic.infoContainer,
-            iconTintColor = colors.semantic.info,
-            modifier = Modifier.widthIn(min = 160.dp)
-        )
+    Column(modifier = modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(metricsScrollState)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            MetricCard(
+                value = totalCerts.toString(),
+                title = "Certificates",
+                subtitle = "Total imported certificates",
+                icon = Icons.Default.WorkspacePremium,
+                iconBgColor = colors.semantic.infoContainer,
+                iconTintColor = colors.semantic.info,
+                modifier = Modifier.widthIn(min = 160.dp)
+            )
 
-        MetricCard(
-            value = totalDomains.toString(),
-            title = "Domains",
-            subtitle = "Configured mTLS domains",
-            icon = Icons.Default.Language,
-            iconBgColor = colors.accent.copy(alpha = 0.14f),
-            iconTintColor = colors.accent,
-            modifier = Modifier.widthIn(min = 160.dp)
-        )
+            MetricCard(
+                value = totalDomains.toString(),
+                title = "Domains",
+                subtitle = "Configured mTLS domains",
+                icon = Icons.Default.Language,
+                iconBgColor = colors.accent.copy(alpha = 0.14f),
+                iconTintColor = colors.accent,
+                modifier = Modifier.widthIn(min = 160.dp)
+            )
 
-        MetricCard(
-            value = expiringSoon.toString(),
-            title = "Needs Attention",
-            subtitle = "Expired or within 30 days",
-            icon = Icons.Default.Event,
-            iconBgColor = colors.semantic.warningContainer,
-            iconTintColor = colors.semantic.warning,
-            modifier = Modifier.widthIn(min = 160.dp)
-        )
+            MetricCard(
+                value = expiringSoon.toString(),
+                title = "Needs Attention",
+                subtitle = "Expired or within 30 days",
+                icon = Icons.Default.Event,
+                iconBgColor = colors.semantic.warningContainer,
+                iconTintColor = colors.semantic.warning,
+                modifier = Modifier.widthIn(min = 160.dp)
+            )
 
-        MetricCard(
-            value = activeCount.toString(),
-            title = "Active",
-            subtitle = "Currently in use",
-            icon = Icons.Default.VerifiedUser,
-            iconBgColor = colors.semantic.successContainer,
-            iconTintColor = colors.semantic.success,
-            modifier = Modifier.widthIn(min = 160.dp)
+            MetricCard(
+                value = activeCount.toString(),
+                title = "Active",
+                subtitle = "Currently in use",
+                icon = Icons.Default.VerifiedUser,
+                iconBgColor = colors.semantic.successContainer,
+                iconTintColor = colors.semantic.success,
+                modifier = Modifier.widthIn(min = 160.dp)
+            )
+        }
+        KNetHorizontalScrollbar(
+            scrollState = metricsScrollState,
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
         )
-    }
-    KNetHorizontalScrollbar(
-        scrollState = metricsScrollState,
-        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 16.dp),
-    )
     }
 }
 

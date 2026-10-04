@@ -23,6 +23,8 @@ import com.devuloopers.knet.engine.proxy.inspection.ProxyDuplexInspectorFactory
 import com.devuloopers.knet.engine.proxy.inspection.ProxyDuplexTransformerFactory
 import com.devuloopers.knet.engine.simulator.NetworkConditionChannelHandler
 import com.devuloopers.knet.engine.simulator.NetworkConditionEngine
+import com.devuloopers.knet.engine.simulator.NetworkConditionRequestAggregator
+import com.devuloopers.knet.application.usecase.networkconditions.NetworkConditionSemanticResolver
 
 /**
  * Desktop runtime coordinator managing Netty proxy server lifecycle.
@@ -37,6 +39,7 @@ class ProxyRuntimeRepository(
     private val duplexInspectorFactories: List<ProxyDuplexInspectorFactory> = emptyList(),
     private val duplexTransformerFactories: List<ProxyDuplexTransformerFactory> = emptyList(),
     private val networkConditionEngine: NetworkConditionEngine? = null,
+    private val networkConditionSemanticResolver: NetworkConditionSemanticResolver? = null,
     private val tlsInterceptionPolicy: TlsInterceptionPolicy = TlsInterceptionPolicy.InspectAll,
 ) {
     constructor(
@@ -50,6 +53,7 @@ class ProxyRuntimeRepository(
         duplexInspectorFactories: List<ProxyDuplexInspectorFactory> = emptyList(),
         duplexTransformerFactories: List<ProxyDuplexTransformerFactory> = emptyList(),
         networkConditionEngine: NetworkConditionEngine? = null,
+        networkConditionSemanticResolver: NetworkConditionSemanticResolver? = null,
         tlsInterceptionPolicy: TlsInterceptionPolicy = TlsInterceptionPolicy.InspectAll,
     ) : this(
         serverTlsContextProvider = DesktopServerTlsContextProvider(certificateAuthority, certificateCache),
@@ -61,6 +65,7 @@ class ProxyRuntimeRepository(
         duplexInspectorFactories = duplexInspectorFactories,
         duplexTransformerFactories = duplexTransformerFactories,
         networkConditionEngine = networkConditionEngine,
+        networkConditionSemanticResolver = networkConditionSemanticResolver,
         tlsInterceptionPolicy = tlsInterceptionPolicy,
     )
 
@@ -95,7 +100,16 @@ class ProxyRuntimeRepository(
 
             val pipelineInitializers = listOf<(io.netty.channel.ChannelPipeline) -> Unit>({ pipeline ->
                 networkConditionEngine?.let { engine ->
-                    pipeline.addLast("knetNetworkConditions", NetworkConditionChannelHandler(engine))
+                    networkConditionSemanticResolver?.let { resolver ->
+                        pipeline.addLast(
+                            PipelineHandlerNames.NETWORK_CONDITION_AGGREGATOR,
+                            NetworkConditionRequestAggregator(engine, resolver),
+                        )
+                    }
+                    pipeline.addLast(
+                        PipelineHandlerNames.NETWORK_CONDITIONS,
+                        NetworkConditionChannelHandler(engine, networkConditionSemanticResolver),
+                    )
                 }
                 pipeline.addLast(
                     PipelineHandlerNames.SELECTIVE_HTTP_AGGREGATOR,

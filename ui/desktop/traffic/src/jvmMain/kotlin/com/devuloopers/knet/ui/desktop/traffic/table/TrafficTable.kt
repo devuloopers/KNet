@@ -206,129 +206,135 @@ fun TrafficTable(
                     )
                 }
 
-                Box(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f),
                 ) {
-                    if (transactions.isEmpty()) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = "No captured traffic matching current filters",
-                                style = typography.caption,
-                                color = themeColors.textSecondary,
-                                maxLines = 1,
-                                softWrap = false,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    } else {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .horizontalScroll(horizontalScrollState),
-                        ) {
-                            LazyColumn(
-                                state = listState,
-                                modifier = Modifier
-                                    .width(columnLayout.tableWidthDp.dp)
-                                    .fillMaxHeight(),
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f),
+                    ) {
+                        if (transactions.isEmpty()) {
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
                             ) {
-                                items(
-                                    items = transactions,
-                                    key = { it.transactionId }
-                                ) { item ->
-                                    val contextMenuItems = remember(item) {
-                                        buildList {
-                                            if (item.rowKind == TrafficRowKind.HTTP_EXCHANGE) {
-                                                add(
-                                                    ContextMenuItem(
-                                                        label = "Send to API Studio",
-                                                        icon = KNetIcons.Send,
-                                                    ) {
-                                                        onSendToApiStudio(item.transactionId)
-                                                    },
-                                                )
-                                            }
-                                            if (item.rowKind == TrafficRowKind.OPAQUE_FLOW) {
-                                                if (item.sourceApplicationId != null) {
+                                Text(
+                                    text = "No captured traffic matching current filters",
+                                    style = typography.caption,
+                                    color = themeColors.textSecondary,
+                                    maxLines = 1,
+                                    softWrap = false,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .horizontalScroll(horizontalScrollState),
+                            ) {
+                                LazyColumn(
+                                    state = listState,
+                                    modifier = Modifier
+                                        .width(columnLayout.tableWidthDp.dp)
+                                        .fillMaxHeight(),
+                                ) {
+                                    items(
+                                        items = transactions,
+                                        key = { it.transactionId }
+                                    ) { item ->
+                                        val contextMenuItems = remember(item) {
+                                            buildList {
+                                                if (item.rowKind == TrafficRowKind.HTTP_EXCHANGE) {
                                                     add(
-                                                        ContextMenuItem(label = "Always tunnel this application") {
+                                                        ContextMenuItem(
+                                                            label = "Send to API Studio",
+                                                            icon = KNetIcons.Send,
+                                                        ) {
+                                                            onSendToApiStudio(item.transactionId)
+                                                        },
+                                                    )
+                                                }
+                                                if (item.rowKind == TrafficRowKind.OPAQUE_FLOW) {
+                                                    if (item.sourceApplicationId != null) {
+                                                        add(
+                                                            ContextMenuItem(label = "Always tunnel this application") {
+                                                                onProtectedTrafficAction(
+                                                                    item.transactionId,
+                                                                    ProtectedTrafficAction.TUNNEL,
+                                                                    ProtectedTrafficQuickRuleScope.SOURCE_APPLICATION,
+                                                                )
+                                                            },
+                                                        )
+                                                    }
+                                                    add(
+                                                        ContextMenuItem(label = "Always tunnel this destination") {
                                                             onProtectedTrafficAction(
                                                                 item.transactionId,
                                                                 ProtectedTrafficAction.TUNNEL,
-                                                                ProtectedTrafficQuickRuleScope.SOURCE_APPLICATION,
+                                                                ProtectedTrafficQuickRuleScope.DESTINATION,
                                                             )
+                                                        },
+                                                    )
+                                                    add(
+                                                        ContextMenuItem(label = "Attempt inspection next time") {
+                                                            onProtectedTrafficAction(
+                                                                item.transactionId,
+                                                                ProtectedTrafficAction.INSPECT,
+                                                                ProtectedTrafficQuickRuleScope.DESTINATION,
+                                                            )
+                                                        },
+                                                    )
+                                                    add(
+                                                        ContextMenuItem(label = "Block this destination") {
+                                                            onProtectedTrafficAction(
+                                                                item.transactionId,
+                                                                ProtectedTrafficAction.BLOCK,
+                                                                ProtectedTrafficQuickRuleScope.DESTINATION,
+                                                            )
+                                                        },
+                                                    )
+                                                    add(
+                                                        ContextMenuItem(label = "Copy destination") {
+                                                            onCopyDestination(item.host)
                                                         },
                                                     )
                                                 }
                                                 add(
-                                                    ContextMenuItem(label = "Always tunnel this destination") {
-                                                        onProtectedTrafficAction(
-                                                            item.transactionId,
-                                                            ProtectedTrafficAction.TUNNEL,
-                                                            ProtectedTrafficQuickRuleScope.DESTINATION,
-                                                        )
-                                                    },
-                                                )
-                                                add(
-                                                    ContextMenuItem(label = "Attempt inspection next time") {
-                                                        onProtectedTrafficAction(
-                                                            item.transactionId,
-                                                            ProtectedTrafficAction.INSPECT,
-                                                            ProtectedTrafficQuickRuleScope.DESTINATION,
-                                                        )
-                                                    },
-                                                )
-                                                add(
-                                                    ContextMenuItem(label = "Block this destination") {
-                                                        onProtectedTrafficAction(
-                                                            item.transactionId,
-                                                            ProtectedTrafficAction.BLOCK,
-                                                            ProtectedTrafficQuickRuleScope.DESTINATION,
-                                                        )
-                                                    },
-                                                )
-                                                add(
-                                                    ContextMenuItem(label = "Copy destination") {
-                                                        onCopyDestination(item.host)
-                                                    },
-                                                )
-                                            }
-                                            add(
-                                            ContextMenuItem(
-                                                label = "Add to Network Conditions...",
-                                                icon = KNetIcons.Speed
-                                            ) {
-                                                onAddNetworkCondition(item.transactionId)
-                                            },
-                                            )
-                                            if (item.rowKind == TrafficRowKind.HTTP_EXCHANGE) {
-                                                add(
                                                     ContextMenuItem(
-                                                        label = "Add Breakpoint Rule",
-                                                        icon = KNetIcons.Pause,
+                                                        label = "Add to Network Conditions...",
+                                                        icon = KNetIcons.Speed
                                                     ) {
-                                                        onAddBreakpointRule(item.transactionId)
+                                                        onAddNetworkCondition(item.transactionId)
                                                     },
                                                 )
+                                                if (item.rowKind == TrafficRowKind.HTTP_EXCHANGE) {
+                                                    add(
+                                                        ContextMenuItem(
+                                                            label = "Add Breakpoint Rule",
+                                                            icon = KNetIcons.Pause,
+                                                        ) {
+                                                            onAddBreakpointRule(item.transactionId)
+                                                        },
+                                                    )
+                                                }
                                             }
                                         }
-                                    }
 
-                                    KNetContextMenuArea(items = contextMenuItems) {
-                                        TableRowItem(
-                                            item = item,
-                                            isSelected = item.transactionId == selectedId,
-                                            columnVisibility = columnVisibility,
-                                            columnLayout = columnLayout,
-                                            todayDate = todayDateState.value,
-                                            activeRules = activeRules,
-                                            onClick = { onSelectTransaction(item.transactionId) }
-                                        )
+                                        KNetContextMenuArea(items = contextMenuItems) {
+                                            TableRowItem(
+                                                item = item,
+                                                isSelected = item.transactionId == selectedId,
+                                                columnVisibility = columnVisibility,
+                                                columnLayout = columnLayout,
+                                                todayDate = todayDateState.value,
+                                                activeRules = activeRules,
+                                                onClick = { onSelectTransaction(item.transactionId) }
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -339,13 +345,11 @@ fun TrafficTable(
                                 .align(Alignment.CenterEnd)
                                 .fillMaxHeight(),
                         )
-                        KNetHorizontalScrollbar(
-                            scrollState = horizontalScrollState,
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .fillMaxWidth(),
-                        )
                     }
+                    KNetHorizontalScrollbar(
+                        scrollState = horizontalScrollState,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                 }
             }
         }

@@ -6,17 +6,24 @@ import java.io.ByteArrayOutputStream
 import java.util.zip.DataFormatException
 import java.util.zip.Inflater
 
-/** Negotiated RFC 7692 settings that affect decoding independently in each direction. */
-internal data class WebSocketPerMessageDeflateNegotiation(
+/**
+ * Negotiated RFC 7692 settings that affect decoding independently in each direction.
+ *
+ * @property clientNoContextTakeover Whether client-to-server messages reset their inflater.
+ * @property serverNoContextTakeover Whether server-to-client messages reset their inflater.
+ */
+data class WebSocketPerMessageDeflateNegotiation(
     val clientNoContextTakeover: Boolean,
     val serverNoContextTakeover: Boolean,
 ) {
+    /** Returns the negotiated context-takeover behavior for [direction]. */
     fun noContextTakeover(direction: TrafficDirection): Boolean = when (direction) {
         TrafficDirection.CLIENT_TO_SERVER -> clientNoContextTakeover
         TrafficDirection.SERVER_TO_CLIENT -> serverNoContextTakeover
     }
 
     companion object {
+        /** Parses the selected per-message deflate parameters from response [headers]. */
         fun fromResponseHeaders(headers: List<HeaderField>): WebSocketPerMessageDeflateNegotiation? {
             val extension = headers
                 .asSequence()
@@ -43,8 +50,12 @@ internal data class WebSocketPerMessageDeflateNegotiation(
     }
 }
 
-internal sealed interface WebSocketInflateResult {
+/** Bounded result of inflating one complete compressed WebSocket message. */
+sealed interface WebSocketInflateResult {
+    /** Successfully decoded logical message payload. */
     data class Success(val payload: ByteArray) : WebSocketInflateResult
+
+    /** Stable validation or output-bound failure. */
     data class Failure(val errorCode: String) : WebSocketInflateResult
 }
 
@@ -54,7 +65,7 @@ internal sealed interface WebSocketInflateResult {
  * The inflater is deliberately direction-scoped because context takeover dictionaries must never
  * cross the client/server boundary. Output is bounded before it is retained by capture or rules.
  */
-internal class WebSocketPerMessageDeflateDecoder(
+class WebSocketPerMessageDeflateDecoder(
     private val noContextTakeover: Boolean,
     private val maximumOutputBytes: Int,
 ) : AutoCloseable {
@@ -65,6 +76,7 @@ internal class WebSocketPerMessageDeflateDecoder(
         require(maximumOutputBytes > 0) { "Maximum inflated WebSocket bytes must be positive." }
     }
 
+    /** Decodes one complete RFC 7692 message [payload] using the negotiated direction state. */
     fun decode(payload: ByteArray): WebSocketInflateResult {
         if (closed) return WebSocketInflateResult.Failure(INFLATER_CLOSED)
         val output = ByteArrayOutputStream(minOf(payload.size.coerceAtLeast(32), maximumOutputBytes))

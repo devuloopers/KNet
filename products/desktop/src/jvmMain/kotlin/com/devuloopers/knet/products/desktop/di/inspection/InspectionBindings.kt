@@ -2,6 +2,7 @@ package com.devuloopers.knet.products.desktop.di.inspection
 
 import com.devuloopers.knet.application.contract.inspection.*
 import com.devuloopers.knet.application.contract.breakpoint.BreakpointProtocolExtension
+import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolExtension
 import com.devuloopers.knet.application.coordinator.inspection.SemanticInspectionScheduler
 import com.devuloopers.knet.application.usecase.inspection.ObserveInspectionAnnotationsUseCase
 import com.devuloopers.knet.data.desktop.inspection.DesktopSemanticInspectionRuntime
@@ -9,6 +10,8 @@ import com.devuloopers.knet.data.desktop.inspection.RoomInspectionAnnotationAdap
 import com.devuloopers.knet.engine.protocol.inspector.graphql.GraphQLBreakpointExtension
 import com.devuloopers.knet.engine.protocol.inspector.graphql.GraphQLDocumentParser
 import com.devuloopers.knet.engine.protocol.inspector.graphql.GraphQLSemanticInspector
+import com.devuloopers.knet.engine.protocol.inspector.graphql.GraphQLNetworkConditionExtension
+import com.devuloopers.knet.engine.protocol.http.HttpNetworkConditionExtension
 import com.devuloopers.knet.engine.sse.inspection.SseProtocolMessageDecoder
 import com.devuloopers.knet.engine.sse.inspection.SseSemanticInspector
 import com.devuloopers.knet.engine.sse.breakpoint.SseBreakpointExtension
@@ -16,10 +19,13 @@ import com.devuloopers.knet.engine.sse.protocol.SseLimits
 import com.devuloopers.knet.engine.grpc.GrpcDescriptorRegistry
 import com.devuloopers.knet.engine.grpc.GrpcProtocolMessageDecoder
 import com.devuloopers.knet.engine.grpc.GrpcBreakpointExtension
+import com.devuloopers.knet.engine.grpc.GrpcNetworkConditionExtension
 import com.devuloopers.knet.engine.graphqlwebsocket.breakpoint.GraphQLWebSocketBreakpointExtension
+import com.devuloopers.knet.engine.graphqlwebsocket.networkconditions.GraphQLWebSocketNetworkConditionExtension
 import com.devuloopers.knet.engine.graphqlwebsocket.inspection.GraphQLWebSocketProtocolMessageDecoder
 import com.devuloopers.knet.engine.graphqlwebsocket.protocol.GraphQLWebSocketEnvelopeParser
 import com.devuloopers.knet.engine.websocket.WebSocketBreakpointExtension
+import com.devuloopers.knet.engine.websocket.WebSocketNetworkConditionExtension
 import com.devuloopers.knet.engine.websocket.WebSocketProtocolMessageDecoder
 import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePayloadDecoder
 import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePresentationRegistry
@@ -40,9 +46,14 @@ internal val inspectionBindings: Module = module {
     single { ProtocolMessagePresentationRegistry(getAll<ProtocolMessagePayloadDecoder>()) }
     single { GraphQLDocumentParser() }
     single { GraphQLBreakpointExtension(get()) } bind BreakpointProtocolExtension::class
+    single { HttpNetworkConditionExtension() } bind NetworkConditionProtocolExtension::class
+    single { GraphQLNetworkConditionExtension(get()) } bind NetworkConditionProtocolExtension::class
     single { GrpcBreakpointExtension() } bind BreakpointProtocolExtension::class
+    single { GrpcNetworkConditionExtension() } bind NetworkConditionProtocolExtension::class
     single { WebSocketBreakpointExtension() } bind BreakpointProtocolExtension::class
+    single { WebSocketNetworkConditionExtension() } bind NetworkConditionProtocolExtension::class
     single { GraphQLWebSocketBreakpointExtension(get()) } bind BreakpointProtocolExtension::class
+    single { GraphQLWebSocketNetworkConditionExtension(get()) } bind NetworkConditionProtocolExtension::class
     single { SseBreakpointExtension(limits = get()) } bind BreakpointProtocolExtension::class
     single { GraphQLSemanticInspector(get()) } bind SemanticInspector::class
     single { SseSemanticInspector(get()) } bind SemanticInspector::class

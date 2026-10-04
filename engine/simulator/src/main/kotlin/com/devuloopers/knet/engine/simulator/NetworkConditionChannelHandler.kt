@@ -1,6 +1,10 @@
 package com.devuloopers.knet.engine.simulator
 
 import com.devuloopers.knet.domain.networkconditions.NetworkFailureBehavior
+import com.devuloopers.knet.domain.networkconditions.EffectiveNetworkCondition
+import com.devuloopers.knet.domain.networkconditions.NetworkConditionMatcher
+import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionHttpInspectionInput
+import com.devuloopers.knet.application.usecase.networkconditions.NetworkConditionSemanticResolver
 import com.devuloopers.knet.engine.proxy.pipeline.ProxyChannelAttributes
 import io.netty.buffer.ByteBuf
 import io.netty.buffer.ByteBufHolder
@@ -8,25 +12,30 @@ import io.netty.channel.ChannelDuplexHandler
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelPromise
 import io.netty.channel.FileRegion
-import io.netty.handler.codec.http.HttpHeaderNames
 import io.netty.handler.codec.http.HttpContent
+import io.netty.handler.codec.http.FullHttpMessage
+import io.netty.handler.codec.http.HttpResponse
 import io.netty.handler.codec.http.HttpRequest
 import io.netty.handler.codec.http.LastHttpContent
 import io.netty.handler.codec.http.DefaultHttpContent
 import io.netty.handler.codec.http.DefaultLastHttpContent
 import io.netty.util.ReferenceCountUtil
 import io.netty.util.concurrent.PromiseCombiner
-import java.net.URI
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 
 /** Request-aware downstream pipeline shaper. Upload is channelRead; download is write. */
 class NetworkConditionChannelHandler(
     private val engine: NetworkConditionEngine,
+    private val semanticResolver: NetworkConditionSemanticResolver? = null,
 ) : ChannelDuplexHandler() {
     private var host: String? = null
     private var port: Int? = null
     private var sequence = 0L
+    private var activeUploadSelection: RequestSelection? = null
+    private var activeDownloadSelection: RequestSelection? = null
+    private var activeDownloadIsFinalResponse: Boolean = false
+    private val responseSelections = ArrayDeque<RequestSelection>()
     private var flow: AutoCloseable? = null
     private var configurationSubscription: AutoCloseable? = null
     private var pendingBytes = 0L
@@ -41,7 +50,10 @@ class NetworkConditionChannelHandler(
     override fun handlerAdded(context: ChannelHandlerContext) {
         configurationSubscription = engine.observeConfigurationChanges {
             context.executor().execute {
-                if (!closed && context.channel().isActive) reapplyQueued(context)
+                if (!closed && context.channel().isActive) {
+                    refreshSelections()
+                    reapplyQueued(context)
+                }
             }
         }
     }
@@ -52,12 +64,35 @@ class NetworkConditionChannelHandler(
     }
 
     override fun channelRead(context: ChannelHandlerContext, message: Any) {
-        if (message is HttpRequest) resolveDestination(context, message)
-        shape(context, message, null, NetworkConditionDirection.UPLOAD)
+        val selection = when (message) {
+            is HttpRequest -> selectRequest(context, message).also { selected ->
+                activeUploadSelection = selected
+                if (selected != null && !message.method().name().equals("CONNECT", ignoreCase = true)) {
+                    responseSelections.addLast(selected)
+                }
+            }
+            is HttpContent -> activeUploadSelection
+            else -> null
+        }
+        shape(context, message, null, NetworkConditionDirection.UPLOAD, selection)
+        if (message is LastHttpContent) activeUploadSelection = null
     }
 
     override fun write(context: ChannelHandlerContext, message: Any, promise: ChannelPromise) {
-        shape(context, message, promise, NetworkConditionDirection.DOWNLOAD)
+        val selection = when (message) {
+            is HttpResponse -> responseSelections.firstOrNull().also {
+                activeDownloadSelection = it
+                activeDownloadIsFinalResponse = message.status().code() !in 100..199 || message.status().code() == 101
+            }
+            is HttpContent -> activeDownloadSelection
+            else -> null
+        }
+        shape(context, message, promise, NetworkConditionDirection.DOWNLOAD, selection)
+        if (message is LastHttpContent && activeDownloadIsFinalResponse) {
+            responseSelections.removeFirstOrNull()
+            activeDownloadSelection = null
+            activeDownloadIsFinalResponse = false
+        }
     }
 
     override fun channelInactive(context: ChannelHandlerContext) {
@@ -78,20 +113,28 @@ class NetworkConditionChannelHandler(
         message: Any,
         promise: ChannelPromise?,
         direction: NetworkConditionDirection,
+        selection: RequestSelection? = null,
     ) {
-        val destinationHost = host ?: context.channel().attr(ProxyChannelAttributes.ROUTE_HOST).get()
-        val destinationPort = port ?: context.channel().attr(ProxyChannelAttributes.PORT).get()
+        val destinationHost = selection?.host ?: host ?: context.channel().attr(ProxyChannelAttributes.ROUTE_HOST).get()
+        val destinationPort = selection?.port ?: port ?: context.channel().attr(ProxyChannelAttributes.PORT).get()
         if (destinationHost == null || destinationPort == null) {
             forward(context, message, promise, direction)
             return
         }
         context.channel().attr(ProxyChannelAttributes.APPLIED_NETWORK_CONDITION).set(
-            engine.appliedCondition(destinationHost, destinationPort),
+            selection?.effective?.let(engine::appliedCondition)
+                ?: engine.appliedCondition(destinationHost, destinationPort),
         )
         val bytes = readableBytes(message)
-        val mtu = engine.virtualMtu(destinationHost, destinationPort)
-        if (mtu != null && bytes > mtu && splitAndShape(context, message, promise, direction, mtu)) return
-        when (val plan = engine.plan(destinationHost, destinationPort, direction, bytes, ++sequence)) {
+        val mtu = selection?.effective?.let(engine::virtualMtu)
+            ?: engine.virtualMtu(destinationHost, destinationPort)
+        if (mtu != null && bytes > mtu &&
+            splitAndShape(context, message, promise, direction, mtu, selection)
+        ) return
+        val plan = selection?.effective?.let { effective ->
+            engine.plan(effective, direction, bytes, ++sequence)
+        } ?: engine.plan(destinationHost, destinationPort, direction, bytes, ++sequence)
+        when (plan) {
             NetworkConditionPlan.PassThrough -> {
                 if (!engine.conditionsEnabled() && queue(direction).isNotEmpty()) {
                     releaseQueuedImmediately(direction)
@@ -99,7 +142,7 @@ class NetworkConditionChannelHandler(
                 } else if (queue(direction).isEmpty()) {
                     forward(context, message, promise, direction)
                 } else {
-                    schedule(context, message, promise, direction, bytes, deadline(direction))
+                    schedule(context, message, promise, direction, bytes, deadline(direction), selection)
                 }
             }
             is NetworkConditionPlan.Fail -> fail(context, message, promise, plan.behavior)
@@ -112,7 +155,7 @@ class NetworkConditionChannelHandler(
                 }
                 val due = maxOf(deadline(direction), plannedDue)
                 setDeadline(direction, due)
-                schedule(context, message, promise, direction, bytes, due)
+                schedule(context, message, promise, direction, bytes, due, selection)
             }
         }
     }
@@ -123,7 +166,11 @@ class NetworkConditionChannelHandler(
         promise: ChannelPromise?,
         direction: NetworkConditionDirection,
         maximumChunkBytes: Int,
+        selection: RequestSelection?,
     ): Boolean {
+        // A full request/response owns its head and trailers as one object. Splitting only its ByteBuf would erase
+        // that metadata; protocol-aware aggregated messages therefore remain one safe scheduling unit.
+        if (message is FullHttpMessage) return false
         val chunks = when (message) {
             is LastHttpContent -> splitLastHttpContent(message, maximumChunkBytes)
             is HttpContent -> splitHttpContent(message, maximumChunkBytes)
@@ -136,13 +183,13 @@ class NetworkConditionChannelHandler(
         }
         ReferenceCountUtil.release(message)
         if (promise == null) {
-            chunks.forEach { chunk -> shape(context, chunk, null, direction) }
+            chunks.forEach { chunk -> shape(context, chunk, null, direction, selection) }
         } else {
             val combiner = PromiseCombiner(context.executor())
             chunks.forEach { chunk ->
                 val childPromise = context.newPromise()
                 combiner.add(childPromise)
-                shape(context, chunk, childPromise, direction)
+                shape(context, chunk, childPromise, direction, selection)
             }
             combiner.finish(promise)
         }
@@ -185,6 +232,7 @@ class NetworkConditionChannelHandler(
         direction: NetworkConditionDirection,
         bytes: Int,
         dueNanos: Long,
+        selection: RequestSelection?,
     ) {
         if (pendingBytes > MAXIMUM_FLOW_QUEUED_BYTES - bytes || !engine.tryQueue(bytes)) {
             engine.recordFaultedFlow()
@@ -193,7 +241,7 @@ class NetworkConditionChannelHandler(
         }
         pendingBytes += bytes
         val queue = queue(direction)
-        queue.addLast(PendingForward(context, message, promise, bytes, dueNanos))
+        queue.addLast(PendingForward(context, message, promise, bytes, dueNanos, selection))
         if (queue.size == 1) {
             scheduleHead(
                 direction = direction,
@@ -313,7 +361,7 @@ class NetworkConditionChannelHandler(
         pending.forEach { item ->
             pendingBytes = (pendingBytes - item.bytes).coerceAtLeast(0L)
             engine.abandon(item.bytes)
-            shape(context, item.message, item.promise, direction)
+            shape(context, item.message, item.promise, direction, item.selection)
         }
     }
 
@@ -352,23 +400,74 @@ class NetworkConditionChannelHandler(
         if (behavior != NetworkFailureBehavior.Timeout) context.close()
     }
 
-    private fun resolveDestination(context: ChannelHandlerContext, request: HttpRequest) {
-        val absolute = runCatching { URI.create(request.uri()) }.getOrNull()
-        if (absolute?.host != null) {
-            host = absolute.host
-            port = absolute.port.takeIf { it > 0 } ?: if (absolute.scheme.equals("https", true)) 443 else 80
-            return
+    /** Resolves semantic criteria once per request and retains only bounded immutable input for live policy edits. */
+    private fun selectRequest(context: ChannelHandlerContext, request: HttpRequest): RequestSelection? {
+        val destination = resolveNetworkConditionDestination(context, request)
+        val destinationHost = destination?.host
+            ?: context.channel().attr(ProxyChannelAttributes.ROUTE_HOST).get()
+        if (destinationHost == null) {
+            host = null
+            port = null
+            context.channel().attr(ProxyChannelAttributes.APPLIED_NETWORK_CONDITION).set(null)
+            return null
         }
-        val authority = if (request.method().name().equals("CONNECT", true)) {
-            request.uri()
-        } else {
-            request.headers()[HttpHeaderNames.HOST]
-        } ?: return
-        val parsed = runCatching { URI.create("http://$authority") }.getOrNull() ?: return
-        host = parsed.host ?: context.channel().attr(ProxyChannelAttributes.ROUTE_HOST).get()
-        port = parsed.port.takeIf { it > 0 }
+        val destinationPort = destination?.port
             ?: context.channel().attr(ProxyChannelAttributes.PORT).get()
             ?: if (context.channel().attr(ProxyChannelAttributes.IS_SSL).get() == true) 443 else 80
+        host = destinationHost
+        port = destinationPort
+        val semanticInput = destination?.takeUnless {
+            request.method().name().equals("CONNECT", ignoreCase = true)
+        }?.let { resolved ->
+            if (request is io.netty.handler.codec.http.FullHttpRequest) {
+                networkConditionInspectionInput(context, request, resolved)
+            } else {
+                NetworkConditionHttpInspectionInput(
+                    request = networkConditionRequestSnapshot(context, request, resolved),
+                    requestBody = null,
+                    requestBodyComplete = false,
+                )
+            }
+        }
+        return RequestSelection(
+            host = destinationHost,
+            port = destinationPort,
+            semanticInput = semanticInput,
+            effective = resolveSelection(destinationHost, destinationPort, semanticInput),
+        ).also { selection ->
+            context.channel().attr(ProxyChannelAttributes.APPLIED_NETWORK_CONDITION).set(
+                engine.appliedCondition(selection.effective),
+            )
+        }
+    }
+
+    private fun resolveSelection(
+        destinationHost: String,
+        destinationPort: Int,
+        semanticInput: NetworkConditionHttpInspectionInput?,
+    ): EffectiveNetworkCondition? = if (semanticInput != null && semanticResolver != null) {
+        semanticResolver.resolveHttp(
+            configuration = engine.configurationSnapshot(),
+            host = destinationHost,
+            port = destinationPort,
+            input = semanticInput,
+        )
+    } else {
+        NetworkConditionMatcher.resolve(engine.configurationSnapshot(), destinationHost, destinationPort)
+    }
+
+    /** Re-evaluates semantic criteria once after a live edit before queued units are replanned. */
+    private fun refreshSelections() {
+        val selections = buildSet {
+            activeUploadSelection?.let(::add)
+            activeDownloadSelection?.let(::add)
+            addAll(responseSelections)
+            uploadQueue.mapNotNullTo(this) { pending -> pending.selection }
+            downloadQueue.mapNotNullTo(this) { pending -> pending.selection }
+        }
+        selections.forEach { selection ->
+            selection.effective = resolveSelection(selection.host, selection.port, selection.semanticInput)
+        }
     }
 
     private fun closeFlow() {
@@ -396,6 +495,15 @@ class NetworkConditionChannelHandler(
         val promise: ChannelPromise?,
         val bytes: Int,
         val dueNanos: Long,
+        val selection: RequestSelection?,
+    )
+
+    /** Event-loop-confined request selection shared with its ordered response and pending units. */
+    private class RequestSelection(
+        val host: String,
+        val port: Int,
+        val semanticInput: NetworkConditionHttpInspectionInput?,
+        var effective: EffectiveNetworkCondition?,
     )
 
     private companion object {

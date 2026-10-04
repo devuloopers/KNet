@@ -119,6 +119,23 @@ public fun HttpRequestSnapshot.absoluteUrlWithoutPort(): String = when (val targ
     is RequestTarget.Custom -> target.value
 }
 
+/**
+ * Returns the raw origin path without its query string, when the request target carries one.
+ *
+ * The value is intentionally not URL-decoded or normalized so protocol rules cannot silently change request
+ * identity. Authority-form, asterisk-form, and non-origin custom targets return null.
+ */
+public fun HttpRequestSnapshot.pathWithoutQuery(): String? = when (val target = head.target) {
+    is RequestTarget.Absolute -> target.pathAndQuery.substringBefore('?').ifBlank { "/" }
+    is RequestTarget.Origin -> target.pathAndQuery.substringBefore('?').ifBlank { "/" }
+    is RequestTarget.Custom -> target.value.takeIf { value -> value.startsWith('/') }
+        ?.substringBefore('?')
+        ?.ifBlank { "/" }
+    is RequestTarget.AuthorityForm,
+    RequestTarget.Asterisk,
+    -> null
+}
+
 /** Returns the destination port retained by the typed request target, when one is available. */
 public fun HttpRequestSnapshot.destinationPort(): Int? = when (val target = head.target) {
     is RequestTarget.Absolute -> target.authority.port

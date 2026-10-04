@@ -18,6 +18,7 @@ import com.devuloopers.knet.engine.websocket.WebSocketBreakpointTransformerFacto
 import com.devuloopers.knet.engine.websocket.WebSocketDuplexInspectorFactory
 import com.devuloopers.knet.engine.websocket.WebSocketSemanticBreakpointLayer
 import com.devuloopers.knet.engine.graphqlwebsocket.breakpoint.GraphQLWebSocketBreakpointLayer
+import com.devuloopers.knet.engine.websocket.WebSocketNetworkConditionTransformerFactory
 import com.devuloopers.knet.engine.sse.capture.SseStreamInspectorFactory
 import com.devuloopers.knet.engine.sse.breakpoint.SseBreakpointTransformerFactory
 import com.devuloopers.knet.application.contract.breakpoint.ProtocolMessageBreakpointGate
@@ -54,6 +55,13 @@ internal val proxyBindings: Module = module {
         )
     }
     single {
+        WebSocketNetworkConditionTransformerFactory(
+            engine = get(),
+            semanticResolver = get(),
+            scope = get(),
+        )
+    }
+    single {
         val certificates: CertificateRuntimeRepository = get()
         val certificateManager: CertificateManager = get()
         ProxyRuntimeRepository(
@@ -67,8 +75,12 @@ internal val proxyBindings: Module = module {
                 get<SseBreakpointTransformerFactory>(),
             ),
             duplexInspectorFactories = listOf(WebSocketDuplexInspectorFactory()),
-            duplexTransformerFactories = listOf(get<WebSocketBreakpointTransformerFactory>()),
+            duplexTransformerFactories = listOf(
+                get<WebSocketBreakpointTransformerFactory>(),
+                get<WebSocketNetworkConditionTransformerFactory>(),
+            ),
             networkConditionEngine = get<NetworkConditionEngine>(),
+            networkConditionSemanticResolver = get(),
             tlsInterceptionPolicy = get(),
         )
     }

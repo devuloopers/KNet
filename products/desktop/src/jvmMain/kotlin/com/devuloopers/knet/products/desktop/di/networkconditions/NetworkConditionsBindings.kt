@@ -1,9 +1,14 @@
 package com.devuloopers.knet.products.desktop.di.networkconditions
 
+import com.devuloopers.knet.application.contract.inspection.InspectionAnnotationStore
+import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolExtension
+import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolRegistry
 import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionRuntimeTelemetry
 import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionsRepository
 import com.devuloopers.knet.application.contract.traffic.TrafficQuery
 import com.devuloopers.knet.application.usecase.networkconditions.PrepareNetworkConditionRuleUseCase
+import com.devuloopers.knet.application.usecase.networkconditions.NetworkConditionProtocolRuleUseCase
+import com.devuloopers.knet.application.usecase.networkconditions.NetworkConditionSemanticResolver
 import com.devuloopers.knet.data.desktop.networkconditions.RoomNetworkConditionsRepository
 import com.devuloopers.knet.engine.simulator.NetworkConditionEngine
 import com.devuloopers.knet.storage.database.KNetDatabase
@@ -18,6 +23,9 @@ import org.koin.dsl.module
 import kotlinx.coroutines.CoroutineScope
 
 internal val networkConditionsBindings: Module = module {
+    single { NetworkConditionProtocolRegistry(getAll<NetworkConditionProtocolExtension>()) }
+    single { NetworkConditionSemanticResolver(get()) }
+    factory { NetworkConditionProtocolRuleUseCase(get()) }
     single {
         RoomNetworkConditionsRepository(get<KNetDatabase>().networkConditionDao())
     } bind NetworkConditionsRepository::class
@@ -28,12 +36,21 @@ internal val networkConditionsBindings: Module = module {
             scope = get<CoroutineScope>(),
         )
     } bind NetworkConditionRuntimeTelemetry::class
-    factory { PrepareNetworkConditionRuleUseCase(get<TrafficQuery>(), get()) }
+    factory {
+        PrepareNetworkConditionRuleUseCase(
+            trafficQuery = get<TrafficQuery>(),
+            repository = get(),
+            loadTrafficExchangeDetails = get(),
+            protocolRegistry = get(),
+            inspectionAnnotations = get<InspectionAnnotationStore>(),
+        )
+    }
     viewModel {
         NetworkConditionsViewModel(
             repository = get(),
             runtimeTelemetry = get(),
             prepareRule = get(),
+            protocolRules = get(),
         )
     }
 }
