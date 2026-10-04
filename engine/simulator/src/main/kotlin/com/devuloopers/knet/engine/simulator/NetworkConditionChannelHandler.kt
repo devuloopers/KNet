@@ -105,7 +105,12 @@ class NetworkConditionChannelHandler(
             is NetworkConditionPlan.Fail -> fail(context, message, promise, plan.behavior)
             is NetworkConditionPlan.Delay -> {
                 val now = engine.currentTimeNanos()
-                val due = maxOf(deadline(direction), now + plan.nanoseconds)
+                val plannedDue = if (now > Long.MAX_VALUE - plan.nanoseconds) {
+                    Long.MAX_VALUE
+                } else {
+                    now + plan.nanoseconds
+                }
+                val due = maxOf(deadline(direction), plannedDue)
                 setDeadline(direction, due)
                 schedule(context, message, promise, direction, bytes, due)
             }
@@ -182,6 +187,7 @@ class NetworkConditionChannelHandler(
         dueNanos: Long,
     ) {
         if (pendingBytes > MAXIMUM_FLOW_QUEUED_BYTES - bytes || !engine.tryQueue(bytes)) {
+            engine.recordFaultedFlow()
             fail(context, message, promise, NetworkFailureBehavior.ResetFlow)
             return
         }
@@ -220,7 +226,7 @@ class NetworkConditionChannelHandler(
             val completed = queue.removeFirst()
             if (completed.context.channel().isActive) {
                 pendingBytes = (pendingBytes - completed.bytes).coerceAtLeast(0L)
-                engine.delivered(direction, completed.bytes)
+                engine.releaseQueued(completed.bytes)
                 forward(
                     completed.context,
                     completed.message,
@@ -270,7 +276,7 @@ class NetworkConditionChannelHandler(
         while (queue.isNotEmpty()) {
             val pending = queue.removeFirst()
             pendingBytes = (pendingBytes - pending.bytes).coerceAtLeast(0L)
-            engine.delivered(direction, pending.bytes)
+            engine.releaseQueued(pending.bytes)
             forward(
                 pending.context,
                 pending.message,
@@ -325,6 +331,7 @@ class NetworkConditionChannelHandler(
         direction: NetworkConditionDirection,
         flush: Boolean = false,
     ) {
+        engine.recordForwarded(direction, readableBytes(message))
         if (promise == null) {
             context.fireChannelRead(message)
         } else if (flush) {

@@ -16,7 +16,9 @@ Use these documents when deciding what the repository currently owns or supports
    [`http2_target_and_implementation_plan.md`](http2_target_and_implementation_plan.md),
    [`grpc_qualification.md`](grpc_qualification.md), [`websocket_qualification.md`](websocket_qualification.md),
    [`graphql_websocket_qualification.md`](graphql_websocket_qualification.md), and
-   [`sse_qualification.md`](sse_qualification.md).
+   [`sse_qualification.md`](sse_qualification.md). Network Conditions test coverage, missing edge cases, and
+   promotion evidence are tracked in
+   [`network_conditions_test_gap_report.md`](network_conditions_test_gap_report.md).
 5. The executable `RuntimeCapabilityCatalog` in
    `products/desktop/src/jvmMain/kotlin/com/devuloopers/knet/products/desktop/di/inspection/InspectionBindings.kt`
    — final product maturity (`SUPPORTED`, `EXPERIMENTAL`, or `UNAVAILABLE`).

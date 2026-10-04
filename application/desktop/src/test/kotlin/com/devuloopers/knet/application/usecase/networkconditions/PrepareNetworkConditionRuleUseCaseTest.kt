@@ -16,7 +16,14 @@ import com.devuloopers.knet.domain.networkconditions.NetworkConditionRuleId
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionTarget
 import com.devuloopers.knet.traffic.id.BodyId
 import com.devuloopers.knet.traffic.id.ExchangeId
+import com.devuloopers.knet.traffic.id.ConnectionId
+import com.devuloopers.knet.traffic.id.OpaqueFlowId
 import com.devuloopers.knet.traffic.model.ExchangeState
+import com.devuloopers.knet.traffic.model.OpaqueFlowSnapshot
+import com.devuloopers.knet.traffic.model.OpaqueFlowState
+import com.devuloopers.knet.traffic.model.OpaqueSecurityProtocol
+import com.devuloopers.knet.traffic.model.OpaqueTransportProtocol
+import com.devuloopers.knet.traffic.model.TrafficEndpoint
 import com.devuloopers.knet.traffic.model.HttpExchangeSnapshot
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
@@ -88,6 +95,44 @@ class PrepareNetworkConditionRuleUseCaseTest {
         assertIs<PrepareNetworkConditionRuleResult.DestinationUnavailable>(result)
     }
 
+    @Test
+    fun `missing traffic identifier is reported without opening an empty rule`() = runTest {
+        val result = PrepareNetworkConditionRuleUseCase(
+            FakeTrafficQuery(exchange(RequestTarget.Origin("/"))),
+            FakeRepository(NetworkConditionConfiguration()),
+        ).execute(ExchangeId("missing"))
+
+        assertIs<PrepareNetworkConditionRuleResult.MissingExchange>(result)
+    }
+
+    @Test
+    fun `opaque traffic uses trusted server name and destination port`() = runTest {
+        val opaque = OpaqueFlowSnapshot(
+            id = OpaqueFlowId("opaque"),
+            connectionId = ConnectionId("connection"),
+            destination = TrafficEndpoint("203.0.113.10", 443),
+            serverName = "Video.Example.Test.",
+            transport = OpaqueTransportProtocol.TCP,
+            security = OpaqueSecurityProtocol.TLS,
+            sourceApplicationId = null,
+            policyRuleId = null,
+            startedAtEpochMillis = 1L,
+            completedAtEpochMillis = null,
+            uploadedBytes = 0L,
+            downloadedBytes = 0L,
+            state = OpaqueFlowState.ACTIVE,
+            terminalOutcome = null,
+        )
+        val result = assertIs<PrepareNetworkConditionRuleResult.Ready>(
+            PrepareNetworkConditionRuleUseCase(
+                FakeTrafficQuery(exchange = null, opaque = opaque),
+                FakeRepository(NetworkConditionConfiguration()),
+            ).execute(ExchangeId(opaque.id.value)),
+        )
+
+        assertEquals("video.example.test:443", result.target.displayValue)
+    }
+
     private fun exchange(target: RequestTarget): HttpExchangeSnapshot = HttpExchangeSnapshot(
         id = ExchangeId("exchange"),
         request = HttpRequestSnapshot(
@@ -102,12 +147,17 @@ class PrepareNetworkConditionRuleUseCaseTest {
         startedAtEpochMillis = 1L,
     )
 
-    private class FakeTrafficQuery(private val exchange: HttpExchangeSnapshot) : TrafficQuery {
+    private class FakeTrafficQuery(
+        private val exchange: HttpExchangeSnapshot?,
+        private val opaque: OpaqueFlowSnapshot? = null,
+    ) : TrafficQuery {
         override val generations: Flow<TrafficGeneration> = emptyFlow()
         override suspend fun query(query: TrafficPageQuery): TrafficPage =
             TrafficPage(items = emptyList(), nextCursor = null, totalCount = 0L, generation = 0L)
         override suspend fun getExchange(exchangeId: ExchangeId): HttpExchangeSnapshot? =
-            exchange.takeIf { it.id == exchangeId }
+            exchange?.takeIf { it.id == exchangeId }
+        override suspend fun getOpaqueFlow(flowId: OpaqueFlowId): OpaqueFlowSnapshot? =
+            opaque?.takeIf { it.id == flowId }
         override suspend fun readBody(bodyId: BodyId, range: BodyRange): BodyChunk =
             BodyChunk(byteArrayOf(), 0L, true)
     }

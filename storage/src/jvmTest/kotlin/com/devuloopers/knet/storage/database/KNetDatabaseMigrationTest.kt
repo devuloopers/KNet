@@ -15,7 +15,7 @@ import kotlin.test.assertEquals
 class KNetDatabaseMigrationTest {
     @Test
     fun `every retained schema generation migrates without deleting canonical sessions`() {
-        listOf(13, 18, 22, 24, 30).forEach { version ->
+        listOf(13, 18, 22, 24, 27, 28, 29, 30).forEach { version ->
             val root = Files.createTempDirectory("knet-v$version-migration-").toFile()
             val databaseFile = root.resolve("traffic.db")
             try {
@@ -45,6 +45,28 @@ class KNetDatabaseMigrationTest {
                                 "'legacy-message-exchange', 7, 'SERVER_TO_CLIENT', 'BINARY', 8, 1)",
                         )
                     }
+                    if (version >= 27) {
+                        connection.execSQL(
+                            "INSERT INTO network_condition_profiles (" +
+                                "id, name, downloadBitsPerSecond, downloadUtilizationPercent, " +
+                                "uploadBitsPerSecond, uploadUtilizationPercent, latencyMillis, jitterMillis, " +
+                                "virtualMtuBytes, failureKind, failureProbabilityPercent, failureSeed, " +
+                                "packetLossPercent, packetDuplicationPercent, packetReorderingPercent" +
+                                ") VALUES (" +
+                                "'migrated-profile', 'Migrated profile', 100000, 80, NULL, 100, 25, 5, " +
+                                "1200, 'NONE', NULL, NULL, 4, 2, 3)",
+                        )
+                        connection.execSQL(
+                            "INSERT INTO network_condition_rules (" +
+                                "id, normalizedHost, wildcard, port, profileId, enabled" +
+                                ") VALUES ('migrated-rule', 'video.example', 1, 443, 'migrated-profile', 1)",
+                        )
+                        connection.execSQL(
+                            "INSERT INTO network_condition_settings (" +
+                                "singletonId, enabled, globalProfileId, lastQuickAddProfileId" +
+                                ") VALUES (1, 1, 'migrated-profile', 'migrated-profile')",
+                        )
+                    }
                 }
 
                 val database = DatabaseFactory.create(databaseFile)
@@ -72,6 +94,22 @@ class KNetDatabaseMigrationTest {
                         assertEquals(7L, message.captureSequence)
                         assertEquals("WEBSOCKET", message.protocol)
                         assertEquals("COMPLETE", message.state)
+                    }
+                    if (version >= 27) {
+                        val settings = runBlocking { database.networkConditionDao().getSettings() }
+                        val profile = runBlocking { database.networkConditionDao().getProfiles().single() }
+                        val rule = runBlocking { database.networkConditionDao().getRules().single() }
+                        assertEquals(true, settings?.enabled)
+                        assertEquals("migrated-profile", settings?.globalProfileId)
+                        assertEquals("migrated-profile", settings?.lastQuickAddProfileId)
+                        assertEquals(100_000L, profile.downloadBitsPerSecond)
+                        assertEquals(80, profile.downloadUtilizationPercent)
+                        assertEquals(1_200, profile.virtualMtuBytes)
+                        assertEquals(4, profile.packetLossPercent)
+                        assertEquals("video.example", rule.normalizedHost)
+                        assertEquals(true, rule.wildcard)
+                        assertEquals(443, rule.port)
+                        assertEquals("migrated-profile", rule.profileId)
                     }
                 } finally {
                     database.close()

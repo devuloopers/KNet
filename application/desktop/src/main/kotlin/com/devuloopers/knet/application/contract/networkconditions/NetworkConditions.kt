@@ -22,9 +22,13 @@ public interface NetworkConditionsRepository {
 }
 
 public data class NetworkConditionRuntimeSnapshot(
+    /** Monotonic timestamp for this aggregate sample. It is never an epoch timestamp. */
+    public val sampledAtNanos: Long = 0L,
     public val activeFlows: Int = 0,
     public val queuedBytes: Long = 0L,
+    /** Application payload bytes KNet has released upstream after any configured shaping delay. */
     public val uploadedBytes: Long = 0L,
+    /** Application payload bytes KNet has released downstream after any configured shaping delay. */
     public val downloadedBytes: Long = 0L,
     public val delayedUnits: Long = 0L,
     public val faultedFlows: Long = 0L,

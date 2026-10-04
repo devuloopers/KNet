@@ -837,6 +837,31 @@ tasks.register("sseReleaseSoak") {
     dependsOn(":engine:sse:sseReleaseSoak")
 }
 
+/** Cross-module Network Conditions gate for proxy, presentation, persistence, and Android host policy. */
+tasks.register("networkConditionsQualification") {
+    group = "verification"
+    description = "Runs Network Conditions domain, persistence, engine, UI, API Studio, Traffic, and Android-host tests."
+    dependsOn(
+        verifyArchitectureFoundation,
+        ":core:domain:jvmTest",
+        ":storage:jvmTest",
+        ":data:desktop:jvmTest",
+        ":application:desktop:test",
+        ":engine:simulator:test",
+        ":ui:desktop:networkConditions:jvmTest",
+        ":ui:desktop:apiStudio:jvmTest",
+        ":ui:desktop:apiStudio:websocket:jvmTest",
+        ":ui:desktop:apiStudio:graphqlWebSocket:jvmTest",
+        ":ui:desktop:apiStudio:grpc:jvmTest",
+        ":ui:desktop:traffic:jvmTest",
+        ":ui:desktop:app:jvmTest",
+        ":core:companion:jvmTest",
+        ":application:companion:jvmTest",
+        ":connectivity:companion:testAndroidHostTest",
+        ":products:desktop:test",
+    )
+}
+
 /** Standard Phase 18 release gate; extended soak is invoked separately with its configured duration. */
 tasks.register("phase18ReleaseGate") {
     group = "verification"

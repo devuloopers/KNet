@@ -40,6 +40,7 @@ class NetworkConditionMatcherTest {
         assertEquals("child", NetworkConditionMatcher.resolve(configuration, "a.video.example.com", 443)?.ruleId?.value)
         assertEquals("parent", NetworkConditionMatcher.resolve(configuration, "video.example.com", 443)?.ruleId?.value)
         assertNull(NetworkConditionMatcher.resolve(configuration, "example.com", 443))
+        assertNull(NetworkConditionMatcher.resolve(configuration, "notexample.com", 443))
     }
 
     @Test
@@ -66,6 +67,72 @@ class NetworkConditionMatcherTest {
                 "video.example.com",
                 443,
             ),
+        )
+    }
+
+    @Test
+    fun `disabled rules fall through and an enabled no-throttling rule bypasses global shaping`() {
+        val disabledExact = rule("disabled", "video.example.com", slow).copy(enabled = false)
+        val bypassRule = rule("bypass", "*.example.com", bypass)
+        val configuration = NetworkConditionConfiguration(
+            enabled = true,
+            globalProfileId = NetworkConditionBuiltIns.SLOW_3G.id,
+            rules = listOf(disabledExact, bypassRule),
+        )
+
+        val bypassed = NetworkConditionMatcher.resolve(configuration, "video.example.com", 443)
+        assertEquals("bypass", bypassed?.ruleId?.value)
+        assertEquals(NetworkConditionBuiltIns.NO_THROTTLING.id, bypassed?.profile?.id)
+        assertEquals(
+            NetworkConditionBuiltIns.SLOW_3G.id,
+            NetworkConditionMatcher.resolve(configuration, "outside.test", 443)?.profile?.id,
+        )
+    }
+
+    @Test
+    fun `precedence is stable regardless of declaration order`() {
+        val candidates = listOf(
+            rule("wild", "*.example.com", bypass),
+            rule("wild-port", "*.example.com", slow, 443),
+            rule("long-wild", "*.video.example.com", bypass),
+            rule("long-wild-port", "*.video.example.com", slow, 443),
+            rule("exact", "cdn.video.example.com", bypass),
+            rule("exact-port", "cdn.video.example.com", slow, 443),
+        )
+
+        listOf(candidates, candidates.reversed()).forEach { rules ->
+            val configuration = NetworkConditionConfiguration(enabled = true, rules = rules)
+            assertEquals(
+                "exact-port",
+                NetworkConditionMatcher.resolve(configuration, "cdn.video.example.com", 443)?.ruleId?.value,
+            )
+            assertEquals(
+                "exact",
+                NetworkConditionMatcher.resolve(configuration, "cdn.video.example.com", 8443)?.ruleId?.value,
+            )
+            assertEquals(
+                "long-wild-port",
+                NetworkConditionMatcher.resolve(configuration, "edge.video.example.com", 443)?.ruleId?.value,
+            )
+            assertEquals(
+                "long-wild",
+                NetworkConditionMatcher.resolve(configuration, "edge.video.example.com", 8443)?.ruleId?.value,
+            )
+            assertEquals(
+                "wild-port",
+                NetworkConditionMatcher.resolve(configuration, "edge.example.com", 443)?.ruleId?.value,
+            )
+            assertNull(NetworkConditionMatcher.resolve(configuration, "outside.test", 443))
+        }
+
+        val withGlobal = NetworkConditionConfiguration(
+            enabled = true,
+            globalProfileId = NetworkConditionBuiltIns.HIGH_LATENCY.id,
+            rules = candidates,
+        )
+        assertEquals(
+            EffectiveNetworkCondition.Source.GLOBAL,
+            NetworkConditionMatcher.resolve(withGlobal, "outside.test", 443)?.source,
         )
     }
 

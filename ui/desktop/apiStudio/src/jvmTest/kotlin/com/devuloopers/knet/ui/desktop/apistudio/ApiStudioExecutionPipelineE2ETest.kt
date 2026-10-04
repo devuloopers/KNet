@@ -13,12 +13,18 @@ import com.devuloopers.knet.traffic.model.http.HttpMethod
 import com.devuloopers.knet.traffic.model.ExchangeTimings
 import com.devuloopers.knet.traffic.id.CaptureSessionId
 import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
+import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionsRepository
 import com.devuloopers.knet.application.contract.traffic.CaptureSessionState
 import com.devuloopers.knet.application.usecase.breakpoint.DropMatchingBreakpointsUseCase
 import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUseCase
 import com.devuloopers.knet.application.usecase.traffic.ObserveTrafficCaptureStateUseCase
 import com.devuloopers.knet.ui.desktop.apistudio.model.ExecutionState
 import com.devuloopers.knet.ui.desktop.apistudio.viewmodel.ApiStudioViewModel
+import com.devuloopers.knet.domain.networkconditions.NetworkConditionConfiguration
+import com.devuloopers.knet.domain.networkconditions.NetworkConditionProfile
+import com.devuloopers.knet.domain.networkconditions.NetworkConditionProfileId
+import com.devuloopers.knet.domain.networkconditions.NetworkConditionRule
+import com.devuloopers.knet.domain.networkconditions.NetworkConditionRuleId
 import com.devuloopers.knet.domain.collection.usecase.GetSavedRequestUseCase
 import com.devuloopers.knet.domain.collection.usecase.SaveRequestToCollectionUseCase
 import com.devuloopers.knet.domain.collection.usecase.SaveUnsavedRequestUseCase
@@ -33,6 +39,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -101,7 +108,10 @@ class ApiStudioExecutionPipelineE2ETest {
         Dispatchers.resetMain()
     }
 
-    private fun createPipelineViewModel(executor: HttpExecutor): ApiStudioViewModel {
+    private fun createPipelineViewModel(
+        executor: HttpExecutor,
+        networkConditionsRepository: NetworkConditionsRepository? = null,
+    ): ApiStudioViewModel {
         val (getLayoutUseCase, updateLayoutUseCase) = createTestLayoutUseCases()
         val (observeApplicationSettings, updateApplicationSettings) =
             createTestApplicationSettingsUseCases()
@@ -133,6 +143,7 @@ class ApiStudioExecutionPipelineE2ETest {
             ),
             getSavedRequestUseCase = GetSavedRequestUseCase(collectionsRepository),
             saveRequestToCollectionUseCase = SaveRequestToCollectionUseCase(collectionsRepository),
+            networkConditionsRepository = networkConditionsRepository,
             ioDispatcher = testDispatcher
         )
     }
@@ -207,5 +218,106 @@ class ApiStudioExecutionPipelineE2ETest {
 
         assertEquals(ExecutionState.SUCCESS, viewModel.uiState.value.executionState)
         assertEquals(null, spyExecutor.lastProxyPort)
+    }
+
+    @Test
+    fun `enabled network conditions route through the running proxy while capture is paused`() = runTest {
+        val spyExecutor = PipelineSpyHttpExecutor()
+        val conditions = TestNetworkConditionsRepository(
+            NetworkConditionConfiguration(
+                enabled = true,
+                globalProfileId = com.devuloopers.knet.domain.networkconditions.NetworkConditionBuiltIns
+                    .STREAMING_100_KBPS.id,
+            ),
+        )
+        val viewModel = createPipelineViewModel(spyExecutor, conditions)
+        proxyRuntime.publish(runningProxyRuntimeState(port = 8080))
+        captureControl.publish(CaptureSessionState.Paused)
+        viewModel.updateUrl("https://api.example.com/conditioned")
+
+        viewModel.executeRequest()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(ExecutionState.SUCCESS, viewModel.uiState.value.executionState)
+        assertEquals(8080, spyExecutor.lastProxyPort)
+    }
+
+    @Test
+    fun `disabling network conditions restores direct routing when capture is paused`() = runTest {
+        val spyExecutor = PipelineSpyHttpExecutor()
+        val conditions = TestNetworkConditionsRepository(NetworkConditionConfiguration(enabled = true))
+        val viewModel = createPipelineViewModel(spyExecutor, conditions)
+        proxyRuntime.publish(runningProxyRuntimeState(port = 8080))
+        captureControl.publish(CaptureSessionState.Paused)
+        conditions.setEnabled(false)
+        viewModel.updateUrl("https://api.example.com/direct")
+
+        viewModel.executeRequest()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(ExecutionState.SUCCESS, viewModel.uiState.value.executionState)
+        assertEquals(null, spyExecutor.lastProxyPort)
+    }
+
+    @Test
+    fun `enabled network conditions fail safely instead of bypassing a stopped proxy`() = runTest {
+        val spyExecutor = PipelineSpyHttpExecutor()
+        val conditions = TestNetworkConditionsRepository(NetworkConditionConfiguration(enabled = true))
+        val viewModel = createPipelineViewModel(spyExecutor, conditions)
+        proxyRuntime.publish(ProxyRuntimeState.Stopped)
+        captureControl.publish(CaptureSessionState.Paused)
+        viewModel.updateUrl("https://api.example.com/must-not-bypass")
+
+        viewModel.executeRequest()
+        testDispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(ExecutionState.ERROR, viewModel.uiState.value.executionState)
+        assertEquals(-1, spyExecutor.lastProxyPort)
+        assertEquals(
+            "Network Conditions are enabled, but the local proxy is unavailable. Start the proxy and try again.",
+            viewModel.uiState.value.errorMessage,
+        )
+    }
+}
+
+private class TestNetworkConditionsRepository(
+    initial: NetworkConditionConfiguration,
+) : NetworkConditionsRepository {
+    override val configuration = MutableStateFlow(initial)
+
+    override suspend fun setEnabled(enabled: Boolean) {
+        configuration.value = configuration.value.copy(enabled = enabled)
+    }
+
+    override suspend fun setGlobalProfile(profileId: NetworkConditionProfileId?) {
+        configuration.value = configuration.value.copy(globalProfileId = profileId)
+    }
+
+    override suspend fun upsertProfile(profile: NetworkConditionProfile) {
+        configuration.value = configuration.value.copy(
+            customProfiles = configuration.value.customProfiles.filterNot { it.id == profile.id } + profile,
+        )
+    }
+
+    override suspend fun deleteProfile(profileId: NetworkConditionProfileId): Boolean = true
+
+    override suspend fun upsertRule(rule: NetworkConditionRule) {
+        configuration.value = configuration.value.copy(
+            rules = configuration.value.rules.filterNot { it.id == rule.id } + rule,
+        )
+    }
+
+    override suspend fun deleteRule(ruleId: NetworkConditionRuleId) {
+        configuration.value = configuration.value.copy(
+            rules = configuration.value.rules.filterNot { it.id == ruleId },
+        )
+    }
+
+    override suspend fun setLastQuickAddProfile(profileId: NetworkConditionProfileId?) {
+        configuration.value = configuration.value.copy(lastQuickAddProfileId = profileId)
+    }
+
+    override suspend fun resetShaping() {
+        configuration.value = configuration.value.copy(enabled = false, globalProfileId = null)
     }
 }

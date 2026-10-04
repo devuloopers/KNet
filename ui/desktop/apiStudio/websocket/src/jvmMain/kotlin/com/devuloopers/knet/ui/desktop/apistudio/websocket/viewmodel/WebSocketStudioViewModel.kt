@@ -3,9 +3,8 @@ package com.devuloopers.knet.ui.desktop.apistudio.websocket.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.application.contract.apistudio.*
-import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
 import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionsRepository
-import com.devuloopers.knet.application.contract.traffic.CaptureSessionState
+import com.devuloopers.knet.application.contract.networkconditions.resolveApiStudioProxyPort
 import com.devuloopers.knet.application.usecase.apistudio.*
 import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUseCase
 import com.devuloopers.knet.application.usecase.traffic.ObserveTrafficCaptureStateUseCase
@@ -134,8 +133,12 @@ class WebSocketStudioViewModel(
             return
         }
         cancelSession()
+        val route = runCatching(::activeRoute).getOrElse { error ->
+            mutableState.update { it.copy(errorMessage = error.message ?: "Unable to resolve the WebSocket route.") }
+            return
+        }
         val session = openSession.execute(
-            ApiStudioProtocolExecutionCommand(document, activeRoute()),
+            ApiStudioProtocolExecutionCommand(document, route),
         ).getOrElse { error ->
             mutableState.update { it.copy(errorMessage = error.message ?: "Unable to open the WebSocket session.") }
             return
@@ -239,12 +242,11 @@ class WebSocketStudioViewModel(
     }
 
     private fun activeRoute(): ApiStudioProtocolRoute {
-        val captureActive = captureState.value is CaptureSessionState.Capturing
-        val conditionsActive = networkConditionsRepository?.configuration?.value?.enabled == true
-        if (!captureActive && !conditionsActive) return ApiStudioProtocolRoute.Direct
-        val port = (proxyState.value as? ProxyRuntimeState.Running)
-            ?.handle?.endpoints?.endpoints?.firstOrNull()?.port
-            ?: return ApiStudioProtocolRoute.Direct
+        val port = resolveApiStudioProxyPort(
+            captureState = captureState.value,
+            networkConditions = networkConditionsRepository?.configuration?.value,
+            proxyState = proxyState.value,
+        ) ?: return ApiStudioProtocolRoute.Direct
         return ApiStudioProtocolRoute.LocalProxy(port = port)
     }
 

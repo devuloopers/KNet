@@ -43,6 +43,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class NetworkConditionsViewModelTest {
@@ -124,7 +125,13 @@ class NetworkConditionsViewModelTest {
             runtimeTelemetry = telemetry,
             prepareRule = PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository),
         )
-        telemetry.mutable.value = NetworkConditionRuntimeSnapshot(activeFlows = 2, queuedBytes = 4_096)
+        viewModel.startRuntimeMonitoring()
+        advanceUntilIdle()
+        telemetry.mutable.value = NetworkConditionRuntimeSnapshot(
+            sampledAtNanos = 1_000_000_000L,
+            activeFlows = 2,
+            queuedBytes = 4_096,
+        )
         advanceUntilIdle()
 
         assertEquals(2, viewModel.state.value.runtime.activeFlows)
@@ -136,6 +143,147 @@ class NetworkConditionsViewModelTest {
             "Profile is still used by a global setting or domain rule.",
             viewModel.state.value.errorMessage,
         )
+    }
+
+    @Test
+    fun `runtime monitoring derives actual bounded rates and stops with the screen`() = runTest(dispatcher) {
+        val repository = FakeRepository()
+        val telemetry = FakeTelemetry()
+        val viewModel = NetworkConditionsViewModel(
+            repository = repository,
+            runtimeTelemetry = telemetry,
+            prepareRule = PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository),
+        )
+        viewModel.startRuntimeMonitoring()
+        advanceUntilIdle()
+
+        telemetry.mutable.value = NetworkConditionRuntimeSnapshot(
+            sampledAtNanos = 1_000_000_000L,
+            downloadedBytes = 1_000L,
+        )
+        advanceUntilIdle()
+        telemetry.mutable.value = NetworkConditionRuntimeSnapshot(
+            sampledAtNanos = 2_000_000_000L,
+            downloadedBytes = 13_500L,
+            uploadedBytes = 6_250L,
+        )
+        advanceUntilIdle()
+
+        assertEquals(100_000L, viewModel.state.value.throughput.currentDownloadBitsPerSecond)
+        assertEquals(50_000L, viewModel.state.value.throughput.currentUploadBitsPerSecond)
+
+        viewModel.stopRuntimeMonitoring()
+        telemetry.mutable.value = NetworkConditionRuntimeSnapshot(
+            sampledAtNanos = 3_000_000_000L,
+            downloadedBytes = 100_000L,
+            uploadedBytes = 100_000L,
+        )
+        advanceUntilIdle()
+
+        assertEquals(100_000L, viewModel.state.value.throughput.currentDownloadBitsPerSecond)
+        assertEquals(50_000L, viewModel.state.value.throughput.currentUploadBitsPerSecond)
+    }
+
+    @Test
+    fun `master global profile and reset actions preserve saved profiles and rules`() = runTest(dispatcher) {
+        val repository = FakeRepository()
+        val viewModel = NetworkConditionsViewModel(
+            repository = repository,
+            runtimeTelemetry = FakeTelemetry(),
+            prepareRule = PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository),
+        )
+        advanceUntilIdle()
+        val custom = NetworkConditionProfile(
+            id = NetworkConditionProfileId("custom-stream"),
+            name = "Custom stream",
+        )
+        val rule = NetworkConditionRule(
+            NetworkConditionRuleId("saved-rule"),
+            com.devuloopers.knet.domain.networkconditions.NetworkConditionTarget.parse("video.example"),
+            custom.id,
+        )
+
+        viewModel.saveProfile(custom)
+        advanceUntilIdle()
+        repository.upsertRule(rule)
+        viewModel.selectGlobalProfile(custom.id)
+        viewModel.setEnabled(true)
+        advanceUntilIdle()
+        assertTrue(viewModel.state.value.configuration.enabled)
+        assertEquals(custom.id, viewModel.state.value.configuration.globalProfileId)
+
+        viewModel.reset()
+        advanceUntilIdle()
+        val reset = viewModel.state.value.configuration
+        assertEquals(false, reset.enabled)
+        assertNull(reset.globalProfileId)
+        assertEquals(custom, reset.customProfiles.single())
+        assertEquals(rule, reset.rules.single())
+    }
+
+    @Test
+    fun `rule toggle delete invalid port and missing traffic errors are recoverable`() = runTest(dispatcher) {
+        val rule = NetworkConditionRule(
+            NetworkConditionRuleId("rule"),
+            com.devuloopers.knet.domain.networkconditions.NetworkConditionTarget.parse("video.example"),
+            NetworkConditionBuiltIns.SLOW_3G.id,
+        )
+        val repository = FakeRepository(NetworkConditionConfiguration(rules = listOf(rule)))
+        val viewModel = NetworkConditionsViewModel(
+            repository = repository,
+            runtimeTelemetry = FakeTelemetry(),
+            prepareRule = PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository),
+        )
+        advanceUntilIdle()
+
+        viewModel.setRuleEnabled(rule, false)
+        advanceUntilIdle()
+        assertEquals(false, viewModel.state.value.configuration.rules.single().enabled)
+        viewModel.deleteRule(rule.id)
+        advanceUntilIdle()
+        assertTrue(viewModel.state.value.configuration.rules.isEmpty())
+
+        viewModel.beginAddRule()
+        viewModel.updateDraftHostPattern("video.example")
+        viewModel.updateDraftPort("70000")
+        viewModel.confirmRuleDraft()
+        advanceUntilIdle()
+        assertEquals("Network condition port is invalid.", viewModel.state.value.errorMessage)
+        assertNotNull(viewModel.state.value.ruleDraft)
+        viewModel.clearError()
+        assertNull(viewModel.state.value.errorMessage)
+        viewModel.dismissRuleDraft()
+
+        viewModel.prepareFromTraffic("missing")
+        advanceUntilIdle()
+        assertEquals("The selected traffic row no longer exists.", viewModel.state.value.errorMessage)
+        assertNull(viewModel.state.value.ruleDraft)
+    }
+
+    @Test
+    fun `returning to the screen starts a fresh throughput window`() = runTest(dispatcher) {
+        val repository = FakeRepository()
+        val telemetry = FakeTelemetry()
+        val viewModel = NetworkConditionsViewModel(
+            repository = repository,
+            runtimeTelemetry = telemetry,
+            prepareRule = PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository),
+        )
+        viewModel.startRuntimeMonitoring()
+        advanceUntilIdle()
+        telemetry.mutable.value = NetworkConditionRuntimeSnapshot(sampledAtNanos = 1_000_000_000L)
+        advanceUntilIdle()
+        telemetry.mutable.value = NetworkConditionRuntimeSnapshot(
+            sampledAtNanos = 2_000_000_000L,
+            downloadedBytes = 12_500L,
+        )
+        advanceUntilIdle()
+        assertEquals(100_000L, viewModel.state.value.throughput.currentDownloadBitsPerSecond)
+
+        viewModel.stopRuntimeMonitoring()
+        viewModel.startRuntimeMonitoring()
+        assertEquals(0L, viewModel.state.value.throughput.currentDownloadBitsPerSecond)
+        assertEquals(false, viewModel.state.value.throughput.currentSampleIsValid)
     }
 
     private fun exchange(): HttpExchangeSnapshot = HttpExchangeSnapshot(

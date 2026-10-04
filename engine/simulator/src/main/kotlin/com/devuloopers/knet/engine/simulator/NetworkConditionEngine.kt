@@ -13,12 +13,19 @@ import com.devuloopers.knet.traffic.model.AppliedNetworkConditionSource
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArraySet
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.math.ceil
@@ -70,6 +77,20 @@ class NetworkConditionEngine(
         scope.launch(start = CoroutineStart.UNDISPATCHED) {
             configuration.drop(1).collect { configurationChanged() }
         }
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            mutableSnapshot.subscriptionCount
+                .map { subscriberCount -> subscriberCount > 0 }
+                .distinctUntilChanged()
+                .collectLatest { observed ->
+                    if (observed) {
+                        publish()
+                        while (currentCoroutineContext().isActive) {
+                            delay(TELEMETRY_SAMPLE_MILLIS)
+                            publish()
+                        }
+                    }
+                }
+        }
     }
 
     internal fun currentTimeNanos(): Long = nanoTime()
@@ -102,10 +123,11 @@ class NetworkConditionEngine(
 
     fun openFlow(): AutoCloseable {
         activeFlows.incrementAndGet()
-        publish()
+        val closed = AtomicBoolean(false)
         return AutoCloseable {
-            activeFlows.updateAndGet { value -> (value - 1).coerceAtLeast(0) }
-            publish()
+            if (closed.compareAndSet(false, true)) {
+                activeFlows.updateAndGet { value -> (value - 1).coerceAtLeast(0) }
+            }
         }
     }
 
@@ -122,7 +144,6 @@ class NetworkConditionEngine(
         if (profile.isPassThrough) return NetworkConditionPlan.PassThrough
         if (shouldFail(profile.failure, effective, flowSequence)) {
             faultedFlows.incrementAndGet()
-            publish()
             return NetworkConditionPlan.Fail(profile.failure)
         }
         effective.ruleId?.let(appliedRules::add)
@@ -141,9 +162,11 @@ class NetworkConditionEngine(
             0L
         }
         val jitterMillis = deterministicJitter(profile, effective, flowSequence)
-        val delay = bandwidthDelay + (profile.latencyMillis + jitterMillis)
-            .coerceAtLeast(0L)
-            .times(NANOS_PER_MILLISECOND)
+        val fixedDelay = saturatingMultiply(
+            (profile.latencyMillis + jitterMillis).coerceAtLeast(0L),
+            NANOS_PER_MILLISECOND,
+        )
+        val delay = saturatingAdd(bandwidthDelay, fixedDelay)
         if (delay <= 0L) return NetworkConditionPlan.PassThrough
         delayedUnits.incrementAndGet()
         publish()
@@ -155,28 +178,36 @@ class NetworkConditionEngine(
         while (true) {
             val current = queuedBytes.get()
             if (current > maximumQueuedBytes - bytes) return false
-            if (queuedBytes.compareAndSet(current, current + bytes)) {
-                publish()
-                return true
-            }
+            if (queuedBytes.compareAndSet(current, current + bytes)) return true
         }
     }
 
-    fun delivered(direction: NetworkConditionDirection, bytes: Int) {
-        if (bytes > 0) {
-            queuedBytes.updateAndGet { current -> (current - bytes).coerceAtLeast(0L) }
-            when (direction) {
-                NetworkConditionDirection.UPLOAD -> uploadedBytes.addAndGet(bytes.toLong())
-                NetworkConditionDirection.DOWNLOAD -> downloadedBytes.addAndGet(bytes.toLong())
-            }
+    /** Removes bytes from the bounded scheduler queue without implying that they were forwarded. */
+    internal fun releaseQueued(bytes: Int) {
+        if (bytes > 0) queuedBytes.updateAndGet { current -> (current - bytes).coerceAtLeast(0L) }
+    }
+
+    /** Records payload at the single common point where KNet releases it to the next pipeline stage. */
+    internal fun recordForwarded(direction: NetworkConditionDirection, bytes: Int) {
+        if (bytes <= 0) return
+        when (direction) {
+            NetworkConditionDirection.UPLOAD -> uploadedBytes.addAndGet(bytes.toLong())
+            NetworkConditionDirection.DOWNLOAD -> downloadedBytes.addAndGet(bytes.toLong())
         }
-        publish()
     }
 
     fun abandon(bytes: Int) {
         if (bytes > 0) queuedBytes.updateAndGet { current -> (current - bytes).coerceAtLeast(0L) }
+    }
+
+    /** Records a scheduler-level flow fault such as bounded-queue rejection. */
+    internal fun recordFaultedFlow() {
+        faultedFlows.incrementAndGet()
         publish()
     }
+
+    /** Makes deterministic tests and non-coroutine embedders able to request the latest aggregate counters. */
+    internal fun refreshTelemetry() = publish()
 
     private fun configurationChanged() {
         buckets.clear()
@@ -213,6 +244,7 @@ class NetworkConditionEngine(
 
     private fun publish() {
         mutableSnapshot.value = NetworkConditionRuntimeSnapshot(
+            sampledAtNanos = nanoTime(),
             activeFlows = activeFlows.get(),
             queuedBytes = queuedBytes.get(),
             uploadedBytes = uploadedBytes.get(),
@@ -236,14 +268,16 @@ class NetworkConditionEngine(
                 lastRate = bitsPerSecond
             }
             val start = maxOf(now, nextAvailableNanos)
-            val duration = ceil(bytes.toDouble() * 8.0 * NANOS_PER_SECOND / bitsPerSecond.toDouble()).toLong()
-            nextAvailableNanos = start + duration
-            return (nextAvailableNanos - now).coerceAtLeast(0L)
+            val durationAsDouble = ceil(bytes.toDouble() * 8.0 * NANOS_PER_SECOND / bitsPerSecond.toDouble())
+            val duration = durationAsDouble.coerceAtMost(Long.MAX_VALUE.toDouble()).toLong()
+            nextAvailableNanos = saturatingAdd(start, duration)
+            return if (nextAvailableNanos >= now) nextAvailableNanos - now else Long.MAX_VALUE
         }
     }
 
     companion object {
         const val DEFAULT_MAXIMUM_QUEUED_BYTES: Long = 64L * 1_024L * 1_024L
+        private const val TELEMETRY_SAMPLE_MILLIS = 1_000L
         private const val DEFAULT_JITTER_SEED = 0x4b4e4554L
         private const val NANOS_PER_MILLISECOND = 1_000_000L
         private const val NANOS_PER_SECOND = 1_000_000_000L
@@ -253,6 +287,18 @@ class NetworkConditionEngine(
             mixed = (mixed xor (mixed ushr 30)) * -4658895280553007687L
             mixed = (mixed xor (mixed ushr 27)) * -7723592293110705685L
             return mixed xor (mixed ushr 31)
+        }
+
+        private fun saturatingAdd(left: Long, right: Long): Long = when {
+            right > 0L && left > Long.MAX_VALUE - right -> Long.MAX_VALUE
+            right < 0L && left < Long.MIN_VALUE - right -> Long.MIN_VALUE
+            else -> left + right
+        }
+
+        private fun saturatingMultiply(left: Long, right: Long): Long {
+            if (left == 0L || right == 0L) return 0L
+            if (left > 0L && right > 0L && left > Long.MAX_VALUE / right) return Long.MAX_VALUE
+            return left * right
         }
     }
 }

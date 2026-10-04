@@ -16,6 +16,7 @@ data class NetworkConditionRuleDraft(
 data class NetworkConditionsState(
     val configuration: NetworkConditionConfiguration = NetworkConditionConfiguration(),
     val runtime: NetworkConditionRuntimeSnapshot = NetworkConditionRuntimeSnapshot(),
+    val throughput: NetworkThroughputHistory = NetworkThroughputHistory(),
     val ruleDraft: NetworkConditionRuleDraft? = null,
     val errorMessage: String? = null,
 )

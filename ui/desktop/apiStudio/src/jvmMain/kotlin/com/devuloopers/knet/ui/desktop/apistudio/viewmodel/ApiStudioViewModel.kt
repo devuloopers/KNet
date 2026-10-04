@@ -2,9 +2,8 @@ package com.devuloopers.knet.ui.desktop.apistudio.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
 import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionsRepository
-import com.devuloopers.knet.application.contract.traffic.CaptureSessionState
+import com.devuloopers.knet.application.contract.networkconditions.resolveApiStudioProxyPort
 import com.devuloopers.knet.application.usecase.apistudio.ExecuteApiStudioRequestUseCase
 import com.devuloopers.knet.application.usecase.apistudio.ApiStudioHttpExecutionEvent
 import com.devuloopers.knet.application.contract.apistudio.HttpLiveResponseUpdate
@@ -641,13 +640,11 @@ class ApiStudioViewModel(
     }
 
     /** Returns a local route only for a synchronously observed active capture session. */
-    private fun activeProxyPort(): Int? {
-        val captureActive = captureSessionState.value is CaptureSessionState.Capturing
-        val conditionsActive = networkConditionsRepository?.configuration?.value?.enabled == true
-        if (!captureActive && !conditionsActive) return null
-        return (proxyRuntimeState.value as? ProxyRuntimeState.Running)
-            ?.handle?.endpoints?.endpoints?.firstOrNull()?.port
-    }
+    private fun activeProxyPort(): Int? = resolveApiStudioProxyPort(
+        captureState = captureSessionState.value,
+        networkConditions = networkConditionsRepository?.configuration?.value,
+        proxyState = proxyRuntimeState.value,
+    )
 
     /** Cancels only the currently active execution and prevents it from publishing a stale result. */
     fun cancelExecution() {

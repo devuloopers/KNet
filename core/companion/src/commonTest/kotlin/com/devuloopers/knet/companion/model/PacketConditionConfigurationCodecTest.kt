@@ -25,6 +25,16 @@ class PacketConditionConfigurationCodecTest {
     @Test
     fun `invalid packet percentages fail closed`() {
         assertFailsWith<IllegalArgumentException> { PacketConditionConfiguration(lossPercent = 101) }
+        assertFailsWith<IllegalArgumentException> { PacketConditionConfiguration(duplicationPercent = -1) }
+        assertFailsWith<IllegalArgumentException> { PacketConditionConfiguration(reorderingPercent = 101) }
+        assertFailsWith<IllegalArgumentException> { PacketConditionConfiguration(uploadBitsPerSecond = 999L) }
+        assertFailsWith<IllegalArgumentException> {
+            PacketConditionConfiguration(downloadBitsPerSecond = 100_000_000_001L)
+        }
+        assertFailsWith<IllegalArgumentException> { PacketConditionConfiguration(latencyMillis = -1L) }
+        assertFailsWith<IllegalArgumentException> { PacketConditionConfiguration(jitterMillis = 120_001L) }
+        assertFailsWith<IllegalArgumentException> { PacketConditionConfiguration(maximumQueuedDatagrams = 0) }
+        assertFailsWith<IllegalArgumentException> { PacketConditionConfiguration(maximumQueuedDatagrams = 16_385) }
     }
 
     @Test
@@ -32,6 +42,25 @@ class PacketConditionConfigurationCodecTest {
         val encoded = PacketConditionConfigurationCodec.encode(PacketConditionConfiguration.Disabled)
         assertFailsWith<IllegalArgumentException> {
             PacketConditionConfigurationCodec.decode(encoded + "enabled=true\n".encodeToByteArray())
+        }
+    }
+
+    @Test
+    fun `missing unknown oversized and future wire formats fail closed`() {
+        val encoded = PacketConditionConfigurationCodec.encode(PacketConditionConfiguration.Disabled).decodeToString()
+        assertFailsWith<IllegalArgumentException> {
+            PacketConditionConfigurationCodec.decode(encoded.replace("version=1", "version=2").encodeToByteArray())
+        }
+        assertFailsWith<IllegalArgumentException> {
+            PacketConditionConfigurationCodec.decode(
+                encoded.lineSequence().filterNot { it.startsWith("seed=") }.joinToString("\n").encodeToByteArray(),
+            )
+        }
+        assertFailsWith<IllegalArgumentException> {
+            PacketConditionConfigurationCodec.decode((encoded + "unknown=value\n").encodeToByteArray())
+        }
+        assertFailsWith<IllegalArgumentException> {
+            PacketConditionConfigurationCodec.decode(ByteArray(4_097) { 'x'.code.toByte() })
         }
     }
 }

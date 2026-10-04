@@ -16,9 +16,8 @@ import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolOutb
 import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolRoute
 import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolReflectionTarget
 import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolSchemaSource
-import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
 import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionsRepository
-import com.devuloopers.knet.application.contract.traffic.CaptureSessionState
+import com.devuloopers.knet.application.contract.networkconditions.resolveApiStudioProxyPort
 import com.devuloopers.knet.application.usecase.apistudio.CreateApiStudioProtocolDocumentUseCase
 import com.devuloopers.knet.application.usecase.apistudio.CreateApiStudioWorkspaceDocumentUseCase
 import com.devuloopers.knet.application.usecase.apistudio.ExecuteApiStudioProtocolDocumentUseCase
@@ -365,17 +364,20 @@ class GrpcStudioViewModel(
     fun selectEvent(index: Int) = mutableState.update { it.copy(selectedEventIndex = index) }
 
     private fun activeRoute(): ApiStudioProtocolRoute {
-        val captureActive = captureState.value is CaptureSessionState.Capturing
-        val conditionsActive = networkConditionsRepository?.configuration?.value?.enabled == true
-        if (!captureActive && !conditionsActive) return ApiStudioProtocolRoute.Direct
-        val port = (proxyState.value as? ProxyRuntimeState.Running)
-            ?.handle?.endpoints?.endpoints?.firstOrNull()?.port
-            ?: return ApiStudioProtocolRoute.Direct
+        val port = resolveApiStudioProxyPort(
+            captureState = captureState.value,
+            networkConditions = networkConditionsRepository?.configuration?.value,
+            proxyState = proxyState.value,
+        ) ?: return ApiStudioProtocolRoute.Direct
         return ApiStudioProtocolRoute.LocalProxy(port = port)
     }
 
     private fun openInteractiveSession(document: ApiStudioProtocolDocument) {
-        val session = openSession.execute(ApiStudioProtocolExecutionCommand(document, activeRoute())).getOrElse { error ->
+        val route = runCatching(::activeRoute).getOrElse { error ->
+            mutableState.update { it.copy(errorMessage = error.message ?: "Unable to resolve the gRPC route.") }
+            return
+        }
+        val session = openSession.execute(ApiStudioProtocolExecutionCommand(document, route)).getOrElse { error ->
             mutableState.update { it.copy(errorMessage = error.message ?: "Unable to open gRPC stream.") }
             return
         }

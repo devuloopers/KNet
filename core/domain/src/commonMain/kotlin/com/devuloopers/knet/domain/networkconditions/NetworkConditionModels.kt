@@ -4,7 +4,7 @@ package com.devuloopers.knet.domain.networkconditions
 @JvmInline
 value class NetworkConditionProfileId(val value: String) {
     init {
-        require(value.isNotBlank() && value == value.trim().lowercase()) {
+        require(value.matches(Regex("[a-z0-9]+(?:[._-][a-z0-9]+)*"))) {
             "Network condition profile ID must be a normalized lowercase token."
         }
     }
@@ -152,9 +152,12 @@ data class NetworkConditionConfiguration(
     val lastQuickAddProfileId: NetworkConditionProfileId? = null,
 ) {
     init {
-        val allProfileIds = NetworkConditionBuiltIns.all.map { it.id }.toSet() + customProfiles.map { it.id }
+        val builtInProfileIds = NetworkConditionBuiltIns.all.map { it.id }.toSet()
+        val customProfileIds = customProfiles.map { it.id }
+        val allProfileIds = builtInProfileIds + customProfileIds
         require(customProfiles.none(NetworkConditionProfile::builtIn)) { "Custom profiles cannot claim built-in ownership." }
-        require(customProfiles.map { it.id }.distinct().size == customProfiles.size) { "Profile IDs must be unique." }
+        require(customProfileIds.distinct().size == customProfiles.size) { "Profile IDs must be unique." }
+        require(customProfileIds.none(builtInProfileIds::contains)) { "Custom profile IDs cannot replace built-in profiles." }
         require(rules.map { it.id }.distinct().size == rules.size) { "Rule IDs must be unique." }
         require(rules.map { it.target }.distinct().size == rules.size) { "Equal network condition targets are not allowed." }
         require(globalProfileId == null || globalProfileId in allProfileIds) { "Global profile is missing." }

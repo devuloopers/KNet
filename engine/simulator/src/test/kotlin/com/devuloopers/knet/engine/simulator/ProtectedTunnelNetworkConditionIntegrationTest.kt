@@ -90,6 +90,7 @@ class ProtectedTunnelNetworkConditionIntegrationTest {
                 }
 
                 assertTrue(elapsed >= 750L, "12.5 KB arrived too quickly for a 100 kbps budget: ${elapsed}ms")
+                engine.refreshTelemetry()
                 assertTrue(engine.snapshot.value.downloadedBytes >= payload.size)
                 val evidence = capture.metadata?.appliedNetworkCondition
                 assertTrue(evidence != null)

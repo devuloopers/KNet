@@ -15,10 +15,13 @@ import com.devuloopers.knet.domain.networkconditions.NetworkConditionTarget
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.ui.desktop.networkconditions.model.NetworkConditionRuleDraft
 import com.devuloopers.knet.ui.desktop.networkconditions.model.NetworkConditionsState
+import com.devuloopers.knet.ui.desktop.networkconditions.model.NetworkThroughputHistory
+import com.devuloopers.knet.ui.desktop.networkconditions.model.NetworkThroughputSampler
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.uuid.ExperimentalUuidApi
@@ -26,22 +29,46 @@ import kotlin.uuid.Uuid
 
 class NetworkConditionsViewModel(
     private val repository: NetworkConditionsRepository,
-    runtimeTelemetry: NetworkConditionRuntimeTelemetry,
+    private val runtimeTelemetry: NetworkConditionRuntimeTelemetry,
     private val prepareRule: PrepareNetworkConditionRuleUseCase,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(NetworkConditionsState())
     val state: StateFlow<NetworkConditionsState> = mutableState.asStateFlow()
+    private val throughputSampler = NetworkThroughputSampler()
+    private var runtimeMonitoringJob: Job? = null
 
     init {
-        combine(repository.configuration, runtimeTelemetry.snapshot) { configuration, runtime ->
-            configuration to runtime
-        }.let { flow ->
-            viewModelScope.launch {
-                flow.collect { (configuration, runtime) ->
-                    mutableState.update { it.copy(configuration = configuration, runtime = runtime) }
+        viewModelScope.launch {
+            repository.configuration.collect { configuration ->
+                mutableState.update { it.copy(configuration = configuration) }
+            }
+        }
+    }
+
+    /** Starts the one-second UI telemetry window. Repeated calls from recomposition are harmless. */
+    fun startRuntimeMonitoring() {
+        if (runtimeMonitoringJob?.isActive == true) return
+        throughputSampler.reset()
+        mutableState.update { it.copy(throughput = NetworkThroughputHistory()) }
+        runtimeMonitoringJob = viewModelScope.launch {
+            // Ignore StateFlow's possibly stale retained value. The engine publishes a fresh baseline on subscribe.
+            runtimeTelemetry.snapshot.drop(1).collect { runtime ->
+                val throughput = throughputSampler.accept(runtime)
+                mutableState.update { current ->
+                    current.copy(
+                        runtime = runtime,
+                        throughput = throughput ?: current.throughput,
+                    )
                 }
             }
         }
+    }
+
+    /** Stops graph work when the destination leaves composition; history restarts on the next visit. */
+    fun stopRuntimeMonitoring() {
+        runtimeMonitoringJob?.cancel()
+        runtimeMonitoringJob = null
+        throughputSampler.reset()
     }
 
     fun setEnabled(enabled: Boolean) = mutate { repository.setEnabled(enabled) }

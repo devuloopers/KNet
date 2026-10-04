@@ -37,6 +37,143 @@ Still required before changing the capability from experimental to supported or 
 - entitlement-signed iOS packet-tunnel implementation/qualification and a permission-managed desktop packet
   adapter. These platforms remain unavailable, not silently emulated by the JVM proxy.
 
+## Live throughput monitor implementation checkpoint — 2026-10-04
+
+Status: **IMPLEMENTED; AUTOMATED QUALIFICATION PASSES**
+
+Delivered:
+
+- exact-once post-shaper payload accounting for shaped, pass-through, live-release, and virtual-MTU paths;
+- subscriber-driven one-second telemetry publication with no per-packet presentation snapshots;
+- an elapsed-time-aware, reset-safe 60-sample primitive ring buffer that stops with the screen lifecycle;
+- a KNet-native Compose Canvas graph for actual download/upload throughput and honest configured references;
+- equal-width/equal-height desktop overview cards, compact stacking, current rates, runtime metrics, and accessibility;
+- engine, channel-handler, rate-calculator, bounded-history, ViewModel lifecycle, product, and architecture coverage.
+
+Physical streaming observation and profiler captures remain part of the broader capability-promotion acceptance gates;
+they are not required for retaining the bounded 60-sample graph implementation.
+
+### Decision and measurement contract
+
+KNet will render the Network Conditions graph itself with Compose `Canvas`; no chart dependency will be added.
+The required graph is deliberately small: a 60-second window, upload and download paths, a grid, and an optional
+configured-rate reference. Keeping this code in `:ui:desktop:networkConditions` preserves the KNet theme, avoids
+third-party chart state and animation machinery, and adds no runtime dependency.
+
+The graph shows **observed application payload throughput after KNet releases bytes from the shaping boundary**.
+It does not plot the configured rate as if it were measured traffic, and it does not claim NIC throughput, TCP
+acknowledgement rate, TLS/IP overhead, or the device's total network usage. A configured bandwidth is drawn only
+as a labelled dashed reference. When enabled domain rules mean that the aggregate graph contains multiple limits,
+the UI shows `Mixed profiles` and omits a misleading single limit line.
+
+The cumulative runtime counters must first be made complete and unambiguous:
+
+- count upload and download bytes at the common forwarding point, after any shaping delay and immediately before
+  KNet releases the unit to the next pipeline stage;
+- include shaped, unlimited, global, domain-rule, and master-bypassed proxy traffic that crosses the Network
+  Conditions handler, while excluding failed, abandoned, or merely queued bytes;
+- separate queue accounting from forwarded-byte accounting so releasing a queued unit cannot double count it;
+- update primitive atomic counters per forwarded unit without allocating or publishing a UI model per packet;
+- coalesce runtime publication to a one-second monotonic sample for the graph, while preserving correct active-flow,
+  queued-byte, fault, and applied-rule totals;
+- identify the measurement source as proxy/application payload bytes. Packet/VPN telemetry may later contribute a
+  separately labelled series through the same application contract, but incompatible proxy and IP-datagram byte
+  layers must not be silently combined.
+
+### Bounded data and lifecycle
+
+The presentation layer retains exactly 60 one-second samples for each direction. It uses fixed-size primitive ring
+buffers and replaces only the immutable chart snapshot consumed by Compose. Two 60-entry `LongArray` histories
+hold 960 bytes of raw rate data; timestamps or validity flags keep the total raw history below 2 KiB. History is
+session-only and is neither written to Room nor retained in Traffic records.
+
+Sampling starts only while the Network Conditions presentation state is observed and stops when the screen leaves
+composition, allowing a short sharing timeout to avoid churn during navigation. A delayed tick uses its actual
+monotonic elapsed duration instead of assuming exactly one second. Counter resets, process restarts, and unsigned
+overflow produce a zero/unknown sample rather than a negative spike. The screen redraws at most once per sample;
+packet arrival never directly invalidates the Canvas.
+
+### UI composition
+
+At desktop widths, **Global condition** and **Live application** become equal-width, equal-height cards. At compact
+widths they stack at full width. The cards continue to use `KNetSurface`, KNet spacing, typography, semantic colors,
+and existing controls.
+
+The Live application card contains:
+
+- current actual download and upload rates with explicit `kbps`/`Mbps` units;
+- a KNet-native 60-second Canvas graph with download and upload paths, subtle grid lines, and `60s`/`Now` anchors;
+- an optional dashed configured-rate reference only when one honest aggregate reference exists;
+- active-flow and queued-byte indicators, while cumulative byte totals move to secondary text/tooltips;
+- a quiet zero baseline and `Waiting for traffic` state rather than fabricated activity;
+- an accessibility description containing the current upload/download rates, configured reference when present,
+  active-flow count, and queued bytes. Color is never the only distinction between upload and download.
+
+Canvas drawing retains reusable paths and the dashed-line effect rather than recreating them for every sample. It
+has no zoom, scrolling, point markers, per-point animation, or retained bitmap. Scaling uses the larger of the
+visible measured peak and an available configured reference, with stable headroom and human-readable tick labels
+to prevent distracting rescaling for small fluctuations.
+
+### Implementation slices
+
+#### 133.6.1 — Correct observed-byte telemetry
+
+- Extend the application telemetry model with an explicit monotonic sample time and documented observed-forwarded
+  byte semantics.
+- Refactor `NetworkConditionEngine` queue release and byte delivery into separate operations.
+- Instrument the shared `NetworkConditionChannelHandler` forwarding path exactly once for shaped and pass-through
+  units, including virtual-MTU chunks and live disable/release.
+- Coalesce telemetry publication so high-throughput traffic does not allocate a snapshot for every chunk.
+
+#### 133.6.2 — Throughput sampler and presentation state
+
+- Add a clock-injected rate calculator that derives bits per second from consecutive cumulative snapshots.
+- Add the bounded 60-sample ring buffer and chart snapshot to `NetworkConditionsState`.
+- Derive the configured reference from the effective global profile only when it truthfully represents the graph;
+  otherwise expose an explicit unlimited, mixed-profile, or unavailable state.
+- Tie collection to the screen/ViewModel subscription lifecycle and leave history unpersisted.
+
+#### 133.6.3 — KNet Canvas graph and equal overview cards
+
+- Change the wide overview layout to equal `1f` weights and a shared measured height; preserve stacked compact mode.
+- Build a private reusable `LiveThroughputGraph` from Compose primitives already present in the UI module.
+- Integrate current-rate labels, legend, metric tiles, empty state, reference line, and accessibility semantics into
+  the Live application card without adding a chart library.
+- Preserve the existing KNet dialogs, domain-rule workflow, responsive scrolling, and keyboard behavior.
+
+#### 133.6.4 — Verification and performance gate
+
+- Run affected application, simulator, Network Conditions UI, proxy integration, architecture, and formatting
+  checks.
+- Add a sustained-stream test and a disabled/pass-through test proving that measured rate follows forwarded bytes,
+  not the configured value.
+- Compare an idle screen and a 100 kbps stream with the graph visible and hidden; the retained history must remain
+  fixed at 60 samples and the sampler must stop after its lifecycle timeout.
+- Record a JVM allocation/heap smoke baseline. The graph must introduce no unbounded collections, retained payload
+  buffers, per-packet UI objects, or continuously growing history.
+
+### Required automated cases
+
+- shaped download and unlimited upload produce independent observed rates;
+- pass-through traffic is counted, while queued, failed, and abandoned bytes are not;
+- virtual-MTU splitting and live queue release count every forwarded byte exactly once;
+- irregular sampling intervals use elapsed monotonic time and never produce negative rates;
+- counter reset, long-idle periods, very large totals, and a zero elapsed interval fail safely;
+- the ring buffer remains at 60 samples after long runs and begins with a zero/unknown baseline;
+- 100 kbps sustained traffic settles within the shaping tolerance while idle intervals fall to zero;
+- configured limits are hidden for unlimited and mixed-profile aggregates and shown with correct units otherwise;
+- wide overview cards have equal width/height, while compact layouts stack without clipping;
+- Canvas scaling handles zero, sub-kbps, Mbps, and sudden peak values without invalid coordinates;
+- leaving the screen stops sampling and returning starts a fresh, bounded monitoring window;
+- UI state and accessibility text contain counters and rates only, never destinations, URLs, headers, or payloads.
+
+### Definition of done
+
+This enhancement is complete when the graph displays measured post-shaper payload throughput rather than a
+decorative configured curve, the two overview cards are visually equal at desktop widths, runtime telemetry counts
+all eligible forwarding paths exactly once, memory remains bounded independently of run duration, and the required
+automated and JVM allocation checks pass. No Vico, KoalaPlot, or other chart dependency is introduced.
+
 ## Outcome
 
 Add a first-class **Network Conditions** feature to KNet. It will be a separate desktop destination immediately
