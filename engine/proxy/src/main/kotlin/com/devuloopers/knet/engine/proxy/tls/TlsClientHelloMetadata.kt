@@ -2,6 +2,16 @@ package com.devuloopers.knet.engine.proxy.tls
 
 import io.netty.buffer.ByteBuf
 
+/** Whether a ClientHello can reuse authenticated state without transmitting a new server certificate. */
+enum class TlsResumptionOffer {
+    /** A complete parsed hello contains no session-resumption offer. */
+    NONE,
+    /** A legacy session/ticket or TLS 1.3 PSK is offered. */
+    OFFERED,
+    /** Incomplete or unsupported metadata cannot exclude resumption. */
+    UNKNOWN,
+}
+
 /** Bounded, payload-free metadata parsed from one complete TLS ClientHello. */
 data class TlsClientHelloMetadata(
     /** Normalized SNI exposed by Netty, when present. */
@@ -10,6 +20,8 @@ data class TlsClientHelloMetadata(
     val offeredApplicationProtocols: List<String>,
     /** Offered TLS versions in client preference order. */
     val offeredTlsVersions: List<String>,
+    /** Never treat a retained session certificate as evidence of a newly transmitted certificate. */
+    val resumptionOffer: TlsResumptionOffer = TlsResumptionOffer.UNKNOWN,
 )
 
 /** Strict bounds-checked parser for safe ClientHello extension metadata. */
@@ -35,30 +47,47 @@ internal object TlsClientHelloMetadataParser {
         val cipherSuitesLength = unsignedShort() ?: return empty(serverName)
         if (cipherSuitesLength % 2 != 0 || !skip(cipherSuitesLength)) return empty(serverName)
         val compressionMethodsLength = unsignedByte() ?: return empty(serverName)
-        if (!skip(compressionMethodsLength) || cursor == end) {
-            return TlsClientHelloMetadata(serverName, emptyList(), listOf(versionLabel(legacyVersion)))
+        if (!skip(compressionMethodsLength)) return empty(serverName)
+        if (cursor == end) {
+            return TlsClientHelloMetadata(serverName, emptyList(), listOf(versionLabel(legacyVersion)),
+                if (sessionIdLength > 0) TlsResumptionOffer.OFFERED else TlsResumptionOffer.NONE)
         }
         val extensionsLength = unsignedShort() ?: return empty(serverName)
         val extensionsEnd = cursor + extensionsLength
         if (extensionsEnd < cursor || extensionsEnd > end) return empty(serverName)
         val protocols = mutableListOf<String>()
         val versions = mutableListOf<String>()
+        var sessionOffered = false
+        var complete = extensionsEnd == end
         while (cursor <= extensionsEnd - EXTENSION_HEADER_BYTES) {
             val type = unsignedShort() ?: break
             val length = unsignedShort() ?: break
             val extensionEnd = cursor + length
-            if (extensionEnd < cursor || extensionEnd > extensionsEnd) break
+            if (extensionEnd < cursor || extensionEnd > extensionsEnd) {
+                complete = false
+                break
+            }
             when (type) {
                 ALPN_EXTENSION -> parseAlpn(clientHello, cursor, extensionEnd, protocols)
                 SUPPORTED_VERSIONS_EXTENSION -> parseVersions(clientHello, cursor, extensionEnd, versions)
+                PRE_SHARED_KEY_EXTENSION -> sessionOffered = true
+                SESSION_TICKET_EXTENSION -> if (length > 0) sessionOffered = true
             }
             cursor = extensionEnd
         }
+        complete = complete && cursor == extensionsEnd
+        // TLS 1.3 uses a non-empty compatibility session ID even on a new full handshake.
+        if (versionLabel(TLS_13_VERSION) !in versions && sessionIdLength > 0) sessionOffered = true
         if (versions.isEmpty()) versions += versionLabel(legacyVersion)
         return TlsClientHelloMetadata(
             serverName = serverName,
             offeredApplicationProtocols = protocols.distinct().take(MAXIMUM_RETAINED_VALUES),
             offeredTlsVersions = versions.distinct().take(MAXIMUM_RETAINED_VALUES),
+            resumptionOffer = when {
+                !complete -> TlsResumptionOffer.UNKNOWN
+                sessionOffered -> TlsResumptionOffer.OFFERED
+                else -> TlsResumptionOffer.NONE
+            },
         )
     }
 
@@ -107,6 +136,9 @@ internal object TlsClientHelloMetadataParser {
     private const val EXTENSION_HEADER_BYTES: Int = 4
     private const val ALPN_EXTENSION: Int = 16
     private const val SUPPORTED_VERSIONS_EXTENSION: Int = 43
+    private const val PRE_SHARED_KEY_EXTENSION: Int = 41
+    private const val SESSION_TICKET_EXTENSION: Int = 35
+    private const val TLS_13_VERSION: Int = 0x0304
     private const val MAXIMUM_RETAINED_VALUES: Int = 16
     private val PRINTABLE_ASCII_RANGE: IntRange = 0x21..0x7e
 }

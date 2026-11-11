@@ -1,7 +1,7 @@
 package com.devuloopers.knet.domain.protectedtraffic
 
-/** Versioned protected-service compatibility group definitions shipped with KNet. */
-object ProtectedTrafficBuiltIns {
+/** Historical v1 definitions used to verify legacy precedence; never installed by production configuration. */
+internal object ProtectedTrafficBuiltIns {
     /** Google Play Billing traffic attributed to the Play Store package. */
     val GooglePlayBillingGroupId: ProtectedServiceGroupId = ProtectedServiceGroupId("google-play-billing")
 

@@ -19,3 +19,5 @@ Invoke script use cases and render their state; runtime implementation remains i
 ## Migration direction
 
 The module currently exposes presentation types only. A future product activation must add its binding under `:products:desktop/di/scripting`.
+
+The console-level dropdown inherits shared selected-label sizing and animation without a fixed feature width.

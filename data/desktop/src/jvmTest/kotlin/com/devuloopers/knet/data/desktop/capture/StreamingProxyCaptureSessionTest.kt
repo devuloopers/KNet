@@ -2,6 +2,9 @@ package com.devuloopers.knet.data.desktop.capture
 
 import com.devuloopers.knet.application.contract.traffic.CaptureIngressLimits
 import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureConnectionMetadata
+import com.devuloopers.knet.traffic.model.OpaqueFlowClosure
+import com.devuloopers.knet.traffic.model.OpaqueFlowCloseInitiator
+import com.devuloopers.knet.traffic.model.OpaqueFlowCloseReason
 import com.devuloopers.knet.engine.proxy.capture.ProxyOpaqueFlowCaptureMetadata
 import com.devuloopers.knet.engine.proxy.capture.ProxyOpaqueSecurityProtocol
 import com.devuloopers.knet.engine.proxy.capture.ProxyOpaqueTransportProtocol
@@ -28,6 +31,9 @@ import com.devuloopers.knet.traffic.model.http.RequestTarget
 import com.devuloopers.knet.traffic.model.http.ResponseHead
 import java.nio.file.Files
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
@@ -76,16 +82,38 @@ class StreamingProxyCaptureSessionTest {
             )
             flow.observeBytes(TrafficDirection.CLIENT_TO_SERVER, 120, 3L)
             flow.observeBytes(TrafficDirection.SERVER_TO_CLIENT, 450, 4L)
+            session.flush()
+            val active = database.canonicalCaptureDao().getOpaqueFlows(session.sessionId.value, 10).single()
+            assertEquals("ACTIVE", active.state)
+            assertNull(active.completedAtEpochMillis)
+            assertEquals(120L, active.uploadedBytes)
+            assertEquals(450L, active.downloadedBytes)
+            repeat(5) { session.flush() }
+            assertEquals(active.version, database.canonicalCaptureDao().getOpaqueFlow(active.id)!!.version,
+                "Idle sampling must not generate repeated Room writes")
+            coroutineScope {
+                launch(Dispatchers.Default) { repeat(2500) { flow.observeBytes(TrafficDirection.CLIENT_TO_SERVER, 1, 4L) } }
+                launch(Dispatchers.Default) { repeat(2500) { flow.observeBytes(TrafficDirection.SERVER_TO_CLIENT, 1, 4L) } }
+            }
+            session.flush()
+            val concurrent = database.canonicalCaptureDao().getOpaqueFlow(active.id)!!
+            assertEquals(2620L, concurrent.uploadedBytes)
+            assertEquals(2950L, concurrent.downloadedBytes)
+            val closure = OpaqueFlowClosure(OpaqueFlowCloseInitiator.DEVICE, OpaqueFlowCloseReason.PEER_EOF, 4L)
+            flow.observeClosure(closure)
             flow.terminate(ExchangeTerminalOutcome.Completed, 5L)
+            flow.observeClosure(OpaqueFlowClosure(OpaqueFlowCloseInitiator.KNET, OpaqueFlowCloseReason.LOCAL_CLOSE, 6L))
             flow.terminate(
                 ExchangeTerminalOutcome.Failed(TrafficTerminationReason.Transport.DUPLEX_IO_FAILED),
                 6L,
             )
+            flow.observeBytes(TrafficDirection.SERVER_TO_CLIENT, 999, 7L)
             connection.close()
             session.flush()
 
             val stored = database.canonicalCaptureDao().getOpaqueFlows(session.sessionId.value, 10).single()
             assertEquals("COMPLETED", stored.state)
+            kotlin.test.assertTrue(stored.version > active.version)
             assertEquals("store.example", stored.destinationHost)
             assertEquals("com.example.store", stored.sourceApplicationId)
             assertEquals("pinned-store", stored.policyRuleId)
@@ -93,11 +121,12 @@ class StreamingProxyCaptureSessionTest {
             assertEquals("store-compatibility", stored.policyGroupId)
             assertEquals("streaming-100-kbps", stored.appliedConditionProfileId)
             assertEquals("store-condition", stored.appliedConditionRuleId)
-            assertEquals(120L, stored.uploadedBytes)
-            assertEquals(450L, stored.downloadedBytes)
+            assertEquals(2620L, stored.uploadedBytes)
+            assertEquals(2950L, stored.downloadedBytes)
             assertNull(stored.terminalErrorCode)
             val snapshot = CanonicalCaptureEntityMapper.opaqueFlowSnapshot(stored)
             assertIs<ExchangeTerminalOutcome.Completed>(snapshot.terminalOutcome)
+            assertEquals(closure, snapshot.closure)
             assertEquals("streaming-100-kbps", snapshot.appliedNetworkCondition?.profileId)
             assertEquals("TUNNEL", snapshot.policyAction?.name)
             assertEquals("store-compatibility", snapshot.policyGroupId)
@@ -139,12 +168,26 @@ class StreamingProxyCaptureSessionTest {
                 ),
                 occurredAtEpochMillis = 2L,
             )
+            val opaque = assertNotNull(connection.startOpaqueFlow(ProxyOpaqueFlowCaptureMetadata(
+                destination = TrafficEndpoint("store.example", 443), serverName = "store.example",
+                transport = ProxyOpaqueTransportProtocol.TCP, security = ProxyOpaqueSecurityProtocol.TLS,
+                policyRuleId = null, policyAction = ProxyOpaquePolicyAction.TUNNEL, occurredAtEpochMillis = 2L,
+            )))
+            opaque.observeBytes(TrafficDirection.CLIENT_TO_SERVER, 7, 3L)
+            opaque.observeBytes(TrafficDirection.SERVER_TO_CLIENT, 11, 3L)
 
             session.close(TrafficTerminationReason.Lifecycle.PROXY_STOPPED)
 
             val stored = assertNotNull(database.canonicalCaptureDao().getExchange(SHUTDOWN_EXCHANGE_ID))
             assertEquals("CANCELLED", stored.state)
             assertEquals("proxy-stopped", stored.terminalErrorCode)
+            val stopped = database.canonicalCaptureDao().getOpaqueFlows(session.sessionId.value, 10).single()
+            assertEquals("CANCELLED", stopped.state)
+            assertEquals("proxy-stopped", stopped.terminalErrorCode)
+            assertEquals(7L, stopped.uploadedBytes); assertEquals(11L, stopped.downloadedBytes)
+            opaque.observeBytes(TrafficDirection.SERVER_TO_CLIENT, 999, 4L)
+            session.flush()
+            assertEquals(stopped, database.canonicalCaptureDao().getOpaqueFlow(stopped.id))
         } finally {
             session.close()
             database.close()

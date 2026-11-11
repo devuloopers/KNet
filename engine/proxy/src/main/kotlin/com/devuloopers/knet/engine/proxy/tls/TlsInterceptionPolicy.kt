@@ -57,6 +57,7 @@ data class TlsInterceptionRequest(
     val connectPort: Int,
     val serverName: String? = null,
     val sourceApplication: TlsSourceApplicationId? = null,
+
 ) {
     init {
         require(connectHost.isNotBlank()) { "CONNECT host must not be blank." }
@@ -78,6 +79,9 @@ data class TlsInterceptionDecision(
     val ruleId: TlsInterceptionRuleId? = null,
     val policyAction: TlsInterceptionPolicyAction = mode.toPolicyAction(),
     val policyGroupId: String? = null,
+    /** Exact decision source retained in opaque capture. */
+    val origin: com.devuloopers.knet.traffic.model.ProtectionDecisionOrigin = com.devuloopers.knet.traffic.model.ProtectionDecisionOrigin.GLOBAL,
+
 ) {
     init {
         require(policyGroupId == null || policyGroupId.isNotBlank()) {

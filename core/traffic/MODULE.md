@@ -33,3 +33,9 @@ This is a leaf contract module and has no production project dependencies.
 Traffic UI, API Studio recording/replay preparation, breakpoints, storage adapters, semantic inspectors, export/replay boundaries, and paired ingress share these models. Request and response heads independently retain their observed application-protocol versions, while `TrafficOrigin` distinguishes an API Studio submission from an ordinary proxy client without conflating it with transport ingress. Response panels and timelines consume `ResponseHead`/`ExchangeTimings` directly. Feature-local mutable editor/UI state remains separate by design; no feature may fork canonical request/response, timing, origin, or content-encoding models.
 HTTP/2 aliases normalize to the canonical `HTTP/2` token. Stream identity and request/response trailers remain
 transport-neutral values, so future gRPC and HTTP/3 adapters can reuse them without importing Netty frames.
+
+OpaqueFlowProgress carries validated cumulative counters and a positive lifecycle version, separately from transport termination. Progress never implies HTTP or application success.
+
+OpaqueFlowClosure carries a validated initiator, observation reason and Unix timestamp independently of terminal
+delivery outcome. Opaque termination/snapshots retain it optionally so legacy or unobserved closures remain unknown.
+It represents first observed transport evidence, not a decrypted result or remote application cause.

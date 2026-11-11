@@ -76,8 +76,11 @@ enum class ProtectedTrafficRuleOrigin {
     /** Rule authored by the user or a user-visible context action. */
     USER,
 
-    /** Versioned KNet compatibility rule controlled by a visible group toggle. */
+    /** Historical built-in definition, retained for legacy policy decoding. */
     BUILT_IN,
+
+    /** Saved exception imported from an enabled legacy preset, retaining its lower precedence. */
+    MIGRATED_PRESET,
 }
 
 /**
@@ -239,6 +242,8 @@ data class ProtectedTrafficConfiguration(
     val defaultAction: ProtectedTrafficAction = ProtectedTrafficAction.INSPECT,
     val rules: List<ProtectedTrafficRule> = emptyList(),
     val enabledBuiltInGroups: Set<ProtectedServiceGroupId> = emptySet(),
+    /** False until an authoritative, valid persisted snapshot has been loaded. */
+    val configurationReady: Boolean = true,
 ) {
     init {
         val duplicate = rules.groupBy(ProtectedTrafficRule::selectorKey).entries.firstOrNull { it.value.size > 1 }

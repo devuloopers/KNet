@@ -23,8 +23,8 @@ internal class SniTlsContextHandlerFactory(
     }
 
     /** Creates one channel-confined handler using [connectHost] when the client omits SNI. */
-    fun create(context: ChannelHandlerContext, connectHost: String): SniHandler = SniHandler(
-        contextMapping(context, connectHost),
+    fun create(context: ChannelHandlerContext, connectHost: String, evidence: DownstreamTlsEvidence): SniHandler = SniHandler(
+        contextMapping(context, connectHost, evidence),
         maximumClientHelloBytes,
         handshakeTimeoutMillis,
     )
@@ -33,6 +33,7 @@ internal class SniTlsContextHandlerFactory(
     private fun contextMapping(
         context: ChannelHandlerContext,
         connectHost: String,
+        evidence: DownstreamTlsEvidence,
     ): AsyncMapping<String, SslContext> = object : AsyncMapping<String, SslContext> {
         override fun map(input: String?, promise: Promise<SslContext>): Future<SslContext> {
             val serverName = runCatching { TlsServerName.select(input, connectHost) }
@@ -55,6 +56,7 @@ internal class SniTlsContextHandlerFactory(
                         )
                         !context.channel().isActive -> promise.cancel(false)
                         else -> {
+                            evidence.contextInstalled(sslContext)
                             context.channel().attr(ProxyChannelAttributes.TLS_SERVER_NAME).set(serverName)
                             promise.trySuccess(sslContext)
                         }

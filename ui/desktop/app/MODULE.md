@@ -10,6 +10,8 @@ Provides the desktop application shell, navigation host, window scaffold, notifi
 - Sidebar grouping and ordering: primary inspection tools precede the divider; Connect Device then Certificates
   form the setup/security group; Settings remains anchored above the branding footer.
 - Workspace-level placement of the Live Intercept drawer above destination-owned drawers, gated until its canonical Traffic row is projected.
+- Composition of the Network Conditions quick control into Traffic's toolbar slot, sharing the existing feature
+  ViewModel and navigation route without adding policy ownership or infrastructure dependencies to Traffic.
 
 ## Does not own
 

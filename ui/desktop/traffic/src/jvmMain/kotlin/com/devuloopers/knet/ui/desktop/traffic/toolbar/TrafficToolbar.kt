@@ -51,7 +51,8 @@ data class TrafficToolbarActions(
 fun TrafficToolbar(
     state: TrafficToolbarState,
     actions: TrafficToolbarActions,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    networkConditionsControl: @Composable () -> Unit = {},
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -68,7 +69,10 @@ fun TrafficToolbar(
             .border(width = 1.dp, color = themeColors.border)
             .padding(horizontal = spacing.md, vertical = spacing.sm),
         leading = {
-            ToolbarGroup(horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
+            ToolbarGroup(
+                modifier = Modifier.weight(1f).padding(end = spacing.md),
+                horizontalArrangement = Arrangement.spacedBy(spacing.sm),
+            ) {
                 // Start Button
                 Row(
                     modifier = Modifier
@@ -130,6 +134,7 @@ fun TrafficToolbar(
                 // Engine Operational Status Badge
                 Row(
                     modifier = Modifier
+                        .weight(1f, fill = false)
                         .clip(shapes.small)
                         .background(themeColors.surfaceVariant)
                         .border(1.dp, themeColors.border, shapes.small)
@@ -156,6 +161,7 @@ fun TrafficToolbar(
                     )
                     Text(
                         text = statusText,
+                        modifier = Modifier.weight(1f, fill = false),
                         style = typography.labelMedium.copy(
                             color = themeColors.textSecondary,
                             fontWeight = FontWeight.Medium
@@ -195,13 +201,21 @@ fun TrafficToolbar(
             }
         },
         trailing = {
-            ToolbarGroup {
-                KNetSwitch(
-                    checked = state.autoScroll,
-                    onCheckedChange = { actions.onAutoScrollToggle() },
-                    label = "Auto Scroll"
-                )
+            BoxWithConstraints {
+                // The selected label can grow while capture actions and Auto Scroll retain their space.
+                val maximumConditionsWidth = maxWidth * 0.3f
+                ToolbarGroup(horizontalArrangement = Arrangement.spacedBy(spacing.md)) {
+                    Box(Modifier.widthIn(max = maximumConditionsWidth)) {
+                        networkConditionsControl()
+                    }
+                    KNetSwitch(
+                        checked = state.autoScroll,
+                        onCheckedChange = { actions.onAutoScrollToggle() },
+                        label = "Auto Scroll"
+                    )
+                }
             }
-        }
+        },
+        content = {},
     )
 }

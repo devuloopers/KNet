@@ -13,8 +13,11 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.job
 
 /**
  * Unit tests verifying layered DI composition, non-duplicate module aggregation, and Koin container startup.
@@ -51,6 +54,15 @@ class DesktopModulesTest {
     fun testShouldNotContainDuplicateModules() {
         val uniqueModules = DesktopModules.all.distinct()
         assertEquals(DesktopModules.all.size, uniqueModules.size, "DesktopModules.all must contain unique module instances")
+    }
+
+    @Test
+    fun `closing the container cancels the shared policy and transform scope`() {
+        val application = startKoin { modules(listOf(module { single { DesktopConfiguration.load() } }) + DesktopModules.all) }
+        val scope = application.koin.get<CoroutineScope>()
+        assertTrue(scope.coroutineContext.job.isActive)
+        application.close()
+        assertFalse(scope.coroutineContext.job.isActive)
     }
 
     @Test

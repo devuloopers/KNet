@@ -1,5 +1,12 @@
 # `:products:companion:androidApp`
 
+## Live Network Conditions ownership
+
+The foreground VPN service starts exactly one application policy-maintenance coroutine after forwarding starts.
+It applies updates through the existing forwarder and cancels/joins maintenance before native shutdown. Global
+updates therefore do not depend on an open UI screen or require restarting the VPN. Packet selectors, original
+application identity and desktop UDP metadata remain separately tracked completion work.
+
 ## Responsibility
 
 Owns the installable Android companion APK, Android manifest, launcher lifecycle, and product composition root.

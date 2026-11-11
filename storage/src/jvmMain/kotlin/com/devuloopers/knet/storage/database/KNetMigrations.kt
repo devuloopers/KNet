@@ -4,6 +4,78 @@ import androidx.room.migration.Migration
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.execSQL
 
+/** Adds nullable close provenance without fabricating evidence for retained captures. */
+internal object Migration34To35 : Migration(34, 35) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("ALTER TABLE opaque_flows ADD COLUMN closureInitiator TEXT")
+        connection.execSQL("ALTER TABLE opaque_flows ADD COLUMN closureReason TEXT")
+        connection.execSQL("ALTER TABLE opaque_flows ADD COLUMN closureObservedAtEpochMillis INTEGER")
+    }
+}
+
+/**
+ * Retires the preset catalogue, importing only already-enabled v1 choices as ordinary visible saved exceptions.
+ * Historical service names exist solely in this versioned upgrade; fresh databases have no built-in rules.
+ * USER retains its higher policy precedence, even for an equivalent disabled explicit rule.
+ */
+internal object Migration33To34 : Migration(33, 34) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("ALTER TABLE protected_traffic_rules ADD COLUMN origin TEXT NOT NULL DEFAULT 'USER'")
+        val oldIndex = "index_protected_traffic_rules_sourceApplication_destinationKind_destinationValue_destinationPrefixLength_port_transport_ipFamily"
+        connection.execSQL("DROP INDEX IF EXISTS `$oldIndex`")
+        connection.execSQL("CREATE UNIQUE INDEX `${oldIndex}_origin` ON protected_traffic_rules " +
+            "(sourceApplication, destinationKind, destinationValue, destinationPrefixLength, port, transport, ipFamily, origin)")
+
+        // These are the exact v1 definitions shipped before preset retirement. Never use them for runtime discovery.
+        val historical = listOf(
+            LegacyRule("builtin-google-play-store-v1", "google-play-billing", application = "com.android.vending"),
+            LegacyRule("builtin-google-play-services-v1", "google-system-services", application = "com.google.android.gms"),
+            LegacyRule("builtin-google-services-framework-v1", "google-system-services", application = "com.google.android.gsf"),
+            LegacyRule("builtin-apple-storekit-agent-v1", "apple-app-store-storekit", application = "com.apple.storekitagent"),
+            LegacyRule("builtin-apple-app-store-v1", "apple-app-store-storekit", application = "com.apple.AppStore"),
+            LegacyRule("builtin-google-play-api-v1", "google-play-billing", host = "play.googleapis.com"),
+            LegacyRule("builtin-google-play-frontend-v1", "google-play-billing", host = "play-fe.googleapis.com"),
+            LegacyRule("builtin-google-android-clients-v1", "google-play-billing", host = "android.clients.google.com"),
+            LegacyRule("builtin-apple-buy-itunes-v1", "apple-app-store-storekit", host = "buy.itunes.apple.com"),
+            LegacyRule("builtin-apple-sandbox-itunes-v1", "apple-app-store-storekit", host = "sandbox.itunes.apple.com"),
+            LegacyRule("builtin-apple-storekit-itunes-v1", "apple-app-store-storekit", host = "storekit.itunes.apple.com"),
+        )
+        historical.forEach { legacy ->
+            connection.prepare(
+                "INSERT INTO protected_traffic_rules (id, enabled, action, sourceApplication, destinationKind, " +
+                    "destinationValue, destinationPrefixLength, destinationIpFamily, port, transport, ipFamily, origin) " +
+                    "SELECT ?1, 1, 'TUNNEL', ?2, ?3, ?4, NULL, NULL, ?5, ?6, NULL, 'MIGRATED_PRESET' " +
+                    "WHERE EXISTS (SELECT 1 FROM protected_service_groups WHERE groupId = ?7 AND enabled = 1) " +
+                    "ON CONFLICT(id) DO NOTHING",
+            ).use { statement ->
+                statement.bindText(1, legacy.id)
+                if (legacy.application == null) statement.bindNull(2) else statement.bindText(2, legacy.application)
+                if (legacy.host == null) {
+                    statement.bindNull(3); statement.bindNull(4); statement.bindNull(5); statement.bindNull(6)
+                } else {
+                    statement.bindText(3, "exact-host"); statement.bindText(4, legacy.host)
+                    statement.bindLong(5, 443); statement.bindText(6, "TCP")
+                }
+                statement.bindText(7, legacy.group)
+                statement.step()
+            }
+        }
+        connection.execSQL("UPDATE protected_service_groups SET enabled = 0")
+    }
+
+    private data class LegacyRule(val id: String, val group: String, val application: String? = null, val host: String? = null)
+}
+
+/** Adds default-on Smart Compatibility without rewriting any existing actions or rules. */
+internal object Migration32To33 : Migration(32, 33) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("ALTER TABLE protected_traffic_settings ADD COLUMN smartCompatibilityEnabled INTEGER NOT NULL DEFAULT 1")
+        connection.execSQL("ALTER TABLE opaque_flows ADD COLUMN protectionOrigin TEXT")
+        connection.execSQL("ALTER TABLE opaque_flows ADD COLUMN inspectionFailureReason TEXT")
+        connection.execSQL("ALTER TABLE opaque_flows ADD COLUMN smartEntryId TEXT")
+    }
+}
+
 /** Adds the durable exchange ordinal while retaining every canonical v18 exchange. */
 internal object Migration18To19 : Migration(18, 19) {
     override fun migrate(connection: SQLiteConnection) {

@@ -52,6 +52,7 @@ import com.devuloopers.knet.ui.desktop.traffic.model.TrafficColumn
 import com.devuloopers.knet.ui.desktop.traffic.model.ResolvedTrafficColumnLayout
 import com.devuloopers.knet.ui.desktop.traffic.model.resolveTrafficColumnLayout
 import com.devuloopers.knet.ui.desktop.traffic.model.toTrafficHostLabel
+import com.devuloopers.knet.ui.desktop.traffic.model.displayStatusLabel
 
 import com.devuloopers.knet.ui.core.components.menu.ContextMenuItem
 import com.devuloopers.knet.ui.core.components.menu.KNetContextMenuArea
@@ -509,6 +510,8 @@ private fun TableRowItem(
         item.terminalOutcome is ExchangeTerminalOutcome.Cancelled -> themeColors.semantic.warning
         item.terminalOutcome is ExchangeTerminalOutcome.Completed -> themeColors.semantic.success
         item.statusText.equals("Timed Out", ignoreCase = true) -> themeColors.textMuted
+        item.rowKind == com.devuloopers.knet.ui.desktop.traffic.model.TrafficRowKind.OPAQUE_FLOW &&
+            item.terminalOutcome == null -> themeColors.semantic.info
         isCompleted && item.status == 0 -> themeColors.semantic.error
         !isCompleted && item.status == 0 -> androidx.compose.ui.graphics.Color(0xFFFAB387)
         else -> themeColors.textSecondary
@@ -665,12 +668,7 @@ private fun TableRowItem(
                 contentAlignment = Alignment.CenterStart,
             ) {
                 Text(
-                    text = when {
-                        item.status > 0 -> "${item.status}"
-                        item.terminalOutcome != null -> item.statusText
-                        isCompleted -> item.statusText.ifBlank { "ERR" }
-                        else -> "In Progress"
-                    },
+                    text = item.displayStatusLabel,
                     style = typography.codeSmall.copy(color = statusColor, fontWeight = FontWeight.Medium),
                     maxLines = 1,
                     softWrap = false,

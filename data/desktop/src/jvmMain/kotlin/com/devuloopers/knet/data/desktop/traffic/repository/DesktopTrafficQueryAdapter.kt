@@ -1,5 +1,19 @@
 package com.devuloopers.knet.data.desktop.traffic.repository
 
+import com.devuloopers.knet.traffic.model.ClientIdentity
+
+import com.devuloopers.knet.traffic.model.IngressContext
+
+import com.devuloopers.knet.traffic.model.IngressKind
+
+import com.devuloopers.knet.application.contract.traffic.TrafficConnectionIngress
+
+import com.devuloopers.knet.traffic.model.OpaqueFlowSnapshot
+
+import com.devuloopers.knet.traffic.id.ConnectionId
+
+import com.devuloopers.knet.traffic.id.OpaqueFlowId
+
 import com.devuloopers.knet.application.contract.traffic.BodyChunk
 import com.devuloopers.knet.application.contract.traffic.BodyRange
 import com.devuloopers.knet.application.contract.traffic.BodyStore
@@ -68,6 +82,31 @@ class DesktopTrafficQueryAdapter(
     override suspend fun getExchange(exchangeId: ExchangeId): HttpExchangeSnapshot? {
         val exchange = dao.getExchange(exchangeId.value) ?: return null
         return adapter(CaptureSessionId(exchange.sessionId)).getExchange(exchangeId)
+    }
+
+    override suspend fun getOpaqueFlow(flowId: OpaqueFlowId): OpaqueFlowSnapshot? =
+        dao.getOpaqueFlow(flowId.value)?.let(CanonicalCaptureEntityMapper::opaqueFlowSnapshot)
+
+    override suspend fun getConnectionIngress(connectionId: ConnectionId): TrafficConnectionIngress? {
+        val connection = dao.getConnection(connectionId.value) ?: return null
+        val kind = when (connection.ingressKind) {
+            "LOCAL" -> IngressKind.Local
+            "LAN_PAIRED_DEVICE" -> IngressKind.LanPairedDevice
+            "WIFI_LAN_CLIENT" -> IngressKind.WifiLanClient
+            "ADB_DEVICE" -> IngressKind.AdbDevice
+            "COMPANION_DIRECT" -> IngressKind.CompanionDirect
+            "COMPANION_RELAY" -> IngressKind.CompanionRelay
+            else -> return null
+        }
+        val address = connection.downstreamHost
+        val loopback = address == "::1" || address == "0:0:0:0:0:0:0:1" ||
+            address?.split('.')?.let { parts ->
+                parts.size == 4 && parts.first() == "127" && parts.all { part -> part.toIntOrNull()?.let { it in 0..255 } == true }
+            } == true
+        return TrafficConnectionIngress(
+            IngressContext(kind, connection.clientIdentity?.let { ClientIdentity(it) }),
+            address, loopback,
+        )
     }
 
     override suspend fun readBody(bodyId: BodyId, range: BodyRange): BodyChunk =

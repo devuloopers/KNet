@@ -48,6 +48,12 @@ class CertificateRuntimeRepository(
 
     fun rootCertificateDer(): ByteArray = certificateAuthority.certificate.encoded.copyOf()
 
+    /** Suppresses automatic compatibility learning when KNet's own CA is expired or not yet valid. */
+    fun inspectionAuthorityValid(): Boolean = runCatching {
+        certificateAuthority.certificate.checkValidity()
+        true
+    }.getOrDefault(false)
+
     /** Returns one process-stable KNet-CA-signed companion listener identity for [serverName]. */
     @Synchronized
     fun companionTlsIdentity(serverName: String): DesktopCompanionTlsIdentity =

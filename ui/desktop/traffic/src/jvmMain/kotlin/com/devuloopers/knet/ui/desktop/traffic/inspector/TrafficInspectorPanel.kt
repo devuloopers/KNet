@@ -14,13 +14,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import com.devuloopers.knet.traffic.model.OpaqueFlowPolicyAction
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.domain.clientNetwork.model.HttpVersionPreference
 import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
 import com.devuloopers.knet.domain.util.UrlQueryStringParser
 import com.devuloopers.knet.traffic.model.absoluteUrl
-import com.devuloopers.knet.traffic.model.TrafficTerminationReason
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.components.tabs.KNetTab
 import com.devuloopers.knet.ui.core.components.tabs.KNetTabRow
@@ -37,7 +35,7 @@ import com.devuloopers.knet.traffic.inspection.InspectionAnnotation
 import com.devuloopers.knet.traffic.inspection.InspectionAnnotationState
 
 /**
- * 500dp Right-Docked Inspection Panel bound strictly to :ui:core design tokens and primitives.
+ * Right-docked inspection panel using shared :ui:core design tokens and primitives.
  */
 @Composable
 fun TrafficInspectorPanel(
@@ -53,7 +51,9 @@ fun TrafficInspectorPanel(
     onProtocolMessageSelected: (com.devuloopers.knet.traffic.id.ProtocolMessageId) -> Unit = {},
     onLoadMoreProtocolMessages: () -> Unit = {},
     onSendToApiStudio: (String) -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    protectionState: TrafficProtectionState = TrafficProtectionState(),
+    protectionActions: TrafficProtectionActions? = null,
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -125,7 +125,7 @@ fun TrafficInspectorPanel(
                     )
                 }
             } else if (selectedTransaction.rowKind == TrafficRowKind.OPAQUE_FLOW) {
-                OpaqueFlowInspectorPanel(selectedTransaction, Modifier.fillMaxSize())
+                OpaqueFlowInspectorPanel(selectedTransaction, protectionState, protectionActions, Modifier.fillMaxSize())
             } else {
                 val selectedPreparedState = preparedState.forSelection(selectedTransaction.transactionId)
                     ?: InspectorPreparedState.loading(selectedTransaction.transactionId)
@@ -247,107 +247,6 @@ fun TrafficInspectorPanel(
             }
         }
     }
-}
-
-/** Renders only metadata KNet actually observed for an end-to-end encrypted flow. */
-@Composable
-private fun OpaqueFlowInspectorPanel(
-    flow: TrafficRowUiState,
-    modifier: Modifier = Modifier,
-) {
-    val colors = KNetTheme.colors
-    val typography = KNetTheme.typography
-    Column(
-        modifier = modifier.padding(16.dp).verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Text(
-            text = flow.method,
-            style = typography.bodyMedium.copy(fontWeight = FontWeight.Bold, color = colors.textPrimary),
-            maxLines = 1,
-            softWrap = false,
-        )
-        Text(
-            text = when (flow.policyAction) {
-                OpaqueFlowPolicyAction.INSPECT ->
-                    "TLS inspection failed before an HTTP exchange could be captured, so payload details are unavailable."
-                OpaqueFlowPolicyAction.TUNNEL ->
-                    "KNet preserved end-to-end encryption. HTTP headers, bodies, status codes, and subscription details are unavailable by design."
-                OpaqueFlowPolicyAction.BLOCK ->
-                    "KNet blocked this protected flow before payload inspection or upstream transfer."
-                OpaqueFlowPolicyAction.BYPASS ->
-                    "The policy selected bypass; at this explicit-proxy boundary KNet preserved the payload as an opaque tunnel."
-                null ->
-                    "This flow was captured without payload semantics, so HTTP headers, bodies, and status codes are unavailable."
-            },
-            style = typography.bodyMedium.copy(color = colors.textSecondary),
-            maxLines = 1,
-            softWrap = false,
-        )
-        OpaqueFlowDetail("Destination", flow.host)
-        OpaqueFlowDetail("Source application", flow.sourceApplicationId ?: "Unavailable")
-        OpaqueFlowDetail("Policy rule", flow.policyRuleId ?: "Global default")
-        OpaqueFlowDetail("Policy action", flow.policyAction?.name ?: "Unavailable")
-        flow.policyGroupId?.let { groupId -> OpaqueFlowDetail("Compatibility group", groupId) }
-        flow.appliedNetworkCondition?.let { condition ->
-            OpaqueFlowDetail("Network condition", condition.profileId)
-            OpaqueFlowDetail("Condition rule", condition.ruleId ?: "Global")
-        }
-        OpaqueFlowDetail("Security", flow.opaqueSecurity?.name ?: "Unknown")
-        OpaqueFlowDetail(
-            "Offered ALPN",
-            flow.offeredApplicationProtocols.takeIf { it.isNotEmpty() }?.joinToString() ?: "Unavailable",
-        )
-        OpaqueFlowDetail(
-            "Offered TLS versions",
-            flow.offeredTlsVersions.takeIf { it.isNotEmpty() }?.joinToString() ?: "Unavailable",
-        )
-        OpaqueFlowDetail("State", flow.statusText)
-        OpaqueFlowDetail("Started", flow.formattedTimestamp)
-        OpaqueFlowDetail("Duration", flow.formattedTime)
-        OpaqueFlowDetail("Uploaded", formatOpaqueBytes(flow.transferredBytes - flow.responseBytes))
-        OpaqueFlowDetail("Downloaded", formatOpaqueBytes(flow.responseBytes))
-        flow.terminalOutcome?.reason?.code?.value?.let { reason ->
-            OpaqueFlowDetail("Termination", reason)
-        }
-        if (
-            flow.terminalOutcome?.reason ==
-            TrafficTerminationReason.Transport.DOWNSTREAM_TLS_HANDSHAKE_FAILED
-        ) {
-            OpaqueFlowDetail(
-                "Guidance",
-                "The client may use certificate pinning. Add an explicit tunnel rule, then retry the connection.",
-            )
-        }
-    }
-}
-
-/** One non-wrapping key/value field in the opaque-flow details panel. */
-@Composable
-private fun OpaqueFlowDetail(label: String, value: String) {
-    val colors = KNetTheme.colors
-    val typography = KNetTheme.typography
-    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-        Text(
-            text = label,
-            style = typography.caption.copy(color = colors.textMuted),
-            maxLines = 1,
-            softWrap = false,
-        )
-        Text(
-            text = value,
-            style = typography.bodyMedium.copy(color = colors.textPrimary),
-            maxLines = 1,
-            softWrap = false,
-        )
-    }
-}
-
-/** Formats one non-negative byte count without introducing an HTTP payload dependency. */
-private fun formatOpaqueBytes(bytes: Long): String = when {
-    bytes >= 1_048_576L -> "${bytes / 1_048_576L} MB"
-    bytes >= 1_024L -> "${bytes / 1_024L} KB"
-    else -> "$bytes B"
 }
 
 /** Protocol-neutral renderer; individual inspectors only contribute versioned generic documents. */

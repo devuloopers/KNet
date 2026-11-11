@@ -14,6 +14,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.runtime.remember
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Icon
@@ -28,9 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedDestinationSelector
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedIpFamily
-import com.devuloopers.knet.domain.protectedtraffic.ProtectedServiceGroupId
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficAction
-import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficBuiltIns
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficRule
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficRuleOrigin
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTransportProtocol
@@ -44,6 +46,7 @@ import com.devuloopers.knet.ui.core.components.dialog.KNetDialog
 import com.devuloopers.knet.ui.core.components.divider.HorizontalDivider
 import com.devuloopers.knet.ui.core.components.input.InputFieldConfig
 import com.devuloopers.knet.ui.core.components.input.KNetTextField
+import com.devuloopers.knet.ui.core.components.inspector.KNetInspectorParagraph
 import com.devuloopers.knet.ui.core.components.scrollbar.KNetVerticalScrollbar
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.components.switch.KNetSwitch
@@ -59,67 +62,28 @@ fun ProtectedTrafficScreen(
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsState()
-    val colors = KNetTheme.colors
+    val ruleListState = rememberLazyListState()
     val spacing = KNetTheme.spacing
-    val scrollState = rememberScrollState()
-
-    Box(modifier = modifier.fillMaxSize().background(colors.background)) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(scrollState)
-                .padding(horizontal = spacing.xxl, vertical = spacing.xl)
-                .padding(end = spacing.sm),
-            verticalArrangement = Arrangement.spacedBy(spacing.xl),
-        ) {
-            ProtectedTrafficHeader()
-            DefaultActionCard(
-                action = state.configuration.defaultAction,
-                onActionSelected = viewModel::selectDefaultAction,
-            )
-
-            SectionHeader(
-                title = "Compatibility groups",
-                subtitle = "Verified service bundles that commonly reject TLS inspection.",
-            )
-            Column(verticalArrangement = Arrangement.spacedBy(spacing.sm)) {
-                compatibilityGroups.forEach { group ->
-                    CompatibilityGroupRow(
-                        group = group,
-                        enabled = group.id in state.configuration.enabledBuiltInGroups,
-                        onEnabledChange = { enabled ->
-                            viewModel.setCompatibilityGroupEnabled(group.id, enabled)
-                        },
-                    )
+    ProtectedTrafficWorkspace(modifier) {
+        Box(Modifier.fillMaxSize()) {
+            LazyColumn(state = ruleListState, modifier = Modifier.fillMaxSize().padding(end = spacing.lg),
+                verticalArrangement = Arrangement.spacedBy(spacing.md)) {
+                item(key = "default") {
+                    DefaultActionCard(state.configuration.defaultAction, viewModel::selectDefaultAction)
                 }
-            }
-
-            SectionHeader(
-                title = "Application and destination rules",
-                subtitle = "Add precise overrides by app identity, host, network, port, or transport.",
-                actionText = "Add rule",
-                onAction = viewModel::beginAddRule,
-            )
-            val userRules = state.configuration.rules.filter { it.origin == ProtectedTrafficRuleOrigin.USER }
-            if (userRules.isEmpty()) {
-                EmptyRulesCard(onAdd = viewModel::beginAddRule)
-            } else {
-                Column(verticalArrangement = Arrangement.spacedBy(spacing.sm)) {
-                    userRules.forEach { rule ->
-                        ProtectedRuleRow(
-                            rule = rule,
-                            onEnabledChange = { enabled -> viewModel.setRuleEnabled(rule, enabled) },
-                            onDelete = { viewModel.deleteRule(rule.id) },
-                        )
-                    }
+                item(key = "rules-heading") {
+                    SectionHeader("Manual rules", "Saved rules take priority over the default TLS action.", "Add rule", viewModel::beginAddRule)
                 }
+                val userRules = state.configuration.rules.filter { it.origin != ProtectedTrafficRuleOrigin.BUILT_IN }
+                if (userRules.isEmpty()) item(key = "empty-rules") { EmptyRulesCard(viewModel::beginAddRule) }
+                items(userRules, key = { "rule-${it.id.value}" }) { rule ->
+                    ProtectedRuleRow(rule, { enabled -> viewModel.setRuleEnabled(rule, enabled) },
+                        { viewModel.deleteRule(rule.id) }, { viewModel.beginEditRule(rule) })
+                }
+
             }
+            KNetVerticalScrollbar(ruleListState, Modifier.align(Alignment.CenterEnd).fillMaxHeight())
         }
-
-        KNetVerticalScrollbar(
-            scrollState = scrollState,
-            modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
-        )
     }
 
     state.ruleDraft?.let { draft ->
@@ -136,59 +100,6 @@ fun ProtectedTrafficScreen(
             message = error,
             onDismissRequest = viewModel::clearError,
         )
-    }
-}
-
-@Composable
-private fun ProtectedTrafficHeader() {
-    val colors = KNetTheme.colors
-    val spacing = KNetTheme.spacing
-    Column(verticalArrangement = Arrangement.spacedBy(spacing.md)) {
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(spacing.sm),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                "Protected Traffic",
-                style = KNetTheme.typography.display.copy(color = colors.textPrimary),
-            )
-            KNetBadge(
-                text = "SAFE TUNNELING",
-                containerColor = colors.semantic.successContainer,
-                contentColor = colors.semantic.success,
-            )
-        }
-        KNetSurface(
-            modifier = Modifier.fillMaxWidth(),
-            color = colors.semantic.infoContainer,
-            border = BorderStroke(1.dp, colors.semantic.info.copy(alpha = 0.45f)),
-            shape = KNetTheme.shapes.medium,
-            contentAlignment = Alignment.CenterStart,
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(spacing.lg),
-                horizontalArrangement = Arrangement.spacedBy(spacing.md),
-                verticalAlignment = Alignment.Top,
-            ) {
-                Icon(
-                    imageVector = KNetIcons.Lock,
-                    contentDescription = null,
-                    tint = colors.semantic.info,
-                    modifier = Modifier.size(KNetTheme.dimensions.iconSizeLarge),
-                )
-                Column(verticalArrangement = Arrangement.spacedBy(spacing.xs)) {
-                    Text(
-                        "Keep protected connections working without decrypting them",
-                        style = KNetTheme.typography.titleSmall.copy(color = colors.textPrimary),
-                    )
-                    Text(
-                        "Pinned, mutually authenticated, and system-owned flows remain visible in Traffic as " +
-                            "bounded metadata records while their end-to-end encryption stays intact.",
-                        style = KNetTheme.typography.bodySmall.copy(color = colors.textSecondary),
-                    )
-                }
-            }
-        }
     }
 }
 
@@ -211,11 +122,15 @@ private fun DefaultActionCard(
             verticalArrangement = Arrangement.spacedBy(spacing.md),
         ) {
             Text(
-                "DEFAULT ACTION",
+                "Default TLS connection handling",
                 style = KNetTheme.typography.caption.copy(
                     color = colors.accent,
                     fontWeight = FontWeight.Bold,
                 ),
+            )
+            KNetInspectorParagraph(
+                "Controls HTTPS, GraphQL over HTTPS, secure WebSocket (WSS) and gRPC over TLS routed through KNet. " +
+                    "Plain HTTP, unencrypted WebSocket (ws://), UDP and QUIC/HTTP/3 are outside this setting.",
             )
             Row(
                 modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
@@ -225,87 +140,28 @@ private fun DefaultActionCard(
                     KNetChip(
                         text = candidate.label,
                         selected = action == candidate,
-                        onClick = { onActionSelected(candidate) },
+                        onClick = if (candidate == ProtectedTrafficAction.BYPASS) null else ({ onActionSelected(candidate) }),
+                        enabled = candidate != ProtectedTrafficAction.BYPASS,
                     )
                 }
             }
-            Text(
+            KNetInspectorParagraph(
                 text = when (action) {
                     ProtectedTrafficAction.INSPECT ->
-                        "Inspect normally unless a compatibility group or custom rule selects another action."
+                        "Attempt TLS decryption to show requests and responses. If inspection fails, select the connection " +
+                            "in Traffic to review the reason and save a handling rule."
                     ProtectedTrafficAction.TUNNEL ->
-                        "Relay encrypted bytes without TLS interception and retain metadata-only visibility."
+                        "Forward encrypted traffic without decrypting it. Destination, timing and byte counts remain visible."
                     ProtectedTrafficAction.BYPASS ->
-                        "Route outside KNet only when the active platform adapter explicitly supports bypass."
+                        "This previously saved Bypass setting is handled as an encrypted tunnel by the desktop proxy."
                     ProtectedTrafficAction.BLOCK ->
-                        "Reject matching protected flows and retain the policy decision for diagnostics."
+                        "Reject these connections and record the decision. Traffic outside this setting is unaffected."
                 },
-                style = KNetTheme.typography.bodySmall.copy(color = colors.textSecondary),
             )
-        }
-    }
-}
-
-@Composable
-private fun CompatibilityGroupRow(
-    group: CompatibilityGroup,
-    enabled: Boolean,
-    onEnabledChange: (Boolean) -> Unit,
-) {
-    val colors = KNetTheme.colors
-    val spacing = KNetTheme.spacing
-    KNetSurface(
-        modifier = Modifier.fillMaxWidth(),
-        color = colors.surface,
-        border = BorderStroke(1.dp, colors.border),
-        shape = KNetTheme.shapes.small,
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = spacing.lg, vertical = spacing.md),
-            horizontalArrangement = Arrangement.spacedBy(spacing.md),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            KNetSurface(
-                color = if (enabled) colors.semantic.successContainer else colors.surfaceVariant,
-                shape = KNetTheme.shapes.small,
-            ) {
-                Icon(
-                    imageVector = KNetIcons.Shield,
-                    contentDescription = null,
-                    tint = if (enabled) colors.semantic.success else colors.textMuted,
-                    modifier = Modifier.padding(spacing.sm).size(KNetTheme.dimensions.iconSizeMedium),
-                )
-            }
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(spacing.xs),
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(spacing.sm),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        group.title,
-                        style = KNetTheme.typography.titleSmall.copy(color = colors.textPrimary),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    KNetBadge(
-                        text = "BUILT-IN",
-                        containerColor = colors.surfaceVariant,
-                        contentColor = colors.textMuted,
-                    )
-                }
-                Text(
-                    group.description,
-                    style = KNetTheme.typography.bodySmall.copy(color = colors.textSecondary),
-                )
-            }
-            KNetSwitch(
-                checked = enabled,
-                onCheckedChange = onEnabledChange,
-                label = if (enabled) "Enabled" else "Disabled",
+            KNetInspectorParagraph("Matching saved rules take priority. Changes apply to new connections.")
+            KNetInspectorParagraph(
+                "Bypass is disabled: routing directly outside KNet requires a supported packet provider.",
+                color = colors.textMuted,
             )
         }
     }
@@ -316,6 +172,7 @@ private fun ProtectedRuleRow(
     rule: ProtectedTrafficRule,
     onEnabledChange: (Boolean) -> Unit,
     onDelete: () -> Unit,
+    onEdit: () -> Unit,
 ) {
     val colors = KNetTheme.colors
     val spacing = KNetTheme.spacing
@@ -342,12 +199,13 @@ private fun ProtectedRuleRow(
                     overflow = TextOverflow.Ellipsis,
                 )
                 KNetBadge(
-                    text = rule.action.label.uppercase(),
+                    text = rule.action.label.uppercase() + if (rule.origin == ProtectedTrafficRuleOrigin.MIGRATED_PRESET) " · IMPORTED" else "",
                     containerColor = actionContainerColor(rule.action),
                     contentColor = actionContentColor(rule.action),
                 )
             }
             KNetSwitch(checked = rule.enabled, onCheckedChange = onEnabledChange)
+            KNetIconButton(onClick = onEdit, icon = KNetIcons.Edit, contentDescription = "Edit protected traffic rule")
             KNetIconButton(
                 onClick = onDelete,
                 icon = KNetIcons.Delete,
@@ -385,7 +243,7 @@ private fun EmptyRulesCard(onAdd: () -> Unit) {
                     style = KNetTheme.typography.titleSmall.copy(color = colors.textPrimary),
                 )
                 Text(
-                    "Built-in compatibility groups still apply when enabled.",
+                    "Add a rule here or choose future connection handling from a Traffic item.",
                     style = KNetTheme.typography.bodySmall.copy(color = colors.textSecondary),
                 )
             }
@@ -483,7 +341,8 @@ private fun RuleDialog(
                     KNetChip(
                         text = action.label,
                         selected = draft.action == action,
-                        onClick = { onChange(draft.copy(action = action)) },
+                        enabled = action != ProtectedTrafficAction.BYPASS,
+                        onClick = if (action == ProtectedTrafficAction.BYPASS) null else ({ onChange(draft.copy(action = action)) }),
                     )
                 }
             }
@@ -571,27 +430,3 @@ private val ProtectedDestinationSelector.displayValue: String
         is ProtectedDestinationSelector.WildcardDomain -> "*.$suffix"
         is ProtectedDestinationSelector.Cidr -> "$networkAddress/$prefixLength"
     }
-
-private data class CompatibilityGroup(
-    val id: ProtectedServiceGroupId,
-    val title: String,
-    val description: String,
-)
-
-private val compatibilityGroups = listOf(
-    CompatibilityGroup(
-        ProtectedTrafficBuiltIns.GooglePlayBillingGroupId,
-        "Google Play Billing",
-        "Tunnel verified Play Store traffic so product and subscription loading can remain functional.",
-    ),
-    CompatibilityGroup(
-        ProtectedTrafficBuiltIns.GoogleSystemServicesGroupId,
-        "Google system services",
-        "Optional broader tunnel for verified Play services and Google Services Framework traffic.",
-    ),
-    CompatibilityGroup(
-        ProtectedTrafficBuiltIns.AppleAppStoreGroupId,
-        "Apple App Store and StoreKit",
-        "Tunnel verified App Store or StoreKit agent flows when the active Apple provider exposes them.",
-    ),
-)

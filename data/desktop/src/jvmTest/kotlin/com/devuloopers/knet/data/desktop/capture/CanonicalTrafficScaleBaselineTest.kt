@@ -19,13 +19,14 @@ import kotlin.test.assertEquals
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import kotlin.time.Duration.Companion.seconds
 
 /** Indexed storage baseline proving 100,000 exchanges are never loaded as one feature result. */
 class CanonicalTrafficScaleBaselineTest {
 
     /** Builds a 100,000-row fixture and verifies filtered keyset pages remain bounded and indexed. */
     @Test
-    fun `one hundred thousand exchanges page without full materialization`() = runTest {
+    fun `one hundred thousand exchanges page without full materialization`() = runTest(timeout = 180.seconds) {
         val root = Files.createTempDirectory("knet-canonical-scale-").toFile()
         val database = DatabaseFactory.create(root.resolve("traffic.db"))
         val dao = database.canonicalCaptureDao()
@@ -42,6 +43,8 @@ class CanonicalTrafficScaleBaselineTest {
             )
             dao.insertConnection(connection(sessionId))
 
+            // Fixture construction is real SQLite I/O and can contend with concurrent crypto/native CI suites.
+            // Keep its bounded setup allowance separate from the unchanged measured 5-second query assertion.
             val fixtureMillis = measureTimeMillis {
                 repeat(FIXTURE_ROWS / INSERT_BATCH_SIZE) { batchIndex ->
                     val firstIndex = batchIndex * INSERT_BATCH_SIZE

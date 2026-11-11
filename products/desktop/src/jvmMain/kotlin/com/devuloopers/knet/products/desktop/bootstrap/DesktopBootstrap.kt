@@ -24,6 +24,7 @@ import com.devuloopers.knet.domain.settings.usecase.ObserveApplicationSettingsUs
 import com.devuloopers.knet.products.desktop.config.DesktopConfiguration
 import com.devuloopers.knet.products.desktop.di.DesktopModules
 import com.devuloopers.knet.products.desktop.lifecycle.ApplicationLifecycle
+import com.devuloopers.knet.products.desktop.lifecycle.CoroutineScopeShutdownResource
 import com.devuloopers.knet.products.desktop.lifecycle.ShutdownAware
 import com.devuloopers.knet.products.desktop.runtime.ApplicationSettingsRuntimeSynchronizer
 import com.devuloopers.knet.storage.database.KNetDatabase
@@ -36,7 +37,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import org.koin.core.Koin
@@ -99,6 +99,10 @@ object DesktopBootstrap {
                 database.close()
             }
         })
+
+        // Reverse teardown closes ingress/proxy first, drains shared policy/transform observers next,
+        // then closes SQLite. Cancellation alone would race a transaction's final rollback/commit.
+        ApplicationLifecycle.registerResource("proxy-policy-scope", CoroutineScopeShutdownResource(koin.get()))
 
         val rulesRepository = koin.get<RulesRepositoryImpl>()
         ApplicationLifecycle.registerResource("rules-repository", object : ShutdownAware {
@@ -187,11 +191,7 @@ object DesktopBootstrap {
     /** Starts process-owned policies once, independently from whether a feature screen is composed. */
     private fun startStartupPolicies(koin: Koin) {
         val policyScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-        ApplicationLifecycle.registerResource("startup-policy-scope", object : ShutdownAware {
-            override fun close() {
-                policyScope.cancel()
-            }
-        })
+        ApplicationLifecycle.registerResource("startup-policy-scope", CoroutineScopeShutdownResource(policyScope))
         koin.get<ApplicationSettingsRuntimeSynchronizer>().start(policyScope)
         policyScope.launch {
             try {

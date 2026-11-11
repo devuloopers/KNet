@@ -9,6 +9,9 @@ Owns the live traffic table, filtering, selection, inspector coordination, and t
 - Traffic ViewModel, table/toolbar UI, selection, presentation-owned filters, bounded rolling keyset-page
   window, generic semantic annotation presentation, typed live-interception projection, and lean
   body-free `TrafficRowUiState` values.
+- A constrained toolbar slot immediately before Auto Scroll for the shell-composed global Network Conditions
+  shortcut. Traffic owns placement, not policy state; capture actions remain visible while long runtime status
+  labels yield width to the shared controls.
 - Stable storage-owned serial numbers, separate loaded-versus-available counts, and auto-scroll policy that
   reacts to a genuinely newer sequence rather than a page-size change.
 - Separate transport and semantic method presentation: filters retain the canonical HTTP method while the
@@ -80,3 +83,30 @@ translation is not misreported as one ambiguous value. Protocol and Source remai
 default and can be enabled through the existing generic column menu.
 HTTP/2 filtering matches either observed protocol leg, and the optional Stream column plus Overview stream field
 read only the stored canonical `StreamId`; presentation never infers a stream from row order or connection state.
+
+The opaque/TLS inspector separates immutable captured diagnostics from a live future-connection policy read.
+A dedicated TrafficProtectionViewModel observes one selected flow, dispatches exact-destination Tunnel/Inspect
+rules through application use cases, serializes mutations and reports feedback in place. Right-click actions use
+the same owner without navigating away. No temporary decision observer or automatic-decision menu remains.
+Diagnostic copy derives from typed captured evidence and never claims pinning is proven. Technical metadata is
+collapsed initially; legacy automatic provenance is labelled historical. Shared inspector components own paragraph
+wrapping, overflow, scrollbars and action reflow.
+
+Saved action selection is reconstructed from the enabled equivalent destination rule and the current winning
+rule. Active actions retain a selected visual and accessible state while redundant submission is disabled.
+Inherited/global handling can still be promoted to an exact saved rule. Overridden choices
+are labelled explicitly. Selection never depends on the transient success message or a per-row click cache.
+
+All single-select Traffic filters inherit UI core's selected-label dropdown width: they fit the current label/placeholder
+and animate both expansion and contraction without feature-specific sizing options. Width measurement, limits, chevron spacing, easing and reduced-motion handling stay
+in UI core. Popup width remains independent so every option is readable even when the anchor displays only Type.
+The existing shared filter-group horizontal scrolling handles constrained windows.
+
+Opaque connections use one shared Active/Closed status contract in the table and inspector; other typed terminal outcomes remain distinct. These labels describe transport lifetime, not encrypted HTTP/business success. Live counters refresh through canonical feed generations.
+
+Typed raw inactivity/write timeouts display Timed Out and identify the applicable deadline in the inspector.
+Generic I/O failures remain Failed; historical records are never reinterpreted as timeouts from duration alone.
+
+Terminal opaque Technical details presents recorded Closed by, Close reason and Close observed at. Device/Server
+mean the first observed peer side; KNet requires explicit local intent. Legacy/unproven evidence remains Unknown
+with no invented timestamp. The existing shared inspector disclosure/scrolling owns layout and overflow.

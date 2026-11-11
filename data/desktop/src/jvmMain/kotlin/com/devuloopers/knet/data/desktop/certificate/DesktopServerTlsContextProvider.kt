@@ -7,6 +7,7 @@ import io.netty.handler.ssl.SslContext
 import io.netty.handler.ssl.SslContextBuilder
 import io.netty.handler.ssl.ApplicationProtocolConfig
 import io.netty.handler.ssl.ApplicationProtocolNames
+import io.netty.handler.ssl.SslProvider
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
 
@@ -20,6 +21,7 @@ class DesktopServerTlsContextProvider(
             .thenApplyAsync(
                 { leaf ->
                     SslContextBuilder.forServer(leaf.keyPair.private, leaf.certificate)
+                        .sslProvider(SslProvider.JDK)
                         .applicationProtocolConfig(
                             ApplicationProtocolConfig(
                                 ApplicationProtocolConfig.Protocol.ALPN,

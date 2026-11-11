@@ -10,6 +10,20 @@ import kotlin.test.assertFailsWith
 /** Tests portable monotonic capture-event validation. */
 class CaptureEventsTest {
 
+    /** Progress carries cumulative counters and a positive lifecycle ordering fence. */
+    @Test
+    fun `opaque progress validates counters coordinates and lifecycle version`() {
+        val event = CaptureEvent.OpaqueFlowProgress(CaptureSessionId("session"), ConnectionId("connection"), 1, 1,
+            com.devuloopers.knet.traffic.id.OpaqueFlowId("opaque"), 1, 120, 450)
+        assertEquals(120L, event.uploadedBytes)
+        assertEquals(450L, event.downloadedBytes)
+        assertFailsWith<IllegalArgumentException> { event.copy(flowVersion = 0) }
+        assertFailsWith<IllegalArgumentException> { event.copy(uploadedBytes = -1) }
+        assertFailsWith<IllegalArgumentException> { event.copy(downloadedBytes = -1) }
+        assertFailsWith<IllegalArgumentException> { event.copy(sequence = -1) }
+        assertFailsWith<IllegalArgumentException> { event.copy(occurredAtEpochMillis = -1) }
+    }
+
     /** Verifies the event derives its terminal state from an unambiguous outcome. */
     @Test
     fun `exchange termination derives state from outcome`() {

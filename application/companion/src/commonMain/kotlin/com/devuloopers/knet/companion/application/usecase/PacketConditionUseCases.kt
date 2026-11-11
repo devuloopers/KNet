@@ -5,6 +5,7 @@ import com.devuloopers.knet.companion.application.contract.CompanionControlOpera
 import com.devuloopers.knet.companion.application.contract.CompanionControlRequest
 import com.devuloopers.knet.companion.application.contract.CompanionControlTransport
 import com.devuloopers.knet.companion.application.contract.CompanionCredentialStore
+import com.devuloopers.knet.companion.application.contract.CompanionPacketPolicySource
 import com.devuloopers.knet.companion.model.CompanionRegistration
 import com.devuloopers.knet.companion.model.PacketConditionConfiguration
 import com.devuloopers.knet.companion.model.PacketConditionConfigurationCodec
@@ -14,7 +15,10 @@ import kotlinx.coroutines.CancellationException
 public class FetchCompanionPacketConditionsUseCase(
     private val credentials: CompanionCredentialStore,
     private val control: CompanionControlTransport,
-) {
+) : CompanionPacketPolicySource {
+    /** Application port used by the session-owned policy maintainer. */
+    public override suspend fun fetch(registration: CompanionRegistration): PacketConditionConfiguration? = execute(registration)
+
     public suspend fun execute(registration: CompanionRegistration): PacketConditionConfiguration? {
         val credential = try {
             credentials.read(registration.credentialReference)

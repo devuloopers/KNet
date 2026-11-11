@@ -15,7 +15,7 @@ import kotlin.test.assertEquals
 class KNetDatabaseMigrationTest {
     @Test
     fun `every retained schema generation migrates without deleting canonical sessions`() {
-        listOf(13, 18, 22, 24, 27, 28, 29, 30, 31).forEach { version ->
+        listOf(13, 18, 22, 24, 27, 28, 29, 30, 31, 32, 33, 34).forEach { version ->
             val root = Files.createTempDirectory("knet-v$version-migration-").toFile()
             val databaseFile = root.resolve("traffic.db")
             try {
@@ -121,6 +121,58 @@ class KNetDatabaseMigrationTest {
                 root.deleteRecursively()
             }
         }
+    }
+
+    @Test
+    fun `smart compatibility upgrade enables new switch without replacing existing block policy`() {
+        val root = Files.createTempDirectory("knet-smart-migration-").toFile()
+        val file = root.resolve("traffic.db")
+        try {
+            createDatabaseFromExportedSchema(file, 32)
+            BundledSQLiteDriver().open(file.absolutePath).use { connection ->
+                connection.execSQL("INSERT INTO protected_traffic_settings (singletonId, defaultAction) VALUES (1, 'BLOCK')")
+                connection.execSQL("INSERT INTO protected_service_groups (groupId, enabled) VALUES ('google-play-billing', 1)")
+            }
+            val firstDatabase = DatabaseFactory.create(file)
+            try {
+                val database = firstDatabase
+                val settings = runBlocking { database.protectedTrafficDao().getSettings() }
+                assertEquals("BLOCK", settings?.defaultAction)
+                assertEquals(true, settings?.smartCompatibilityEnabled)
+                runBlocking { database.protectedTrafficDao().upsertSettings(settings!!.copy(smartCompatibilityEnabled = false)) }
+            } finally { firstDatabase.close() }
+            val secondDatabase = DatabaseFactory.create(file)
+            try {
+                val database = secondDatabase
+                val settings = runBlocking { database.protectedTrafficDao().getSettings() }
+                assertEquals(false, settings?.smartCompatibilityEnabled)
+                assertEquals("BLOCK", settings?.defaultAction)
+            } finally { secondDatabase.close() }
+        } finally { root.deleteRecursively() }
+    }
+
+    @Test
+    fun `v34 completed opaque capture retains state counters and unknown closure evidence after upgrade`() {
+        val root = Files.createTempDirectory("knet-close-migration-").toFile()
+        val file = root.resolve("traffic.db")
+        try {
+            createDatabaseFromExportedSchema(file, 34)
+            BundledSQLiteDriver().open(file.absolutePath).use { connection ->
+                connection.execSQL("INSERT INTO opaque_flows (id, sessionId, connectionId, connectionSequence, version, state, " +
+                    "startedAtEpochMillis, completedAtEpochMillis, destinationHost, transport, security, uploadedBytes, downloadedBytes) " +
+                    "VALUES ('legacy-close', 'session', 'connection', 1, 7, 'COMPLETED', 100, 60100, 'store.example', 'TCP', 'TLS', 123, 456)")
+            }
+            val database = DatabaseFactory.create(file)
+            try {
+                val row = runBlocking { database.canonicalCaptureDao().getOpaqueFlow("legacy-close") }!!
+                assertEquals("COMPLETED", row.state)
+                assertEquals(7L, row.version)
+                assertEquals(123L, row.uploadedBytes); assertEquals(456L, row.downloadedBytes)
+                assertEquals(60100L, row.completedAtEpochMillis)
+                assertEquals(null, row.closureInitiator); assertEquals(null, row.closureReason)
+                assertEquals(null, row.closureObservedAtEpochMillis)
+            } finally { database.close() }
+        } finally { root.deleteRecursively() }
     }
 
     private fun createDatabaseFromExportedSchema(databaseFile: File, version: Int) {

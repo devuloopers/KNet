@@ -45,6 +45,7 @@ import com.devuloopers.knet.ui.desktop.traffic.view.TrafficScreen
 import com.devuloopers.knet.ui.desktop.traffic.model.TrafficInterceptionUiState
 import com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficViewModel
 import com.devuloopers.knet.ui.desktop.networkconditions.view.NetworkConditionsScreen
+import com.devuloopers.knet.ui.desktop.networkconditions.view.NetworkConditionsQuickControl
 import com.devuloopers.knet.ui.desktop.networkconditions.viewmodel.NetworkConditionsViewModel
 import com.devuloopers.knet.ui.desktop.protectedtraffic.view.ProtectedTrafficScreen
 import com.devuloopers.knet.ui.desktop.protectedtraffic.viewmodel.ProtectedTrafficViewModel
@@ -71,6 +72,7 @@ fun KNetWorkspaceHost(
     val breakpointViewModel: BreakpointManagerViewModel = koinViewModel()
     val breakpointState by breakpointViewModel.uiState.collectAsState()
     val trafficViewModel: TrafficViewModel = koinViewModel()
+    val trafficProtectionViewModel: com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficProtectionViewModel = koinViewModel()
     val networkConditionsViewModel: NetworkConditionsViewModel = koinViewModel()
     val protectedTrafficViewModel: ProtectedTrafficViewModel = koinViewModel()
     val trafficState by trafficViewModel.uiState.collectAsState()
@@ -90,8 +92,20 @@ fun KNetWorkspaceHost(
     Box(modifier = modifier.fillMaxSize()) {
         when (destination) {
             DesktopDestination.Traffic -> {
+                val networkConditionsState by networkConditionsViewModel.state.collectAsState()
                 TrafficScreen(
+                    protectionViewModel = trafficProtectionViewModel,
                     viewModel = trafficViewModel,
+                    networkConditionsControl = {
+                        NetworkConditionsQuickControl(
+                            configuration = networkConditionsState.configuration,
+                            onEnabledChange = networkConditionsViewModel::setEnabled,
+                            onActivateProfile = networkConditionsViewModel::activateGlobalProfile,
+                            onOpenNetworkConditions = { onNavigateToDestination(DesktopDestination.NetworkConditions) },
+                            errorMessage = networkConditionsState.errorMessage,
+                            onDismissError = networkConditionsViewModel::clearError,
+                        )
+                    },
                     onSendToApiStudio = { captured ->
                         if (captured.kind == RequestKindId.WEBSOCKET ||
                             captured.kind == RequestKindId.GRAPHQL_WEBSOCKET
@@ -105,10 +119,6 @@ fun KNetWorkspaceHost(
                     onAddNetworkCondition = { exchangeId ->
                         networkConditionsViewModel.prepareFromTraffic(exchangeId)
                         onNavigateToDestination(DesktopDestination.NetworkConditions)
-                    },
-                    onProtectedTrafficAction = { flowId, action, scope ->
-                        protectedTrafficViewModel.applyFlowAction(flowId, action, scope)
-                        onNavigateToDestination(DesktopDestination.ProtectedTraffic)
                     },
                     modifier = Modifier.fillMaxSize()
                 )

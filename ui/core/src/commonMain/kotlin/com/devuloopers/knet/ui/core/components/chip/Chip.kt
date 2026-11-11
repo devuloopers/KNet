@@ -11,30 +11,33 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.semantics
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
-/** Compact selectable chip; omit [onClick] for a passive label. */
+/** Compact selectable chip; omit [onClick] for a passive label. Disabled chips expose unavailable state. */
 @Composable
 fun KNetChip(
     text: String,
     onClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier,
-    selected: Boolean = false
+    selected: Boolean = false,
+    enabled: Boolean = true,
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
     val shapes = KNetTheme.shapes
 
     val containerColor = if (selected) themeColors.accent else themeColors.surfaceVariant
-    val textColor = if (selected) themeColors.surface else themeColors.textPrimary
+    val textColor = if (!enabled) themeColors.textMuted else if (selected) themeColors.surface else themeColors.textPrimary
 
     val interactionModifier = if (onClick != null) {
         Modifier
-            .selectable(selected = selected, role = Role.Button, onClick = onClick)
+            .selectable(selected = selected, enabled = enabled, role = Role.Button, onClick = onClick)
             .handCursor()
     } else {
-        Modifier
+        if (!enabled) Modifier.semantics { disabled() } else Modifier
     }
 
     Box(

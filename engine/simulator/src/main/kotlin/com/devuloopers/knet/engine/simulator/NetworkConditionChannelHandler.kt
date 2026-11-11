@@ -1,5 +1,9 @@
 package com.devuloopers.knet.engine.simulator
 
+import com.devuloopers.knet.engine.proxy.pipeline.ProxyTransportActivity
+import io.netty.channel.socket.ChannelInputShutdownEvent
+import io.netty.channel.socket.ChannelInputShutdownReadComplete
+
 import com.devuloopers.knet.domain.networkconditions.NetworkFailureBehavior
 import com.devuloopers.knet.domain.networkconditions.EffectiveNetworkCondition
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionMatcher
@@ -46,6 +50,26 @@ class NetworkConditionChannelHandler(
     private var uploadDeadlineNanos = 0L
     private var downloadDeadlineNanos = 0L
     private var closed = false
+    private var transportHold: AutoCloseable? = null
+    private var inputShutdownPending = false
+    private var inputShutdownReadCompletePending = false
+    private var inputEnded = false
+    private var inputReadPending = false
+
+    override fun read(context: ChannelHandlerContext) {
+        if (inputEnded) return
+        if (uploadQueue.isNotEmpty()) inputReadPending = true else context.read()
+    }
+
+    override fun userEventTriggered(context: ChannelHandlerContext, event: Any) {
+        if (event === ChannelInputShutdownEvent.INSTANCE) inputEnded = true
+        when {
+            event === ChannelInputShutdownEvent.INSTANCE && uploadQueue.isNotEmpty() -> inputShutdownPending = true
+            event === ChannelInputShutdownReadComplete.INSTANCE && (uploadQueue.isNotEmpty() || inputShutdownPending) ->
+                inputShutdownReadCompletePending = true
+            else -> context.fireUserEventTriggered(event)
+        }
+    }
 
     override fun handlerAdded(context: ChannelHandlerContext) {
         configurationSubscription = engine.observeConfigurationChanges {
@@ -98,6 +122,7 @@ class NetworkConditionChannelHandler(
     override fun channelInactive(context: ChannelHandlerContext) {
         closeConfigurationSubscription()
         clearQueues()
+        inputReadPending = false
         closeFlow()
         context.fireChannelInactive()
     }
@@ -105,6 +130,7 @@ class NetworkConditionChannelHandler(
     override fun handlerRemoved(context: ChannelHandlerContext) {
         closeConfigurationSubscription()
         clearQueues()
+        resumeInputRead(context)
         closeFlow()
     }
 
@@ -137,7 +163,7 @@ class NetworkConditionChannelHandler(
         when (plan) {
             NetworkConditionPlan.PassThrough -> {
                 if (!engine.conditionsEnabled() && queue(direction).isNotEmpty()) {
-                    releaseQueuedImmediately(direction)
+                    releaseQueuedImmediately(context, direction)
                     forward(context, message, promise, direction, flush = promise != null)
                 } else if (queue(direction).isEmpty()) {
                     forward(context, message, promise, direction)
@@ -242,6 +268,7 @@ class NetworkConditionChannelHandler(
         pendingBytes += bytes
         val queue = queue(direction)
         queue.addLast(PendingForward(context, message, promise, bytes, dueNanos, selection))
+        if (transportHold == null) transportHold = ProxyTransportActivity.hold(context.channel())
         if (queue.size == 1) {
             scheduleHead(
                 direction = direction,
@@ -292,6 +319,9 @@ class NetworkConditionChannelHandler(
             } else {
                 scheduleHead(direction, (next.dueNanos - engine.currentTimeNanos()).coerceAtLeast(0L))
             }
+            releaseTransportHoldIfIdle()
+            releaseInputShutdownIfReady(head.context)
+            resumeInputRead(head.context)
         }, delayNanos, TimeUnit.NANOSECONDS)
         setTask(direction, task)
     }
@@ -312,9 +342,12 @@ class NetworkConditionChannelHandler(
         while (downloadQueue.isNotEmpty()) abandon(downloadQueue.removeFirst())
         uploadDeadlineNanos = 0L
         downloadDeadlineNanos = 0L
+        releaseTransportHoldIfIdle()
+        inputShutdownPending = false
+        inputShutdownReadCompletePending = false
     }
 
-    private fun releaseQueuedImmediately(direction: NetworkConditionDirection) {
+    private fun releaseQueuedImmediately(context: ChannelHandlerContext, direction: NetworkConditionDirection) {
         when (direction) {
             NetworkConditionDirection.UPLOAD -> uploadTask?.cancel(false)
             NetworkConditionDirection.DOWNLOAD -> downloadTask?.cancel(false)
@@ -334,13 +367,16 @@ class NetworkConditionChannelHandler(
             )
         }
         setDeadline(direction, 0L)
+        releaseTransportHoldIfIdle()
+        releaseInputShutdownIfReady(context)
+        resumeInputRead(context)
     }
 
     /** Re-reserves pending bytes after enable/profile/rule edits while preserving direction order. */
     private fun reapplyQueued(context: ChannelHandlerContext) {
         if (!engine.conditionsEnabled()) {
-            releaseQueuedImmediately(NetworkConditionDirection.UPLOAD)
-            releaseQueuedImmediately(NetworkConditionDirection.DOWNLOAD)
+            releaseQueuedImmediately(context, NetworkConditionDirection.UPLOAD)
+            releaseQueuedImmediately(context, NetworkConditionDirection.DOWNLOAD)
             return
         }
         reapplyQueued(context, NetworkConditionDirection.UPLOAD)
@@ -362,6 +398,37 @@ class NetworkConditionChannelHandler(
             pendingBytes = (pendingBytes - item.bytes).coerceAtLeast(0L)
             engine.abandon(item.bytes)
             shape(context, item.message, item.promise, direction, item.selection)
+        }
+        releaseTransportHoldIfIdle()
+        releaseInputShutdownIfReady(context)
+        resumeInputRead(context)
+    }
+
+    /** Manual raw reads cannot drain another upload batch while its current bytes are still delayed. */
+    private fun resumeInputRead(context: ChannelHandlerContext) {
+        if (uploadQueue.isNotEmpty() || !inputReadPending) return
+        inputReadPending = false
+        if (!inputEnded && context.channel().isActive) context.read()
+    }
+
+    /** TCP FIN follows every delayed upload unit, including live-disable/replan paths. */
+    private fun releaseInputShutdownIfReady(context: ChannelHandlerContext) {
+        if (uploadQueue.isNotEmpty()) return
+        if (inputShutdownPending) {
+            inputShutdownPending = false
+            context.fireUserEventTriggered(ChannelInputShutdownEvent.INSTANCE)
+        }
+        if (inputShutdownReadCompletePending) {
+            inputShutdownReadCompletePending = false
+            context.fireUserEventTriggered(ChannelInputShutdownReadComplete.INSTANCE)
+        }
+    }
+
+    /** Releases one owner token only after both direction queues have drained or been abandoned. */
+    private fun releaseTransportHoldIfIdle() {
+        if (uploadQueue.isEmpty() && downloadQueue.isEmpty()) {
+            transportHold?.close()
+            transportHold = null
         }
     }
 

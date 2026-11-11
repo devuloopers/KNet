@@ -24,6 +24,8 @@ import com.devuloopers.knet.engine.proxy.tls.TlsInterceptionMode
 import com.devuloopers.knet.engine.proxy.tls.TlsInterceptionPolicy
 import com.devuloopers.knet.engine.proxy.tls.TlsInterceptionRequest
 import com.devuloopers.knet.engine.proxy.tls.TlsInspectionOutcomeHandler
+import com.devuloopers.knet.engine.proxy.tls.DownstreamTlsEvidence
+import com.devuloopers.knet.engine.proxy.tls.TlsCertificateFlightObserver
 import com.devuloopers.knet.engine.proxy.tls.TlsSourceApplicationId
 import com.devuloopers.knet.engine.proxy.tls.TlsClientHelloMetadata
 import com.devuloopers.knet.engine.proxy.tls.TlsClientHelloPolicyHandler
@@ -44,7 +46,9 @@ import io.netty.channel.socket.SocketChannel
 import io.netty.handler.codec.http.*
 import io.netty.handler.codec.http2.Http2StreamFrameToHttpObjectCodec
 import io.netty.handler.ssl.SslContextBuilder
-import io.netty.handler.timeout.ReadTimeoutHandler
+import com.devuloopers.knet.engine.proxy.pipeline.ProxyTransportIdleHandler
+import com.devuloopers.knet.engine.proxy.pipeline.configureRawTunnelInactivity
+import com.devuloopers.knet.engine.proxy.pipeline.ProxyTransportActivity
 import io.netty.handler.timeout.WriteTimeoutHandler
 import io.netty.util.ReferenceCountUtil
 import io.netty.util.concurrent.Future
@@ -534,7 +538,7 @@ internal class KNetStreamingProxyHandler(
                 override fun initChannel(channel: Channel) {
                     channel.pipeline().addLast(
                         PipelineHandlerNames.READ_TIMEOUT,
-                        ReadTimeoutHandler(runtimePolicy.readIdleTimeoutMillis, TimeUnit.MILLISECONDS),
+                        ProxyTransportIdleHandler(runtimePolicy.readIdleTimeoutMillis, TimeUnit.MILLISECONDS),
                     )
                     channel.pipeline().addLast(
                         PipelineHandlerNames.WRITE_TIMEOUT,
@@ -639,7 +643,7 @@ internal class KNetStreamingProxyHandler(
         val pipeline = channel.pipeline()
         pipeline.addLast(
             PipelineHandlerNames.READ_TIMEOUT,
-            ReadTimeoutHandler(runtimePolicy.readIdleTimeoutMillis, TimeUnit.MILLISECONDS),
+            ProxyTransportIdleHandler(runtimePolicy.readIdleTimeoutMillis, TimeUnit.MILLISECONDS),
         )
         pipeline.addLast(
             PipelineHandlerNames.WRITE_TIMEOUT,
@@ -1099,15 +1103,21 @@ internal class KNetStreamingProxyHandler(
     ) {
         when (route) {
             is ClassifiedConnectRoute.Inspect -> {
+                val tlsEvidence = DownstreamTlsEvidence(metadata.resumptionOffer)
                 context.pipeline().replace(
                     context.name(),
                     PipelineHandlerNames.SSL,
-                    sniTlsContextHandlerFactory.create(context, connectHost),
+                    sniTlsContextHandlerFactory.create(context, connectHost, tlsEvidence),
+                )
+                context.pipeline().addBefore(
+                    PipelineHandlerNames.SSL,
+                    PipelineHandlerNames.TLS_CERTIFICATE_FLIGHT,
+                    TlsCertificateFlightObserver(tlsEvidence),
                 )
                 context.pipeline().addAfter(
                     PipelineHandlerNames.SSL,
                     PipelineHandlerNames.TLS_INSPECTION_OUTCOME,
-                    TlsInspectionOutcomeHandler {
+                    TlsInspectionOutcomeHandler(tlsEvidence) { failure ->
                         startOpaqueTlsCapture(
                             context = context,
                             host = connectHost,
@@ -1115,6 +1125,7 @@ internal class KNetStreamingProxyHandler(
                             serverName = metadata.serverName,
                             decision = route.decision,
                             metadata = metadata,
+                            failureReason = failure.reason,
                         )?.terminate(
                             ExchangeTerminalOutcome.Failed(
                                 TrafficTerminationReason.Transport.DOWNSTREAM_TLS_HANDSHAKE_FAILED,
@@ -1180,7 +1191,10 @@ internal class KNetStreamingProxyHandler(
                 val pipeline = context.pipeline()
                 pipeline.get(HttpServerCodec::class.java)?.let(pipeline::remove)
                 pipeline.get(PipelineHandlerNames.HTTP_AGGREGATOR)?.let { pipeline.remove(it) }
-                pipeline.addFirst(PipelineHandlerNames.SSL, sniTlsContextHandlerFactory.create(context, host))
+                val tlsEvidence = DownstreamTlsEvidence()
+                pipeline.addFirst(PipelineHandlerNames.SSL, sniTlsContextHandlerFactory.create(context, host, tlsEvidence))
+                pipeline.addBefore(PipelineHandlerNames.SSL, PipelineHandlerNames.TLS_CERTIFICATE_FLIGHT,
+                    TlsCertificateFlightObserver(tlsEvidence))
                 installDownstreamTlsProtocol(pipeline)
                 context.channel().config().isAutoRead = true
             } catch (pipelineFailure: Exception) {
@@ -1325,6 +1339,7 @@ internal class KNetStreamingProxyHandler(
         capture: ProxyOpaqueFlowCapture?,
     ) {
         val lifecycle = RawTunnelLifecycle(capture)
+        ProxyTransportActivity.link(context.channel(), upstream)
         val downstreamPipeline = context.pipeline()
         removeDownstreamHttpHandlers(downstreamPipeline)
         downstreamPipeline.get(PipelineHandlerNames.PROXY_HANDLER)
@@ -1340,10 +1355,9 @@ internal class KNetStreamingProxyHandler(
                 lifecycle = lifecycle,
             ),
         )
-        upstream.pipeline().addLast(
-            PipelineHandlerNames.READ_TIMEOUT,
-            ReadTimeoutHandler(runtimePolicy.readIdleTimeoutMillis, TimeUnit.MILLISECONDS),
-        )
+        // Quiet TLS/WebSocket/push connections are valid. Do not inherit an HTTP/setup inactivity deadline.
+        configureRawTunnelInactivity(downstreamPipeline, runtimePolicy.rawTunnelIdleTimeoutMillis)
+        configureRawTunnelInactivity(upstream.pipeline(), runtimePolicy.rawTunnelIdleTimeoutMillis)
         upstream.pipeline().addLast(
             PipelineHandlerNames.WRITE_TIMEOUT,
             WriteTimeoutHandler(runtimePolicy.writeIdleTimeoutMillis, TimeUnit.MILLISECONDS),
@@ -1379,7 +1393,9 @@ internal class KNetStreamingProxyHandler(
         serverName: String?,
         decision: TlsInterceptionDecision,
         metadata: TlsClientHelloMetadata? = null,
-    ): ProxyOpaqueFlowCapture? = connectionCapture?.startOpaqueFlow(
+        failureReason: com.devuloopers.knet.traffic.model.InspectionFailureReason? = null,
+    ): ProxyOpaqueFlowCapture? {
+        val delegate = connectionCapture?.startOpaqueFlow(
         ProxyOpaqueFlowCaptureMetadata(
             destination = com.devuloopers.knet.traffic.model.TrafficEndpoint(host, port),
             serverName = serverName,
@@ -1390,6 +1406,8 @@ internal class KNetStreamingProxyHandler(
                 decision.policyAction.name,
             ),
             policyGroupId = decision.policyGroupId,
+            protectionOrigin = decision.origin,
+            inspectionFailureReason = failureReason,
             sourceApplicationId = context.channel().attr(ProxyChannelAttributes.SOURCE_APPLICATION_ID).get(),
             appliedNetworkCondition = context.channel()
                 .attr(ProxyChannelAttributes.APPLIED_NETWORK_CONDITION)
@@ -1399,6 +1417,8 @@ internal class KNetStreamingProxyHandler(
             offeredTlsVersions = metadata?.offeredTlsVersions.orEmpty(),
         ),
     )
+        return delegate
+    }
 
     /** Returns a validated typed source identity supplied by the trusted ingress boundary. */
     private fun sourceApplication(context: ChannelHandlerContext): com.devuloopers.knet.engine.proxy.tls.TlsSourceApplicationId? =

@@ -10,10 +10,10 @@ components. Production code targets JVM desktop, Android, iOS ARM64, and iOS Sim
 - Design tokens, palettes, typography, responsive layout primitives, and generic UI components.
 - System-aware light/dark theme resolution, Material theme bridging, and reduced-motion behavior.
 - One cohesive dropdown contract for compact, searchable, disabled, selected, hover, focus, and keyboard states,
-  with compact/standard/large height presets, a bounded content-responsive anchor width calculated from the
-  widest option, plus an independently content-responsive popup width that is clamped by window constraints.
-  Anchor and popup width targets are stable across selection changes, animate only when their option-set-derived
-  target changes, and remain overridable by feature layout. Genuinely clipped standard labels reuse the shared
+  with compact/standard/large height presets and centrally bounded content-responsive widths. Every single-select
+  anchor fits its displayed label or placeholder and uses themed growth/contraction by default, without feature
+  opt-ins. Reduced motion applies the target immediately. The independent
+  popup still fits the widest option and respects window constraints. Explicit sizing modifiers take precedence. Genuinely clipped standard labels reuse the shared
   stationary-hover overflow preview. A composition-scoped expansion coordinator gives single-select,
   multi-select, and searchable dropdowns one active owner: clicking another anchor closes the previous popup and
   opens the new one in the same pointer event, while clicking the active anchor closes it once. Popups do not steal
@@ -38,6 +38,11 @@ components. Production code targets JVM desktop, Android, iOS ARM64, and iOS Sim
   shape and whose single-line labels retain their measured width under unbounded scroll constraints, truncating
   only at the design-system maximum.
 - Controlled split-pane primitives whose ratios remain owned by their feature screens.
+- A shared inspector content viewport with minimum readable width, horizontal/vertical scrollbars, explanatory
+  paragraph wrapping, and intrinsic-width actions that reflow without feature-specific resize breakpoints.
+- A theme-owned overflow menu for secondary actions with accessible naming and disabled-item semantics.
+- An opt-in `KNetAnimatedDetailsLayout` that reserves inspector width alongside a list, clips stable-width
+  content during reveal/collapse, uses shared motion and responsive tokens, and snaps for reduced motion.
 - Button defaults that preserve caller-owned outer spacing and sizing modifiers; explicit caller heights may
   override the density default without forcing padding into the content measurement. Loading buttons disable
   interaction by default, with an explicit opt-in for cancellable operations that must retain click and hand-

@@ -231,6 +231,7 @@ class PrepareNetworkConditionRuleUseCaseTest {
         override val configuration = MutableStateFlow(initial)
         override suspend fun setEnabled(enabled: Boolean) = Unit
         override suspend fun setGlobalProfile(profileId: NetworkConditionProfileId?) = Unit
+        override suspend fun activateGlobalProfile(profileId: NetworkConditionProfileId?) = Unit
         override suspend fun upsertProfile(profile: NetworkConditionProfile) = Unit
         override suspend fun deleteProfile(profileId: NetworkConditionProfileId): Boolean = true
         override suspend fun upsertRule(rule: NetworkConditionRule) = Unit

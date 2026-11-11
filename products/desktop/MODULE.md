@@ -1,5 +1,13 @@
 # `:products:desktop`
 
+## Policy and transaction shutdown
+
+The shared policy/transform scope is explicitly owned by product composition and cancelled on container close.
+Desktop bootstrap registers a bounded drain resource before storage and before proxy/ingress resources, so reverse
+shutdown stops transports, cancels and waits for policy/transform cleanup, then closes SQLite. Startup policy work
+uses the same drain contract. It executes on the existing shutdown worker/hook rather than the Compose event
+thread. A cleanup timeout is reported and cannot be mistaken for successful scope completion.
+
 ## Responsibility
 
 Composes and launches the desktop product. This is the desktop composition root and lifecycle owner.
@@ -57,3 +65,10 @@ Cross-feature request presentation lives in `di/request`, where descriptor strat
 and deterministic strategy priority is enforced by the domain resolver. API Studio, Traffic, and Breakpoint
 ViewModels consume only that composed use case.
 No ViewModel constructor supplies a production fallback implementation.
+
+## Protected TLS handling
+
+The composition root binds persisted configuration, the pure TLS rule adapter and application use cases. No automatic
+learner, clock/limits injection, entry observer or lifecycle job is instantiated. protectedTrafficQualification covers
+saved policy, compatible storage, real manual-rule TLS reconnects, shaping, Traffic/UI and product composition;
+physical device and entitlement gates remain separate.

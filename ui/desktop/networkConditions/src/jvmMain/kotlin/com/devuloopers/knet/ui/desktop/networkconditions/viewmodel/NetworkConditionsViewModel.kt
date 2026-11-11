@@ -21,6 +21,8 @@ import com.devuloopers.knet.domain.networkconditions.NetworkConditionTarget
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.ui.desktop.networkconditions.model.NetworkConditionRuleDraft
 import com.devuloopers.knet.ui.desktop.networkconditions.model.NetworkConditionsState
+import com.devuloopers.knet.ui.desktop.networkconditions.model.NetworkConditionsTab
+import com.devuloopers.knet.ui.desktop.networkconditions.model.networkConditionRuleDetails
 import com.devuloopers.knet.ui.desktop.networkconditions.model.NetworkThroughputHistory
 import com.devuloopers.knet.ui.desktop.networkconditions.model.NetworkThroughputSampler
 import kotlinx.coroutines.Job
@@ -50,7 +52,15 @@ class NetworkConditionsViewModel(
     init {
         viewModelScope.launch {
             repository.configuration.collect { configuration ->
-                mutableState.update { it.copy(configuration = configuration) }
+                val definitions = protocolRules.definitions().associateBy { it.protocolId }
+                val details = configuration.rules.associate { rule ->
+                    rule.id to networkConditionRuleDetails(
+                        definition = definitions[rule.protocolCriteria.protocolId],
+                        values = protocolRules.editorValues(rule.protocolCriteria),
+                        transportOnly = rule.protocolCriteria.isTransportOnly,
+                    )
+                }
+                mutableState.update { it.copy(configuration = configuration, ruleDetails = details) }
             }
         }
     }
@@ -83,8 +93,15 @@ class NetworkConditionsViewModel(
 
     fun setEnabled(enabled: Boolean) = mutate { repository.setEnabled(enabled) }
 
+    fun selectTab(tab: NetworkConditionsTab) = mutableState.update { it.copy(activeTab = tab) }
+
     fun selectGlobalProfile(profileId: NetworkConditionProfileId?) = mutate {
         repository.setGlobalProfile(profileId)
+    }
+
+    /** Traffic quick selection applies the chosen default and master enablement as one persisted change. */
+    fun activateGlobalProfile(profileId: NetworkConditionProfileId?) = mutate {
+        repository.activateGlobalProfile(profileId)
     }
 
     fun saveProfile(profile: NetworkConditionProfile) = mutate { repository.upsertProfile(profile) }
@@ -102,6 +119,7 @@ class NetworkConditionsViewModel(
     fun beginAddRule() {
         mutableState.update {
             it.copy(
+                activeTab = NetworkConditionsTab.RULES,
                 ruleDraft = NetworkConditionRuleDraft(
                     hostPattern = "",
                     port = "",
@@ -117,6 +135,7 @@ class NetworkConditionsViewModel(
     fun beginEditRule(rule: NetworkConditionRule) {
         mutableState.update {
             it.copy(
+                activeTab = NetworkConditionsTab.RULES,
                 ruleDraft = NetworkConditionRuleDraft(
                     hostPattern = (if (rule.target.wildcard) "*." else "") + rule.target.normalizedHost,
                     port = rule.target.port?.toString().orEmpty(),
@@ -140,6 +159,7 @@ class NetworkConditionsViewModel(
                         it.configuration.rules.firstOrNull { rule -> rule.id == ruleId }
                     }
                     it.copy(
+                        activeTab = NetworkConditionsTab.RULES,
                         ruleDraft = NetworkConditionRuleDraft(
                             hostPattern = (if (result.target.wildcard) "*." else "") +
                                 result.target.normalizedHost,

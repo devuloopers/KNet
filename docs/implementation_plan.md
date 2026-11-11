@@ -2939,6 +2939,81 @@ tests, raw and GraphQL WebSocket transfer tests, affected module tests, `webSock
 
 ## Phase 133: Network Conditions [IMPLEMENTED — EXPERIMENTAL QUALIFICATION]
 
+### Phase 133.10: Traffic global Network Conditions shortcut [IMPLEMENTED]
+
+Implemented on 2026-11-10. Traffic now hosts a compact KNet-styled global control immediately before Auto Scroll.
+Its popover exposes master enable/bypass, all built-in and saved custom profiles, Domain rules only, and navigation
+to the full screen. Selecting a profile atomically enables conditions and persists the selected global default;
+Off retains profiles/rules, whereas No throttling leaves matching domain/protocol rules active. The existing
+repository validates profile references before any settings write, so stale choices fail without changing policy.
+
+The desktop shell composes the existing Network Conditions ViewModel into a Traffic toolbar slot. There is no
+Traffic-owned simulator, repository, or duplicate configuration. Changes propagate in both directions, independent
+of capture pause and Traffic filtering, and errors remain visible from the shortcut. The engine-status label
+yields width to keep capture buttons, the global control, and Auto Scroll accessible at compact desktop sizes.
+
+Regression coverage includes persisted activation/restart, rejected missing profiles, independent concurrent
+settings writes, No throttling versus Off/domain-only matching, shared ViewModel updates and error recovery,
+popover edge placement, and actual pointer-driven Compose interaction through the nested profile dropdown. Shell
+render tests cover 976-pixel width at 125% text scale, long custom-profile/status labels, capture-paused operation,
+profile activation, master bypass preserving rules, and navigation to full settings. No dependency or schema change
+is introduced.
+
+Verification on 2026-11-10 passed `./gradlew networkConditionsQualification :products:desktop:compileKotlin`:
+274 actionable tasks (100 executed, 174 up-to-date). All 35 Network Conditions UI/module tests and both pointer-driven
+Traffic toolbar integration tests pass, along with the real Room activation/restart regression. Render artifacts
+were inspected, and `git diff --check` passes.
+
+The toolbar control now measures only its current displayed label with its resolved text style, including inherited
+letter spacing and theme-scaled icon, gap, and button padding widths. Both expansion and contraction use KNet's motion duration/easing, with immediate resizing when
+animations are disabled. A bounded host slot reserves space for capture actions and Auto Scroll; the right edge
+stays anchored while long labels truncate at the available bound. Unselected long profile names do not reserve
+width. Additional Compose frame assertions cover intermediate widths in both directions, fixed height/right edge,
+Auto Scroll anchoring, long-selection bounds, reduced-motion resizing, and non-ellipsized normal labels.
+
+Selected-width verification passed `./gradlew networkConditionsQualification :products:desktop:compileKotlin`
+on 2026-11-10: 274 tasks (61 executed, 213 up-to-date), including all four Traffic control
+render/pointer/motion tests. `git diff --check` passes.
+
+### Phase 133.9: Compact Network Conditions workspace [IMPLEMENTED]
+
+HTTP dropdown crash follow-up (2026-11-10) [COMPLETED]: the supplied log reports a missing generated
+`NetworkConditionProtocolField` class. The current UI JAR contains the class, but was replaced after the reported
+desktop process started, indicating stale runtime classes. A fresh-process render/pointer regression passes
+All traffic to HTTP, text/choice field composition and Path Match selection. The 36 Network Conditions and 11
+Protected Traffic UI tests passed with zero failures/errors/skips, using isolated UI build outputs to preserve
+development runtime JARs. Inspected the HTTP editor and Smart bar renders; `git diff --check` passes. The running
+development app needs a complete rebuild/relaunch to refresh its loaded classes; no protocol-matching change was needed.
+
+Port hint clarification (2026-11-10) [COMPLETED]: replaced the rule editor's `Any` placeholder with `e.g. 443`
+and a KNet-themed caption explaining that a blank port matches all ports. The existing compact overflow render
+uses a blank port; its 480×420 image at 125% font scale was inspected with the hint/caption and fixed actions visible.
+All 35 Network Conditions UI tests passed with zero failures/skips. Matching and persistence behavior are unchanged.
+
+Implemented on 2026-11-10 from the approved second design proposal. Replaced the overview cards and long stacked
+sections with a compact global-profile toolbar, full-width actual-throughput graph, Rules/Profiles tabs, and
+aligned virtualized tables. The existing KNet theme, dropdowns, switches, tabs, buttons, and scrollbar primitives
+remain the visual and interaction owners. No new runtime dependency, storage schema, or networking behavior was
+introduced.
+
+Rule rows expose extension-decoded protocol criteria and priority without parsing opaque payloads in composables;
+the ViewModel refreshes these summaries only when configuration changes. Traffic quick-add and manual/edit flows
+select the Rules tab. The rule dialog uses bounded dropdowns and keeps its actions outside the scrollable body.
+New rules still default to No throttling; built-in profiles remain read-only, and all custom profile fields and
+existing deletion guards remain available. The monitor retains its bounded 60-sample history, observed-payload
+measurement contract, honest mixed-profile references, and lifecycle-driven sampling.
+
+Regression coverage includes tab/policy isolation, monitoring across tab changes, Traffic quick-add, semantic
+summary updates, exact/prefix distinction, missing extensions, long criteria, and real Compose rendering at
+976×560 with 125% font scale and 1,000 rules. Render tests also exercise profile scrolling/custom edit availability,
+the Domain rules only dropdown option, bypassed empty states, measured/reference labels, and fixed rule-dialog
+actions under overflow. PNGs are generated under the UI module's ignored build reports for visual review.
+
+Verification on 2026-11-10 passed `./gradlew networkConditionsQualification :products:desktop:compileKotlin`:
+274 actionable tasks (68 executed, 206 up-to-date), including all 31 Network Conditions presentation, ViewModel,
+sampler, and actual Compose render/interaction tests. `git diff --check` also passes. These checks do not promote
+the independent packet/physical-streaming capability gates.
+
 ### Phase 133.8: HTTP, gRPC, and WebSocket semantic conditions [IMPLEMENTED]
 
 Implemented on 2026-10-04. The fail-closed protocol registry now exposes the ordered scopes **All traffic**,
@@ -3116,3 +3191,252 @@ linking, a shared Darwin kernel, or a JVM desktop build is not evidence for an e
 
 See [`protected_traffic_passthrough_implementation_plan.md`](protected_traffic_passthrough_implementation_plan.md)
 for product decisions, ownership, delivery slices, security/privacy invariants, and acceptance gates.
+
+## Phase 136: KNet Smart Compatibility [RETIRED]
+
+Smart Compatibility removal (2026-11-10) [COMPLETED]: removed automatic learning, temporary decision APIs/cache,
+proxy callbacks and admission attributes, the toggle/help, automatic-state warnings and Forget controls. Protected
+Traffic now manages default TLS handling and saved rules; Traffic retains diagnostics, in-place Tunnel/Inspect actions
+and persistent saved-choice selection. Room schema 34 and historical enum/identity fields remain readable without
+activating old automatic settings or creating new automatic evidence.
+
+Replaced automatic socket tests with actual TLS 1.2/1.3 and mTLS repeated-rejection/manual-rule reconnect tests,
+including origin certificate/client authentication, exactly one application request, explicit Inspect restoration
+and real 100 kbps shaping. Both protectedTrafficQualification and networkConditionsQualification passed in isolated
+outputs (5m 48s): 967 tests across 25 distinct task outputs, zero failures/errors/skips. Desktop compilation, all six
+architecture checks, requirements-ledger validation and `git diff --check` passed. Normal/compact inspector and
+settings renders were inspected; compiled affected JARs contain no SmartCompatibility classes. No app was launched
+or live development JAR replaced. See [the retirement record](smart_compatibility_retirement.md). Earlier Smart
+implementation records below are historical; broader pending Network Conditions/platform requirements remain open.
+
+### Historical implementation record (superseded where automatic learning is mentioned)
+
+Traffic inspector follow-up (2026-11-10) [COMPLETED]: implemented the approved diagnostic-first TLS/opaque
+pane with typed rejection evidence and qualified possible causes, current future-connection handling, in-place
+Tunnel/Inspect actions, exact-ingress Forget in overflow, compact metrics and collapsed technical details. Both
+pane and context-menu policy actions stay in Traffic. Captured outcomes remain immutable when live policy changes.
+Fixed the desktop query facade's missing opaque-flow lookup so these application actions resolve retained rows;
+added conservative retained-ingress reads to prevent another device/application's entry from being presented or
+forgotten. Shared UI-core primitives own readable paragraphs, action reflow and overflow scrollbars.
+
+Verification passed in isolated build directories: 53 application tests, 53 Traffic tests, 12 workspace tests,
+21 shared UI tests and 4 focused data-query tests (143 total; zero failures/errors/skips). Desktop compilation,
+all six architecture checks and `git diff --check` pass. Inspected normal and compact 125% text renders; the
+narrow action labels stay visible and metadata remains scrollable. No desktop app was launched or live runtime
+JAR replaced. See [Traffic protection inspector](traffic_protection_inspector.md) for behavior and scope.
+
+Traffic action selection follow-up (2026-11-10) [COMPLETED]: saved exact Tunnel/Inspect choices now remain
+visibly selected when revisiting a row or recreating presentation state. Checked Tunnelling enabled/Inspection
+enabled controls disable redundant submissions while preserving the alternative. Current rule identity and
+precedence distinguish exact saved choices from inherited/global/temporary Smart handling and overridden rules.
+Captured Cancelled/Rejected outcomes remain historical. Rule actions await bounded authoritative publication;
+loading, failed/cancelled saves, missing ports and late selection updates cannot invent a saved selection.
+
+All 17 planned scenarios have automated assertions: 182 tests passed with zero failures/errors/skips across
+application, Traffic, workspace, UI core, Protected Traffic UI and focused data tests. Room close/reopen,
+compact 125% text, dark/light selected states, keyboard/reduced-motion and overridden-rule renders were checked.
+Desktop compilation, all six architecture checks and `git diff --check` pass. Verification used isolated Gradle
+outputs and did not launch the app. See [the completed selection plan](traffic_protection_selection_plan.md)
+for the exact test mapping and scope; physical smoke testing remains separate.
+
+Protected Traffic settings cleanup (2026-11-10) [COMPLETED]: removed the duplicate observed-connections list,
+its decision inspector and the now-redundant Overview/Advanced tabs. The screen opens directly to Smart
+Compatibility/help, default handling and saved rules. The settings ViewModel now observes configuration only;
+connection evidence/actions remain in Traffic and the runtime learner remains independent.
+
+Verification passed in isolated Gradle outputs: 9 Protected Traffic, 72 Traffic, 12 workspace and 16 focused
+Smart runtime/socket tests (109 total; zero failures/errors/skips). Actual TLS 1.2/1.3 and mutual-TLS rejection,
+client reconnect and real bandwidth delivery regressions passed. Desktop compilation, all six architecture checks
+and `git diff --check` pass. Normal and compact 125% text renders were inspected; Smart help, keyboard/readiness,
+default handling, imported rules and add/cancel editing remain covered. No app was launched or live JAR replaced.
+
+Protected Traffic scope copy (2026-11-10) [COMPLETED]: renamed the default control to Default TLS connection
+handling. The UI explains covered TLS protocols, excluded plain/UDP traffic, each selected action, saved-rule
+precedence, new-connection timing and unavailable direct Bypass. Shared UI-core explanatory text preserves readable
+copy without feature-specific wrapping. All 9 Protected Traffic tests and desktop compilation passed in isolated
+outputs (26 seconds); the updated render was inspected and `git diff --check` passes. Policy behaviour is unchanged.
+
+Automatic-fallback policy follow-up (2026-11-10) [SUPERSEDED]: the user chose explicit Traffic-based handling and
+removed automatic learning. Do not refine or reintroduce the setup guard or automatic trials. Manual rules,
+diagnostics and saved-choice selection remain required.
+
+Initial software paths were implemented on 2026-11-10; the subsequent readiness audit identified remaining
+software and automated-test work as well as independent physical qualification. Smart Compatibility is **on by default** on
+fresh installs and upgrade, as requested, while a subsequently saved disable persists. Keep existing global actions,
+manual rules, migrated legacy exceptions, and retained Traffic. An independent persisted Smart setting
+adds bounded automatic learning at the global default-Inspect boundary; explicit rules and non-Inspect defaults
+remain authoritative.
+
+The latest 2026-11-10 decision removes the duplicate observed-connections list, decision drawer and Overview/Advanced
+tabs from Protected Traffic. Keep Smart Compatibility and hover help in its header, then default handling and saved
+rules in one settings screen. Connection diagnosis, current future handling and per-destination actions live in
+Traffic's right inspector. The settings ViewModel observes configuration only; the runtime learner remains independent.
+Shared responsive and inspector primitives remain in `:ui:core`.
+
+Per the later 2026-11-10 decision, remove preset controls
+and the runtime service catalogue. Schema 34 imports previously enabled legacy choices as visible saved exceptions
+with original IDs and lower priority; explicit user rules retain precedence. Disabled presets create no rules, and
+fresh installations rely on Smart learning after an eligible first failure.
+
+Delivery requires typed downstream certificate-rejection evidence, conservative eligibility and setup/fault
+exclusions, exact host/port/transport/ingress scope with verified app identity when available, session-scoped cache
+limits and expiry, atomic single-trial admission, and explicit reason/origin evidence in Traffic. Unknown evidence
+remains a suggestion. Automatic handling affects subsequent client-created TCP/TLS connections only, preserves
+end-to-end TLS and eligible Network Conditions, never replays requests, and cannot claim pinning or purchase success
+from encrypted byte progress.
+
+- [x] 136.1: Default-on settings/migration semantics, typed domain contracts, precedence, scope, clocks, and limits.
+- [ ] 136.2: Structured TLS failure classification is implemented; actual certificate-flight evidence and its
+  false-positive regressions remain open after the readiness audit.
+- [x] 136.3: Bounded learner, candidate/trial lifecycle, invalidation, cooldown, expiry, and non-blocking integration.
+- [x] 136.4: Additive persistence migration, historical decision evidence, restart, retention, and capture lifecycle.
+- [x] 136.5: Overview/Advanced tabs, persistent Smart controls, selection-driven animated inspector, actions, Advanced
+  default/saved-rule controls, tab/scroll state, and responsive/accessibility/reduced-motion UI tests.
+  Copy follow-up (2026-11-10) [COMPLETED]: remove the enabled-state "On by default" text from the Smart
+  Compatibility bar. The existing Enabled/Disabled switch and default setting retain their behaviour.
+  All 11 Protected Traffic UI tests passed in an isolated build, and the updated bar render was inspected.
+  Toolbar follow-up (2026-11-10) [COMPLETED]: moved Smart Compatibility to the right of Overview/Advanced
+  on the same row, removed the separate bar, and added a KNet question-mark icon with a hover explanation.
+  All 13 Protected Traffic UI tests passed, including compact 125% text alignment for both tabs/states,
+  switch callbacks, accessible help text, and pointer-driven tooltip display/dismissal without changing Smart.
+  Inspected compact and hover renders; isolated UI build outputs preserved running desktop dependencies.
+- [ ] 136.6: Dedicated gate passes current policy, migration, socket, conditions, UI, DI and architecture suites;
+  the complete false-positive, capture-lifecycle, protocol and resource qualification matrix remains open.
+- [ ] 136.7: Packaged desktop and independently qualified Android/Darwin protected workloads and capability reporting.
+
+Android/iOS original-source attribution, signed Darwin system capture, UDP/QUIC reporting, and real protected-flow
+100 kbps qualification retain their Phase 134/135 gates. Smart cannot discover connections not routed through KNet
+or guarantee that an unfamiliar service's first attempt succeeds. See
+[`smart_compatibility_implementation_plan.md`](smart_compatibility_implementation_plan.md) for the complete plan,
+initial bounds, migration decisions, module ownership, test matrix, and completion criteria.
+
+Phase 136 automated and physical evidence is tracked in
+[`smart_compatibility_qualification.md`](smart_compatibility_qualification.md). No attached Android device was found;
+a paired iPad is available, but the entitled app/extension device build currently fails because Xcode has no account
+or provisioning profiles configured. These platform checks are not marked passed by the software gate.
+
+Preset retirement follow-up (2026-11-10) [COMPLETED]: remove the service catalogue and its controls/API.
+Smart learns eligible first-attempt inspection failures; retain only default handling and saved rules in Advanced.
+Schema 34 imports previously enabled preset exceptions as visible saved rules with their old lower priority,
+so existing explicit rules and disabled overrides retain their behaviour. Migration/UI tests, both qualification gates, and the rebuilt desktop bundle passed: 954 tests, zero failures/skips.
+
+Readiness audit follow-up (2026-11-10) [IN PROGRESS]: the forced combined feature-gate rerun passed all 286
+actionable tasks and reports 868 tests with zero failures/errors/skips across 24 distinct test-task outputs. This
+supersedes the earlier reported 954 total as current evidence. A temporary Android-host reproduction confirmed
+delayed upstream UDP socket creation after association close; no production fix was made during the audit.
+Certificate context installation is also insufficient proof of actual certificate presentation for Smart learning.
+Android live packet-policy refresh/rules, original-source attribution, UDP reporting, additional Darwin adapters,
+dedicated CI enforcement and the remaining protocol/performance/native test matrices are still open. Limited proxy
+exploratory testing can begin; full planned-feature acceptance is not ready with only physical work outstanding.
+See [the readiness audit](network_conditions_protected_traffic_readiness_audit.md) for evidence and completion order.
+
+### Phases 133–136 completion program (2026-11-10) [IN PROGRESS]
+
+The user requested full implementation and non-physical qualification, leaving physical acceptance as the final
+remaining stage. The [completion plan](network_conditions_protected_traffic_completion_plan.md) owns sequencing,
+dependencies, platform delivery prerequisites, acceptance evidence and the mapping of all 114 NC ledger IDs plus
+Protected Traffic and Smart requirements. Implementation has started with the requirement ledger, comparative
+public inspector test review, UDP teardown regressions, supported JSSE certificate-flight evidence, pairing/Forget
+invalidation, live global Android packet-policy updates, TCP half-close/timeout regressions, real streaming load
+measurements, transactional policy snapshots/cancellation rollback and CI/report enforcement. These are partial work packages; packet rules, attribution/reporting,
+native adapters, scenarios/automation and the complete protocol/UI/performance matrices remain open.
+
+- [ ] C00: Complete requirement/evidence ledger, native platform/backend decisions and signing/toolchain prerequisites.
+- [ ] C01: Fix association-owned UDP cancellation, terminal registry state and resource cleanup with permanent tests.
+- [ ] C02: Prove actual Smart certificate-flight evidence and complete exclusions, invalidation and lifecycle tests.
+- [ ] C03: Finish atomic policy/storage, versioned packet rule contracts, migration and compatibility handling.
+- [ ] C04: Implement live Android packet-policy updates, rule matching and complete scheduling/control-path safety.
+- [ ] C05: Connect original-flow attribution, authenticated opaque reporting, Traffic/export and actual UDP telemetry.
+- [ ] C06: Complete native iOS/iPadOS TCP/UDP policy, attribution fallbacks, tests and signed build/packaging.
+- [ ] C07: Complete native desktop packet/system-capture adapters, authenticated bridges, platform tests and packages.
+- [ ] C08: Close every condition-specific protocol, protected TLS/raw relay, API Studio and paired-device matrix.
+- [ ] C09: Deliver timed scenarios, profile import/export and authenticated local automation with tests.
+- [ ] C10: Close persistence/capture/Traffic/editor/graph/accessibility/motion interaction assertions.
+- [ ] C11: Pass sustained rate/fairness, 500 MiB offered-load, heap/baseline and long-running resource qualifications.
+- [ ] C12: Enforce CI/platform/native gates, validate final packages and independently audit complete software evidence.
+- [ ] P01: Physical acceptance per desktop/mobile OS, provider, device and transport, following verified C00–C12.
+
+Only C00–C12 verified with no missing implementation, mandatory test or external delivery blocker permits the label
+**SOFTWARE COMPLETE; PHYSICAL QUALIFICATION PENDING**. Required account/entitlement/signing configuration and absent
+native artifacts are software delivery blockers, not physical tests. Keep platform promotion independently pending.
+
+## Traffic Type filter selected width (2026-11-10) [COMPLETED]
+
+The Type filter now fits its displayed selection/placeholder and animates growth and contraction with KNet motion.
+The initial implementation used an opt-in UI-core sizing mode. The shared-dropdown follow-up below promotes
+selected-label sizing to the common default. UI core owns measurement, bounds and easing. The popup independently fits every option, and the existing toolbar scrolling handles constrained
+windows. Reduced motion applies the target immediately. No new library or feature-specific sizing rule was added.
+
+Actual pointer selection tests cover readable menu labels, intermediate expansion/contraction widths, callback
+counts, returning to Type, larger text and reduced motion. All 105 affected tests passed (shared UI 21, Traffic 72,
+workspace 12; zero failures/errors/skips), along with desktop compilation, all six architecture checks and
+`git diff --check`. The selected-width render was inspected. Verification used isolated Gradle outputs without
+launching the desktop app or replacing live JARs. Renders are in the Traffic module's
+`build/reports/traffic-filter-ui/` directory.
+
+## Shared dropdown selected width (2026-11-10) [COMPLETED]
+
+Selected-label sizing is now built into KNetDropdown for every caller. Removed the per-feature width mode and Type
+opt-in. Shared text measurement, limits, easing and reduced-motion behavior govern growth/contraction; popup width
+still accounts for every option. Removed legacy fixed widths from the global profile, auth type/API-key location
+and console level selectors. Intentional full-width/fixed form constraints remain authoritative.
+
+Shared desktop composition tests verify that unselected long options do not reserve anchor width, selection changes
+resize the component, maximum bounds apply, fixed/full-width forms stay aligned and live font scaling remeasures the
+label. Existing pointer tests verify intermediate growth/contraction, readable popup options and reduced motion.
+All 261 tests passed across 10 UI outputs, zero failures/errors/skips. Desktop compilation, all six architecture
+checks and `git diff --check` passed. The updated filter render was inspected. Verification used isolated Gradle
+outputs and did not launch the desktop app or replace live JARs.
+
+## TLS connection lifecycle reporting (2026-11-10) [COMPLETED]
+
+Real local TLS 1.2/1.3 keep-alive tests reproduce completed HTTP responses on a still-open reusable connection. Fixed
+opaque labels to Active/Closed in a shared table/inspector presentation contract, retaining typed failures and
+cancellations and never inventing encrypted HTTP/business success. A single session-owned 500 ms sampler coalesces
+changed counter snapshots into Room, with final counters/version ordering protected against close races. Progress
+cannot regress counters or reopen terminal rows. Fixed feed invalidation so a different flow's higher version cannot
+mask the selected flow's update. No schema migration or payload capture was added.
+
+Cases cover automatic live counters without flush, socket reuse and closure, concurrent bidirectional observations,
+idle coalescing, capture shutdown/final counters, stale events, metadata validation, ordinary HTTP presentation and
+actual table/inspector rendering. Both feature qualification gates and desktop compilation passed: 978 tests across
+25 distinct outputs, zero failures/errors/skips. All six architecture checks, ledger validation and `git diff --check`
+passed. Fresh Active/Closed renders were inspected. Verification used isolated Gradle outputs without launching the
+app or replacing live JARs. See [the test report](opaque_tls_lifecycle_reporting.md); physical Billing acceptance
+remains separate from these local-server transport tests.
+
+## Quiet TLS tunnel timeout handling (2026-11-11) [COMPLETED]
+
+Investigated the 62.526-second Play tunnel termination. Its retained generic duplex_io_failed reason cannot prove
+which exception occurred, but the raw route inherited the 60-second HTTP inactivity cutoff and discarded timeout
+classification. Reproduced the lost timeout reason before fixing it. Established direct/SNI-selected raw tunnels now
+have a separate optional inactivity limit, disabled by default; HTTP/setup, pending-write and admission protections
+remain. Typed read/write deadlines survive close races and display Timed Out with a specific inspector explanation.
+Generic I/O failures and historical captures remain unchanged.
+
+Real TLS 1.2/1.3 tests finish a response, idle beyond the shortened HTTP cutoff and reuse the same socket/flow;
+another test persists an explicitly configured raw timeout and final counters after a completed response. Cases
+also cover negative/zero policy values, retained stalled-write protection, actual write-timeout/close/promise races,
+ordinary I/O errors, accurate status labels and headless rendering. Both feature gates and desktop compilation
+passed: 989 tests across 25 distinct outputs, zero failures/errors/skips, all six architecture checks and ledger
+validation. The inspector render and `git diff --check` passed. No desktop app launch/live-JAR replacement or
+historical database rewrite was performed. Rebuild/relaunch and a new device capture are needed for physical
+acceptance. See [the test report](opaque_tls_lifecycle_reporting.md#quiet-tunnel-follow-up-2026-11-11).
+## Opaque connection closure attribution (2026-11-11) [COMPLETED]
+
+Persisted first observed device/server EOF or explicit KNet close evidence before peer propagation and close-future
+capture cancellation. KNet inactivity/write deadlines, explicit close, proxy stop and connection-set reset retain
+their specific reasons. Generic I/O errors, indistinguishable opposite EOF observations and legacy captures remain
+Unknown. Provenance is independent of final delivery outcome; later callbacks cannot replace it.
+
+Typed owner/reason/time now flow through canonical terminal events, Room schema 35 and queries to the existing
+Traffic Technical details disclosure. Migration 34 to 35 preserves retained captures with absent evidence rather
+than fabricating it. Capture detachment does not claim a transport close. Added validation, peer/propagation and
+concurrent EOF tests; real socket FIN/reset/stop/reconnect-listener cases; Room reopen, stale/duplicate terminal
+guards, corrupt/partial/legacy mapping, migration and standard/compact/larger-text rendering checks.
+
+Both feature gates and desktop compilation passed: 1,005 tests across 25 distinct outputs, zero failures/errors/skips;
+all six architecture checks, ledger validation and `git diff --check` passed. Required report suites include the new
+model, relay and data closure cases. Inspector renders were inspected. Verification used isolated build outputs
+without launching or modifying the running app/database. Rebuild/relaunch and new physical-device capture remain
+the acceptance step. See [the qualification report](opaque_flow_closure_attribution.md).

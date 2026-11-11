@@ -1,8 +1,22 @@
 # Network Conditions test gap and edge case report
 
-Updated: 2026-10-04
+Updated: 2026-11-10
 
 Status: **Core automated tests pass; complete feature qualification is not yet achieved**
+
+The [2026-11-10 combined readiness audit](network_conditions_protected_traffic_readiness_audit.md) confirms that
+non-physical implementation and test work remains. A forced rerun of both feature gates passed with 868 tests,
+zero failures/errors/skips; a separate temporary host probe reproduced delayed UDP socket creation after association
+close. The retained matrix below remains the acceptance ledger, with its covered/partial checkpoint applied.
+
+Completion follow-up: permanent UDP association ownership, actual JSSE certificate-flight evidence, live global
+Android policy, transactional snapshots/cancellation rollback, stream half-close/backpressure and measured-load
+regressions have been added. Current commands, results and remaining software work are in the
+[completion execution record](qualification/network_protection_execution.md) and its machine-readable ledger.
+The baseline counts above are historical; these additions do not close the complete feature matrix.
+The latest final-tree aggregate reports **954 module tests across 26 distinct outputs**, zero failures/errors/skips,
+plus three separate passing load cases. This is new measured evidence, independent of the superseded earlier
+954-count claim. The requirement ledger still records unclosed software assertions.
 
 ## Purpose and conclusion
 
@@ -15,7 +29,7 @@ The current tests provide a good foundation for matching, migration and persiste
 scheduling, bounded queues, live configuration changes, throughput sampling, and Android host-side UDP policy. They
 do not yet satisfy all acceptance gates in the
 [Network Conditions implementation plan](network_conditions_implementation_plan.md). In particular, KNet still lacks
-condition-specific protocol matrices, production-scale streaming and heap tests, Compose UI assertions, some
+condition-specific protocol matrices, production-scale streaming and heap tests, complete Compose interaction coverage, some
 lifecycle/concurrency cases, and physical-device packet qualification.
 
 This document is a test backlog and qualification record. A missing test is not automatically a confirmed product
@@ -23,6 +37,37 @@ defect. When a proposed test exposes incorrect behavior, the defect should be tr
 case should remain in this matrix.
 
 ## Audit baseline
+
+The Traffic global shortcut adds persisted atomic profile activation, stale-profile failure, restart preservation,
+Off versus unlimited/domain-only semantics, and concurrent-settings regression coverage. Two shell Compose tests
+exercise actual pointer clicks through the settings popover/profile dropdown and verify its position before Auto
+Scroll at compact width with increased font scale. Matching rule overrides, shared configuration updates, paused
+capture independence, and full-screen navigation are covered; popup edge placement has focused tests. These are
+targeted additions, not a claim of complete keyboard, operating-system, or packet qualification.
+
+The shortcut qualification run passed `./gradlew networkConditionsQualification :products:desktop:compileKotlin`
+on 2026-11-10 (274 tasks: 100 executed, 174 up-to-date). The Network Conditions module now has 35 passing tests;
+both shell pointer-integration tests and all six Room repository tests pass. Compact toolbar and popover renders
+were inspected locally.
+
+Selected-label sizing additionally has Compose frame-level regression checks for animated expansion/contraction,
+stable height/right edge and Auto Scroll position, unselected long-name isolation, bounded long selections, and
+immediate resizing with reduced motion. Resolved text-style measurement and text-layout assertions prevent normal
+labels from truncating because of inherited letter spacing. These supplement the existing pointer-based popover interaction tests.
+The selected-width verification run passed the qualification gate and desktop compilation on 2026-11-10
+(274 tasks: 61 executed, 213 up-to-date); all four Traffic control render/pointer/motion tests pass.
+
+The 2026-11-10 compact workspace adds actual Compose render/semantics tests without another test dependency.
+Coverage includes 976×560 layout at 125% font scale, bounded composition for 1,000 rules, profile-tab interaction
+and scrolling to a custom profile, built-in edit protection, the Domain rules only option, empty/bypassed output,
+measured versus configured graph labels, and Save/Cancel visibility while the rule form overflows. Tab/quick-add
+state and protocol-summary regressions are also covered. This is partial coverage of NC-UI-010, NC-UI-011,
+NC-UI-014, NC-UI-016, NC-UI-018, and NC-UI-019; full keyboard/typing interaction, theme matrices, and native-window
+dialog qualification are not implied. NC-UI-009 is superseded by the approved single-workspace design.
+
+Verification on 2026-11-10 passed `./gradlew networkConditionsQualification :products:desktop:compileKotlin`
+(274 tasks: 68 executed, 206 up-to-date). All 31 tests in the Network Conditions UI module pass, including six
+Compose render/interaction cases. The generated dark-theme render artifacts were inspected locally.
 
 The audit reviewed production and test code in these areas:
 
@@ -271,8 +316,8 @@ and cleanup—not merely that the protocol still works while the handler exists.
 
 | ID | Priority | Missing or partial case | Required assertion |
 | --- | --- | --- | --- |
-| NC-UI-009 | P1 | Equal desktop overview cards | At supported wide window sizes, Global condition and Live application cards must have equal width and equal measured height. |
-| NC-UI-010 | P1 | Compact responsive layout | Cards must stack at full width without clipping, overlapping controls, inaccessible scrolling, or dialog overflow. |
+| NC-UI-009 | Superseded | Equal desktop overview cards | Replaced on 2026-11-10 by the approved compact toolbar/full-width graph and Rules/Profiles workspace. |
+| NC-UI-010 | P1 | Compact responsive layout | Toolbar controls and table scrolling must remain accessible without overlapping controls or dialog actions. Partial render coverage at 976×560 and increased font scale is implemented. |
 | NC-UI-011 | P1 | Theme regression | Controls, surfaces, focus indication, typography, and semantic colors must use KNet theme tokens in dark and supported alternate themes. |
 | NC-UI-012 | P0 | Graph reference state | Disabled, no global limit, unlimited, offline, a single limited global profile, and enabled domain-rule/mixed states must show the correct label and only honest reference lines. |
 | NC-UI-013 | P0 | Graph scaling boundaries | Zero, sub-kbps, exactly 100 kbps, Mbps, large peaks, and sudden drops must produce finite coordinates, readable ticks, and stable headroom. |
@@ -307,7 +352,7 @@ or Wi-Fi changes, WebRTC, or QUIC on a physical device.
 | NC-AND-001 | P1 | Intermediate loss/duplication/reordering distributions | Fixed seeds at representative percentages must produce reproducible counts within a documented tolerance, not only 0 or 100 percent cases. |
 | NC-AND-002 | P1 | Latency and jitter bounds | Verify fixed latency, signed jitter, non-negative final delay, and deterministic results over multiple flows and directions. |
 | NC-AND-003 | P0 | Offline mapping and recovery | Desktop Offline/Timeout/Reset policies mapped to packet loss must produce the documented packet behavior and recover after policy removal. |
-| NC-AND-004 | P0 | Live packet-policy refresh | An already-running VPN session must fetch/apply a new policy safely without restart, stale budgets, dropped control-plane connectivity, or double shaping. This feature is not implemented yet. |
+| NC-AND-004 | P0 | Live packet-policy refresh | An already-running VPN session must fetch/apply a new policy safely without restart, stale budgets, dropped control-plane connectivity, or double shaping. |
 | NC-AND-005 | P0 | Protocol/IP/CIDR/port rules | Verify precedence, IPv4/IPv6, inferred-domain uncertainty, and fallback when attribution is unavailable. This feature is not implemented yet. |
 | NC-AND-006 | P0 | Queue close and cancellation | Closing a UDP association or VPN with delayed datagrams must release every queue slot, timer, socket, and payload exactly once. |
 | NC-AND-007 | P0 | DNS and recursion safety | VPN DNS remains available, protected sockets never re-enter the VPN, and desktop control/certificate/pairing endpoints remain reachable. |

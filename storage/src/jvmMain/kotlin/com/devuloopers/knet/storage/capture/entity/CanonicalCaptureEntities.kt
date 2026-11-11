@@ -187,6 +187,12 @@ data class OpaqueFlowEntity(
     val policyRuleId: String?,
     val policyAction: String? = null,
     val policyGroupId: String? = null,
+    /** Retained policy origin and failure evidence; nullable for old captures. */
+    val protectionOrigin: String? = null,
+    /** Bounded diagnostic enum name. */
+    val inspectionFailureReason: String? = null,
+    /** Legacy automatic identity retained for historical database compatibility only. */
+    val smartEntryId: String? = null,
     val appliedConditionProfileId: String? = null,
     val appliedConditionRuleId: String? = null,
     val appliedConditionSource: String? = null,
@@ -195,6 +201,12 @@ data class OpaqueFlowEntity(
     val uploadedBytes: Long,
     val downloadedBytes: Long,
     val terminalErrorCode: String?,
+    /** Nullable typed enum names/time preserve the absence of evidence in older captures. */
+    val closureInitiator: String? = null,
+    /** Bounded observation reason, separate from the terminal delivery outcome. */
+    val closureReason: String? = null,
+    /** Unix time of first observed close evidence, not necessarily the final delivery timestamp. */
+    val closureObservedAtEpochMillis: Long? = null,
 )
 
 /**

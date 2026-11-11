@@ -27,7 +27,7 @@ internal val networkConditionsBindings: Module = module {
     single { NetworkConditionSemanticResolver(get()) }
     factory { NetworkConditionProtocolRuleUseCase(get()) }
     single {
-        RoomNetworkConditionsRepository(get<KNetDatabase>().networkConditionDao())
+        RoomNetworkConditionsRepository(get<KNetDatabase>(), get<CoroutineScope>())
     } bind NetworkConditionsRepository::class
     single {
         val repository = get<NetworkConditionsRepository>()

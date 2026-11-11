@@ -3,6 +3,9 @@ package com.devuloopers.knet.engine.simulator
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionBuiltIns
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionConfiguration
 import com.devuloopers.knet.engine.proxy.KNetProxyServer
+import com.devuloopers.knet.engine.proxy.KNetProxyRuntimePolicy
+import com.devuloopers.knet.domain.networkconditions.NetworkConditionProfile
+import com.devuloopers.knet.domain.networkconditions.NetworkConditionProfileId
 import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureSink
 import com.devuloopers.knet.engine.proxy.capture.ProxyConnectionCapture
 import com.devuloopers.knet.engine.proxy.capture.ProxyExchangeCapture
@@ -32,7 +35,26 @@ import kotlin.test.assertTrue
 
 class ProtectedTunnelNetworkConditionIntegrationTest {
     @Test
-    fun `protected raw tunnel shares the 100 kbps download budget`() {
+    fun `protected raw tunnel shares the 100 kbps download budget`() = exercise(
+        NetworkConditionConfiguration(enabled = true, globalProfileId = NetworkConditionBuiltIns.STREAMING_100_KBPS.id),
+        KNetProxyRuntimePolicy(), 750L,
+    )
+
+    @Test
+    fun `IPv6 destination remains a real protected tunnel under the shared 100 kbps budget`() = exercise(
+        NetworkConditionConfiguration(enabled = true, globalProfileId = NetworkConditionBuiltIns.STREAMING_100_KBPS.id),
+        KNetProxyRuntimePolicy(), 750L, destinationHost = "::1",
+    )
+
+    @Test
+    fun `intentional delay longer than transport idle cannot truncate a protected tunnel`() {
+        val profile = NetworkConditionProfile(NetworkConditionProfileId("long-delay"), "Long delay", latencyMillis = 2_000)
+        exercise(NetworkConditionConfiguration(enabled = true, globalProfileId = profile.id, customProfiles = listOf(profile)),
+            KNetProxyRuntimePolicy(readIdleTimeoutMillis = 1_000, writeIdleTimeoutMillis = 1_000), 4_000L)
+    }
+
+    private fun exercise(configuration: NetworkConditionConfiguration, policy: KNetProxyRuntimePolicy, minimumMillis: Long,
+        destinationHost: String = "127.0.0.1") {
         val payload = ByteArray(12_500) { index -> (index % 127).toByte() }
         val origin = ServerSocket(0)
         val originWorker = Thread {
@@ -43,20 +65,17 @@ class ProtectedTunnelNetworkConditionIntegrationTest {
                     flush()
                     socket.shutdownOutput()
                 }
-                socket.soTimeout = 5_000
+                socket.soTimeout = 15_000
                 while (socket.getInputStream().read() >= 0) {
                     // Keep the read half alive until the proxy/client completes the opposite direction.
                 }
             }
         }.apply { isDaemon = true; start() }
-        val configuration = NetworkConditionConfiguration(
-            enabled = true,
-            globalProfileId = NetworkConditionBuiltIns.STREAMING_100_KBPS.id,
-        )
         val engine = NetworkConditionEngine(configuration = { configuration })
         val capture = RecordingOpaqueCapture()
         val proxy = KNetProxyServer(
             port = availableLoopbackPort(),
+            runtimePolicy = policy,
             serverTlsContextProvider = ServerTlsContextProvider { _, _ ->
                 CompletableFuture.failedFuture(AssertionError("Tunnel must not request a certificate."))
             },
@@ -74,7 +93,8 @@ class ProtectedTunnelNetworkConditionIntegrationTest {
             Socket().use { socket ->
                 socket.connect(proxy.boundAddress())
                 socket.soTimeout = 10_000
-                val endpoint = "127.0.0.1:${origin.localPort}"
+                val endpoint = if (':' in destinationHost) "[$destinationHost]:${origin.localPort}"
+                    else "$destinationHost:${origin.localPort}"
                 val input = BufferedInputStream(socket.getInputStream())
                 val elapsed = measureTimeMillis {
                     socket.getOutputStream().apply {
@@ -89,12 +109,12 @@ class ProtectedTunnelNetworkConditionIntegrationTest {
                     assertContentEquals(payload, input.readNBytes(payload.size))
                 }
 
-                assertTrue(elapsed >= 750L, "12.5 KB arrived too quickly for a 100 kbps budget: ${elapsed}ms")
+                assertTrue(elapsed >= minimumMillis, "Conditioned payload arrived too quickly: ${elapsed}ms")
                 engine.refreshTelemetry()
                 assertTrue(engine.snapshot.value.downloadedBytes >= payload.size)
                 val evidence = capture.metadata?.appliedNetworkCondition
                 assertTrue(evidence != null)
-                assertTrue(evidence.profileId == NetworkConditionBuiltIns.STREAMING_100_KBPS.id.value)
+                assertTrue(evidence.profileId == configuration.globalProfileId?.value)
                 assertTrue(evidence.source == AppliedNetworkConditionSource.GLOBAL)
             }
         } finally {

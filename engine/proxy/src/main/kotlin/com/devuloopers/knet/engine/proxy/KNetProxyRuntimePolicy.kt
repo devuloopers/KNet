@@ -9,8 +9,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  * @property happyEyeballsDelayMillis Delay before starting the next IPv6/IPv4 candidate.
  * @property maximumUpstreamAddressCandidates Maximum DNS candidates attempted for one connection.
  * @property tlsHandshakeTimeoutMillis Upstream and downstream TLS handshake deadline.
- * @property readIdleTimeoutMillis Socket read-idle deadline.
- * @property writeIdleTimeoutMillis Socket write-idle deadline.
+ * @property readIdleTimeoutMillis HTTP/setup inactivity deadline; either-direction progress and intentional holds keep it alive.
+ * @property writeIdleTimeoutMillis Deadline for an outstanding socket write, not an idle open connection.
+ * @property rawTunnelIdleTimeoutMillis Optional inactivity deadline after a raw CONNECT tunnel is installed; zero permits quiet reusable connections.
  * @property gracefulShutdownTimeoutMillis Event-loop graceful shutdown deadline.
  * @property maximumDownstreamConnections Total admitted client connections.
  * @property maximumConnectionsPerClient Admitted connections for one remote address.
@@ -37,6 +38,7 @@ data class KNetProxyRuntimePolicy(
     val maximumHttp2ConcurrentStreams: Long = 100L,
     val maximumHttp2HeaderListBytes: Long = 64L * 1024L,
     val http2InitialWindowBytes: Int = 65_535,
+    val rawTunnelIdleTimeoutMillis: Long = 0L,
 ) {
     init {
         require(connectTimeoutMillis > 0L) { "Connect timeout must be positive." }
@@ -49,6 +51,7 @@ data class KNetProxyRuntimePolicy(
         require(tlsHandshakeTimeoutMillis > 0L) { "TLS handshake timeout must be positive." }
         require(readIdleTimeoutMillis > 0L) { "Read-idle timeout must be positive." }
         require(writeIdleTimeoutMillis > 0L) { "Write-idle timeout must be positive." }
+        require(rawTunnelIdleTimeoutMillis >= 0L) { "Raw-tunnel inactivity timeout must be nonnegative." }
         require(gracefulShutdownTimeoutMillis > 0L) { "Graceful shutdown timeout must be positive." }
         require(maximumDownstreamConnections > 0) { "Downstream connection limit must be positive." }
         require(maximumConnectionsPerClient > 0) { "Per-client connection limit must be positive." }

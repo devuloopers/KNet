@@ -13,6 +13,10 @@ public interface NetworkConditionsRepository {
 
     public suspend fun setEnabled(enabled: Boolean)
     public suspend fun setGlobalProfile(profileId: NetworkConditionProfileId?)
+
+    /** Atomically selects a validated global default and enables shaping, preserving rules and custom profiles. */
+    public suspend fun activateGlobalProfile(profileId: NetworkConditionProfileId?)
+
     public suspend fun upsertProfile(profile: NetworkConditionProfile)
     public suspend fun deleteProfile(profileId: NetworkConditionProfileId): Boolean
     public suspend fun upsertRule(rule: NetworkConditionRule)

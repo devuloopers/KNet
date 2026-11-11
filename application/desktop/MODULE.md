@@ -110,3 +110,10 @@ contribution, runtime adapter, and product binding without adding a protocol bra
 
 The `contract` name is intentional: it describes what outer adapters must implement without using the
 hexagonal-architecture term `port` or implying a network socket port.
+
+## Protected TLS handling
+
+ProtectedTrafficRepository owns saved default/rule configuration. Selected-flow observation reads only authoritative
+configuration and retained flow metadata; it never opens a socket or mutates capture history. Typed Traffic actions
+save the exact destination/port/transport rule and await committed publication. Automatic learning, temporary entry
+APIs, toggle/Forget/promote use cases and device-security invalidation subscriptions have been retired.

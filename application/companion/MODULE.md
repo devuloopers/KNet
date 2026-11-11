@@ -1,5 +1,13 @@
 # `:application:companion`
 
+## Session-owned packet policy maintenance
+
+`CompanionPacketPolicySource`/`Sink` are typed application ports for authenticated reads and native acknowledgements.
+`MaintainCompanionPacketPolicyUseCase` performs sequential, bounded reads for one running VPN session. It rejects
+in-flight old-identity/endpoint responses, propagates cancellation and stops on inactive/unsupported providers.
+Failures retain the last global policy for a five-second monotonic lease, then release stale shaping; successful
+reads recover without VPN restart. Platform service code owns and cancels the job before native teardown.
+
 ## Responsibility
 
 Owns portable companion workflows and application contracts. It coordinates pairing, durable registration, credential

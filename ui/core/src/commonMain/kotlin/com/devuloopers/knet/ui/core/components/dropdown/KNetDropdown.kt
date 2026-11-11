@@ -131,9 +131,9 @@ object KNetDropdownDefaults {
     }
 
     /**
-     * Resolves a stable dropdown width from the widest measured option label.
+     * Resolves a bounded dropdown width from the measured anchor label.
      *
-     * Anchor label padding and chevron chrome are included so changing the current selection never changes width.
+     * Includes label padding and chevron chrome; the same bounds apply to every single-select anchor.
      */
     fun contentWidth(widestLabelWidth: Dp, size: KNetDropdownSize): Dp {
         val anchorChrome = HorizontalPadding + AnchorContentSpacing + chevronWidth(size)
@@ -150,8 +150,9 @@ object KNetDropdownDefaults {
 /**
  * Compact, anchored KNet selection field.
  *
- * The anchor is stably sized from the complete option set while the popup may grow wider for menu chrome and
- * long labels. Selection is represented independently from display text, and keyboard users can open or close
+ * Every anchor fits its displayed selection or placeholder and animates width changes with shared theme motion.
+ * The popup independently fits the complete option set. Selection is represented independently from display text,
+ * and keyboard users can open or close
  * the list with Enter, Space, the arrow keys, or Escape.
  *
  * @param selectedItem Current selection.
@@ -178,7 +179,7 @@ fun <T> KNetDropdown(
     size: KNetDropdownSize = KNetDropdownSize.Standard,
     centeredAnchorContent: Boolean = false,
     itemText: (T) -> String = { it.toString() },
-    itemColor: ((T) -> Color?)? = null
+    itemColor: ((T) -> Color?)? = null,
 ) {
     val colors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -206,16 +207,16 @@ fun <T> KNetDropdown(
             if (isEmpty()) add("")
         }
     }
-    val widestAnchorLabelWidthPx = remember(optionLabels, typography.labelMedium) {
-        optionLabels.maxOf { label ->
-            textMeasurer.measure(
-                text = label,
-                style = typography.labelMedium.copy(fontWeight = FontWeight.SemiBold),
-                maxLines = 1
-            ).size.width
-        }
+    val anchorFontWeight = if (isDefaultSelected) FontWeight.Medium else FontWeight.SemiBold
+    val measuredAnchorLabelWidthPx = remember(displayText, typography.labelMedium, anchorFontWeight, textMeasurer) {
+        textMeasurer.measure(
+            text = displayText,
+            style = typography.labelMedium.copy(fontWeight = anchorFontWeight),
+            maxLines = 1,
+            softWrap = false,
+        ).size.width
     }
-    val widestMenuLabelWidthPx = remember(optionLabels, typography.bodySmall) {
+    val widestMenuLabelWidthPx = remember(optionLabels, typography.bodySmall, textMeasurer) {
         optionLabels.maxOf { label ->
             textMeasurer.measure(
                 text = label,
@@ -225,7 +226,7 @@ fun <T> KNetDropdown(
         }
     }
     val contentResponsiveAnchorWidth = KNetDropdownDefaults.contentWidth(
-        widestLabelWidth = with(density) { widestAnchorLabelWidthPx.toDp() },
+        widestLabelWidth = with(density) { measuredAnchorLabelWidthPx.toDp() },
         size = size
     )
     val contentResponsiveMenuWidth = KNetDropdownDefaults.menuContentWidth(
@@ -234,7 +235,7 @@ fun <T> KNetDropdown(
     val widthAnimationDuration = if (motion.animationsEnabled) motion.durationFast else motion.durationInstant
     val animatedAnchorWidth by animateDpAsState(
         targetValue = contentResponsiveAnchorWidth,
-        animationSpec = tween(widthAnimationDuration),
+        animationSpec = tween(widthAnimationDuration, easing = motion.easingStandard),
         label = "dropdownAnchorWidth"
     )
     val animatedMenuWidth by animateDpAsState(
@@ -254,7 +255,7 @@ fun <T> KNetDropdown(
             enabled = canExpand,
             size = size,
             textColor = textColor,
-            fontWeight = if (isDefaultSelected) FontWeight.Medium else FontWeight.SemiBold,
+            fontWeight = anchorFontWeight,
             centeredContent = centeredAnchorContent,
             onToggle = { expansionState.toggle() },
             onOpen = expansionState::open,

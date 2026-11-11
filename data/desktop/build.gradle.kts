@@ -3,6 +3,8 @@ plugins {
     alias(libs.plugins.kotlinSerialization)
 }
 
+
+
 kotlin {
     jvm()
 
@@ -47,3 +49,23 @@ kotlin {
         }
     }
 }
+
+/**
+ * Wall-clock storage qualification runs after feature suites so concurrent compilation/crypto does not distort
+ * its unchanged five-second query budget. The aggregate gate requires this separate report; it is never skipped.
+ */
+val canonicalTrafficScaleQualification by tasks.registering(Test::class) {
+    group = "verification"
+    description = "Measures bounded indexed paging over a real 100,000-row SQLite capture."
+    val ordinaryTests = tasks.named<Test>("jvmTest")
+    dependsOn(ordinaryTests)
+    testClassesDirs = ordinaryTests.get().testClassesDirs
+    classpath = ordinaryTests.get().classpath
+    filter.includeTestsMatching("com.devuloopers.knet.data.desktop.capture.CanonicalTrafficScaleBaselineTest")
+    maxParallelForks = 1
+}
+
+tasks.named<Test>("jvmTest") {
+    filter.excludeTestsMatching("com.devuloopers.knet.data.desktop.capture.CanonicalTrafficScaleBaselineTest")
+}
+tasks.named("check") { dependsOn(canonicalTrafficScaleQualification) }

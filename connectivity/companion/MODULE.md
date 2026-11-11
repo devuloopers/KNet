@@ -1,5 +1,17 @@
 # `:connectivity:companion`
 
+## Live packet policy and owner cleanup
+
+Android UDP associations own child jobs, bounded delayed work and terminal destination registries. Control close
+and VPN teardown cancel both directions, release admission slots, and prohibit late upstream recreation. DNS has
+separate bounded admission. Once condition-enabled UDP routing is established, disabling shaping preserves that
+route instead of dropping later datagrams. TCP relays retain both halves until their structured copies finish.
+
+The Android forwarder applies authenticated global policy in place, re-planning pending deadlines and fencing
+superseded sends. Its policy-refresh coroutine belongs to the foreground service, not a Traffic screen or flow.
+Native original-tuple callbacks, packet destination rules and UDP desktop reporting remain incomplete; these changes
+do not promote app attribution, QUIC inspection or physical WebRTC support.
+
 ## Responsibility
 
 Owns multiplatform companion connectivity adapters for Android and iOS. Shared source sets contain the bounded

@@ -1,0 +1,185 @@
+{
+  "recordedAtUtc": "2026-11-10T13:09:19.606595+00:00",
+  "gitHead": "b5edfffd85045bc48062aff082fcafef00b1cc6a",
+  "sourceState": "uncommitted working tree; no commit or push created",
+  "featureGate": {
+    "tests": 954,
+    "failures": 0,
+    "skipped": 0,
+    "softwareRequirementsComplete": false,
+    "softwareRequirementsOpen": 107,
+    "modules": [
+      {
+        "path": "core/domain/build/test-results/jvmTest",
+        "tests": 98
+      },
+      {
+        "path": "core/traffic/build/test-results/jvmTest",
+        "tests": 19
+      },
+      {
+        "path": "core/companion/build/test-results/jvmTest",
+        "tests": 28
+      },
+      {
+        "path": "application/desktop/build/test-results/test",
+        "tests": 49
+      },
+      {
+        "path": "application/companion/build/test-results/jvmTest",
+        "tests": 43
+      },
+      {
+        "path": "storage/build/test-results/jvmTest",
+        "tests": 4
+      },
+      {
+        "path": "data/desktop/build/test-results/jvmTest",
+        "tests": 92
+      },
+      {
+        "path": "data/desktop/build/test-results/canonicalTrafficScaleQualification",
+        "tests": 1
+      },
+      {
+        "path": "engine/proxy/build/test-results/test",
+        "tests": 140
+      },
+      {
+        "path": "engine/protocol/build/test-results/test",
+        "tests": 19
+      },
+      {
+        "path": "engine/grpc/build/test-results/test",
+        "tests": 21
+      },
+      {
+        "path": "engine/websocket/build/test-results/test",
+        "tests": 27
+      },
+      {
+        "path": "engine/graphqlWebSocket/build/test-results/test",
+        "tests": 18
+      },
+      {
+        "path": "engine/sse/build/test-results/test",
+        "tests": 27
+      },
+      {
+        "path": "engine/simulator/build/test-results/test",
+        "tests": 58
+      },
+      {
+        "path": "ui/core/build/test-results/jvmTest",
+        "tests": 21
+      },
+      {
+        "path": "ui/desktop/networkConditions/build/test-results/jvmTest",
+        "tests": 35
+      },
+      {
+        "path": "ui/desktop/protectedTraffic/build/test-results/jvmTest",
+        "tests": 11
+      },
+      {
+        "path": "ui/desktop/traffic/build/test-results/jvmTest",
+        "tests": 41
+      },
+      {
+        "path": "ui/desktop/apiStudio/build/test-results/jvmTest",
+        "tests": 51
+      },
+      {
+        "path": "ui/desktop/apiStudio/websocket/build/test-results/jvmTest",
+        "tests": 5
+      },
+      {
+        "path": "ui/desktop/apiStudio/graphqlWebSocket/build/test-results/jvmTest",
+        "tests": 5
+      },
+      {
+        "path": "ui/desktop/apiStudio/grpc/build/test-results/jvmTest",
+        "tests": 9
+      },
+      {
+        "path": "ui/desktop/app/build/test-results/jvmTest",
+        "tests": 12
+      },
+      {
+        "path": "products/desktop/build/test-results/test",
+        "tests": 38
+      },
+      {
+        "path": "connectivity/companion/build/test-results/testAndroidHostTest",
+        "tests": 82
+      }
+    ]
+  },
+  "loadGate": {
+    "tests": 3,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "measurements": [
+    {
+      "workload": "download",
+      "bytes": "800000",
+      "elapsedNanos": "64145730208",
+      "bitsPerSecond": "99772.81386067715",
+      "latestFirstByteNanos": "628742083",
+      "maximumQueuedBytes": "262144",
+      "heapIncrease": "38797312",
+      "directIncrease": "16777216"
+    },
+    {
+      "workload": "upload",
+      "bytes": "800000",
+      "elapsedNanos": "64008200208",
+      "bitsPerSecond": "99987.18881647452",
+      "latestFirstByteNanos": "498865500",
+      "maximumQueuedBytes": "262144",
+      "heapIncrease": "12582912",
+      "directIncrease": "0"
+    },
+    {
+      "workload": "incremental-500-MiB",
+      "bytes": "524288000",
+      "elapsedNanos": "3058965458",
+      "bitsPerSecond": "1.3711511481866496E9",
+      "latestFirstByteNanos": "12072125",
+      "maximumQueuedBytes": "0",
+      "heapIncrease": "17825792",
+      "directIncrease": "0"
+    }
+  ],
+  "additionalPassedGates": [
+    "http2Qualification",
+    "grpcQualification",
+    "webSocketQualification",
+    "graphQLWebSocketQualification",
+    "sseQualification",
+    "companionAndroidProductQualification",
+    "companionIosProductQualification",
+    ":products:desktop:createDistributable"
+  ],
+  "platformEvidenceScope": "Android host/product tests, lint and debug APK; iOS shared/native tests, device compilation and Simulator framework linking; not signed native adapter archives or physical routing",
+  "requirementStatuses": {
+    "VERIFIED": 55,
+    "PENDING": 87,
+    "BASELINE_PARTIAL": 20,
+    "SUPERSEDED": 1,
+    "PHYSICAL_PENDING": 5
+  },
+  "physicalTestsPerformed": false,
+  "desktopApplicationLaunched": false,
+  "softwareComplete": false,
+  "commands": [
+    "./gradlew networkProtectionQualification :engine:simulator:networkProtectionLoadQualification :products:desktop:createDistributable companionAndroidProductQualification companionIosProductQualification http2Qualification grpcQualification webSocketQualification graphQLWebSocketQualification sseQualification --continue --max-workers=3 --no-daemon --console=plain",
+    "./gradlew networkProtectionQualification :engine:simulator:networkProtectionLoadQualification :products:desktop:createDistributable --max-workers=3 --no-daemon --console=plain"
+  ],
+  "strictCompletionGuard": {
+    "verified": true,
+    "result": "Expected rejection: 107 software requirements remain open; they cannot be deferred as physical-only."
+  }
+}

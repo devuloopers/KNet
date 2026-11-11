@@ -14,6 +14,7 @@ import com.devuloopers.knet.engine.proxy.tls.TlsInterceptionPolicy
 import com.devuloopers.knet.engine.proxy.tls.TlsInterceptionPolicyAction
 import com.devuloopers.knet.engine.proxy.tls.TlsInterceptionRequest
 import com.devuloopers.knet.engine.proxy.tls.TlsInterceptionRuleId
+import com.devuloopers.knet.traffic.model.ProtectionDecisionOrigin
 
 /**
  * Adapts the shared protected-traffic policy to the desktop explicit-proxy CONNECT boundary.
@@ -33,8 +34,9 @@ class ProtectedTrafficTlsInterceptionPolicy(
         val address = (parsed as? ProtectedDestinationSelector.Exact)
             ?.takeIf(ProtectedDestinationSelector.Exact::isIpLiteral)
             ?.value
+        val activeConfiguration = configuration()
         val domainDecision = policy.evaluate(
-            configuration(),
+            activeConfiguration,
             ProtectedTrafficRequest(
                 sourceApplication = request.sourceApplication?.value?.let(::ProtectedSourceApplicationId),
                 destinationHost = destination.takeIf { address == null },
@@ -45,9 +47,7 @@ class ProtectedTrafficTlsInterceptionPolicy(
         )
         val mode = when (domainDecision.action) {
             ProtectedTrafficAction.INSPECT -> TlsInterceptionMode.INSPECT
-            ProtectedTrafficAction.TUNNEL,
-            ProtectedTrafficAction.BYPASS,
-            -> TlsInterceptionMode.TUNNEL
+            ProtectedTrafficAction.TUNNEL, ProtectedTrafficAction.BYPASS -> TlsInterceptionMode.TUNNEL
             ProtectedTrafficAction.BLOCK -> TlsInterceptionMode.BLOCK
         }
         val ruleEvidence = domainDecision.evidence as? ProtectedTrafficDecisionEvidence.Rule
@@ -57,6 +57,14 @@ class ProtectedTrafficTlsInterceptionPolicy(
             ruleId = ruleId,
             policyAction = TlsInterceptionPolicyAction.valueOf(domainDecision.action.name),
             policyGroupId = ruleEvidence?.groupId?.value,
+            origin = when {
+                ruleEvidence?.groupId != null || ruleEvidence != null && activeConfiguration.rules.any {
+                    it.id == ruleEvidence.ruleId && it.origin == com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficRuleOrigin.MIGRATED_PRESET
+                } -> ProtectionDecisionOrigin.PRESET
+                ruleEvidence != null -> ProtectionDecisionOrigin.MANUAL
+                else -> ProtectionDecisionOrigin.GLOBAL
+            },
         )
     }
+
 }

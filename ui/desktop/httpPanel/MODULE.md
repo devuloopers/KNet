@@ -50,3 +50,5 @@ folding, search, and editor surface as single JSON documents; this module does n
 by payload weight instead of entry count alone. Request, response, body-mode, and GraphQL navigation reuse
 the constraint-stable tab primitive from `:ui:core`; GraphQL authoring allocates the remaining toolbar width
 to its scrollable tabs while preserving the operation-name field.
+
+Auth type and API-key location selectors inherit the shared selected-label width and animation without local width overrides.

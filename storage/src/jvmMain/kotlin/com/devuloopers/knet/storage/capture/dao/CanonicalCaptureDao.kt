@@ -264,14 +264,24 @@ interface CanonicalCaptureDao {
     ): List<CanonicalOpaqueFlowPageRow>
 
     /** Emits a compact invalidation scalar for one canonical session's opaque flows. */
-    @Query("SELECT COUNT(*) + COALESCE(MAX(version), 0) FROM opaque_flows WHERE sessionId = :sessionId")
+    @Query("SELECT COUNT(*) + COALESCE(SUM(version), 0) FROM opaque_flows WHERE sessionId = :sessionId")
     fun observeOpaqueFlowChangeScalar(sessionId: String): Flow<Long>
+
+    /** Applies a newer cumulative counter snapshot without terminalizing or reopening a flow. */
+    @Query(
+        "UPDATE opaque_flows SET version = :version, " +
+            "uploadedBytes = MAX(uploadedBytes, :uploadedBytes), downloadedBytes = MAX(downloadedBytes, :downloadedBytes) " +
+            "WHERE id = :flowId AND version < :version AND state = 'ACTIVE'",
+    )
+    suspend fun updateOpaqueFlowProgress(flowId: String, version: Long, uploadedBytes: Long, downloadedBytes: Long): Int
 
     /** Terminates one opaque flow only when its monotonic lifecycle version advances. */
     @Query(
         "UPDATE opaque_flows SET version = :version, state = :state, " +
-            "completedAtEpochMillis = :completedAt, uploadedBytes = :uploadedBytes, " +
-            "downloadedBytes = :downloadedBytes, terminalErrorCode = :errorCode " +
+            "completedAtEpochMillis = :completedAt, uploadedBytes = MAX(uploadedBytes, :uploadedBytes), " +
+            "downloadedBytes = MAX(downloadedBytes, :downloadedBytes), terminalErrorCode = :errorCode, " +
+            "closureInitiator = :closureInitiator, closureReason = :closureReason, " +
+            "closureObservedAtEpochMillis = :closureObservedAtEpochMillis " +
             "WHERE id = :flowId AND version < :version AND state = 'ACTIVE'",
     )
     suspend fun terminateOpaqueFlow(
@@ -282,6 +292,9 @@ interface CanonicalCaptureDao {
         uploadedBytes: Long,
         downloadedBytes: Long,
         errorCode: String?,
+        closureInitiator: String? = null,
+        closureReason: String? = null,
+        closureObservedAtEpochMillis: Long? = null,
     ): Int
 
     /** Emits a compact invalidation scalar for one canonical session. */

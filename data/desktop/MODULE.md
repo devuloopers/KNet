@@ -83,3 +83,31 @@ Settings persistence is side-effect free. It does not configure the HTTP client,
 or UI when a preference flow is collected; runtime propagation is owned by the desktop product composition root.
 Contributed API Studio editors share `RoomApiStudioWorkspaceDocumentStore`. The adapter understands identity,
 placement, naming ownership, and payload version only; gRPC/protobuf and future editor payloads stay opaque.
+
+## Network Conditions snapshots
+
+Network Conditions publishes one committed multi-table read snapshot per invalidation and serializes validated
+mutations in SQLite write transactions across repository instances. Its transaction owner retains Room connection
+confinement while preserving the caller's cancellation, so interrupted work rolls back. Profile/reference cleanup
+is atomic; corrupt policy data still fails closed without deleting saved rows. Packet policy v2 and the remaining
+diagnostic/migration matrix have independent completion requirements.
+
+The product supplies the application-owned coroutine scope explicitly; repository observers do not create an
+unowned background scope that can survive database/application shutdown.
+
+## Protected TLS handling
+
+The TLS adapter selects only persisted manual/imported rules or the configured default; it never learns from failures.
+The Room repository ignores the retired automatic setting while retaining its legacy column for compatible storage.
+Canonical capture preserves TLS diagnostics and reads historical automatic origin/identity evidence without activating
+it. New captures write no automatic identity. Saved rules remain editable/removable and no service catalogue is injected.
+
+A single session-owned 500 ms sampler coalesces changed opaque counters into monotonic progress events. It joins before shutdown; non-blocking transport observations and terminal snapshots are serialized per flow. Flush samples counters before its barrier. No payload is retained for opaque traffic.
+
+Real TLS keep-alive qualification crosses a shortened HTTP inactivity deadline before reusing the same connection,
+including an SNI-selected manual tunnel. An explicitly configured raw inactivity limit persists a typed timeout
+with the final byte counters. Historical generic failures are retained without guessing an unrecorded cause.
+
+Opaque capture retains typed close evidence under the flow's metadata monitor and persists it in its terminal
+event. Canonical mapping preserves nullable legacy evidence and safely maps corrupt evidence to Unknown.
+Real-socket close qualification also checks database reopening, independent of encrypted application outcomes.

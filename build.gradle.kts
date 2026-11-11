@@ -1,14 +1,182 @@
 import org.gradle.api.DefaultTask
 import org.gradle.api.file.ConfigurableFileCollection
 import org.gradle.api.file.DirectoryProperty
+import org.gradle.api.file.RegularFileProperty
+import org.gradle.api.provider.Property
 import org.gradle.api.provider.MapProperty
 import org.gradle.api.provider.ListProperty
 import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.InputFiles
+import org.gradle.api.tasks.InputFile
 import org.gradle.api.tasks.Internal
 import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.PathSensitivity
 import org.gradle.api.tasks.TaskAction
+import org.gradle.api.tasks.OutputFile
+import javax.xml.XMLConstants
+import javax.xml.parsers.DocumentBuilderFactory
+
+/** Verifies fresh complete task outputs, including missing reports and skipped mandatory tests. */
+abstract class VerifyNetworkProtectionReportsTask : DefaultTask() {
+    /** Root containing the test-task outputs produced by this task's gate dependencies. */
+    @get:Internal abstract val repositoryDirectory: DirectoryProperty
+    /** Distinct test output paths; a missing or empty task report is a failure. */
+    @get:Input abstract val reportDirectories: ListProperty<String>
+    /** XML report inputs, owned by the prerequisite test tasks. */
+    @get:InputFiles @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val reports: ConfigurableFileCollection
+    /** Newly required regression suites that cannot silently disappear from successful task outputs. */
+    @get:Input abstract val requiredSuites: ListProperty<String>
+    /** Requirement state is distinct from test-task execution evidence. */
+    @get:InputFile @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val ledger: RegularFileProperty
+    /** Machine-readable counts for this exact gate run; module count does not imply full requirements closure. */
+    @get:OutputFile abstract val summaryFile: RegularFileProperty
+
+    /** Rejects missing evidence, test failures and mandatory skipped tests before publishing the count. */
+    @TaskAction fun verify() {
+        val root = repositoryDirectory.get().asFile
+        val parser = DocumentBuilderFactory.newInstance().apply {
+            setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
+            setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+            setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "")
+            setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "")
+        }.newDocumentBuilder()
+        val suites = mutableSetOf<String>()
+        var total = 0
+        val counts = reportDirectories.get().distinct().map { relative ->
+            val files = root.resolve(relative).listFiles { file -> file.name.startsWith("TEST-") && file.extension == "xml" }.orEmpty()
+            check(files.isNotEmpty()) { "Mandatory test-task reports are missing: $relative" }
+            var count = 0
+            files.forEach { file ->
+                val suite = parser.parse(file).documentElement
+                suites += suite.getAttribute("name")
+                // Kotlin multiplatform appends target display suffixes to suite names. JUnit's testcase
+                // classname is the executed source identity and stays stable across JVM target labels.
+                val cases = suite.getElementsByTagName("testcase")
+                for (index in 0 until cases.length) {
+                    suites += (cases.item(index) as org.w3c.dom.Element).getAttribute("classname")
+                }
+                val tests = suite.getAttribute("tests").toInt()
+                listOf("failures", "errors", "skipped").forEach { attribute ->
+                    check(suite.getAttribute(attribute).ifEmpty { "0" }.toInt() == 0) {
+                        "${file.name} has non-zero $attribute; the feature gate is incomplete."
+                    }
+                }
+                count += tests
+            }
+            check(count > 0) { "Mandatory test-task output contains no executed cases: $relative" }
+            total += count
+            "    {\"path\":\"$relative\",\"tests\":$count}"
+        }
+        check(requiredSuites.get().all { it in suites }) { "Required regression suites missing: ${requiredSuites.get().filterNot { it in suites }}" }
+        val output = summaryFile.get().asFile
+        val softwareOpen = ledger.get().asFile.readLines().drop(1).filter(String::isNotBlank).count { line ->
+            val columns = line.split('\t')
+            QualificationKind.valueOf(columns[2]) in setOf(QualificationKind.SOFTWARE, QualificationKind.MIXED) &&
+                QualificationStatus.valueOf(columns[3]) != QualificationStatus.VERIFIED
+        }
+        output.parentFile.mkdirs()
+        output.writeText("{\n  \"tests\":$total,\n  \"failures\":0,\n  \"skipped\":0,\n  \"softwareRequirementsComplete\":${softwareOpen == 0},\n  \"softwareRequirementsOpen\":$softwareOpen,\n  \"modules\":[\n${counts.joinToString(",\n")}\n  ]\n}\n")
+        logger.lifecycle("Network protection gate: $total tests, no failures/skips, ${counts.size} distinct task outputs. Requirements closure is tracked separately.")
+    }
+}
+
+/** Closed evidence statuses used by the requirements ledger, independent of a passing module test count. */
+enum class QualificationStatus { PENDING, BASELINE_PARTIAL, VERIFIED, PHYSICAL_PENDING, SUPERSEDED }
+
+/** Whether acceptance is executable in software, requires hardware, or has been replaced by an approved decision. */
+enum class QualificationKind { SOFTWARE, PHYSICAL, MIXED, RETIRED }
+
+/** Checks that every accepted requirement remains tracked and that completion never hides missing software work. */
+abstract class VerifyNetworkProtectionLedgerTask : DefaultTask() {
+    /** Root used to resolve evidence and test-source links. */
+    @get:Internal abstract val repositoryDirectory: DirectoryProperty
+    /** Versioned machine-readable acceptance ledger. */
+    @get:InputFile @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val ledger: RegularFileProperty
+    /** Original requirement documents, tracked so additions cannot bypass the ledger. */
+    @get:InputFiles @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val requirementDocuments: ConfigurableFileCollection
+    /** Strict release closure mode; normal development validation permits explicitly pending work. */
+    @get:Input abstract val requireSoftwareComplete: Property<Boolean>
+
+    /** Validates identity, ownership, status and retained source/evidence references. */
+    @TaskAction fun verify() {
+        val root = repositoryDirectory.get().asFile
+        val lines = ledger.get().asFile.readLines()
+        val columns = listOf("id", "owner", "kind", "status", "title", "requirement", "source", "tests", "evidence")
+        check(lines.first().split('\t') == columns) { "Unexpected network protection ledger schema." }
+        val entries = lines.drop(1).filter(String::isNotBlank).map { line ->
+            val values = line.split('\t')
+            check(values.size == columns.size) { "Malformed qualification ledger row: ${values.firstOrNull()}" }
+            columns.zip(values).toMap()
+        }
+        val ids = entries.map { it.getValue("id") }
+        check(ids.size == ids.toSet().size) { "Qualification requirement IDs must be unique." }
+        val networkSource = root.resolve("docs/network_conditions_test_gap_report.md").readText()
+        val expectedNetwork = Regex("(?m)^\\| (NC-[A-Z]+-\\d{3}) \\|").findAll(networkSource)
+            .map { it.groupValues[1] }.toSet()
+        check(ids.filter { it.startsWith("NC-") }.toSet() == expectedNetwork) { "Network Conditions ledger IDs differ from the acceptance document." }
+        val networkRequirements = networkSource.lineSequence().filter { Regex("^\\| NC-[A-Z]+-\\d{3} \\|").containsMatchIn(it) }
+            .associate { line -> line.split('|').map(String::trim).let { it[1] to it[4] } }
+        entries.filter { it.getValue("id") in expectedNetwork }.forEach { entry ->
+            check(entry.getValue("requirement") == networkRequirements[entry.getValue("id")]) {
+                "Acceptance text changed for ${entry.getValue("id")}; update/review its ledger evidence."
+            }
+        }
+        val smartSource = root.resolve("docs/smart_compatibility_implementation_plan.md").readText()
+            .substringAfter("## Required automated test matrix").substringBefore("\nThe implemented")
+        val expectedSmart = smartSource.lineSequence().count { it.startsWith("| ") && !it.startsWith("| Area |") }
+        check(ids.count { it.startsWith("SC-") } == expectedSmart) { "Smart acceptance categories are missing from the ledger." }
+        val protectedSource = root.resolve("docs/protected_traffic_passthrough_implementation_plan.md").readText()
+            .substringAfter("## Automated acceptance gates").substringBefore("\n## ")
+        check(ids.count { it.startsWith("PT-") } == Regex("(?m)^- ").findAll(protectedSource).count()) {
+            "Protected Traffic acceptance assertions are missing from the ledger."
+        }
+        check((1..6).all { "AUDIT-A$it" in ids }) { "All six readiness findings must remain tracked." }
+        val pending = mutableListOf<String>()
+        entries.forEach { entry ->
+            val id = entry.getValue("id")
+            check(entry.getValue("owner") in (0..12).map { "C" + it.toString().padStart(2, '0') }) { "Unknown work package for $id" }
+            val kind = QualificationKind.valueOf(entry.getValue("kind"))
+            val status = QualificationStatus.valueOf(entry.getValue("status"))
+            check(entry.getValue("title").isNotBlank() && entry.getValue("requirement").isNotBlank()) { "Empty acceptance requirement for $id" }
+            check(root.resolve(entry.getValue("source").substringBefore('#')).isFile) { "Missing requirement source for $id" }
+            check(status != QualificationStatus.PHYSICAL_PENDING || kind in setOf(QualificationKind.PHYSICAL, QualificationKind.MIXED)) {
+                "$id cannot defer a software-only requirement as physical testing."
+            }
+            check((status == QualificationStatus.SUPERSEDED) == (kind == QualificationKind.RETIRED)) { "Invalid retired requirement $id" }
+            if (status == QualificationStatus.VERIFIED) {
+                listOf("tests", "evidence").forEach { column ->
+                    val references = entry.getValue(column).split(';').filter(String::isNotBlank)
+                    check(references.isNotEmpty() && references.all { root.resolve(it.substringBefore('#')).isFile }) {
+                        "Verified requirement $id needs existing $column references."
+                    }
+                }
+            }
+            if (kind in setOf(QualificationKind.SOFTWARE, QualificationKind.MIXED) && status != QualificationStatus.VERIFIED) pending += id
+        }
+        check(!requireSoftwareComplete.get() || pending.isEmpty()) {
+            "Software acceptance remains open for ${pending.size} requirements: ${pending.joinToString()}"
+        }
+        logger.lifecycle("Validated ${entries.size} network protection requirements; ${pending.size} software requirements remain open.")
+    }
+}
+
+/** Requirements validation; strict closure is requested with -PrequireNetworkProtectionComplete=true. */
+val verifyNetworkProtectionLedger by tasks.registering(VerifyNetworkProtectionLedgerTask::class) {
+    group = "verification"
+    description = "Checks complete requirement tracking and prevents software gaps being deferred as physical tests."
+    repositoryDirectory.set(layout.projectDirectory)
+    ledger.set(layout.projectDirectory.file("docs/qualification/network_protection_cases.tsv"))
+    requirementDocuments.from(
+        "docs/network_conditions_test_gap_report.md",
+        "docs/protected_traffic_passthrough_implementation_plan.md",
+        "docs/smart_compatibility_implementation_plan.md",
+    )
+    requireSoftwareComplete.set(providers.gradleProperty("requireNetworkProtectionComplete").map(String::toBooleanStrict).orElse(false))
+}
 
 /** Verifies that all configured module ownership documents exist. */
 abstract class VerifyModuleDocumentationTask : DefaultTask() {
@@ -722,6 +890,9 @@ tasks.register("companionIosProductQualification") {
     dependsOn(
         "companionFoundationQualification",
         ":products:companion:iosApp:linkDebugFrameworkIosSimulatorArm64",
+        ":products:companion:iosPacketTunnel:iosSimulatorArm64Test",
+        ":products:companion:iosPacketTunnel:linkDebugFrameworkIosSimulatorArm64",
+        ":products:companion:iosPacketTunnel:compileKotlinIosArm64",
     )
 }
 
@@ -842,6 +1013,7 @@ tasks.register("networkConditionsQualification") {
     group = "verification"
     description = "Runs Network Conditions domain, persistence, engine, UI, API Studio, Traffic, and Android-host tests."
     dependsOn(
+        verifyNetworkProtectionLedger,
         verifyArchitectureFoundation,
         ":core:domain:jvmTest",
         ":storage:jvmTest",
@@ -853,6 +1025,7 @@ tasks.register("networkConditionsQualification") {
         ":engine:websocket:test",
         ":engine:simulator:test",
         ":engine:graphqlWebSocket:test",
+        ":engine:sse:test",
         ":ui:desktop:networkConditions:jvmTest",
         ":ui:desktop:apiStudio:jvmTest",
         ":ui:desktop:apiStudio:websocket:jvmTest",
@@ -865,6 +1038,88 @@ tasks.register("networkConditionsQualification") {
         ":connectivity:companion:testAndroidHostTest",
         ":products:desktop:test",
     )
+}
+
+/** Cross-module saved-policy/TLS gate; physical platform qualification remains independently tracked. */
+tasks.register("protectedTrafficQualification") {
+    group = "verification"
+    description = "Qualifies saved TLS policy, compatible storage, manual-rule reconnects, Traffic controls, and composition."
+    dependsOn(
+        verifyNetworkProtectionLedger,
+        verifyArchitectureFoundation,
+        ":core:domain:jvmTest",
+        ":core:traffic:jvmTest",
+        ":application:desktop:test",
+        ":storage:jvmTest",
+        ":data:desktop:jvmTest",
+        ":engine:proxy:test",
+        ":engine:simulator:test",
+        ":ui:core:jvmTest",
+        ":ui:desktop:protectedTraffic:jvmTest",
+        ":ui:desktop:traffic:jvmTest",
+        ":ui:desktop:app:jvmTest",
+        ":core:companion:jvmTest",
+        ":application:companion:jvmTest",
+        ":connectivity:companion:testAndroidHostTest",
+        ":products:desktop:test",
+    )
+}
+
+/** Aggregate gate with independently checked XML evidence; it never launches the desktop application. */
+tasks.register<VerifyNetworkProtectionReportsTask>("networkProtectionQualification") {
+    group = "verification"
+    description = "Runs both feature gates and rejects missing, failed or skipped mandatory test evidence."
+    dependsOn("networkConditionsQualification", "protectedTrafficQualification", ":data:desktop:canonicalTrafficScaleQualification")
+    repositoryDirectory.set(layout.projectDirectory)
+    reportDirectories.set(listOf(
+        "core/domain/build/test-results/jvmTest", "core/traffic/build/test-results/jvmTest",
+        "core/companion/build/test-results/jvmTest", "application/desktop/build/test-results/test",
+        "application/companion/build/test-results/jvmTest", "storage/build/test-results/jvmTest",
+        "data/desktop/build/test-results/jvmTest", "data/desktop/build/test-results/canonicalTrafficScaleQualification",
+        "engine/proxy/build/test-results/test",
+        "engine/protocol/build/test-results/test", "engine/grpc/build/test-results/test",
+        "engine/websocket/build/test-results/test", "engine/graphqlWebSocket/build/test-results/test",
+        "engine/sse/build/test-results/test", "engine/simulator/build/test-results/test",
+        "ui/core/build/test-results/jvmTest", "ui/desktop/networkConditions/build/test-results/jvmTest",
+        "ui/desktop/protectedTraffic/build/test-results/jvmTest", "ui/desktop/traffic/build/test-results/jvmTest",
+        "ui/desktop/apiStudio/build/test-results/jvmTest", "ui/desktop/apiStudio/websocket/build/test-results/jvmTest",
+        "ui/desktop/apiStudio/graphqlWebSocket/build/test-results/jvmTest", "ui/desktop/apiStudio/grpc/build/test-results/jvmTest",
+        "ui/desktop/app/build/test-results/jvmTest", "products/desktop/build/test-results/test",
+        "connectivity/companion/build/test-results/testAndroidHostTest",
+    ))
+    reports.from(reportDirectories.map { directories -> directories.map { relative -> layout.projectDirectory.dir(relative).asFileTree.matching { include("TEST-*.xml") } } })
+    requiredSuites.set(listOf(
+        "com.devuloopers.knet.companion.connectivity.transport.UdpAssociationLifecycleTest",
+        "com.devuloopers.knet.companion.connectivity.transport.LivePacketPolicyTest",
+        "com.devuloopers.knet.companion.application.usecase.MaintainCompanionPacketPolicyUseCaseTest",
+        "com.devuloopers.knet.engine.proxy.tls.TlsCertificateFlightObserverTest",
+        "com.devuloopers.knet.data.desktop.protectedtraffic.ManualProtectedTrafficSocketIntegrationTest",
+        "com.devuloopers.knet.data.desktop.capture.OpaqueKeepAliveCaptureTest",
+        "com.devuloopers.knet.data.desktop.capture.OpaqueClosureCaptureTest",
+        "com.devuloopers.knet.traffic.model.OpaqueFlowClosureTest",
+        "com.devuloopers.knet.ui.desktop.traffic.model.OpaqueFlowStatusPresentationTest",
+        "com.devuloopers.knet.data.desktop.protectedtraffic.ProtectedHttpTwoTunnelIntegrationTest",
+        "com.devuloopers.knet.data.desktop.networkconditions.NetworkConditionAtomicSnapshotTest",
+        "com.devuloopers.knet.engine.proxy.pipeline.ProxyTransportIdleHandlerTest",
+        "com.devuloopers.knet.engine.proxy.pipeline.RawTunnelInactivityTest",
+        "com.devuloopers.knet.engine.proxy.handler.RawTunnelFailureReasonTest",
+        "com.devuloopers.knet.engine.proxy.handler.RawTunnelCloseAttributionTest",
+        "com.devuloopers.knet.engine.proxy.handler.RawTunnelTerminalLifecycleTest",
+        "com.devuloopers.knet.engine.proxy.handler.RawTunnelReadBackpressureTest",
+        "com.devuloopers.knet.engine.proxy.handler.DuplexTransformLifecycleTest",
+        "com.devuloopers.knet.engine.simulator.ShapedInputShutdownTest",
+        "com.devuloopers.knet.engine.simulator.ProtectedTunnelUploadEofIntegrationTest",
+        "com.devuloopers.knet.engine.simulator.SseNetworkConditionIntegrationTest",
+        "com.devuloopers.knet.data.desktop.capture.CanonicalTrafficScaleBaselineTest",
+        "com.devuloopers.knet.products.desktop.CoroutineScopeShutdownResourceTest",
+    ))
+    summaryFile.set(layout.buildDirectory.file("reports/network-protection/qualification-summary.json"))
+    ledger.set(layout.projectDirectory.file("docs/qualification/network_protection_cases.tsv"))
+}
+
+// The measured storage stage retains its real threshold while avoiding simultaneous feature compilation/tests.
+project(":data:desktop").tasks.matching { it.name == "canonicalTrafficScaleQualification" }.configureEach {
+    mustRunAfter("${rootProject.path}networkConditionsQualification", "${rootProject.path}protectedTrafficQualification")
 }
 
 /** Standard Phase 18 release gate; extended soak is invoked separately with its configured duration. */

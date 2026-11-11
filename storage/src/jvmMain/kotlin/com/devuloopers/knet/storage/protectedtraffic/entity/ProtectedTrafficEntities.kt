@@ -3,6 +3,7 @@ package com.devuloopers.knet.storage.protectedtraffic.entity
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import androidx.room.ColumnInfo
 
 /**
  * Singleton persisted protected-traffic fallback configuration.
@@ -14,6 +15,8 @@ import androidx.room.PrimaryKey
 data class ProtectedTrafficSettingsEntity(
     @PrimaryKey val singletonId: Int = 1,
     val defaultAction: String,
+    /** Retired setting retained only for schema compatibility; runtime policy never reads it. */
+    @ColumnInfo(defaultValue = "1") val smartCompatibilityEnabled: Boolean = true,
 )
 
 /**
@@ -43,6 +46,7 @@ data class ProtectedTrafficSettingsEntity(
                 "port",
                 "transport",
                 "ipFamily",
+                "origin",
             ],
             unique = true,
         ),
@@ -60,6 +64,8 @@ data class ProtectedTrafficRuleEntity(
     val port: Int?,
     val transport: String?,
     val ipFamily: String?,
+    /** USER or MIGRATED_PRESET; imported exceptions retain their original lower precedence. */
+    @ColumnInfo(defaultValue = "'USER'") val origin: String = "USER",
 )
 
 /**

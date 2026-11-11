@@ -3,21 +3,12 @@ package com.devuloopers.knet.ui.desktop.protectedtraffic.viewmodel
 import com.devuloopers.knet.application.contract.protectedtraffic.ProtectedTrafficRepository
 import com.devuloopers.knet.application.usecase.protectedtraffic.DeleteProtectedTrafficRuleUseCase
 import com.devuloopers.knet.application.usecase.protectedtraffic.ObserveProtectedTrafficConfigurationUseCase
-import com.devuloopers.knet.application.usecase.protectedtraffic.SetProtectedServiceGroupEnabledUseCase
 import com.devuloopers.knet.application.usecase.protectedtraffic.SetProtectedTrafficDefaultActionUseCase
 import com.devuloopers.knet.application.usecase.protectedtraffic.UpsertProtectedTrafficRuleUseCase
-import com.devuloopers.knet.application.usecase.protectedtraffic.SetProtectedTrafficFlowActionUseCase
-import com.devuloopers.knet.application.contract.traffic.BodyChunk
-import com.devuloopers.knet.application.contract.traffic.BodyRange
-import com.devuloopers.knet.application.contract.traffic.TrafficGeneration
-import com.devuloopers.knet.application.contract.traffic.TrafficPage
-import com.devuloopers.knet.application.contract.traffic.TrafficPageQuery
-import com.devuloopers.knet.application.contract.traffic.TrafficQuery
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedDestinationSelector
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedServiceGroupId
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedSourceApplicationId
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficAction
-import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficBuiltIns
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficConfiguration
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficRule
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficRuleId
@@ -25,13 +16,6 @@ import com.devuloopers.knet.ui.desktop.protectedtraffic.model.ProtectedTrafficRu
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emptyFlow
-import com.devuloopers.knet.traffic.id.BodyId
-import com.devuloopers.knet.traffic.id.ExchangeId
-import com.devuloopers.knet.traffic.id.OpaqueFlowId
-import com.devuloopers.knet.traffic.model.HttpExchangeSnapshot
-import com.devuloopers.knet.traffic.model.OpaqueFlowSnapshot
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -85,7 +69,7 @@ class ProtectedTrafficViewModelTest {
     }
 
     @Test
-    fun `workspace exposes invalid selector errors and compatibility toggles`() = runTest(dispatcher) {
+    fun `workspace exposes invalid selector errors without preset controls`() = runTest(dispatcher) {
         val repository = FakeRepository()
         val viewModel = viewModel(repository)
         advanceUntilIdle()
@@ -93,41 +77,56 @@ class ProtectedTrafficViewModelTest {
         viewModel.beginAddRule()
         viewModel.updateRuleDraft(ProtectedTrafficRuleDraft(destination = "*.invalid", port = "443"))
         viewModel.saveRuleDraft()
-        viewModel.setCompatibilityGroupEnabled(ProtectedTrafficBuiltIns.GooglePlayBillingGroupId, true)
         advanceUntilIdle()
 
         assertTrue(viewModel.state.value.errorMessage.orEmpty().isNotBlank())
-        assertTrue(
-            ProtectedTrafficBuiltIns.GooglePlayBillingGroupId in
-                repository.configuration.value.enabledBuiltInGroups,
-        )
+        assertTrue(repository.configuration.value.enabledBuiltInGroups.isEmpty())
+    }
+
+    @Test
+    fun `changing default policy preserves saved rules and an open draft`() = runTest(dispatcher) {
+        val repository = FakeRepository()
+        val rule = ProtectedTrafficRule(ProtectedTrafficRuleId("saved"), action = ProtectedTrafficAction.TUNNEL,
+            destination = ProtectedDestinationSelector.parse("api.example.com"))
+        repository.configuration.value = ProtectedTrafficConfiguration(defaultAction = ProtectedTrafficAction.TUNNEL, rules = listOf(rule))
+        val viewModel = viewModel(repository)
+        advanceUntilIdle()
+        viewModel.beginAddRule()
+        val draft = viewModel.state.value.ruleDraft
+        viewModel.selectDefaultAction(ProtectedTrafficAction.BLOCK)
+        advanceUntilIdle()
+        assertEquals(ProtectedTrafficAction.BLOCK, repository.configuration.value.defaultAction)
+        assertEquals(listOf(rule), repository.configuration.value.rules)
+        assertEquals(draft, viewModel.state.value.ruleDraft)
+        assertEquals(ProtectedTrafficAction.BLOCK, viewModel.state.value.configuration.defaultAction)
+    }
+
+    @Test
+    fun `editing disabled rule retains identity and enabled state`() = runTest(dispatcher) {
+        val repository = FakeRepository()
+        val rule = ProtectedTrafficRule(ProtectedTrafficRuleId("edit-me"), enabled = false,
+            action = ProtectedTrafficAction.TUNNEL, destination = ProtectedDestinationSelector.parse("old.example.com"))
+        repository.upsertRule(rule)
+        val viewModel = viewModel(repository)
+        advanceUntilIdle()
+        viewModel.beginEditRule(rule)
+        viewModel.updateRuleDraft(viewModel.state.value.ruleDraft!!.copy(destination = "new.example.com"))
+        viewModel.saveRuleDraft()
+        advanceUntilIdle()
+        val saved = repository.configuration.value.rules.single()
+        assertEquals(rule.id, saved.id)
+        assertEquals(false, saved.enabled)
+        assertEquals(ProtectedDestinationSelector.parse("new.example.com"), saved.destination)
     }
 
     private fun viewModel(repository: ProtectedTrafficRepository) = ProtectedTrafficViewModel(
-        ObserveProtectedTrafficConfigurationUseCase(repository),
-        SetProtectedTrafficDefaultActionUseCase(repository),
-        UpsertProtectedTrafficRuleUseCase(repository),
-        DeleteProtectedTrafficRuleUseCase(repository),
-        SetProtectedServiceGroupEnabledUseCase(repository),
-        SetProtectedTrafficFlowActionUseCase(EmptyTrafficQuery, repository),
+        ObserveProtectedTrafficConfigurationUseCase(repository), SetProtectedTrafficDefaultActionUseCase(repository),
+        UpsertProtectedTrafficRuleUseCase(repository), DeleteProtectedTrafficRuleUseCase(repository),
     )
-
-    private object EmptyTrafficQuery : TrafficQuery {
-        override val generations: Flow<TrafficGeneration> = emptyFlow()
-        override suspend fun query(query: TrafficPageQuery): TrafficPage = TrafficPage(
-            items = emptyList(),
-            nextCursor = null,
-            totalCount = 0L,
-            generation = 0L,
-        )
-        override suspend fun getExchange(exchangeId: ExchangeId): HttpExchangeSnapshot? = null
-        override suspend fun getOpaqueFlow(flowId: OpaqueFlowId): OpaqueFlowSnapshot? = null
-        override suspend fun readBody(bodyId: BodyId, range: BodyRange): BodyChunk =
-            BodyChunk(byteArrayOf(), range.offset, endOfBody = true)
-    }
 
     private class FakeRepository : ProtectedTrafficRepository {
         override val configuration = MutableStateFlow(ProtectedTrafficConfiguration())
+
 
         override suspend fun setDefaultAction(action: ProtectedTrafficAction) {
             configuration.value = configuration.value.copy(defaultAction = action)
@@ -145,12 +144,6 @@ class ProtectedTrafficViewModelTest {
             )
         }
 
-        override suspend fun setBuiltInGroupEnabled(groupId: ProtectedServiceGroupId, enabled: Boolean) {
-            configuration.value = configuration.value.copy(
-                enabledBuiltInGroups = configuration.value.enabledBuiltInGroups.toMutableSet().apply {
-                    if (enabled) add(groupId) else remove(groupId)
-                },
-            )
-        }
+
     }
 }

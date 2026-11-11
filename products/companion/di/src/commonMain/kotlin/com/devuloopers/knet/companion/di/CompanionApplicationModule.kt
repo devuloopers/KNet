@@ -52,6 +52,7 @@ internal fun companionApplicationModule(): Module = module {
     single { CompleteCompanionCertificateEnrollmentUseCase(get(), get(), get(), ::currentEpochMillis) }
     single { ObserveCompanionCertificateStoreChangesUseCase(get()) }
     single { FetchCompanionPacketConditionsUseCase(get(), get()) }
+    single { com.devuloopers.knet.companion.application.usecase.MaintainCompanionPacketPolicyUseCase(get<FetchCompanionPacketConditionsUseCase>(), get()) }
     single { StartCompanionInspectionUseCase(get(), get(), get(), get(), get(), get()) }
     single { StopCompanionInspectionUseCase(get(), get()) }
     single { ObserveCompanionInspectionUseCase(get()) }

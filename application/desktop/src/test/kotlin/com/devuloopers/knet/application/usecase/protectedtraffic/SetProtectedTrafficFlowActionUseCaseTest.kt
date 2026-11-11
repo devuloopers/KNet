@@ -72,6 +72,17 @@ class SetProtectedTrafficFlowActionUseCaseTest {
         assertEquals(emptyList(), repository.configuration.value.rules)
     }
 
+    @Test
+    fun `destination action refuses retained rows without an exact port`() = runTest {
+        val repository = FakeRepository(ProtectedTrafficConfiguration())
+        val captured = flow(null).copy(destination = TrafficEndpoint("203.0.113.10", null))
+        val result = SetProtectedTrafficFlowActionUseCase(FakeTrafficQuery(captured), repository).execute(
+            FLOW_ID, ProtectedTrafficAction.TUNNEL, ProtectedTrafficQuickRuleScope.DESTINATION,
+        )
+        assertIs<SetProtectedTrafficFlowActionResult.DestinationUnavailable>(result)
+        assertEquals(emptyList(), repository.configuration.value.rules)
+    }
+
     private fun flow(sourceApplicationId: String?): OpaqueFlowSnapshot = OpaqueFlowSnapshot(
         id = FLOW_ID,
         connectionId = ConnectionId("connection"),
@@ -102,6 +113,7 @@ class SetProtectedTrafficFlowActionUseCaseTest {
 
     private class FakeRepository(initial: ProtectedTrafficConfiguration) : ProtectedTrafficRepository {
         override val configuration = MutableStateFlow(initial)
+
         override suspend fun setDefaultAction(action: ProtectedTrafficAction) = Unit
         override suspend fun upsertRule(rule: ProtectedTrafficRule) {
             configuration.value = configuration.value.copy(
@@ -109,7 +121,6 @@ class SetProtectedTrafficFlowActionUseCaseTest {
             )
         }
         override suspend fun deleteRule(ruleId: ProtectedTrafficRuleId) = Unit
-        override suspend fun setBuiltInGroupEnabled(groupId: ProtectedServiceGroupId, enabled: Boolean) = Unit
     }
 
     private companion object {

@@ -36,12 +36,19 @@ import androidx.compose.ui.text.AnnotatedString
 @Composable
 fun TrafficScreen(
     viewModel: TrafficViewModel,
+    protectionViewModel: com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficProtectionViewModel,
     onSendToApiStudio: (CapturedApiStudioRequest) -> Unit = {},
     onAddNetworkCondition: (String) -> Unit = {},
-    onProtectedTrafficAction: (String, ProtectedTrafficAction, ProtectedTrafficQuickRuleScope) -> Unit = { _, _, _ -> },
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    networkConditionsControl: @Composable () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsState()
+    val protectionState by protectionViewModel.uiState.collectAsState()
+    androidx.compose.runtime.LaunchedEffect(state.selectedTransaction?.transactionId, state.selectedTransaction?.rowKind) {
+        protectionViewModel.selectFlow(state.selectedTransaction?.takeIf {
+            it.rowKind == com.devuloopers.knet.ui.desktop.traffic.model.TrafficRowKind.OPAQUE_FLOW
+        }?.transactionId?.let { com.devuloopers.knet.traffic.id.OpaqueFlowId(it) })
+    }
     val themeColors = KNetTheme.colors
     var inspectorSplitRatio by remember { mutableFloatStateOf(0.65f) }
     val clipboardManager = LocalClipboardManager.current
@@ -139,7 +146,8 @@ fun TrafficScreen(
             // 1. Top Toolbar (56dp)
             TrafficToolbar(
                 state = toolbarState,
-                actions = toolbarActions
+                actions = toolbarActions,
+                networkConditionsControl = networkConditionsControl,
             )
 
             // 1.1 Error Banner (Visible when engine error occurs)
@@ -172,7 +180,11 @@ fun TrafficScreen(
                         onSendToApiStudio = handleExportToStudio,
                         onAddBreakpointRule = viewModel::createBreakpointFromTransaction,
                         onAddNetworkCondition = onAddNetworkCondition,
-                        onProtectedTrafficAction = onProtectedTrafficAction,
+                        onProtectedTrafficAction = { id, action, scope ->
+                            viewModel.processIntent(TrafficIntent.SelectTransaction(id))
+                            protectionViewModel.selectFlow(com.devuloopers.knet.traffic.id.OpaqueFlowId(id))
+                            protectionViewModel.applyFlowAction(id, action, scope)
+                        },
                         onCopyDestination = { destination ->
                             clipboardManager.setText(AnnotatedString(destination))
                         },
@@ -184,6 +196,10 @@ fun TrafficScreen(
                 },
                 secondPane = { paneModifier ->
                     TrafficInspectorPanel(
+                        protectionState = protectionState,
+                        protectionActions = com.devuloopers.knet.ui.desktop.traffic.model.TrafficProtectionActions(
+                            apply = protectionViewModel::applyDestinationAction,
+                        ),
                         selectedTransaction = state.selectedTransaction,
                         activeTab = state.activeInspectorTab,
                         activeRequestSubTab = state.activeRequestSubTab,

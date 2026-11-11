@@ -26,6 +26,29 @@ import kotlin.test.assertNotNull
 
 class CanonicalTrafficHistoryQueryTest {
     @Test
+    fun `desktop facade resolves retained opaque policy actions and trusted ingress`() = runTest {
+        val root = Files.createTempDirectory("knet-opaque-lookup-").toFile()
+        val database = DatabaseFactory.create(root.resolve("traffic.db"))
+        try {
+            val dao=database.canonicalCaptureDao()
+            dao.insertSession(CaptureSessionEntity("session",1L,null,"ACTIVE",0L))
+            dao.insertConnection(connection("session").copy(ingressKind="LAN_PAIRED_DEVICE",clientIdentity="device-a",downstreamHost="127.0.0.1"))
+            dao.insertOpaqueFlow(opaqueFlow("selected-flow","session",2L))
+            val query=DesktopTrafficQueryAdapter(dao,FileBodyStore(root.resolve("bodies")))
+            val selected=assertNotNull(query.getOpaqueFlow(com.devuloopers.knet.traffic.id.OpaqueFlowId("selected-flow")))
+            assertEquals("protected.example",selected.serverName)
+            val ingress=assertNotNull(query.getConnectionIngress(selected.connectionId))
+            assertEquals(com.devuloopers.knet.traffic.model.IngressKind.LanPairedDevice,ingress.ingress.kind)
+            assertEquals("device-a",ingress.ingress.clientIdentity!!.value)
+            kotlin.test.assertTrue(ingress.downstreamIsLoopback)
+            dao.insertConnection(connection("session").copy(id="unknown-ingress",ingressKind="CUSTOM:future",clientIdentity="device-a"))
+            kotlin.test.assertNull(query.getConnectionIngress(com.devuloopers.knet.traffic.id.ConnectionId("unknown-ingress")))
+            kotlin.test.assertNull(query.getOpaqueFlow(com.devuloopers.knet.traffic.id.OpaqueFlowId("deleted")))
+            kotlin.test.assertNull(query.getConnectionIngress(com.devuloopers.knet.traffic.id.ConnectionId("deleted")))
+        } finally { database.close();root.deleteRecursively() }
+    }
+
+    @Test
     fun `opaque flow mutations invalidate the desktop live Traffic generation`() = runBlocking {
         val root = Files.createTempDirectory("knet-opaque-generation-").toFile()
         val database = DatabaseFactory.create(root.resolve("traffic.db"))

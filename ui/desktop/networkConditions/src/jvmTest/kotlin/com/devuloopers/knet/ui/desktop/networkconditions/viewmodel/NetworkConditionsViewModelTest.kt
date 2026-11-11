@@ -28,6 +28,7 @@ import com.devuloopers.knet.domain.networkconditions.NetworkConditionProtocolCri
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionProtocolId
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionRule
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionRuleId
+import com.devuloopers.knet.ui.desktop.networkconditions.model.NetworkConditionsTab
 import com.devuloopers.knet.traffic.id.BodyId
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.ExchangeState
@@ -349,6 +350,100 @@ class NetworkConditionsViewModelTest {
         assertEquals(25, rule.priority)
         assertEquals(protocolId, rule.protocolCriteria.protocolId)
         assertEquals("LoadFeed", rule.protocolCriteria.encodedPayload)
+        assertEquals("Operation: LoadFeed", viewModel.state.value.ruleDetails.getValue(rule.id).criteria)
+
+        viewModel.selectTab(NetworkConditionsTab.PROFILES)
+        viewModel.beginEditRule(rule)
+        assertEquals(NetworkConditionsTab.RULES, viewModel.state.value.activeTab)
+        viewModel.updateDraftProtocolValue(fieldId, "LoadNext")
+        viewModel.confirmRuleDraft()
+        advanceUntilIdle()
+        assertEquals("Operation: LoadNext", viewModel.state.value.ruleDetails.getValue(rule.id).criteria)
+
+        viewModel.deleteRule(rule.id)
+        advanceUntilIdle()
+        assertTrue(viewModel.state.value.ruleDetails.isEmpty())
+    }
+
+    @Test
+    fun `tab changes leave policy and monitoring intact and traffic quick add returns to rules`() = runTest(dispatcher) {
+        val repository = FakeRepository()
+        val telemetry = FakeTelemetry()
+        val viewModel = NetworkConditionsViewModel(repository, telemetry,
+            PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository))
+        advanceUntilIdle()
+        val originalConfiguration = repository.configuration.value
+
+        viewModel.startRuntimeMonitoring()
+        viewModel.selectTab(NetworkConditionsTab.PROFILES)
+        advanceUntilIdle()
+        assertEquals(originalConfiguration, repository.configuration.value)
+        assertEquals(NetworkConditionsTab.PROFILES, viewModel.state.value.activeTab)
+        telemetry.mutable.value = NetworkConditionRuntimeSnapshot(sampledAtNanos = 1_000_000_000L)
+        advanceUntilIdle()
+        telemetry.mutable.value = NetworkConditionRuntimeSnapshot(sampledAtNanos = 2_000_000_000L, downloadedBytes = 12_500L)
+        advanceUntilIdle()
+        assertEquals(100_000L, viewModel.state.value.throughput.currentDownloadBitsPerSecond)
+        assertEquals(NetworkConditionsTab.PROFILES, viewModel.state.value.activeTab)
+
+        viewModel.prepareFromTraffic(exchange().id.value)
+        advanceUntilIdle()
+        assertEquals(NetworkConditionsTab.RULES, viewModel.state.value.activeTab)
+        assertEquals(NetworkConditionBuiltIns.NO_THROTTLING.id, assertNotNull(viewModel.state.value.ruleDraft).profileId)
+        viewModel.stopRuntimeMonitoring()
+    }
+
+    @Test
+    fun `manual add selects rules and configuration updates preserve the selected tab`() = runTest(dispatcher) {
+        val repository = FakeRepository()
+        val viewModel = NetworkConditionsViewModel(repository, FakeTelemetry(),
+            PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository))
+        advanceUntilIdle()
+        viewModel.selectTab(NetworkConditionsTab.PROFILES)
+        viewModel.selectGlobalProfile(NetworkConditionBuiltIns.STREAMING_100_KBPS.id)
+        advanceUntilIdle()
+        assertEquals(NetworkConditionsTab.PROFILES, viewModel.state.value.activeTab)
+        viewModel.beginAddRule()
+        assertEquals(NetworkConditionsTab.RULES, viewModel.state.value.activeTab)
+        assertEquals(NetworkConditionBuiltIns.NO_THROTTLING.id, assertNotNull(viewModel.state.value.ruleDraft).profileId)
+    }
+
+    @Test
+    fun `quick profile activation synchronizes state and off preserves the selected global profile`() = runTest(dispatcher) {
+        val repository = FakeRepository()
+        val viewModel = NetworkConditionsViewModel(repository, FakeTelemetry(),
+            PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository))
+        advanceUntilIdle()
+        viewModel.activateGlobalProfile(NetworkConditionBuiltIns.STREAMING_100_KBPS.id)
+        advanceUntilIdle()
+        assertTrue(viewModel.state.value.configuration.enabled)
+        assertEquals(NetworkConditionBuiltIns.STREAMING_100_KBPS.id, viewModel.state.value.configuration.globalProfileId)
+        viewModel.setEnabled(false)
+        advanceUntilIdle()
+        assertEquals(false, viewModel.state.value.configuration.enabled)
+        assertEquals(NetworkConditionBuiltIns.STREAMING_100_KBPS.id, viewModel.state.value.configuration.globalProfileId)
+        repository.setGlobalProfile(NetworkConditionBuiltIns.FAST_3G.id)
+        advanceUntilIdle()
+        assertEquals(NetworkConditionBuiltIns.FAST_3G.id, viewModel.state.value.configuration.globalProfileId)
+        viewModel.activateGlobalProfile(null)
+        advanceUntilIdle()
+        assertTrue(viewModel.state.value.configuration.enabled)
+        assertNull(viewModel.state.value.configuration.globalProfileId)
+    }
+
+    @Test
+    fun `stale quick profile selection reports an error and preserves the existing configuration`() = runTest(dispatcher) {
+        val repository = FakeRepository()
+        val viewModel = NetworkConditionsViewModel(repository, FakeTelemetry(),
+            PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository))
+        advanceUntilIdle()
+        val before = viewModel.state.value.configuration
+        viewModel.activateGlobalProfile(NetworkConditionProfileId("removed-profile"))
+        advanceUntilIdle()
+        assertEquals(before, viewModel.state.value.configuration)
+        assertEquals("Unknown global profile.", viewModel.state.value.errorMessage)
+        viewModel.clearError()
+        assertNull(viewModel.state.value.errorMessage)
     }
 
     private fun exchange(): HttpExchangeSnapshot = HttpExchangeSnapshot(
@@ -395,6 +490,11 @@ class NetworkConditionsViewModelTest {
 
         override suspend fun setGlobalProfile(profileId: NetworkConditionProfileId?) {
             configuration.value = configuration.value.copy(globalProfileId = profileId)
+        }
+
+        override suspend fun activateGlobalProfile(profileId: NetworkConditionProfileId?) {
+            require(profileId == null || configuration.value.profile(profileId) != null) { "Unknown global profile." }
+            configuration.value = configuration.value.copy(enabled = true, globalProfileId = profileId)
         }
 
         override suspend fun upsertProfile(profile: NetworkConditionProfile) {

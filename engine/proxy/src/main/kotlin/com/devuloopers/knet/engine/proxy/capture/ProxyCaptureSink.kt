@@ -117,6 +117,10 @@ data class ProxyOpaqueFlowCaptureMetadata(
     val policyRuleId: String?,
     val policyAction: ProxyOpaquePolicyAction? = null,
     val policyGroupId: String? = null,
+    /** Exact policy provenance, null for retained legacy records. */
+    val protectionOrigin: com.devuloopers.knet.traffic.model.ProtectionDecisionOrigin? = null,
+    /** Typed failure evidence without exception text or payloads. */
+    val inspectionFailureReason: com.devuloopers.knet.traffic.model.InspectionFailureReason? = null,
     val sourceApplicationId: String? = null,
     val appliedNetworkCondition: AppliedNetworkCondition? = null,
     val occurredAtEpochMillis: Long,
@@ -142,6 +146,9 @@ data class ProxyOpaqueFlowCaptureMetadata(
 
 /** Non-blocking counter and lifecycle side output for one payload-opaque flow. */
 interface ProxyOpaqueFlowCapture {
+    /** Retains bounded close evidence before peer propagation; terminal events persist it atomically with counters. */
+    fun observeClosure(closure: com.devuloopers.knet.traffic.model.OpaqueFlowClosure) = Unit
+
     /** Records bytes accepted from one side without copying or retaining their payload. */
     fun observeBytes(
         direction: TrafficDirection,

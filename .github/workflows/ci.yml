@@ -2,6 +2,9 @@ name: Continuous Integration
 
 on:
   workflow_dispatch:
+  pull_request:
+  push:
+    branches: [main]
 
 permissions:
   contents: read
@@ -61,6 +64,79 @@ jobs:
           sseQualification
           --no-daemon
           --stacktrace
+
+  network-protection:
+    name: Network Conditions and Protected Traffic
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.2.0
+        with:
+          distribution: zulu
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.0.0
+
+      - name: Install Android SDK platform
+        shell: bash
+        run: >-
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          --install
+          'platforms;android-37.0'
+          'build-tools;37.0.0'
+
+      - name: Run complete feature gates
+        run: ./gradlew networkProtectionQualification --no-daemon --stacktrace
+
+      - name: Retain feature test evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: network-protection-test-results
+          path: |
+            **/build/test-results/**/TEST-*.xml
+            **/build/reports/tests/**
+            docs/qualification/network_protection_cases.tsv
+            build/reports/network-protection/**
+          if-no-files-found: error
+          retention-days: 14
+
+  network-protection-load:
+    name: Network protection sustained I/O and memory
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.0.2
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.2.0
+        with:
+          distribution: zulu
+          java-version: ${{ env.JAVA_VERSION }}
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@9c971963bec38e04b3d30dcc455b5382be2fdbfb # v6.0.0
+
+      - name: Measure aggregate upload download and bounded streaming
+        run: ./gradlew :engine:simulator:networkProtectionLoadQualification --no-daemon --stacktrace
+
+      - name: Retain measured load evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: network-protection-load-results
+          path: |
+            engine/simulator/build/test-results/networkProtectionLoadQualification/**
+            engine/simulator/build/reports/tests/networkProtectionLoadQualification/**
+            engine/simulator/build/reports/network-protection-load/**
+          if-no-files-found: error
+          retention-days: 14
 
   desktop-platform:
     name: Desktop (${{ matrix.name }})

@@ -2,7 +2,6 @@ package com.devuloopers.knet.data.desktop.protectedtraffic
 
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedDestinationSelector
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficAction
-import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficBuiltIns
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficRule
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficRuleId
 import com.devuloopers.knet.storage.database.DatabaseFactory
@@ -11,7 +10,8 @@ import java.nio.file.Files
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.job
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -20,10 +20,10 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
-/** Restart, validation, group-toggle, and corrupt-state coverage for the Room repository. */
+/** Restart, validation, retired-setting compatibility, and corrupt-state coverage for the Room repository. */
 class RoomProtectedTrafficRepositoryTest {
     @Test
-    fun `rules defaults and compatibility groups survive restart`() = runTest {
+    fun `saved rules and default handling survive restart`() = runTest {
         val root = Files.createTempDirectory("knet-protected-traffic-").toFile()
         val databaseFile = root.resolve("knet.db")
         val rule = ProtectedTrafficRule(
@@ -38,14 +38,12 @@ class RoomProtectedTrafficRepositoryTest {
             val repository = RoomProtectedTrafficRepository(firstDatabase.protectedTrafficDao(), firstScope)
             repository.setDefaultAction(ProtectedTrafficAction.BLOCK)
             repository.upsertRule(rule)
-            repository.setBuiltInGroupEnabled(ProtectedTrafficBuiltIns.GooglePlayBillingGroupId, true)
             repository.configuration.first { state ->
                 state.defaultAction == ProtectedTrafficAction.BLOCK &&
-                    rule in state.rules &&
-                    ProtectedTrafficBuiltIns.GooglePlayBillingGroupId in state.enabledBuiltInGroups
+                    rule in state.rules
             }
         } finally {
-            firstScope.cancel()
+            firstScope.coroutineContext.job.cancelAndJoin()
             firstDatabase.close()
         }
 
@@ -56,16 +54,42 @@ class RoomProtectedTrafficRepositoryTest {
             val restored = repository.configuration.first { state ->
                 state.defaultAction == ProtectedTrafficAction.BLOCK && rule in state.rules
             }
-            assertTrue(ProtectedTrafficBuiltIns.GooglePlayBillingGroupId in restored.enabledBuiltInGroups)
-            assertTrue(ProtectedTrafficBuiltIns.rules.all { it in restored.rules })
+            assertTrue(restored.enabledBuiltInGroups.isEmpty())
+            assertEquals(listOf(rule), restored.rules)
 
             repository.deleteRule(rule.id)
             assertFalse(repository.configuration.first { rule !in it.rules }.rules.contains(rule))
         } finally {
-            restartedScope.cancel()
+            restartedScope.coroutineContext.job.cancelAndJoin()
             restartedDatabase.close()
             root.deleteRecursively()
         }
+    }
+
+    @Test
+    fun `legacy automatic setting never changes explicit or default policy`() = runTest {
+        val root = Files.createTempDirectory("knet-retired-automatic-setting-").toFile()
+        val database = DatabaseFactory.create(root.resolve("knet.db"))
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        try {
+            val repository = RoomProtectedTrafficRepository(database.protectedTrafficDao(), scope)
+            for (legacyEnabled in listOf(true, false)) {
+                database.protectedTrafficDao().upsertSettings(ProtectedTrafficSettingsEntity(
+                    defaultAction = ProtectedTrafficAction.INSPECT.name, smartCompatibilityEnabled = legacyEnabled))
+                val configuration = repository.configuration.first { it.configurationReady && it.defaultAction == ProtectedTrafficAction.INSPECT }
+                assertTrue(configuration.rules.isEmpty())
+                val policy = ProtectedTrafficTlsInterceptionPolicy({ repository.configuration.value })
+                val request = com.devuloopers.knet.engine.proxy.tls.TlsInterceptionRequest("new.example", 443)
+                repeat(10) {
+                    assertEquals(com.devuloopers.knet.engine.proxy.tls.TlsInterceptionMode.INSPECT, policy.decide(request).mode)
+                }
+                repository.setDefaultAction(ProtectedTrafficAction.TUNNEL)
+                repository.configuration.first { it.defaultAction == ProtectedTrafficAction.TUNNEL }
+                assertEquals(com.devuloopers.knet.engine.proxy.tls.TlsInterceptionMode.TUNNEL, policy.decide(request).mode)
+                assertEquals(legacyEnabled, database.protectedTrafficDao().getSettings()!!.smartCompatibilityEnabled,
+                    "Writing current policy must preserve compatible legacy storage without consulting it")
+            }
+        } finally { scope.coroutineContext.job.cancelAndJoin(); database.close(); root.deleteRecursively() }
     }
 
     @Test
@@ -99,10 +123,10 @@ class RoomProtectedTrafficRepositoryTest {
                 ProtectedTrafficSettingsEntity(defaultAction = "unsupported-action"),
             )
             val recovered = repository.configuration.first { it.defaultAction == ProtectedTrafficAction.INSPECT }
-            assertEquals(ProtectedTrafficBuiltIns.rules, recovered.rules)
+            assertTrue(recovered.rules.isEmpty())
             assertTrue(recovered.enabledBuiltInGroups.isEmpty())
         } finally {
-            scope.cancel()
+            scope.coroutineContext.job.cancelAndJoin()
             database.close()
             root.deleteRecursively()
         }

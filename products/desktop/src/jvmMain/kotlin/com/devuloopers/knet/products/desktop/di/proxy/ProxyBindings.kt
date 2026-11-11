@@ -25,14 +25,16 @@ import com.devuloopers.knet.application.contract.breakpoint.ProtocolMessageBreak
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import org.koin.core.module.Module
 import org.koin.dsl.bind
 import org.koin.dsl.module
+import org.koin.dsl.onClose
 import com.devuloopers.knet.engine.simulator.NetworkConditionEngine
 
 /** Proxy transport runtime, breakpoint gate, capture session, and proxy-control composition. */
 internal val proxyBindings: Module = module {
-    single { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
+    single { CoroutineScope(SupervisorJob() + Dispatchers.Default) }.onClose { it?.cancel() }
     single { GraphQLWebSocketBreakpointLayer(get()) } bind WebSocketSemanticBreakpointLayer::class
     single {
         GrpcMessageBreakpointTransformerFactory(

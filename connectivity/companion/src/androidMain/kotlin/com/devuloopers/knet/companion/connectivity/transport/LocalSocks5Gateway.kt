@@ -19,10 +19,13 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlin.coroutines.coroutineContext
 
 /**
  * Process-local SOCKS5 ingress used by the Android TUN translator.
@@ -40,6 +43,7 @@ internal class LocalSocks5Gateway(
     private val udpFlowIdleTimeoutNanos: Long = UDP_FLOW_IDLE_TIMEOUT_NANOS,
 ) : AutoCloseable {
     private val running = AtomicBoolean(false)
+    private val started = AtomicBoolean(false)
     private val activeFlows = Semaphore(MAXIMUM_ACTIVE_FLOWS)
     private val gatewayScope = CoroutineScope(
         SupervisorJob() + Dispatchers.IO.limitedParallelism(MAXIMUM_ACTIVE_FLOWS * 2 + 2),
@@ -47,20 +51,38 @@ internal class LocalSocks5Gateway(
     private val resourcesLock = Any()
     private val resources: MutableSet<AutoCloseable> = mutableSetOf()
     private val packetRuntime = AndroidPacketConditionRuntime(packetConditions)
+    private val udpConditionRoutingEstablished = AtomicBoolean(packetConditions.enabled)
     private val udpSequence = AtomicLong()
     private var serverSocket: ServerSocket? = null
 
     val port: Int
         get() = checkNotNull(serverSocket).localPort
 
+    /** Number of retained delayed datagrams, including work owned by every active association. */
+    internal val queuedUdpDatagramCount: Int
+        get() = packetRuntime.queuedCount
+
+    /** Applies one authenticated policy without restarting the VPN or interrupting unrelated TCP streams. */
+    internal fun updatePacketConditions(configuration: PacketConditionConfiguration) {
+        if (!running.get()) return
+        if (configuration.enabled) udpConditionRoutingEstablished.set(true)
+        packetRuntime.update(configuration)
+    }
+
     fun start() {
-        check(running.compareAndSet(false, true)) { "SOCKS5 gateway is already running." }
-        val server = ServerSocket().apply {
-            reuseAddress = true
-            bind(InetSocketAddress(ipv4Loopback(), 0), ACCEPT_BACKLOG)
+        check(started.compareAndSet(false, true)) { "SOCKS5 gateway instances cannot be restarted." }
+        running.set(true)
+        val server = ServerSocket()
+        try {
+            server.reuseAddress = true
+            server.bind(InetSocketAddress(ipv4Loopback(), 0), ACCEPT_BACKLOG)
+            serverSocket = server
+            gatewayScope.launch { acceptLoop(server) }
+        } catch (failure: Exception) {
+            runCatching(server::close)
+            close()
+            throw failure
         }
-        serverSocket = server
-        gatewayScope.launch { acceptLoop(server) }
     }
 
     override fun close() {
@@ -87,19 +109,16 @@ internal class LocalSocks5Gateway(
                 continue
             }
             track(client)
-            gatewayScope.launch {
-                try {
-                    handle(client)
-                } finally {
-                    untrack(client)
-                    runCatching(client::close)
-                    activeFlows.release()
-                }
+            // Completion also runs if shutdown cancels this child before its body starts.
+            gatewayScope.launch { handle(client) }.invokeOnCompletion {
+                untrack(client)
+                runCatching(client::close)
+                activeFlows.release()
             }
         }
     }
 
-    private fun handle(client: Socket) {
+    private suspend fun handle(client: Socket) {
         client.tcpNoDelay = true
         client.soTimeout = NEGOTIATION_TIMEOUT_MILLIS
         val input = client.getInputStream()
@@ -113,7 +132,7 @@ internal class LocalSocks5Gateway(
         }
     }
 
-    private fun handleConnect(
+    private suspend fun handleConnect(
         client: Socket,
         clientInput: InputStream,
         clientOutput: OutputStream,
@@ -141,7 +160,12 @@ internal class LocalSocks5Gateway(
             }
         } ?: return
         track(stream)
-        bridge(client, clientInput, clientOutput, stream)
+        try {
+            bridge(client, clientInput, clientOutput, stream)
+        } finally {
+            untrack(stream)
+            stream.close()
+        }
     }
 
     /**
@@ -151,7 +175,7 @@ internal class LocalSocks5Gateway(
      * therefore cannot pass through KNet's inspecting HTTP proxy. Protecting the socket prevents VPN recursion while
      * keeping name resolution available for the application HTTP(S) flows that KNet does inspect.
      */
-    private fun handleProtectedDirectTcp(
+    private suspend fun handleProtectedDirectTcp(
         client: Socket,
         clientInput: InputStream,
         clientOutput: OutputStream,
@@ -182,17 +206,20 @@ internal class LocalSocks5Gateway(
         }
     }
 
-    private fun bridgeDirect(
+    private suspend fun bridgeDirect(
         client: Socket,
         clientInput: InputStream,
         clientOutput: OutputStream,
         upstream: Socket,
-    ) {
-        gatewayScope.launch {
+    ): Unit = coroutineScope {
+        // EOF closes only that direction. The association owner waits for both copies before closing sockets.
+        launch {
             try {
                 upstream.getInputStream().copyTo(clientOutput, COPY_BUFFER_BYTES)
                 clientOutput.flush()
             } catch (_: Exception) {
+                runCatching(upstream::close)
+                runCatching(client::close)
             } finally {
                 runCatching(client::shutdownOutput)
             }
@@ -202,24 +229,26 @@ internal class LocalSocks5Gateway(
             upstream.getOutputStream().flush()
             runCatching(upstream::shutdownOutput)
         } catch (_: Exception) {
+            runCatching(upstream::close)
+            runCatching(client::close)
         }
     }
 
-    private fun bridge(
+    private suspend fun bridge(
         client: Socket,
         clientInput: InputStream,
         clientOutput: OutputStream,
         gateway: AndroidProxyStream,
-    ) {
-        gatewayScope.launch {
+    ): Unit = coroutineScope {
+        launch {
             try {
                 gateway.input.copyTo(clientOutput, COPY_BUFFER_BYTES)
                 clientOutput.flush()
             } catch (_: Exception) {
+                gateway.close()
+                runCatching(client::close)
             } finally {
                 runCatching(client::shutdownOutput)
-                untrack(gateway)
-                gateway.close()
             }
         }
         try {
@@ -227,32 +256,32 @@ internal class LocalSocks5Gateway(
             gateway.output.flush()
             gateway.shutdownOutput()
         } catch (_: Exception) {
+            gateway.close()
+            runCatching(client::close)
         }
     }
 
     private fun handleUdpAssociation(client: Socket, controlInput: InputStream, output: OutputStream) {
-        val relay = DatagramSocket(InetSocketAddress(ipv4Loopback(), 0))
-        track(relay)
+        val association = UdpAssociation()
+        track(association)
         try {
-            writeReply(output, SOCKS_REPLY_SUCCEEDED, relay.localPort)
-            gatewayScope.launch { relayUdp(relay) }
+            writeReply(output, SOCKS_REPLY_SUCCEEDED, association.relay.localPort)
+            association.scope.launch { relayUdp(association) }
             client.soTimeout = 0
             while (running.get() && controlInput.read() >= 0) {
                 // SOCKS keeps the TCP control channel open for the lifetime of the UDP association.
             }
         } finally {
-            untrack(relay)
-            relay.close()
+            association.close()
+            untrack(association)
         }
     }
 
-    private fun relayUdp(relay: DatagramSocket) {
+    private fun relayUdp(association: UdpAssociation) {
+        val relay = association.relay
         val packetBytes = ByteArray(MAXIMUM_UDP_PACKET_BYTES)
         var clientAddress: InetSocketAddress? = null
-        val upstreamFlows = UdpUpstreamFlowRegistry(
-            maximumSize = maximumUdpDestinations,
-            idleTimeoutNanos = udpFlowIdleTimeoutNanos,
-        )
+        val upstreamFlows = association.upstreamFlows
         try {
             while (running.get() && !relay.isClosed) {
                 val inbound = DatagramPacket(packetBytes, packetBytes.size)
@@ -268,18 +297,13 @@ internal class LocalSocks5Gateway(
                 if (
                     request.destination.port != DNS_PORT &&
                     unsupportedTrafficPolicy == UnsupportedTrafficPolicy.REJECT &&
-                    !packetRuntime.enabled
+                    !udpConditionRoutingEstablished.get()
                 ) {
                     continue
                 }
                 val responseTarget = clientAddress
-                if (!packetRuntime.tryEnqueue()) continue
-                gatewayScope.launch {
-                    try {
-                        forwardUdp(request, relay, responseTarget, upstreamFlows)
-                    } finally {
-                        packetRuntime.complete()
-                    }
+                association.launchQueued(controlTraffic = request.destination.port == DNS_PORT) {
+                    forwardUdp(request, relay, responseTarget, upstreamFlows, association)
                 }
             }
         } finally {
@@ -288,7 +312,9 @@ internal class LocalSocks5Gateway(
     }
 
     private fun track(resource: AutoCloseable) {
-        synchronized(resourcesLock) { resources.add(resource) }
+        synchronized(resourcesLock) {
+            if (running.get()) resources.add(resource) else runCatching(resource::close)
+        }
     }
 
     private fun untrack(resource: AutoCloseable) {
@@ -300,47 +326,46 @@ internal class LocalSocks5Gateway(
         relay: DatagramSocket,
         clientAddress: InetSocketAddress,
         upstreamFlows: UdpUpstreamFlowRegistry,
+        association: UdpAssociation,
     ) {
         val conditionsApply = request.destination.port != DNS_PORT
         val flowKey = request.destination.flowKey
-        val action = if (conditionsApply) {
-            packetRuntime.plan(
-                direction = PacketConditionDirection.UPLOAD,
-                flowKey = flowKey,
-                bytes = request.payload.size,
-                sequence = udpSequence.incrementAndGet(),
-            )
-        } else {
-            PacketConditionAction.Forward(delayMillis = 0L, copies = 1)
-        }
-        if (action is PacketConditionAction.Drop) return
-        action as PacketConditionAction.Forward
-        if (action.delayMillis > 0L) delay(action.delayMillis)
-
-        val acquired = upstreamFlows.getOrCreate(request.destination) {
-            createUdpFlow(request.destination)
-        } ?: return
-        val flow = acquired.flow
-        if (acquired.created) {
-            gatewayScope.launch {
-                receiveUdpResponses(flow, relay, clientAddress, conditionsApply, upstreamFlows)
+        val sequence = udpSequence.incrementAndGet()
+        while (true) {
+            val scheduled = if (conditionsApply) packetRuntime.schedule(PacketConditionDirection.UPLOAD,
+                flowKey, request.payload.size, sequence) else null
+            val action = scheduled?.action ?: PacketConditionAction.Forward(0L, 1)
+            if (action is PacketConditionAction.Drop) {
+                if (scheduled == null || packetRuntime.ifCurrent(scheduled.revision) {}) return
+                continue
             }
-        }
-        repeat(action.copies) {
-            runCatching {
-                flow.touch()
-                flow.socket.send(DatagramPacket(request.payload, request.payload.size))
+            action as PacketConditionAction.Forward
+            coroutineContext.ensureActive()
+            val acquired = upstreamFlows.getOrCreate(request.destination) { createUdpFlow(request.destination) } ?: return
+            val flow = acquired.flow
+            if (acquired.created) {
+                association.scope.launch { receiveUdpResponses(flow, relay, clientAddress, conditionsApply, upstreamFlows, association) }
             }
+            val send = {
+                repeat(action.copies) {
+                    runCatching {
+                        flow.touch()
+                        upstreamFlows.send(flow, DatagramPacket(request.payload, request.payload.size))
+                    }
+                }
+            }
+            if (scheduled == null) { send(); return }
+            if (packetRuntime.ifCurrent(scheduled.revision, send)) return
         }
     }
 
     private fun createUdpFlow(destination: SocksDestination): UdpUpstreamFlow? {
         val upstream = DatagramSocket()
-        if (!protector.protect(upstream)) {
-            upstream.close()
-            return null
-        }
         return try {
+            if (!protector.protect(upstream)) {
+                upstream.close()
+                return null
+            }
             upstream.connect(InetSocketAddress(destination.host, destination.port))
             UdpUpstreamFlow(destination, upstream)
         } catch (_: Exception) {
@@ -355,6 +380,7 @@ internal class LocalSocks5Gateway(
         clientAddress: InetSocketAddress,
         conditionsApply: Boolean,
         upstreamFlows: UdpUpstreamFlowRegistry,
+        association: UdpAssociation,
     ) {
         val responseBytes = ByteArray(MAXIMUM_UDP_PACKET_BYTES)
         try {
@@ -368,33 +394,53 @@ internal class LocalSocks5Gateway(
                 flow.touch()
                 val payload = response.data.copyOfRange(response.offset, response.offset + response.length)
                 val responseSource = InetSocketAddress(response.address, response.port)
-                if (!packetRuntime.tryEnqueue()) continue
-                gatewayScope.launch {
-                    try {
-                        val action = if (conditionsApply) {
-                            packetRuntime.plan(
-                                direction = PacketConditionDirection.DOWNLOAD,
-                                flowKey = flow.destination.flowKey,
-                                bytes = payload.size,
-                                sequence = udpSequence.incrementAndGet(),
-                            )
-                        } else {
-                            PacketConditionAction.Forward(delayMillis = 0L, copies = 1)
+                association.launchQueued(controlTraffic = !conditionsApply) {
+                    val encoded = encodeUdpResponse(responseSource, payload)
+                    val sequence = udpSequence.incrementAndGet()
+                    while (true) {
+                        val scheduled = if (conditionsApply) packetRuntime.schedule(PacketConditionDirection.DOWNLOAD,
+                            flow.destination.flowKey, payload.size, sequence) else null
+                        val action = scheduled?.action ?: PacketConditionAction.Forward(0L, 1)
+                        if (action is PacketConditionAction.Drop) {
+                            if (scheduled == null || packetRuntime.ifCurrent(scheduled.revision) {}) return@launchQueued
+                            continue
                         }
-                        if (action is PacketConditionAction.Drop) return@launch
                         action as PacketConditionAction.Forward
-                        if (action.delayMillis > 0L) delay(action.delayMillis)
-                        val encoded = encodeUdpResponse(responseSource, payload)
-                        repeat(action.copies) {
-                            runCatching { relay.send(DatagramPacket(encoded, encoded.size, clientAddress)) }
+                        coroutineContext.ensureActive()
+                        val send = {
+                            repeat(action.copies) { runCatching { relay.send(DatagramPacket(encoded, encoded.size, clientAddress)) } }
                         }
-                    } finally {
-                        packetRuntime.complete()
+                        if (scheduled == null) { send(); return@launchQueued }
+                        if (packetRuntime.ifCurrent(scheduled.revision, send)) return@launchQueued
                     }
                 }
             }
         } finally {
             upstreamFlows.remove(flow)
+        }
+    }
+
+    /** One terminal owner for the association's delay jobs, receive sockets and upstream registry. */
+    private inner class UdpAssociation : AutoCloseable {
+        private val closed = AtomicBoolean(false)
+        private val owner = SupervisorJob(gatewayScope.coroutineContext[Job])
+        val scope = CoroutineScope(gatewayScope.coroutineContext + owner)
+        val relay = DatagramSocket(InetSocketAddress(ipv4Loopback(), 0))
+        val upstreamFlows = UdpUpstreamFlowRegistry(maximumUdpDestinations, udpFlowIdleTimeoutNanos)
+
+        /** Retains one slot until completion, even when cancellation wins before the coroutine starts. */
+        fun launchQueued(controlTraffic: Boolean = false, block: suspend () -> Unit) {
+            if (closed.get() || !packetRuntime.tryEnqueue(controlTraffic)) return
+            scope.launch { block() }.invokeOnCompletion { packetRuntime.complete(controlTraffic) }
+        }
+
+        override fun close() {
+            if (!closed.compareAndSet(false, true)) return
+            // Seal the registry before waking/cancelling children: no late child can create a socket.
+            upstreamFlows.closeAll()
+            relay.close()
+            owner.cancel()
+            packetRuntime.replanAfterCancellation()
         }
     }
 
@@ -454,12 +500,14 @@ internal class UdpUpstreamFlowRegistry(
     }
 
     private val flows = mutableMapOf<SocksDestination, UdpUpstreamFlow>()
+    private var closed = false
 
     @Synchronized
     fun getOrCreate(
         destination: SocksDestination,
         create: () -> UdpUpstreamFlow?,
     ): Acquired? {
+        if (closed) return null
         val now = nanoTime()
         evictIdle(now)
         flows[destination]?.takeUnless { it.socket.isClosed }?.let { existing ->
@@ -484,8 +532,15 @@ internal class UdpUpstreamFlowRegistry(
 
     @Synchronized
     fun closeAll() {
+        closed = true
         flows.values.toList().forEach { flow -> runCatching(flow.socket::close) }
         flows.clear()
+    }
+
+    /** Serializes a send with terminal cleanup; a retired association/evicted socket cannot send afterward. */
+    @Synchronized
+    fun send(flow: UdpUpstreamFlow, packet: DatagramPacket) {
+        if (!closed && flows[flow.destination] === flow && !flow.socket.isClosed) flow.socket.send(packet)
     }
 
     @Synchronized

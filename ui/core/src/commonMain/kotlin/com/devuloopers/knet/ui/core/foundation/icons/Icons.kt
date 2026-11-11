@@ -2,6 +2,7 @@ package com.devuloopers.knet.ui.core.foundation.icons
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.HelpOutline
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -27,6 +28,10 @@ object KNetIcons {
     val ChevronDown: ImageVector = Icons.Default.KeyboardArrowDown
     val ChevronRight: ImageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight
     val Info: ImageVector = Icons.Default.Info
+    /** Question-mark outline for contextual help and hover explanations. */
+    val Help: ImageVector = Icons.AutoMirrored.Filled.HelpOutline
+    /** Compact overflow trigger for secondary actions. */
+    val More: ImageVector = Icons.Default.MoreHoriz
     val Warning: ImageVector = Icons.Default.Warning
     val Back: ImageVector = Icons.AutoMirrored.Filled.ArrowBack
     val List: ImageVector = Icons.AutoMirrored.Filled.List

@@ -88,6 +88,11 @@ data class TrafficRowUiState(
     val policyRuleId: String? = null,
     val policyAction: OpaqueFlowPolicyAction? = null,
     val policyGroupId: String? = null,
+    /** Retained protected-policy provenance and safe TLS failure reason. */
+    val protectionOrigin: com.devuloopers.knet.traffic.model.ProtectionDecisionOrigin? = null,
+    /** Diagnostic evidence captured at admission. */
+    val inspectionFailureReason: com.devuloopers.knet.traffic.model.InspectionFailureReason? = null,
+    /** Proven security classification; no decrypted payload is inferred for opaque records. */
     val opaqueSecurity: OpaqueSecurityProtocol? = null,
     val opaqueTransport: OpaqueTransportProtocol? = null,
     val offeredApplicationProtocols: List<String> = emptyList(),
@@ -114,6 +119,8 @@ data class TrafficRowUiState(
     val contentType: String?,
     val timings: ExchangeTimings,
     val terminalOutcome: ExchangeTerminalOutcome? = null,
+    /** First observed close evidence; absent in historical/unobserved flows. */
+    val closure: com.devuloopers.knet.traffic.model.OpaqueFlowClosure? = null,
     val interception: TrafficInterceptionUiState = TrafficInterceptionUiState.None,
 ) {
     val fullUrl: String
@@ -157,7 +164,11 @@ internal fun OpaqueFlowSnapshot.toTrafficRowUiState(sequenceNumber: Long): Traff
         },
         path = "Encrypted payload unavailable",
         status = 0,
-        statusText = terminalOutcome.toTrafficStatusLabel(),
+        statusText = when (terminalOutcome) {
+            null -> "Active"
+            ExchangeTerminalOutcome.Completed -> "Closed"
+            else -> terminalOutcome.toTrafficStatusLabel()
+        },
         protocol = ApplicationProtocol.fromToken(displayProtocol),
         clientProtocol = ApplicationProtocol.fromToken(displayProtocol),
         connectionId = connectionId.value,
@@ -175,6 +186,9 @@ internal fun OpaqueFlowSnapshot.toTrafficRowUiState(sequenceNumber: Long): Traff
         policyRuleId = policyRuleId,
         policyAction = policyAction,
         policyGroupId = policyGroupId,
+        protectionOrigin = protectionOrigin,
+        inspectionFailureReason = inspectionFailureReason,
+        closure = closure,
         opaqueSecurity = security,
         opaqueTransport = transport,
         offeredApplicationProtocols = offeredApplicationProtocols,
@@ -182,6 +196,16 @@ internal fun OpaqueFlowSnapshot.toTrafficRowUiState(sequenceNumber: Long): Traff
         appliedNetworkCondition = appliedNetworkCondition,
     )
 }
+
+/** Visible status shared by the table and opaque inspector; HTTP request and transport lifetimes stay distinct. */
+internal val TrafficRowUiState.displayStatusLabel: String
+    get() = when {
+        rowKind == TrafficRowKind.OPAQUE_FLOW -> statusText
+        status > 0 -> status.toString()
+        terminalOutcome != null -> statusText
+        formattedTime != "-" -> statusText.ifBlank { "ERR" }
+        else -> "In Progress"
+    }
 
 /** Builds an immediate body-free Traffic projection for a suspended canonical exchange. */
 internal fun PendingBreakpoint.toTrafficRowUiState(

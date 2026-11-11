@@ -22,6 +22,9 @@ object PipelineHandlerNames {
     /** Observes terminal downstream TLS setup without retaining encrypted or cleartext bytes. */
     const val TLS_INSPECTION_OUTCOME = "tlsInspectionOutcome"
 
+    /** Outbound transport observer preceding the TLS handler for certificate-flight evidence. */
+    const val TLS_CERTIFICATE_FLIGHT = "tlsCertificateFlight"
+
     /** TLS application-protocol negotiation handler selecting HTTP/1 or HTTP/2. */
     const val ALPN = "alpn"
 

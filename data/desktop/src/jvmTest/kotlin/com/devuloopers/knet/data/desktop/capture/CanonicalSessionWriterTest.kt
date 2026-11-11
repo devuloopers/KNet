@@ -17,6 +17,9 @@ import com.devuloopers.knet.traffic.id.CaptureSessionId
 import com.devuloopers.knet.traffic.id.ConnectionId
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.id.StreamId
+import com.devuloopers.knet.traffic.model.OpaqueFlowClosure
+import com.devuloopers.knet.traffic.model.OpaqueFlowCloseInitiator
+import com.devuloopers.knet.traffic.model.OpaqueFlowCloseReason
 import com.devuloopers.knet.traffic.model.CaptureEvent
 import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.IngressContext
@@ -34,6 +37,7 @@ import com.devuloopers.knet.traffic.model.http.RequestHead
 import com.devuloopers.knet.traffic.model.http.RequestTarget
 import com.devuloopers.knet.traffic.model.http.ResponseHead
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.flow.first
 import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -369,6 +373,60 @@ class CanonicalSessionWriterTest {
     }
 
     /** Creates a deterministic connection event. */
+    @Test
+    fun `opaque progress invalidates every flow and stale snapshots cannot reopen or regress terminal counters`() = runTest {
+        val fixture = Fixture.create()
+        val writer = fixture.openWriter(CaptureIngressLimits(32, 32L, 32L, 16))
+        try {
+            writer.tryPublish(connectionOpened(0L))
+            fun start(id: String, sequence: Long) = CaptureEvent.OpaqueFlowStarted(
+                SESSION_ID, CONNECTION_ID, sequence, 1_000L,
+                com.devuloopers.knet.traffic.id.OpaqueFlowId(id), 0L,
+                TrafficEndpoint("store.example", 443), "store.example",
+                com.devuloopers.knet.traffic.model.OpaqueTransportProtocol.TCP,
+                com.devuloopers.knet.traffic.model.OpaqueSecurityProtocol.TLS, null, null,
+            )
+            fun progress(id: String, sequence: Long, version: Long, up: Long, down: Long) = CaptureEvent.OpaqueFlowProgress(
+                SESSION_ID, CONNECTION_ID, sequence, 1_001L,
+                com.devuloopers.knet.traffic.id.OpaqueFlowId(id), version, up, down,
+            )
+            writer.tryPublish(start("busy", 1L)); writer.tryPublish(start("selected", 2L))
+            writer.tryPublish(progress("busy", 3L, 10L, 1_000L, 2_000L))
+            writer.tryPublish(progress("selected", 4L, 1L, 10L, 20L))
+            writer.flush()
+            val before = fixture.dao.observeOpaqueFlowChangeScalar(SESSION_ID.value).first()
+            writer.tryPublish(progress("selected", 5L, 2L, 20L, 40L)); writer.flush()
+            val after = fixture.dao.observeOpaqueFlowChangeScalar(SESSION_ID.value).first()
+            assertTrue(after > before, "A lower-version flow must invalidate the feed even while another flow has version 10")
+            writer.tryPublish(progress("selected", 6L, 1L, 999L, 999L))
+            writer.tryPublish(progress("selected", 7L, 3L, 1L, 1L))
+            writer.flush()
+            val active = assertNotNull(fixture.dao.getOpaqueFlow("selected"))
+            assertEquals("ACTIVE", active.state)
+            assertEquals(20L, active.uploadedBytes); assertEquals(40L, active.downloadedBytes)
+            writer.tryPublish(CaptureEvent.OpaqueFlowTerminated(
+                SESSION_ID, CONNECTION_ID, 8L, 1_010L, com.devuloopers.knet.traffic.id.OpaqueFlowId("selected"),
+                4L, 30L, 60L, ExchangeTerminalOutcome.Completed,
+                OpaqueFlowClosure(OpaqueFlowCloseInitiator.SERVER, OpaqueFlowCloseReason.PEER_EOF, 1_005L)))
+            writer.tryPublish(progress("selected", 9L, 5L, 5_000L, 5_000L))
+            writer.tryPublish(CaptureEvent.OpaqueFlowTerminated(
+                SESSION_ID, CONNECTION_ID, 10L, 1_012L, com.devuloopers.knet.traffic.id.OpaqueFlowId("selected"),
+                6L, 9_000L, 9_000L, ExchangeTerminalOutcome.Completed,
+                OpaqueFlowClosure(OpaqueFlowCloseInitiator.KNET, OpaqueFlowCloseReason.LOCAL_CLOSE, 1_012L)))
+            writer.flush()
+            val closed = assertNotNull(fixture.dao.getOpaqueFlow("selected"))
+            assertEquals("COMPLETED", closed.state); assertEquals(4L, closed.version)
+            assertEquals(30L, closed.uploadedBytes); assertEquals(60L, closed.downloadedBytes)
+            assertEquals("SERVER", closed.closureInitiator)
+            assertEquals("PEER_EOF", closed.closureReason)
+            assertEquals(1_005L, closed.closureObservedAtEpochMillis)
+            val unknown = CanonicalCaptureEntityMapper.opaqueFlowSnapshot(closed.copy(closureInitiator = "invalid"))
+            assertEquals(OpaqueFlowCloseInitiator.UNKNOWN, unknown.closure?.initiator)
+            val partial = CanonicalCaptureEntityMapper.opaqueFlowSnapshot(closed.copy(closureObservedAtEpochMillis = null))
+            assertEquals(null, partial.closure)
+        } finally { writer.close(); fixture.close() }
+    }
+
     private fun connectionOpened(sequence: Long): CaptureEvent.ConnectionOpened = CaptureEvent.ConnectionOpened(
         sessionId = SESSION_ID,
         connectionId = CONNECTION_ID,

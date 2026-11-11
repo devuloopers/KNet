@@ -1,15 +1,10 @@
 package com.devuloopers.knet.ui.desktop.networkconditions.view
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.ScrollState
-import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -22,15 +17,14 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -40,8 +34,6 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaFieldDefinition
 import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaFieldId
@@ -50,34 +42,25 @@ import com.devuloopers.knet.application.contract.networkconditions.NetworkCondit
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionProfile
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionProfileId
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionProtocolId
-import com.devuloopers.knet.domain.networkconditions.NetworkConditionRule
-import com.devuloopers.knet.domain.networkconditions.NetworkConditionRuleId
 import com.devuloopers.knet.domain.networkconditions.NetworkDirectionCondition
 import com.devuloopers.knet.domain.networkconditions.NetworkFailureBehavior
-import com.devuloopers.knet.ui.core.components.badge.KNetBadge
-import com.devuloopers.knet.ui.core.components.button.ButtonSize
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
 import com.devuloopers.knet.ui.core.components.button.KNetButton
-import com.devuloopers.knet.ui.core.components.button.KNetIconButton
 import com.devuloopers.knet.ui.core.components.chip.KNetChip
 import com.devuloopers.knet.ui.core.components.dialog.AlertDialog
 import com.devuloopers.knet.ui.core.components.dialog.KNetDialog
+import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdown
 import com.devuloopers.knet.ui.core.components.divider.HorizontalDivider
 import com.devuloopers.knet.ui.core.components.input.InputFieldConfig
 import com.devuloopers.knet.ui.core.components.input.InputFieldState
 import com.devuloopers.knet.ui.core.components.input.KNetTextField
-import com.devuloopers.knet.ui.core.components.scrollbar.KNetHorizontalScrollbar
 import com.devuloopers.knet.ui.core.components.scrollbar.KNetVerticalScrollbar
-import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.components.switch.KNetSwitch
-import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.networkconditions.model.NetworkConditionRuleDraft
-import com.devuloopers.knet.ui.desktop.networkconditions.model.NetworkConditionsState
 import com.devuloopers.knet.ui.desktop.networkconditions.model.NetworkThroughputHistory
 import com.devuloopers.knet.ui.desktop.networkconditions.model.hasObservedTraffic
 import com.devuloopers.knet.ui.desktop.networkconditions.model.niceChartMaximum
-import com.devuloopers.knet.ui.desktop.networkconditions.model.throughputReference
 import com.devuloopers.knet.ui.desktop.networkconditions.viewmodel.NetworkConditionsViewModel
 import kotlin.math.max
 
@@ -94,64 +77,27 @@ fun NetworkConditionsScreen(
     }
     var showCustomProfileDialog by remember { mutableStateOf(false) }
     var customProfileSeed by remember { mutableStateOf<NetworkConditionProfile?>(null) }
-    val colors = KNetTheme.colors
-    val spacing = KNetTheme.spacing
-    val scrollState = rememberScrollState()
-
-    Box(modifier = modifier.fillMaxSize().background(colors.background)) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(scrollState)
-                .padding(horizontal = spacing.xxl, vertical = spacing.xl)
-                .padding(end = spacing.sm),
-            verticalArrangement = Arrangement.spacedBy(spacing.xl),
-        ) {
-            ScreenHeader(
-                enabled = state.configuration.enabled,
-                selectedProfile = state.configuration.profile(state.configuration.globalProfileId),
-                onEnabledChange = viewModel::setEnabled,
-                onReset = viewModel::reset,
-            )
-
-            Overview(
-                state = state,
-                onSelectProfile = viewModel::selectGlobalProfile,
-                onNewCustomProfile = {
-                    customProfileSeed = null
-                    showCustomProfileDialog = true
-                },
-            )
-
-            PacketConditionsNotice()
-
-            DomainRulesSection(
-                state = state,
-                onAdd = viewModel::beginAddRule,
-                onEnabledChange = viewModel::setRuleEnabled,
-                onEdit = viewModel::beginEditRule,
-                onDelete = viewModel::deleteRule,
-            )
-
-            ProfilesSection(
-                profiles = state.configuration.profiles,
-                onAdd = {
-                    customProfileSeed = null
-                    showCustomProfileDialog = true
-                },
-                onEdit = { profile ->
-                    customProfileSeed = profile
-                    showCustomProfileDialog = true
-                },
-                onDelete = viewModel::deleteProfile,
-            )
-        }
-
-        KNetVerticalScrollbar(
-            scrollState = scrollState,
-            modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
-        )
-    }
+    NetworkConditionsWorkspace(
+        state = state,
+        onEnabledChange = viewModel::setEnabled,
+        onReset = viewModel::reset,
+        onSelectProfile = viewModel::selectGlobalProfile,
+        onSelectTab = viewModel::selectTab,
+        onAddRule = viewModel::beginAddRule,
+        onRuleEnabledChange = viewModel::setRuleEnabled,
+        onEditRule = viewModel::beginEditRule,
+        onDeleteRule = viewModel::deleteRule,
+        onNewProfile = {
+            customProfileSeed = null
+            showCustomProfileDialog = true
+        },
+        onEditProfile = { profile ->
+            customProfileSeed = profile
+            showCustomProfileDialog = true
+        },
+        onDeleteProfile = viewModel::deleteProfile,
+        modifier = modifier,
+    )
 
     state.ruleDraft?.let { draft ->
         RuleDialog(
@@ -191,293 +137,13 @@ fun NetworkConditionsScreen(
 }
 
 @Composable
-private fun ScreenHeader(
-    enabled: Boolean,
-    selectedProfile: NetworkConditionProfile?,
-    onEnabledChange: (Boolean) -> Unit,
-    onReset: () -> Unit,
-) {
-    val colors = KNetTheme.colors
-    val typography = KNetTheme.typography
-    val spacing = KNetTheme.spacing
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(spacing.lg),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(spacing.xs),
-        ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(spacing.sm),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(
-                    text = "Network Conditions",
-                    style = typography.display.copy(color = colors.textPrimary),
-                )
-                KNetBadge(
-                    text = if (enabled) "ACTIVE" else "BYPASSED",
-                    containerColor = if (enabled) colors.semantic.successContainer else colors.surfaceVariant,
-                    contentColor = if (enabled) colors.semantic.success else colors.textMuted,
-                )
-            }
-            Text(
-                text = when {
-                    !enabled -> "Profiles and rules are saved, but traffic shaping is currently bypassed."
-                    selectedProfile != null -> "Applying ${selectedProfile.name} globally, with domain rules taking priority."
-                    else -> "Domain rules are active; unmatched traffic passes through unchanged."
-                },
-                style = typography.bodyMedium.copy(color = colors.textSecondary),
-            )
-        }
-
-        KNetSurface(
-            color = colors.surface,
-            border = BorderStroke(1.dp, colors.border),
-            shape = KNetTheme.shapes.small,
-        ) {
-            KNetSwitch(
-                checked = enabled,
-                onCheckedChange = onEnabledChange,
-                label = if (enabled) "Enabled" else "Disabled",
-                modifier = Modifier.padding(horizontal = spacing.md, vertical = spacing.sm),
-            )
-        }
-        KNetButton(onClick = onReset, variant = ButtonVariant.Secondary) {
-            Icon(
-                imageVector = KNetIcons.Refresh,
-                contentDescription = null,
-                modifier = Modifier.size(KNetTheme.dimensions.iconSizeSmall),
-            )
-            Spacer(Modifier.width(spacing.xs))
-            Text("Reset")
-        }
-    }
-}
-
-@Composable
-private fun Overview(
-    state: NetworkConditionsState,
-    onSelectProfile: (NetworkConditionProfileId?) -> Unit,
-    onNewCustomProfile: () -> Unit,
-) {
-    val spacing = KNetTheme.spacing
-    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-        if (maxWidth >= 880.dp) {
-            Row(
-                modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min),
-                horizontalArrangement = Arrangement.spacedBy(spacing.lg),
-            ) {
-                GlobalConditionCard(
-                    state = state,
-                    onSelectProfile = onSelectProfile,
-                    onNewCustomProfile = onNewCustomProfile,
-                    modifier = Modifier.weight(1f).fillMaxHeight(),
-                )
-                LiveApplicationCard(state = state, modifier = Modifier.weight(1f).fillMaxHeight())
-            }
-        } else {
-            Column(verticalArrangement = Arrangement.spacedBy(spacing.lg)) {
-                GlobalConditionCard(
-                    state = state,
-                    onSelectProfile = onSelectProfile,
-                    onNewCustomProfile = onNewCustomProfile,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                LiveApplicationCard(state = state, modifier = Modifier.fillMaxWidth())
-            }
-        }
-    }
-}
-
-@Composable
-private fun GlobalConditionCard(
-    state: NetworkConditionsState,
-    onSelectProfile: (NetworkConditionProfileId?) -> Unit,
-    onNewCustomProfile: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val configuration = state.configuration
-    val selected = configuration.profile(configuration.globalProfileId)
-    FeatureCard(modifier = modifier) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SectionLabel("GLOBAL CONDITION")
-            Text(
-                text = if (configuration.enabled) "APPLYING NOW" else "SAVED · BYPASSED",
-                style = KNetTheme.typography.caption.copy(
-                    color = if (configuration.enabled) {
-                        KNetTheme.colors.semantic.success
-                    } else {
-                        KNetTheme.colors.textMuted
-                    },
-                    fontWeight = FontWeight.Bold,
-                ),
-            )
-        }
-        Text(
-            text = selected?.name ?: "Domain rules only",
-            style = KNetTheme.typography.titleLarge.copy(color = KNetTheme.colors.textPrimary),
-        )
-        Text(
-            text = when {
-                !configuration.enabled -> "This profile is saved and will resume when Network Conditions is enabled."
-                selected == null -> "Unmatched hosts continue without throttling."
-                else -> "Applied to unmatched traffic; enabled domain rules take priority."
-            },
-            style = KNetTheme.typography.bodySmall.copy(color = KNetTheme.colors.textSecondary),
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm),
-        ) {
-            MetricTile("DOWNLOAD", selected?.let { rate(it.download.effectiveBitsPerSecond) } ?: "—", Modifier.weight(1f))
-            MetricTile("UPLOAD", selected?.let { rate(it.upload.effectiveBitsPerSecond) } ?: "—", Modifier.weight(1f))
-            MetricTile("LATENCY", selected?.let { "${it.latencyMillis} ms" } ?: "—", Modifier.weight(1f))
-        }
-        Text(
-            text = selected?.let { profile ->
-                "Jitter ±${profile.jitterMillis} ms   ·   MTU ${profile.virtualMtuBytes}   ·   " +
-                    profile.failure.summary()
-            } ?: "Select a global profile or continue with domain-specific rules only.",
-            style = KNetTheme.typography.caption.copy(color = KNetTheme.colors.textMuted),
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm),
-        ) {
-            KNetChip(
-                text = "Domain rules only",
-                selected = configuration.globalProfileId == null,
-                onClick = { onSelectProfile(null) },
-            )
-            configuration.profiles.forEach { profile ->
-                KNetChip(
-                    text = profile.name,
-                    selected = configuration.globalProfileId == profile.id,
-                    onClick = { onSelectProfile(profile.id) },
-                )
-            }
-        }
-        KNetButton(
-            onClick = onNewCustomProfile,
-            variant = ButtonVariant.Secondary,
-            size = ButtonSize.Compact,
-        ) {
-            Icon(
-                imageVector = KNetIcons.Add,
-                contentDescription = null,
-                modifier = Modifier.size(KNetTheme.dimensions.iconSizeSmall),
-            )
-            Spacer(Modifier.width(KNetTheme.spacing.xs))
-            Text("Custom profile")
-        }
-    }
-}
-
-@Composable
-private fun LiveApplicationCard(state: NetworkConditionsState, modifier: Modifier = Modifier) {
-    val colors = KNetTheme.colors
-    val spacing = KNetTheme.spacing
-    val reference = throughputReference(state)
-    val history = state.throughput
-    val hasObservedTraffic = history.hasObservedTraffic()
-    FeatureCard(modifier = modifier) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            SectionLabel("LIVE APPLICATION")
-            Text(
-                text = reference.label,
-                style = KNetTheme.typography.caption.copy(color = colors.textMuted),
-            )
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(spacing.sm),
-        ) {
-            RateSummary(
-                label = "DOWNLOAD",
-                value = if (history.currentSampleIsValid && hasObservedTraffic) {
-                    rate(history.currentDownloadBitsPerSecond)
-                } else {
-                    "—"
-                },
-                color = colors.accent,
-                modifier = Modifier.weight(1f),
-            )
-            RateSummary(
-                label = "UPLOAD",
-                value = if (history.currentSampleIsValid && hasObservedTraffic) {
-                    rate(history.currentUploadBitsPerSecond)
-                } else {
-                    "—"
-                },
-                color = colors.semantic.success,
-                modifier = Modifier.weight(1f),
-            )
-        }
-
-        LiveThroughputGraph(
-            history = history,
-            downloadReferenceBitsPerSecond = reference.downloadBitsPerSecond,
-            uploadReferenceBitsPerSecond = reference.uploadBitsPerSecond,
-            activeFlows = state.runtime.activeFlows,
-            queuedBytes = state.runtime.queuedBytes,
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(spacing.sm),
-        ) {
-            MetricTile("ACTIVE FLOWS", state.runtime.activeFlows.toString(), Modifier.weight(1f))
-            MetricTile("QUEUED", formatBytes(state.runtime.queuedBytes), Modifier.weight(1f))
-        }
-        Text(
-            text = "Observed payload  ↓ ${formatBytes(state.runtime.downloadedBytes)}" +
-                "   ↑ ${formatBytes(state.runtime.uploadedBytes)}",
-            style = KNetTheme.typography.caption.copy(color = colors.textMuted),
-        )
-    }
-}
-
-@Composable
-private fun RateSummary(
-    label: String,
-    value: String,
-    color: androidx.compose.ui.graphics.Color,
-    modifier: Modifier = Modifier,
-) {
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Box(Modifier.size(8.dp).background(color, KNetTheme.shapes.small))
-        Column(verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xs)) {
-            Text(label, style = KNetTheme.typography.caption.copy(color = KNetTheme.colors.textMuted))
-            Text(value, style = KNetTheme.typography.titleLarge.copy(color = KNetTheme.colors.textPrimary))
-        }
-    }
-}
-
-@Composable
-private fun LiveThroughputGraph(
+internal fun LiveThroughputGraph(
     history: NetworkThroughputHistory,
     downloadReferenceBitsPerSecond: Long?,
     uploadReferenceBitsPerSecond: Long?,
     activeFlows: Int,
     queuedBytes: Long,
+    compact: Boolean = false,
 ) {
     val colors = KNetTheme.colors
     val downloadPath = remember { Path() }
@@ -512,41 +178,46 @@ private fun LiveThroughputGraph(
         append(", $activeFlows active flows, ${formatBytes(queuedBytes)} queued")
     }
 
-    KNetSurface(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        color = colors.surfaceVariant,
-        border = BorderStroke(1.dp, colors.border),
-        shape = KNetTheme.shapes.small,
-        contentAlignment = Alignment.TopStart,
+        verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm),
     ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(KNetTheme.spacing.md),
-            verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm),
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+            Text(
+                text = buildList {
+                    downloadReferenceBitsPerSecond?.let { add("Download reference ${rate(it)}") }
+                    uploadReferenceBitsPerSecond?.let { add("Upload reference ${rate(it)}") }
+                }.joinToString(" · "),
+                style = KNetTheme.typography.caption.copy(color = colors.textSecondary),
+            )
+            Text(
+                text = if (!hasObservedTraffic && referencePeak == 0L) {
+                    "Auto scale"
+                } else {
+                    "Scale ${rate(chartMaximum)}"
+                },
+                style = KNetTheme.typography.caption.copy(color = colors.textMuted),
+            )
+        }
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(if (compact) 64.dp else 104.dp)
+                .semantics { contentDescription = accessibilityText },
+        ) {
+            Column(
+                modifier = Modifier.width(64.dp).fillMaxHeight(),
+                verticalArrangement = Arrangement.SpaceBetween,
             ) {
-                Text(
-                    text = if (hasObservedTraffic) "Actual throughput" else "Live monitor",
-                    style = KNetTheme.typography.labelMedium.copy(color = colors.textSecondary),
-                )
-                Text(
-                    text = if (!hasObservedTraffic && referencePeak == 0L) {
-                        "Auto scale"
-                    } else {
-                        "Scale ${rate(chartMaximum)}"
-                    },
-                    style = KNetTheme.typography.caption.copy(color = colors.textMuted),
-                )
+                listOf(rate(chartMaximum), rate(chartMaximum / 2), "0").forEach { label ->
+                    Text(label, style = KNetTheme.typography.caption.copy(color = colors.textMuted))
+                }
             }
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(112.dp)
-                    .semantics { contentDescription = accessibilityText },
-            ) {
+            Box(Modifier.fillMaxSize().padding(start = 64.dp)) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     repeat(5) { index ->
                         val fraction = index / 4f
@@ -638,370 +309,12 @@ private fun LiveThroughputGraph(
                     }
                 }
             }
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("60s", style = KNetTheme.typography.caption.copy(color = colors.textMuted))
-                Text("Now", style = KNetTheme.typography.caption.copy(color = colors.textMuted))
-            }
+        }
+        Row(modifier = Modifier.fillMaxWidth().padding(start = 64.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("60s ago", style = KNetTheme.typography.caption.copy(color = colors.textMuted))
+            Text("Now", style = KNetTheme.typography.caption.copy(color = colors.textMuted))
         }
     }
-}
-
-@Composable
-private fun MetricTile(label: String, value: String, modifier: Modifier = Modifier) {
-    val colors = KNetTheme.colors
-    KNetSurface(
-        modifier = modifier,
-        color = colors.surfaceVariant,
-        shape = KNetTheme.shapes.small,
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(KNetTheme.spacing.md),
-            verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xs),
-        ) {
-            Text(label, style = KNetTheme.typography.caption.copy(color = colors.textMuted))
-            Text(value, style = KNetTheme.typography.titleMedium.copy(color = colors.textPrimary))
-        }
-    }
-}
-
-@Composable
-private fun PacketConditionsNotice() {
-    val colors = KNetTheme.colors
-    val spacing = KNetTheme.spacing
-    KNetSurface(
-        modifier = Modifier.fillMaxWidth(),
-        color = colors.semantic.infoContainer,
-        border = BorderStroke(1.dp, colors.semantic.info.copy(alpha = 0.45f)),
-        shape = KNetTheme.shapes.medium,
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(spacing.lg),
-            horizontalArrangement = Arrangement.spacedBy(spacing.md),
-            verticalAlignment = Alignment.Top,
-        ) {
-            Icon(
-                imageVector = KNetIcons.Shield,
-                contentDescription = null,
-                tint = colors.semantic.info,
-                modifier = Modifier.size(KNetTheme.dimensions.iconSizeLarge),
-            )
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(spacing.xs),
-            ) {
-                Text(
-                    "Advanced packet conditions",
-                    style = KNetTheme.typography.titleSmall.copy(color = colors.textPrimary),
-                )
-                Text(
-                    "Android Companion VPN applies the global profile to UDP, QUIC/HTTP/3, and WebRTC datagrams. " +
-                        "Proxy traffic is shaped once at the appropriate transport boundary.",
-                    style = KNetTheme.typography.bodySmall.copy(color = colors.textSecondary),
-                )
-                Text(
-                    "iOS and desktop packet adapters remain in qualification until their signed TUN implementations " +
-                        "pass physical-device validation.",
-                    style = KNetTheme.typography.caption.copy(color = colors.textMuted),
-                )
-            }
-            KNetBadge(
-                text = "ANDROID READY",
-                containerColor = colors.semantic.successContainer,
-                contentColor = colors.semantic.success,
-            )
-        }
-    }
-}
-
-@Composable
-private fun DomainRulesSection(
-    state: NetworkConditionsState,
-    onAdd: () -> Unit,
-    onEnabledChange: (NetworkConditionRule, Boolean) -> Unit,
-    onEdit: (NetworkConditionRule) -> Unit,
-    onDelete: (NetworkConditionRuleId) -> Unit,
-) {
-    val rules = state.configuration.rules
-    SectionHeader(
-        title = "Condition rules",
-        subtitle = "Target a domain, GraphQL operation, or multiplexed GraphQL WebSocket message.",
-        actionText = "Add condition rule",
-        onAction = onAdd,
-    )
-    if (rules.isEmpty()) {
-        EmptyRulesCard(onAdd = onAdd)
-    } else {
-        Column(verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm)) {
-            rules.forEach { rule ->
-                RuleRow(
-                    rule = rule,
-                    profile = state.configuration.profile(rule.profileId),
-                    protocolDisplayName = state.protocolDefinitions
-                        .firstOrNull { definition -> definition.protocolId == rule.protocolCriteria.protocolId }
-                        ?.displayName,
-                    onEnabledChange = { enabled -> onEnabledChange(rule, enabled) },
-                    onEdit = { onEdit(rule) },
-                    onDelete = { onDelete(rule.id) },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun EmptyRulesCard(onAdd: () -> Unit) {
-    val colors = KNetTheme.colors
-    val spacing = KNetTheme.spacing
-    KNetSurface(
-        modifier = Modifier.fillMaxWidth(),
-        color = colors.surface,
-        border = BorderStroke(1.dp, colors.border),
-        shape = KNetTheme.shapes.medium,
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(spacing.xl),
-            horizontalArrangement = Arrangement.spacedBy(spacing.md),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = KNetIcons.Hub,
-                contentDescription = null,
-                tint = colors.textMuted,
-                modifier = Modifier.size(KNetTheme.dimensions.iconSizeLarge),
-            )
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    "No condition overrides",
-                    style = KNetTheme.typography.titleSmall.copy(color = colors.textPrimary),
-                )
-                Text(
-                    "Add one here or use Add to Network Conditions from any Traffic row.",
-                    style = KNetTheme.typography.bodySmall.copy(color = colors.textSecondary),
-                )
-            }
-            KNetButton(onClick = onAdd, variant = ButtonVariant.Secondary, size = ButtonSize.Compact) {
-                Text("Create first rule")
-            }
-        }
-    }
-}
-
-@Composable
-private fun RuleRow(
-    rule: NetworkConditionRule,
-    profile: NetworkConditionProfile?,
-    protocolDisplayName: String?,
-    onEnabledChange: (Boolean) -> Unit,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
-) {
-    val colors = KNetTheme.colors
-    val spacing = KNetTheme.spacing
-    KNetSurface(
-        modifier = Modifier.fillMaxWidth(),
-        color = colors.surface,
-        border = BorderStroke(1.dp, colors.border),
-        shape = KNetTheme.shapes.small,
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = spacing.lg, vertical = spacing.md),
-            horizontalArrangement = Arrangement.spacedBy(spacing.md),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(spacing.xs),
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(spacing.sm),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        text = rule.target.displayValue,
-                        style = KNetTheme.typography.titleSmall.copy(color = colors.textPrimary),
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    if (profile != null) KNetBadge(profile.name)
-                    if (!rule.protocolCriteria.isTransportOnly) {
-                        KNetBadge(protocolDisplayName ?: rule.protocolCriteria.protocolId.value)
-                    }
-                }
-                Text(
-                    text = buildString {
-                        append(profile?.let(::compactProfileSummary) ?: "Missing profile")
-                        if (rule.priority > 0) append("  ·  Priority ${rule.priority}")
-                    },
-                    style = KNetTheme.typography.bodySmall.copy(color = colors.textSecondary),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            KNetSwitch(checked = rule.enabled, onCheckedChange = onEnabledChange)
-            KNetIconButton(
-                onClick = onEdit,
-                icon = KNetIcons.Edit,
-                contentDescription = "Edit ${rule.target.displayValue}",
-                tint = colors.textSecondary,
-            )
-            KNetIconButton(
-                onClick = onDelete,
-                icon = KNetIcons.Delete,
-                contentDescription = "Delete ${rule.target.displayValue}",
-                tint = colors.semantic.error,
-            )
-        }
-    }
-}
-
-@Composable
-private fun ProfilesSection(
-    profiles: List<NetworkConditionProfile>,
-    onAdd: () -> Unit,
-    onEdit: (NetworkConditionProfile) -> Unit,
-    onDelete: (NetworkConditionProfileId) -> Unit,
-) {
-    SectionHeader(
-        title = "Profiles",
-        subtitle = "Reusable bandwidth, delay, reliability, and packet-quality presets.",
-        actionText = "New custom profile",
-        onAction = onAdd,
-    )
-    Column(verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm)) {
-        profiles.forEach { profile ->
-            ProfileRow(
-                profile = profile,
-                onEdit = { onEdit(profile) },
-                onDelete = { onDelete(profile.id) },
-            )
-        }
-    }
-}
-
-@Composable
-private fun ProfileRow(
-    profile: NetworkConditionProfile,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
-) {
-    val colors = KNetTheme.colors
-    val spacing = KNetTheme.spacing
-    KNetSurface(
-        modifier = Modifier.fillMaxWidth(),
-        color = colors.surface,
-        border = BorderStroke(1.dp, colors.border),
-        shape = KNetTheme.shapes.small,
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = spacing.lg, vertical = spacing.md),
-            horizontalArrangement = Arrangement.spacedBy(spacing.md),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(spacing.xs),
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(spacing.sm),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        profile.name,
-                        style = KNetTheme.typography.titleSmall.copy(color = colors.textPrimary),
-                    )
-                    KNetBadge(
-                        text = if (profile.builtIn) "BUILT-IN" else "CUSTOM",
-                        containerColor = if (profile.builtIn) colors.surfaceVariant else colors.semantic.infoContainer,
-                        contentColor = if (profile.builtIn) colors.textMuted else colors.semantic.info,
-                    )
-                }
-                Text(
-                    text = profileSummary(profile),
-                    style = KNetTheme.typography.bodySmall.copy(color = colors.textSecondary),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-            if (!profile.builtIn) {
-                KNetIconButton(
-                    onClick = onEdit,
-                    icon = KNetIcons.Edit,
-                    contentDescription = "Edit ${profile.name}",
-                    tint = colors.textSecondary,
-                )
-                KNetIconButton(
-                    onClick = onDelete,
-                    icon = KNetIcons.Delete,
-                    contentDescription = "Delete ${profile.name}",
-                    tint = colors.semantic.error,
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SectionHeader(
-    title: String,
-    subtitle: String,
-    actionText: String,
-    onAction: () -> Unit,
-) {
-    val colors = KNetTheme.colors
-    val spacing = KNetTheme.spacing
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(spacing.lg),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(spacing.xs)) {
-            Text(title, style = KNetTheme.typography.titleLarge.copy(color = colors.textPrimary))
-            Text(subtitle, style = KNetTheme.typography.bodySmall.copy(color = colors.textSecondary))
-        }
-        KNetButton(onClick = onAction, variant = ButtonVariant.Primary) {
-            Icon(
-                imageVector = KNetIcons.Add,
-                contentDescription = null,
-                modifier = Modifier.size(KNetTheme.dimensions.iconSizeSmall),
-            )
-            Spacer(Modifier.width(spacing.xs))
-            Text(actionText)
-        }
-    }
-}
-
-@Composable
-private fun FeatureCard(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
-    val colors = KNetTheme.colors
-    KNetSurface(
-        modifier = modifier,
-        color = colors.surface,
-        border = BorderStroke(1.dp, colors.border),
-        shape = KNetTheme.shapes.medium,
-        contentAlignment = Alignment.TopStart,
-    ) {
-        Column(
-            modifier = Modifier.fillMaxWidth().padding(KNetTheme.spacing.lg),
-            verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.md),
-        ) {
-            content()
-        }
-    }
-}
-
-@Composable
-private fun SectionLabel(text: String) {
-    Text(
-        text = text,
-        style = KNetTheme.typography.caption.copy(
-            color = KNetTheme.colors.accent,
-            fontWeight = FontWeight.Bold,
-        ),
-    )
 }
 
 @Composable
@@ -1019,142 +332,127 @@ private fun RuleDialog(
     onDismiss: () -> Unit,
     onSave: () -> Unit,
 ) {
-    val dialogScrollState = rememberScrollState()
     KNetDialog(
         onDismissRequest = onDismiss,
         title = if (draft.existingRuleId == null) "Add network condition" else "Edit network condition",
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(max = 720.dp),
-        ) {
+        NetworkConditionRuleEditor(
+            draft, profiles, protocolDefinitions, onHostChange, onPortChange, onPriorityChange,
+            onEnabledChange, onProfileSelected, onProtocolSelected, onProtocolValueChange, onDismiss, onSave,
+        )
+    }
+}
+
+/** The dialog form is independently renderable so overflow and fixed actions can be verified at real sizes. */
+@Composable
+internal fun NetworkConditionRuleEditor(
+    draft: NetworkConditionRuleDraft,
+    profiles: List<NetworkConditionProfile>,
+    protocolDefinitions: List<NetworkConditionProtocolDefinition>,
+    onHostChange: (String) -> Unit,
+    onPortChange: (String) -> Unit,
+    onPriorityChange: (String) -> Unit,
+    onEnabledChange: (Boolean) -> Unit,
+    onProfileSelected: (NetworkConditionProfileId) -> Unit,
+    onProtocolSelected: (NetworkConditionProtocolId) -> Unit,
+    onProtocolValueChange: (ProtocolCriteriaFieldId, String) -> Unit,
+    onDismiss: () -> Unit,
+    onSave: () -> Unit,
+) {
+    val scrollState = rememberScrollState()
+    Column(Modifier.fillMaxWidth().heightIn(max = 560.dp),
+        verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.md)) {
+        Box(Modifier.weight(1f, fill = false).fillMaxWidth()) {
             Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(dialogScrollState)
-                    .padding(end = KNetTheme.spacing.sm),
+                Modifier.fillMaxWidth().verticalScroll(scrollState).padding(end = KNetTheme.spacing.md),
                 verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.lg),
             ) {
-                LabeledTextField(
-                    label = "Host or wildcard",
-                    value = draft.hostPattern,
-                    onValueChange = onHostChange,
-                    placeholder = "api.example.com or *.example.com",
-                    supportingText = "Use a wildcard to include every subdomain.",
-                )
-                LabeledTextField(
-                    label = "Port",
-                    value = draft.port,
-                    onValueChange = onPortChange,
-                    placeholder = "Any port",
-                    supportingText = "Leave blank to match every destination port.",
-                )
-                LabeledTextField(
-                    label = "Priority",
-                    value = draft.priority,
-                    onValueChange = onPriorityChange,
-                    placeholder = "0",
-                    supportingText = "Higher priority wins before protocol and destination specificity.",
-                )
-                KNetSwitch(
-                    checked = draft.enabled,
-                    onCheckedChange = onEnabledChange,
-                    label = "Rule enabled",
-                )
-                HorizontalDivider()
-                Column(verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm)) {
+                Column(verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xs)) {
+                    FormFieldRow {
+                        LabeledTextField(
+                            label = "Host or wildcard", value = draft.hostPattern, onValueChange = onHostChange,
+                            placeholder = "api.example.com or *.example.com", modifier = Modifier.weight(3f),
+                        )
+                        LabeledTextField(
+                            label = "Port", value = draft.port, onValueChange = onPortChange,
+                            placeholder = "e.g. 443", modifier = Modifier.weight(1f),
+                        )
+                    }
                     Text(
-                        "Match scope",
-                        style = KNetTheme.typography.labelMedium.copy(color = KNetTheme.colors.textPrimary),
+                        "Blank port matches all ports.",
+                        style = KNetTheme.typography.caption.copy(color = KNetTheme.colors.textMuted),
                     )
-                    ScrollableChipSelector(
-                        items = protocolDefinitions,
-                        text = NetworkConditionProtocolDefinition::displayName,
-                        selected = { definition -> draft.protocolId == definition.protocolId },
-                        onSelected = { definition -> onProtocolSelected(definition.protocolId) },
+                }
+                val definition = protocolDefinitions.firstOrNull { it.protocolId == draft.protocolId }
+                LabeledDropdown(
+                    label = "Match scope",
+                    selected = definition,
+                    items = protocolDefinitions,
+                    text = { it.displayName },
+                    onSelected = { onProtocolSelected(it.protocolId) },
+                    placeholder = "Unavailable protocol",
+                )
+                definition?.fields?.forEach { field ->
+                    NetworkConditionProtocolField(
+                        field = field,
+                        value = draft.protocolValues.firstOrNull { it.fieldId == field.id }?.value.orEmpty(),
+                        onValueChange = { onProtocolValueChange(field.id, it) },
                     )
-                    protocolDefinitions.firstOrNull { definition -> definition.protocolId == draft.protocolId }
-                        ?.fields
-                        ?.forEach { field ->
-                            NetworkConditionProtocolField(
-                                field = field,
-                                value = draft.protocolValues.firstOrNull { value -> value.fieldId == field.id }
-                                    ?.value
-                                    .orEmpty(),
-                                onValueChange = { value -> onProtocolValueChange(field.id, value) },
-                            )
-                        }
                 }
                 HorizontalDivider()
-                ConditionProfileSelector(
-                    profiles = profiles,
-                    selectedProfileId = draft.profileId,
-                    onProfileSelected = onProfileSelected,
+                LabeledDropdown(
+                    label = "Condition profile",
+                    selected = profiles.firstOrNull { it.id == draft.profileId },
+                    items = profiles,
+                    text = { it.name },
+                    onSelected = { onProfileSelected(it.id) },
+                    placeholder = "Select a profile",
                 )
-                DialogActions(
-                    confirmText = "Save rule",
-                    confirmEnabled = draft.hostPattern.isNotBlank(),
-                    onDismiss = onDismiss,
-                    onConfirm = onSave,
-                )
+                FormFieldRow {
+                    LabeledTextField(
+                        label = "Priority", value = draft.priority, onValueChange = onPriorityChange,
+                        supportingText = "Higher priority wins.", modifier = Modifier.weight(1f),
+                    )
+                    Box(Modifier.weight(1f).padding(top = KNetTheme.spacing.xxl)) {
+                        KNetSwitch(draft.enabled, onEnabledChange, label = "Rule enabled")
+                    }
+                }
             }
-            KNetVerticalScrollbar(
-                scrollState = dialogScrollState,
-                modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
-            )
+            KNetVerticalScrollbar(scrollState, Modifier.align(Alignment.CenterEnd).fillMaxHeight())
         }
-    }
-}
-
-@Composable
-private fun ConditionProfileSelector(
-    profiles: List<NetworkConditionProfile>,
-    selectedProfileId: NetworkConditionProfileId,
-    onProfileSelected: (NetworkConditionProfileId) -> Unit,
-) {
-    val profileScrollState = rememberScrollState()
-    Column(verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm)) {
-        Text(
-            "Condition profile",
-            style = KNetTheme.typography.labelMedium.copy(color = KNetTheme.colors.textPrimary),
-        )
-        ScrollableChipSelector(
-            items = profiles,
-            text = NetworkConditionProfile::name,
-            selected = { profile -> selectedProfileId == profile.id },
-            onSelected = { profile -> onProfileSelected(profile.id) },
-            scrollState = profileScrollState,
+        HorizontalDivider()
+        DialogActions(
+            confirmText = "Save rule",
+            confirmEnabled = draft.hostPattern.isNotBlank() && profiles.any { it.id == draft.profileId } &&
+                definitionAvailable(draft, protocolDefinitions),
+            onDismiss = onDismiss,
+            onConfirm = onSave,
         )
     }
 }
 
+private fun definitionAvailable(
+    draft: NetworkConditionRuleDraft,
+    definitions: List<NetworkConditionProtocolDefinition>,
+): Boolean = definitions.any { it.protocolId == draft.protocolId }
+
 @Composable
-private fun <T> ScrollableChipSelector(
+private fun <T : Any> LabeledDropdown(
+    label: String,
+    selected: T?,
     items: List<T>,
     text: (T) -> String,
-    selected: (T) -> Boolean,
     onSelected: (T) -> Unit,
-    scrollState: ScrollState = rememberScrollState(),
+    placeholder: String,
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xs),
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().horizontalScroll(scrollState),
-            horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm),
-        ) {
-            items.forEach { item ->
-                KNetChip(
-                    text = text(item),
-                    selected = selected(item),
-                    onClick = { onSelected(item) },
-                )
-            }
-        }
-        KNetHorizontalScrollbar(
-            scrollState = scrollState,
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xs)) {
+        Text(label, style = KNetTheme.typography.labelMedium.copy(color = KNetTheme.colors.textPrimary))
+        KNetDropdown(
+            selectedItem = selected,
+            items = items,
+            onItemSelected = { it?.let(onSelected) },
+            itemText = { it?.let(text) ?: placeholder },
+            defaultItem = null,
             modifier = Modifier.fillMaxWidth(),
         )
     }
@@ -1168,39 +466,17 @@ private fun NetworkConditionProtocolField(
 ) {
     when (field) {
         is ProtocolCriteriaFieldDefinition.Text -> LabeledTextField(
-            label = field.label,
-            value = value,
-            onValueChange = onValueChange,
-            placeholder = field.placeholder,
-            supportingText = field.description,
+            label = field.label, value = value, onValueChange = onValueChange,
+            placeholder = field.placeholder, supportingText = field.description,
         )
-
-        is ProtocolCriteriaFieldDefinition.Choice -> Column(
-            verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xs),
-        ) {
-            Text(
-                text = field.label,
-                style = KNetTheme.typography.labelMedium.copy(color = KNetTheme.colors.textPrimary),
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Ellipsis,
-            )
-            ScrollableChipSelector(
-                items = field.options,
-                text = ProtocolCriteriaOption::label,
-                selected = { option -> value == option.value },
-                onSelected = { option -> onValueChange(option.value) },
-            )
-            field.description?.let { description ->
-                Text(
-                    text = description,
-                    style = KNetTheme.typography.caption.copy(color = KNetTheme.colors.textMuted),
-                    maxLines = 1,
-                    softWrap = false,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
+        is ProtocolCriteriaFieldDefinition.Choice -> LabeledDropdown(
+            label = field.label,
+            selected = field.options.firstOrNull { it.value == value },
+            items = field.options,
+            text = ProtocolCriteriaOption::label,
+            onSelected = { onValueChange(it.value) },
+            placeholder = "Select an option",
+        )
     }
 }
 
@@ -1547,30 +823,24 @@ private fun DialogActions(
     }
 }
 
-private fun compactProfileSummary(profile: NetworkConditionProfile): String = buildString {
-    append("↓ ${rate(profile.download.effectiveBitsPerSecond)}")
-    append("  ↑ ${rate(profile.upload.effectiveBitsPerSecond)}")
-    append("  •  ${profile.latencyMillis} ms")
-    if (profile.jitterMillis > 0) append(" ±${profile.jitterMillis} ms")
-    if (profile.failure != NetworkFailureBehavior.None) append("  •  ${profile.failure.summary()}")
-}
-
-private fun profileSummary(profile: NetworkConditionProfile): String = buildString {
-    append(compactProfileSummary(profile))
-    append("  •  MTU ${profile.virtualMtuBytes}")
+internal fun profileSummary(profile: NetworkConditionProfile): String = buildString {
+    append("Jitter ±${profile.jitterMillis} ms  •  MTU ${profile.virtualMtuBytes}")
+    append("  •  ${profile.failure.summary()}")
+    if (profile.download.utilizationPercent != 100) append("  •  Download utilization ${profile.download.utilizationPercent}%")
+    if (profile.upload.utilizationPercent != 100) append("  •  Upload utilization ${profile.upload.utilizationPercent}%")
     if (profile.packetLossPercent > 0) append("  •  ${profile.packetLossPercent}% loss")
     if (profile.packetDuplicationPercent > 0) append("  •  ${profile.packetDuplicationPercent}% duplicate")
     if (profile.packetReorderingPercent > 0) append("  •  ${profile.packetReorderingPercent}% reorder")
 }
 
-private fun rate(value: Long?): String = when {
+internal fun rate(value: Long?): String = when {
     value == null -> "Unlimited"
     value >= 1_000_000_000L -> "${value / 1_000_000_000L} Gbps"
     value >= 1_000_000L -> "${value / 1_000_000L} Mbps"
     else -> "${value / 1_000L} kbps"
 }
 
-private fun formatBytes(value: Long): String = when {
+internal fun formatBytes(value: Long): String = when {
     value >= 1_073_741_824L -> "${value / 1_073_741_824L} GB"
     value >= 1_048_576L -> "${value / 1_048_576L} MB"
     value >= 1_024L -> "${value / 1_024L} KB"
@@ -1604,7 +874,7 @@ private fun FailureEditorKind.toDomain(probability: Int?, seed: Long?): NetworkF
     )
 }
 
-private fun NetworkFailureBehavior.summary(): String = when (this) {
+internal fun NetworkFailureBehavior.summary(): String = when (this) {
     NetworkFailureBehavior.None -> "No faults"
     NetworkFailureBehavior.Offline -> "Offline"
     NetworkFailureBehavior.Timeout -> "Timeout"

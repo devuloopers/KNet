@@ -22,6 +22,9 @@ import com.devuloopers.knet.traffic.model.HttpExchangeSnapshot
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.HttpResponseSnapshot
 import com.devuloopers.knet.traffic.model.IngressKind
+import com.devuloopers.knet.traffic.model.OpaqueFlowClosure
+import com.devuloopers.knet.traffic.model.OpaqueFlowCloseInitiator
+import com.devuloopers.knet.traffic.model.OpaqueFlowCloseReason
 import com.devuloopers.knet.traffic.model.OpaqueFlowSnapshot
 import com.devuloopers.knet.traffic.model.OpaqueFlowState
 import com.devuloopers.knet.traffic.model.OpaqueSecurityProtocol
@@ -135,6 +138,9 @@ internal object CanonicalCaptureEntityMapper {
         policyRuleId = event.policyRuleId,
         policyAction = event.policyAction?.name,
         policyGroupId = event.policyGroupId,
+        protectionOrigin = event.protectionOrigin?.name,
+        inspectionFailureReason = event.inspectionFailureReason?.name,
+        smartEntryId = null, // Legacy column remains readable; new captures have no automatic decision.
         appliedConditionProfileId = event.appliedNetworkCondition?.profileId,
         appliedConditionRuleId = event.appliedNetworkCondition?.ruleId,
         appliedConditionSource = event.appliedNetworkCondition?.source?.name,
@@ -180,6 +186,9 @@ internal object CanonicalCaptureEntityMapper {
                 runCatching { com.devuloopers.knet.traffic.model.OpaqueFlowPolicyAction.valueOf(stored) }.getOrNull()
             },
             policyGroupId = flow.policyGroupId,
+            protectionOrigin = flow.protectionOrigin?.let { runCatching { com.devuloopers.knet.traffic.model.ProtectionDecisionOrigin.valueOf(it) }.getOrNull() },
+            inspectionFailureReason = flow.inspectionFailureReason?.let { runCatching { com.devuloopers.knet.traffic.model.InspectionFailureReason.valueOf(it) }.getOrNull() },
+            smartEntryId = flow.smartEntryId,
             appliedNetworkCondition = appliedNetworkCondition(
                 flow.appliedConditionProfileId,
                 flow.appliedConditionRuleId,
@@ -193,7 +202,16 @@ internal object CanonicalCaptureEntityMapper {
             terminalOutcome = outcome,
             offeredApplicationProtocols = flow.offeredApplicationProtocolsEncoded.decodeOpaqueMetadata(),
             offeredTlsVersions = flow.offeredTlsVersionsEncoded.decodeOpaqueMetadata(),
+            closure = opaqueClosure(flow),
         )
+    }
+
+    /** Corrupt/partial evidence never assigns a peer or fabricates an observation timestamp. */
+    private fun opaqueClosure(flow: OpaqueFlowEntity): OpaqueFlowClosure? {
+        val observedAt = flow.closureObservedAtEpochMillis?.takeIf { timestamp -> timestamp >= 0L } ?: return null
+        return runCatching { OpaqueFlowClosure(OpaqueFlowCloseInitiator.valueOf(flow.closureInitiator.orEmpty()),
+            OpaqueFlowCloseReason.valueOf(flow.closureReason.orEmpty()), observedAt) }
+            .getOrElse { OpaqueFlowClosure(OpaqueFlowCloseInitiator.UNKNOWN, OpaqueFlowCloseReason.UNKNOWN, observedAt) }
     }
 
     /** Maps finalized body metadata to its immutable body-object row. */

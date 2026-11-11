@@ -4,7 +4,31 @@ Status: **IN PROGRESS**
 
 Target phase: Phase 135
 
-Last updated: 2026-10-01
+Last updated: 2026-11-10
+
+The [current readiness audit](network_conditions_protected_traffic_readiness_audit.md) distinguishes working proxy
+paths from unfinished mobile attribution/UDP and native Darwin paths. It also records remaining automated-test
+and Smart presentation-evidence gaps; physical qualification is not the only outstanding work.
+
+The [combined completion plan](network_conditions_protected_traffic_completion_plan.md) assigns all Phase 135
+software, platform/native delivery and acceptance assertions to C00–C12, leaving physical acceptance as P01 only
+after verified software completion. Historical preset delivery is superseded by approved retirement/migration.
+
+## Smart Compatibility follow-up (implemented software, 2026-11-10)
+
+The Phase 135 checkpoint below remains historical. Phase 136 adds **Smart Compatibility on by default** for fresh
+and upgraded installations, preserving subsequently saved disables, existing global actions, user rules, and preset
+choices. See [the Smart Compatibility plan](smart_compatibility_implementation_plan.md) for the authoritative learning,
+migration, precedence, UI, and test decisions. Physical platform qualification remains separate; see the
+[qualification report](smart_compatibility_qualification.md).
+
+The UI has Overview and Advanced tabs, with Smart controls above both. Overview starts with a full-width
+connection list; selecting a row opens an animated details pane alongside it. Per the user's later 2026-11-10
+choice, compatibility preset controls and the runtime Google/Apple catalogue are removed. Schema 34 imports only
+previously enabled choices as visible saved exceptions with their old lower precedence. First-attempt inspection
+failure is accepted for Smart learning; new installations have no implicit service rules. Explicit
+Inspect/Block/Tunnel/Bypass rules remain authoritative. Automatic handling is limited to eligible default-inspection
+flows, records its reason, and affects only subsequent client-created connections.
 
 ## Implementation progress (2026-10-01)
 
@@ -53,9 +77,11 @@ its provider, not invent network requests for local Binder, XPC, or StoreKit cal
 1. **Tunnel is not bypass.** The default protected-traffic action keeps the connection inside KNet, preserves
    end-to-end encryption, records bounded metadata, and applies eligible Network Conditions. A complete VPN bypass
    remains a separate last-resort action and cannot claim Traffic visibility or throttling.
-2. **No silent security downgrade.** KNet never changes an `Inspect` rule to `Tunnel` merely because a client rejects
-   the generated certificate. It records a typed downstream TLS failure and offers an explicit rule action for the
-   next connection. Built-in protected-service rules may select `Tunnel` before the first handshake.
+2. **Explicit rules stay authoritative.** KNet never changes a user `Inspect` rule to `Tunnel` merely because a client
+   rejects the generated certificate. The runtime records a typed downstream TLS failure and offers a next-connection rule action.
+   Phase 136 adds visible, default-on Smart learning only at the global
+   default-inspection boundary, with bounded lifetime and evidence requirements. Saved rules, including imported legacy exceptions,
+   may select `Tunnel` before a handshake. Neither path replays failed requests.
 3. **Opaque flows are not fake HTTP exchanges.** Persistence and Traffic use a dedicated transport-flow model rather
    than fabricating an HTTP method, status, headers, or body that KNet never observed.
 4. **Application identity is the strongest mobile selector.** Android package/UID rules take precedence over broad
@@ -123,7 +149,10 @@ An explicit `BLOCK` does not receive hidden priority over a more specific rule; 
 the selected rule's action is applied. Duplicate effective selectors are rejected. Live rule changes apply to new
 flows; existing tunnels retain their opening decision so a TLS stream is never reclassified mid-connection.
 
-### Built-in compatibility groups
+### Historical compatibility groups (retired in Phase 136)
+
+The following records the original Phase 135 design. Phase 136 removed the catalogue and toggle API; schema 34
+retains enabled choices as saved exceptions, while Smart learns unfamiliar inspection incompatibilities.
 
 The first built-in group is **Google Play Billing**:
 
@@ -294,8 +323,10 @@ connect failure, upstream TLS alert observed as opaque bytes, read/write timeout
 VPN stop, and process interruption. A likely-pinning diagnosis is presented as a hypothesis, not certainty.
 
 KNet may suggest creating a tunnel rule after a downstream TLS failure, but it cannot transparently replay the failed
-TLS connection. The user or client retries after the rule is applied. Repeated suggestions are deduplicated by
-application/destination and expire without creating policy automatically.
+TLS connection. The user or client creates a new connection after a rule or eligible temporary decision applies.
+Phase 136 implements bounded, default-on automatic learning for supported downstream certificate alerts, while
+uncertain evidence remains a suggestion and explicit rules stay authoritative. Duplicate callbacks are bounded and
+temporary decisions expire. The detailed Smart plan defines scope, expiry, and false-positive tests.
 
 ## Delivery slices
 
@@ -305,6 +336,7 @@ application/destination and expire without creating policy automatically.
   compatibility-group IDs, repositories, use cases, Room migration, and corrupt-state fallback.
 - Add settings UI for global default, application rules, destination rules, and protected-service groups.
 - Keep current inspection behavior as the migration default except for an explicitly enabled Google Play group.
+  Phase 136 separately adds a default-on Smart setting without changing this global default or enabling all groups.
 
 ### 135.2 — Desktop raw TLS/TCP tunnel
 

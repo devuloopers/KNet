@@ -3,22 +3,17 @@ package com.devuloopers.knet.data.desktop.protectedtraffic
 import com.devuloopers.knet.application.contract.protectedtraffic.ProtectedTrafficRepository
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedDestinationSelector
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedIpFamily
-import com.devuloopers.knet.domain.protectedtraffic.ProtectedServiceGroupId
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedSourceApplicationId
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficAction
-import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficBuiltIns
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficConfiguration
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficRule
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficRuleId
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficRuleOrigin
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTransportProtocol
 import com.devuloopers.knet.storage.protectedtraffic.dao.ProtectedTrafficDao
-import com.devuloopers.knet.storage.protectedtraffic.entity.ProtectedServiceGroupEntity
 import com.devuloopers.knet.storage.protectedtraffic.entity.ProtectedTrafficRuleEntity
 import com.devuloopers.knet.storage.protectedtraffic.entity.ProtectedTrafficSettingsEntity
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -26,56 +21,50 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
-/** Room-backed protected-traffic repository with validated, fail-safe snapshot publication. */
+/**
+ * Room-backed protected-traffic policy with validated, fail-safe snapshot publication.
+ * @param dao Reads and writes persisted policy without adding a runtime service catalogue.
+ * @param scope Product-owned observer lifetime; cancel and join it before storage closes.
+ */
 class RoomProtectedTrafficRepository(
     private val dao: ProtectedTrafficDao,
-    scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    scope: CoroutineScope,
 ) : ProtectedTrafficRepository {
     private val mutation = Mutex()
-    private val fallback = ProtectedTrafficConfiguration(rules = ProtectedTrafficBuiltIns.rules)
+    private val fallback = ProtectedTrafficConfiguration(configurationReady = false)
 
     override val configuration: StateFlow<ProtectedTrafficConfiguration> = combine(
         dao.observeSettings(),
         dao.observeRules(),
-        dao.observeGroups(),
-    ) { settings, rules, groups ->
+    ) { settings, rules ->
         runCatching {
             ProtectedTrafficConfiguration(
                 defaultAction = settings?.defaultAction?.decodeAction() ?: ProtectedTrafficAction.INSPECT,
-                rules = ProtectedTrafficBuiltIns.rules + rules.map(ProtectedTrafficRuleEntity::toDomain),
-                enabledBuiltInGroups = groups.filter { it.enabled }.mapTo(mutableSetOf()) {
-                    ProtectedServiceGroupId(it.groupId)
-                },
+                rules = rules.map(ProtectedTrafficRuleEntity::toDomain),
             )
         }.getOrElse { fallback }
     }.stateIn(scope, SharingStarted.Eagerly, fallback)
 
     override suspend fun setDefaultAction(action: ProtectedTrafficAction) = mutation.withLock {
-        dao.upsertSettings(ProtectedTrafficSettingsEntity(defaultAction = action.name))
+        val existing = dao.getSettings() ?: ProtectedTrafficSettingsEntity(defaultAction = ProtectedTrafficAction.INSPECT.name)
+        dao.upsertSettings(existing.copy(defaultAction = action.name))
     }
 
     override suspend fun upsertRule(rule: ProtectedTrafficRule) = mutation.withLock {
-        require(rule.origin == ProtectedTrafficRuleOrigin.USER) { "Built-in protected-traffic rules are immutable." }
         val existing = dao.getRules().map(ProtectedTrafficRuleEntity::toDomain)
+        require(rule.origin == ProtectedTrafficRuleOrigin.USER ||
+            rule.origin == ProtectedTrafficRuleOrigin.MIGRATED_PRESET && existing.any {
+                it.id == rule.id && it.origin == rule.origin && it.selectorKey == rule.selectorKey && it.action == rule.action
+            }) { "Only explicit user rules or existing imported exceptions may be saved." }
         ProtectedTrafficConfiguration(
-            rules = ProtectedTrafficBuiltIns.rules + existing.filterNot { it.id == rule.id } + rule,
-            enabledBuiltInGroups = configuration.value.enabledBuiltInGroups,
+            rules = existing.filterNot { it.id == rule.id } + rule,
         )
         dao.upsertRule(rule.toEntity())
     }
 
     override suspend fun deleteRule(ruleId: ProtectedTrafficRuleId) = mutation.withLock {
-        require(ProtectedTrafficBuiltIns.rules.none { it.id == ruleId }) { "Built-in rules cannot be deleted." }
         dao.deleteRule(ruleId.value)
     }
-
-    override suspend fun setBuiltInGroupEnabled(groupId: ProtectedServiceGroupId, enabled: Boolean) =
-        mutation.withLock {
-            require(ProtectedTrafficBuiltIns.rules.any { it.groupId == groupId }) {
-                "Unknown protected-service compatibility group."
-            }
-            dao.upsertGroup(ProtectedServiceGroupEntity(groupId.value, enabled))
-        }
 }
 
 private fun ProtectedTrafficRule.toEntity(): ProtectedTrafficRuleEntity {
@@ -121,6 +110,7 @@ private fun ProtectedTrafficRule.toEntity(): ProtectedTrafficRuleEntity {
         port = port,
         transport = transport?.name,
         ipFamily = ipFamily?.name,
+        origin = origin.name,
     )
 }
 
@@ -133,6 +123,7 @@ private fun ProtectedTrafficRuleEntity.toDomain(): ProtectedTrafficRule = Protec
     port = port,
     transport = transport?.let(ProtectedTransportProtocol::valueOf),
     ipFamily = ipFamily?.let(ProtectedIpFamily::valueOf),
+    origin = ProtectedTrafficRuleOrigin.valueOf(origin),
 )
 
 private fun ProtectedTrafficRuleEntity.decodeDestination(): ProtectedDestinationSelector? = when (destinationKind) {

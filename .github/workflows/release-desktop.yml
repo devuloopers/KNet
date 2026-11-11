@@ -93,6 +93,31 @@ jobs:
           --no-daemon
           --stacktrace
 
+      - name: Install Android SDK for shared feature gates
+        shell: bash
+        run: >-
+          "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          --install
+          'platforms;android-37.0'
+          'build-tools;37.0.0'
+
+      - name: Qualify Network Conditions and Protected Traffic
+        run: ./gradlew networkProtectionQualification :engine:simulator:networkProtectionLoadQualification --no-daemon --stacktrace
+
+      - name: Retain feature test evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: release-network-protection-test-results
+          path: |
+            **/build/test-results/**/TEST-*.xml
+            **/build/reports/tests/**
+            docs/qualification/network_protection_cases.tsv
+            build/reports/network-protection/**
+            engine/simulator/build/reports/network-protection-load/**
+          if-no-files-found: error
+          retention-days: 14
+
   desktop-packages:
     name: Desktop package (${{ matrix.name }})
     needs: metadata

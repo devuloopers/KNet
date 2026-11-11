@@ -22,12 +22,14 @@ import com.devuloopers.knet.data.desktop.traffic.repository.DesktopTrafficMainte
 import com.devuloopers.knet.data.desktop.traffic.repository.DesktopTrafficQueryAdapter
 import com.devuloopers.knet.storage.database.KNetDatabase
 import com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficViewModel
+import com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficProtectionViewModel
 import org.koin.core.module.Module
 import org.koin.core.module.dsl.viewModel
 import org.koin.dsl.module
 
 /** Canonical traffic maintenance/query adapters and traffic application workflows. */
 internal val trafficBindings: Module = module {
+    viewModel { TrafficProtectionViewModel(get(), get()) }
     single {
         DesktopTrafficMaintenanceAdapter(
             database = get(),

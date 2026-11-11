@@ -4,6 +4,7 @@ import com.devuloopers.knet.engine.proxy.inspection.NettyPayloadSlice
 import com.devuloopers.knet.engine.proxy.inspection.ProxyDuplexInspector
 import com.devuloopers.knet.engine.proxy.inspection.ProxyDuplexTransformResult
 import com.devuloopers.knet.engine.proxy.inspection.ProxyDuplexTransformer
+import com.devuloopers.knet.engine.proxy.pipeline.ProxyTransportActivity
 import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
 import com.devuloopers.knet.traffic.model.TrafficDirection
 import com.devuloopers.knet.traffic.model.TrafficTerminationReason
@@ -54,6 +55,12 @@ internal class KNetDuplexRelayHandler(
     private val lifecycle: DuplexRelayLifecycle,
 ) : SimpleChannelInboundHandler<ByteBuf>() {
     private var transformInProgress = false
+    private var transformHold: AutoCloseable? = null
+
+    override fun handlerAdded(context: ChannelHandlerContext) {
+        ProxyTransportActivity.link(context.channel(), peer)
+        super.handlerAdded(context)
+    }
 
     override fun channelRead0(context: ChannelHandlerContext, message: ByteBuf) {
         val occurredAt = Clock.System.now().toEpochMilliseconds()
@@ -66,11 +73,16 @@ internal class KNetDuplexRelayHandler(
 
         check(!transformInProgress) { "Duplex transformer calls must remain serialized per direction." }
         transformInProgress = true
+        val hold = ProxyTransportActivity.hold(context.channel())
+        transformHold = hold
         val ownedPayload = ByteArray(message.readableBytes())
         message.getBytes(message.readerIndex(), ownedPayload)
         selectedTransformer.transform(direction, ownedPayload, occurredAt).whenComplete { result, failure ->
             context.executor().execute {
+                hold.close()
+                if (transformHold === hold) transformHold = null
                 transformInProgress = false
+                if (!context.channel().isActive) return@execute
                 if (failure != null || result is ProxyDuplexTransformResult.DropConnection) {
                     val reason = (result as? ProxyDuplexTransformResult.DropConnection)?.reason
                         ?: TrafficTerminationReason.Interception.DUPLEX_TRANSFORM_FAILED
@@ -102,9 +114,22 @@ internal class KNetDuplexRelayHandler(
     }
 
     override fun channelInactive(context: ChannelHandlerContext) {
+        transformHold?.close()
+        transformHold = null
         lifecycle.terminate(ExchangeTerminalOutcome.Completed)
         if (peer.isActive) peer.close()
         super.channelInactive(context)
+    }
+
+    override fun handlerRemoved(context: ChannelHandlerContext) {
+        transformHold?.close()
+        transformHold = null
+        if (context.channel().isActive) {
+            lifecycle.terminate(ExchangeTerminalOutcome.Cancelled(TrafficTerminationReason.Transport.DUPLEX_PEER_CLOSED))
+            peer.close()
+            context.close()
+        }
+        super.handlerRemoved(context)
     }
 
     override fun exceptionCaught(context: ChannelHandlerContext, cause: Throwable) {

@@ -7,11 +7,14 @@ import io.netty.handler.ssl.SslHandshakeCompletionEvent
 
 /** Records at most one TLS interception failure before any HTTP exchange can exist. */
 internal class TlsInspectionOutcomeHandler(
-    private val onFailure: () -> Unit,
+    private val evidence: DownstreamTlsEvidence = DownstreamTlsEvidence(),
+    private val onFailure: (TlsInspectionFailure) -> Unit,
 ) : ChannelInboundHandlerAdapter() {
     private var failureRecorded: Boolean = false
+    private var certificateContextInstalled: Boolean = false
 
     override fun userEventTriggered(context: ChannelHandlerContext, event: Any) {
+        if (event is SniCompletionEvent && event.cause() == null) certificateContextInstalled = true
         val failed = when (event) {
             is SniCompletionEvent -> event.cause() != null
             is SslHandshakeCompletionEvent -> !event.isSuccess
@@ -19,7 +22,12 @@ internal class TlsInspectionOutcomeHandler(
         }
         if (failed && !failureRecorded) {
             failureRecorded = true
-            onFailure()
+            val cause = when (event) {
+                is SniCompletionEvent -> event.cause()
+                is SslHandshakeCompletionEvent -> event.cause()
+                else -> null
+            }
+            onFailure(TlsInspectionFailureClassifier.classify(cause, certificateContextInstalled, evidence.presentation))
         }
         context.fireUserEventTriggered(event)
     }

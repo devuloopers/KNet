@@ -45,6 +45,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
 import kotlin.uuid.ExperimentalUuidApi
@@ -65,6 +68,13 @@ class StreamingProxyCaptureSession internal constructor(
     private val closed = AtomicBoolean(false)
     private val connections = ConcurrentHashMap.newKeySet<StreamingConnectionCapture>()
     private val shutdownScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    // One sampler per session coalesces counters; transport threads never enqueue an event per network chunk.
+    private val progressJob = shutdownScope.launch {
+        while (isActive) {
+            delay(OPAQUE_PROGRESS_INTERVAL_MILLIS)
+            connections.forEach { connection -> connection.publishOpaqueProgress() }
+        }
+    }
 
     override fun openConnection(metadata: ProxyCaptureConnectionMetadata): ProxyConnectionCapture? {
         if (closed.get()) return null
@@ -87,6 +97,7 @@ class StreamingProxyCaptureSession internal constructor(
 
     /** Waits until all capture work admitted before this call is durable. */
     suspend fun flush() {
+        connections.forEach { connection -> connection.publishOpaqueProgress() }
         ingress.flush()
     }
 
@@ -95,6 +106,7 @@ class StreamingProxyCaptureSession internal constructor(
         reason: TrafficTerminationReason = TrafficTerminationReason.Lifecycle.CAPTURE_SESSION_CLOSED,
     ) {
         if (!closed.compareAndSet(false, true)) return
+        progressJob.cancelAndJoin()
         connections.toList().forEach { connection ->
             connection.close(reason)
         }
@@ -136,6 +148,11 @@ private class StreamingConnectionCapture(
     private val sentBodyBytes = AtomicLong(0L)
     private val exchanges = ConcurrentHashMap<ExchangeId, StreamingExchangeCapture>()
     private val opaqueFlows = ConcurrentHashMap<OpaqueFlowId, StreamingOpaqueFlowCapture>()
+
+    /** Publishes only changed counter snapshots; flow-level locking fences close and sampling races. */
+    fun publishOpaqueProgress() {
+        opaqueFlows.values.forEach { flow -> flow.publishProgress() }
+    }
 
     fun open(): Boolean = publish(
         CaptureEvent.ConnectionOpened(
@@ -234,6 +251,8 @@ private class StreamingConnectionCapture(
                     com.devuloopers.knet.traffic.model.OpaqueFlowPolicyAction.valueOf(action.name)
                 },
                 policyGroupId = metadata.policyGroupId,
+                protectionOrigin = metadata.protectionOrigin,
+                inspectionFailureReason = metadata.inspectionFailureReason,
                 appliedNetworkCondition = metadata.appliedNetworkCondition,
                 offeredApplicationProtocols = metadata.offeredApplicationProtocols,
                 offeredTlsVersions = metadata.offeredTlsVersions,
@@ -293,49 +312,71 @@ private class StreamingOpaqueFlowCapture(
     private val addObservedBytes: (TrafficDirection, Long) -> Unit,
     private val onTerminated: () -> Unit,
 ) : ProxyOpaqueFlowCapture {
-    private val terminal = AtomicBoolean(false)
-    private val uploadedBytes = AtomicLong(0L)
-    private val downloadedBytes = AtomicLong(0L)
+    private val monitor = Any()
+    private var terminal = false
+    private var closure: com.devuloopers.knet.traffic.model.OpaqueFlowClosure? = null
+    private var uploadedBytes = 0L
+    private var downloadedBytes = 0L
+    private var publishedUploadedBytes = 0L
+    private var publishedDownloadedBytes = 0L
+    private var lastObservedAtEpochMillis = 0L
+    private var version = 0L
 
-    override fun observeBytes(
-        direction: TrafficDirection,
-        byteCount: Int,
-        occurredAtEpochMillis: Long,
-    ) {
+    override fun observeClosure(closure: com.devuloopers.knet.traffic.model.OpaqueFlowClosure) {
+        synchronized(monitor) { if (!terminal) this.closure = closure }
+    }
+
+    override fun observeBytes(direction: TrafficDirection, byteCount: Int, occurredAtEpochMillis: Long) {
         require(byteCount >= 0) { "Opaque-flow byte observation must not be negative." }
         require(occurredAtEpochMillis >= 0L) { "Opaque-flow byte timestamp must not be negative." }
-        if (terminal.get() || byteCount == 0) return
-        when (direction) {
-            TrafficDirection.CLIENT_TO_SERVER -> uploadedBytes.addAndGet(byteCount.toLong())
-            TrafficDirection.SERVER_TO_CLIENT -> downloadedBytes.addAndGet(byteCount.toLong())
+        // Both relay directions, the sampler and close may run concurrently. The monitor owns only small metadata
+        // transitions and non-blocking ingress admission; it never performs storage or socket work.
+        synchronized(monitor) {
+            if (terminal || byteCount == 0) return
+            when (direction) {
+                TrafficDirection.CLIENT_TO_SERVER -> uploadedBytes += byteCount
+                TrafficDirection.SERVER_TO_CLIENT -> downloadedBytes += byteCount
+            }
+            lastObservedAtEpochMillis = maxOf(lastObservedAtEpochMillis, occurredAtEpochMillis)
+            addObservedBytes(direction, byteCount.toLong())
         }
-        addObservedBytes(direction, byteCount.toLong())
+    }
+
+    /** Coalesces unchanged observations and gives every admitted snapshot a strictly newer lifecycle version. */
+    fun publishProgress() = synchronized(monitor) {
+        if (terminal || uploadedBytes == publishedUploadedBytes && downloadedBytes == publishedDownloadedBytes) return@synchronized
+        val result = ingress.tryPublish(CaptureEvent.OpaqueFlowProgress(
+            sessionId = sessionId, connectionId = connectionId, sequence = nextSequence(),
+            occurredAtEpochMillis = lastObservedAtEpochMillis, flowId = flowId, flowVersion = ++version,
+            uploadedBytes = uploadedBytes, downloadedBytes = downloadedBytes,
+        ))
+        if (result is CapturePublishResult.Accepted) {
+            publishedUploadedBytes = uploadedBytes
+            publishedDownloadedBytes = downloadedBytes
+        }
     }
 
     override fun terminate(outcome: ExchangeTerminalOutcome, occurredAtEpochMillis: Long) {
         require(occurredAtEpochMillis >= 0L) { "Opaque-flow terminal timestamp must not be negative." }
-        if (!terminal.compareAndSet(false, true)) return
-        ingress.tryPublish(
-            CaptureEvent.OpaqueFlowTerminated(
-                sessionId = sessionId,
-                connectionId = connectionId,
-                sequence = nextSequence(),
-                occurredAtEpochMillis = occurredAtEpochMillis,
-                flowId = flowId,
-                flowVersion = 1L,
-                uploadedBytes = uploadedBytes.get(),
-                downloadedBytes = downloadedBytes.get(),
-                outcome = outcome,
-            )
-        )
+        synchronized(monitor) {
+            if (terminal) return
+            terminal = true
+            ingress.tryPublish(CaptureEvent.OpaqueFlowTerminated(
+                sessionId = sessionId, connectionId = connectionId, sequence = nextSequence(),
+                occurredAtEpochMillis = occurredAtEpochMillis, flowId = flowId, flowVersion = ++version,
+                uploadedBytes = uploadedBytes, downloadedBytes = downloadedBytes, outcome = outcome, closure = closure,
+            ))
+        }
         onTerminated()
     }
 
     fun cancelForConnectionClose(reason: TrafficTerminationReason?) {
+        val cancellationReason = synchronized(monitor) {
+            reason ?: if (closure?.reason == com.devuloopers.knet.traffic.model.OpaqueFlowCloseReason.PROXY_STOPPED)
+                TrafficTerminationReason.Lifecycle.PROXY_STOPPED else TrafficTerminationReason.Transport.DOWNSTREAM_CONNECTION_CLOSED
+        }
         terminate(
-            ExchangeTerminalOutcome.Cancelled(
-                reason ?: TrafficTerminationReason.Transport.DOWNSTREAM_CONNECTION_CLOSED,
-            ),
+            ExchangeTerminalOutcome.Cancelled(cancellationReason),
             Clock.System.now().toEpochMilliseconds(),
         )
     }
@@ -755,3 +796,6 @@ private class StreamingReservation(
         }
     }
 }
+
+/** Live metadata cadence shared by every opaque connection in one capture session. */
+private const val OPAQUE_PROGRESS_INTERVAL_MILLIS = 500L

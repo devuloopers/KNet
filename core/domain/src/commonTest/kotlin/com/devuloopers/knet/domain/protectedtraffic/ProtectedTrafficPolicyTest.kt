@@ -10,6 +10,23 @@ class ProtectedTrafficPolicyTest {
     private val policy = ProtectedTrafficPolicy()
 
     @Test
+    fun `imported exact exception stays below a broader explicit manual rule`() {
+        val imported = ProtectedTrafficRule(
+            id = ProtectedTrafficRuleId("imported"), action = ProtectedTrafficAction.TUNNEL,
+            destination = ProtectedDestinationSelector.parse("play.googleapis.com"), port = 443,
+            transport = ProtectedTransportProtocol.TCP, origin = ProtectedTrafficRuleOrigin.MIGRATED_PRESET,
+        )
+        val manual = ProtectedTrafficRule(
+            id = ProtectedTrafficRuleId("manual-wildcard"), action = ProtectedTrafficAction.INSPECT,
+            destination = ProtectedDestinationSelector.parse("*.googleapis.com"),
+        )
+        val configuration = ProtectedTrafficConfiguration(defaultAction = ProtectedTrafficAction.BLOCK, rules = listOf(imported, manual))
+        assertEquals(ProtectedTrafficAction.INSPECT, policy.evaluate(configuration, request(host = "play.googleapis.com")).action)
+        assertEquals(ProtectedTrafficAction.TUNNEL, policy.evaluate(configuration.copy(rules = listOf(imported, manual.copy(enabled = false))),
+            request(host = "play.googleapis.com")).action)
+    }
+
+    @Test
     fun `application rule wins over destination block`() {
         val applicationRule = rule(
             id = "application",

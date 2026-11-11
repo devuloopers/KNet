@@ -6,6 +6,46 @@ Created: 2026-09-30
 
 Target phases: Phase 133 for proxy conditions and Phase 134 for packet/UDP conditions
 
+Execution closure: the [combined completion plan](network_conditions_protected_traffic_completion_plan.md) maps all
+114 test-ledger IDs and unfinished accepted features to work packages C00–C12. Its target is complete software and
+non-physical evidence, with device/platform acceptance remaining as P01. Current implementation status is unchanged.
+
+## Traffic global shortcut checkpoint — 2026-11-10
+
+Traffic now exposes the same global configuration immediately before Auto Scroll through a shell-composed
+Network Conditions control. Master Off preserves saved policy; selecting any existing profile atomically enables
+conditions and selects that default; Domain rules only is available; matching domain/protocol rules retain their
+existing precedence. A quiet action opens the full feature screen for detailed editing.
+
+The feature retains sole policy ownership, while Traffic owns only its toolbar slot and responsive placement.
+The shared ViewModel/repository propagate edits both ways and report failed mutations without optimistic or
+partially enabled state. No capture/filter scoping, new simulator, dependency, or database migration is added.
+Pointer-based Compose tests, compact toolbar renders, ViewModel tests, and real Room persistence/matching tests
+cover the shortcut independently from the packet capability-promotion gates.
+
+The shortcut anchor sizes from its selected label rather than a fixed width or the widest menu option. Theme-scaled
+text measurement includes its icons and shared spacing; KNet motion animates both width directions, and reduced
+motion applies the target width immediately. The Traffic slot bounds long selections while keeping Auto Scroll
+end-aligned and capture controls accessible. Actual Compose frame checks cover these sizing and motion invariants.
+
+## Desktop workspace redesign checkpoint — 2026-11-10
+
+The approved compact workspace supersedes the earlier equal-overview-card layout described below. Global policy
+is presented in a toolbar above one full-width Canvas monitor; Rules and Profiles are separate tabs with bounded,
+virtualized tables. Existing KNet controls and theme tokens are reused, including dropdown overflow, accessible
+switches, tab selection, and visible shared scrollbars. Rule forms keep Save/Cancel outside scrolling content.
+
+All existing shaping and profile functionality is retained. Protocol summaries are derived through the existing
+extension editor contract on configuration updates, not on telemetry ticks. Traffic quick-add returns to Rules,
+manual rules retain the No throttling default, and the packet notice explicitly distinguishes experimental Android
+UDP shaping from unavailable iOS/desktop packet adapters. No dependency, database migration, data-plane change,
+or new product feature is required by the redesign.
+
+Real Compose render tests supplement the existing presentation and ViewModel suites with a minimum-sized desktop
+workspace at increased font scale, 1,000-row virtualization, profile-tab scrolling, overflowed rule forms, actual
+versus reference labels, and empty/bypassed-state assertions. Full keyboard traversal, alternate-platform visual
+qualification, and the physical streaming/packet gates remain independent work.
+
 ## Implementation checkpoint — 2026-10-01
 
 Delivered:

@@ -82,6 +82,12 @@ public data class OpaqueFlowSnapshot(
     public val policyRuleId: String?,
     public val policyAction: OpaqueFlowPolicyAction? = null,
     public val policyGroupId: String? = null,
+    /** Exact policy provenance, null for retained legacy records. */
+    public val protectionOrigin: ProtectionDecisionOrigin? = null,
+    /** Typed failure evidence without exception text or payloads. */
+    public val inspectionFailureReason: InspectionFailureReason? = null,
+    /** Retired automatic identity read from historical captures; never created for new flows. */
+    public val smartEntryId: String? = null,
     public val appliedNetworkCondition: AppliedNetworkCondition? = null,
     public val startedAtEpochMillis: Long,
     public val completedAtEpochMillis: Long?,
@@ -91,6 +97,8 @@ public data class OpaqueFlowSnapshot(
     public val terminalOutcome: ExchangeTerminalOutcome?,
     public val offeredApplicationProtocols: List<String> = emptyList(),
     public val offeredTlsVersions: List<String> = emptyList(),
+    /** First observed closure evidence; null for active/unobserved or historical captures. */
+    public val closure: OpaqueFlowClosure? = null,
 ) {
     init {
         require(serverName == null || serverName.isNotBlank()) { "Opaque-flow server name must not be blank." }

@@ -49,6 +49,25 @@ class TlsClientHelloMetadataParserTest {
         hello.release()
     }
 
+    @Test fun `resumption evidence distinguishes TLS 13 compatibility IDs from offered sessions`() {
+        val versions = extension(43, byteArrayOf(2, 3, 4))
+        fun parse(sessionIdSize: Int, extensions: ByteArray): TlsResumptionOffer {
+            val hello = Unpooled.buffer().apply {
+                writeShort(0x0303); writeZero(32)
+                writeByte(sessionIdSize); writeZero(sessionIdSize)
+                writeShort(2); writeShort(0x1301); writeByte(1); writeByte(0)
+                writeShort(extensions.size); writeBytes(extensions)
+            }
+            return try { TlsClientHelloMetadataParser.parse(hello).resumptionOffer } finally { hello.release() }
+        }
+        assertEquals(TlsResumptionOffer.NONE, parse(32, versions))
+        assertEquals(TlsResumptionOffer.OFFERED, parse(32, versions + extension(41, byteArrayOf(1))))
+        assertEquals(TlsResumptionOffer.OFFERED, parse(16, byteArrayOf()))
+        assertEquals(TlsResumptionOffer.OFFERED, parse(0, extension(35, byteArrayOf(1))))
+        assertEquals(TlsResumptionOffer.NONE, parse(0, extension(35, byteArrayOf())))
+        assertEquals(TlsResumptionOffer.UNKNOWN, parse(0, versions + byteArrayOf(0, 41, 0, 20)))
+    }
+
     private fun extension(type: Int, payload: ByteArray): ByteArray =
         byteArrayOf(
             (type ushr 8).toByte(),

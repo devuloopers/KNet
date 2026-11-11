@@ -23,7 +23,7 @@ import io.netty.handler.ssl.ApplicationProtocolConfig
 import io.netty.handler.ssl.ApplicationProtocolNames
 import io.netty.handler.ssl.ApplicationProtocolNegotiationHandler
 import io.netty.handler.ssl.SslContextBuilder
-import io.netty.handler.timeout.ReadTimeoutHandler
+import com.devuloopers.knet.engine.proxy.pipeline.ProxyTransportIdleHandler
 import io.netty.handler.timeout.WriteTimeoutHandler
 import io.netty.util.ReferenceCountUtil
 import java.io.IOException
@@ -187,7 +187,7 @@ internal class HttpTwoUpstreamConnectionPool(
         val pipeline = channel.pipeline()
         pipeline.addLast(
             PipelineHandlerNames.READ_TIMEOUT,
-            ReadTimeoutHandler(runtimePolicy.readIdleTimeoutMillis, TimeUnit.MILLISECONDS),
+            ProxyTransportIdleHandler(runtimePolicy.readIdleTimeoutMillis, TimeUnit.MILLISECONDS),
         )
         pipeline.addLast(
             PipelineHandlerNames.WRITE_TIMEOUT,

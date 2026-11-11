@@ -147,7 +147,12 @@ class ProtectedTlsTunnelIntegrationTest {
     }
 
     @Test
-    fun `tunnel preserves origin tls and records opaque byte counters`() {
+    fun `tunnel preserves origin tls and records opaque byte counters`() = exerciseTunnel(sendServerName = true)
+
+    @Test
+    fun `IP CONNECT without SNI preserves origin tls and honest absent name metadata`() = exerciseTunnel(sendServerName = false)
+
+    private fun exerciseTunnel(sendServerName: Boolean) {
         val originAuthority = CertificateAuthority.generate(commonName = "Protected origin authority")
         val originLeaf = CertificateCache().get(KNetProxyServer.DEFAULT_BIND_HOST, originAuthority)
         val origin = HttpsServer.create(InetSocketAddress(KNetProxyServer.DEFAULT_BIND_HOST, 0), 0).apply {
@@ -178,7 +183,7 @@ class ProtectedTlsTunnelIntegrationTest {
             ),
             tlsInterceptionPolicy = TlsInterceptionPolicy { request ->
                 policySources += request.sourceApplication?.value
-                if (request.serverName == null) {
+                if (sendServerName && request.serverName == null) {
                     TlsInterceptionDecision(mode = TlsInterceptionMode.INSPECT)
                 } else {
                     TlsInterceptionDecision(
@@ -208,7 +213,7 @@ class ProtectedTlsTunnelIntegrationTest {
                 .socketFactory
                 .createSocket(rawSocket, "localhost", origin.address.port, true) as SSLSocket
             secureSocket.sslParameters = secureSocket.sslParameters.apply {
-                serverNames = listOf(SNIHostName("protected.example.test"))
+                serverNames = if (sendServerName) listOf(SNIHostName("protected.example.test")) else emptyList()
                 applicationProtocols = arrayOf("h2", "http/1.1")
             }
             secureSocket.soTimeout = 10_000
@@ -235,9 +240,11 @@ class ProtectedTlsTunnelIntegrationTest {
             assertEquals("com.example.streaming", capture.metadata?.sourceApplicationId)
             assertTrue(policySources.isNotEmpty())
             assertTrue(policySources.all { it == "com.example.streaming" })
-            assertEquals("protected.example.test", capture.metadata?.serverName)
-            assertEquals(listOf("h2", "http/1.1"), capture.metadata?.offeredApplicationProtocols)
-            assertTrue(capture.metadata?.offeredTlsVersions.orEmpty().isNotEmpty())
+            assertEquals(if (sendServerName) "protected.example.test" else null, capture.metadata?.serverName)
+            if (sendServerName) {
+                assertEquals(listOf("h2", "http/1.1"), capture.metadata?.offeredApplicationProtocols)
+                assertTrue(capture.metadata?.offeredTlsVersions.orEmpty().isNotEmpty())
+            }
             assertTrue(capture.uploaded.get() > 0L)
             assertTrue(capture.downloaded.get() > 0L)
             assertIs<ExchangeTerminalOutcome.Completed>(capture.outcome)

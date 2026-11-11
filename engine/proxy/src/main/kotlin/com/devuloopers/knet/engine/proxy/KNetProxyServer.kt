@@ -45,7 +45,7 @@ import io.netty.handler.logging.LogLevel
 import io.netty.handler.logging.LoggingHandler
 import io.netty.handler.ssl.ApplicationProtocolNames
 import io.netty.handler.ssl.ApplicationProtocolNegotiationHandler
-import io.netty.handler.timeout.ReadTimeoutHandler
+import com.devuloopers.knet.engine.proxy.pipeline.ProxyTransportIdleHandler
 import io.netty.handler.timeout.WriteTimeoutHandler
 import io.netty.util.ResourceLeakDetector
 import io.netty.util.AsciiString
@@ -208,7 +208,7 @@ class KNetProxyServer(
 
                         pipeline.addLast(
                             PipelineHandlerNames.READ_TIMEOUT,
-                            ReadTimeoutHandler(runtimePolicy.readIdleTimeoutMillis, TimeUnit.MILLISECONDS),
+                            ProxyTransportIdleHandler(runtimePolicy.readIdleTimeoutMillis, TimeUnit.MILLISECONDS),
                         )
                         pipeline.addLast(
                             PipelineHandlerNames.WRITE_TIMEOUT,
@@ -237,7 +237,15 @@ class KNetProxyServer(
      * Connectivity adapters may use this boundary after a real network transition. Breakpoint rule
      * changes do not require it because selective decisions are evaluated for each request.
      */
-    fun closeActiveConnections() {
+    fun closeActiveConnections() = closeActiveConnections(com.devuloopers.knet.traffic.model.OpaqueFlowCloseReason.CONNECTIONS_RESET)
+
+    /** Mark local intent on each owning event loop before any channel close listener can publish cancellation. */
+    private fun closeActiveConnections(reason: com.devuloopers.knet.traffic.model.OpaqueFlowCloseReason) {
+        activeChannels.map { channel -> channel.eventLoop().submit {
+            channel.pipeline().get(com.devuloopers.knet.engine.proxy.handler.KNetRawTunnelRelayHandler::class.java)
+                ?.recordLocalClose(reason)
+            channel.close()
+        } }.forEach { submitted -> submitted.syncUninterruptibly() }
         activeChannels.close().syncUninterruptibly()
     }
 
@@ -259,7 +267,7 @@ class KNetProxyServer(
         upstreamAddressResolver = null
         eventLoopLagTask?.cancel(false)
         eventLoopLagTask = null
-        closeActiveConnections()
+        closeActiveConnections(com.devuloopers.knet.traffic.model.OpaqueFlowCloseReason.PROXY_STOPPED)
         httpTwoUpstreamPool?.close()
         httpTwoUpstreamPool = null
         serverChannel?.close()?.syncUninterruptibly()

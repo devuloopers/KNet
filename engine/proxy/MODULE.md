@@ -83,3 +83,29 @@ listener, PING acknowledgement preserves stream admission, and repeated parent-c
 healthy. The root `http2Qualification` task composes these transport tests with canonical model, persistence,
 protocol-lab, API Studio, Traffic, and desktop composition gates; real-device Wi-Fi and release-soak evidence
 remain future maturity work.
+
+## TLS diagnostics and explicit handling
+
+The policy boundary selects Inspect, Tunnel or Block from injected saved/default policy. It has no automatic failure,
+trial-progress or session-reset callbacks. Typed downstream rejection diagnostics retain independently tracked
+certificate-flight evidence: SNI selection, failed writes, unknown providers and potential resumption remain
+inconclusive. Opaque capture records rule/default provenance without temporary automatic identities. Raw relay,
+Network Conditions and terminal accounting remain independent of policy selection.
+
+## Intentional delays and terminal delivery
+
+Transport inactivity observes progress in either direction. Neutral, bounded ownership tokens defer inactivity
+while the simulator or a duplex transform retains intentional work, including linked raw peers and HTTP/2 parents.
+Actual stalled transport writes retain their separate deadline. Raw terminal capture waits for outstanding writes;
+EOF alone cannot report delivery complete or hide a later write failure. These contracts remain engine-owned.
+
+Established opaque CONNECT relays use `rawTunnelIdleTimeoutMillis`, independently of the HTTP/setup inactivity
+deadline. Its default of zero permits quiet reusable TLS connections; it does not disable connect/ClientHello
+deadlines, outstanding-write deadlines or connection admission. Both direct-policy and SNI-selected relay paths
+replace the setup timer on installation. Explicit raw inactivity and write timeouts retain READ_TIMED_OUT and
+WRITE_TIMED_OUT capture reasons; ordinary I/O errors remain failures. See `docs/opaque_tls_lifecycle_reporting.md`.
+
+Raw relay closure attribution records incoming EOF or explicit local close before propagating to its peer.
+Shutdown/reset intent is marked on the owning event loop before channel close listeners can end capture. Generic
+I/O errors and indistinguishable opposite EOFs remain Unknown. Provenance is independent of delivery outcome;
+see `docs/opaque_flow_closure_attribution.md` for signal ownership and qualification.

@@ -137,6 +137,10 @@ public sealed interface CaptureEvent {
         public val policyRuleId: String?,
         public val policyAction: OpaqueFlowPolicyAction? = null,
         public val policyGroupId: String? = null,
+        /** Exact policy provenance, null for retained legacy records. */
+        public val protectionOrigin: ProtectionDecisionOrigin? = null,
+        /** Typed failure evidence without exception text or payloads. */
+        public val inspectionFailureReason: InspectionFailureReason? = null,
         public val appliedNetworkCondition: AppliedNetworkCondition? = null,
         public val offeredApplicationProtocols: List<String> = emptyList(),
         public val offeredTlsVersions: List<String> = emptyList(),
@@ -154,6 +158,34 @@ public sealed interface CaptureEvent {
             }
             require(offeredApplicationProtocols.size <= 16 && offeredTlsVersions.size <= 16)
             require((offeredApplicationProtocols + offeredTlsVersions).all { it.isNotBlank() && it.length <= 255 })
+        }
+    }
+
+    /**
+     * Snapshot of cumulative opaque bytes while a connection remains active; no payload is retained.
+     * @property sessionId Owning capture session.
+     * @property connectionId Transport admission identity.
+     * @property sequence Monotonic per-connection event sequence.
+     * @property occurredAtEpochMillis Time of the latest included byte observation.
+     * @property flowId Stable opaque-flow identity.
+     * @property flowVersion Strictly increasing progress/terminal ordering fence.
+     * @property uploadedBytes Cumulative observed client-to-server bytes, never a delta.
+     * @property downloadedBytes Cumulative observed server-to-client bytes, never a delta.
+     */
+    public data class OpaqueFlowProgress(
+        override val sessionId: CaptureSessionId,
+        override val connectionId: ConnectionId,
+        override val sequence: Long,
+        override val occurredAtEpochMillis: Long,
+        public val flowId: OpaqueFlowId,
+        public val flowVersion: Long,
+        public val uploadedBytes: Long,
+        public val downloadedBytes: Long,
+    ) : CaptureEvent {
+        init {
+            validateEventCoordinates(sequence, occurredAtEpochMillis)
+            require(flowVersion > 0L) { "Opaque-flow progress version must be positive." }
+            require(uploadedBytes >= 0L && downloadedBytes >= 0L) { "Opaque-flow counters must not be negative." }
         }
     }
 
@@ -176,6 +208,8 @@ public sealed interface CaptureEvent {
         public val uploadedBytes: Long,
         public val downloadedBytes: Long,
         public val outcome: ExchangeTerminalOutcome,
+        /** First observed closure evidence; absent when capture ended without a transport observation. */
+        public val closure: OpaqueFlowClosure? = null,
     ) : CaptureEvent {
         init {
             validateEventCoordinates(sequence, occurredAtEpochMillis)

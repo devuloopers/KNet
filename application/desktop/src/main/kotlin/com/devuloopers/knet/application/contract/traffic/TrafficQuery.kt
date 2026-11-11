@@ -209,4 +209,17 @@ public interface TrafficQuery : BodyAccess {
      * The default preserves compatibility for specialized HTTP-only query implementations.
      */
     public suspend fun getOpaqueFlow(flowId: OpaqueFlowId): OpaqueFlowSnapshot? = null
+
+    /** Returns retained, proxy-attributed ingress metadata; unavailable legacy contexts remain unknown. */
+    public suspend fun getConnectionIngress(connectionId: com.devuloopers.knet.traffic.id.ConnectionId): TrafficConnectionIngress? = null
 }
+
+/** Retained admission context used to scope policy presentation without trusting display host strings. */
+public data class TrafficConnectionIngress(
+    /** Ingress established by the proxy or its authorized bridge. */
+    public val ingress: com.devuloopers.knet.traffic.model.IngressContext,
+    /** Actual downstream address recorded when the connection was admitted. */
+    public val downstreamHost: String?,
+    /** Whether the recorded numeric address is loopback; never inferred from a request header. */
+    public val downstreamIsLoopback: Boolean = false,
+)

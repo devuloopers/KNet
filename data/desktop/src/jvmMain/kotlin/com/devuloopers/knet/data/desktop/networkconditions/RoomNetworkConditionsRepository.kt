@@ -11,51 +11,57 @@ import com.devuloopers.knet.domain.networkconditions.NetworkConditionRuleId
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionTarget
 import com.devuloopers.knet.domain.networkconditions.NetworkDirectionCondition
 import com.devuloopers.knet.domain.networkconditions.NetworkFailureBehavior
-import com.devuloopers.knet.storage.networkconditions.dao.NetworkConditionDao
+import com.devuloopers.knet.storage.database.KNetDatabase
 import com.devuloopers.knet.storage.networkconditions.entity.NetworkConditionProfileEntity
 import com.devuloopers.knet.storage.networkconditions.entity.NetworkConditionRuleEntity
 import com.devuloopers.knet.storage.networkconditions.entity.NetworkConditionSettingsEntity
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.CancellationException
 
-/** Room-backed, fail-closed Network Conditions source with atomic validated publication. */
+/**
+ * Room-backed Network Conditions source with committed snapshots and serialized validated mutations.
+ * Invalid stored policy data bypasses shaping without deleting saved rows; mutation validation failures propagate.
+ *
+ * @param database Owns policy tables and transaction-confined connections.
+ * @param scope Application-owned observer lifetime; cancel and join it before closing [database].
+ */
 class RoomNetworkConditionsRepository(
-    private val dao: NetworkConditionDao,
-    scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    private val database: KNetDatabase,
+    scope: CoroutineScope,
 ) : NetworkConditionsRepository {
-    private val mutation = Mutex()
+    private val dao = database.networkConditionDao()
+    private val transactions = NetworkConditionTransactions(database)
 
-    override val configuration: StateFlow<NetworkConditionConfiguration> = combine(
-        dao.observeSettings(),
-        dao.observeProfiles(),
-        dao.observeRules(),
-    ) { settings, profiles, rules ->
-        runCatching {
-            NetworkConditionConfiguration(
-                enabled = settings?.enabled ?: false,
-                globalProfileId = settings?.globalProfileId?.let(::NetworkConditionProfileId),
-                customProfiles = profiles.map(NetworkConditionProfileEntity::toDomain),
-                rules = rules.map(NetworkConditionRuleEntity::toDomain),
-                lastQuickAddProfileId = settings?.lastQuickAddProfileId?.let(::NetworkConditionProfileId),
-            )
-        }.getOrElse { NetworkConditionConfiguration() }
+    override val configuration: StateFlow<NetworkConditionConfiguration> = database.invalidationTracker.createFlow(
+        "network_condition_settings", "network_condition_profiles", "network_condition_rules",
+    ).map {
+        // Independently combined table flows can pair settings with an older profile/rule emission.
+        // One read transaction instead publishes only a committed, internally consistent policy.
+        transactions.read {
+            runCatching { persistentConfiguration() }.getOrElse { failure ->
+                if (failure is CancellationException) throw failure
+                NetworkConditionConfiguration()
+            }
+        }
     }.stateIn(scope, SharingStarted.Eagerly, NetworkConditionConfiguration())
 
     override suspend fun setEnabled(enabled: Boolean) = updateSettings { it.copy(enabled = enabled) }
 
-    override suspend fun setGlobalProfile(profileId: NetworkConditionProfileId?) = mutation.withLock {
+    override suspend fun setGlobalProfile(profileId: NetworkConditionProfileId?) = writePolicy {
         require(profileId == null || persistentConfiguration().profile(profileId) != null) { "Unknown global profile." }
         dao.upsertSettings(settings().copy(globalProfileId = profileId?.value))
     }
 
-    override suspend fun upsertProfile(profile: NetworkConditionProfile) = mutation.withLock {
+    override suspend fun activateGlobalProfile(profileId: NetworkConditionProfileId?) = writePolicy {
+        require(profileId == null || persistentConfiguration().profile(profileId) != null) { "Unknown global profile." }
+        dao.upsertSettings(settings().copy(enabled = true, globalProfileId = profileId?.value))
+    }
+
+    override suspend fun upsertProfile(profile: NetworkConditionProfile) = writePolicy {
         require(!profile.builtIn) { "Built-in profiles cannot be overwritten." }
         val state = persistentConfiguration()
         val candidate = state.customProfiles.filterNot { it.id == profile.id } + profile
@@ -69,9 +75,9 @@ class RoomNetworkConditionsRepository(
         dao.upsertProfile(profile.toEntity())
     }
 
-    override suspend fun deleteProfile(profileId: NetworkConditionProfileId): Boolean = mutation.withLock {
+    override suspend fun deleteProfile(profileId: NetworkConditionProfileId): Boolean = writePolicy {
         val state = persistentConfiguration()
-        if (state.globalProfileId == profileId || state.rules.any { it.profileId == profileId }) return@withLock false
+        if (state.globalProfileId == profileId || state.rules.any { it.profileId == profileId }) return@writePolicy false
         if (state.lastQuickAddProfileId == profileId) {
             dao.upsertSettings(settings().copy(lastQuickAddProfileId = null))
         }
@@ -79,7 +85,7 @@ class RoomNetworkConditionsRepository(
         true
     }
 
-    override suspend fun upsertRule(rule: NetworkConditionRule) = mutation.withLock {
+    override suspend fun upsertRule(rule: NetworkConditionRule) = writePolicy {
         val state = persistentConfiguration()
         require(state.profile(rule.profileId) != null) { "Unknown rule profile." }
         val candidate = state.rules.filterNot { it.id == rule.id } + rule
@@ -89,11 +95,11 @@ class RoomNetworkConditionsRepository(
         dao.upsertRule(rule.toEntity())
     }
 
-    override suspend fun deleteRule(ruleId: NetworkConditionRuleId) = mutation.withLock {
+    override suspend fun deleteRule(ruleId: NetworkConditionRuleId) = writePolicy {
         dao.deleteRule(ruleId.value)
     }
 
-    override suspend fun setLastQuickAddProfile(profileId: NetworkConditionProfileId?) = mutation.withLock {
+    override suspend fun setLastQuickAddProfile(profileId: NetworkConditionProfileId?) = writePolicy {
         require(profileId == null || persistentConfiguration().profile(profileId) != null) { "Unknown quick-add profile." }
         dao.upsertSettings(settings().copy(lastQuickAddProfileId = profileId?.value))
     }
@@ -101,8 +107,12 @@ class RoomNetworkConditionsRepository(
     override suspend fun resetShaping() = updateSettings { it.copy(enabled = false, globalProfileId = null) }
 
     private suspend fun updateSettings(transform: (NetworkConditionSettingsEntity) -> NetworkConditionSettingsEntity) {
-        mutation.withLock { dao.upsertSettings(transform(settings())) }
+        writePolicy { dao.upsertSettings(transform(settings())) }
     }
+
+    /** Serializes validation/read/modify/write across repository instances and rolls back on cancellation. */
+    private suspend fun <Result> writePolicy(block: suspend () -> Result): Result =
+        transactions.write(block)
 
     private suspend fun settings(): NetworkConditionSettingsEntity =
         dao.getSettings() ?: NetworkConditionSettingsEntity(

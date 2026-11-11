@@ -2,7 +2,9 @@ package com.devuloopers.knet.companion.connectivity.transport
 
 import android.content.Context
 import com.devuloopers.knet.companion.application.contract.CompanionInspectionConfiguration
+import com.devuloopers.knet.companion.application.contract.PacketPolicyUpdateResult
 import com.devuloopers.knet.companion.model.CompanionInspectionMode
+import com.devuloopers.knet.companion.model.PacketConditionConfiguration
 import java.io.File
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.Dispatchers
@@ -33,6 +35,11 @@ public enum class AndroidSourceAttributionCapability {
 
 /** Replaceable Android TUN forwarding boundary owned by the product's VPN service. */
 public interface AndroidTunForwarder {
+    /** Applies live policy when the implementation supplies that capability. Older adapters report unsupported. */
+    public suspend fun updatePacketConditions(
+        configuration: PacketConditionConfiguration,
+    ): PacketPolicyUpdateResult = PacketPolicyUpdateResult.UNSUPPORTED
+
     /** Whether this data plane preserves the original tuple required for package attribution. */
     public val sourceAttributionCapability: AndroidSourceAttributionCapability
         get() = AndroidSourceAttributionCapability.TRANSLATED_SOCKET_ONLY
@@ -74,6 +81,15 @@ public class PlatformAndroidTunForwarder internal constructor(
 
     private val lifecycleLock: Mutex = Mutex()
     private var active: ActiveForwarding? = null
+
+    /** Serializes live updates with startup/teardown while keeping each existing association alive. */
+    override suspend fun updatePacketConditions(
+        configuration: PacketConditionConfiguration,
+    ): PacketPolicyUpdateResult = lifecycleLock.withLock {
+        val current = active ?: return@withLock PacketPolicyUpdateResult.INACTIVE
+        current.socks.updatePacketConditions(configuration)
+        PacketPolicyUpdateResult.APPLIED
+    }
 
     /** Starts one forwarding session over an already-established [tunFileDescriptor]. */
     override suspend fun start(

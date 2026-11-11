@@ -65,3 +65,16 @@ that prototype document row with the neutral `api_studio_workspace_documents` ta
 saved-collection placement for any contributed editor while keeping schema sources independent. This development
 schema intentionally requires no compatibility model for the discarded v24 prototype rows.
 Breakpoint queries return priority then ID order so persistence and live rule evaluation share one stable order.
+
+## Retired automatic compatibility storage
+
+Schema 33 added the automatic setting and nullable origin/reason/temporary-identity fields; schema 34 imported enabled
+legacy presets as saved exceptions. These schema versions and columns remain for compatible upgrades and historical
+captures. Runtime policy ignores the retired automatic setting; retained historical SMART evidence does not create
+rules. New captures have no temporary decision identity. No destructive migration or history rewrite is required.
+
+Opaque progress updates existing counters/version only while ACTIVE, with monotonic counters and terminal-state guards. Opaque feed invalidation uses the sum of versions so another flow cannot hide an update. No schema migration is required.
+
+Schema 35 separately adds nullable closure owner/reason/observation-time columns. Migration 34 to 35 preserves
+retained captures without fabricating close evidence. The guarded opaque terminal update commits provenance with
+final counters atomically; later progress or terminal events cannot replace it. See `docs/opaque_flow_closure_attribution.md`.

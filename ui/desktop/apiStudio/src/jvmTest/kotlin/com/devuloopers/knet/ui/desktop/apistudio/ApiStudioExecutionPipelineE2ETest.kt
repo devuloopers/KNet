@@ -293,6 +293,10 @@ private class TestNetworkConditionsRepository(
         configuration.value = configuration.value.copy(globalProfileId = profileId)
     }
 
+    override suspend fun activateGlobalProfile(profileId: NetworkConditionProfileId?) {
+        configuration.value = configuration.value.copy(enabled = true, globalProfileId = profileId)
+    }
+
     override suspend fun upsertProfile(profile: NetworkConditionProfile) {
         configuration.value = configuration.value.copy(
             customProfiles = configuration.value.customProfiles.filterNot { it.id == profile.id } + profile,

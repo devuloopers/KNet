@@ -31,6 +31,7 @@ class KNetInspectionVpnService : VpnService(), AndroidSocketProtector {
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val lifecycleLock = Mutex()
     private var tunDescriptor: ParcelFileDescriptor? = null
+    private var packetPolicyJob: Job? = null
 
     private val coordinator: AndroidInspectionRuntimeCoordinator
         get() = GlobalContext.get().get()
@@ -109,6 +110,12 @@ class KNetInspectionVpnService : VpnService(), AndroidSocketProtector {
             return@withLock
         }
         KNetLogger.info(LogTags.PROXY) { "companion_event=inspection_started mode=device_vpn" }
+        // Exactly one refresh owner per running service session; it is cancelled before native teardown.
+        packetPolicyJob = serviceScope.launch {
+            val maintain = GlobalContext.get().get<com.devuloopers.knet.companion.application.usecase.MaintainCompanionPacketPolicyUseCase>()
+            maintain.execute(request.configuration.registration, request.configuration.packetConditions,
+                com.devuloopers.knet.companion.application.contract.CompanionPacketPolicySink(forwarder::updatePacketConditions))
+        }
     }
 
     private fun establishInterface(): ParcelFileDescriptor? = try {
@@ -138,6 +145,8 @@ class KNetInspectionVpnService : VpnService(), AndroidSocketProtector {
 
     private suspend fun stopInspectionResources() {
         val hadResources = tunDescriptor != null
+        packetPolicyJob?.cancelAndJoin()
+        packetPolicyJob = null
         forwarder.stop()
         runCatching { tunDescriptor?.close() }
         tunDescriptor = null
