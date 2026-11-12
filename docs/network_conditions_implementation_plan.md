@@ -12,9 +12,49 @@ non-physical evidence, with device/platform acceptance remaining as P01. Current
 
 ## Traffic global shortcut checkpoint — 2026-11-10
 
+### Header and scrollbar follow-up — 2026-11-12
+
+Status: **IMPLEMENTED; RENDER AND REGRESSION QUALIFICATION PASSES**
+
+Rules and Profiles supply a separate header slot to the shared table viewport. Header surfaces now extend across
+the complete visible width, including the scrollbar lane. The vertical track starts below the measured header
+and ends above any horizontal scrollbar; header and body retain one horizontal scroll state and matching column
+widths. Short tables reserve no unused scrollbar space. Protected Traffic inherits the same shared behavior.
+
+The rendered regression first reproduced the previous right-edge gap. All 119 relevant UI tests passed, including
+normal/larger text, narrow/wide scrolling, header/body alignment and absent-gutter cases. Desktop and UI-core
+Android/iOS simulator compilation, all six architecture checks, ledger validation and git diff --check passed.
+Actual renders were reviewed without launching the desktop app. Evidence:
+`/tmp/knet-table-header-scrollbar-verification.log` and `/tmp/knet-table-header-scrollbar-summary.json`.
+
+### Preset cleanup follow-up — 2026-11-12
+
+Status: **IMPLEMENTED; REGRESSION AND PERSISTENCE QUALIFICATION PASSES**
+
+The workspace and Traffic shortcut now present one No throttling choice, using the name from the profile list
+rather than a separate global label. Both existing null and
+no-throttling global selections map to this choice without a read-time persistence change; explicitly choosing it
+uses the existing null-global command. No throttling remains a built-in profile for rule exceptions and the
+default for new rules. Custom profiles, saved rules, enablement and existing matcher precedence are retained.
+Graph reference presentation also treats both unlimited defaults consistently.
+
+Lossy / unstable is renamed Unstable connection, retaining the lossy-unstable ID, delay/jitter, seeded flow resets
+and packet-adapter parameters. No profile is deleted from persisted policy, and no database migration is needed.
+The old unreferenced simulator catalog/manager/handler/profile/statistics path and its implementation-only tests
+are retired. Current-engine aggregate timing, socket, EOF, queue, ownership and fault tests remain the simulator
+qualification source.
+
+All 222 relevant tests passed with zero failures/errors/skips across domain, current simulator, Room network
+conditions, Network Conditions UI and app shell. Desktop compilation, all six architecture checks, ledger
+validation and git diff --check passed. Actual selector renders were reviewed. Verification used isolated
+outputs and temporary test databases without launching the desktop app. Evidence:
+`/tmp/knet-preset-cleanup-verification.log` and `/tmp/knet-preset-cleanup-verification-summary.json`.
+
+The following checkpoint describes the retained Traffic shortcut behavior after this follow-up.
+
 Traffic now exposes the same global configuration immediately before Auto Scroll through a shell-composed
 Network Conditions control. Master Off preserves saved policy; selecting any existing profile atomically enables
-conditions and selects that default; Domain rules only is available; matching domain/protocol rules retain their
+conditions and selects that default; No throttling is available; matching domain/protocol rules retain their
 existing precedence. A quiet action opens the full feature screen for detailed editing.
 
 The feature retains sole policy ownership, while Traffic owns only its toolbar slot and responsive placement.
@@ -45,6 +85,128 @@ Real Compose render tests supplement the existing presentation and ViewModel sui
 workspace at increased font scale, 1,000-row virtualization, profile-tab scrolling, overflowed rule forms, actual
 versus reference labels, and empty/bypassed-state assertions. Full keyboard traversal, alternate-platform visual
 qualification, and the physical streaming/packet gates remain independent work.
+
+## Approved panel refresh — 2026-11-12
+
+Status: **IMPLEMENTED; RENDER AND REGRESSION QUALIFICATION PASSES**
+
+The approved proposal is applied only to the Network Conditions destination. The global selector and configured
+rates/latency/jitter/MTU/fault summary form one KNet surface. A second surface groups the measured throughput graph,
+current series readings and live counters. Rules/Profiles use the existing selectable KNet tabs with a local selected
+underline, one contextual add action and the shared virtualized table viewport. Empty rules occupy a bounded panel.
+The bottom Android UDP/packet-capability notice is removed at the user's request; underlying capability declarations
+and profile parameters retain their existing meanings.
+
+The screen uses UI-core window classes, spacing, surfaces, typography, borders, dropdowns and table overflow.
+Compact heights condense header copy and runtime metrics so rule rows remain accessible. Chart paths remain measured
+straight-line segments; subtle fills close only contiguous valid intervals and never bridge missing samples. The
+axis gutter uses theme-scaled text measurement so larger labels remain separate from the plot. Equal configured
+upload/download references share one label; mixed-domain profiles still omit a misleading aggregate limit.
+
+This UI work changes no navigation, Traffic shortcut, editor actions, persistence, shaping or telemetry timing.
+Headless real-Compose checks cover the approved wide composition, 1.5x text, compact 976x560 layout at 1.25x text,
+1,000 virtualized rules, profile editing protections, dropdown selection, measured/reference values and footer
+removal. The generated mockup's illustrative graph is represented in tests by explicit fixture measurements;
+production continues to show actual telemetry.
+
+All 42 module tests passed with zero failures, errors or skipped cases. The final verification run passed in 28s,
+including desktop compilation, all six architecture checks and ledger validation. `git diff --check` passed.
+Wide, compact, 1.5x text, profile-list and editor renders were inspected using the actual Compose output under
+`ui/desktop/networkConditions/build/reports/network-conditions-ui/`. The main accepted-layout render is
+`approved-workspace.png`; `compact-rules.png` verifies visible rule rows at minimum desktop size and
+`approved-larger-text.png` verifies the font-scaled chart gutter. Log: `/tmp/knet-network-conditions-design-final.log`.
+No desktop application or user database was opened. Verification ran:
+
+```shell
+./gradlew --init-script /tmp/knet-traffic-inspector-20261110.init.gradle.kts \
+  :ui:desktop:networkConditions:jvmTest :products:desktop:compileKotlin \
+  verifyArchitectureFoundation verifyNetworkProtectionLedger \
+  --max-workers=3 --no-daemon --no-configuration-cache --console=plain
+```
+
+### Three-tab workspace follow-up — 2026-11-12
+
+Status: **IMPLEMENTED; RENDER AND REGRESSION QUALIFICATION PASSES**
+
+The approved follow-up moves the graph and runtime counters into a default Overview tab. Rules and Profiles each
+receive the complete remaining table viewport, while title, global-profile settings, master enable and Reset stay
+shared above the tab row. Overview has no unrelated add action; Rules exposes Add rule and Profiles exposes New
+custom profile. Its graph flexes to the available panel height using the existing bounded Canvas implementation.
+
+The screen continues owning one monitoring lifecycle, independently of tab composition. Returning to Overview
+shows the accumulated window, and a bounded saveable-state holder restores each list's scroll position. Traffic
+quick-add, manual add and rule editing explicitly select Rules. No persistence schema or shaping behavior changes.
+
+Headless checks exercise all three tabs at wide and minimum desktop sizes, verify more than half the viewport
+is available to each table, scroll a 1,000-rule list, switch away/back and confirm restoration, and assert shared
+controls, contextual actions and removed footer. ViewModel checks cover Overview's default, samples collected while
+other tabs are active, unchanged policy and Traffic quick-add routing. Existing measured/reference, larger-text,
+profile protections, editor overflow and graph-cadence regressions remain part of the module gate.
+
+The run passed in 40s: all 43 Network Conditions tests, desktop compilation and all six architecture checks.
+XML reports contain zero failures/errors/skips, and `git diff --check` passed. Actual Overview and full-height
+Rules/Profiles renders were inspected, including 976x560 at 1.25x text and the wide/larger-text monitor. Scene tests
+confirm both table bodies use more than half the window height and restore the scrolled rule after an Overview
+round trip. ViewModel tests confirm two elapsed samples survive Profiles/Rules/Overview navigation unchanged.
+
+Evidence: `/tmp/knet-network-conditions-three-tabs-verification.log` and module XML reports in the isolated build
+root. Render outputs under `ui/desktop/networkConditions/build/reports/network-conditions-ui/` include
+`approved-workspace.png` and `three-tabs-{overview,rules,profiles}-{1440,976}.png`. No desktop application or user
+database was opened. Verification used:
+
+```shell
+./gradlew --init-script /tmp/knet-traffic-inspector-20261110.init.gradle.kts \
+  :ui:desktop:networkConditions:jvmTest :products:desktop:compileKotlin verifyArchitectureFoundation \
+  --max-workers=3 --no-daemon --no-configuration-cache --console=plain
+```
+
+### Traffic actual-throughput footer — 2026-11-12
+
+Status: **IMPLEMENTED; REGRESSION QUALIFICATION PASSES**
+
+Traffic's existing statistics footer hosts a compact feature-owned Download/Upload reading beside its row-size
+total. Blue/green direction icons, tabular figures and a stable normal-value width follow the approved proposal.
+The row count and byte total retain their filtered-list meaning; rates come from all actual forwarding measured by
+KNet, independently of row filters, shaping enablement or capture attachment. They do not claim total NIC/device
+bandwidth. Starting/invalid readings show a dash; valid idle readings show zero. Both Overview and the footer use
+the same sampler and decimal bit-rate formatter, including sub-kbps and fractional Mbps values.
+
+The label-spacing follow-up keeps values start-aligned within their reserved slots, leaving only the shared small
+label gap. Spare width follows short values instead of appearing before them. All 16 app-shell regressions and
+desktop compilation passed in 21s; the idle footer render was inspected. This retains normal value-width stability
+and the existing footer height/overflow behavior. Log: `/tmp/knet-throughput-label-spacing-final.log`.
+
+The shell owns one monitoring composition outside its destination switch. It stays active across Traffic and
+Network Conditions, preserving the bounded history without duplicate subscriptions. Leaving both stops work;
+returning establishes a fresh baseline instead of displaying an obsolete instantaneous speed. Clicking the reading
+selects Overview before navigation. An unfinished rule draft remains retained for its Rules tab rather than
+obscuring the monitor or being discarded.
+
+Traffic receives only an optional composition slot; it gains no dependency on the Network Conditions feature,
+repository or engine. UI core owns the existing 48dp statistics-row height and intrinsic-width horizontal overflow,
+including its pinned scrollbar. No inline graph, extra toolbar control, new measurement engine or storage schema
+is added. Tests cover real footer composition, navigation, waiting/idle/invalid states, conditions Off, filtered
+counts, value-width stability, narrow larger-text overflow, shared-host subscription counts, handoff continuity,
+departure/disposal and formatter extremes. Cross-platform UI-core compilation accompanies the desktop checks.
+
+The final run passed in 45s: **164 tests** across UI core (21), Network Conditions (45), Traffic (82) and app shell
+(16), with zero failures, errors or skipped tests. Desktop compilation, UI-core Android/iOS simulator compilation,
+all six architecture checks, ledger validation and `git diff --check` passed. Live and narrow/larger-text footer
+renders were inspected. This does not replace physical-device throughput acceptance; automated rendering uses
+explicit fixture measurements and lifecycle tests derive rates from cumulative counter observations.
+
+Evidence: `/tmp/knet-traffic-throughput-final-verification.log`,
+`/tmp/knet-traffic-throughput-verification-summary.json`, and actual render fixtures
+`ui/desktop/app/build/reports/network-conditions-ui/traffic-throughput-{live,narrow}.png`. Verification used isolated
+outputs and did not launch the desktop app or mutate its user database:
+
+```shell
+./gradlew --init-script /tmp/knet-traffic-inspector-20261110.init.gradle.kts \
+  :ui:core:jvmTest :ui:desktop:networkConditions:jvmTest :ui:desktop:traffic:jvmTest :ui:desktop:app:jvmTest \
+  :products:desktop:compileKotlin :ui:core:compileAndroidMain :ui:core:compileKotlinIosSimulatorArm64 \
+  verifyArchitectureFoundation verifyNetworkProtectionLedger \
+  --max-workers=3 --no-daemon --no-configuration-cache --console=plain
+```
 
 ## Implementation checkpoint — 2026-10-01
 
@@ -92,6 +254,43 @@ Delivered:
 
 Physical streaming observation and profiler captures remain part of the broader capability-promotion acceptance gates;
 they are not required for retaining the bounded 60-sample graph implementation.
+
+<a id="graph-clock-repair"></a>
+
+### Graph-clock repair — 2026-11-12
+
+Status: **IMPLEMENTED; REGRESSION QUALIFICATION PASSES**
+
+Shaped reservations and scheduler faults were publishing extra runtime snapshots between the existing one-second
+ticks. The graph appended one point per observation, so enabling a rate/latency profile could consume its history
+at chunk frequency. This also allocated snapshots on the transport path despite the intended telemetry contract.
+Both failures were reproduced with new tests before the production correction.
+
+Scheduler events now update counters only. The existing subscriber-owned timer publishes aggregates independently
+of the active profile. The graph additionally coalesces extra readings until a full monotonic second has elapsed,
+keeping the cumulative baseline so every transferred byte remains in the measured rate. Duplicate/stale timestamps
+do not consume history, subsecond counter resets invalidate the interval, and late ticks leave bounded gaps rather
+than compressing elapsed seconds. The 60-slot primitive history and screen monitoring lifecycle remain bounded.
+
+Regressions cover 6,000 chunk observations over 60 seconds, independent measured upload/download rates, disabled to
+4G to 100 kbps to disabled transitions, fault/delay counter totals, absence of work without subscribers, duplicate
+and backward timestamps, reset recovery, large gaps and navigation restart. No chart dependency or animation
+workaround is added; configured references and bandwidth shaping retain their existing meaning. Verification uses
+isolated Gradle outputs and does not launch the desktop app.
+
+The final run passed in 1m 13s: 59 simulator tests and 41 Network Conditions UI tests, with zero failures, errors
+or skipped tests. Existing simulator suites include local real-socket shaping and SSE checks; workspace renders
+and lifecycle tests also remain green. Desktop compilation, all six architecture checks, ledger validation and
+`git diff --check` passed. Evidence: `/tmp/knet-graph-cadence-reproduction.log` contains both pre-fix failures;
+`/tmp/knet-graph-cadence-verification.log` and `/tmp/knet-graph-cadence-verification-summary.json` record the final
+run and independent XML totals. Physical visual confirmation requires rebuilding/relaunching the desktop app.
+
+```shell
+./gradlew --init-script /tmp/knet-traffic-inspector-20261110.init.gradle.kts \
+  :engine:simulator:test :ui:desktop:networkConditions:jvmTest :products:desktop:compileKotlin \
+  verifyArchitectureFoundation verifyNetworkProtectionLedger \
+  --max-workers=3 --no-daemon --no-configuration-cache --console=plain
+```
 
 ### Decision and measurement contract
 
@@ -448,9 +647,9 @@ Replace the current prototype global handler with a bounded, direction-aware sha
 - cancellation, shutdown, and timer cleanup;
 - runtime counters that contain no sensitive request payloads.
 
-`NetworkSimulatorManager` and `KNetNetworkSimulatorHandler` are migration inputs, not the final public contract.
-The current single symmetric profile, per-channel traffic shaper, and arbitrary Netty-message drop behaviour are
-not sufficient for production semantics.
+`NetworkSimulatorManager` and `KNetNetworkSimulatorHandler` were migration inputs and were removed with the
+unused legacy catalog on 2026-11-12. The canonical NetworkConditionEngine and NetworkConditionBuiltIns own the
+production path; the old symmetric, per-channel shaper and arbitrary Netty-message drops are no longer present.
 
 ### `:engine:proxy` and protocol engines
 

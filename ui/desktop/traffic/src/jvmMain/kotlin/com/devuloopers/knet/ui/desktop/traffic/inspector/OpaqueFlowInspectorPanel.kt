@@ -18,10 +18,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import com.devuloopers.knet.application.usecase.protectedtraffic.ProtectedTrafficFlowHandling
 import com.devuloopers.knet.domain.protectedtraffic.*
 import com.devuloopers.knet.traffic.model.*
-import com.devuloopers.knet.ui.core.components.badge.KNetBadge
 import com.devuloopers.knet.ui.core.components.button.*
 import com.devuloopers.knet.ui.core.components.divider.HorizontalDivider
-import com.devuloopers.knet.ui.core.components.inspector.KNetInspectorContent
+import com.devuloopers.knet.ui.core.components.inspector.*
 import com.devuloopers.knet.ui.core.components.inspector.KNetInspectorActions
 import com.devuloopers.knet.ui.core.components.inspector.KNetInspectorParagraph
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
@@ -40,29 +39,30 @@ internal fun OpaqueFlowInspectorPanel(flow: TrafficRowUiState, state: TrafficPro
         ?: TrafficProtectionState(isLoading = true)
     var expanded by remember(flow.transactionId) { mutableStateOf(false) }
     val diagnostic = opaqueDiagnostic(flow)
-    KNetInspectorContent(modifier.testTag("Opaque flow inspector")) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
-            Icon(KNetIcons.Shield, null, Modifier.size(KNetTheme.dimensions.iconSizeLarge), tint = colors.textSecondary)
-            InspectorText(if (flow.opaqueSecurity == OpaqueSecurityProtocol.TLS) "TLS connection" else "Transport connection",
-                Modifier.weight(1f), KNetTheme.typography.titleMedium)
-
-        }
-        Column(verticalArrangement = Arrangement.spacedBy(spacing.sm)) {
-            InspectorText(flow.host, style = KNetTheme.typography.titleLarge)
-            KNetBadge(flow.displayStatusLabel, containerColor = if (diagnostic.failure) colors.semantic.errorContainer else colors.surfaceVariant,
-                contentColor = if (diagnostic.failure) colors.semantic.error else colors.textSecondary)
-        }
+    val tls = flow.opaqueSecurity == OpaqueSecurityProtocol.TLS
+    Column(modifier.testTag("Opaque flow inspector")) {
+        KNetInspectorSummaryHeader(KNetInspectorSummary(
+            badge = if (tls) "TLS" else flow.opaqueSecurity?.name?.takeIf { it != "UNKNOWN" } ?: flow.opaqueTransport?.name ?: "Transport",
+            title = flow.host,
+            subtitle = if (tls) "TLS connection" else "Transport connection · metadata only",
+            copyValue = flow.host,
+            metrics = listOf(KNetInspectorMetric("State", flow.displayStatusLabel,
+                if (diagnostic.failure) KNetInspectorTone.ERROR else KNetInspectorTone.INFO),
+                KNetInspectorMetric("Uploaded", formatOpaqueBytes(flow.transferredBytes - flow.responseBytes)),
+                KNetInspectorMetric("Downloaded", formatOpaqueBytes(flow.responseBytes))),
+        ))
+        KNetInspectorContent(Modifier.weight(1f).fillMaxWidth(), contentIdentity = flow.transactionId) {
         Column(verticalArrangement = Arrangement.spacedBy(spacing.sm)) {
             InspectorText(if (diagnostic.failure) "WHY IT FAILED" else "ABOUT THIS CONNECTION",
                 style = KNetTheme.typography.caption, color = colors.textMuted)
             KNetInspectorParagraph(diagnostic.title, style = KNetTheme.typography.titleMedium, color = colors.textPrimary)
             KNetInspectorParagraph(diagnostic.explanation)
             diagnostic.evidence?.let { KNetInspectorParagraph(it, color = if (diagnostic.failure) colors.semantic.error else colors.textSecondary) }
-            if (flow.protectionOrigin == ProtectionDecisionOrigin.AUTOMATIC)
+            if (tls && flow.protectionOrigin == ProtectionDecisionOrigin.AUTOMATIC)
                 KNetInspectorParagraph("Automatically tunnelled — device rejected KNet’s certificate. This temporary decision preserves encryption; it does not prove certificate pinning.")
             diagnostic.possibleCauses?.let { KNetInspectorParagraph(it, style = KNetTheme.typography.caption) }
         }
+        if (tls && flow.opaqueTransport == OpaqueTransportProtocol.TCP) {
         HorizontalDivider()
         Column(verticalArrangement = Arrangement.spacedBy(spacing.md)) {
             InspectorText("Future connections", style = KNetTheme.typography.titleMedium)
@@ -106,19 +106,8 @@ internal fun OpaqueFlowInspectorPanel(flow: TrafficRowUiState, state: TrafficPro
             }
         }
         HorizontalDivider()
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(spacing.md)) {
-            Metric("Duration", flow.formattedTime, Modifier.weight(1f))
-            Metric("Uploaded", formatOpaqueBytes(flow.transferredBytes - flow.responseBytes), Modifier.weight(1f))
-            Metric("Downloaded", formatOpaqueBytes(flow.responseBytes), Modifier.weight(1f))
         }
-        KNetButton(onClick = { expanded = !expanded }, variant = ButtonVariant.Ghost, modifier = Modifier.fillMaxWidth()) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
-                Icon(if (expanded) KNetIcons.ChevronDown else KNetIcons.ChevronRight, null,
-                    Modifier.size(KNetTheme.dimensions.iconSizeMedium))
-                InspectorText("Technical details")
-            }
-        }
+        KNetInspectorDisclosure("Technical details", expanded, { expanded = !expanded })
         if (expanded) Column(verticalArrangement = Arrangement.spacedBy(spacing.md), modifier = Modifier.testTag("Opaque technical details")) {
             if (flow.terminalOutcome != null) {
                 Detail("Closed by", when (flow.closure?.initiator) {
@@ -134,6 +123,7 @@ internal fun OpaqueFlowInspectorPanel(flow: TrafficRowUiState, state: TrafficPro
                 KNetInspectorParagraph("Identifies the first close signal observed by KNet; the remote app’s reason remains unknown.",
                     style = KNetTheme.typography.caption)
             }
+            Detail("Duration", flow.formattedTime)
             Detail("Captured policy action", flow.policyAction?.name ?: "Unavailable")
             Detail("Captured decision source", flow.protectionOrigin?.let { when (it) {
                 ProtectionDecisionOrigin.AUTOMATIC -> "Automatic certificate-rejection fallback"
@@ -154,12 +144,22 @@ internal fun OpaqueFlowInspectorPanel(flow: TrafficRowUiState, state: TrafficPro
         }
     }
 }
+}
 
 /** Only typed captured evidence can select a certificate rejection diagnosis. */
 internal data class OpaqueDiagnostic(val title: String, val explanation: String, val failure: Boolean,
     val evidence: String? = null, val possibleCauses: String? = null)
 
 internal fun opaqueDiagnostic(flow: TrafficRowUiState): OpaqueDiagnostic {
+    if (flow.policyAction == OpaqueFlowPolicyAction.BLOCK)
+        return OpaqueDiagnostic("Connection blocked by policy", "KNet blocked this flow before forwarding application data.", false)
+    if (flow.opaqueSecurity != OpaqueSecurityProtocol.TLS) {
+        val failed = flow.terminalOutcome is ExchangeTerminalOutcome.Failed
+        return OpaqueDiagnostic(if (failed) "Transport connection failed" else "Transport metadata only",
+            if (flow.opaqueSecurity == OpaqueSecurityProtocol.QUIC)
+                "QUIC traffic remains encrypted. KNet exposes captured transport metadata; decrypted HTTP/3 requests and responses are unavailable."
+            else "KNet retained destination, timing and byte counts. No decoded application payload is available for this flow.", failed)
+    }
     if (flow.policyAction == OpaqueFlowPolicyAction.TUNNEL || flow.policyAction == OpaqueFlowPolicyAction.BYPASS)
         return when ((flow.terminalOutcome as? ExchangeTerminalOutcome.Failed)?.reason) {
             TrafficTerminationReason.Transport.READ_TIMED_OUT -> OpaqueDiagnostic("Tunnel inactivity timeout",
@@ -285,14 +285,6 @@ private fun Detail(label: String, value: String) {
     Column(verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xs)) {
         InspectorText(label, style = KNetTheme.typography.caption, color = KNetTheme.colors.textMuted)
         KNetInspectorParagraph(value, color = KNetTheme.colors.textPrimary)
-    }
-}
-
-@Composable
-private fun Metric(label: String, value: String, modifier: Modifier) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xs)) {
-        InspectorText(label, style = KNetTheme.typography.caption, color = KNetTheme.colors.textMuted)
-        InspectorText(value)
     }
 }
 

@@ -38,6 +38,8 @@ object KNetIcons {
     val Folder: ImageVector = Icons.Default.Folder
     val FolderOpen: ImageVector = Icons.Default.FolderOpen
     val Download: ImageVector = Icons.Default.FileDownload
+    /** Upstream/upload direction, paired with the existing download icon. */
+    val Upload: ImageVector = Icons.Default.FileUpload
     val History: ImageVector = Icons.Default.History
     val Save: ImageVector = Icons.Default.Save
     val Code: ImageVector = Icons.Default.Code

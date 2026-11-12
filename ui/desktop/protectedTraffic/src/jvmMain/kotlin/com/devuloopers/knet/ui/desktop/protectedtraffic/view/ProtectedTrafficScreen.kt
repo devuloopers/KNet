@@ -18,6 +18,7 @@ import com.devuloopers.knet.ui.core.foundation.responsive.ResponsiveLayout
 import com.devuloopers.knet.ui.core.foundation.responsive.WindowSizeClass
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.protectedtraffic.model.displayLabel
+import com.devuloopers.knet.ui.desktop.protectedtraffic.model.description
 import com.devuloopers.knet.ui.desktop.protectedtraffic.viewmodel.ProtectedTrafficViewModel
 
 /**
@@ -31,12 +32,13 @@ fun ProtectedTrafficScreen(viewModel: ProtectedTrafficViewModel, modifier: Modif
     ResponsiveLayout(modifier) { windowInfo ->
         val compact = windowInfo.widthSizeClass == WindowSizeClass.Compact
         Box(Modifier.fillMaxSize()) {
-            ProtectedTrafficWorkspace(compact = compact, headerActions = {
+            ProtectedTrafficWorkspace(headerActions = {
                 Column(verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xs)) {
                     ManagerText("Default TLS handling", caption = true)
                     KNetDropdown(selectedItem = state.configuration.defaultHandling,
                         items = ProtectedTrafficDefaultHandling.entries,
                         itemText = { it.displayLabel }, onItemSelected = viewModel::selectDefaultHandling,
+                        itemDescription = { it.description },
                         enabled = state.configuration.configurationReady && !state.isSettingDefault,
                         modifier = Modifier.testTag("Default TLS action"))
                     if (state.configuration.defaultAction == ProtectedTrafficAction.BYPASS)

@@ -8,6 +8,9 @@ components. Production code targets JVM desktop, Android, iOS ARM64, and iOS Sim
 ## Owns
 
 - Design tokens, palettes, typography, responsive layout primitives, and generic UI components.
+- A shared manager-screen layout and header with matching page insets, title/subtitle typography, stable
+  heading baselines and minimum height. Measured controls move below the title and flow within narrow viewports;
+  feature modules supply action behavior without owning header resize rules.
 - System-aware light/dark theme resolution, Material theme bridging, and reduced-motion behavior.
 - One cohesive dropdown contract for compact, searchable, disabled, selected, hover, focus, and keyboard states,
   with compact/standard/large height presets and centrally bounded content-responsive widths. Every single-select
@@ -24,9 +27,20 @@ components. Production code targets JVM desktop, Android, iOS ARM64, and iOS Sim
   centered label-and-chevron group
   without changing width calculation or the default edge-separated arrangement; both arrangements retain the
   shared label-to-chevron spacing token.
+- Optional dropdown descriptions explain the current value and menu choices after a shared hover delay.
+  The reusable tooltip host uses KNet tokens, bounds wrapped paragraphs to the window, prefers beside-menu help,
+  never takes focus or reserves layout space, and cancels stale/pending help on interaction or content changes.
+  Popup visibility requires the pointer to remain inside its control/row; retained keyboard focus cannot keep
+  it visible or reopen it after pointer exit. Keyboard focus retains the same accessible description.
+  Described controls expose the same text to accessibility services and suppress duplicate overflow previews.
+  Narrow-window help avoids the complete menu bounds, while shared anchor/row keyboard routing preserves
+  arrow navigation and Enter/Space selection across non-focusable popup layers.
 - A manager-table viewport with one finite shared width for header and virtualized rows, theme-owned minimum
   width and row density, viewport-pinned scrollbars, and an empty state that remains visible during horizontal
   overflow. Table rows support disabled interaction and the shared manager density token.
+  Its separate header slot supplies the measured header height: the header background spans the scrollbar lane,
+  vertical tracks begin below it, and horizontal/vertical gutters are reserved only for actual overflow.
+  Header cells and rows retain one shared horizontal scroll owner and identical finite column width.
 - A generic multi-select dropdown that reuses the same anchor and popup contract, keeps the menu open across
   toggles, and gives each accessible checkbox row one interaction owner. Feature-specific option types remain
   outside `:ui:core`.
@@ -34,6 +48,8 @@ components. Production code targets JVM desktop, Android, iOS ARM64, and iOS Sim
   measured content overflows its viewport; single-select, multi-select, and searchable dropdowns reuse it instead
   of owning separate scrollbar styling or visibility rules.
 - One theme-aware horizontal scrollbar primitive for finite scroll state, sharing the same metrics and hover styling as the vertical primitive and rendering only for real overflow.
+- A fixed-height statistics footer with leading/trailing slots, intrinsic-width values and a pinned horizontal
+  scrollbar for narrow panes or larger text. Its height and overflow policy belong to UI core rather than Traffic.
 - A reusable table-header resize handle with a wide desktop hit target, horizontal-resize cursor, hover/drag
   feedback, absolute density-independent width callbacks, gesture-completion notification, and double-click reset.
   Column identity, limits, layout calculation, and persistence remain feature-owned.
@@ -91,3 +107,17 @@ component family.
 KNetApplicationTheme is the shared fixed-dark boundary for desktop and Companion roots. It ignores host appearance;
 explicit KNetTheme light/system palettes remain available for previews and future work. See
 `docs/fixed_dark_application_appearance.md`.
+
+Inspector summaries, aligned captured fields, disclosure controls and framed-message list/detail viewports are
+shared UI-core primitives. The design system owns minimum readable widths, selected-message metadata limits,
+scrollbars and single-line overflow previews. Feature modules supply display facts and actions only.
+See `docs/traffic_inspector_redesign.md`.
+
+Inspector content identities reset only scroll offsets; they do not key/remount the supplied content tree.
+Identity-free callers retain saveable scroll behavior. This supports stable row/message selection while keeping
+per-capture view state isolated. See the selection follow-up in `docs/traffic_inspector_redesign.md`.
+
+Inspector scroll offsets reset through retained, measured ScrollState instances. Identity changes do not replace
+viewport measurements, and horizontal scrollbar chrome is hidden until a measured viewport proves overflow.
+This avoids transient header-height changes during selection; wide/narrow per-frame regressions are documented
+in `docs/traffic_inspector_redesign.md`.

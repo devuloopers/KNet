@@ -1,5 +1,59 @@
 # KNet Implementation Plan
 
+## Traffic throughput initial zero readings (2026-11-12) [COMPLETED]
+
+Show 0 kbps for both Traffic footer directions before the first sample and after monitoring resets. Preserve
+the reserved number widths, footer height, measured rates and explicit post-start measurement gaps. Verify
+the existing rendered footer checks and isolated desktop compilation.
+
+Both directions now start and reset at 0 kbps. Extended the existing footer checks to verify identical indicator
+bounds from startup through the first sample, unit changes, reset and later unavailable intervals. Both rendered
+footer tests passed with zero failures/errors/skips; desktop compilation, all six architecture checks and
+git diff --check passed. Verification used isolated outputs without launching the app or opening user data.
+
+## Shared traffic-control screen headers (2026-11-12) [COMPLETED]
+
+Unify Intercepts, Network Conditions and Protected Traffic with a shared UI-core screen layout and header.
+Use one title/subtitle typography, page inset, header height and action placement policy. Match the Intercepts
+title to its sidebar label and retain every existing action, table and drawer. Verify alignment, narrow/larger-text
+action overflow, feature tests, shared-platform compilation and isolated desktop compilation.
+
+Delivered reusable KNetScreenLayout/KNetScreenHeader in UI core and adopted them in all three traffic-control
+screens. Titles use the same 20sp display token, subtitles the same 12sp body token, with matching 24dp side/16dp
+top insets and a shared minimum header height. Intercepts now matches its sidebar title. Measured actions stack
+and flow when necessary without moving the title baseline; short windows use shared reduced content gaps so
+Rules/Profiles retain their scrolling area. Existing policy/interception actions, tables and drawers remain intact.
+
+All 130 tests passed: UI core 28 (including four header/layout cases), Network Conditions 45, Protected Traffic 24,
+Intercepts 7 and app shell 26, with zero failures/errors/skips. Desktop compilation, shared Android/iOS simulator
+compilation, all six architecture checks and git diff --check passed. Normal/compact feature renders and
+larger-text header previews were reviewed using isolated outputs without launching the desktop app or opening
+the user database. Verification log: /tmp/knet-screen-header-verification.log.
+
+## Sidebar workspace, control and setup groups (2026-11-12) [COMPLETED]
+
+Reorder the shared expanded/collapsed sidebar as Traffic, API Studio; Intercepts, Network Conditions,
+Protected Traffic; Connect Device, Certificates. Separate the three groups with subtle inset dividers and
+retain bottom-pinned Settings and the existing branding footer. Verify existing navigation checks, headless
+expanded/collapsed previews and isolated desktop compilation.
+
+Delivered the agreed sequence with two inset group dividers and one shared render path for both sidebar states.
+Updated the existing destination-order check; all 26 app-shell tests, desktop compilation, all six architecture
+checks and git diff --check passed. Reviewed expanded/collapsed previews at 720dp and 520dp height, including
+bottom-pinned Settings and the branding footer. Verification used isolated outputs without opening the desktop
+application or user database.
+
+## GraphQL parameter editor alignment (2026-11-12) [COMPLETED]
+
+Align the GraphQL / Raw parameters selector with the shared request tabs and key-value editor. Use the
+design-system tab container and spacing tokens for both API Studio and interception, preserving editor state
+and request data.
+
+GraphQL / Raw parameters now use the shared KNet tab row with the same horizontal inset as Params and the
+structured editor; the raw table retains its existing inset without doubling it. Reviewed standalone headless
+renders of both selections at 1280px and 680px. All 48 existing HTTP-panel tests, desktop compilation, all six
+architecture checks and git diff --check passed using isolated outputs. No desktop app or user database was opened.
+
 > [!NOTE]
 > This chronological ledger preserves the state and verification claims recorded by each delivery phase. Earlier
 > statements are historical, not current capability declarations. Use the [documentation map](README.md), current
@@ -3496,3 +3550,276 @@ compilation passed in 6m 25s: 1,064 tests across 26 distinct outputs, zero failu
 checks, ledger validation and git diff --check passed. Automatic/manual inspector and wide/compact manager renders
 were inspected. No desktop app or user database was opened; physical service acceptance remains pending.
 See [the implementation and qualification report](automatic_tls_fallback.md).
+
+## Stable Network Conditions graph cadence (2026-11-12) [COMPLETED]
+
+Investigate and correct accelerated throughput-history scrolling when shaping is enabled. Separate frequent
+scheduler counter changes from the one-second telemetry clock, and coalesce graph readings by monotonic elapsed
+time so profile changes or bursty updates cannot consume the 60-point window early. Verify counter/rate accuracy,
+profile transitions, duplicate/backward timestamps and monitoring lifecycle without launching the desktop app.
+
+Reproduced per-scheduler-event publication and per-observation chart advancement with two failing regressions before
+fixing them. Scheduler callbacks now update counters only; the subscriber-owned timer publishes once per second.
+The graph coalesces subsecond readings, retains cumulative byte accounting, ignores duplicate/stale timestamps,
+invalidates reset intervals and leaves bounded gaps for delayed ticks. All 100 tests passed across simulator and
+Network Conditions UI, including 6,000 updates over 60 seconds and Off/4G/100 kbps/Off transitions. Desktop
+compilation, all six architecture checks, ledger validation and git diff --check passed. Builds used isolated
+outputs; no desktop app was launched. See the [graph-clock repair evidence](network_conditions_implementation_plan.md#graph-clock-repair).
+
+## Network Conditions visual refresh (2026-11-12) [COMPLETED]
+
+Apply the approved dark-theme proposal to the Network Conditions destination only: grouped profile settings,
+integrated throughput/counter panel, clear Rules/Profiles workspace and compact empty state. Remove the packet
+capability footer text. Reuse KNet components, theme tokens and shared responsive/table policies; retain current
+actions, real measurements, graph timing and editors. Verify full/compact/larger-text layouts and existing actions
+through headless rendering, module tests and desktop compilation without launching the app.
+
+Delivered the grouped settings panel, integrated measured graph/counters, selected-tab underline and bounded empty
+state. Removed the packet footer and reused the shared table viewport and window size classes. The chart retains
+raw measured segments, gaps and timing; its axis gutter scales with KNet typography. All 42 Network Conditions
+tests passed, with zero failures/errors/skips; desktop compilation, all six architecture checks, ledger validation
+and git diff --check passed. Wide, compact/larger-text, profiles and editor renders were reviewed. Verification used
+isolated outputs and did not launch the desktop application. The Traffic shortcut and other destinations were not
+changed by this visual refresh.
+
+## Three-tab Network Conditions workspace (2026-11-12) [COMPLETED]
+
+Move the graph/live counters into a default Overview tab, with full-height Rules and Profiles tabs. Retain the
+shared global controls and current styling, preserve monitoring/history while switching tabs, and route Traffic
+quick-add to Rules. Verify table height, tab actions, monitoring continuity and compact/larger-text layouts through
+headless rendering and the existing module tests without launching the desktop application.
+
+Overview now owns the flexible-height graph and counters; Rules and Profiles each have the complete remaining
+table viewport and their contextual add action. Global controls remain shared. Tab-local list state restores
+scroll positions, monitoring/history continue across tabs, and quick-add opens Rules. All 43 module tests passed
+with zero failures/errors/skips; desktop compilation, all six architecture checks and git diff --check passed.
+Wide, minimum-size and larger-text renders were reviewed. At 976x560 with 1.25x text, rules/profile tables retain
+more than half the window height. Verification used isolated outputs without launching the app.
+
+## Live throughput in Traffic (2026-11-12) [COMPLETED]
+
+Add the approved compact download/upload indicator to Traffic's existing footer and navigate its click to Network
+Conditions Overview. Reuse the same actual counters, rate sampler and formatting while moving monitoring ownership
+to the shared host for Traffic/Network Conditions. Preserve one-second cadence, Off-mode readings, idle/waiting
+states, unchanged footer height and accessible narrow-pane overflow. Verify lifecycle handoff, navigation, rates,
+filter independence and headless wide/compact rendering without launching the desktop app.
+
+Delivered the clickable blue/green Download/Upload footer readings and explicit Overview navigation. A shared
+host lifecycle preserves one sampler/history across Traffic and Network Conditions, stopping on departure/disposal.
+Valid idle values show zero, invalid/starting values show a dash, and the common decimal formatter preserves
+fractional/sub-kbps rates. The shared footer retains its 48dp height and exposes narrow-pane overflow.
+All 164 tests across UI core, Network Conditions, Traffic and app shell passed with zero failures/errors/skips.
+Desktop and UI-core Android/iOS simulator compilation, all six architecture checks, ledger validation and
+git diff --check passed. Live and narrow/larger-text footer renders were inspected. Builds were isolated and
+the desktop application/user database were not opened.
+
+## Tight Traffic throughput label spacing (2026-11-12) [COMPLETED]
+
+Align rate text at the start of its stable value slot so labels and values have only the shared small gap.
+Keep reserved space after short values to retain stable layout while rates change. Inspect idle/live label placement
+and verify the existing footer behavior without launching the desktop app.
+
+Rate text now starts immediately after the label's shared small gap; unused reserved width follows the number.
+All 16 app-shell tests and desktop compilation passed in 21s, with zero failures/errors/skips. Existing value-width,
+navigation and narrow-pane checks remain green, the idle footer render was inspected, and git diff --check passed.
+Verification used isolated build outputs without launching the desktop app.
+
+## API Studio GraphQL import formatting (2026-11-12) [COMPLETED]
+
+Fixed initial GET GraphQL authoring hydration shared by API Studio and interception. Query, Variables and Extensions
+now open prettified when imported from Traffic, loaded from a URL or reopened from a saved request. Canonical
+URL/body and explicit operationName selection remain unchanged until a real edit. Validation uses raw preparation
+and preserves active buffers, including incomplete typing and custom spacing during unrelated header/auth changes.
+Added failing-then-passing import/reopen/shared-hydration regressions and validation/source-preservation coverage.
+All 298 selected tests passed, plus desktop compilation, architecture gates and whitespace checks.
+Log: `/tmp/knet-graphql-studio-prettify-verification.log`; reproduction: `/tmp/knet-graphql-studio-prettify-baseline.log`.
+
+## GraphQL Variables and Extensions display formatting (2026-11-12) [COMPLETED]
+
+Fixed compact one-line Variables/Extensions in the shared GET/POST viewer adapter. Read-only preparation now
+uses the shared two-space JSON printer through a strict bounded path. Malformed or over-budget fields retain their
+original text; capture bytes, URL encoding and editable draft buffers remain unchanged. Formatting runs off-thread.
+Added source-preservation/formatting-limit regressions and a headless viewer check showing five Variables lines and
+nine nested Extensions lines. All 287 selected tests passed, plus the desktop build and architecture checks.
+Verification: `/tmp/knet-graphql-json-inspection-formatting.log`. The baseline report records this follow-up separately.
+
+## GraphQL HTTP GET and POST baseline (2026-11-12) [COMPLETED — AUTOMATED; PHYSICAL CHECKS PENDING]
+
+Implemented the five-phase [GET/POST plan](graphql_http_get_post_implementation_plan.md). One bounded source-aware
+HTTP decoder and AST parser now feed descriptors, semantic schema version 2, breakpoints, Network Conditions,
+Traffic preparation and API Studio. POST opens Request > Body > Query; GET opens Request > Params > Query with
+Query/Variables/Extensions and original raw parameters. GET has no synthetic body. Structured edits preserve source,
+unknown POST envelope fields, untouched URL encoding/pairs and in-progress editor buffers. Drafts/collections use the
+existing schema; historical captures remain intact.
+
+Qualification found and fixed JSON-body trimming, HTTP/1.1 repeated-parameter reordering, caller-dispatcher blocking
+on idle streams, stale/ambiguous operation selection, partial editor-buffer loss and GraphQL response-media routing.
+The [implementation report](graphql_http_get_post_implementation_report.md) records 435 passing tests (43 added),
+real loopback capture/import/replay/cancellation, Room restart/promotion and headless source/geometry regressions.
+Desktop, shared Android/iOS UI compilation, all architecture gates, ledger validation and whitespace checks passed.
+Physical client and real-input checks remain separately listed in the report; this does not complete the broader
+Network Protection program or its independent open requirements.
+
+## Compact GraphQL overview and query shortcut (2026-11-12) [COMPLETED]
+
+GraphQL Overview retains operation metadata and shows View query instead of a duplicated query preview. The
+repeated request target is omitted from the display projection; the full URL remains in the header and original
+annotations remain intact. Producer/consumer field identity is shared through a small application metadata contract,
+including compatibility with already stored annotations. Other protocol summaries and fields are unchanged.
+
+View query explicitly selects Request > Body > Query even after Variables, Extensions, Raw JSON, Headers, Cookies
+or Params was selected. The existing shared viewer supports optional controlled sub-tab selection while standalone
+consumers keep their local behavior. Availability comes from the matching prepared request format, without payload
+parsing in composables. Loading/unavailable viewers have a disabled, guarded action and accessible hover explanation;
+retained truncated queries can open with the existing warning. Raw batches are not misrepresented as a single-query
+viewer. The themed button can share its tooltip interaction source.
+
+Added nine regression cases. All 225 relevant tests passed (Traffic 115, HTTP panel 41, UI core 24, app shell 26,
+protocol engine 19), with zero failures/errors/skips. Desktop and shared Android/iOS UI compilation, all six
+architecture checks, existing selection/frame-geometry regressions and git diff --check passed. The compact overview
+render was inspected. Verification used isolated build outputs without launching the app or opening the user DB.
+Log: `/tmp/knet-graphql-query-shortcut-verification.log`; preview:
+`/tmp/knet-graphql-query-shortcut-overview.png`. See `docs/traffic_inspector_redesign.md`.
+
+## Stable inspector geometry during selection (2026-11-12) [COMPLETED]
+
+Frame-by-frame rendering reproduced the remaining 16px jump: a wide header briefly changed from 136px to 152px
+because a new, unmeasured ScrollState was treated as proven overflow. Navigation moved from y=138 to y=154 on
+the first selection frame. Retaining composition alone did not prevent this measurement reset.
+
+Shared inspector scroll states now retain their measured viewport while resetting only offsets, without animation,
+when capture/message identity changes. The horizontal scrollbar requires a measured viewport and positive overflow
+before adding chrome or spacing. Genuine narrow-pane overflow remains visible; default saveable scrolling and
+per-capture scroll/disclosure resets are preserved. No stale payload is held under a new selection.
+
+All three new geometry cases failed against the previous implementation and pass after the fix: unmeasured
+scrollbar height, header measurement through URL changes, and navigation position on every rendered selection
+frame. Wide and narrow panes are covered. All 197 relevant tests passed (Traffic 109, HTTP panel 38, UI core 24,
+app shell 26) with no failures/errors/skips. Desktop and shared Android/iOS UI compilation, all six architecture
+checks and git diff --check passed using isolated outputs without launching the app or opening the user database.
+Logs: `/tmp/knet-inspector-geometry-baseline.log` and `/tmp/knet-inspector-geometry-verification.log`.
+
+## Stable Traffic inspector selection (2026-11-12) [COMPLETED]
+
+Removed whole-inspector composition keys from Overview, opaque/TLS and protocol-message views. Shared inspector
+components reset only identity-owned scroll state; disclosure still resets per capture without remounting the pane.
+Cached terminal payloads and annotations are applied atomically with selection inside the existing bounded LRU.
+Same-item refreshes retain their own prepared details, active exchanges refresh on revisit, and annotation observers
+start with retained same-item data while still applying genuine annotation removal.
+
+Response tabs remain mounted during preparation instead of briefly displaying No Response. Live message-page
+updates preserve an unchanged selected preview, repeated selection is a no-op, and async payload commits are fenced
+by exchange/message/parent identity. New uncached selections never reuse another capture's payload.
+
+The regression baseline reproduced the intermediate cached loading state and viewport remount. Added nine cases
+covering viewport/node retention, scroll reset, response navigation, cached annotations, active exchange freshness,
+live message-page updates and late payloads; strengthened the existing immediate-cache-selection test.
+All 194 relevant tests passed: Traffic 106, HTTP panel 38, shared UI core 24 and app shell 26, with zero failures,
+errors or skips. Desktop compilation, shared UI-core Android/iOS simulator compilation, all six architecture checks
+and git diff --check passed. Verification used isolated outputs without opening the desktop app or user database.
+Logs: `/tmp/knet-inspector-selection-baseline.log`, `/tmp/knet-inspector-stability.log` and
+`/tmp/knet-inspector-stability-final.log`. See `docs/traffic_inspector_redesign.md` for the follow-up behavior.
+
+## Protocol-aware Traffic inspector redesign (2026-11-12) [COMPLETED]
+
+Implemented the approved inspector across HTTP/HTTPS/HTTP2, GraphQL, WebSocket/GraphQL WebSocket, gRPC,
+SSE and opaque TLS/TCP/UDP/QUIC records using the existing KNet theme. Shared persistent endpoint/metric headers,
+aligned fields, message list/detail viewports, one scrolling overview and collapsed technical details are in place.
+Only meaningful completed protocol documents are shown; skipped candidates are hidden and failed analysis stays
+secondary to the network result. Transport, RPC and stream outcomes remain distinct, including refused upgrades.
+
+Streaming workspaces are available before their first message. Protocol engines own selected-message fields;
+optional GraphQL WebSocket operation names use bounded, identity-fenced durable history with explicit gaps.
+Binary, unavailable and truncated previews remain truthful. Request export, response body/header/cookie copy,
+Request/Response/Timeline navigation and protected future-connection actions are retained. UDP/QUIC remains
+metadata-only. Selection changes reset view-local scrolling/disclosure without altering saved handling rules.
+
+Added 30 regression cases across presentation, preview/context budgets, cancellation, protocol decoders, Room
+ordering, response failures, protected actions and headless UI rendering. All 454 tests across UI core (24),
+Traffic (98), HTTP panel (37), app shell (26), application (62), gRPC (22), GraphQL WebSocket (21), WebSocket (27),
+SSE (28) and desktop data (109) passed with zero failures/errors/skips. Desktop compilation, shared UI-core Android
+and iOS simulator compilation, all six architecture checks, ledger validation and git diff --check passed.
+The ledger still reports 93 open software requirements outside this scoped redesign; this does not claim universal
+network qualification. Physical-device testing remains separate. Populated protocol views, TLS rejection,
+UDP/QUIC and narrow/larger-font renders were inspected without launching the app or opening the user database.
+See `docs/traffic_inspector_redesign.md` for behavior, bounds and verification details.
+
+## Consistent Network Conditions profile names (2026-11-12) [COMPLETED]
+
+Use the canonical profile-list name No throttling for the merged unlimited choice in the workspace and Traffic
+shortcut. Read this display name from the built-in catalog, preserving one choice, existing stored IDs and
+matching behavior. Update existing selector regressions and verify both feature UI suites and desktop compilation.
+
+Both selectors and the Traffic summary now read No throttling directly from the built-in profile catalog, matching
+the Profiles list. The merged unlimited option remains unique for existing null and no-throttling saved IDs.
+All 71 relevant tests passed (Network Conditions 45, app shell 26), with zero failures/errors/skips; desktop
+compilation, all six architecture checks and git diff --check passed. Verification used isolated outputs without
+launching the desktop application or changing the user database.
+
+## Table header scrollbar gutter repair (2026-11-12) [COMPLETED]
+
+Keep shared manager-table header backgrounds edge-to-edge and place vertical scrollbar tracks below the measured
+header, within the row viewport. Preserve header/body horizontal alignment, pinned horizontal scrolling, lazy
+rows and visible empty states. Reserve scrollbar space only for actual overflow and verify normal/larger-text,
+wide/narrow layouts in both Network Conditions and Protected Traffic without launching the desktop app.
+
+Reproduced the right-edge header gap with a failing rendered-pixel regression. The shared viewport now owns a
+separate measured-header slot, extends its background across the scrollbar lane and confines the vertical track
+to the row viewport. Header/rows retain one horizontal scroll owner; absent scrollbars reserve no gutter.
+Network Conditions Rules/Profiles and Protected Traffic use the same contract. All 119 relevant tests passed
+(UI core 24, Network Conditions 45, Protected Traffic 24, app shell 26), with zero failures/errors/skips.
+The new checks cover measured header height, narrow/large-text scrolling, column alignment and short tables.
+Desktop and shared Android/iOS simulator compilation, all six architecture checks, ledger validation and
+git diff --check passed. Actual wide Profiles and narrow overflow renders were reviewed; builds used isolated
+outputs without opening the desktop application or user database.
+
+## Network Conditions preset cleanup (2026-11-12) [COMPLETED]
+
+Merge the global selector's Domain rules only and No throttling representations into one No global throttling
+choice in the workspace and Traffic shortcut. Preserve saved IDs, rule exceptions, disabled state and custom
+profiles. Rename Lossy / unstable to Unstable connection without changing its parameters or stable ID. Remove
+the unreferenced legacy simulator catalog and its isolated implementation/tests; retain production-engine coverage.
+Verify saved-state compatibility, global and rule selectors, live shaping, persistence and desktop compilation
+with isolated outputs and no desktop application launch.
+
+Delivered one shared No global throttling option in both selectors, preserving saved null/no-throttling IDs
+during rendering and retaining No throttling rule exceptions/custom unlimited profiles. Unstable connection
+retains the lossy-unstable ID and all configured effects. Removed the unreferenced legacy simulator path,
+its implementation-only tests/fixture and its direct logger dependency; canonical runtime coverage remains.
+All 222 relevant tests passed: domain 95, production simulator 48, Room network-condition persistence 10,
+Network Conditions UI 45 and app shell 24, with zero failures/errors/skips. Desktop compilation, all six
+architecture checks, qualification-ledger validation and git diff --check passed. Saved-ID restoration, rule
+precedence, both selectors and actual UI renders were checked. No desktop application or user database was opened.
+
+## Hover-only tooltip dismissal repair (2026-11-12) [COMPLETED]
+
+Reproduce the focused-control hover-exit sequence reported after TLS help was added. Make shared descriptive
+tooltips visible only while the pointer remains inside their control or menu row, dismiss immediately on exit,
+and prevent retained focus from reopening them. Keep accessible descriptions and keyboard selection. Verify
+focused field/menu exit, moving onto the tooltip itself, cancellation before the delay and clean re-entry.
+
+Reproduced both focused-field and focused-menu failures before fixing the shared tooltip host. Popup visibility
+now requires pointer hover; focus neither keeps help alive nor restarts its delay after exit. Descriptions remain
+available through accessibility semantics, and keyboard navigation/selection still work. All 71 relevant tests
+passed across UI core (24), Protected Traffic (24) and app shell (23), with zero failures/errors/skips. Desktop
+and shared Android/iOS simulator compilation, all six architecture checks and git diff --check passed. Verification
+used isolated outputs without launching the desktop application. This supersedes the earlier focus-triggered
+popup behavior described in the initial TLS help phase.
+
+## TLS handling hover descriptions (2026-11-12) [COMPLETED]
+
+Add optional descriptions to the shared dropdown, shown after a short hover or keyboard-focus delay without
+changing field/menu dimensions. Use KNet-themed, window-bounded, non-focusable tooltips for the selected TLS mode
+and every menu option. Explain certificate-rejection fallback, client reconnect, encrypted metadata, saved-rule
+precedence and new-connection scope. Verify interaction, selection, accessibility and compact layouts through
+headless tests and isolated compilation without launching the desktop app.
+
+Delivered optional shared dropdown descriptions and KNet-themed 500ms hover/focus help for the selected TLS mode
+and every option. Descriptions expose matching accessibility text and clarify eligible later-connection fallback,
+client reconnect, encrypted metadata, explicit-rule precedence and new-connection scope. Help avoids the whole
+menu in narrow windows, suppresses duplicate overflow previews and cancels stale/pending presentation. Shared
+anchor/row routing also preserves arrow navigation and Enter/Space selection across desktop popup layers.
+All 69 relevant tests passed across UI core (24), Protected Traffic (24) and app shell (21), with zero failures,
+errors or skips. Desktop and UI-core Android/iOS simulator compilation, all six architecture checks and
+git diff --check passed. Actual manager and narrow/larger-text renders were reviewed. Builds used isolated outputs
+without opening the desktop application or user database.

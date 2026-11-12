@@ -46,6 +46,9 @@ import com.devuloopers.knet.ui.desktop.traffic.model.TrafficInterceptionUiState
 import com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficViewModel
 import com.devuloopers.knet.ui.desktop.networkconditions.view.NetworkConditionsScreen
 import com.devuloopers.knet.ui.desktop.networkconditions.view.NetworkConditionsQuickControl
+import com.devuloopers.knet.ui.desktop.networkconditions.view.NetworkConditionsRuntimeMonitoring
+import com.devuloopers.knet.ui.desktop.networkconditions.view.NetworkThroughputIndicator
+import com.devuloopers.knet.ui.desktop.networkconditions.model.NetworkConditionsTab
 import com.devuloopers.knet.ui.desktop.networkconditions.viewmodel.NetworkConditionsViewModel
 import com.devuloopers.knet.ui.desktop.protectedtraffic.view.ProtectedTrafficScreen
 import com.devuloopers.knet.ui.desktop.protectedtraffic.viewmodel.ProtectedTrafficViewModel
@@ -74,6 +77,8 @@ fun KNetWorkspaceHost(
     val trafficViewModel: TrafficViewModel = koinViewModel()
     val trafficProtectionViewModel: com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficProtectionViewModel = koinViewModel()
     val networkConditionsViewModel: NetworkConditionsViewModel = koinViewModel()
+    NetworkConditionsRuntimeMonitoring(networkConditionsViewModel,
+        active = destination == DesktopDestination.Traffic || destination == DesktopDestination.NetworkConditions)
     val protectedTrafficViewModel: ProtectedTrafficViewModel = koinViewModel()
     val trafficState by trafficViewModel.uiState.collectAsState()
     val drawerEvent = breakpointState.activeEvent?.takeIf { event ->
@@ -105,6 +110,12 @@ fun KNetWorkspaceHost(
                             errorMessage = networkConditionsState.errorMessage,
                             onDismissError = networkConditionsViewModel::clearError,
                         )
+                    },
+                    throughputIndicator = {
+                        NetworkThroughputIndicator(networkConditionsState.throughput, onOpenOverview = {
+                            networkConditionsViewModel.selectTab(NetworkConditionsTab.OVERVIEW)
+                            onNavigateToDestination(DesktopDestination.NetworkConditions)
+                        })
                     },
                     onSendToApiStudio = { captured ->
                         if (captured.kind == RequestKindId.WEBSOCKET ||

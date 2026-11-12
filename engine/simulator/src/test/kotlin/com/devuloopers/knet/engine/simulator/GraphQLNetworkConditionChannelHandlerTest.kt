@@ -30,6 +30,28 @@ import kotlin.test.assertNull
 
 class GraphQLNetworkConditionChannelHandlerTest {
     @Test
+    fun `GET operation matches from the head without waiting for a body or aggregating it`() {
+        val extension = GraphQLNetworkConditionExtension()
+        val criteria = assertNotNull(extension.createCriteria(listOf(
+            ProtocolCriteriaValue(GraphQLNetworkConditionProtocol.operationNameFieldId, "LoadFeed"),
+            ProtocolCriteriaValue(GraphQLNetworkConditionProtocol.operationTypeFieldId, "query"))))
+        val rule = NetworkConditionRule(NetworkConditionRuleId("get-feed"), NetworkConditionTarget.parse("api.example.com", 443),
+            NetworkConditionBuiltIns.NO_THROTTLING.id, protocolCriteria = criteria)
+        val configuration = NetworkConditionConfiguration(enabled = true, rules = listOf(rule))
+        val resolver = NetworkConditionSemanticResolver(NetworkConditionProtocolRegistry(listOf(extension)))
+        val engine = NetworkConditionEngine(configuration = { configuration })
+        val channel = EmbeddedChannel(NetworkConditionRequestAggregator(engine, resolver), NetworkConditionChannelHandler(engine, resolver))
+        try {
+            val request = DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET,
+                "https://api.example.com/startup?query=query+LoadFeed+%7B+feed+%7B+id+%7D+%7D")
+            request.headers().set(HttpHeaderNames.HOST, "api.example.com")
+            channel.writeInbound(request)
+            assertNotNull(channel.readInbound<DefaultHttpRequest>(), "GET head must pass immediately")
+            assertEquals(rule.id.value, channel.attr(ProxyChannelAttributes.APPLIED_NETWORK_CONDITION).get()?.ruleId)
+        } finally { channel.finishAndReleaseAll() }
+    }
+
+    @Test
     fun `operation rule wins over the endpoint fallback on one GraphQL URL`() {
         val extension = GraphQLNetworkConditionExtension()
         val criteria = assertNotNull(extension.createCriteria(listOf(

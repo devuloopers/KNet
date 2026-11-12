@@ -25,13 +25,20 @@ data class NetworkConditionsState(
     val throughput: NetworkThroughputHistory = NetworkThroughputHistory(),
     val ruleDraft: NetworkConditionRuleDraft? = null,
     val protocolDefinitions: List<NetworkConditionProtocolDefinition> = emptyList(),
-    val activeTab: NetworkConditionsTab = NetworkConditionsTab.RULES,
+    val activeTab: NetworkConditionsTab = NetworkConditionsTab.OVERVIEW,
     val ruleDetails: Map<NetworkConditionRuleId, NetworkConditionRuleDetails> = emptyMap(),
     val errorMessage: String? = null,
 )
 
 /** Local workspace selection; it never changes persisted shaping policy. */
-enum class NetworkConditionsTab(val title: String) {
+enum class NetworkConditionsTab(
+    /** Visible destination-local tab label. */
+    val title: String,
+) {
+    /** Measured throughput and aggregate live counters. */
+    OVERVIEW("Overview"),
+    /** Saved matching rules with their full available table viewport. */
     RULES("Rules"),
+    /** Built-in and custom simulation profiles with their full available table viewport. */
     PROFILES("Profiles"),
 }

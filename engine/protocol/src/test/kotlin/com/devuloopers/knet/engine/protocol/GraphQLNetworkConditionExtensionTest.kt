@@ -174,7 +174,7 @@ class GraphQLNetworkConditionExtensionTest {
     ): InspectionAnnotation = InspectionAnnotation(
         exchangeId = ExchangeId("exchange"),
         inspectorId = InspectorId("graphql"),
-        schemaVersion = 1L,
+        schemaVersion = 2L,
         state = InspectionAnnotationState.COMPLETED,
         document = InspectionDocument(
             kind = "graphql",

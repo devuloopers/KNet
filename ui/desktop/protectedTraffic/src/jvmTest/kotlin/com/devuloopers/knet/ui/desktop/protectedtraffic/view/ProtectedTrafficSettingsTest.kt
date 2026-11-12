@@ -3,6 +3,7 @@ package com.devuloopers.knet.ui.desktop.protectedtraffic.view
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.InternalComposeUiApi
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.Density
@@ -23,6 +24,41 @@ import kotlin.test.*
 /** Real manager, ViewModel and use cases exercise saved rules without reintroducing automatic compatibility. */
 @OptIn(ExperimentalComposeUiApi::class, InternalComposeUiApi::class, ExperimentalCoroutinesApi::class)
 class ProtectedTrafficSettingsTest {
+    @Test fun `default TLS help renders accurate fallback copy inside the manager window`() {
+        val clock = TestCoroutineScheduler()
+        fixture(clock = clock) { ui ->
+            ui.frame()
+            val anchor = ui.tag("Default TLS action")
+            ui.scene.sendPointerEvent(PointerEventType.Move, anchor.boundsInWindow.center)
+            ui.frame(); clock.advanceTimeBy(500); clock.runCurrent(); ui.frame()
+            val tooltip = ui.nodes().first { it.text().contains("The failed connection is not retried by KNet") }
+            assertTrue(tooltip.boundsInWindow.left >= 0 && tooltip.boundsInWindow.right <= 1280)
+            assertTrue(tooltip.boundsInWindow.top >= 0 && tooltip.boundsInWindow.bottom <= 900)
+            ui.save("manager-tls-handling-help")
+        }
+    }
+
+    @Test fun `TLS choices expose accurate accessible explanations for selected and available modes`() = fixture { ui ->
+        ui.frame()
+        fun explanation(node: SemanticsNode) = node.config.getOrNull(SemanticsProperties.ContentDescription).orEmpty().joinToString(" ")
+        fun selectedExplanation() = ui.descendants(ui.tag("Default TLS action")).map(::explanation).first { it.isNotBlank() }
+        val initial = selectedExplanation()
+        assertTrue(initial.contains("client explicitly rejects"))
+        assertTrue(initial.contains("eligible later connections temporarily tunnel"))
+        assertTrue(initial.contains("not retried by KNet; the app must reconnect"))
+        ui.activateTag("Default TLS action")
+        val expected = mapOf("Inspect with automatic fallback" to "not retried by KNet",
+            "Inspect only" to "automatic tunneling is disabled", "Tunnel" to "HTTP headers and bodies remain encrypted",
+            "Block" to "Reject TLS connections")
+        for ((label, behavior) in expected) {
+            val description = explanation(ui.action(label))
+            assertTrue(description.contains(behavior), "Missing behavior for $label")
+            assertTrue(description.contains("Saved rules take priority. Changes apply to new connections."))
+        }
+        ui.activate("Tunnel")
+        assertTrue(selectedExplanation().contains("Forward TLS traffic without decrypting it"))
+    }
+
     @Test fun `manager searches live saved rules and supports default action toggle delete and an animated editor`() = fixture { ui ->
         ui.frame()
         for (label in listOf("Protected Traffic", "Default TLS handling", "Enabled", "Destination", "Application", "Port", "Transport", "Action", "Actions"))
@@ -142,7 +178,8 @@ class ProtectedTrafficSettingsTest {
         action = ProtectedTrafficAction.TUNNEL, destination = ProtectedDestinationSelector.parse(host), port = 443,
         transport = ProtectedTransportProtocol.TCP)
 
-    private fun fixture(width: Int = 1280, height: Int = 900, fontScale: Float = 1f, block: (Ui) -> Unit) = EventQueue.invokeAndWait {
+    private fun fixture(width: Int = 1280, height: Int = 900, fontScale: Float = 1f, clock: TestCoroutineScheduler? = null,
+        block: (Ui) -> Unit) = EventQueue.invokeAndWait {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         val store = ViewModelStore()
         try {
@@ -150,7 +187,9 @@ class ProtectedTrafficSettingsTest {
             val viewModel = ProtectedTrafficViewModel(ObserveProtectedTrafficConfigurationUseCase(repository),
                 SetProtectedTrafficDefaultActionUseCase(repository), UpsertProtectedTrafficRuleUseCase(repository), DeleteProtectedTrafficRuleUseCase(repository))
             store.put("protected", viewModel)
-            ImageComposeScene(width, height, Density(1f, fontScale), content = { KNetApplicationTheme { ProtectedTrafficScreen(viewModel) } })
+            ImageComposeScene(width, height, Density(1f, fontScale),
+                coroutineContext = clock?.let { UnconfinedTestDispatcher(it) } ?: Dispatchers.Unconfined,
+                content = { KNetApplicationTheme { ProtectedTrafficScreen(viewModel) } })
                 .use { scene -> block(Ui(repository, viewModel, scene)) }
         } finally { store.clear(); Dispatchers.resetMain() }
     }

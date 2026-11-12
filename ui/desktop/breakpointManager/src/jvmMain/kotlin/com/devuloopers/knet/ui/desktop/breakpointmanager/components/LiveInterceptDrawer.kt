@@ -1,5 +1,14 @@
 package com.devuloopers.knet.ui.desktop.breakpointmanager.components
 
+import com.devuloopers.knet.domain.graphql.GraphQLHttpDiagnostic
+import com.devuloopers.knet.domain.payload.PayloadStrategyRegistry
+import com.devuloopers.knet.engine.formatter.graphql.GraphQLHttpRequestFormatter
+import com.devuloopers.knet.traffic.model.http.RequestTarget
+import com.devuloopers.knet.ui.desktop.httppanel.mapper.GraphQlPayloadMapper
+import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQLParameterEditorState
+import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlSubTab
+import com.devuloopers.knet.ui.desktop.httppanel.usecase.SyncBodyStateUseCase
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
@@ -12,6 +21,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.*
+import com.devuloopers.knet.traffic.model.absoluteUrl
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -147,6 +159,27 @@ fun LiveInterceptDrawer(
         }
         var reqBodyState by remember(eventToRender.id, preResolved) {
             mutableStateOf(RequestBodyState.from(preResolved?.requestPayloadSpec ?: PayloadInspectionSpec.EMPTY))
+        }
+        var editedTarget by remember(eventToRender.id) { mutableStateOf(request.head.target) }
+        var graphQLParameters by remember(eventToRender.id, preResolved) { mutableStateOf(preResolved?.requestParameters) }
+        var preserveParameterBuffers by remember(eventToRender.id) { mutableStateOf(false) }
+        var parameterEditError by remember(eventToRender.id) { mutableStateOf<String?>(null) }
+        LaunchedEffect(eventToRender.id, editedTarget, preserveParameterBuffers) {
+            if (request.head.method.token.equals("GET", true)) {
+                val prepared = withContext(Dispatchers.Default) {
+                    GraphQLParameterEditorState.prepare("GET",
+                        request.copy(head = request.head.copy(target = editedTarget)).absoluteUrl(), prettify = !preserveParameterBuffers)
+                }
+                val previous = graphQLParameters
+                graphQLParameters = if (preserveParameterBuffers && previous != null) previous.copy(diagnostic = prepared?.diagnostic
+                    ?: GraphQLHttpDiagnostic.INVALID_DOCUMENT.takeIf { prepared == null })
+                else prepared?.let { it.copy(graphQl = it.graphQl.copy(activeSubTab =
+                    previous?.graphQl?.activeSubTab ?: GraphQlSubTab.QUERY)) }
+            }
+        }
+        val bodySync = remember {
+            SyncBodyStateUseCase(
+                PayloadStrategyRegistry(listOf(GraphQlPayloadMapper())))
         }
         var requestBodyEdited by remember(eventToRender.id) { mutableStateOf(false) }
         var activeReqSubTab by remember(eventToRender.id) {
@@ -349,7 +382,7 @@ fun LiveInterceptDrawer(
                                     val editedHeaderFields = headersToForward.map { entry ->
                                         HeaderField(HeaderName(entry.key), entry.value)
                                     }
-                                    val metadataChanged = editedHeaderFields != request.head.headers
+                                    val metadataChanged = editedHeaderFields != request.head.headers || editedTarget != request.head.target
                                     if (!metadataChanged && !requestBodyEdited) {
                                         actions.forwardUnchanged()
                                         return@KNetButton
@@ -358,6 +391,7 @@ fun LiveInterceptDrawer(
                                         request = request.copy(
                                             head = request.head.copy(
                                                 headers = editedHeaderFields,
+                                                target = editedTarget,
                                             )
                                         ),
                                         body = if (requestBodyEdited) {
@@ -455,8 +489,18 @@ fun LiveInterceptDrawer(
                                 modifier = Modifier.align(Alignment.Center),
                             )
                         } else if (candidate.phase == BreakpointPhase.REQUEST) {
+                            Column(Modifier.fillMaxSize()) {
+                            parameterEditError?.let { com.devuloopers.knet.ui.core.components.inspector.KNetInspectorParagraph(it,
+                                Modifier.fillMaxWidth(), color = themeColors.semantic.warning) }
                             RequestEditorPanel(
                                 bodyState = reqBodyState,
+                                graphQLParameters = graphQLParameters,
+                                queryParams = com.devuloopers.knet.domain.util.UrlQueryStringParser.parseQueryParams(
+                                    when (val target = editedTarget) {
+                                        is RequestTarget.Absolute -> target.pathAndQuery
+                                        is RequestTarget.Origin -> target.pathAndQuery
+                                        else -> ""
+                                    }).mapIndexed { index, pair -> KeyValueEntry("parameter-$index", pair.first, pair.second) },
                                 headers = editedReqHeaders,
                                 activeSubTab = activeReqSubTab,
                                 actions = RequestEditorPanelActions(
@@ -464,11 +508,45 @@ fun LiveInterceptDrawer(
                                         requestBodyEdited = true
                                         reqBodyState = it
                                     },
+                                    onGraphQlStateChanged = { updated ->
+                                        val parameters = graphQLParameters
+                                        if (activeReqSubTab == InspectorSubTab.PARAMS && parameters != null) {
+                                            GraphQLHttpRequestFormatter.updateTarget(editedTarget,
+                                                GraphQLHttpRequestFormatter.changedFields(parameters.graphQl.payload, updated.payload))
+                                                .onSuccess { target ->
+                                                    preserveParameterBuffers = true
+                                                    editedTarget = target
+                                                    graphQLParameters = parameters.copy(graphQl = updated)
+                                                    parameterEditError = null
+                                                }.onFailure { parameterEditError = "Edit the raw URL parameters to resolve ambiguous or invalid encoding." }
+                                        } else {
+                                            requestBodyEdited = true
+                                            reqBodyState = bodySync.updateGraphQlState(reqBodyState, updated)
+                                        }
+                                    },
+                                    onQueryParamsChanged = { entries ->
+                                        val oldTarget = editedTarget
+                                        val text = when (oldTarget) {
+                                            is RequestTarget.Absolute -> oldTarget.pathAndQuery
+                                            is RequestTarget.Origin -> oldTarget.pathAndQuery
+                                            else -> ""
+                                        }
+                                        val target = com.devuloopers.knet.domain.util.UrlQueryStringParser.rebuildUrlWithQueryParams(text,
+                                            entries.filter { it.enabled }.map { it.key to it.value })
+                                        editedTarget = when (oldTarget) {
+                                            is RequestTarget.Absolute -> oldTarget.copy(pathAndQuery = target)
+                                            is RequestTarget.Origin -> oldTarget.copy(pathAndQuery = target)
+                                            else -> oldTarget
+                                        }
+                                        preserveParameterBuffers = false
+                                        graphQLParameters = null
+                                    },
                                     onHeadersChanged = { editedReqHeaders = it },
                                     onSubTabSelected = { activeReqSubTab = it }
                                 ),
-                                modifier = Modifier.fillMaxSize()
+                                modifier = Modifier.weight(1f)
                             )
+                            }
                         } else {
                             ResponseEditorPanel(
                                 statusCode = editedStatusCode,

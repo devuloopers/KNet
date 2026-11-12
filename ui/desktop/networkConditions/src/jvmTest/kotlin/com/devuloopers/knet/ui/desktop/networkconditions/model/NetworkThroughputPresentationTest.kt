@@ -22,7 +22,7 @@ class NetworkThroughputPresentationTest {
             ).label,
         )
         assertEquals(
-            "Unlimited",
+            "No global limit",
             throughputReference(stateWithGlobal(NetworkConditionBuiltIns.NO_THROTTLING.id.value)).label,
         )
         assertEquals(

@@ -1,5 +1,7 @@
 package com.devuloopers.knet.ui.desktop.httppanel.usecase
 
+import com.devuloopers.knet.engine.formatter.graphql.GraphQLHttpRequestFormatter
+
 import com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType
 import com.devuloopers.knet.domain.payload.PayloadStrategyRegistry
 import com.devuloopers.knet.domain.payload.StructuredPayloadState
@@ -44,7 +46,11 @@ class SyncBodyStateUseCase(
      * Updates structured [GraphQlState], automatically serializing it back into transport [RequestBodyState.payloadText].
      */
     fun updateGraphQlState(currentState: RequestBodyState, newGraphQlState: GraphQlState): RequestBodyState {
-        val serializedPayload = strategyRegistry.serialize(RequestBodyType.GRAPHQL, newGraphQlState.payload)
+        val changes = GraphQLHttpRequestFormatter.changedFields(
+            currentState.graphQlState.payload, newGraphQlState.payload)
+        val serializedPayload = if (changes.isEmpty()) currentState.payloadText else
+            GraphQLHttpRequestFormatter.updateJsonBody(currentState.payloadText, changes)
+                .getOrElse { strategyRegistry.serialize(RequestBodyType.GRAPHQL, newGraphQlState.payload) }
 
         return currentState.copy(
             graphQlState = newGraphQlState,

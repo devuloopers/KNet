@@ -32,6 +32,7 @@ import androidx.compose.ui.text.AnnotatedString
 
 /**
  * Top-level Live Traffic Workspace Screen composable bound strictly to :ui:core design tokens and parameter objects.
+ * @param throughputIndicator Shell-composed actual throughput display; Traffic owns placement, not measurements.
  */
 @Composable
 fun TrafficScreen(
@@ -41,6 +42,7 @@ fun TrafficScreen(
     onAddNetworkCondition: (String) -> Unit = {},
     modifier: Modifier = Modifier,
     networkConditionsControl: @Composable () -> Unit = {},
+    throughputIndicator: (@Composable () -> Unit)? = null,
 ) {
     val state by viewModel.uiState.collectAsState()
     val protectionState by protectionViewModel.uiState.collectAsState()
@@ -191,6 +193,7 @@ fun TrafficScreen(
                         activeRules = state.activeBreakpointRules,
                         canLoadMore = state.nextPageCursor != null && !state.isPageLoading,
                         onLoadMore = { viewModel.processIntent(TrafficIntent.LoadNextPage) },
+                        throughputIndicator = throughputIndicator,
                         modifier = paneModifier
                     )
                 },

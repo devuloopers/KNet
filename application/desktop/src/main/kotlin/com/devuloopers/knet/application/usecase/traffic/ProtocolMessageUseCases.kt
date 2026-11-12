@@ -7,11 +7,16 @@ import com.devuloopers.knet.application.contract.traffic.ProtocolMessageQuery
 import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePayloadInput
 import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePresentation
 import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePresentationRegistry
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessageContextEntry
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessageContextQuery
 import com.devuloopers.knet.traffic.model.HttpExchangeSnapshot
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.body.MessageBodyRef
+import com.devuloopers.knet.traffic.model.body.BodyCaptureOutcome
 import com.devuloopers.knet.traffic.model.message.ProtocolMessageSnapshot
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.CancellationException
+import com.devuloopers.knet.traffic.model.message.ProtocolMessageState
 
 /** Executes one bounded, indexed page query for framed child messages. */
 public class QueryProtocolMessagesUseCase(
@@ -89,19 +94,54 @@ public class LoadProtocolMessageBodyUseCase(
                     ),
                 )
                 val bytes = chunk.copyBytes()
+                val truncated = !chunk.endOfBody || body.body.outcome != BodyCaptureOutcome.Complete ||
+                    body.body.observedBytes > body.body.storedBytes || message.state == ProtocolMessageState.TRUNCATED
                 LoadProtocolMessageBodyResult.Available(
                     bytes = bytes,
-                    truncated = !chunk.endOfBody,
-                    presentation = parentExchange?.let { parent ->
-                        presentations.decode(
-                            ProtocolMessagePayloadInput(
-                                parentExchange = parent,
-                                message = message,
-                                payload = bytes,
-                            ),
-                        )
+                    truncated = truncated,
+                    presentation = parentExchange?.takeIf { it.id == message.exchangeId }?.let { parent ->
+                        val input = ProtocolMessagePayloadInput(parent, message, bytes,
+                            truncated = truncated || message.state != ProtocolMessageState.COMPLETE)
+                        val context = input.takeUnless { it.truncated }?.let(presentations::contextQuery)?.takeIf {
+                            it.exchangeId == message.exchangeId && it.beforeMessageId == message.id && it.protocol == message.protocol
+                        }?.let { query -> readContext(query, message) }.orEmpty()
+                        presentations.decode(input.copy(context = context))
                     },
                 )
             }
         }
+
+    private suspend fun readContext(query: ProtocolMessageContextQuery,
+        selected: ProtocolMessageSnapshot): List<ProtocolMessageContextEntry> {
+        // Context is optional enrichment. A storage gap must preserve the selected raw preview,
+        // and must prevent the decoder from correlating across that gap.
+        return try {
+            var remaining = ProtocolMessagePayloadInput.MAXIMUM_PAYLOAD_BYTES
+            buildList {
+                for (message in messages.queryContext(query).take(query.limit)) {
+                    if (message.exchangeId != selected.exchangeId || message.connectionId != selected.connectionId ||
+                        message.streamId != selected.streamId || message.id == selected.id ||
+                        message.protocol != query.protocol || message.kind != query.kind ||
+                        query.direction != null && message.direction != query.direction) break
+                    val body = message.body as? MessageBodyRef.Available
+                    if (body == null || body.body.outcome != BodyCaptureOutcome.Complete ||
+                        body.body.observedBytes > body.body.storedBytes || message.state != ProtocolMessageState.COMPLETE || remaining <= 0) {
+                        add(ProtocolMessageContextEntry(message, null, true))
+                        break
+                    }
+                    val range = BodyRange(0, minOf(remaining, ProtocolMessageContextEntry.MAXIMUM_PAYLOAD_BYTES))
+                    val chunk = messages.readBody(body.body.id, range)
+                    if (chunk.size > range.length || chunk.offset != 0L) break
+                    val bytes = chunk.copyBytes()
+                    remaining -= bytes.size
+                    add(ProtocolMessageContextEntry(message, bytes, !chunk.endOfBody))
+                    if (!chunk.endOfBody) break
+                }
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (_: Exception) {
+            emptyList()
+        }
+    }
 }

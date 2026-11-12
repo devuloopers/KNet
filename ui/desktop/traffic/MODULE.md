@@ -12,6 +12,8 @@ Owns the live traffic table, filtering, selection, inspector coordination, and t
 - A constrained toolbar slot immediately before Auto Scroll for the shell-composed global Network Conditions
   shortcut. Traffic owns placement, not policy state; capture actions remain visible while long runtime status
   labels yield width to the shared controls.
+- A shell-composed actual-throughput slot in the existing statistics footer, next to the visible-row byte total.
+  UI core owns fixed-height overflow. Traffic filters and capture attachment never manufacture or reset rate values.
 - Stable storage-owned serial numbers, separate loaded-versus-available counts, and auto-scroll policy that
   reacts to a genuinely newer sequence rather than a page-size change.
 - Separate transport and semantic method presentation: filters retain the canonical HTTP method while the
@@ -112,3 +114,29 @@ Generic I/O failures remain Failed; historical records are never reinterpreted a
 Terminal opaque Technical details presents recorded Closed by, Close reason and Close observed at. Device/Server
 mean the first observed peer side; KNet requires explicit local intent. Legacy/unproven evidence remains Unknown
 with no invented timestamp. The existing shared inspector disclosure/scrolling owns layout and overflow.
+
+The protocol-aware inspector uses one persistent endpoint/metric header and one scrolling grouped overview.
+Only completed meaningful annotation documents appear inline; skipped checks are invisible and failed analysis
+is secondary technical information. IDs remain collapsed. HTTP, GraphQL, gRPC, WebSocket, GraphQL WebSocket
+and SSE retain distinct transport/RPC/stream outcomes. Message navigation is available before the first frame;
+SSE uses Events with record counts. Protocol decoders own selected-message fields and optional bounded operation
+correlation. Opaque TLS retains future-connection actions separately from immutable capture evidence; UDP/QUIC
+remains metadata-only. All responsive policy stays in UI core. See `docs/traffic_inspector_redesign.md`.
+
+Selection applies cached terminal detail and annotations atomically. Same-item refreshes preserve prepared content;
+active exchanges are refreshed rather than cached as complete. Entire inspector subtrees remain mounted while
+UI core resets only identity-owned scroll state. Live message-page refreshes retain unchanged selected previews,
+and async message payloads commit only to their exact current exchange/message/parent selection. See
+`docs/traffic_inspector_redesign.md` for selection stability qualification.
+
+GraphQL Overview projects compact operation metadata with a guarded View query action. It navigates explicitly to
+Request > Body > Query using the matching prepared request, and omits duplicate query/target text only from the display.
+Other annotations retain their summaries; source annotations and header URLs remain intact. See
+`docs/traffic_inspector_redesign.md`.
+
+## GraphQL GET parameter preparation
+
+Traffic prepares GET query data off-thread into `InspectorPreparedState.requestParameterSpec`,
+includes its size in cache accounting and uses the existing exchange identity/cancellation fences.
+View query targets Params for GET and Body for POST, resetting the shared Query sub-tab. The source
+URL is unchanged for header copy and cross-feature transfer; missing/ambiguous data remains honest.

@@ -2,6 +2,9 @@ package com.devuloopers.knet.engine.formatter.formatters
 
 import com.devuloopers.knet.engine.formatter.BodyFormatter
 import com.devuloopers.knet.engine.formatter.model.BodyFormat
+import com.fasterxml.jackson.core.JsonFactory
+import com.fasterxml.jackson.core.StreamReadConstraints
+import java.io.Writer
 import com.fasterxml.jackson.core.JsonGenerator
 import com.fasterxml.jackson.core.util.DefaultIndenter
 import com.fasterxml.jackson.core.util.DefaultPrettyPrinter
@@ -34,6 +37,37 @@ private val ndJsonMediaTypes = setOf(
     "application/jsonl",
     "application/x-jsonlines"
 )
+
+// Inspection formatting shares the JSON reader/printer policy, while bounding both recursive parsing
+// and indentation expansion. An adversarial nested object must not allocate an unbounded pretty string.
+private const val MAXIMUM_INSPECTION_INPUT_CHARACTERS = 1_048_576
+private const val MAXIMUM_INSPECTION_OUTPUT_CHARACTERS = 2_097_152
+private val inspectionReader = mapper.reader().with(
+    JsonFactory.builder().streamReadConstraints(
+        StreamReadConstraints.builder().maxNestingDepth(128)
+            .maxDocumentLength(MAXIMUM_INSPECTION_INPUT_CHARACTERS.toLong())
+            .maxStringLength(MAXIMUM_INSPECTION_INPUT_CHARACTERS).build(),
+    ).build(),
+)
+
+/** Stops indentation expansion before allocating more than the inspection display budget. */
+private class InspectionJsonWriter : Writer() {
+    private val output = StringBuilder()
+
+    override fun write(buffer: CharArray, offset: Int, length: Int) {
+        check(length <= MAXIMUM_INSPECTION_OUTPUT_CHARACTERS - output.length) { "JSON display budget exceeded." }
+        output.append(buffer, offset, length)
+    }
+
+    override fun write(text: String, offset: Int, length: Int) {
+        check(length <= MAXIMUM_INSPECTION_OUTPUT_CHARACTERS - output.length) { "JSON display budget exceeded." }
+        output.append(text, offset, offset + length)
+    }
+
+    override fun flush() = Unit
+    override fun close() = Unit
+    override fun toString(): String = output.toString()
+}
 
 /**
  * Strategy formatter for JSON objects, arrays, and Google XSSI security prefixed payloads.
@@ -108,6 +142,29 @@ class JsonBodyFormatter : BodyFormatter {
     }
 
     companion object {
+        /**
+         * Formats complete JSON objects/arrays for a read-only inspection projection using the shared
+         * two-space printer. Call during off-thread preparation, never while rendering or synchronizing edits.
+         *
+         * Malformed, incomplete, non-container or over-budget data is returned exactly as supplied. This
+         * strict path does not strip prefixes, salvage a JSON substring or rewrite editable source text.
+         *
+         * @param raw Source JSON text retained by the protocol decoder.
+         * @return Indented display text, or unchanged [raw] if safe formatting is unavailable.
+         */
+        fun prettyPrintJsonForInspection(raw: String): String {
+            if (raw.isBlank() || raw.length > MAXIMUM_INSPECTION_INPUT_CHARACTERS) return raw
+            return try {
+                val node = inspectionReader.readTree(raw)
+                if (node == null || !node.isContainerNode) return raw
+                val output = InspectionJsonWriter()
+                mapper.writer(printer).writeValue(output, node)
+                output.toString()
+            } catch (_: Exception) {
+                raw
+            }
+        }
+
         /**
          * Pretty-prints a raw JSON string with 2-space indentation and XSSI prefix stripping.
          *

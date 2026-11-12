@@ -3,7 +3,13 @@ package com.devuloopers.knet.ui.desktop.networkconditions.model
 import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionRuntimeSnapshot
 import kotlin.math.roundToLong
 
-/** Immutable, right-aligned 60-second chart data. Primitive arrays keep retained history bounded. */
+/**
+ * Immutable, right-aligned one-second chart slots. Primitive arrays keep retained history bounded.
+ * @property downloadBitsPerSecond Measured interval-average download rates, oldest to newest.
+ * @property uploadBitsPerSecond Measured interval-average upload rates, oldest to newest.
+ * @property validSamples Whether the matching slot has trustworthy measurement evidence.
+ * @property sampleCount Number of populated slots, including explicit gaps.
+ */
 data class NetworkThroughputHistory(
     val downloadBitsPerSecond: LongArray = LongArray(DEFAULT_CAPACITY),
     val uploadBitsPerSecond: LongArray = LongArray(DEFAULT_CAPACITY),
@@ -30,7 +36,12 @@ data class NetworkThroughputHistory(
     }
 }
 
-/** Converts cumulative monotonic counters into a bounded, allocation-light rate history. */
+/**
+ * Coalesces cumulative counters into a bounded history at most once per elapsed second.
+ * Extra observations retain their bytes through the cumulative baseline without allocating chart arrays.
+ * @param capacity Maximum number of one-second slots, including missing intervals.
+ * @param maximumSampleIntervalNanos Longest interval whose average rate is useful; longer gaps stay invalid.
+ */
 internal class NetworkThroughputSampler(
     private val capacity: Int = NetworkThroughputHistory.DEFAULT_CAPACITY,
     private val maximumSampleIntervalNanos: Long = DEFAULT_MAXIMUM_SAMPLE_INTERVAL_NANOS,
@@ -41,32 +52,57 @@ internal class NetworkThroughputSampler(
     private var nextIndex = 0
     private var storedSamples = 0
     private var previous: NetworkConditionRuntimeSnapshot? = null
+    private var latestObservation: NetworkConditionRuntimeSnapshot? = null
+    private var countersContinuous = true
 
     init {
         require(capacity > 0)
-        require(maximumSampleIntervalNanos > 0L)
+        require(maximumSampleIntervalNanos >= SAMPLE_INTERVAL_NANOS)
     }
 
+    /** Discards the rate baseline, pending observations and populated history on a monitoring restart. */
     fun reset() {
         previous = null
+        latestObservation = null
+        countersContinuous = true
         nextIndex = 0
         storedSamples = 0
     }
 
-    /** The first snapshot establishes a baseline and intentionally produces no chart point. */
+    /**
+     * Establishes a first baseline, then returns history only after a full second has elapsed.
+     * Duplicate/stale observations cannot advance or rewind the chart. Counter resets invalidate their entire
+     * measurement interval, even when subsequent subsecond counters grow past its original baseline.
+     */
     fun accept(snapshot: NetworkConditionRuntimeSnapshot): NetworkThroughputHistory? {
         val baseline = previous
-        previous = snapshot
-        if (baseline == null) return null
+        if (baseline == null) {
+            previous = snapshot
+            latestObservation = snapshot
+            return null
+        }
+        val observed = requireNotNull(latestObservation)
+        if (snapshot.sampledAtNanos <= observed.sampledAtNanos) return null
+        latestObservation = snapshot
+        countersContinuous = countersContinuous && snapshot.uploadedBytes >= observed.uploadedBytes &&
+            snapshot.downloadedBytes >= observed.downloadedBytes
 
         val elapsedNanos = snapshot.sampledAtNanos - baseline.sampledAtNanos
+        if (elapsedNanos in 1 until SAMPLE_INTERVAL_NANOS) return null
+        previous = snapshot
         val uploadedDelta = snapshot.uploadedBytes - baseline.uploadedBytes
         val downloadedDelta = snapshot.downloadedBytes - baseline.downloadedBytes
-        val valid = elapsedNanos in 1..maximumSampleIntervalNanos &&
-            snapshot.sampledAtNanos >= baseline.sampledAtNanos &&
+        val valid = countersContinuous && elapsedNanos in SAMPLE_INTERVAL_NANOS..maximumSampleIntervalNanos &&
+            baseline.uploadedBytes >= 0L && baseline.downloadedBytes >= 0L &&
+            snapshot.uploadedBytes >= 0L && snapshot.downloadedBytes >= 0L &&
             uploadedDelta >= 0L &&
             downloadedDelta >= 0L
+        countersContinuous = true
 
+        // A late timer or suspended screen leaves gaps rather than compressing elapsed seconds into one slot.
+        // Even a multi-hour gap performs at most capacity writes and retains no extra history.
+        val slots = (elapsedNanos / SAMPLE_INTERVAL_NANOS).coerceIn(1L, capacity.toLong()).toInt()
+        repeat(slots - 1) { append(0L, 0L, false) }
         append(
             downloadBitsPerSecond = if (valid) bitsPerSecond(downloadedDelta, elapsedNanos) else 0L,
             uploadBitsPerSecond = if (valid) bitsPerSecond(uploadedDelta, elapsedNanos) else 0L,
@@ -105,6 +141,7 @@ internal class NetworkThroughputSampler(
     }
 
     private companion object {
+        const val SAMPLE_INTERVAL_NANOS = 1_000_000_000L
         const val BITS_PER_BYTE = 8.0
         const val NANOS_PER_SECOND = 1_000_000_000.0
         const val DEFAULT_MAXIMUM_SAMPLE_INTERVAL_NANOS = 5_000_000_000L

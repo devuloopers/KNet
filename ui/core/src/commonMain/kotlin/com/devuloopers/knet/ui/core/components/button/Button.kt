@@ -53,6 +53,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * @param clickableWhileLoading Explicit opt-in for loading controls that expose a valid cancellation action.
  * @param colors Custom button colors override.
  * @param role Accessibility role exposed by the click target.
+ * @param interactionSource Optional shared source for tooltip anchors and button hover/focus feedback.
  * @param content Slot layout for button text and icons.
  */
 @Composable
@@ -66,6 +67,7 @@ fun KNetButton(
     clickableWhileLoading: Boolean = false,
     colors: ButtonColors = ButtonDefaults.colors(variant),
     role: Role = Role.Button,
+    interactionSource: MutableInteractionSource? = null,
     content: @Composable () -> Unit
 ) {
     val buttonHeight = ButtonDefaults.height(size)
@@ -73,9 +75,9 @@ fun KNetButton(
     val typography = KNetTheme.typography
     val motion = KNetTheme.motion
     val duration = if (motion.animationsEnabled) motion.durationNormal else motion.durationInstant
-    val interactionSource = remember { MutableInteractionSource() }
-    val focused by interactionSource.collectIsFocusedAsState()
-    val hovered by interactionSource.collectIsHoveredAsState()
+    val buttonInteractionSource = interactionSource ?: remember { MutableInteractionSource() }
+    val focused by buttonInteractionSource.collectIsFocusedAsState()
+    val hovered by buttonInteractionSource.collectIsHoveredAsState()
 
     val isClickable = isKNetButtonClickable(
         enabled = enabled,
@@ -108,7 +110,7 @@ fun KNetButton(
             .clip(shapes.small)
             .animateContentSize(animationSpec = tween(durationMillis = duration))
             .clickable(
-                interactionSource = interactionSource,
+                interactionSource = buttonInteractionSource,
                 indication = null,
                 enabled = isClickable,
                 role = role,

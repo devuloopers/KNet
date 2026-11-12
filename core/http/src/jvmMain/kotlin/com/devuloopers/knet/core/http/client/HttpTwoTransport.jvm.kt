@@ -1,6 +1,8 @@
 package com.devuloopers.knet.core.http.client
 
+import com.devuloopers.knet.traffic.model.http.StandardApplicationProtocol
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -140,7 +142,9 @@ internal actual class HttpTwoTransport actual constructor() {
             val buffer = ByteArray(STREAM_CHUNK_BYTES)
             while (true) {
                 currentCoroutineContext().ensureActive()
-                val read = runInterruptible { input.read(buffer) }
+                // A slow or idle stream must never block the collector's dispatcher (including the UI thread).
+                // Interruptible IO also lets cancellation close the response before another frame arrives.
+                val read = runInterruptible(Dispatchers.IO) { input.read(buffer) }
                 if (read < 0) break
                 if (read == 0) continue
                 val chunk = buffer.copyOf(read)
@@ -214,7 +218,7 @@ internal actual class HttpTwoTransport actual constructor() {
             init(null, arrayOf(trustManager), null)
         }
         val clientBuilder = HttpClient.newBuilder()
-            .version(HttpClient.Version.HTTP_2)
+            .version(if (request.preferredProtocol == StandardApplicationProtocol.HTTP_1_1) HttpClient.Version.HTTP_1_1 else HttpClient.Version.HTTP_2)
             .sslContext(sslContext)
             .connectTimeout(
                 request.configuration.connectTimeoutMillis.coerceAtLeast(1L).milliseconds.toJavaDuration(),
@@ -260,6 +264,7 @@ internal actual class HttpTwoTransport actual constructor() {
 
     private data class ClientKey(
         val proxyPort: Int?,
+        val preferredProtocol: StandardApplicationProtocol,
         val verifySsl: Boolean,
         val connectTimeoutMillis: Long,
         val followRedirects: Boolean,
@@ -268,6 +273,7 @@ internal actual class HttpTwoTransport actual constructor() {
         companion object {
             fun from(request: HttpTwoTransportRequest): ClientKey = ClientKey(
                 proxyPort = request.proxyPort?.takeIf { it > 0 },
+                preferredProtocol = request.preferredProtocol,
                 verifySsl = request.configuration.verifySsl,
                 connectTimeoutMillis = request.configuration.connectTimeoutMillis.coerceAtLeast(1L),
                 followRedirects = request.configuration.followRedirects,

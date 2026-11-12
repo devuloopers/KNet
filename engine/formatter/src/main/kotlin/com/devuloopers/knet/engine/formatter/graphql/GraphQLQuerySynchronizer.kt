@@ -1,7 +1,7 @@
 package com.devuloopers.knet.engine.formatter.graphql
 
-import graphql.language.OperationDefinition
-import graphql.parser.Parser
+import com.devuloopers.knet.domain.graphql.GraphQLHttpDiagnostic
+
 
 /**
  * High-performance domain utility for real-time extraction and bidirectional synchronization
@@ -38,24 +38,10 @@ object GraphQLQuerySynchronizer {
         val trimmed = queryText.trim()
         if (trimmed.isEmpty()) return null
 
-        // 1. Try resilient AST Parser first for complete documents
-        try {
-            val document = Parser().parseDocument(trimmed)
-            val operationDef = document.definitions
-                .filterIsInstance<OperationDefinition>()
-                .firstOrNull()
-
-            if (operationDef != null) {
-                val name = operationDef.name
-                if (!name.isNullOrBlank()) {
-                    return name.trim()
-                } else {
-                    return null
-                }
-            }
-        } catch (_: Exception) {
-            // AST parsing might fail during live typing; gracefully fall back to regex
-        }
+        val decoded = GraphQLHttpRequestFormatter.inspect("POST", "", "application/graphql", trimmed.encodeToByteArray())
+            ?: return null
+        if (decoded.diagnostic == null) return decoded.selectedOperation?.name
+        if (decoded.diagnostic != GraphQLHttpDiagnostic.INVALID_DOCUMENT) return null
 
         // 2. Regex fallback for in-flight / partially typed documents
         val lines = queryText.lines()
@@ -77,6 +63,16 @@ object GraphQLQuerySynchronizer {
         return null
     }
 
+    /** Resolves editor selection without keeping a stale name on an anonymous document or choosing
+     * the first operation in a multi-operation document. Intermediate typing retains its selector. */
+    fun operationNameForEditedDocument(queryText: String, currentName: String): String {
+        val decoded = GraphQLHttpRequestFormatter.inspect("POST", "", "application/graphql", queryText.encodeToByteArray())
+        if (decoded?.diagnostic == null) return decoded?.selectedOperation?.name.orEmpty()
+        if (decoded.diagnostic == GraphQLHttpDiagnostic.INVALID_DOCUMENT)
+            return extractOperationName(queryText) ?: currentName
+        return currentName
+    }
+
     /**
      * Updates, adds, renames, or clears the operation name in a GraphQL query document
      * while preserving variable definitions, directives, indentation, and query body content.
@@ -88,6 +84,8 @@ object GraphQLQuerySynchronizer {
     fun updateOperationName(queryText: String, newOperationName: String): String {
         val sanitized = newOperationName.trim()
         val trimmedQuery = queryText.trim()
+        val facts = GraphQLHttpRequestFormatter.inspect("POST", "", "application/graphql", queryText.encodeToByteArray())
+        if (facts?.diagnostic == GraphQLHttpDiagnostic.AMBIGUOUS_OPERATION) return queryText
 
         // 1. Handle completely empty query text
         if (trimmedQuery.isEmpty()) {

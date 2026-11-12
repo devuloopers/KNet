@@ -15,6 +15,7 @@ kotlin {
                 implementation(project(":ui:desktop:httpPanel"))
                 implementation(project(":ui:desktop:codeEditor"))
                 implementation(project(":core:domain"))
+                implementation(project(":engine:formatter"))
                 implementation(project(":core:logger"))
                 implementation(libs.compose.runtime)
                 implementation(libs.compose.foundation)

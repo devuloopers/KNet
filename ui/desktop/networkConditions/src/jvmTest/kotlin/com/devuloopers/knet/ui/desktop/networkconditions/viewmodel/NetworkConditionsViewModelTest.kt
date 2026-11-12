@@ -50,6 +50,15 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.collectAsState
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.ImageComposeScene
+import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import com.devuloopers.knet.ui.desktop.networkconditions.view.NetworkConditionsRuntimeMonitoring
+import com.devuloopers.knet.ui.desktop.networkconditions.view.NetworkConditionsScreen
+import com.devuloopers.knet.ui.desktop.networkconditions.view.NetworkThroughputIndicator
+import java.awt.EventQueue
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -220,6 +229,37 @@ class NetworkConditionsViewModelTest {
     }
 
     @Test
+    fun `off 4g and 100 kbps switches retain one graph tick per second despite chunk telemetry`() = runTest(dispatcher) {
+        val repository = FakeRepository()
+        val telemetry = FakeTelemetry()
+        val viewModel = NetworkConditionsViewModel(repository, telemetry,
+            PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository))
+        viewModel.startRuntimeMonitoring()
+        advanceUntilIdle()
+        telemetry.mutable.value = NetworkConditionRuntimeSnapshot(sampledAtNanos = 1_000_000_000L)
+        advanceUntilIdle()
+        val profiles = listOf(null, NetworkConditionBuiltIns.MOBILE_4G.id, NetworkConditionBuiltIns.STREAMING_100_KBPS.id, null)
+        profiles.forEachIndexed { second, profileId ->
+            if (profileId == null) viewModel.setEnabled(false) else viewModel.activateGlobalProfile(profileId)
+            advanceUntilIdle()
+            assertEquals(second, viewModel.state.value.throughput.sampleCount)
+            repeat(100) { index ->
+                val chunk = second * 100L + index + 1L
+                telemetry.mutable.value = NetworkConditionRuntimeSnapshot(
+                    sampledAtNanos = 1_000_000_000L + chunk * 10_000_000L,
+                    downloadedBytes = chunk * 125L, uploadedBytes = chunk * 25L, queuedBytes = chunk,
+                )
+                advanceUntilIdle()
+                assertEquals(chunk, viewModel.state.value.runtime.queuedBytes)
+                assertEquals(if (index == 99) second + 1 else second, viewModel.state.value.throughput.sampleCount)
+            }
+            assertEquals(100_000L, viewModel.state.value.throughput.currentDownloadBitsPerSecond)
+            assertEquals(20_000L, viewModel.state.value.throughput.currentUploadBitsPerSecond)
+        }
+        viewModel.stopRuntimeMonitoring()
+    }
+
+    @Test
     fun `master global profile and reset actions preserve saved profiles and rules`() = runTest(dispatcher) {
         val repository = FakeRepository()
         val viewModel = NetworkConditionsViewModel(
@@ -373,6 +413,7 @@ class NetworkConditionsViewModelTest {
             PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository))
         advanceUntilIdle()
         val originalConfiguration = repository.configuration.value
+        assertEquals(NetworkConditionsTab.OVERVIEW, viewModel.state.value.activeTab)
 
         viewModel.startRuntimeMonitoring()
         viewModel.selectTab(NetworkConditionsTab.PROFILES)
@@ -386,11 +427,84 @@ class NetworkConditionsViewModelTest {
         assertEquals(100_000L, viewModel.state.value.throughput.currentDownloadBitsPerSecond)
         assertEquals(NetworkConditionsTab.PROFILES, viewModel.state.value.activeTab)
 
+        viewModel.selectTab(NetworkConditionsTab.RULES)
+        telemetry.mutable.value = NetworkConditionRuntimeSnapshot(sampledAtNanos = 3_000_000_000L, downloadedBytes = 25_000L)
+        advanceUntilIdle()
+        viewModel.selectTab(NetworkConditionsTab.OVERVIEW)
+        advanceUntilIdle()
+        assertEquals(NetworkConditionsTab.OVERVIEW, viewModel.state.value.activeTab)
+        assertEquals(2, viewModel.state.value.throughput.sampleCount)
+        assertEquals(100_000L, viewModel.state.value.throughput.currentDownloadBitsPerSecond)
+        assertEquals(originalConfiguration, repository.configuration.value)
+
         viewModel.prepareFromTraffic(exchange().id.value)
         advanceUntilIdle()
         assertEquals(NetworkConditionsTab.RULES, viewModel.state.value.activeTab)
         assertEquals(NetworkConditionBuiltIns.NO_THROTTLING.id, assertNotNull(viewModel.state.value.ruleDraft).profileId)
         viewModel.stopRuntimeMonitoring()
+    }
+
+    @OptIn(ExperimentalComposeUiApi::class)
+    @Test
+    fun `shared host keeps one sampler across traffic and overview and stops on departure or disposal`() = runTest(dispatcher) {
+        val repository = FakeRepository()
+        val telemetry = FakeTelemetry()
+        val viewModel = NetworkConditionsViewModel(repository, telemetry,
+            PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository))
+        val active = mutableStateOf(true)
+        val traffic = mutableStateOf(true)
+        lateinit var scene: ImageComposeScene
+        var frame = 0L
+        fun render() = EventQueue.invokeAndWait {
+            repeat(2) { frame += 1_000_000_000L; scene.render(frame).close() }
+        }
+        EventQueue.invokeAndWait {
+            scene = ImageComposeScene(1280, 800, content = {
+                KNetTheme {
+                    NetworkConditionsRuntimeMonitoring(viewModel, active.value)
+                    if (active.value) {
+                        if (traffic.value) NetworkThroughputIndicator(viewModel.state.collectAsState().value.throughput, {})
+                        else NetworkConditionsScreen(viewModel)
+                    }
+                }
+            })
+        }
+        try {
+            render(); advanceUntilIdle()
+            assertEquals(1, telemetry.mutable.subscriptionCount.value)
+            telemetry.mutable.value = NetworkConditionRuntimeSnapshot(sampledAtNanos = 1_000_000_000L)
+            advanceUntilIdle()
+            telemetry.mutable.value = NetworkConditionRuntimeSnapshot(sampledAtNanos = 2_000_000_000L,
+                downloadedBytes = 16_000L, uploadedBytes = 3_000L)
+            advanceUntilIdle()
+            assertEquals(128_000L, viewModel.state.value.throughput.currentDownloadBitsPerSecond)
+            assertEquals(24_000L, viewModel.state.value.throughput.currentUploadBitsPerSecond)
+            assertEquals(false, repository.configuration.value.enabled)
+
+            traffic.value = false; render(); advanceUntilIdle()
+            assertEquals(1, telemetry.mutable.subscriptionCount.value)
+            assertEquals(1, viewModel.state.value.throughput.sampleCount)
+            telemetry.mutable.value = NetworkConditionRuntimeSnapshot(sampledAtNanos = 3_000_000_000L,
+                downloadedBytes = 32_000L, uploadedBytes = 6_000L)
+            advanceUntilIdle()
+            traffic.value = true; render(); advanceUntilIdle()
+            assertEquals(1, telemetry.mutable.subscriptionCount.value)
+            assertEquals(2, viewModel.state.value.throughput.sampleCount)
+
+            active.value = false; render(); advanceUntilIdle()
+            assertEquals(0, telemetry.mutable.subscriptionCount.value)
+            telemetry.mutable.value = NetworkConditionRuntimeSnapshot(sampledAtNanos = 4_000_000_000L,
+                downloadedBytes = 1_000_000L)
+            advanceUntilIdle()
+            active.value = true; render(); advanceUntilIdle()
+            assertEquals(1, telemetry.mutable.subscriptionCount.value)
+            assertEquals(0, viewModel.state.value.throughput.sampleCount)
+            assertEquals(false, viewModel.state.value.throughput.currentSampleIsValid)
+        } finally {
+            EventQueue.invokeAndWait { scene.close() }
+            advanceUntilIdle()
+        }
+        assertEquals(0, telemetry.mutable.subscriptionCount.value)
     }
 
     @Test

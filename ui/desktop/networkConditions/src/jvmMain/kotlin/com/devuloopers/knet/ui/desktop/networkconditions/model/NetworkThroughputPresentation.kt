@@ -19,7 +19,7 @@ internal fun throughputReference(state: NetworkConditionsState): ThroughputRefer
     val configuration = state.configuration
     if (!configuration.enabled) return ThroughputReference("Conditions bypassed")
     if (configuration.rules.any { it.enabled }) return ThroughputReference("Mixed profiles")
-    val profile = configuration.profile(configuration.globalProfileId)
+    val profile = configuration.selectedGlobalProfile
         ?: return ThroughputReference("No global limit")
     val download = profile.download.effectiveBitsPerSecond
     val upload = profile.upload.effectiveBitsPerSecond

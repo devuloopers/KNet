@@ -25,6 +25,8 @@ import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePage
 import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePageCursor
 import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePageQuery
 import com.devuloopers.knet.application.contract.traffic.ProtocolMessageQuery
+import com.devuloopers.knet.application.contract.traffic.ProtocolMessageContextQuery
+import com.devuloopers.knet.traffic.model.message.ProtocolMessageSnapshot
 import com.devuloopers.knet.application.contract.traffic.TrafficPage
 import com.devuloopers.knet.application.contract.traffic.TrafficPageQuery
 import com.devuloopers.knet.application.contract.traffic.TrafficQuery
@@ -143,6 +145,14 @@ class DesktopTrafficQueryAdapter(
             },
             totalCount = totalCount,
         )
+    }
+
+    override suspend fun queryContext(query: ProtocolMessageContextQuery): List<ProtocolMessageSnapshot> {
+        val entities = dao.getDuplexMessageContext(query.exchangeId.value, query.beforeMessageId.value,
+            query.protocol.value, query.direction?.name, query.kind.value, query.limit)
+        val bodies = entities.mapNotNull { it.bodyId }.distinct().takeIf { it.isNotEmpty() }
+            ?.let { dao.getBodies(it).associateBy { body -> body.id } } ?: emptyMap()
+        return entities.map { CanonicalCaptureEntityMapper.messageSnapshot(it, bodies) }
     }
 
     private fun adapter(sessionId: CaptureSessionId?): CanonicalTrafficQueryAdapter =

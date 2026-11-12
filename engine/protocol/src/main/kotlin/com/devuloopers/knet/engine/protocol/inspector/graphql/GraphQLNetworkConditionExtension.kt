@@ -88,38 +88,19 @@ class GraphQLNetworkConditionExtension(
         val contentType = input.request.head.headers.firstOrNull { header ->
             header.name.value.equals(CONTENT_TYPE_HEADER, ignoreCase = true)
         }?.value.orEmpty()
-        val endpointHint = absoluteUrl.contains(GRAPHQL_PATH_HINT, ignoreCase = true) ||
-            contentType.contains(GRAPHQL_MEDIA_HINT, ignoreCase = true)
-        val document = input.requestBody
-            ?.takeIf { input.requestBodyComplete }
-            ?.copyBytes()
-            ?.let(parser::parse)
-        if (document != null) {
-            return Observation(
-                document.operations.map { operation -> Operation(operation.name, operation.type.token()) },
-            )
-        }
-        val operationName = queryParameter(absoluteUrl, OPERATION_NAME_QUERY_PARAMETER)
-            ?.takeIf(::validOperationName)
-        return if (endpointHint) {
-            Observation(operationName?.let { name -> listOf(Operation(name, QUERY)) }.orEmpty())
-        } else {
-            null
-        }
+        val document = parser.decodeHttp(input.request.head.method.token, absoluteUrl, contentType,
+            input.requestBody?.copyBytes(), input.requestBodyComplete) ?: return null
+        return Observation(document.matchableOperations.map { Operation(it.name, it.type.token()) })
     }
 
     override fun shouldInspectHttpBody(input: NetworkConditionHttpInspectionInput): Boolean {
-        val absoluteUrl = input.request.absoluteUrl()
-        if (absoluteUrl.contains(GRAPHQL_PATH_HINT, ignoreCase = true)) return true
-        val contentType = input.request.head.headers.firstOrNull { header ->
-            header.name.value.equals(CONTENT_TYPE_HEADER, ignoreCase = true)
+        if (input.request.head.method.token.equals("GET", true)) return false
+        val contentType = input.request.head.headers.firstOrNull {
+            it.name.value.equals(CONTENT_TYPE_HEADER, true)
         }?.value?.substringBefore(';')?.trim()?.lowercase()
-        return when {
-            contentType == null -> input.request.head.method.token.equals(POST_METHOD, ignoreCase = true)
-            contentType.contains(GRAPHQL_MEDIA_HINT) -> true
-            contentType == JSON_MEDIA_TYPE || contentType.endsWith(JSON_SUFFIX) -> true
-            else -> false
-        }
+        return input.request.head.method.token.equals(POST_METHOD, true) &&
+            (contentType == null || contentType.contains(GRAPHQL_MEDIA_HINT) ||
+                contentType == JSON_MEDIA_TYPE || contentType.endsWith(JSON_SUFFIX))
     }
 
     override fun editorValues(criteria: NetworkConditionProtocolCriteria): List<ProtocolCriteriaValue> {
@@ -188,6 +169,7 @@ class GraphQLNetworkConditionExtension(
             .firstOrNull { candidate -> candidate.kind == GraphQLInspectionSchema.DOCUMENT_KIND }
             ?: return null
         val fields = document.fields.associate { field -> field.label to field.value.trim() }
+        if (fields[GraphQLInspectionSchema.DIAGNOSTIC_FIELD] != null) return createCriteria(emptyList())
         val batchSize = fields[GraphQLInspectionSchema.BATCH_SIZE_FIELD]?.toIntOrNull() ?: 1
         if (batchSize > 1) return createCriteria(emptyList())
         val operationName = fields[GraphQLInspectionSchema.OPERATION_NAME_FIELD].orEmpty()
@@ -219,15 +201,6 @@ class GraphQLNetworkConditionExtension(
             ?: return null
         return Criteria(operationName, operationType)
     }
-
-    private fun queryParameter(url: String, name: String): String? = url
-        .substringAfter('?', missingDelimiterValue = "")
-        .split('&')
-        .asSequence()
-        .map { parameter -> parameter.substringBefore('=') to parameter.substringAfter('=', "") }
-        .firstOrNull { parameter -> parameter.first == name }
-        ?.second
-        ?.takeIf(String::isNotBlank)
 
     private fun validOperationName(value: String): Boolean =
         value.length <= MAXIMUM_OPERATION_NAME_CHARACTERS && GRAPHQL_NAME.matches(value)

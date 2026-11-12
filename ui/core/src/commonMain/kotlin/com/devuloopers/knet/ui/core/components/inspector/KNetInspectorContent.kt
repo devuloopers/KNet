@@ -3,7 +3,6 @@ package com.devuloopers.knet.ui.core.components.inspector
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -19,12 +18,14 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * Shared inspector overflow policy: retain the design-system minimum readable width and expose both scrollbars.
  * The feature supplies content only; dimensions, padding and clipping are owned here.
  * @param modifier Viewport supplied by the hosting split pane.
+ * @param contentIdentity Resets only scroll offsets when the captured item changes, without remounting its content.
  * @param content Finite metadata and actions rendered in the scrolling inspector column.
  */
 @Composable
-fun KNetInspectorContent(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
-    val vertical = rememberScrollState()
-    val horizontal = rememberScrollState()
+fun KNetInspectorContent(modifier: Modifier = Modifier, contentIdentity: String? = null,
+    content: @Composable ColumnScope.() -> Unit) {
+    val vertical = rememberInspectorScrollState(contentIdentity)
+    val horizontal = rememberInspectorScrollState(contentIdentity)
     val spacing = KNetTheme.spacing
     BoxWithConstraints(modifier.background(KNetTheme.colors.surface)) {
         val contentWidth = maxOf(maxWidth - spacing.md, KNetTheme.dimensions.inspectorMinWidth)

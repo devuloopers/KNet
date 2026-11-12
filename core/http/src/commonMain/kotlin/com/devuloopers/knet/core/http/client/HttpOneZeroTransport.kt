@@ -2,6 +2,7 @@ package com.devuloopers.knet.core.http.client
 
 import com.devuloopers.knet.core.http.config.HttpClientConfiguration
 import com.devuloopers.knet.domain.clientNetwork.model.OutboundRequestBody
+import com.devuloopers.knet.traffic.model.http.StandardApplicationProtocol
 import com.devuloopers.knet.traffic.model.http.ApplicationProtocol
 import com.devuloopers.knet.traffic.model.http.HttpMethod
 
@@ -27,6 +28,8 @@ internal data class HttpTwoTransportRequest(
     val localProxyTlsTrust: LocalProxyTlsTrust?,
     /** When true, an HTTP/1.1 negotiation result is a request failure rather than a valid fallback. */
     val requireHttpTwo: Boolean,
+    /** Exact HTTP/1.1 uses the same raw-URI adapter to preserve repeated query-pair ordering. */
+    val preferredProtocol: StandardApplicationProtocol = StandardApplicationProtocol.HTTP_2,
 )
 
 /** Raw response returned before shared decoding, cookie storage, and presentation mapping. */

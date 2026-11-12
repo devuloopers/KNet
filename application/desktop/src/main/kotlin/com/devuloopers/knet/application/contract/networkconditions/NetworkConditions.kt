@@ -39,7 +39,11 @@ public data class NetworkConditionRuntimeSnapshot(
     public val appliedRuleIds: Set<NetworkConditionRuleId> = emptySet(),
 )
 
-/** Read-only telemetry boundary; payloads and URLs never cross it. */
+/**
+ * Read-only cumulative telemetry boundary; payloads and URLs never cross it.
+ * Production engines publish on a subscriber-owned one-second clock, not per delayed chunk or fault.
+ * Consumers derive rates from monotonic timestamps and must not treat extra observations as elapsed seconds.
+ */
 public interface NetworkConditionRuntimeTelemetry {
     public val snapshot: StateFlow<NetworkConditionRuntimeSnapshot>
 }

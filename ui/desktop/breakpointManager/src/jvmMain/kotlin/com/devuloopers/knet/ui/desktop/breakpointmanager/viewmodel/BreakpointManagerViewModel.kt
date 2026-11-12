@@ -1,5 +1,6 @@
 package com.devuloopers.knet.ui.desktop.breakpointmanager.viewmodel
 
+import com.devuloopers.knet.traffic.model.absoluteUrl
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.application.contract.breakpoint.BreakpointRequestEdit
@@ -346,6 +347,8 @@ class BreakpointManagerViewModel(
             transactionId = event.id,
             requestPayloadSpec = requestBodySpec,
             responsePayloadSpec = responseBodySpec,
+            requestParameters = com.devuloopers.knet.ui.desktop.httppanel.model.GraphQLParameterEditorState.prepare(
+                event.candidate.request.head.method.token, event.candidate.request.absoluteUrl()),
         )
     }
 

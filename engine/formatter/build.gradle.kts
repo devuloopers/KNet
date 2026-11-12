@@ -5,6 +5,7 @@ plugins {
 dependencies {
     implementation(project(":core:domain"))
     implementation(project(":engine:sse"))
+    implementation(project(":engine:protocol"))
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.brotli.dec)

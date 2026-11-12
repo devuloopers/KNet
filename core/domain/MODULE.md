@@ -71,3 +71,10 @@ separate atomic update use case. Neither contract contains platform runtime coll
 Protected Traffic defaults distinguish automatic Inspect from Inspect only, Tunnel and Block. Manual rule actions
 and their precedence are unchanged; AutomaticFallback is runtime decision evidence, not a saved action or preset.
 See `docs/automatic_tls_fallback.md`.
+
+## GraphQL HTTP contracts
+
+`domain.graphql` contains immutable, platform-neutral derived-source, selected-operation, diagnostic and
+editable-field types for GraphQL HTTP. These models do not parse requests or depend on graphql-java.
+The execution use case retains an unchanged target when the supplied query rows already describe it,
+so replay does not normalize raw flag parameters or percent spelling merely by rebuilding them.

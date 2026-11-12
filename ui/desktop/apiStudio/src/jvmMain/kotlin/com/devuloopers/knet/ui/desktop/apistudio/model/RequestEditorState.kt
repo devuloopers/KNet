@@ -1,5 +1,7 @@
 package com.devuloopers.knet.ui.desktop.apistudio.model
 
+import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQLParameterEditorState
+
 import com.devuloopers.knet.scripting.model.ScriptLanguage
 import com.devuloopers.knet.domain.clientNetwork.model.HttpVersionPreference
 import com.devuloopers.knet.scripting.model.ScriptPhase
@@ -52,6 +54,8 @@ data class RequestEditorState(
     val automaticHeaderIds: Set<String> = emptySet(),
 
     val authState: AuthState = AuthState(),
+    /** Derived URL GraphQL editor fields, rebuilt off-thread and never persisted as a body. */
+    val graphQLParameters: GraphQLParameterEditorState? = null,
     val bodyState: RequestBodyState = RequestBodyState(mode = RequestBodyMode.NONE),
     val preRequestScript: String = "",
     val testScript: String = "",

@@ -31,6 +31,50 @@ import kotlin.test.assertTrue
 
 class RoomNetworkConditionsRepositoryTest {
     @Test
+    fun `saved unlimited aliases and renamed unstable profile references survive database reopen`() = runTest {
+        for (globalId in listOf(null, NetworkConditionBuiltIns.NO_THROTTLING.id)) {
+            val root = Files.createTempDirectory("knet-preset-compatibility-").toFile()
+            val file = root.resolve("knet.db")
+            val rules = listOf(
+                NetworkConditionRule(NetworkConditionRuleId("saved-unlimited"), NetworkConditionTarget.parse("unlimited.example", 443),
+                    NetworkConditionProfileId("no-throttling")),
+                NetworkConditionRule(NetworkConditionRuleId("saved-unstable"), NetworkConditionTarget.parse("unstable.example", 443),
+                    NetworkConditionProfileId("lossy-unstable")),
+            )
+            val database = DatabaseFactory.create(file)
+            val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            try {
+                val repository = RoomNetworkConditionsRepository(database, scope)
+                rules.forEach { repository.upsertRule(it) }
+                repository.activateGlobalProfile(globalId)
+                repository.configuration.first { it.enabled && it.rules.size == rules.size && it.globalProfileId == globalId }
+            } finally {
+                scope.coroutineContext.job.cancelAndJoin()
+                database.close()
+            }
+            val reopened = DatabaseFactory.create(file)
+            val reopenedScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            try {
+                val restored = RoomNetworkConditionsRepository(reopened, reopenedScope).configuration.first {
+                    it.enabled && it.rules.size == rules.size
+                }
+                assertEquals(globalId, restored.globalProfileId, "Presentation cleanup must not migrate stored identities")
+                assertEquals(rules.toSet(), restored.rules.toSet())
+                val unlimited = NetworkConditionMatcher.resolve(restored, "unlimited.example", 443)!!.profile
+                assertEquals("No throttling", unlimited.name)
+                assertTrue(unlimited.isPassThrough)
+                val unstable = NetworkConditionMatcher.resolve(restored, "unstable.example", 443)!!.profile
+                assertEquals("lossy-unstable", unstable.id.value)
+                assertEquals("Unstable connection", unstable.name)
+            } finally {
+                reopenedScope.coroutineContext.job.cancelAndJoin()
+                reopened.close()
+                root.deleteRecursively()
+            }
+        }
+    }
+
+    @Test
     fun `quick activation preserves rules and profiles while off unlimited and domain only stay distinct`() = runTest {
         val root = Files.createTempDirectory("knet-network-quick-control-").toFile()
         val file = root.resolve("knet.db")

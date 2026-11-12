@@ -48,6 +48,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.compositeOver
@@ -57,8 +60,11 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -76,9 +82,12 @@ import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import com.devuloopers.knet.ui.core.components.input.OverflowTextPopupHost
 import com.devuloopers.knet.ui.core.components.scrollbar.KNetVerticalScrollbar
+import com.devuloopers.knet.ui.core.components.tooltip.KNetTooltipHost
+import com.devuloopers.knet.ui.core.components.tooltip.KNetTooltipPlacement
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.dimensions.KNetDimensions
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import kotlin.math.roundToInt
 
 /** Density presets shared by KNet single-select and multi-select dropdowns. */
 enum class KNetDropdownSize {
@@ -166,6 +175,7 @@ object KNetDropdownDefaults {
  * @param centeredAnchorContent Whether the selected label and chevron form one centered, compact group.
  * @param itemText Converts a value into visible text.
  * @param itemColor Optionally supplies a semantic text color for a value.
+ * @param itemDescription Optional contextual help for each option and the current selection. Blank values omit help.
  */
 @Composable
 fun <T> KNetDropdown(
@@ -180,6 +190,7 @@ fun <T> KNetDropdown(
     centeredAnchorContent: Boolean = false,
     itemText: (T) -> String = { it.toString() },
     itemColor: ((T) -> Color?)? = null,
+    itemDescription: ((T) -> String?)? = null,
 ) {
     val colors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -189,6 +200,31 @@ fun <T> KNetDropdown(
     val expansionState = rememberDropdownExpansionState()
     val expanded = expansionState.expanded
     var anchorSizePx by remember { mutableStateOf(IntSize.Zero) }
+    var keyboardIndex by remember(expanded, items) { mutableStateOf(-1) }
+    val optionFocusRequesters = remember(items) { items.map { FocusRequester() } }
+
+    // Non-focusable popup layers retain the anchor's keyboard routing on desktop. Route the same menu commands
+    // from both owners, while the actual row focus supplies accessibility and delayed contextual help.
+    fun handleMenuKey(key: Key): Boolean {
+        if (!expanded || items.isEmpty()) return false
+        return when (key) {
+            Key.DirectionDown, Key.DirectionUp -> {
+                val current = keyboardIndex.takeIf { it >= 0 } ?: items.indexOf(selectedItem).coerceAtLeast(0)
+                val delta = if (key == Key.DirectionDown) 1 else -1
+                keyboardIndex = (current + delta + items.size) % items.size
+                optionFocusRequesters[keyboardIndex].requestFocus()
+                true
+            }
+            Key.Enter, Key.Spacebar -> {
+                val index = keyboardIndex.takeIf { it >= 0 } ?: items.indexOf(selectedItem)
+                if (index in items.indices) onItemSelected(items[index])
+                expansionState.close()
+                true
+            }
+            Key.Escape -> { expansionState.close(); true }
+            else -> false
+        }
+    }
 
     val isDefaultSelected = selectedItem == defaultItem
     val displayText = if (isDefaultSelected && !placeholder.isNullOrBlank()) placeholder else itemText(selectedItem)
@@ -249,18 +285,24 @@ fun <T> KNetDropdown(
             .width(animatedAnchorWidth)
             .onSizeChanged { anchorSizePx = it }
     ) {
-        KNetDropdownAnchor(
-            text = displayText,
-            expanded = expanded,
-            enabled = canExpand,
-            size = size,
-            textColor = textColor,
-            fontWeight = anchorFontWeight,
-            centeredContent = centeredAnchorContent,
-            onToggle = { expansionState.toggle() },
-            onOpen = expansionState::open,
-            onClose = expansionState::close,
-        )
+        val selectedDescription = itemDescription?.invoke(selectedItem)?.takeIf(String::isNotBlank)
+        KNetTooltipHost(selectedDescription, enabled = canExpand && !expanded) { interactionSource ->
+            KNetDropdownAnchor(
+                text = displayText,
+                expanded = expanded,
+                enabled = canExpand,
+                size = size,
+                textColor = textColor,
+                fontWeight = anchorFontWeight,
+                centeredContent = centeredAnchorContent,
+                onToggle = { expansionState.toggle() },
+                onOpen = expansionState::open,
+                onClose = expansionState::close,
+                interactionSource = interactionSource,
+                description = selectedDescription,
+                onExpandedKeyDown = ::handleMenuKey,
+            )
+        }
 
         KNetDropdownPopup(
             expanded = expanded,
@@ -269,10 +311,16 @@ fun <T> KNetDropdown(
             preferredMenuWidth = animatedMenuWidth
         ) {
             val menuScrollState = rememberScrollState()
+            var menuBounds by remember { mutableStateOf<IntRect?>(null) }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = KNetDropdownDefaults.MaxMenuHeight)
+                    .onGloballyPositioned { coordinates ->
+                        val bounds = coordinates.boundsInWindow()
+                        menuBounds = IntRect(bounds.left.roundToInt(), bounds.top.roundToInt(),
+                            bounds.right.roundToInt(), bounds.bottom.roundToInt())
+                    }
             ) {
                 Column(
                     modifier = Modifier
@@ -280,13 +328,21 @@ fun <T> KNetDropdown(
                         .heightIn(max = KNetDropdownDefaults.MaxMenuHeight)
                         .verticalScroll(menuScrollState)
                 ) {
-                    items.forEach { item ->
+                    items.forEachIndexed { index, item ->
                         val isSelected = item == selectedItem
                         val customColor = itemColor?.invoke(item)?.takeUnless { it == Color.Unspecified }
                         KNetDropdownMenuItem(
                             text = itemText(item),
                             selected = isSelected,
                             textColor = customColor,
+                            description = itemDescription?.invoke(item),
+                            tooltipAvoidBounds = menuBounds,
+                            highlighted = keyboardIndex == index,
+                            modifier = Modifier.focusRequester(optionFocusRequesters[index])
+                                .onFocusChanged { if (it.isFocused) keyboardIndex = index }
+                                .onPreviewKeyEvent { event ->
+                                    event.type == KeyEventType.KeyDown && handleMenuKey(event.key)
+                                },
                             onClick = {
                                 onItemSelected(item)
                                 expansionState.close()
@@ -323,13 +379,15 @@ internal fun KNetDropdownAnchor(
     onToggle: () -> Unit,
     onOpen: () -> Unit,
     onClose: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+    description: String? = null,
+    onExpandedKeyDown: ((Key) -> Boolean)? = null,
 ) {
     val colors = KNetTheme.colors
     val typography = KNetTheme.typography
     val shapes = KNetTheme.shapes
     val motion = KNetTheme.motion
-    val interactionSource = remember { MutableInteractionSource() }
     val hovered by interactionSource.collectIsHoveredAsState()
     val focused by interactionSource.collectIsFocusedAsState()
     val fieldHeight = KNetDropdownDefaults.fieldHeight(size)
@@ -376,6 +434,7 @@ internal fun KNetDropdownAnchor(
             ) { onToggle() }
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown || !enabled) return@onPreviewKeyEvent false
+                if (expanded && onExpandedKeyDown?.invoke(event.key) == true) return@onPreviewKeyEvent true
                 when (event.key) {
                     Key.Enter, Key.Spacebar, Key.DirectionDown, Key.DirectionUp -> {
                         onOpen()
@@ -388,7 +447,10 @@ internal fun KNetDropdownAnchor(
                     else -> false
                 }
             }
-            .semantics { stateDescription = if (expanded) "Expanded" else "Collapsed" }
+            .semantics {
+                stateDescription = if (expanded) "Expanded" else "Collapsed"
+                if (!description.isNullOrBlank()) contentDescription = description
+            }
             .handCursor(enabled),
         horizontalArrangement = if (centeredContent) Arrangement.Center else Arrangement.Start,
         verticalAlignment = Alignment.CenterVertically
@@ -396,7 +458,7 @@ internal fun KNetDropdownAnchor(
         OverflowTextPopupHost(
             text = text,
             textStyle = anchorTextStyle,
-            enabled = text.isNotEmpty(),
+            enabled = text.isNotEmpty() && description.isNullOrBlank(),
             modifier = if (centeredContent) {
                 Modifier
             } else {
@@ -616,7 +678,9 @@ internal fun KNetDropdownMenuItem(
     modifier: Modifier = Modifier,
     highlighted: Boolean = false,
     textColor: Color? = null,
-    content: (@Composable () -> Unit)? = null
+    content: (@Composable () -> Unit)? = null,
+    description: String? = null,
+    tooltipAvoidBounds: IntRect? = null,
 ) {
     val colors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -631,7 +695,9 @@ internal fun KNetDropdownMenuItem(
         color = resolvedTextColor,
         fontWeight = resolvedFontWeight
     )
-    DropdownMenuItem(
+    KNetTooltipHost(description, modifier = Modifier.fillMaxWidth(), placement = KNetTooltipPlacement.Beside,
+        avoidBounds = tooltipAvoidBounds) { interactionSource ->
+      DropdownMenuItem(
         text = {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -646,7 +712,7 @@ internal fun KNetDropdownMenuItem(
                     OverflowTextPopupHost(
                         text = text,
                         textStyle = itemTextStyle,
-                        enabled = true,
+                        enabled = description.isNullOrBlank(),
                         modifier = Modifier.weight(1f),
                         contentAlignment = Alignment.CenterStart
                     ) {
@@ -670,12 +736,17 @@ internal fun KNetDropdownMenuItem(
             }
         },
         onClick = onClick,
+        interactionSource = interactionSource,
         contentPadding = PaddingValues(horizontal = KNetDropdownDefaults.HorizontalPadding),
         modifier = modifier
             .fillMaxWidth()
             .height(KNetDropdownDefaults.ItemHeight)
             .background(background)
-            .semantics { this.selected = selected }
+            .semantics {
+                this.selected = selected
+                if (!description.isNullOrBlank()) contentDescription = description
+            }
             .handCursor()
-    )
+      )
+    }
 }

@@ -20,5 +20,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
 data class ResolvedInterceptPayload(
     val transactionId: String,
     val requestPayloadSpec: PayloadInspectionSpec,
-    val responsePayloadSpec: PayloadInspectionSpec
+    val responsePayloadSpec: PayloadInspectionSpec,
+    /** Off-thread prepared GET fields; URL remains the only request source. */
+    val requestParameters: com.devuloopers.knet.ui.desktop.httppanel.model.GraphQLParameterEditorState? = null,
 )

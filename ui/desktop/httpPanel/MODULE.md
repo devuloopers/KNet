@@ -24,6 +24,9 @@ Provides reusable HTTP request/response inspection and editing panels for Traffi
   separators remain caller-owned and edge-to-edge where intended.
 - Params, Headers, and Cookies reuse one request-panel placement policy that insets and clips their editable
   key-value table surfaces to the same medium spacing and corner tokens as the primary tabs.
+- GET GraphQL authoring uses the same inset for its shared GraphQL / Raw parameters tab bar, source label,
+  diagnostics, and structured editor. The raw key-value table keeps its existing inset; tab overflow remains
+  owned by the design-system tab row across API Studio and interception.
 - Reusable typed request-editor rows; query, header, cookie, and structured-body entries retain identity and
   enabled state instead of being projected through lossy `Pair` lists.
 - Packaged default response-editor documents, including the HTML template loaded from module resources rather
@@ -52,3 +55,22 @@ the constraint-stable tab primitive from `:ui:core`; GraphQL authoring allocates
 to its scrollable tabs while preserving the operation-name field.
 
 Auth type and API-key location selectors inherit the shared selected-label width and animation without local width overrides.
+
+The GraphQL body viewer supports optional controlled sub-tab selection through SmartBodyViewer and RequestViewPanel.
+Default consumers retain local selection. Query-view availability reads already prepared formats without body parsing
+in composables. See the query shortcut in `docs/traffic_inspector_redesign.md`.
+
+## GraphQL HTTP sources
+
+The shared GraphQL viewer labels JSON body versus URL parameters. GET uses Params > Query/Variables/
+Extensions/Raw parameters; POST uses Body > Query/Variables/Extensions/Raw JSON. Prepared GET data is
+separate from `PayloadInspectionSpec` for captured body bytes. `GraphQLParameterEditorState` is a derived,
+nonpersistent URL editor projection. The shared parameter editor keeps raw rows accessible and never
+serializes its decoded view as a synthetic body. JSON body edits preserve unrelated envelope fields.
+
+GraphQL Variables/Extensions arrive as an indented read-only projection prepared by the formatter adapter.
+Composables do not parse or pretty-print JSON; raw parameter/body views and editable buffers keep their source text.
+
+GET GraphQL authoring preparation also prettifies initial Query/Variables/Extensions through the same bounded
+formatters, independently of the canonical URL. Validation-only preparation disables display formatting so active
+buffers and incomplete input are retained by API Studio and interception.

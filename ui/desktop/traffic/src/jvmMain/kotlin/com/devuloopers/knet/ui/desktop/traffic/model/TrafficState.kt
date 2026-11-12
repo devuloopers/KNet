@@ -83,6 +83,14 @@ data class ProtocolMessagesUiState(
     }
 }
 
+/** A live page refresh may change counts without changing the selected message or its prepared payload. */
+internal fun ProtocolMessagesUiState.retainPreparedSelection(previous: ProtocolMessagesUiState): ProtocolMessagesUiState =
+    if (exchangeId == previous.exchangeId && selectedMessage != null && selectedMessage == previous.selectedMessage) {
+        copy(selectedBodyBytes = previous.selectedBodyBytes, selectedBodyPresentation = previous.selectedBodyPresentation,
+            selectedBodyUnavailable = previous.selectedBodyUnavailable, selectedBodyTruncated = previous.selectedBodyTruncated,
+            isBodyLoading = previous.isBodyLoading)
+    } else this
+
 private fun ByteArray?.contentEqualsNullable(other: ByteArray?): Boolean = when {
     this === other -> true
     this == null || other == null -> false

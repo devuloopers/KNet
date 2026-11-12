@@ -365,6 +365,41 @@ class OpaqueFlowInspectorTest {
         }
     }
 
+    @Test fun `UDP and QUIC remain metadata only without unsupported TLS choices`() = onUiThread {
+        val fixture = ProtectionFixture()
+        for (security in listOf(OpaqueSecurityProtocol.QUIC, OpaqueSecurityProtocol.UNKNOWN)) {
+            val row = fixture.captured.copy(security = security,
+                transport = OpaqueTransportProtocol.UDP, inspectionFailureReason = null,
+                policyAction = OpaqueFlowPolicyAction.TUNNEL,
+                terminalOutcome = ExchangeTerminalOutcome.Failed(TrafficTerminationReason.Unspecified.FAILURE))
+                .toTrafficRowUiState(1)
+            scene(row, fixture.state(), TrafficProtectionActions({})).use { scene ->
+                scene.frame()
+                assertTrue(scene.nodes().any { it.text() == "Failed" })
+                assertFalse(scene.nodes().any { it.text() == "TLS Rejected" })
+                assertTrue(scene.nodes().any { it.text() == "Transport connection · metadata only" })
+                assertFalse(scene.nodes().any { it.text() in listOf("Always tunnel", "Inspect next time", "Future connections", "Device rejected KNet’s certificate") })
+                if (security == OpaqueSecurityProtocol.QUIC)
+                    assertTrue(scene.nodes().any { it.text().contains("decrypted HTTP/3 requests and responses are unavailable") })
+                scene.save("opaque-${security.name.lowercase()}")
+            }
+        }
+    }
+
+    @Test fun `changing TLS records keeps the inspector mounted and clears the previous policy view`() = onUiThread {
+        val fixture = ProtectionFixture()
+        val row = mutableStateOf(fixture.captured.toTrafficRowUiState(1))
+        ImageComposeScene(680, 900, content = { KNetTheme {
+            OpaqueFlowInspectorPanel(row.value, fixture.state(), TrafficProtectionActions({}))
+        }}).use { scene ->
+            scene.frame()
+            val future = scene.nodes().single { it.text() == "Future connections" }.id
+            row.value = row.value.copy(transactionId = "different-flow"); scene.frame()
+            assertEquals(future, scene.nodes().single { it.text() == "Future connections" }.id)
+            assertTrue(scene.nodes().any { it.text() == "Loading…" })
+        }
+    }
+
     private fun ImageComposeScene.action(action:ProtectedTrafficAction)=nodes().first {
         it.config.getOrNull(SemanticsProperties.TestTag)=="Protection action ${action.name}"
     }

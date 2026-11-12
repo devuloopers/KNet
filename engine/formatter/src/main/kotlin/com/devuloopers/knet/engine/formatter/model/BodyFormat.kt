@@ -165,7 +165,13 @@ sealed interface BodyFormat {
         val operationName: String?,
         val queryText: String,
         val variablesJson: String,
-        val extensionsJson: String = ""
+        val extensionsJson: String = "",
+        /** Authoritative HTTP source, never inferred from a synthetic body. */
+        val source: com.devuloopers.knet.domain.graphql.GraphQLHttpSource = com.devuloopers.knet.domain.graphql.GraphQLHttpSource.JSON_BODY,
+        /** Explicit extraction/selection diagnostic shown beside retained source. */
+        val diagnostic: com.devuloopers.knet.domain.graphql.GraphQLHttpDiagnostic? = null,
+        /** Request selector, distinct from a document-derived name. */
+        val suppliedOperationName: String? = null,
     ) : BodyFormat, HasTextContent {
         override val badgeLabel: String
             get() = if (!operationName.isNullOrEmpty()) "GQL: $operationName" else "GQL: $operationType"

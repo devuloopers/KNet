@@ -25,6 +25,16 @@ Implements deterministic network-condition simulation for proxied connections.
 - Latency, bandwidth, packet/connection behavior profiles and runtime statistics.
 - Netty handlers that apply selected simulation policy.
 
+The sole preset catalog is NetworkConditionBuiltIns in core domain. The unused NetworkProfiles/NetworkProfile,
+NetworkSimulatorManager, KNetNetworkSimulatorHandler and NetworkSimulationStats path and its implementation-only
+tests were removed on 2026-11-12. Production-engine tests retain aggregate shaping, deterministic faults, live
+replanning, pass-through accounting, bounded queues and channel removal/EOF/reference ownership coverage.
+
+Shaping reservations, forwarded chunks and flow faults update aggregate counters without publishing presentation
+objects. One subscriber-owned coroutine publishes telemetry each second and stops when no observer remains;
+profile changes do not restart or accelerate that clock. Explicit refresh is an internal test/embedder boundary.
+Graph-clock regression evidence is recorded in `docs/network_conditions_implementation_plan.md`.
+
 ## Does not own
 
 - Proxy startup, UI state, persisted preferences, connectivity, or traffic storage.

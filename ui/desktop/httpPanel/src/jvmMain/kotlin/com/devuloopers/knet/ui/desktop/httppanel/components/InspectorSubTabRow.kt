@@ -1,6 +1,8 @@
 package com.devuloopers.knet.ui.desktop.httppanel.components
 
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.Alignment
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.devuloopers.knet.ui.core.components.tabs.KNetTab
@@ -18,6 +20,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
  * @param paramCount Query param entries count.
  * @param cookieCount Cookie entries count.
  * @param modifier Composable layout modifier.
+ * @param actions Optional pinned inspector actions; the shared tab row owns horizontal overflow.
  */
 @Composable
 fun InspectorSubTabRow(
@@ -27,26 +30,28 @@ fun InspectorSubTabRow(
     headerCount: Int = 0,
     paramCount: Int = 0,
     cookieCount: Int = 0,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    actions: (@Composable () -> Unit)? = null,
 ) {
-    KNetTabRow(
-        modifier = modifier.fillMaxWidth()
-    ) {
-        tabs.forEach { subTab ->
-            val isSelected = subTab == activeTab
-            val labelText = when (subTab) {
-                InspectorSubTab.PARAMS -> "Params ($paramCount)"
-                InspectorSubTab.AUTH -> "Auth"
-                InspectorSubTab.HEADERS -> "Headers ($headerCount)"
-                InspectorSubTab.BODY -> "Body"
-                InspectorSubTab.COOKIES -> if (cookieCount > 0) "Cookies ($cookieCount)" else "Cookies"
-                InspectorSubTab.SCRIPTS -> "Scripts"
+    Row(modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        KNetTabRow(modifier = Modifier.weight(1f)) {
+            tabs.forEach { subTab ->
+                val isSelected = subTab == activeTab
+                val labelText = when (subTab) {
+                    InspectorSubTab.PARAMS -> "Params ($paramCount)"
+                    InspectorSubTab.AUTH -> "Auth"
+                    InspectorSubTab.HEADERS -> "Headers ($headerCount)"
+                    InspectorSubTab.BODY -> "Body"
+                    InspectorSubTab.COOKIES -> if (cookieCount > 0) "Cookies ($cookieCount)" else "Cookies"
+                    InspectorSubTab.SCRIPTS -> "Scripts"
+                }
+                KNetTab(
+                    title = labelText,
+                    selected = isSelected,
+                    onClick = { onTabSelected(subTab) }
+                )
             }
-            KNetTab(
-                title = labelText,
-                selected = isSelected,
-                onClick = { onTabSelected(subTab) }
-            )
         }
+        actions?.invoke()
     }
 }

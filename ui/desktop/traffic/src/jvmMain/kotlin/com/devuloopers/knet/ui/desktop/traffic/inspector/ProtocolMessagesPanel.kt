@@ -15,7 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -23,7 +23,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
+import com.devuloopers.knet.ui.core.components.inspector.*
+import com.devuloopers.knet.ui.core.components.divider.HorizontalDivider
 import com.devuloopers.knet.traffic.id.ProtocolMessageId
 import com.devuloopers.knet.traffic.model.TrafficDirection
 import com.devuloopers.knet.traffic.model.message.ProtocolMessageSnapshot
@@ -38,202 +39,144 @@ import com.devuloopers.knet.ui.desktop.httppanel.components.SmartBodyViewer
 import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
 import com.devuloopers.knet.ui.desktop.traffic.model.ProtocolMessagesUiState
 
-/** Protocol-neutral framed-message browser shared by gRPC and future duplex protocols. */
+/** Protocol-neutral list/detail workspace; protocol-owned decoders supply selected-message facts. */
 @Composable
 internal fun ProtocolMessagesPanel(
     state: ProtocolMessagesUiState,
     onMessageSelected: (ProtocolMessageId) -> Unit,
     onLoadMore: () -> Unit,
     modifier: Modifier = Modifier,
+    events: Boolean = false,
 ) {
     val colors = KNetTheme.colors
+    val spacing = KNetTheme.spacing
     val typography = KNetTheme.typography
     if (state.items.isEmpty() && !state.isLoading) {
         Box(modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(
-                text = "No framed protocol messages captured",
-                style = typography.bodyMedium.copy(color = colors.textMuted),
-            )
+            Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(spacing.sm)) {
+                Text(if (state.isLoading) "Loading captured records…" else if (events) "No stream records captured" else "No messages captured",
+                    style = typography.bodyMedium.copy(color = colors.textMuted))
+            }
         }
         return
     }
-
-    Row(modifier = modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .width(230.dp)
-                .fillMaxHeight()
-                .border(width = 1.dp, color = colors.border),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text("Messages", style = typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold))
-                Text(
-                    state.totalCount.toString(),
-                    style = typography.codeSmall.copy(color = colors.textMuted),
-                )
+    KNetInspectorMessageLayout(modifier.fillMaxSize(), contentIdentity = state.exchangeId, list = {
+        Column(Modifier.fillMaxSize()) {
+            Row(Modifier.fillMaxWidth().padding(spacing.md), horizontalArrangement = Arrangement.SpaceBetween) {
+                MessageText(if (events) "Records" else "Messages", Modifier.weight(1f), bold = true)
+                MessageText(state.totalCount.toString(), color = colors.textMuted)
             }
-            val listState = rememberLazyListState()
+            HorizontalDivider()
+            val listState = remember(state.exchangeId) { LazyListState() }
             Box(Modifier.weight(1f).fillMaxWidth()) {
-                LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
-                    items(state.items, key = { message -> message.id.value }) { message ->
-                        ProtocolMessageRow(
-                            message = message,
-                            selected = message.id == state.selectedMessageId,
-                            onClick = { onMessageSelected(message.id) },
-                        )
+                LazyColumn(state = listState, modifier = Modifier.fillMaxSize().padding(end = KNetTheme.dimensions.scrollbarWidth)) {
+                    items(state.items, key = { it.id.value }) { message ->
+                        ProtocolMessageRow(message, message.id == state.selectedMessageId) { onMessageSelected(message.id) }
                     }
-                    if (state.nextCursor != null) {
-                        item(key = "load-more") {
-                            KNetButton(
-                                onClick = onLoadMore,
-                                modifier = Modifier.fillMaxWidth().padding(8.dp),
-                                variant = ButtonVariant.Secondary,
-                                size = ButtonSize.Compact,
-                                loading = state.isLoading,
-                            ) {
-                                Text("Load older")
-                            }
+                    if (state.nextCursor != null) item(key = "load-more") {
+                        KNetButton(onClick = onLoadMore, modifier = Modifier.fillMaxWidth().padding(spacing.sm),
+                            variant = ButtonVariant.Secondary, size = ButtonSize.Compact, loading = state.isLoading) {
+                            Text("Load more")
                         }
                     }
                 }
-                KNetVerticalScrollbar(
-                    lazyListState = listState,
-                    modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight(),
-                )
+                KNetVerticalScrollbar(lazyListState = listState, modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight())
             }
         }
-
-        Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
-            state.selectedMessage?.let { message ->
-                ProtocolMessageMetadata(
-                    message = message,
-                    truncated = state.selectedBodyTruncated,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+    }, detail = {
+        val message = state.selectedMessage
+        if (message == null) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                MessageText(if (state.isLoading) "Loading captured records…" else if (events) "Select a stream record" else "Select a message", color = colors.textMuted)
             }
-            val payloadSpec = remember(
-                state.selectedMessageId,
-                state.selectedBodyBytes,
-                state.selectedBodyPresentation,
-                state.isBodyLoading,
-            ) {
-                val bytes = state.selectedBodyBytes
-                val presentation = state.selectedBodyPresentation
+        } else {
+            val presentation = state.selectedBodyPresentation.takeUnless { state.isBodyLoading }
+            KNetInspectorMessageMetadata(Modifier.fillMaxWidth(), contentIdentity = message.id.value) {
+                MessageText(presentation?.title ?: "${message.kind.displayName()} · ${message.direction.displayName()}",
+                    Modifier.fillMaxWidth(), bold = true)
+                KNetInspectorFields(buildList {
+                    add(KNetInspectorField("Direction", message.direction.displayName()))
+                    add(KNetInspectorField("State", message.state.displayName()))
+                    add(KNetInspectorField("Captured size", formatBytes(message.observedBytes)))
+                    presentation?.fields.orEmpty().forEach { add(KNetInspectorField(it.label, it.value, true)) }
+                    presentation?.schemaName?.takeIf { presentation.fields.isEmpty() }?.let {
+                        add(KNetInspectorField("Schema", it, true))
+                    }
+                    add(KNetInspectorField("Compression", if (message.compressed) message.compressionEncoding ?: "Encoding unavailable" else "Uncompressed"))
+                    message.terminationReason?.code?.value?.let { add(KNetInspectorField("Termination", it, true)) }
+                })
+                if (state.selectedBodyTruncated || message.state == ProtocolMessageState.TRUNCATED)
+                    KNetInspectorParagraph("Preview truncated. Only retained bytes are shown.", color = colors.semantic.warning)
+            }
+            HorizontalDivider()
+            val payloadSpec = remember(message.id, state.selectedBodyBytes, presentation, state.isBodyLoading) {
                 when {
                     state.isBodyLoading -> PayloadInspectionSpec(isPreparing = true)
                     presentation != null -> PayloadInspectionSpec.fromPayload(
-                        headers = listOf("content-type" to presentation.contentType),
-                        rawBody = presentation.text,
-                    )
-                    bytes == null -> PayloadInspectionSpec.EMPTY
-                    else -> PayloadInspectionSpec.fromPayload(
-                        headers = listOf("content-type" to "text/plain"),
-                        rawBody = bytes.toHexDump(),
-                    )
+                        headers = listOf("content-type" to presentation.contentType), rawBody = presentation.text)
+                    state.selectedBodyBytes == null -> PayloadInspectionSpec.EMPTY
+                    else -> PayloadInspectionSpec.fromPayload(headers = listOf("content-type" to "text/plain"),
+                        rawBody = state.selectedBodyBytes.toHexDump())
                 }
             }
-            SmartBodyViewer(
-                spec = payloadSpec,
+            SmartBodyViewer(spec = payloadSpec,
                 emptyTitle = if (state.selectedBodyUnavailable) "Message Body Unavailable" else "Empty Message",
-                emptySubtitle = if (state.selectedBodyUnavailable) {
-                    "The message metadata was retained, but its payload is not available in body storage."
-                } else {
-                    "This framed protocol message contains no payload bytes."
-                },
-                modifier = Modifier.weight(1f).fillMaxWidth(),
-            )
+                emptySubtitle = if (state.selectedBodyUnavailable)
+                    "Metadata was retained, but the payload is unavailable in body storage."
+                    else "This captured record contains no payload bytes.",
+                modifier = Modifier.weight(1f).fillMaxWidth())
         }
-    }
+    })
 }
 
 @Composable
-private fun ProtocolMessageRow(
-    message: ProtocolMessageSnapshot,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
+private fun ProtocolMessageRow(message: ProtocolMessageSnapshot, selected: Boolean, onClick: () -> Unit) {
     val colors = KNetTheme.colors
-    val typography = KNetTheme.typography
-    val direction = when (message.direction) {
-        TrafficDirection.CLIENT_TO_SERVER -> "REQUEST"
-        TrafficDirection.SERVER_TO_CLIENT -> "RESPONSE"
-    }
+    val spacing = KNetTheme.spacing
     val stateColor = when (message.state) {
-        ProtocolMessageState.COMPLETE -> colors.semantic.success
-        ProtocolMessageState.IN_PROGRESS -> colors.semantic.warning
-        ProtocolMessageState.TRUNCATED,
-        ProtocolMessageState.FAILED,
-        ProtocolMessageState.CANCELLED -> colors.semantic.error
+        ProtocolMessageState.COMPLETE -> colors.textMuted
+        ProtocolMessageState.IN_PROGRESS, ProtocolMessageState.TRUNCATED -> colors.semantic.warning
+        ProtocolMessageState.FAILED, ProtocolMessageState.CANCELLED -> colors.semantic.error
     }
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(if (selected) colors.interaction.selectedOverlay else colors.surface)
-            .clickable(onClick = onClick)
-            .handCursor()
-            .padding(horizontal = 12.dp, vertical = 9.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp),
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                text = "#${message.sequence}",
-                style = typography.codeSmall.copy(fontWeight = FontWeight.SemiBold),
-            )
-            Spacer(Modifier.width(8.dp))
-            Text(direction, style = typography.codeSmall.copy(color = colors.accent))
-            Spacer(Modifier.weight(1f))
-            Text(message.state.name, style = typography.codeSmall.copy(color = stateColor))
+    Column(Modifier.fillMaxWidth().background(if (selected) colors.interaction.selectedOverlay else colors.surface)
+        .clickable(onClick = onClick).handCursor().padding(spacing.md), verticalArrangement = Arrangement.spacedBy(spacing.xs)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
+            MessageText("#${message.sequence}", color = colors.textMuted)
+            MessageText(message.direction.displayName(), Modifier.weight(1f), color = colors.accent)
         }
-        Text(
-            text = "${formatBytes(message.observedBytes)}${if (message.compressed) " · compressed" else ""}",
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            style = typography.codeSmall.copy(color = colors.textMuted),
-        )
+        MessageText(message.kind.displayName(), Modifier.fillMaxWidth(), bold = true)
+        MessageText("${formatBytes(message.observedBytes)} · ${message.state.displayName()}", Modifier.fillMaxWidth(), color = stateColor)
     }
 }
 
 @Composable
-private fun ProtocolMessageMetadata(
-    message: ProtocolMessageSnapshot,
-    truncated: Boolean,
-    modifier: Modifier,
-) {
-    val colors = KNetTheme.colors
-    val typography = KNetTheme.typography
-    Row(
-        modifier = modifier
-            .border(width = 1.dp, color = colors.border)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            text = message.protocol.value.uppercase(),
-            style = typography.codeSmall.copy(color = colors.accent, fontWeight = FontWeight.Bold),
-        )
-        Text("Message ${message.sequence}", style = typography.bodyMedium)
-        Text(formatBytes(message.observedBytes), style = typography.codeSmall.copy(color = colors.textSecondary))
-        message.compressionEncoding?.let { encoding ->
-            Text(encoding, style = typography.codeSmall.copy(color = colors.textSecondary))
-        }
-        if (truncated) {
-            Text("Preview truncated", style = typography.codeSmall.copy(color = colors.semantic.warning))
-        }
-        message.terminationReason?.code?.value?.let { error ->
-            Text(
-                text = error,
-                modifier = Modifier.weight(1f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = typography.codeSmall.copy(color = colors.semantic.error),
-            )
-        }
-    }
+private fun MessageText(text: String, modifier: Modifier = Modifier,
+    color: androidx.compose.ui.graphics.Color = KNetTheme.colors.textPrimary, bold: Boolean = false) {
+    KNetInspectorText(text, modifier, color = color, bold = bold)
+}
+
+private fun TrafficDirection.displayName(): String = when (this) {
+    TrafficDirection.CLIENT_TO_SERVER -> "Sent"
+    TrafficDirection.SERVER_TO_CLIENT -> "Received"
+}
+
+private fun ProtocolMessageState.displayName(): String = when (this) {
+    ProtocolMessageState.IN_PROGRESS -> "In progress"
+    ProtocolMessageState.COMPLETE -> "Complete"
+    ProtocolMessageState.TRUNCATED -> "Truncated"
+    ProtocolMessageState.FAILED -> "Failed"
+    ProtocolMessageState.CANCELLED -> "Cancelled"
+}
+
+private fun com.devuloopers.knet.traffic.model.message.ProtocolMessageKind.displayName(): String = when (this) {
+    com.devuloopers.knet.traffic.model.message.ProtocolMessageKind.TEXT -> "Text"
+    com.devuloopers.knet.traffic.model.message.ProtocolMessageKind.BINARY -> "Binary"
+    com.devuloopers.knet.traffic.model.message.ProtocolMessageKind.PING -> "Ping"
+    com.devuloopers.knet.traffic.model.message.ProtocolMessageKind.PONG -> "Pong"
+    com.devuloopers.knet.traffic.model.message.ProtocolMessageKind.CLOSE -> "Close"
+    com.devuloopers.knet.traffic.model.message.ProtocolMessageKind.RECORD -> "Stream record"
+    com.devuloopers.knet.traffic.model.message.ProtocolMessageKind.DATA -> "Data"
+    else -> value
 }
 
 private fun ByteArray.toHexDump(): String = buildString(size * 3) {

@@ -29,6 +29,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -45,6 +46,8 @@ import com.devuloopers.knet.ui.core.components.table.KNetTableHeader
 import com.devuloopers.knet.ui.core.components.table.KNetColumnResizeHandle
 import com.devuloopers.knet.ui.core.components.scrollbar.KNetHorizontalScrollbar
 import com.devuloopers.knet.ui.core.components.scrollbar.KNetVerticalScrollbar
+import com.devuloopers.knet.ui.core.components.statusbar.KNetStatisticsBar
+import com.devuloopers.knet.ui.core.components.divider.VerticalDivider
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.core.foundation.time.KNetDateTime
 import com.devuloopers.knet.ui.desktop.traffic.model.ColumnVisibilityState
@@ -61,7 +64,6 @@ import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficAction
 
 private object TrafficTableMetrics {
     val rowHeight = 34.dp
-    val footerHeight = 48.dp
 }
 
 /**
@@ -97,6 +99,7 @@ data class TrafficTableColumnResizeActions(
  * @param activeRules Current authored breakpoint rules used for row decoration.
  * @param canLoadMore Whether another keyset page is available.
  * @param onLoadMore Requests the next keyset page.
+ * @param throughputIndicator Shell-owned throughput content, independent of filtered row counts and sizes.
  */
 @Composable
 fun TrafficTable(
@@ -118,6 +121,7 @@ fun TrafficTable(
     activeRules: List<com.devuloopers.knet.domain.rules.model.BreakpointRule> = emptyList(),
     canLoadMore: Boolean = false,
     onLoadMore: () -> Unit = {},
+    throughputIndicator: (@Composable () -> Unit)? = null,
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -355,17 +359,7 @@ fun TrafficTable(
             }
         }
 
-        // Bottom Statistics Footer Bar (48dp / h-12)
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(TrafficTableMetrics.footerHeight)
-                .background(themeColors.background)
-                .border(width = 1.dp, color = themeColors.border)
-                .padding(horizontal = 16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
+        KNetStatisticsBar(Modifier.testTag("Traffic statistics"), leading = {
             Text(
                 text = requestCountLabel(
                     loadedCount = transactions.size,
@@ -375,19 +369,18 @@ fun TrafficTable(
                 maxLines = 1,
                 softWrap = false
             )
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = formattedVisibleSize,
-                    style = typography.caption.copy(color = themeColors.textSecondary),
-                    maxLines = 1,
-                    softWrap = false
-                )
+        }, trailing = {
+            if (throughputIndicator != null) {
+                throughputIndicator()
+                VerticalDivider(Modifier.height(KNetTheme.dimensions.iconSizeMedium))
             }
-        }
+            Text(
+                text = formattedVisibleSize,
+                style = typography.caption.copy(color = themeColors.textSecondary),
+                maxLines = 1,
+                softWrap = false
+            )
+        })
     }
 }
 

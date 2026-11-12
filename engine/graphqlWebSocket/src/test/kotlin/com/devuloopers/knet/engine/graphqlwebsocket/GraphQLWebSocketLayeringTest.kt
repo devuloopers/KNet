@@ -133,6 +133,59 @@ class GraphQLWebSocketLayeringTest {
         ))
     }
 
+    @Test
+    fun `selected next is correlated to its own multiplexed operation and newest reused ID`() {
+        val decoder = GraphQLWebSocketProtocolMessageDecoder(parser)
+        val next = payloadInput("""{"id":"one","type":"next","payload":{"data":{}}}""")
+            .copy(message = message().copy(id = ProtocolMessageId("selected-next"), direction = TrafficDirection.SERVER_TO_CLIENT))
+        fun entry(id: String, name: String, suffix: String) = com.devuloopers.knet.application.contract.traffic.ProtocolMessageContextEntry(
+            message().copy(id = ProtocolMessageId(suffix)), subscribe(id, name).encodeToByteArray(), false)
+        val result = decoder.decode(next.copy(context = listOf(entry("two", "News", "2"), entry("one", "Prices", "1"))))!!
+        assertEquals("Prices", result.fields.first { it.label == "Operation" }.value)
+        assertEquals("one", result.fields.first { it.label == "Operation ID" }.value)
+        val reused = decoder.decode(next.copy(context = listOf(entry("one", "NewPrices", "3"), entry("one", "OldPrices", "1"))))!!
+        assertEquals("NewPrices", reused.fields.first { it.label == "Operation" }.value)
+        val lookup = decoder.contextQuery(next)!!
+        assertEquals(next.message.id, lookup.beforeMessageId)
+        assertEquals(next.message.exchangeId, lookup.exchangeId)
+        assertEquals(null, lookup.direction)
+        assertEquals(null, decoder.contextQuery(payloadInput(subscribe("one", "Prices"))))
+    }
+
+    @Test
+    fun `correlation stops at complete missing truncated malformed or foreign history`() {
+        val decoder = GraphQLWebSocketProtocolMessageDecoder(parser)
+        val next = payloadInput("""{"id":"one","type":"next","payload":{"data":{}}}""")
+            .copy(message = message().copy(id = ProtocolMessageId("next")))
+        fun entry(payload: String?, truncated: Boolean = false, foreign: Boolean = false) =
+            com.devuloopers.knet.application.contract.traffic.ProtocolMessageContextEntry(
+                message().copy(id = ProtocolMessageId("prior"), exchangeId = if (foreign) ExchangeId("other") else EXCHANGE_ID),
+                payload?.encodeToByteArray(), truncated)
+        val good = entry(subscribe("one", "OldPrices"))
+        for (gap in listOf(entry(null), entry(subscribe("one", "Prefix"), true), entry("broken"),
+            entry(subscribe("one", "Foreign"), foreign = true), entry("""{"id":"one","type":"complete"}"""),
+            entry("""{"id":"one","type":"error","payload":[]}"""))) {
+            val result = decoder.decode(next.copy(context = listOf(gap, good)))!!
+            assertFalse(result.fields.any { it.label == "Operation" }, result.toString())
+            assertEquals("one", result.fields.first { it.label == "Operation ID" }.value)
+        }
+        assertEquals(null, decoder.decode(next.copy(truncated = true)))
+        assertEquals(null, decoder.contextQuery(next.copy(truncated = true)))
+        assertFalse(decoder.decode(next)!!.fields.any { it.label == "Operation" })
+    }
+
+    @Test
+    fun `binary control payload uses safe fallback while close has captured code and reason`() {
+        val decoder = WebSocketProtocolMessageDecoder()
+        val input = payloadInput("")
+        assertEquals(null, decoder.decode(input.copy(message = message().copy(kind = ProtocolMessageKind.PING),
+            payload = byteArrayOf(0, -1, 5))))
+        val close = decoder.decode(input.copy(message = message().copy(kind = ProtocolMessageKind.CLOSE),
+            payload = byteArrayOf(3, -24) + "finished".encodeToByteArray()))!!
+        assertEquals("1000", close.fields.first { it.label == "Close code" }.value)
+        assertEquals("finished", close.fields.first { it.label == "Close reason" }.value)
+    }
+
     private fun payloadInput(payload: String) = ProtocolMessagePayloadInput(
         parentExchange = exchange(),
         message = message(),

@@ -84,7 +84,7 @@ class NetworkConditionsViewModel(
         }
     }
 
-    /** Stops graph work when the destination leaves composition; history restarts on the next visit. */
+    /** Stops telemetry when the shared host leaves both throughput destinations; the next visit starts fresh. */
     fun stopRuntimeMonitoring() {
         runtimeMonitoringJob?.cancel()
         runtimeMonitoringJob = null

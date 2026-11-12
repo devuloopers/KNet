@@ -31,13 +31,17 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.toInspectionText
  * @param emptyTitle Title for empty state placeholder.
  * @param emptySubtitle Subtitle for empty state placeholder.
  * @param modifier Composable layout modifier.
+ * @param graphQLSubTab Optional controlled GraphQL query/variables/extensions selection.
+ * @param onGraphQLSubTabSelected Publishes user changes to the controlled GraphQL viewer.
  */
 @Composable
 fun SmartBodyViewer(
     spec: PayloadInspectionSpec,
     emptyTitle: String = "No Body Payload",
     emptySubtitle: String = "This transaction contained no request or response body payload.",
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    graphQLSubTab: GraphQLBodySubTab? = null,
+    onGraphQLSubTabSelected: (GraphQLBodySubTab) -> Unit = {},
 ) {
     if (spec.isPreparing) {
         KNetContentLoadingPlaceholder(modifier = modifier.fillMaxSize())
@@ -66,7 +70,9 @@ fun SmartBodyViewer(
             GraphQLBodyViewer(
                 format = format,
                 rawJsonText = formattedJson,
-                modifier = modifier.fillMaxSize()
+                modifier = modifier.fillMaxSize(),
+                activeSubTab = graphQLSubTab,
+                onSubTabSelected = onGraphQLSubTabSelected,
             )
         }
 

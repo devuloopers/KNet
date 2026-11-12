@@ -19,7 +19,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
@@ -32,8 +31,11 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaFieldDefinition
 import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaFieldId
@@ -61,20 +63,17 @@ import com.devuloopers.knet.ui.desktop.networkconditions.model.NetworkConditionR
 import com.devuloopers.knet.ui.desktop.networkconditions.model.NetworkThroughputHistory
 import com.devuloopers.knet.ui.desktop.networkconditions.model.hasObservedTraffic
 import com.devuloopers.knet.ui.desktop.networkconditions.model.niceChartMaximum
+import com.devuloopers.knet.ui.desktop.networkconditions.model.formatNetworkRate
 import com.devuloopers.knet.ui.desktop.networkconditions.viewmodel.NetworkConditionsViewModel
 import kotlin.math.max
 
-/** KNet-native workspace for global, domain-specific, and packet-level network simulation. */
+/** KNet-native workspace; its host owns [NetworkConditionsRuntimeMonitoring] across throughput destinations. */
 @Composable
 fun NetworkConditionsScreen(
     viewModel: NetworkConditionsViewModel,
     modifier: Modifier = Modifier,
 ) {
     val state by viewModel.state.collectAsState()
-    DisposableEffect(viewModel) {
-        viewModel.startRuntimeMonitoring()
-        onDispose(viewModel::stopRuntimeMonitoring)
-    }
     var showCustomProfileDialog by remember { mutableStateOf(false) }
     var customProfileSeed by remember { mutableStateOf<NetworkConditionProfile?>(null) }
     NetworkConditionsWorkspace(
@@ -99,7 +98,7 @@ fun NetworkConditionsScreen(
         modifier = modifier,
     )
 
-    state.ruleDraft?.let { draft ->
+    state.ruleDraft?.takeIf { state.activeTab == com.devuloopers.knet.ui.desktop.networkconditions.model.NetworkConditionsTab.RULES }?.let { draft ->
         RuleDialog(
             draft = draft,
             profiles = state.configuration.profiles,
@@ -143,11 +142,14 @@ internal fun LiveThroughputGraph(
     uploadReferenceBitsPerSecond: Long?,
     activeFlows: Int,
     queuedBytes: Long,
-    compact: Boolean = false,
+    measurementContext: String = "Measured KNet payload",
+    modifier: Modifier = Modifier,
 ) {
     val colors = KNetTheme.colors
     val downloadPath = remember { Path() }
     val uploadPath = remember { Path() }
+    val downloadArea = remember { Path() }
+    val uploadArea = remember { Path() }
     val referenceDash = remember { PathEffect.dashPathEffect(floatArrayOf(8f, 7f)) }
     val measuredPeak = max(
         history.downloadBitsPerSecond.maxOrNull() ?: 0L,
@@ -155,7 +157,24 @@ internal fun LiveThroughputGraph(
     )
     val referencePeak = max(downloadReferenceBitsPerSecond ?: 0L, uploadReferenceBitsPerSecond ?: 0L)
     val chartMaximum = niceChartMaximum(max(measuredPeak, referencePeak))
+    val axisLabels = remember(chartMaximum) { listOf(rate(chartMaximum), rate(chartMaximum / 2), "0") }
+    val textMeasurer = rememberTextMeasurer()
+    val density = LocalDensity.current
+    val axisStyle = KNetTheme.typography.caption
+    val axisLabelWidth = remember(axisLabels, axisStyle, textMeasurer, density) {
+        with(density) {
+            axisLabels.maxOf { textMeasurer.measure(it, style = axisStyle, maxLines = 1, softWrap = false).size.width }.toDp()
+        }
+    }
+    // Measure with the same theme/font-scale contract as KNet fields, leaving a clear gap before the plot.
+    val axisGutter = maxOf(KNetTheme.spacing.giant, axisLabelWidth + KNetTheme.spacing.md)
     val hasObservedTraffic = history.hasObservedTraffic()
+    val referenceLabel = if (downloadReferenceBitsPerSecond != null && downloadReferenceBitsPerSecond == uploadReferenceBitsPerSecond) {
+        "Configured limit ${rate(downloadReferenceBitsPerSecond)}"
+    } else buildList {
+        downloadReferenceBitsPerSecond?.let { add("Download reference ${rate(it)}") }
+        uploadReferenceBitsPerSecond?.let { add("Upload reference ${rate(it)}") }
+    }.joinToString(" · ").ifEmpty { measurementContext }
     val accessibilityText = buildString {
         append("Live throughput. Download ")
         append(
@@ -179,7 +198,7 @@ internal fun LiveThroughputGraph(
     }
 
     Column(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm),
     ) {
         Row(
@@ -188,11 +207,10 @@ internal fun LiveThroughputGraph(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = buildList {
-                    downloadReferenceBitsPerSecond?.let { add("Download reference ${rate(it)}") }
-                    uploadReferenceBitsPerSecond?.let { add("Upload reference ${rate(it)}") }
-                }.joinToString(" · "),
+                text = referenceLabel,
+                modifier = Modifier.weight(1f),
                 style = KNetTheme.typography.caption.copy(color = colors.textSecondary),
+                maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = if (!hasObservedTraffic && referencePeak == 0L) {
@@ -201,23 +219,24 @@ internal fun LiveThroughputGraph(
                     "Scale ${rate(chartMaximum)}"
                 },
                 style = KNetTheme.typography.caption.copy(color = colors.textMuted),
+                maxLines = 1, softWrap = false,
             )
         }
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(if (compact) 64.dp else 104.dp)
+                .weight(1f)
                 .semantics { contentDescription = accessibilityText },
         ) {
             Column(
-                modifier = Modifier.width(64.dp).fillMaxHeight(),
+                modifier = Modifier.width(axisGutter).fillMaxHeight(),
                 verticalArrangement = Arrangement.SpaceBetween,
             ) {
-                listOf(rate(chartMaximum), rate(chartMaximum / 2), "0").forEach { label ->
-                    Text(label, style = KNetTheme.typography.caption.copy(color = colors.textMuted))
+                axisLabels.forEach { label ->
+                    Text(label, style = KNetTheme.typography.caption.copy(color = colors.textMuted), maxLines = 1, softWrap = false)
                 }
             }
-            Box(Modifier.fillMaxSize().padding(start = 64.dp)) {
+            Box(Modifier.fillMaxSize().padding(start = axisGutter)) {
                 Canvas(modifier = Modifier.fillMaxSize()) {
                     repeat(5) { index ->
                         val fraction = index / 4f
@@ -262,22 +281,39 @@ internal fun LiveThroughputGraph(
                         )
                     }
 
-                    fun populatePath(path: Path, values: LongArray) {
+                    fun populatePath(path: Path, values: LongArray, area: Boolean = false) {
                         path.reset()
                         var previousValid = false
+                        var previousX = 0f
                         val denominator = (values.size - 1).coerceAtLeast(1)
                         values.indices.forEach { index ->
                             val valid = history.validSamples.getOrElse(index) { false }
                             if (valid) {
                                 val x = size.width * index / denominator.toFloat()
                                 val y = referenceY(values[index])
-                                if (previousValid) path.lineTo(x, y) else path.moveTo(x, y)
+                                if (previousValid) path.lineTo(x, y) else if (area) {
+                                    path.moveTo(x, size.height)
+                                    path.lineTo(x, y)
+                                } else path.moveTo(x, y)
+                                previousX = x
+                            } else if (area && previousValid) {
+                                path.lineTo(previousX, size.height)
+                                path.close()
                             }
                             previousValid = valid
+                        }
+                        if (area && previousValid) {
+                            path.lineTo(previousX, size.height)
+                            path.close()
                         }
                     }
 
                     if (hasObservedTraffic) {
+                        // Fill only measured contiguous segments; missing samples remain gaps, without smoothing data.
+                        populatePath(downloadArea, history.downloadBitsPerSecond, area = true)
+                        populatePath(uploadArea, history.uploadBitsPerSecond, area = true)
+                        drawPath(downloadArea, colors.accent.copy(alpha = 0.06f))
+                        drawPath(uploadArea, colors.semantic.success.copy(alpha = 0.06f))
                         populatePath(downloadPath, history.downloadBitsPerSecond)
                         populatePath(uploadPath, history.uploadBitsPerSecond)
                         drawPath(
@@ -301,18 +337,20 @@ internal fun LiveThroughputGraph(
                         Text(
                             "Waiting for traffic",
                             style = KNetTheme.typography.labelMedium.copy(color = colors.textSecondary),
+                            maxLines = 1, softWrap = false,
                         )
                         Text(
                             "Actual rates will appear here",
                             style = KNetTheme.typography.caption.copy(color = colors.textMuted),
+                            maxLines = 1, softWrap = false,
                         )
                     }
                 }
             }
         }
-        Row(modifier = Modifier.fillMaxWidth().padding(start = 64.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("60s ago", style = KNetTheme.typography.caption.copy(color = colors.textMuted))
-            Text("Now", style = KNetTheme.typography.caption.copy(color = colors.textMuted))
+        Row(modifier = Modifier.fillMaxWidth().padding(start = axisGutter), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("60s ago", style = KNetTheme.typography.caption.copy(color = colors.textMuted), maxLines = 1, softWrap = false)
+            Text("Now", style = KNetTheme.typography.caption.copy(color = colors.textMuted), maxLines = 1, softWrap = false)
         }
     }
 }
@@ -833,12 +871,7 @@ internal fun profileSummary(profile: NetworkConditionProfile): String = buildStr
     if (profile.packetReorderingPercent > 0) append("  •  ${profile.packetReorderingPercent}% reorder")
 }
 
-internal fun rate(value: Long?): String = when {
-    value == null -> "Unlimited"
-    value >= 1_000_000_000L -> "${value / 1_000_000_000L} Gbps"
-    value >= 1_000_000L -> "${value / 1_000_000L} Mbps"
-    else -> "${value / 1_000L} kbps"
-}
+internal fun rate(value: Long?): String = formatNetworkRate(value)
 
 internal fun formatBytes(value: Long): String = when {
     value >= 1_073_741_824L -> "${value / 1_073_741_824L} GB"

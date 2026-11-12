@@ -8,7 +8,6 @@ dependencies {
     api(project(":core:domain"))
     api(project(":application:desktop"))
     implementation(project(":engine:proxy"))
-    implementation(project(":core:logger"))
     implementation(libs.netty.all)
     implementation(libs.kotlinx.coroutines.core)
 

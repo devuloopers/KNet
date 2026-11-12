@@ -190,6 +190,47 @@ class NetworkConditionEngineTest {
         assertEquals(12_500L, engine.snapshot.value.downloadedBytes)
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
+    @Test
+    fun `profile changes and scheduler events cannot accelerate the telemetry clock`() = runTest {
+        val configuration = MutableStateFlow(NetworkConditionConfiguration())
+        val engine = NetworkConditionEngine(configuration, backgroundScope,
+            nanoTime = { testScheduler.currentTime * 1_000_000L + 1L })
+        val samples = mutableListOf<com.devuloopers.knet.application.contract.networkconditions.NetworkConditionRuntimeSnapshot>()
+        val observer = backgroundScope.launch { engine.snapshot.collect { samples += it } }
+        runCurrent()
+        val baselineSamples = samples.size
+        val profiles = listOf(null, NetworkConditionBuiltIns.MOBILE_4G.id, NetworkConditionBuiltIns.STREAMING_100_KBPS.id)
+
+        profiles.forEachIndexed { second, profileId ->
+            configuration.value = configuration.value.copy(enabled = profileId != null, globalProfileId = profileId)
+            runCurrent()
+            repeat(100) { chunk ->
+                engine.plan("stream.test", 443, NetworkConditionDirection.DOWNLOAD, 125, chunk.toLong())
+                engine.recordForwarded(NetworkConditionDirection.DOWNLOAD, 125)
+                engine.recordForwarded(NetworkConditionDirection.UPLOAD, 25)
+                if (chunk % 10 == 0) engine.recordFaultedFlow()
+                runCurrent()
+            }
+            assertEquals(baselineSamples + second, samples.size, "Scheduler events must only update counters")
+            advanceTimeBy(1_000L)
+            runCurrent()
+            assertEquals(baselineSamples + second + 1, samples.size)
+            assertEquals((second + 1L) * 12_500L, samples.last().downloadedBytes)
+            assertEquals((second + 1L) * 2_500L, samples.last().uploadedBytes)
+            assertEquals((second + 1L) * 10L, samples.last().faultedFlows)
+            assertEquals(if (second == 0) 0L else second * 100L, samples.last().delayedUnits)
+        }
+        observer.cancel()
+        runCurrent()
+        val retained = engine.snapshot.value
+        engine.plan("stream.test", 443, NetworkConditionDirection.DOWNLOAD, 125, 101L)
+        engine.recordFaultedFlow()
+        advanceTimeBy(1_000L)
+        runCurrent()
+        assertEquals(retained, engine.snapshot.value, "Unobserved scheduler work must not publish snapshots")
+    }
+
     @Test
     fun `MTU-only profile is active and exposes its virtual MTU`() {
         val profile = NetworkConditionProfile(

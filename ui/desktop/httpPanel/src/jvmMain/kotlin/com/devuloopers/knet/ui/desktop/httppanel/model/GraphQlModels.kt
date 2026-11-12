@@ -59,7 +59,7 @@ enum class GraphQlSubTab(
      */
     fun updatePayload(state: GraphQlState, newText: String): GraphQlState = when (this) {
         QUERY -> {
-            val extractedOpName = GraphQLQuerySynchronizer.extractOperationName(newText) ?: ""
+            val extractedOpName = GraphQLQuerySynchronizer.operationNameForEditedDocument(newText, state.operationName)
             state.copy(payload = state.payload.copy(queryText = newText, operationName = extractedOpName))
         }
         VARIABLES -> state.copy(payload = state.payload.copy(variablesText = newText))
@@ -75,7 +75,7 @@ enum class GraphQlSubTab(
     fun prettify(state: GraphQlState): GraphQlState = when (this) {
         QUERY -> {
             val formatted = GraphQLBodyFormatter.formatQuery(state.queryText)
-            val extractedOpName = GraphQLQuerySynchronizer.extractOperationName(formatted) ?: ""
+            val extractedOpName = GraphQLQuerySynchronizer.operationNameForEditedDocument(formatted, state.operationName)
             state.copy(payload = state.payload.copy(queryText = formatted, operationName = extractedOpName))
         }
         VARIABLES -> state.copy(payload = state.payload.copy(variablesText = formatGraphQlJson(state.variablesText)))

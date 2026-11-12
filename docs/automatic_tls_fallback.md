@@ -78,6 +78,14 @@ user override and forgets corresponding temporary decisions. Other application/d
 Changes govern new connections, not an established socket. Actions await authoritative committed publication
 before reporting success; failures retain actionable feedback and late results cannot replace another selection.
 
+The Protected Traffic default dropdown provides a shared KNet-themed explanation after 500ms of hovering,
+both for its selected mode and each menu choice. The descriptions explain that rejected
+connections are not replayed, tunneling preserves encrypted HTTP data, saved rules take precedence, and changes
+govern new connections. The same copy is exposed to accessibility services. Help does not change the selection
+or control dimensions; narrow-window placement keeps the complete menu available for selection.
+The popup dismisses immediately when the pointer leaves the control or menu row and never reopens from retained
+focus. Keyboard navigation exposes the same accessible description without opening a hover popup.
+
 ## Persistence and composition
 
 Room schema 36 adds automaticTlsFallbackEnabled with a default of true. Migration 35 to 36 preserves existing

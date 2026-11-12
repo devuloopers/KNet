@@ -265,6 +265,7 @@ fun ApiStudioScreen(
 
                                     RequestEditorPanel(
                                         bodyState = uiState.editorState.bodyState,
+                                        graphQLParameters = uiState.editorState.graphQLParameters,
                                         queryParams = uiState.editorState.queryParams,
                                         headers = uiState.editorState.headers,
                                         cookies = uiState.editorState.cookies,

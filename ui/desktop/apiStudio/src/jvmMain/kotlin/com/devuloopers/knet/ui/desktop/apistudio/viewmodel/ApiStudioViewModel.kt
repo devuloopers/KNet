@@ -1,5 +1,10 @@
 package com.devuloopers.knet.ui.desktop.apistudio.viewmodel
 
+import com.devuloopers.knet.domain.graphql.GraphQLHttpDiagnostic
+import com.devuloopers.knet.engine.formatter.graphql.GraphQLHttpRequestFormatter
+import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQLParameterEditorState
+import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlSubTab
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionsRepository
@@ -111,6 +116,7 @@ class ApiStudioViewModel(
     private var executionJob: Job? = null
     private var requestNameRevision = 0L
     private var requestNameJob: Job? = null
+    private var graphQLParametersJob: Job? = null
 
     private val autoSaveCoordinator = ApiStudioAutoSaveCoordinator(
         scope = viewModelScope,
@@ -148,6 +154,7 @@ class ApiStudioViewModel(
     fun updateUrl(url: String) = mutateEditor { editor ->
         editor.copy(
             url = url,
+            graphQLParameters = editor.graphQLParameters.takeIf { editor.url == url },
             queryParams = UrlQueryStringParser.parseQueryParams(url).mapIndexed { index, (name, value) ->
                 KeyValueEntry("query-$index", name, value)
             }
@@ -161,7 +168,8 @@ class ApiStudioViewModel(
                 editor.url,
                 queryParams.filter { it.enabled }.map { it.key to it.value }
             ),
-            queryParams = queryParams
+            queryParams = queryParams,
+            graphQLParameters = null,
         )
     }
 
@@ -187,8 +195,16 @@ class ApiStudioViewModel(
     }
 
     /** Updates structured GraphQL state and its serialized request payload. */
-    fun updateGraphQlState(graphQlState: GraphQlState) = mutateEditor { editor ->
-        editor.copy(bodyState = syncBodyStateUseCase.updateGraphQlState(editor.bodyState, graphQlState))
+    fun updateGraphQlState(graphQlState: GraphQlState) = mutateEditor(preserveGraphQLBuffers = true) { editor ->
+        val parameters = editor.graphQLParameters
+        if (editor.method == HttpMethod.GET && parameters != null && editor.activeSubTab == InspectorSubTab.PARAMS) {
+            val changes = GraphQLHttpRequestFormatter.changedFields(parameters.graphQl.payload, graphQlState.payload)
+            val updatedUrl = GraphQLHttpRequestFormatter.updateUrl(editor.url, changes)
+                .getOrElse { return@mutateEditor editor }
+            editor.copy(url = updatedUrl,
+                queryParams = UrlQueryStringParser.parseQueryParams(updatedUrl).mapIndexed { index, (name, value) -> KeyValueEntry("query-$index", name, value) },
+                graphQLParameters = parameters.copy(graphQl = graphQlState))
+        } else editor.copy(bodyState = syncBodyStateUseCase.updateGraphQlState(editor.bodyState, graphQlState))
     }
 
     /** Updates request cookies. */
@@ -491,6 +507,11 @@ class ApiStudioViewModel(
     fun executeRequest() {
         ensureDraftForEdit()
         val currentEditor = _uiState.value.editorState
+        if (currentEditor.method == HttpMethod.GET && currentEditor.graphQLParameters?.diagnostic ==
+            GraphQLHttpDiagnostic.GET_OPERATION_NOT_QUERY) {
+            _uiState.update { it.copy(errorMessage = GraphQLHttpDiagnostic.GET_OPERATION_NOT_QUERY.description) }
+            return
+        }
         val executionDocument = currentEditor.toDomainSavedRequest(
             id = _uiState.value.selectedRequestId ?: "execution",
             name = _uiState.value.activeDocumentTitle,
@@ -505,6 +526,14 @@ class ApiStudioViewModel(
         executionJob = viewModelScope.launch {
             var interpreter: HttpResponseStreamInterpreterSession? = null
             try {
+                val graphQLDiagnostic = withContext(ioDispatcher) {
+                    if (currentEditor.method == HttpMethod.GET || currentEditor.bodyState.mode == com.devuloopers.knet.ui.desktop.httppanel.model.RequestBodyMode.GRAPHQL)
+                        GraphQLHttpRequestFormatter.inspect(currentEditor.method.token,
+                            currentEditor.url, body = currentEditor.bodyState.payloadText.encodeToByteArray())?.diagnostic
+                    else null
+                }
+                if (graphQLDiagnostic != null && graphQLDiagnostic != GraphQLHttpDiagnostic.MISSING_QUERY)
+                    throw IllegalArgumentException(graphQLDiagnostic.description)
                 executeApiStudioRequestUseCase.executeStreaming(executionDocument, activeProxyPort()).collect { event ->
                     coroutineContext.ensureActive()
                     if (requestExecutionRevision != executionRevision) return@collect
@@ -667,7 +696,7 @@ class ApiStudioViewModel(
         viewModelScope.launch(ioDispatcher) { dropMatchingBreakpointsSafely(currentEditor) }
     }
 
-    private fun mutateEditor(transform: (RequestEditorState) -> RequestEditorState) {
+    private fun mutateEditor(preserveGraphQLBuffers: Boolean = false, transform: (RequestEditorState) -> RequestEditorState) {
         ensureDraftForEdit()
         _uiState.update { state ->
             val editor = transform(state.editorState)
@@ -676,8 +705,43 @@ class ApiStudioViewModel(
                 persistenceErrorMessage = null
             )
         }
+        scheduleGraphQLParameters(preserveGraphQLBuffers)
         scheduleGeneratedRequestName()
         autoSaveCoordinator.schedule(snapshot())
+    }
+
+    // Parsing stays off the UI thread. Both document identity and exact method/URL fence late results,
+    // including a switch to another saved request with an identical target.
+    private fun scheduleGraphQLParameters(preserveBuffers: Boolean = false) {
+        graphQLParametersJob?.cancel()
+        val source = _uiState.value
+        val editor = source.editorState
+        // URL/parameter edits clear the previous projection; other edits keep the active buffers.
+        // Pretty-print only initial hydration so validation or a header change cannot erase keystrokes.
+        val keepBuffers = preserveBuffers || editor.graphQLParameters != null
+        if (editor.method != HttpMethod.GET) {
+            _uiState.update { it.copy(editorState = it.editorState.copy(graphQLParameters = null)) }
+            return
+        }
+        graphQLParametersJob = viewModelScope.launch {
+            val prepared = withContext(ioDispatcher) {
+                GraphQLParameterEditorState.prepare(editor.method.token, editor.url, prettify = !keepBuffers)
+            }
+            _uiState.update { current ->
+                if (current.sessionContext != source.sessionContext || current.editorState.url != editor.url ||
+                    current.editorState.method != editor.method) current
+                else {
+                    val previous = current.editorState.graphQLParameters
+                    // Validation must not reformat or erase intermediate keystrokes. URL edits/imports
+                    // hydrate new fields; structured editor edits retain their exact authoring buffers.
+                    val parameters = if (keepBuffers && previous != null) previous.copy(diagnostic = prepared?.diagnostic
+                        ?: GraphQLHttpDiagnostic.INVALID_DOCUMENT.takeIf { prepared == null })
+                    else prepared?.let { it.copy(graphQl = it.graphQl.copy(activeSubTab = previous?.graphQl?.activeSubTab
+                        ?: GraphQlSubTab.QUERY)) }
+                    current.copy(editorState = current.editorState.copy(graphQLParameters = parameters))
+                }
+            }
+        }
     }
 
     private fun ensureDraftForEdit() {
@@ -724,6 +788,7 @@ class ApiStudioViewModel(
                 persistenceErrorMessage = null
             )
         }
+        scheduleGraphQLParameters()
     }
 
     private fun scheduleGeneratedRequestName(immediate: Boolean = false) {

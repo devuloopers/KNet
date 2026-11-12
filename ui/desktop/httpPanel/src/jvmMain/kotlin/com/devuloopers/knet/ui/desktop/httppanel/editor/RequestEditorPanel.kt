@@ -55,7 +55,8 @@ fun RequestEditorPanel(
     activeScriptPhase: ScriptPhase = ScriptPhase.PRE_REQUEST,
     scriptLanguage: ScriptLanguage = ScriptLanguage.JAVASCRIPT,
     actions: RequestEditorPanelActions = RequestEditorPanelActions(),
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    graphQLParameters: GraphQLParameterEditorState? = null,
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -123,6 +124,7 @@ fun RequestEditorPanel(
                 }
 
                 InspectorSubTab.PARAMS -> {
+                    GraphQLParametersEditor(graphQLParameters, { actions.onGraphQlStateChanged?.invoke(it) }) {
                     KNetKeyValueEditor(
                         entries = queryParams,
                         keyHeader = "PARAMETER NAME",
@@ -143,6 +145,7 @@ fun RequestEditorPanel(
                         },
                         modifier = requestKeyValueEditorModifier
                     )
+                    }
                 }
 
                 InspectorSubTab.COOKIES -> {

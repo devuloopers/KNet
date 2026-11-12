@@ -6,6 +6,9 @@ Owns Protected Traffic settings for explicit TLS policy management.
 
 ## Owns
 
+- Protected Traffic title, description and default-policy controls composed in UI core's shared screen layout;
+  page insets, typography, header alignment and narrow-width action placement remain design-system owned.
+
 - The Protected Traffic settings screen, immutable state, and use-case-driven ViewModel actions.
 - Default TLS inspect/tunnel behavior, scope/action explanations, ordered rule presentation, and explicit inspect,
   tunnel, or block editing. This control applies to proxy CONNECT routes, not plain HTTP or UDP/QUIC traffic.
@@ -45,7 +48,15 @@ default handling retain their own pending state. A deleted draft cannot silently
 `:ui:core` owns manager density/minimum width, pinned table scrollbars, compact layout classification and the
 animated drawer shell with independently scrolling content and fixed actions. Connection diagnostics remain in
 Traffic, and saved changes apply to new connections. See `docs/protected_traffic_rule_manager.md` for qualification.
+The table supplies a separate header slot to the shared viewport; the full-width header surface remains above
+the row-only scrollbar track, with a single horizontal scroll owner preserving column alignment.
 
 The default dropdown offers Inspect with automatic fallback, Inspect only, Tunnel and Block. The preference is
 persisted atomically through the application use case; explicit rule actions retain their existing values. Temporary
 learning has no preset catalogue, observed-connection screen or persistent rule row. See `docs/automatic_tls_fallback.md`.
+
+The shared dropdown exposes KNet-themed hover descriptions for its selected mode and all four menu
+choices. Copy distinguishes client reconnect from replay, describes encrypted metadata, and explains saved-rule
+precedence and new-connection scope. These descriptions do not mutate policy or change field/menu dimensions.
+Hover help dismisses immediately when the pointer leaves the control/row, even if it retains focus; keyboard
+navigation retains accessible descriptions without opening a hover popup.

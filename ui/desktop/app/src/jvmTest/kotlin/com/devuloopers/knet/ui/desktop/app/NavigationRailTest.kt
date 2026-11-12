@@ -5,6 +5,7 @@ import com.devuloopers.knet.ui.desktop.app.navigation.NavigationController
 import com.devuloopers.knet.ui.desktop.app.navigation.NavigationState
 import com.devuloopers.knet.ui.desktop.app.navigation.primaryNavigationItems
 import com.devuloopers.knet.ui.desktop.app.navigation.setupNavigationItems
+import com.devuloopers.knet.ui.desktop.app.navigation.trafficControlNavigationItems
 import com.devuloopers.knet.ui.desktop.app.navigation.utilityNavigationItems
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -19,9 +20,10 @@ class NavigationRailTest {
     @Test
     fun `verify destination list contains expected desktop destinations`() {
         val primaryDestinations = primaryNavigationItems.map { it.destination }
+        val trafficControlDestinations = trafficControlNavigationItems.map { it.destination }
         val setupDestinations = setupNavigationItems.map { it.destination }
         val utilityDestinations = utilityNavigationItems.map { it.destination }
-        val destinations = primaryDestinations + setupDestinations + utilityDestinations
+        val destinations = primaryDestinations + trafficControlDestinations + setupDestinations + utilityDestinations
 
         assertEquals(8, destinations.size)
         assertTrue(destinations.contains(DesktopDestination.Traffic))
@@ -36,11 +38,16 @@ class NavigationRailTest {
             listOf(
                 DesktopDestination.Traffic,
                 DesktopDestination.ApiStudio,
-                DesktopDestination.NetworkConditions,
-                DesktopDestination.ProtectedTraffic,
-                DesktopDestination.Breakpoints,
             ),
             primaryDestinations,
+        )
+        assertEquals(
+            listOf(
+                DesktopDestination.Breakpoints,
+                DesktopDestination.NetworkConditions,
+                DesktopDestination.ProtectedTraffic,
+            ),
+            trafficControlDestinations,
         )
         assertEquals(
             listOf(DesktopDestination.ConnectDevice, DesktopDestination.Certificate),

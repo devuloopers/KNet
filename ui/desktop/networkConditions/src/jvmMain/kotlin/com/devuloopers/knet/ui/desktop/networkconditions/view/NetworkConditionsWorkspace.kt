@@ -1,14 +1,12 @@
 package com.devuloopers.knet.ui.desktop.networkconditions.view
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.TooltipArea
 import androidx.compose.foundation.background
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
@@ -16,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -24,20 +23,22 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionProfile
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionProfileId
@@ -50,20 +51,25 @@ import com.devuloopers.knet.ui.core.components.button.KNetIconButton
 import com.devuloopers.knet.ui.core.components.divider.HorizontalDivider
 import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdown
 import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdownSize
-import com.devuloopers.knet.ui.core.components.scrollbar.KNetHorizontalScrollbar
-import com.devuloopers.knet.ui.core.components.scrollbar.KNetVerticalScrollbar
+import com.devuloopers.knet.ui.core.components.layout.KNetScreenLayout
+import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.components.switch.KNetSwitch
+import com.devuloopers.knet.ui.core.components.table.KNetTableViewport
 import com.devuloopers.knet.ui.core.components.tabs.KNetTab
-import com.devuloopers.knet.ui.core.components.tabs.KNetTabRow
 import com.devuloopers.knet.ui.core.components.tooltip.KNetTooltip
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
+import com.devuloopers.knet.ui.core.foundation.responsive.ResponsiveLayout
+import com.devuloopers.knet.ui.core.foundation.responsive.WindowSizeClass
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.networkconditions.model.NetworkConditionsState
 import com.devuloopers.knet.ui.desktop.networkconditions.model.NetworkConditionsTab
 import com.devuloopers.knet.ui.desktop.networkconditions.model.hasObservedTraffic
 import com.devuloopers.knet.ui.desktop.networkconditions.model.throughputReference
+import com.devuloopers.knet.ui.desktop.networkconditions.model.noThrottlingProfileName
+import com.devuloopers.knet.ui.desktop.networkconditions.model.globalProfileOptions
+import com.devuloopers.knet.ui.desktop.networkconditions.model.selectedGlobalProfile
 
-/** One constrained workspace: policy controls stay visible while only table rows scroll. */
+/** Theme-owned panels and responsive size classes keep policy, measured traffic and saved rules distinct. */
 @Composable
 internal fun NetworkConditionsWorkspace(
     state: NetworkConditionsState,
@@ -81,148 +87,170 @@ internal fun NetworkConditionsWorkspace(
     modifier: Modifier = Modifier,
 ) {
     val spacing = KNetTheme.spacing
-    BoxWithConstraints(modifier.fillMaxSize().background(KNetTheme.colors.background)) {
-        val compact = maxHeight < 680.dp
-        Column(
-            Modifier.fillMaxSize().padding(horizontal = spacing.xxl, vertical = spacing.lg),
-            verticalArrangement = Arrangement.spacedBy(if (compact) spacing.sm else spacing.md),
+    val tabState = rememberSaveableStateHolder()
+    ResponsiveLayout(modifier.background(KNetTheme.colors.background)) { windowInfo ->
+        val compact = windowInfo.heightSizeClass == WindowSizeClass.Compact
+        val compactWidth = windowInfo.widthSizeClass == WindowSizeClass.Compact
+        KNetScreenLayout(
+            title = "Network Conditions",
+            subtitle = if (state.configuration.enabled) "Global conditions apply unless a rule overrides them."
+                else "Conditions bypassed. Saved profiles and rules are retained.",
+            actions = {
+                KNetSwitch(state.configuration.enabled, onEnabledChange,
+                    label = if (state.configuration.enabled) "Enabled" else "Disabled")
+                KNetButton(onReset, variant = ButtonVariant.Secondary, size = ButtonSize.Compact) {
+                    Text("Reset", maxLines = 1, softWrap = false)
+                }
+            },
         ) {
-            WorkspaceHeader(state.configuration.enabled, onEnabledChange, onReset)
-            HorizontalDivider()
-            GlobalConditionToolbar(state, onSelectProfile)
-            HorizontalDivider()
-            ThroughputMonitor(state, compact)
-            HorizontalDivider()
+            GlobalConditionToolbar(state, onSelectProfile, compactWidth, compact)
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                KNetTabRow {
+                Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(spacing.sm)) {
                     NetworkConditionsTab.entries.forEach { tab ->
-                        KNetTab(tab.title, state.activeTab == tab, { onSelectTab(tab) })
+                        val selected = state.activeTab == tab
+                        val accent = KNetTheme.colors.accent
+                        val underline = KNetTheme.dimensions.borderWidth * 2
+                        KNetTab(tab.title, selected, { onSelectTab(tab) }, modifier = Modifier.drawWithContent {
+                            drawContent()
+                            if (selected) drawRect(accent, Offset(0f, size.height - underline.toPx()),
+                                Size(size.width, underline.toPx()))
+                        })
                     }
                 }
                 Spacer(Modifier.weight(1f))
-                KNetButton(
+                if (state.activeTab != NetworkConditionsTab.OVERVIEW) KNetButton(
                     onClick = if (state.activeTab == NetworkConditionsTab.RULES) onAddRule else onNewProfile,
                     size = ButtonSize.Compact,
                 ) {
                     Icon(KNetIcons.Add, null, Modifier.size(KNetTheme.dimensions.iconSizeSmall))
                     Spacer(Modifier.width(spacing.xs))
-                    Text(if (state.activeTab == NetworkConditionsTab.RULES) "Add rule" else "New custom profile")
+                    Text(if (state.activeTab == NetworkConditionsTab.RULES) "Add rule" else "New custom profile",
+                        maxLines = 1, softWrap = false)
                 }
             }
-            key(state.activeTab) {
-                Box(Modifier.weight(1f).fillMaxWidth()) {
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                // Tab-local list scroll state survives navigation; telemetry remains owned by the screen ViewModel.
+                tabState.SaveableStateProvider(state.activeTab) {
                     when (state.activeTab) {
+                        NetworkConditionsTab.OVERVIEW -> ThroughputMonitor(state, compact, Modifier.fillMaxSize())
                         NetworkConditionsTab.RULES -> RulesTable(state, onRuleEnabledChange, onEditRule, onDeleteRule)
                         NetworkConditionsTab.PROFILES -> ProfilesTable(state.configuration.profiles, onEditProfile, onDeleteProfile)
                     }
                 }
             }
-            HorizontalDivider()
-            Text(
-                "Packet conditions: Android UDP experimental · iOS and desktop packet shaping unavailable",
-                style = KNetTheme.typography.caption.copy(color = KNetTheme.colors.textSecondary),
-            )
         }
     }
 }
 
 @Composable
-private fun WorkspaceHeader(enabled: Boolean, onEnabledChange: (Boolean) -> Unit, onReset: () -> Unit) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.lg)) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xs)) {
-            Text("Network Conditions", style = KNetTheme.typography.display.copy(color = KNetTheme.colors.textPrimary))
-            Text(
-                if (enabled) "Global conditions apply unless a rule overrides them."
-                else "Conditions bypassed. Saved profiles and rules are retained.",
-                style = KNetTheme.typography.bodySmall.copy(color = KNetTheme.colors.textSecondary),
-            )
-        }
-        KNetSwitch(enabled, onEnabledChange, label = if (enabled) "Enabled" else "Disabled")
-        KNetButton(onReset, variant = ButtonVariant.Secondary, size = ButtonSize.Compact) { Text("Reset") }
-    }
-}
-
-@Composable
-private fun GlobalConditionToolbar(state: NetworkConditionsState, onSelectProfile: (NetworkConditionProfileId?) -> Unit) {
-    val selected = state.configuration.profile(state.configuration.globalProfileId)
-    val options = remember(state.configuration.profiles) { listOf<NetworkConditionProfile?>(null) + state.configuration.profiles }
-    BoxWithConstraints(Modifier.fillMaxWidth()) {
-        val wide = maxWidth >= 1050.dp
-        val selector: @Composable () -> Unit = {
-            Column(verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xs)) {
-                SmallLabel("Global profile")
+private fun GlobalConditionToolbar(state: NetworkConditionsState, onSelectProfile: (NetworkConditionProfileId?) -> Unit,
+    compactWidth: Boolean, compact: Boolean) {
+    val selected = state.configuration.selectedGlobalProfile
+    val options = remember(state.configuration.profiles) { state.configuration.globalProfileOptions }
+    val summary = selected?.let { "MTU ${it.virtualMtuBytes} · ${it.failure.summary()}" } ?: "No global limit"
+    WorkspacePanel {
+        Row(Modifier.fillMaxWidth().padding(if (compact) KNetTheme.spacing.md else KNetTheme.spacing.lg), verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.lg)) {
+            Column(Modifier.weight(1.8f), verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xs)) {
+                SmallLabel(if (compactWidth && compact) "Global profile · $summary" else "Global profile")
                 KNetDropdown(
                     selectedItem = selected, items = options, onItemSelected = { onSelectProfile(it?.id) },
-                    defaultItem = null, itemText = { it?.name ?: "Domain rules only" },
-                    size = KNetDropdownSize.Compact,
+                    defaultItem = null, itemText = { it?.name ?: noThrottlingProfileName },
+                    size = KNetDropdownSize.Standard, modifier = Modifier.fillMaxWidth(),
                 )
+                if (compactWidth && !compact) SmallLabel(summary)
             }
-        }
-        val metrics: @Composable () -> Unit = {
-            FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween,
-                verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm)) {
-                PolicyMetric("Download", selected?.let { rate(it.download.effectiveBitsPerSecond) } ?: "Unlimited")
-                PolicyMetric("Upload", selected?.let { rate(it.upload.effectiveBitsPerSecond) } ?: "Unlimited")
-                PolicyMetric("Latency", "${selected?.latencyMillis ?: 0} ms")
-                PolicyMetric("Jitter", "${selected?.jitterMillis ?: 0} ms")
-            }
-        }
-        if (wide) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xxl)) {
-                selector()
-                Box(Modifier.weight(1f)) { metrics() }
-                Text(selected?.let { "MTU ${it.virtualMtuBytes} · ${it.failure.summary()}" } ?: "No global limit",
-                    style = KNetTheme.typography.bodySmall.copy(color = KNetTheme.colors.textSecondary))
-            }
-        } else {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.lg)) {
-                Box(Modifier.weight(1f)) { selector() }
-                Box(Modifier.weight(2f)) { metrics() }
+            MetricDivider()
+            PolicyMetric("Download", selected?.let { rate(it.download.effectiveBitsPerSecond) } ?: "Unlimited", Modifier.weight(1f))
+            MetricDivider()
+            PolicyMetric("Upload", selected?.let { rate(it.upload.effectiveBitsPerSecond) } ?: "Unlimited", Modifier.weight(1f))
+            MetricDivider()
+            PolicyMetric("Latency", "${selected?.latencyMillis ?: 0} ms", Modifier.weight(0.8f))
+            MetricDivider()
+            PolicyMetric("Jitter", "${selected?.jitterMillis ?: 0} ms", Modifier.weight(0.7f))
+            if (!compactWidth) {
+                MetricDivider()
+                Box(Modifier.weight(1.3f)) { SmallLabel(summary) }
             }
         }
     }
 }
 
 @Composable
-private fun PolicyMetric(label: String, value: String) {
-    Column(verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xs)) {
+private fun PolicyMetric(label: String, value: String, modifier: Modifier = Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xs)) {
         SmallLabel(label)
-        Text(value, style = KNetTheme.typography.titleMedium.copy(color = KNetTheme.colors.textPrimary))
+        Text(value, style = KNetTheme.typography.titleMedium.copy(color = KNetTheme.colors.textPrimary),
+            maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
     }
 }
 
+/** A short visual separator uses the same density tokens as the existing KNet controls. */
 @Composable
-private fun ThroughputMonitor(state: NetworkConditionsState, compact: Boolean) {
+private fun MetricDivider(compact: Boolean = false) {
+    Box(Modifier.width(KNetTheme.dimensions.borderWidth)
+        .height(if (compact) KNetTheme.dimensions.iconSizeMedium else KNetTheme.dimensions.inputHeightStandard + KNetTheme.spacing.md)
+        .background(KNetTheme.colors.border))
+}
+
+/** Screen-local composition of the existing KNet surface; no palette or shared component behavior is overridden. */
+@Composable
+private fun WorkspacePanel(modifier: Modifier = Modifier, content: @Composable () -> Unit) {
+    KNetSurface(modifier.fillMaxWidth(), color = KNetTheme.colors.surface, shape = KNetTheme.shapes.medium,
+        border = BorderStroke(KNetTheme.dimensions.borderWidth, KNetTheme.colors.border),
+        contentAlignment = Alignment.TopStart, content = content)
+}
+
+@Composable
+private fun ThroughputMonitor(state: NetworkConditionsState, compact: Boolean, modifier: Modifier = Modifier) {
     val reference = throughputReference(state)
     val history = state.throughput
     val observed = history.currentSampleIsValid && history.hasObservedTraffic()
-    Column(verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm)) {
-        FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xl),
-            verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xs)) {
-            Text("Actual throughput", style = KNetTheme.typography.titleMedium.copy(color = KNetTheme.colors.textPrimary))
-            SmallLabel("KNet payload · ${reference.label}")
-            Legend("Download ${if (observed) rate(history.currentDownloadBitsPerSecond) else "—"}", KNetTheme.colors.accent)
-            Legend("Upload ${if (observed) rate(history.currentUploadBitsPerSecond) else "—"}", KNetTheme.colors.semantic.success)
-        }
-        LiveThroughputGraph(history, reference.downloadBitsPerSecond, reference.uploadBitsPerSecond,
-            state.runtime.activeFlows, state.runtime.queuedBytes, compact = compact)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xl)) {
-            SmallLabel("${state.runtime.activeFlows} active flows")
-            SmallLabel("${formatBytes(state.runtime.queuedBytes)} queued")
-            SmallLabel("Downloaded ${formatBytes(state.runtime.downloadedBytes)}")
-            SmallLabel("Uploaded ${formatBytes(state.runtime.uploadedBytes)}")
+    WorkspacePanel(modifier) {
+        Column(Modifier.fillMaxSize().padding(if (compact) KNetTheme.spacing.md else KNetTheme.spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(if (compact) KNetTheme.spacing.sm else KNetTheme.spacing.md)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xl)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xs)) {
+                    Text("Actual throughput", style = KNetTheme.typography.titleMedium.copy(color = KNetTheme.colors.textPrimary),
+                        maxLines = 1, softWrap = false)
+                    if (!compact) SmallLabel("Measured KNet payload")
+                }
+                Legend("Download ${if (observed) rate(history.currentDownloadBitsPerSecond) else "—"}", KNetTheme.colors.accent)
+                Legend("Upload ${if (observed) rate(history.currentUploadBitsPerSecond) else "—"}", KNetTheme.colors.semantic.success)
+            }
+            LiveThroughputGraph(history, reference.downloadBitsPerSecond, reference.uploadBitsPerSecond,
+                state.runtime.activeFlows, state.runtime.queuedBytes, measurementContext = reference.label,
+                modifier = Modifier.weight(1f).fillMaxWidth())
+            HorizontalDivider()
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.lg)) {
+                RuntimeMetric("Active flows", state.runtime.activeFlows.toString(), compact, Modifier.weight(1f))
+                MetricDivider(compact)
+                RuntimeMetric("Queued", formatBytes(state.runtime.queuedBytes), compact, Modifier.weight(1f))
+                MetricDivider(compact)
+                RuntimeMetric("Downloaded", formatBytes(state.runtime.downloadedBytes), compact, Modifier.weight(1f))
+                MetricDivider(compact)
+                RuntimeMetric("Uploaded", formatBytes(state.runtime.uploadedBytes), compact, Modifier.weight(1f))
+            }
         }
     }
+}
+
+/** Compact-height workspaces retain the same counters on one line to leave room for usable table rows. */
+@Composable
+private fun RuntimeMetric(label: String, value: String, compact: Boolean, modifier: Modifier) {
+    if (compact) Text("$label $value", modifier, style = KNetTheme.typography.bodySmall,
+        color = KNetTheme.colors.textSecondary, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+    else PolicyMetric(label, value, modifier)
 }
 
 @Composable
 private fun Legend(text: String, color: Color) {
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xs)) {
         Box(Modifier.size(7.dp).background(color, KNetTheme.shapes.small))
-        Text(text, style = KNetTheme.typography.bodySmall.copy(color = KNetTheme.colors.textPrimary))
+        Text(text, style = KNetTheme.typography.bodySmall.copy(color = KNetTheme.colors.textPrimary),
+            maxLines = 1, softWrap = false)
     }
 }
 
@@ -234,16 +262,20 @@ private fun RulesTable(
     onDelete: (NetworkConditionRuleId) -> Unit,
 ) {
     if (state.configuration.rules.isEmpty()) {
-        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Column(horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm)) {
-                Text("No condition rules", style = KNetTheme.typography.titleMedium.copy(color = KNetTheme.colors.textPrimary))
-                SmallLabel("Add a rule here or use Add to Network Conditions from Traffic.")
+        WorkspacePanel(Modifier.heightIn(max = KNetTheme.spacing.massive * 4).fillMaxHeight()) {
+            Box(Modifier.fillMaxSize().padding(KNetTheme.spacing.lg), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm)) {
+                    Icon(KNetIcons.Hub, null, Modifier.size(KNetTheme.spacing.xxxl), tint = KNetTheme.colors.textMuted)
+                    Text("No condition rules", style = KNetTheme.typography.titleMedium.copy(color = KNetTheme.colors.textPrimary),
+                        maxLines = 1, softWrap = false)
+                    SmallLabel("Add a rule here or from a Traffic row.")
+                }
             }
         }
         return
     }
-    ConditionTable(minimumWidth = 1000.dp, header = {
+    ConditionTable(header = {
         HeaderCell("Enabled", Modifier.width(72.dp))
         HeaderCell("Destination", Modifier.weight(1f))
         HeaderCell("Match criteria", Modifier.weight(1.5f))
@@ -281,7 +313,7 @@ private fun RulesTable(
 @Composable
 private fun ProfilesTable(profiles: List<NetworkConditionProfile>, onEdit: (NetworkConditionProfile) -> Unit,
     onDelete: (NetworkConditionProfileId) -> Unit) {
-    ConditionTable(minimumWidth = 1000.dp, header = {
+    ConditionTable(header = {
         HeaderCell("Name", Modifier.weight(1.2f))
         HeaderCell("Download", Modifier.width(100.dp))
         HeaderCell("Upload", Modifier.width(100.dp))
@@ -313,24 +345,13 @@ private fun ProfilesTable(profiles: List<NetworkConditionProfile>, onEdit: (Netw
 
 /** A shared header/body scroll owner keeps columns aligned and lazily composes large lists. */
 @Composable
-private fun ConditionTable(minimumWidth: Dp, header: @Composable RowScope.() -> Unit, content: LazyListScope.() -> Unit) {
-    val horizontal = rememberScrollState()
+private fun ConditionTable(header: @Composable RowScope.() -> Unit, content: LazyListScope.() -> Unit) {
     val vertical = rememberLazyListState()
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val tableWidth = maxOf(maxWidth - KNetTheme.dimensions.scrollbarWidth, minimumWidth)
-        Column(Modifier.fillMaxSize()) {
-            Box(Modifier.weight(1f).fillMaxWidth()) {
-                Box(Modifier.fillMaxSize().padding(end = KNetTheme.dimensions.scrollbarWidth).horizontalScroll(horizontal)) {
-                    Column(Modifier.width(tableWidth).fillMaxHeight()) {
-                        Row(Modifier.fillMaxWidth().background(KNetTheme.colors.panelHeader)
-                            .padding(horizontal = KNetTheme.spacing.md, vertical = KNetTheme.spacing.sm), content = header)
-                        LazyColumn(Modifier.weight(1f).fillMaxWidth(), state = vertical, content = content)
-                    }
-                }
-                KNetVerticalScrollbar(vertical, Modifier.align(Alignment.CenterEnd).fillMaxHeight())
-            }
-            KNetHorizontalScrollbar(horizontal, Modifier.fillMaxWidth())
-        }
+    KNetTableViewport(vertical, Modifier.fillMaxSize(), header = { headerModifier ->
+        Row(headerModifier.background(KNetTheme.colors.panelHeader)
+            .padding(horizontal = KNetTheme.spacing.md, vertical = KNetTheme.spacing.sm), content = header)
+    }) { contentModifier ->
+        LazyColumn(contentModifier, state = vertical, content = content)
     }
 }
 
@@ -342,7 +363,8 @@ private fun TableRow(content: @Composable RowScope.() -> Unit) {
 
 @Composable
 private fun HeaderCell(text: String, modifier: Modifier) {
-    Text(text, modifier, style = KNetTheme.typography.labelMedium.copy(color = KNetTheme.colors.textSecondary))
+    Text(text, modifier, style = KNetTheme.typography.labelMedium.copy(color = KNetTheme.colors.textSecondary),
+        maxLines = 1, softWrap = false)
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -356,11 +378,12 @@ private fun TableText(text: String, modifier: Modifier = Modifier, color: Color 
             small -> KNetTheme.typography.caption
             else -> KNetTheme.typography.bodySmall
         }
-        Text(text, style = style.copy(color = color), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(text, style = style.copy(color = color), maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
     }
 }
 
 @Composable
 private fun SmallLabel(text: String) {
-    Text(text, style = KNetTheme.typography.caption.copy(color = KNetTheme.colors.textSecondary))
+    Text(text, style = KNetTheme.typography.caption.copy(color = KNetTheme.colors.textSecondary),
+        maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
 }

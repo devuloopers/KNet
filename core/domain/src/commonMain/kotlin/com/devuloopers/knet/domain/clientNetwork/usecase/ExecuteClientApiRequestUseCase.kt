@@ -130,7 +130,7 @@ class ExecuteClientApiRequestUseCase(
         cookies: Map<String, String>,
     ): PreparedRequest? {
         val sanitizedUrl = runCatching { validateUseCase.execute(url) }.getOrNull() ?: return null
-        val finalUrl = if (queryParams.isNotEmpty()) {
+        val finalUrl = if (queryParams.isNotEmpty() && queryParams != UrlQueryStringParser.parseQueryParams(sanitizedUrl)) {
             UrlQueryStringParser.rebuildUrlWithQueryParams(sanitizedUrl, queryParams)
         } else {
             sanitizedUrl

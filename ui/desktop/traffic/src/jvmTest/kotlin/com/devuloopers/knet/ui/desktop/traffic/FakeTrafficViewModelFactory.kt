@@ -87,6 +87,7 @@ object FakeTrafficViewModelFactory {
         localIp: String = "127.0.0.1",
         customObserveLocalIpUseCase: ObserveLocalIpUseCase? = null,
         customTrafficQueryPort: TrafficQuery? = null,
+        customProtocolMessageQuery: ProtocolMessageQuery? = null,
         customTrafficFacetReader: TrafficFacetReader = TrafficFacetReader { TrafficFacetCounts() },
         customSessionCatalogPort: TrafficSessionCatalog? = null,
         customProxyRuntime: ProxyRuntime? = null,
@@ -170,7 +171,7 @@ object FakeTrafficViewModelFactory {
             }
         }
         val loadTrafficExchangeDetailsUseCase = LoadTrafficExchangeDetailsUseCase(fakeTrafficQueryPort)
-        val protocolMessages = object : ProtocolMessageQuery {
+        val protocolMessages = customProtocolMessageQuery ?: object : ProtocolMessageQuery {
             override fun observeChanges(exchangeId: ExchangeId): Flow<Long> = flowOf(0L)
 
             override suspend fun queryMessages(query: ProtocolMessagePageQuery): ProtocolMessagePage =

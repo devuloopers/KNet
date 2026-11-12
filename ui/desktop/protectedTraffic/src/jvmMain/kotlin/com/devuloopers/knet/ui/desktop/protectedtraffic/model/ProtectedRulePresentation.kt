@@ -31,3 +31,18 @@ internal val ProtectedTrafficDefaultHandling.displayLabel: String get() = when (
     ProtectedTrafficDefaultHandling.TUNNEL -> "Tunnel"
     ProtectedTrafficDefaultHandling.BLOCK -> "Block"
 }
+
+/** Explains the actual TLS policy and its precedence without implying replay of a rejected connection. */
+internal val ProtectedTrafficDefaultHandling.description: String get() {
+    val behavior = when (this) {
+        ProtectedTrafficDefaultHandling.INSPECT_WITH_FALLBACK ->
+            "Inspect TLS traffic using KNet’s certificate. If the client explicitly rejects it, eligible later connections temporarily tunnel without decryption. The failed connection is not retried by KNet; the app must reconnect."
+        ProtectedTrafficDefaultHandling.INSPECT_ONLY ->
+            "Always attempt TLS inspection using KNet’s certificate. Certificate rejection fails the connection; automatic tunneling is disabled."
+        ProtectedTrafficDefaultHandling.TUNNEL ->
+            "Forward TLS traffic without decrypting it. KNet shows connection details, timing and transferred bytes; HTTP headers and bodies remain encrypted."
+        ProtectedTrafficDefaultHandling.BLOCK ->
+            "Reject TLS connections covered by this default."
+    }
+    return "$behavior\n\nSaved rules take priority. Changes apply to new connections."
+}

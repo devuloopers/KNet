@@ -1,5 +1,7 @@
 package com.devuloopers.knet.core.http.client
 
+import com.devuloopers.knet.traffic.model.http.StandardApplicationProtocol
+
 import com.devuloopers.knet.core.http.config.HttpClientConfiguration
 import com.devuloopers.knet.core.http.cookie.CookieStore
 import com.devuloopers.knet.core.http.cookie.MemoryCookieStore
@@ -236,7 +238,15 @@ open class KNetApiClient(
                         },
                     )
                 }
-                HttpVersionPreference.HTTP_1_1 -> dispatchWithClientStreaming(
+                HttpVersionPreference.HTTP_1_1 -> if (customEngine == null) {
+                    dispatchHttpTwoStreaming(currentUrl, method, attributedHeaders, currentBody, auth, targetProxyPort,
+                        requireHttpTwo = false,
+                        preferredProtocol = StandardApplicationProtocol.HTTP_1_1,
+                        onEvent = { event ->
+                            if (event is HttpExecutionEvent.ResponseHead) responseStarted = true
+                            emit(event)
+                        })
+                } else dispatchWithClientStreaming(
                     client = targetProxyPort?.let(::getProxyHttpClient) ?: directHttpClient,
                     url = currentUrl,
                     method = method,
@@ -341,7 +351,11 @@ open class KNetApiClient(
                         auth = auth,
                     )
                 }
-                HttpVersionPreference.HTTP_1_1 -> dispatchWithClient(
+                HttpVersionPreference.HTTP_1_1 -> if (customEngine == null) {
+                    dispatchHttpTwo(currentUrl, method, attributedHeaders, currentBody, auth, targetProxyPort,
+                        requireHttpTwo = false,
+                        preferredProtocol = StandardApplicationProtocol.HTTP_1_1)
+                } else dispatchWithClient(
                     client = targetProxyPort?.let(::getProxyHttpClient) ?: directHttpClient,
                     url = currentUrl,
                     method = method,
@@ -391,6 +405,7 @@ open class KNetApiClient(
         auth: ApiRequestAuth,
         targetProxyPort: Int?,
         requireHttpTwo: Boolean,
+        preferredProtocol: StandardApplicationProtocol = StandardApplicationProtocol.HTTP_2,
     ): ExecutionResult {
         val elapsedTime = TimeSource.Monotonic.markNow()
         val prepared = prepareExactTransportRequest(url, headers, auth)
@@ -404,6 +419,7 @@ open class KNetApiClient(
                 configuration = currentConfiguration,
                 localProxyTlsTrust = localProxyTlsTrust.takeIf { targetProxyPort != null },
                 requireHttpTwo = requireHttpTwo,
+                preferredProtocol = preferredProtocol,
             ),
         )
         return response.toExecutionResult(
@@ -420,6 +436,7 @@ open class KNetApiClient(
         auth: ApiRequestAuth,
         targetProxyPort: Int?,
         requireHttpTwo: Boolean,
+        preferredProtocol: StandardApplicationProtocol = StandardApplicationProtocol.HTTP_2,
         onEvent: suspend (HttpExecutionEvent) -> Unit,
     ): ExecutionResult {
         val elapsedTime = TimeSource.Monotonic.markNow()
@@ -434,6 +451,7 @@ open class KNetApiClient(
                 configuration = currentConfiguration,
                 localProxyTlsTrust = localProxyTlsTrust.takeIf { targetProxyPort != null },
                 requireHttpTwo = requireHttpTwo,
+                preferredProtocol = preferredProtocol,
             ),
             onResponseHead = { head ->
                 onEvent(HttpExecutionEvent.ResponseHead(head.toDomainHead(prepared.url)))
@@ -595,7 +613,7 @@ open class KNetApiClient(
                         val trimmed = body.content.trim()
                         val formattedGraphQl = when {
                             trimmed.isBlank() -> "{}"
-                            trimmed.startsWith("{") -> trimmed
+                            trimmed.startsWith("{") -> body.content
                             else -> "{\"query\": \"${trimmed.replace("\"", "\\\"").replace("\n", "\\n")}\"}"
                         }
                         setBody(formattedGraphQl)

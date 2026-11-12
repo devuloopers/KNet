@@ -10,6 +10,7 @@ import com.devuloopers.knet.engine.sse.protocol.SseParseResult
 import com.devuloopers.knet.engine.sse.protocol.SseRecordKind
 import com.devuloopers.knet.traffic.model.message.MessageProtocolId
 import com.devuloopers.knet.traffic.model.message.ProtocolMessageKind
+import com.devuloopers.knet.traffic.inspection.InspectionField
 
 /** Shared-parser SSE decoder plugged into Traffic's protocol-neutral presentation registry. */
 class SseProtocolMessageDecoder(
@@ -20,7 +21,7 @@ class SseProtocolMessageDecoder(
     override val priority: Int = 100
 
     override fun decode(input: ProtocolMessagePayloadInput): ProtocolMessagePresentation? {
-        if (input.message.kind != ProtocolMessageKind.RECORD) return null
+        if (input.truncated || input.message.kind != ProtocolMessageKind.RECORD) return null
         val parser = SseIncrementalParser(limits)
         val parsed = (parser.accept(input.payload).firstOrNull() as? SseParseResult.Record)?.value ?: return null
         val title = when (parsed.kind) {
@@ -33,6 +34,16 @@ class SseProtocolMessageDecoder(
             contentType = "text/event-stream",
             text = input.payload.decodeToString(),
             schemaName = parsed.lastEventId.takeIf(String::isNotEmpty),
+            fields = buildList {
+                add(InspectionField("Record", when (parsed.kind) {
+                    SseRecordKind.EVENT -> "Event"
+                    SseRecordKind.COMMENT -> "Keep-alive comment"
+                    SseRecordKind.STATE_UPDATE -> "State update"
+                }))
+                if (parsed.kind == SseRecordKind.EVENT) parsed.eventType?.let { add(InspectionField("Event type", it)) }
+                parsed.lastEventId.takeIf(String::isNotEmpty)?.let { add(InspectionField("Record ID", it)) }
+                parsed.retryMillis?.let { add(InspectionField("Retry", "$it ms")) }
+            },
         )
     }
 }

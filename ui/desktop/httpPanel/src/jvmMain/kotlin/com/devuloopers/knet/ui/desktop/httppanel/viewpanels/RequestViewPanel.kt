@@ -1,5 +1,8 @@
 package com.devuloopers.knet.ui.desktop.httppanel.viewpanels
 
+import com.devuloopers.knet.engine.formatter.model.BodyFormat
+import com.devuloopers.knet.ui.desktop.httppanel.components.GraphQLBodyViewer
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,8 +18,12 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.httppanel.components.InspectorSubTabRow
 import com.devuloopers.knet.ui.desktop.httppanel.components.RequestSummaryHeader
 import com.devuloopers.knet.ui.desktop.httppanel.components.SmartBodyViewer
+import com.devuloopers.knet.ui.desktop.httppanel.components.GraphQLBodySubTab
 import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
 import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
+import com.devuloopers.knet.ui.core.components.button.KNetButton
+import com.devuloopers.knet.ui.core.components.button.ButtonVariant
+import androidx.compose.material3.Text
 
 /**
  * Unified high-density request view panel composable shared across Live Traffic Inspector,
@@ -31,16 +38,23 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
  * @param onSubTabSelected Event callback when user switches sub-tabs.
  * @param onOpenInApiStudio Optional action button callback for 1-click API Studio export.
  * @param modifier Composable layout modifier.
+ * @param showSummaryHeader Whether this panel owns endpoint chrome; persistent Traffic headers render it once.
+ * @param graphQLSubTab Optional controlled GraphQL body sub-tab for explicit query navigation.
+ * @param onGraphQLSubTabSelected Publishes GraphQL sub-tab changes to the caller.
  */
 @Composable
 fun RequestViewPanel(
     spec: NetworkRequestSpec,
     payloadSpec: PayloadInspectionSpec? = null,
+    parameterPayloadSpec: PayloadInspectionSpec = PayloadInspectionSpec.EMPTY,
     isPreparing: Boolean = false,
     activeSubTab: InspectorSubTab = InspectorSubTab.BODY,
     onSubTabSelected: (InspectorSubTab) -> Unit = {},
     onOpenInApiStudio: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showSummaryHeader: Boolean = true,
+    graphQLSubTab: GraphQLBodySubTab? = null,
+    onGraphQLSubTabSelected: (GraphQLBodySubTab) -> Unit = {},
 ) {
     val themeColors = KNetTheme.colors
 
@@ -64,11 +78,10 @@ fun RequestViewPanel(
             .background(themeColors.surface)
     ) {
         // 1. Target URL Summary Bar
-        RequestSummaryHeader(
+        if (showSummaryHeader) RequestSummaryHeader(
             spec = spec,
             onOpenInApiStudio = onOpenInApiStudio
         )
-
         // 2. Sub-Tabs Row
         InspectorSubTabRow(
             tabs = InspectorSubTab.RequestInspectorTabs,
@@ -79,7 +92,12 @@ fun RequestViewPanel(
             },
             headerCount = headerEntries.size,
             paramCount = paramEntries.size,
-            cookieCount = cookieEntries.size
+            cookieCount = cookieEntries.size,
+            actions = if (!showSummaryHeader && onOpenInApiStudio != null) ({
+                KNetButton(onOpenInApiStudio, variant = ButtonVariant.Ghost) {
+                    Text("Open in API Studio", maxLines = 1, softWrap = false)
+                }
+            }) else null,
         )
 
         HorizontalDivider(color = themeColors.border)
@@ -101,6 +119,8 @@ fun RequestViewPanel(
                     }
                     SmartBodyViewer(
                         spec = effectiveBodySpec,
+                        graphQLSubTab = graphQLSubTab,
+                        onGraphQLSubTabSelected = onGraphQLSubTabSelected,
                         emptyTitle = "No Request Body",
                         emptySubtitle = "This request was sent without a body payload (e.g. GET or HEAD request)",
                         modifier = Modifier.fillMaxSize()
@@ -118,7 +138,11 @@ fun RequestViewPanel(
                 }
 
                 InspectorSubTab.PARAMS -> {
-                    KNetReadOnlyKeyValueViewer(
+                    val graphQL = parameterPayloadSpec.resolvedFormat as? BodyFormat.GraphQL
+                    if (graphQL != null) GraphQLBodyViewer(
+                        format = graphQL, rawJsonText = "", rawParameters = paramEntries,
+                        activeSubTab = graphQLSubTab, onSubTabSelected = onGraphQLSubTabSelected,
+                    ) else KNetReadOnlyKeyValueViewer(
                         entries = paramEntries,
                         keyHeader = "PARAMETER NAME",
                         valueHeader = "VALUE",

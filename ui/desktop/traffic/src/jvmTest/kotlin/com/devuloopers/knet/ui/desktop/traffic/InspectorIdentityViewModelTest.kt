@@ -30,6 +30,10 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.resetMain
@@ -82,11 +86,61 @@ class InspectorIdentityViewModelTest {
         viewModel.processIntent(TrafficIntent.SelectTransaction("older"))
         advanceUntilIdle()
         viewModel.processIntent(TrafficIntent.SelectTransaction("newest"))
+        assertEquals(InspectorLoadState.READY, viewModel.uiState.value.preparedState.loadState,
+            "A cached selection must not publish an intermediate empty loading state.")
+        assertEquals("newest", viewModel.uiState.value.preparedState.exchange?.id?.value)
         advanceUntilIdle()
 
         assertEquals(1, port.detailReads.getValue("newest"))
         assertEquals("", viewModel.uiState.value.preparedState.requestBodyText)
         assertEquals("", viewModel.uiState.value.preparedState.responseBodyText)
+    }
+
+    @Test
+    fun `cached annotations stay visible while the selected observer reconnects`() = runTest(dispatcher) {
+        val owner = ExchangeId("newest")
+        val annotation = com.devuloopers.knet.traffic.inspection.InspectionAnnotation(owner,
+            com.devuloopers.knet.traffic.inspection.InspectorId("graphql"), 1,
+            com.devuloopers.knet.traffic.inspection.InspectionAnnotationState.COMPLETED,
+            com.devuloopers.knet.traffic.inspection.InspectionDocument("graphql", "GraphQL query", fields = listOf(
+                com.devuloopers.knet.traffic.inspection.InspectionField("Operation", "GetAccount"))), createdAtEpochMillis = 1)
+        val annotations = MutableStateFlow(mapOf(owner to listOf(annotation)))
+        val store = object : com.devuloopers.knet.application.contract.inspection.InspectionAnnotationStore {
+            override suspend fun put(sessionId: com.devuloopers.knet.traffic.id.CaptureSessionId,
+                annotation: com.devuloopers.knet.traffic.inspection.InspectionAnnotation) = Unit
+            override suspend fun get(exchangeId: ExchangeId) = annotations.value[exchangeId].orEmpty()
+            override fun observe(exchangeId: ExchangeId) = flow {
+                delay(200); emitAll(annotations.map { it[exchangeId].orEmpty() })
+            }
+            override fun observe(exchangeIds: Set<ExchangeId>) = annotations.map { it.filterKeys { id -> id in exchangeIds } }
+        }
+        val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort =
+            DetailPort(listOf(exchange("newest", 2_000), exchange("older", 1_000))), customInspectionAnnotationPort = store)
+        advanceUntilIdle()
+        assertEquals(listOf(annotation), viewModel.uiState.value.preparedState.annotations)
+        viewModel.processIntent(TrafficIntent.SelectTransaction("older")); advanceUntilIdle()
+        viewModel.processIntent(TrafficIntent.SelectTransaction("newest"))
+        assertEquals(listOf(annotation), viewModel.uiState.value.preparedState.annotations)
+        runCurrent()
+        assertEquals(listOf(annotation), viewModel.uiState.value.preparedState.annotations,
+            "The observer's initial state must not erase cached protocol details.")
+        advanceUntilIdle()
+        annotations.value = emptyMap(); advanceUntilIdle()
+        assertEquals(emptyList(), viewModel.uiState.value.preparedState.annotations,
+            "A real annotation removal must still update the selected inspector.")
+    }
+
+    @Test
+    fun `active exchange is refreshed on revisit instead of caching an unfinished body`() = runTest(dispatcher) {
+        val active = exchange("newest", 2_000).copy(state = ExchangeState.RESPONSE_STREAMING, terminalOutcome = null)
+        val port = DetailPort(listOf(active, exchange("older", 1_000)))
+        val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = port)
+        advanceUntilIdle()
+        viewModel.processIntent(TrafficIntent.SelectTransaction("older")); advanceUntilIdle()
+        viewModel.processIntent(TrafficIntent.SelectTransaction("newest"))
+        assertEquals(InspectorLoadState.LOADING, viewModel.uiState.value.preparedState.loadState)
+        advanceUntilIdle()
+        assertEquals(2, port.detailReads.getValue("newest"))
     }
 
     private class DetailPort(

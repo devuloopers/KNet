@@ -115,3 +115,7 @@ with the final byte counters. Historical generic failures are retained without g
 Opaque capture retains typed close evidence under the flow's metadata monitor and persists it in its terminal
 event. Canonical mapping preserves nullable legacy evidence and safely maps corrupt evidence to Unknown.
 Real-socket close qualification also checks database reopening, independent of encrypted application outcomes.
+
+Optional protocol-message context queries use durable capture ordering within the selected exchange, newest first,
+with a bounded limit. The adapter returns message/body metadata; lazy body access remains application-owned.
+No wall-clock or per-direction sequence is used to correlate multiplexed operations.

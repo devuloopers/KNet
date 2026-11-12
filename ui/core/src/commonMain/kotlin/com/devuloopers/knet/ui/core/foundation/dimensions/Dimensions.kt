@@ -10,7 +10,11 @@ import androidx.compose.ui.unit.dp
 @Immutable
 data class Dimensions(
     val toolbarHeight: Dp = 32.dp,
+    /** Shared manager headers reserve consistent title/subtitle height before feature content begins. */
+    val screenHeaderMinHeight: Dp = 48.dp,
     val statusBarHeight: Dp = 24.dp,
+    /** Statistics footers keep one row and expose horizontal overflow without consuming more list height. */
+    val statisticsBarHeight: Dp = 48.dp,
     val navigationWidth: Dp = 48.dp,
     val sidebarWidth: Dp = 240.dp,
     val tableRowHeight: Dp = 26.dp,
@@ -36,6 +40,11 @@ data class Dimensions(
     val searchFieldMinWidth: Dp = 160.dp,
     val inspectorMinWidth: Dp = 320.dp,
     val inspectorMaxWidth: Dp = 500.dp,
+    /** Message navigation and payload retain readable independent panes under shared horizontal overflow. */
+    val inspectorMessageListWidth: Dp = 210.dp,
+    val inspectorMessageDetailMinWidth: Dp = 300.dp,
+    /** Metadata scrolls independently so it cannot displace the selected message payload. */
+    val inspectorMessageMetadataMaxHeight: Dp = 180.dp,
     val dialogWidthMedium: Dp = 520.dp,
     val sideDrawerWidth: Dp = 720.dp,
     val expandedSideDrawerWidth: Dp = 880.dp,

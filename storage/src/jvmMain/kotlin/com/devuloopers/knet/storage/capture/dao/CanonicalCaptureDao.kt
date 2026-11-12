@@ -596,6 +596,15 @@ interface CanonicalCaptureDao {
         limit: Int,
     ): List<DuplexMessageEntity>
 
+    /** Finds bounded earlier context using capture ordering, independent from wall-clock changes or message direction sequence. */
+    @Query("SELECT candidate.* FROM duplex_messages AS candidate " +
+        "INNER JOIN duplex_messages AS selected ON selected.id = :beforeMessageId AND selected.exchangeId = :exchangeId " +
+        "WHERE candidate.exchangeId = :exchangeId AND candidate.captureSequence < selected.captureSequence " +
+        "AND candidate.protocol = :protocol AND (:direction IS NULL OR candidate.direction = :direction) AND candidate.messageKind = :kind " +
+        "ORDER BY candidate.captureSequence DESC LIMIT :limit")
+    suspend fun getDuplexMessageContext(exchangeId: String, beforeMessageId: String, protocol: String,
+        direction: String?, kind: String, limit: Int): List<DuplexMessageEntity>
+
     /** Attaches a finalized payload body to its owning framed message. */
     @Query("UPDATE duplex_messages SET bodyId = :bodyId WHERE id = :messageId AND bodyId IS NULL")
     suspend fun updateDuplexMessageBody(messageId: String, bodyId: String): Int

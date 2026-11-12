@@ -4,38 +4,27 @@ import com.devuloopers.knet.domain.request.descriptor.RequestDescriptorContribut
 import com.devuloopers.knet.domain.request.descriptor.RequestDescriptorInput
 import com.devuloopers.knet.domain.request.descriptor.RequestDescriptorStrategy
 import com.devuloopers.knet.domain.request.descriptor.RequestKindId
-import com.devuloopers.knet.engine.formatter.formatters.GraphQLBodyFormatter
-import com.devuloopers.knet.engine.formatter.model.BodyFormat
+import com.devuloopers.knet.engine.formatter.graphql.GraphQLHttpRequestFormatter
 
 /**
  * Describes GraphQL requests using the same envelope and AST parser as body formatting.
  *
  * Anonymous operations retain `GQL` identity while allowing the HTTP contribution to provide a path-based name.
  */
-class GraphQlRequestDescriptorStrategy(
-    private val formatter: GraphQLBodyFormatter = GraphQLBodyFormatter()
-) : RequestDescriptorStrategy {
+class GraphQlRequestDescriptorStrategy : RequestDescriptorStrategy {
     override val priority: Int = 100
 
     override fun describe(request: RequestDescriptorInput): RequestDescriptorContribution? {
-        val headers = request.headers.associate { it.name.value to it.value }
-        val bodyText = request.body?.decodeToString().orEmpty()
         val contentType = request.headers.firstOrNull {
             it.name.value.equals(CONTENT_TYPE_HEADER, ignoreCase = true)
         }?.value.orEmpty()
-        val isRecognized = request.semanticKindHint == RequestKindId.GRAPHQL ||
-            request.absoluteUrl.contains(GRAPHQL_TARGET_HINT, ignoreCase = true) ||
-            contentType.contains(GRAPHQL_MEDIA_TYPE_HINT, ignoreCase = true) ||
-            bodyText.isNotBlank() && formatter.matches(headers, bodyText)
-        if (!isRecognized) return null
-
-        val formatted = bodyText.takeIf(String::isNotBlank)?.let {
-            formatter.format(headers = headers, bodyText = it) as? BodyFormat.GraphQL
-        }
+        val document = GraphQLHttpRequestFormatter.inspect(request.transportMethod.token, request.absoluteUrl,
+            contentType, request.body?.copyBytes(), request.bodyComplete)
+        if (document == null && request.semanticKindHint != RequestKindId.GRAPHQL) return null
         return RequestDescriptorContribution(
             kind = RequestKindId.GRAPHQL,
             badgeLabel = "GQL",
-            suggestedName = formatted?.operationName?.trim()?.takeIf { it.isNotEmpty() }
+            suggestedName = document?.selectedOperation?.name?.trim()?.takeIf { it.isNotEmpty() }
         )
     }
 

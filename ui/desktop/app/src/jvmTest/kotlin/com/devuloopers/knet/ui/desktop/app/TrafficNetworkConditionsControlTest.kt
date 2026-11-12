@@ -44,6 +44,44 @@ class TrafficNetworkConditionsControlTest {
     private var frameNanos = 0L
 
     @Test
+    fun `global shortcut has one unlimited choice preserves old IDs and keeps custom profiles and rules`() = onUiThread {
+        for (savedId in listOf(null, NetworkConditionBuiltIns.NO_THROTTLING.id)) {
+            val custom = NetworkConditionBuiltIns.NO_THROTTLING.copy(id = NetworkConditionProfileId("company-baseline"),
+                name = "Company baseline", builtIn = false)
+            val rule = NetworkConditionRule(NetworkConditionRuleId("retained-exception"),
+                NetworkConditionTarget.parse("unlimited.example.test", 443), NetworkConditionBuiltIns.NO_THROTTLING.id)
+            val configuration = mutableStateOf(NetworkConditionConfiguration(globalProfileId = savedId,
+                customProfiles = listOf(custom), rules = listOf(rule)))
+            val activations = mutableListOf<NetworkConditionProfileId?>()
+            ImageComposeScene(1280, 700, content = {
+                KNetTheme(motion = Motion(animationsEnabled = false)) {
+                    NetworkConditionsQuickControl(configuration.value, {}, {
+                        activations += it
+                        configuration.value = configuration.value.copy(enabled = true, globalProfileId = it)
+                    }, {})
+                }
+            }).use { scene ->
+                scene.frame(); scene.click(scene.quickAnchor()); scene.frame()
+                scene.clickText(NetworkConditionBuiltIns.NO_THROTTLING.name); scene.frame()
+                val options = scene.nodes().filter { it.config.getOrNull(SemanticsProperties.Selected) != null }
+                assertEquals(1, options.count { it.text() == NetworkConditionBuiltIns.NO_THROTTLING.name })
+                assertFalse(options.any { it.text() == "No global throttling" || it.text() == "Domain rules only" || it.text() == "Lossy / unstable" })
+                assertTrue(options.any { it.text() == "Unstable connection" })
+                assertTrue(options.any { it.text() == "Company baseline" }, "Custom unlimited profiles keep their identity")
+                assertTrue(activations.isEmpty())
+                assertEquals(savedId, configuration.value.globalProfileId)
+                scene.click(options.single { it.text() == NetworkConditionBuiltIns.NO_THROTTLING.name }); scene.frame()
+                assertEquals(listOf<NetworkConditionProfileId?>(null), activations)
+                assertTrue(configuration.value.enabled)
+                assertEquals(listOf(rule), configuration.value.rules)
+                assertEquals(listOf(custom), configuration.value.customProfiles)
+                assertTrue(scene.quickAnchor().text().contains("Global: ${NetworkConditionBuiltIns.NO_THROTTLING.name}"))
+                scene.save("traffic-global-preset-cleanup-${savedId?.value ?: "unset"}")
+            }
+        }
+    }
+
+    @Test
     fun `selected label expands and contracts smoothly while auto scroll stays anchored`() = onUiThread {
         val configuration = mutableStateOf(NetworkConditionConfiguration())
         val custom = NetworkConditionBuiltIns.STREAMING_100_KBPS.copy(
@@ -212,7 +250,7 @@ class TrafficNetworkConditionsControlTest {
             // A full-screen configuration change is immediately reflected by the same toolbar state.
             configuration.value = configuration.value.copy(globalProfileId = NetworkConditionBuiltIns.NO_THROTTLING.id)
             scene.frame()
-            assertTrue(scene.quickAnchor().text().contains("Global: No throttling"))
+            assertTrue(scene.quickAnchor().text().contains("Global: ${NetworkConditionBuiltIns.NO_THROTTLING.name}"))
             scene.click(scene.quickAnchor())
             scene.frame()
             scene.clickText("Enable Network Conditions")

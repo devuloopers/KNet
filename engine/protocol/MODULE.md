@@ -9,8 +9,8 @@ Hosts protocol-specific parsers and inspectors that derive structured views or s
 - GraphQL semantic inspection implemented against the application inspector contract.
 - The GraphQL live-breakpoint extension: versioned typed criteria, bounded detection, compiled
   operation matching, compact cross-phase observations, and smart captured-rule suggestions.
-- A shared Kotlin serialization GraphQL document parser used by both live breakpoint matching and
-  asynchronous post-capture inspection.
+- A shared bounded HTTP source decoder and GraphQL AST parser used by live matching and asynchronous
+  post-capture inspection.
 - Protocol-specific parsing that consumes bounded captured content and emits generic versioned inspection documents.
 
 ## Does not own
@@ -35,3 +35,13 @@ endpoint-scoped rather than guessing one operation.
 Dormant WebSocket/protobuf stubs were removed. Experimental HTTP/2 transport lives in `:engine:proxy` and does
 not change this semantic-inspection boundary. WebSocket and gRPC now live in independent experimental engine
 modules; HTTP/3 remains unavailable until a real implementation passes its conformance gates.
+
+## GraphQL HTTP source ownership
+
+`GraphQLHttpDecoder` owns bounded POST JSON and GET form decoding, strict UTF-8 percent decoding,
+operation selection, AST formatting and source-preserving envelope edits. It reuses the existing graphql-java
+version with per-call depth/token/character limits; parser defaults are never changed globally.
+The common `:core:domain` GraphQL contracts distinguish source, supplied selector, resolved operation and
+diagnostic. Breakpoints, Network Conditions and semantic schema version 2 consume these same facts.
+Ambiguous/invalid requests cannot produce named operation matches; raw forwarding is unchanged.
+The older `GraphQLDocumentParser` API is a compatibility adapter, including GraphQL WebSocket use.

@@ -94,3 +94,15 @@ only when the user invokes it. Future editors therefore add a module, codec, con
 binding; the sidebar, Room schema, collection dialogs, and shell routing stay unchanged.
 The contribution reports a lazily materialized document ID back to the shell after persistence succeeds, allowing
 the common sidebar to select it without owning protocol fields or risking loss of the user's first edit.
+
+## GraphQL HTTP source-preserving authoring
+
+GET GraphQL fields are derived off-thread from the URL and fenced by active document, method and URL.
+They are edited under Params using the shared editor. Changed fields are form-encoded once; untouched
+pairs retain order, duplicate unrelated keys and raw spelling. Persistence continues to store method,
+URL and actual body, requiring no new schema. POST JSON edits keep unrelated envelope fields.
+The formatter dependency exposes bounded protocol adapters rather than importing a runtime engine.
+
+Initial GraphQL GET import/URL loading/restoration opens prettified authoring fields without serializing them back
+into the URL. Once hydrated, validation and unrelated editor mutations retain current buffers; source edits explicitly
+clear the old projection before preparing the new URL. Merely selecting Query/Variables/Extensions is not a payload edit.

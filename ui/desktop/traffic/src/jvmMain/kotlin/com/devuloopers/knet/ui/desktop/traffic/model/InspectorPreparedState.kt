@@ -42,6 +42,8 @@ data class InspectorPreparedState(
     val responsePayloadSpec: PayloadInspectionSpec = PayloadInspectionSpec.EMPTY,
     val requestBodyTruncated: Boolean = false,
     val responseBodyTruncated: Boolean = false,
+    /** Bounded derived GET view; requestPayloadSpec continues to represent only captured body bytes. */
+    val requestParameterSpec: PayloadInspectionSpec = PayloadInspectionSpec.EMPTY,
     val annotations: List<InspectionAnnotation> = emptyList(),
     val loadState: InspectorLoadState = InspectorLoadState.IDLE,
 ) {
@@ -61,7 +63,7 @@ data class InspectorPreparedState(
 
     /** Conservative memory weight used by the bounded inspector-detail cache. */
     val estimatedRetainedBytes: Long
-        get() = requestPayloadSpec.estimatedRetainedBytes +
+        get() = requestParameterSpec.estimatedRetainedBytes + requestPayloadSpec.estimatedRetainedBytes +
             responsePayloadSpec.estimatedRetainedBytes +
             annotations.sumOf { annotation -> annotation.toString().length.toLong() * 2L } +
             INSPECTOR_METADATA_ESTIMATE_BYTES

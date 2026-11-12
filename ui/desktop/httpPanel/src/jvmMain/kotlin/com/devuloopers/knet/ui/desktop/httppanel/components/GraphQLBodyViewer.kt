@@ -21,6 +21,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.devuloopers.knet.domain.graphql.GraphQLHttpSource
+import com.devuloopers.knet.ui.core.components.keyvalue.KeyValueEntry
+import com.devuloopers.knet.ui.core.components.keyvalue.KNetReadOnlyKeyValueViewer
+import com.devuloopers.knet.ui.core.components.inspector.KNetInspectorParagraph
 import com.devuloopers.knet.engine.formatter.model.BodyFormat
 import com.devuloopers.knet.ui.core.components.badge.KNetBadge
 import com.devuloopers.knet.ui.core.components.divider.HorizontalDivider
@@ -99,19 +103,26 @@ enum class GraphQLBodySubTab(val label: String, val codeLanguage: CodeLanguage) 
  * @param format Strongly-typed [BodyFormat.GraphQL] domain model containing parsed query AST, variables, and extensions.
  * @param rawJsonText Raw JSON representation of the GraphQL POST request body.
  * @param modifier Layout modifier applied to the root container.
+ * @param activeSubTab Optional controlled selection for navigation shortcuts; null keeps local tab ownership.
+ * @param onSubTabSelected Publishes user selection when the caller owns the active tab.
  */
 @Composable
 fun GraphQLBodyViewer(
     format: BodyFormat.GraphQL,
     rawJsonText: String,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    rawParameters: List<KeyValueEntry> = emptyList(),
+    activeSubTab: GraphQLBodySubTab? = null,
+    onSubTabSelected: (GraphQLBodySubTab) -> Unit = {},
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
     val spacing = KNetTheme.spacing
 
-    var activeSubTab by remember { mutableStateOf(GraphQLBodySubTab.QUERY) }
+    var localActiveSubTab by remember { mutableStateOf(GraphQLBodySubTab.QUERY) }
+    val selectedSubTab = activeSubTab ?: localActiveSubTab
 
+    val urlSource = format.source == GraphQLHttpSource.URL_PARAMETERS
     val hasVariables = format.variablesJson.isNotBlank() && format.variablesJson.trim() != "{}"
     val hasExtensions = format.extensionsJson.isNotBlank() && format.extensionsJson.trim() != "{}"
 
@@ -134,19 +145,22 @@ fun GraphQLBodyViewer(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 GraphQLBodySubTab.entries.forEach { subTab ->
-                    val isSelected = activeSubTab == subTab
+                    val isSelected = selectedSubTab == subTab
                     val hasContent = when (subTab) {
                         GraphQLBodySubTab.QUERY -> format.queryText.isNotBlank()
                         GraphQLBodySubTab.VARIABLES -> hasVariables
                         GraphQLBodySubTab.EXTENSIONS -> hasExtensions
                         GraphQLBodySubTab.RAW_JSON -> rawJsonText.isNotBlank()
                     }
-                    val title = subTab.resolveTitle(hasContent)
+                    val title = if (urlSource && subTab == GraphQLBodySubTab.RAW_JSON) "Raw parameters" else subTab.resolveTitle(hasContent)
 
                     KNetTab(
                         title = title,
                         selected = isSelected,
-                        onClick = { activeSubTab = subTab }
+                        onClick = {
+                            localActiveSubTab = subTab
+                            onSubTabSelected(subTab)
+                        }
                     )
                 }
             }
@@ -175,6 +189,12 @@ fun GraphQLBodyViewer(
             }
         }
 
+        Text(text = "Source: ${format.source.label}", style = typography.caption,
+            color = themeColors.textMuted, maxLines = 1, softWrap = false,
+            modifier = Modifier.padding(horizontal = spacing.sm, vertical = spacing.xxs))
+        format.diagnostic?.let { KNetInspectorParagraph(it.description,
+            Modifier.fillMaxWidth().padding(horizontal = spacing.sm, vertical = spacing.xxs), color = themeColors.semantic.warning) }
+
         HorizontalDivider(
             color = themeColors.border,
             modifier = Modifier.height(1.dp)
@@ -186,8 +206,11 @@ fun GraphQLBodyViewer(
                 .weight(1f)
                 .fillMaxWidth()
         ) {
-            val emptyState = activeSubTab.getEmptyState(format, rawJsonText)
-            if (emptyState != null) {
+            val emptyState = selectedSubTab.getEmptyState(format, rawJsonText)
+            if (urlSource && selectedSubTab == GraphQLBodySubTab.RAW_JSON) {
+                KNetReadOnlyKeyValueViewer(entries = rawParameters, keyHeader = "PARAMETER NAME", valueHeader = "ENCODED VALUE",
+                    emptyMessage = "No original URL parameters.", modifier = Modifier.fillMaxSize())
+            } else if (emptyState != null) {
                 KNetEmptyStatePlaceholder(
                     title = emptyState.first,
                     subtitle = emptyState.second,
@@ -195,10 +218,10 @@ fun GraphQLBodyViewer(
                 )
             } else {
                 KNetCodeEditor(
-                    code = activeSubTab.getPayload(format, rawJsonText),
+                    code = selectedSubTab.getPayload(format, rawJsonText),
                     configuration = CodeEditorConfiguration(
                         mode = EditorMode.ReadOnly,
-                        language = activeSubTab.codeLanguage
+                        language = selectedSubTab.codeLanguage
                     ),
                     modifier = Modifier.fillMaxSize()
                 )

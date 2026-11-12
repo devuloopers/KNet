@@ -43,6 +43,31 @@ class SseSemanticInspectorTest {
         assertEquals("update, message", document?.fields?.first { it.label == "Event types" }?.value)
     }
 
+    @Test
+    fun `record presentation distinguishes events comments and state updates without losing raw fields`() {
+        val decoder = SseProtocolMessageDecoder()
+        val message = com.devuloopers.knet.traffic.model.message.ProtocolMessageSnapshot(
+            com.devuloopers.knet.traffic.id.ProtocolMessageId("record"), com.devuloopers.knet.traffic.id.ConnectionId("connection"),
+            exchange().id, null, com.devuloopers.knet.traffic.model.message.MessageProtocolId.SSE,
+            com.devuloopers.knet.traffic.model.message.ProtocolMessageKind.RECORD,
+            com.devuloopers.knet.traffic.model.TrafficDirection.SERVER_TO_CLIENT, 1, 1, null, 1, false, null,
+            com.devuloopers.knet.traffic.model.body.MessageBodyRef.Empty,
+            com.devuloopers.knet.traffic.model.message.ProtocolMessageState.COMPLETE)
+        fun decode(text: String) = decoder.decode(com.devuloopers.knet.application.contract.traffic.ProtocolMessagePayloadInput(
+            exchange(), message, text.encodeToByteArray()))!!
+        val event = decode("id: 42\nevent: update\nretry: 3000\ndata: {\"ok\":true}\n\n")
+        assertEquals("update", event.fields.first { it.label == "Event type" }.value)
+        assertEquals("42", event.fields.first { it.label == "Record ID" }.value)
+        assertEquals("3000 ms", event.fields.first { it.label == "Retry" }.value)
+        assertTrue(event.text.contains("data:"))
+        val comment = decode(": heartbeat\n\n")
+        assertEquals("Keep-alive comment", comment.fields.first { it.label == "Record" }.value)
+        assertTrue(comment.fields.none { it.label == "Event type" || it.label == "Record ID" })
+        assertEquals("State update", decode("retry: 1500\n\n").fields.first { it.label == "Record" }.value)
+        assertEquals(null, decoder.decode(com.devuloopers.knet.application.contract.traffic.ProtocolMessagePayloadInput(
+            exchange(), message, "data: prefix".encodeToByteArray(), truncated = true)))
+    }
+
     private fun exchange(): HttpExchangeSnapshot = HttpExchangeSnapshot(
         id = ExchangeId("sse-test"),
         request = HttpRequestSnapshot(

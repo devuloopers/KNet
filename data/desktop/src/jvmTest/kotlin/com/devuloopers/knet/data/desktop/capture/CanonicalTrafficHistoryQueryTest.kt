@@ -213,6 +213,35 @@ class CanonicalTrafficHistoryQueryTest {
         }
     }
 
+    @Test
+    fun `message history is scoped bounded and ordered by capture sequence despite clock reversal`() = runTest {
+        val root = Files.createTempDirectory("knet-message-context-").toFile()
+        val database = DatabaseFactory.create(root.resolve("traffic.db"))
+        try {
+            val dao = database.canonicalCaptureDao()
+            dao.insertSession(CaptureSessionEntity("session", 1, null, "ACTIVE", 0))
+            dao.insertConnection(connection("session"))
+            for (id in listOf("one", "other")) dao.insertExchange(exchange(id, "session", 1, "https", "HTTP/1.1", "/ws"))
+            fun message(id: String, sequence: Long, owner: String = "one", direction: String = "CLIENT_TO_SERVER",
+                kind: String = "text") = com.devuloopers.knet.storage.capture.entity.DuplexMessageEntity(
+                id, "session", "connection-session", owner, null, sequence, sequence, direction, "websocket", kind,
+                10_000 - sequence, null, 0, false, null, null, "COMPLETE", null)
+            listOf(message("old", 1), message("foreign", 2, "other"), message("binary", 3, kind = "binary"),
+                message("server-complete", 4, direction = "SERVER_TO_CLIENT"), message("new", 5),
+                message("selected", 6), message("future", 7)).forEach { dao.insertDuplexMessage(it) }
+            val adapter = DesktopTrafficQueryAdapter(dao, FileBodyStore(root.resolve("bodies")))
+            val query = com.devuloopers.knet.application.contract.traffic.ProtocolMessageContextQuery(
+                com.devuloopers.knet.traffic.id.ExchangeId("one"), com.devuloopers.knet.traffic.id.ProtocolMessageId("selected"),
+                com.devuloopers.knet.traffic.model.message.MessageProtocolId.WEBSOCKET, null,
+                com.devuloopers.knet.traffic.model.message.ProtocolMessageKind.TEXT, limit = 2)
+            assertEquals(listOf("new", "server-complete"), adapter.queryContext(query).map { it.id.value })
+            assertEquals(listOf("new", "old"), adapter.queryContext(query.copy(direction =
+                com.devuloopers.knet.traffic.model.TrafficDirection.CLIENT_TO_SERVER)).map { it.id.value })
+            assertEquals(emptyList(), adapter.queryContext(query.copy(exchangeId = com.devuloopers.knet.traffic.id.ExchangeId("other"))))
+            assertEquals(emptyList(), adapter.queryContext(query.copy(beforeMessageId = com.devuloopers.knet.traffic.id.ProtocolMessageId("deleted"))))
+        } finally { database.close(); root.deleteRecursively() }
+    }
+
     private fun connection(sessionId: String): TrafficConnectionEntity = TrafficConnectionEntity(
         id = "connection-$sessionId",
         sessionId = sessionId,

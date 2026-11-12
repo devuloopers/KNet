@@ -119,3 +119,11 @@ and exact destination metadata. Selected-flow observation combines its current s
 and retained admission evidence without opening sockets or mutating history. Typed Traffic actions save Inspect,
 Tunnel or Block overrides, or restore inherited handling, and await committed publication. Explicit choices invalidate
 relevant temporary decisions and remain authoritative. See `docs/automatic_tls_fallback.md`.
+
+Selected protocol-message presentation may request optional bounded preceding context through the decoder SPI.
+The use case enforces exchange/connection/stream ownership, per-body and aggregate read limits, evidence gaps,
+and cancellation. No history or payload parsing runs in composables. See `docs/traffic_inspector_redesign.md`.
+
+GraphQLInspectionMetadata provides stable document/legacy-field identity shared by the semantic producer and
+presentation adapters. It preserves stored annotation shape; Traffic can omit duplicated preview fields without
+removing source annotations. See `docs/traffic_inspector_redesign.md`.

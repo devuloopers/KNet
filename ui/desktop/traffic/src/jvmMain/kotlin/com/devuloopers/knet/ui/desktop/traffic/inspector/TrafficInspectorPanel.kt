@@ -1,19 +1,15 @@
 package com.devuloopers.knet.ui.desktop.traffic.inspector
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.domain.clientNetwork.model.HttpVersionPreference
 import com.devuloopers.knet.domain.network.model.NetworkRequestSpec
@@ -22,17 +18,16 @@ import com.devuloopers.knet.traffic.model.absoluteUrl
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.components.tabs.KNetTab
 import com.devuloopers.knet.ui.core.components.tabs.KNetTabRow
-import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import com.devuloopers.knet.ui.core.components.inspector.KNetInspectorSummaryHeader
+import com.devuloopers.knet.ui.core.components.inspector.KNetInspectorParagraph
 import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
-import com.devuloopers.knet.ui.desktop.httppanel.model.NetworkOverviewSpec
-import com.devuloopers.knet.ui.desktop.httppanel.viewpanels.OverviewViewPanel
+import com.devuloopers.knet.ui.desktop.httppanel.components.GraphQLBodySubTab
+import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQLQueryAvailability
 import com.devuloopers.knet.ui.desktop.httppanel.viewpanels.RequestViewPanel
 import com.devuloopers.knet.ui.desktop.httppanel.viewpanels.ResponseViewPanel
 import com.devuloopers.knet.ui.desktop.httppanel.viewpanels.TimelineViewPanel
 import com.devuloopers.knet.ui.desktop.traffic.model.*
-import com.devuloopers.knet.traffic.inspection.InspectionAnnotation
-import com.devuloopers.knet.traffic.inspection.InspectionAnnotationState
 
 /**
  * Right-docked inspection panel using shared :ui:core design tokens and primitives.
@@ -57,12 +52,25 @@ fun TrafficInspectorPanel(
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
+    var graphQLRequestSubTab by remember(selectedTransaction?.transactionId) { mutableStateOf(GraphQLBodySubTab.QUERY) }
+    val selectedPrepared = selectedTransaction?.let { preparedState.forSelection(it.transactionId) }
+        ?: InspectorPreparedState()
+    val selectedMessages = selectedTransaction?.let { protocolMessages.forSelection(it.transactionId) }
+        ?: ProtocolMessagesUiState()
+    val presentation = if (selectedTransaction != null && selectedTransaction.rowKind == TrafficRowKind.HTTP_EXCHANGE)
+        remember(selectedTransaction, selectedPrepared.exchange, selectedPrepared.annotations, selectedMessages.exchangeId,
+            selectedMessages.totalCount, selectedMessages.items.map { it.protocol }.distinct()) {
+            inspectorPresentation(selectedTransaction, selectedPrepared, selectedMessages)
+        } else null
+    val supportsMessages = presentation?.protocol?.streaming == true || selectedMessages.totalCount > 0L
+    val shownTab = if (activeTab == InspectorTab.MESSAGES && !supportsMessages) InspectorTab.OVERVIEW else activeTab
 
     KNetSurface(
         modifier = modifier.fillMaxSize().border(width = 1.dp, color = themeColors.border),
         color = themeColors.surface
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
+            presentation?.let { KNetInspectorSummaryHeader(it.summary) }
             // Top Inspector Navigation Header
             if (selectedTransaction?.rowKind != TrafficRowKind.OPAQUE_FLOW) {
                 KNetTabRow(
@@ -72,45 +80,41 @@ fun TrafficInspectorPanel(
                 ) {
                     KNetTab(
                         title = "Overview",
-                        selected = activeTab == InspectorTab.OVERVIEW,
+                        selected = shownTab == InspectorTab.OVERVIEW,
                         onClick = { onTabSelected(InspectorTab.OVERVIEW) }
                     )
                     KNetTab(
                         title = "Request",
-                        selected = activeTab == InspectorTab.REQUEST,
+                        selected = shownTab == InspectorTab.REQUEST,
                         onClick = { onTabSelected(InspectorTab.REQUEST) }
                     )
                     KNetTab(
                         title = "Response",
-                        selected = activeTab == InspectorTab.RESPONSE,
+                        selected = shownTab == InspectorTab.RESPONSE,
                         onClick = { onTabSelected(InspectorTab.RESPONSE) }
                     )
-                    if (protocolMessages.totalCount > 0L || activeTab == InspectorTab.MESSAGES) {
+                    if (supportsMessages) {
                         KNetTab(
-                            title = "Messages (${protocolMessages.totalCount})",
-                            selected = activeTab == InspectorTab.MESSAGES,
+                            title = if (presentation?.protocol == TrafficInspectorProtocol.SSE) "Events" else "Messages (${selectedMessages.totalCount})",
+                            selected = shownTab == InspectorTab.MESSAGES,
                             onClick = { onTabSelected(InspectorTab.MESSAGES) },
                         )
                     }
                     KNetTab(
                         title = "Timeline",
-                        selected = activeTab == InspectorTab.TIMELINE,
+                        selected = shownTab == InspectorTab.TIMELINE,
                         onClick = { onTabSelected(InspectorTab.TIMELINE) }
                     )
                 }
             }
 
-            selectedTransaction?.appliedNetworkCondition?.let { condition ->
-                Text(
-                    text = buildString {
-                        append("Network Conditions: ").append(condition.profileId)
-                        condition.ruleId?.let { append(" · rule ").append(it) }
-                    },
-                    style = typography.caption.copy(color = themeColors.textSecondary),
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
-                    maxLines = 1,
-                    softWrap = false,
-                )
+            if (selectedTransaction?.rowKind == TrafficRowKind.HTTP_EXCHANGE) {
+                val preview = when (shownTab) {
+                    InspectorTab.REQUEST -> if (selectedPrepared.requestBodyTruncated) "Request body preview truncated. Only retained bytes are shown." else null
+                    InspectorTab.RESPONSE -> if (selectedPrepared.responseBodyTruncated) "Response body preview truncated. Only retained bytes are shown." else null
+                    else -> null
+                }
+                preview?.let { KNetInspectorParagraph(it, Modifier.fillMaxWidth().padding(KNetTheme.spacing.md), color = themeColors.semantic.warning) }
             }
 
             // Tab Content Body
@@ -127,54 +131,18 @@ fun TrafficInspectorPanel(
             } else if (selectedTransaction.rowKind == TrafficRowKind.OPAQUE_FLOW) {
                 OpaqueFlowInspectorPanel(selectedTransaction, protectionState, protectionActions, Modifier.fillMaxSize())
             } else {
-                val selectedPreparedState = preparedState.forSelection(selectedTransaction.transactionId)
+                val selectedPreparedState = selectedPrepared.takeIf { it.transactionId == selectedTransaction.transactionId }
                     ?: InspectorPreparedState.loading(selectedTransaction.transactionId)
-                val exchange = selectedPreparedState.exchange
-                when (activeTab) {
-                    InspectorTab.OVERVIEW -> {
-                        val overviewSpec = remember(selectedTransaction, exchange) {
-                            val targetUrl = exchange?.request?.absoluteUrl()
-                                ?.takeIf { url -> "://" in url }
-                                ?: selectedTransaction.fullUrl
-                            val contentType = exchange?.response?.head?.headers
-                                ?.firstOrNull { header ->
-                                    header.name.value.equals("Content-Type", ignoreCase = true)
-                                }
-                                ?.value
-                                .orEmpty()
-                            NetworkOverviewSpec(
-                                method = selectedTransaction.method,
-                                url = targetUrl,
-                                statusCode = selectedTransaction.status,
-                                statusText = selectedTransaction.statusText,
-                                isTerminal = selectedTransaction.terminalOutcome != null,
-                                clientProtocol = exchange?.request?.head?.protocol?.token
-                                    ?: selectedTransaction.clientProtocol.token,
-                                upstreamProtocol = exchange?.response?.head?.protocol?.token
-                                    ?: selectedTransaction.upstreamProtocol?.token,
-                                origin = exchange?.origin?.displayName ?: selectedTransaction.origin.displayName,
-                                connectionId = exchange?.connectionId?.value ?: selectedTransaction.connectionId,
-                                streamId = exchange?.streamId?.value ?: selectedTransaction.streamId,
-                                remoteIp = "",
-                                timestamp = selectedTransaction.formattedTimestamp,
-                                durationMs = selectedTransaction.formattedTime,
-                                sizeBytes = selectedTransaction.formattedSize,
-                                contentType = contentType,
-                                failureCode = selectedTransaction.terminalOutcome?.reason?.code?.value,
-                            )
-                        }
-                        Column(modifier = Modifier.fillMaxSize()) {
-                            OverviewViewPanel(
-                                spec = overviewSpec,
-                                modifier = Modifier.weight(1f).fillMaxWidth()
-                            )
-                            if (selectedPreparedState.annotations.isNotEmpty()) {
-                                SemanticAnnotationsPanel(
-                                    annotations = selectedPreparedState.annotations,
-                                    modifier = Modifier.fillMaxWidth().heightIn(max = 220.dp),
-                                )
+                when (shownTab) {
+                    InspectorTab.OVERVIEW -> presentation?.let {
+                        TrafficOverviewPanel(selectedTransaction.transactionId, it, Modifier.fillMaxSize(), onViewQuery = {
+                            if (it.graphQLQueryAvailability == GraphQLQueryAvailability.AVAILABLE) {
+                                graphQLRequestSubTab = GraphQLBodySubTab.QUERY
+                                onRequestSubTabSelected(if (selectedPrepared.exchange?.request?.head?.method?.token.equals("GET", true))
+                                    InspectorSubTab.PARAMS else InspectorSubTab.BODY)
+                                onTabSelected(InspectorTab.REQUEST)
                             }
-                        }
+                        })
                     }
 
                     InspectorTab.REQUEST -> {
@@ -203,9 +171,13 @@ fun TrafficInspectorPanel(
                         RequestViewPanel(
                             spec = requestSpec,
                             payloadSpec = selectedPreparedState.requestPayloadSpec.takeIf { !it.isEmpty },
+                            parameterPayloadSpec = selectedPreparedState.requestParameterSpec,
                             isPreparing = selectedPreparedState.isPreparing,
                             activeSubTab = activeRequestSubTab,
                             onSubTabSelected = onRequestSubTabSelected,
+                            showSummaryHeader = false,
+                            graphQLSubTab = graphQLRequestSubTab,
+                            onGraphQLSubTabSelected = { graphQLRequestSubTab = it },
                             onOpenInApiStudio = {
                                 onSendToApiStudio(selectedTransaction.transactionId)
                             },
@@ -218,6 +190,7 @@ fun TrafficInspectorPanel(
                         ResponseViewPanel(
                             head = responseHead,
                             timings = selectedTransaction.timings,
+                            showSummaryHeader = false,
                             responseSizeBytes = selectedTransaction.responseBytes,
                             payloadSpec = selectedPreparedState.responsePayloadSpec.takeIf { !it.isEmpty }
                                 ?: com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec.EMPTY,
@@ -230,7 +203,8 @@ fun TrafficInspectorPanel(
 
                     InspectorTab.MESSAGES -> {
                         ProtocolMessagesPanel(
-                            state = protocolMessages,
+                            state = selectedMessages,
+                            events = presentation?.protocol == TrafficInspectorProtocol.SSE,
                             onMessageSelected = onProtocolMessageSelected,
                             onLoadMore = onLoadMoreProtocolMessages,
                             modifier = Modifier.fillMaxSize(),
@@ -243,54 +217,6 @@ fun TrafficInspectorPanel(
                             modifier = Modifier.fillMaxSize()
                         )
                     }
-                }
-            }
-        }
-    }
-}
-
-/** Protocol-neutral renderer; individual inspectors only contribute versioned generic documents. */
-@Composable
-private fun SemanticAnnotationsPanel(
-    annotations: List<InspectionAnnotation>,
-    modifier: Modifier = Modifier,
-) {
-    val colors = KNetTheme.colors
-    val typography = KNetTheme.typography
-    Column(
-        modifier = modifier
-            .border(1.dp, colors.border)
-            .background(colors.surface)
-            .padding(12.dp)
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Text("Semantic inspection", style = typography.bodyMedium.copy(fontWeight = FontWeight.Bold))
-        annotations.forEach { annotation ->
-            val document = annotation.document
-            Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(
-                    text = document?.title ?: annotation.inspectorId.value,
-                    style = typography.bodyMedium.copy(
-                        color = if (annotation.state == InspectionAnnotationState.FAILED) {
-                            colors.semantic.error
-                        } else {
-                            colors.textPrimary
-                        },
-                        fontWeight = FontWeight.SemiBold,
-                    ),
-                )
-                document?.summary?.takeIf(String::isNotBlank)?.let { summary ->
-                    Text(summary, style = typography.codeSmall.copy(color = colors.textSecondary))
-                }
-                document?.fields.orEmpty().forEach { field ->
-                    Text(
-                        "${field.label}: ${field.value}",
-                        style = typography.codeSmall.copy(color = colors.textSecondary),
-                    )
-                }
-                annotation.errorCode?.let { error ->
-                    Text(error, style = typography.codeSmall.copy(color = colors.textMuted))
                 }
             }
         }

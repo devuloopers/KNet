@@ -63,6 +63,33 @@ class GrpcDescriptorRegistryTest {
         assertEquals("test.echo.EchoService/UnaryEcho", descriptor.suggestedName)
     }
 
+    @Test
+    fun `message presentation exposes captured descriptor identity and refuses partial previews`() {
+        val registry = GrpcDescriptorRegistry()
+        registry.importDescriptorSet(GrpcDescriptorSourceId("echo"), echoDescriptorSet()).getOrThrow()
+        val exchange = com.devuloopers.knet.traffic.model.HttpExchangeSnapshot(
+            com.devuloopers.knet.traffic.id.ExchangeId("grpc"),
+            request = com.devuloopers.knet.traffic.model.HttpRequestSnapshot(com.devuloopers.knet.traffic.model.http.RequestHead(
+                HttpMethod.POST, com.devuloopers.knet.traffic.model.http.RequestTarget.Absolute(
+                    com.devuloopers.knet.traffic.model.http.HttpScheme.fromToken("https"),
+                    com.devuloopers.knet.traffic.model.http.Authority("example.test"), "/test.echo.EchoService/UnaryEcho"),
+                com.devuloopers.knet.traffic.model.http.ApplicationProtocol.fromToken("HTTP/2"), emptyList())),
+            state = com.devuloopers.knet.traffic.model.ExchangeState.COMPLETED, startedAtEpochMillis = 1)
+        val message = com.devuloopers.knet.traffic.model.message.ProtocolMessageSnapshot(
+            com.devuloopers.knet.traffic.id.ProtocolMessageId("message"), com.devuloopers.knet.traffic.id.ConnectionId("connection"),
+            exchange.id, null, com.devuloopers.knet.traffic.model.message.MessageProtocolId.GRPC,
+            com.devuloopers.knet.traffic.model.message.ProtocolMessageKind.DATA,
+            com.devuloopers.knet.traffic.model.TrafficDirection.CLIENT_TO_SERVER, 1, 1, null, 4, false, null,
+            com.devuloopers.knet.traffic.model.body.MessageBodyRef.Empty,
+            com.devuloopers.knet.traffic.model.message.ProtocolMessageState.COMPLETE)
+        val input = com.devuloopers.knet.application.contract.traffic.ProtocolMessagePayloadInput(exchange, message,
+            byteArrayOf(0x0a, 0x02, 'h'.code.toByte(), 'i'.code.toByte()))
+        val decoder = GrpcProtocolMessageDecoder(registry)
+        assertEquals("test.echo.EchoRequest", decoder.decode(input)!!.fields.first { it.label == "Message type" }.value)
+        assertNull(decoder.decode(input.copy(truncated = true)))
+        assertNull(decoder.decode(input.copy(message = message.copy(exchangeId = com.devuloopers.knet.traffic.id.ExchangeId("other")))))
+    }
+
     private fun echoDescriptorSet(): ByteArray {
         val request = DescriptorProtos.DescriptorProto.newBuilder()
             .setName("EchoRequest")

@@ -50,13 +50,17 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 /** Primary traffic inspection and request-authoring destinations shown above the first divider. */
 internal val primaryNavigationItems = listOf(
     NavigationDestinationInfo(DesktopDestination.Traffic, "Traffic", Icons.Default.WifiTethering),
-    NavigationDestinationInfo(DesktopDestination.ApiStudio, "API Studio", Icons.Default.Navigation),
-    NavigationDestinationInfo(DesktopDestination.NetworkConditions, "Network Conditions", Icons.Default.Speed),
-    NavigationDestinationInfo(DesktopDestination.ProtectedTraffic, "Protected Traffic", Icons.Default.Security),
-    NavigationDestinationInfo(DesktopDestination.Breakpoints, "Intercepts", Icons.Default.PauseCircle)
+    NavigationDestinationInfo(DesktopDestination.ApiStudio, "API Studio", Icons.Default.Navigation)
 )
 
-/** Connection and trust destinations shown directly below the first divider. */
+/** Connection behavior controls shown between the workspace and setup dividers. */
+internal val trafficControlNavigationItems = listOf(
+    NavigationDestinationInfo(DesktopDestination.Breakpoints, "Intercepts", Icons.Default.PauseCircle),
+    NavigationDestinationInfo(DesktopDestination.NetworkConditions, "Network Conditions", Icons.Default.Speed),
+    NavigationDestinationInfo(DesktopDestination.ProtectedTraffic, "Protected Traffic", Icons.Default.Security)
+)
+
+/** Connection and trust destinations shown below the traffic controls and second divider. */
 internal val setupNavigationItems = listOf(
     NavigationDestinationInfo(DesktopDestination.ConnectDevice, "Connect Device", Icons.Default.Devices),
     NavigationDestinationInfo(DesktopDestination.Certificate, "Certificates", Icons.Default.Lock)
@@ -70,8 +74,8 @@ internal val utilityNavigationItems = listOf(
 /**
  * Independent Floating Overlay Panel composable rendered in [KNetLayers.Navigation] layer (z = 100).
  *
- * Primary navigation starts immediately at the top. Connection setup and certificate management are grouped
- * after the first divider, while KNet branding remains in a passive footer below Settings.
+ * Workspace, traffic controls and connection setup share one grouped order in expanded and collapsed modes.
+ * Inset dividers separate those groups, while KNet branding remains in a passive footer below Settings.
  *
  * @param navigationState Single source of truth navigation interaction state.
  * @param presentation Animated presentation values (width, alpha, offset).
@@ -89,6 +93,7 @@ fun NavigationOverlay(
     modifier: Modifier = Modifier
 ) {
     val themeColors = KNetTheme.colors
+    val spacing = KNetTheme.spacing
 
     Column(
         modifier = modifier
@@ -113,41 +118,29 @@ fun NavigationOverlay(
             .padding(vertical = 8.dp),
         horizontalAlignment = Alignment.Start
     ) {
-        // Primary inspection and authoring destinations.
-        primaryNavigationItems.forEach { info ->
-            NavigationRailRowItem(
-                info = info,
-                isSelected = currentDestination == info.destination,
-                isExpanded = navigationState.isExpanded,
-                labelAlpha = presentation.labelAlpha,
-                labelOffset = presentation.labelOffset,
-                onSelect = {
-                    navigationState.onItemClick()
-                    onDestinationSelected(info.destination)
+        listOf(primaryNavigationItems, trafficControlNavigationItems, setupNavigationItems)
+            .forEachIndexed { index, items ->
+                if (index > 0) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(horizontal = spacing.sm, vertical = spacing.sm),
+                        thickness = 1.dp,
+                        color = themeColors.border
+                    )
                 }
-            )
-        }
-
-        HorizontalDivider(
-            modifier = Modifier.padding(vertical = 8.dp),
-            thickness = 1.dp,
-            color = themeColors.border
-        )
-
-        // Connection setup precedes certificate management in the setup/security group.
-        setupNavigationItems.forEach { info ->
-            NavigationRailRowItem(
-                info = info,
-                isSelected = currentDestination == info.destination,
-                isExpanded = navigationState.isExpanded,
-                labelAlpha = presentation.labelAlpha,
-                labelOffset = presentation.labelOffset,
-                onSelect = {
-                    navigationState.onItemClick()
-                    onDestinationSelected(info.destination)
+                items.forEach { info ->
+                    NavigationRailRowItem(
+                        info = info,
+                        isSelected = currentDestination == info.destination,
+                        isExpanded = navigationState.isExpanded,
+                        labelAlpha = presentation.labelAlpha,
+                        labelOffset = presentation.labelOffset,
+                        onSelect = {
+                            navigationState.onItemClick()
+                            onDestinationSelected(info.destination)
+                        }
+                    )
                 }
-            )
-        }
+            }
 
         Spacer(modifier = Modifier.weight(1f))
 

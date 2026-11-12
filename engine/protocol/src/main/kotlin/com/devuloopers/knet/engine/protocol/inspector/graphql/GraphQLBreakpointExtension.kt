@@ -84,7 +84,7 @@ class GraphQLBreakpointExtension(
 
         return inspectRequest(
             request = input.candidate.request,
-            bodyBytes = input.candidate.requestBody?.copyBytes(),
+            bodyBytes = input.candidate.requestBody?.takeIf { it.size.toLong() >= input.candidate.requestObservedBodyBytes }?.copyBytes(),
         )
     }
 
@@ -114,28 +114,10 @@ class GraphQLBreakpointExtension(
         val contentType = request.head.headers.firstOrNull {
             it.name.value.equals(CONTENT_TYPE_HEADER, ignoreCase = true)
         }?.value.orEmpty()
-        val endpointHint = absoluteUrl.contains(GRAPHQL_PATH_HINT, ignoreCase = true) ||
-            contentType.contains(GRAPHQL_MEDIA_HINT, ignoreCase = true)
-        val document = bodyBytes?.let(parser::parse)
-        if (document != null) {
-            return GraphQLBreakpointObservation(
-                document.operations.map { operation ->
-                    GraphQLBreakpointOperation(operation.name, operation.type)
-                },
-            )
-        }
-
-        val operationName = queryParameter(absoluteUrl, OPERATION_NAME_QUERY_PARAMETER)
-            ?.takeIf { it.length <= MAXIMUM_OPERATION_NAME_CHARACTERS && GRAPHQL_NAME.matches(it) }
-        return if (endpointHint) {
-            GraphQLBreakpointObservation(
-                operations = operationName?.let {
-                    listOf(GraphQLBreakpointOperation(it, GraphQLOperationType.QUERY))
-                }.orEmpty(),
-            )
-        } else {
-            null
-        }
+        val document = parser.decodeHttp(request.head.method.token, absoluteUrl, contentType, bodyBytes) ?: return null
+        return GraphQLBreakpointObservation(document.matchableOperations.map {
+            GraphQLBreakpointOperation(it.name, it.type)
+        })
     }
 
     override fun editorValues(criteria: ProtocolMatchCriteria): List<ProtocolCriteriaValue> {
@@ -186,15 +168,6 @@ class GraphQLBreakpointExtension(
         }
         return GraphQLCriteria(operationName)
     }
-
-    private fun queryParameter(url: String, name: String): String? = url
-        .substringAfter('?', missingDelimiterValue = "")
-        .split('&')
-        .asSequence()
-        .map { parameter -> parameter.substringBefore('=') to parameter.substringAfter('=', "") }
-        .firstOrNull { it.first == name }
-        ?.second
-        ?.takeIf(String::isNotBlank)
 
     private data class GraphQLCriteria(val operationName: String?)
 

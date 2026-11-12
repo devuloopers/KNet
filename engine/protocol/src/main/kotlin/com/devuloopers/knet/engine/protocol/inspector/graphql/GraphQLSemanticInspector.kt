@@ -2,6 +2,7 @@ package com.devuloopers.knet.engine.protocol.inspector.graphql
 
 import com.devuloopers.knet.application.contract.inspection.SemanticInspectionInput
 import com.devuloopers.knet.application.contract.inspection.SemanticInspector
+import com.devuloopers.knet.application.contract.inspection.GraphQLInspectionMetadata
 import com.devuloopers.knet.traffic.inspection.InspectionDocument
 import com.devuloopers.knet.traffic.inspection.InspectionField
 import com.devuloopers.knet.traffic.inspection.InspectorId
@@ -11,13 +12,15 @@ import com.devuloopers.knet.traffic.model.http.RequestTarget
 /** Stable generic annotation identities shared by GraphQL Traffic presentation and rule suggestions. */
 internal object GraphQLInspectionSchema {
     val inspectorId: InspectorId = InspectorId("graphql")
-    const val VERSION: Long = 1L
-    const val DOCUMENT_KIND: String = "graphql"
+    const val VERSION: Long = 2L
+    const val DOCUMENT_KIND: String = GraphQLInspectionMetadata.DOCUMENT_KIND
     const val OPERATION_TYPE_FIELD: String = "Operation type"
     const val OPERATION_NAME_FIELD: String = "Operation name"
     const val BATCH_SIZE_FIELD: String = "Batch size"
-    const val REQUEST_TARGET_FIELD: String = "Request target"
+    const val REQUEST_TARGET_FIELD: String = GraphQLInspectionMetadata.REQUEST_TARGET_FIELD
     const val BODY_FIELD: String = "Body"
+    const val SOURCE_FIELD: String = "Source"
+    const val DIAGNOSTIC_FIELD: String = "Inspection"
 }
 
 /** Asynchronous bounded GraphQL semantic inspector for captured HTTP exchanges. */
@@ -41,6 +44,7 @@ class GraphQLSemanticInspector(
             it.name.value.equals("Content-Type", ignoreCase = true)
         }?.value.orEmpty()
         return request.method.token.equals("POST", ignoreCase = true) ||
+            request.method.token.equals("GET", ignoreCase = true) && GraphQLHttpDecoder.hasGraphQLParameters(target) ||
             target.contains("graphql", ignoreCase = true) ||
             contentType.contains("graphql", ignoreCase = true)
     }
@@ -60,47 +64,32 @@ class GraphQLSemanticInspector(
             }
             bytes
         }
-        if (bodyBytes.isEmpty()) {
-            return if (target.contains("graphql", ignoreCase = true) ||
-                contentType.contains("graphql", ignoreCase = true)
-            ) {
-                InspectionDocument(kind = GraphQLInspectionSchema.DOCUMENT_KIND, title = "GraphQL request")
-            } else {
-                null
-            }
-        }
-        val document = parser.parse(bodyBytes) ?: return null
-        val primary = document.operations.first()
-        val operationType = primary.type.displayName()
-        val operationName = primary.name
-        val title = if (document.operations.size > 1) {
-            "GraphQL batch: ${document.operations.size} operations"
-        } else {
+        val document = parser.decodeHttp(input.exchange.request.head.method.token, target, contentType, bodyBytes,
+            bodyComplete = input.requestBody?.truncated != true) ?: return null
+        val primary = document.selectedOperation ?: document.matchableOperations.firstOrNull()
+        val operationType = primary?.type?.label
+        val operationName = primary?.name
+        val title = if (document.matchableOperations.size > 1) {
+            "GraphQL batch: ${document.matchableOperations.size} operations"
+        } else if (operationType != null) {
             operationName?.let { "GraphQL $operationType: $it" } ?: "GraphQL $operationType"
-        }
+        } else "GraphQL request"
         return InspectionDocument(
             kind = GraphQLInspectionSchema.DOCUMENT_KIND,
             title = title,
-            summary = primary.summary,
+            summary = document.queryText.take(2_048).replace(Regex("\\s+"), " ").take(256).takeIf(String::isNotBlank),
             fields = listOfNotNull(
-                InspectionField(GraphQLInspectionSchema.OPERATION_TYPE_FIELD, operationType),
+                operationType?.let { InspectionField(GraphQLInspectionSchema.OPERATION_TYPE_FIELD, it) },
                 operationName?.let { InspectionField(GraphQLInspectionSchema.OPERATION_NAME_FIELD, it) },
-                document.operations.size.takeIf { it > 1 }?.let {
+                document.matchableOperations.size.takeIf { it > 1 }?.let {
                     InspectionField(GraphQLInspectionSchema.BATCH_SIZE_FIELD, it.toString())
                 },
+                InspectionField(GraphQLInspectionSchema.SOURCE_FIELD, document.source.label),
+                document.diagnostic?.let { InspectionField(GraphQLInspectionSchema.DIAGNOSTIC_FIELD, it.description) },
                 InspectionField(GraphQLInspectionSchema.REQUEST_TARGET_FIELD, target),
-                input.requestBody?.truncated?.takeIf { it }?.let {
-                    InspectionField(GraphQLInspectionSchema.BODY_FIELD, "Preview truncated")
-                },
             ),
         )
     }
-}
-
-private fun GraphQLOperationType.displayName(): String = when (this) {
-    GraphQLOperationType.QUERY -> "Query"
-    GraphQLOperationType.MUTATION -> "Mutation"
-    GraphQLOperationType.SUBSCRIPTION -> "Subscription"
 }
 
 private fun RequestTarget.displayValue(): String = when (this) {

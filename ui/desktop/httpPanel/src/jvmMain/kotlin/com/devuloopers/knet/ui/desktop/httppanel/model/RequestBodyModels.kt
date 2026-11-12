@@ -98,7 +98,7 @@ data class RequestBodyState(
                     val parsedGraphQlState = GraphQlPayloadMapper().parseToUi(trimmed)
                     RequestBodyState(
                         mode = RequestBodyMode.GRAPHQL,
-                        payloadText = trimmed,
+                        payloadText = spec.rawBody,
                         graphQlState = parsedGraphQlState
                     )
                 }

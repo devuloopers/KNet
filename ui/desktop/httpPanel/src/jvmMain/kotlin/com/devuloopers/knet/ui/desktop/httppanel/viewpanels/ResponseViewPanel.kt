@@ -27,6 +27,7 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.httppanel.components.InspectorSubTabRow
 import com.devuloopers.knet.ui.desktop.httppanel.components.NetworkErrorCard
 import com.devuloopers.knet.ui.desktop.httppanel.components.ResponseSummaryHeader
+import com.devuloopers.knet.ui.desktop.httppanel.components.ResponseInspectorActions
 import com.devuloopers.knet.ui.desktop.httppanel.components.SmartBodyViewer
 import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
 import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
@@ -44,6 +45,7 @@ import com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab
  * @param onSubTabSelected Event callback when user switches sub-tabs.
  * @param onClearResponse Optional callback to clear the response state.
  * @param modifier Composable layout modifier.
+ * @param showSummaryHeader Whether this panel owns endpoint metrics; Traffic keeps its common header visible.
  */
 @Composable
 fun ResponseViewPanel(
@@ -58,7 +60,8 @@ fun ResponseViewPanel(
     activeSubTab: InspectorSubTab = InspectorSubTab.BODY,
     onSubTabSelected: (InspectorSubTab) -> Unit = {},
     onClearResponse: (() -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    showSummaryHeader: Boolean = true,
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -94,10 +97,8 @@ fun ResponseViewPanel(
         values.mapIndexed { index, (name, value) -> KeyValueEntry("res_cookie_$index", name, value) }
     }
 
-    val statusCode = head?.status?.code ?: 0
-    val isGatewayError = statusCode == 502 || statusCode == 503 || statusCode == 504
-    val isError = failureReason != null || isGatewayError || (head == null && !errorMessage.isNullOrBlank())
-    val hasResponse = (head != null || payloadSpec.rawBody.isNotBlank()) && !isGatewayError
+    val isError = failureReason != null || (head == null && !errorMessage.isNullOrBlank())
+    val hasResponse = head != null || payloadSpec.rawBody.isNotBlank()
 
     if (isError) {
         NetworkErrorCard(
@@ -106,7 +107,7 @@ fun ResponseViewPanel(
             onClearResponse = onClearResponse,
             modifier = modifier
         )
-    } else if (!hasResponse) {
+    } else if (!hasResponse && !isPreparing && !payloadSpec.isPreparing) {
         Box(
             modifier = modifier
                 .fillMaxSize()
@@ -141,8 +142,8 @@ fun ResponseViewPanel(
                 .background(themeColors.surface)
         ) {
             // 1. Response Summary Bar
-            ResponseSummaryHeader(
-                head = requireNotNull(head),
+            if (showSummaryHeader && head != null) ResponseSummaryHeader(
+                head = head,
                 timings = timings,
                 formattedSize = formattedSize,
                 contentType = contentType,
@@ -160,7 +161,10 @@ fun ResponseViewPanel(
                     onSubTabSelected(newTab)
                 },
                 headerCount = headerEntries.size,
-                cookieCount = cookieEntries.size
+                cookieCount = cookieEntries.size,
+                actions = if (!showSummaryHeader) ({
+                    ResponseInspectorActions(head, payloadSpec.formattedText, cookieEntries.map { it.key to it.value }, onClearResponse)
+                }) else null,
             )
 
             HorizontalDivider(color = themeColors.border)

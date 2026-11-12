@@ -166,34 +166,27 @@ fun ResponseSummaryHeader(
             }
         }
 
-        // 3. Pinned Trailing Action Toolbar
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            val copyOptions = buildList {
-                if (head.headers.isNotEmpty()) {
-                    val formattedHeaders = head.headers.joinToString("\n") { "${it.name.value}: ${it.value}" }
-                    add(KNetCopyOption("Response Headers") { formattedHeaders })
-                }
-                if (cookies.isNotEmpty()) {
-                    val formattedCookies = cookies.joinToString("; ") { "${it.first}=${it.second}" }
-                    add(KNetCopyOption("Cookies") { formattedCookies })
-                }
-            }
+        ResponseInspectorActions(head, responseBody, cookies, onClearResponse)
+    }
+}
 
-            KNetCopyDropdownButton(
-                primaryTextToCopy = { responseBody },
-                options = copyOptions
-            )
-
-            if (onClearResponse != null) {
-                KNetIconButton(
-                    icon = KNetIcons.Delete,
-                    contentDescription = "Clear Response",
-                    onClick = onClearResponse
-                )
-            }
+/** Copy and clear actions shared by standalone response headers and persistent-header Traffic inspectors. */
+@Composable
+internal fun ResponseInspectorActions(head: ResponseHead?, responseBody: String,
+    cookies: List<Pair<String, String>>, onClearResponse: (() -> Unit)? = null) {
+    Row(verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm)) {
+        val copyOptions = buildList {
+            val headers = head?.headers.orEmpty()
+            if (headers.isNotEmpty()) add(KNetCopyOption("Response Headers") {
+                headers.joinToString("\n") { "${it.name.value}: ${it.value}" }
+            })
+            if (cookies.isNotEmpty()) add(KNetCopyOption("Cookies") {
+                cookies.joinToString("; ") { "${it.first}=${it.second}" }
+            })
         }
+        KNetCopyDropdownButton(primaryTextToCopy = { responseBody }, options = copyOptions)
+        if (onClearResponse != null) KNetIconButton(icon = KNetIcons.Delete,
+            contentDescription = "Clear Response", onClick = onClearResponse)
     }
 }

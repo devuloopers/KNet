@@ -9,6 +9,7 @@ dependencies {
     implementation(project(":core:logger"))
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.graphql.java)
 
     testImplementation(kotlin("test"))
     testImplementation(libs.kotlinx.coroutines.core)

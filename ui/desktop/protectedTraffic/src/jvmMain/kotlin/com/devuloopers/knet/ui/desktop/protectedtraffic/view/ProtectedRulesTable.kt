@@ -48,13 +48,14 @@ internal fun ProtectedRulesTable(state: ProtectedTrafficState, onEnabled: (Prote
             }
         }
     })
-    KNetTableViewport(listState, modifier.testTag("Protected rules table"), emptyContent = empty) { contentModifier ->
-        Column(contentModifier) {
-            KNetTableHeader {
+    KNetTableViewport(listState, modifier.testTag("Protected rules table"), emptyContent = empty,
+        header = { headerModifier ->
+            KNetTableHeader(headerModifier) {
                 RuleColumn.entries.forEach { column -> KNetCell(column.title, Modifier.weight(column.weight)
                     .padding(horizontal = KNetTheme.spacing.xs), isHeader = true) }
             }
-            LazyColumn(state = listState, modifier = Modifier.fillMaxWidth().weight(1f)) {
+        }) { contentModifier ->
+            LazyColumn(state = listState, modifier = contentModifier) {
                 items(rules, key = { it.id.value }) { rule ->
                     val enabled = state.configuration.configurationReady && !state.isSaving && rule.id !in state.pendingRuleIds
                     KNetRow(onClick = { onEdit(rule) }, selected = state.ruleDraft?.id == rule.id, enabled = enabled,
@@ -86,7 +87,6 @@ internal fun ProtectedRulesTable(state: ProtectedTrafficState, onEnabled: (Prote
                     }
                 }
             }
-        }
     }
 }
 

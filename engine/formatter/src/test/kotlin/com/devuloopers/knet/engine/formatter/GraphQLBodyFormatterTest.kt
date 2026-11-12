@@ -11,6 +11,14 @@ class GraphQLBodyFormatterTest {
     private val formatter = GraphQLBodyFormatter()
 
     @Test
+    fun officialGraphQLResponseMediaTypeIsJsonRatherThanARequestEnvelope() {
+        val headers = mapOf("Content-Type" to "application/graphql-response+json; charset=utf-8")
+        val body = "{\"data\":{\"viewer\":{\"id\":7}},\"extensions\":{\"cost\":1}}"
+        assertTrue(!formatter.matches(headers, body))
+        assertTrue(com.devuloopers.knet.engine.formatter.registry.BodyFormatterRegistry.resolveFormat(headers, body) is BodyFormat.Json)
+    }
+
+    @Test
     fun testGraphQLParsing() {
         assertTrue(formatter.matches(mapOf("content-type" to "application/json"), TestFixtures.SAMPLE_GRAPHQL))
 

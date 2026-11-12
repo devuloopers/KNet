@@ -3,15 +3,22 @@ package com.devuloopers.knet.application.contract.traffic
 import com.devuloopers.knet.traffic.model.HttpExchangeSnapshot
 import com.devuloopers.knet.traffic.model.message.MessageProtocolId
 import com.devuloopers.knet.traffic.model.message.ProtocolMessageSnapshot
+import com.devuloopers.knet.traffic.inspection.InspectionField
 
 /** Owned message payload passed to a protocol-specific presentation decoder. */
 public data class ProtocolMessagePayloadInput(
     public val parentExchange: HttpExchangeSnapshot,
     public val message: ProtocolMessageSnapshot,
     public val payload: ByteArray,
+    /** Complete, bounded earlier messages supplied only to a decoder that explicitly requests context. */
+    public val context: List<ProtocolMessageContextEntry> = emptyList(),
+    /** Whether this payload is only a retained preview prefix. */
+    public val truncated: Boolean = false,
 ) {
     init {
         require(payload.size <= MAXIMUM_PAYLOAD_BYTES) { "Protocol message decoder payload exceeds its limit." }
+        require(context.size <= ProtocolMessageContextQuery.MAXIMUM_MESSAGES) { "Protocol context is too large." }
+        require(context.sumOf { it.retainedBytes.toLong() } <= MAXIMUM_PAYLOAD_BYTES) { "Protocol context exceeds its byte budget." }
     }
 
     public companion object {
@@ -24,6 +31,7 @@ public data class ProtocolMessagePayloadInput(
 
         other as ProtocolMessagePayloadInput
 
+        if (context != other.context || truncated != other.truncated) return false
         if (parentExchange != other.parentExchange) return false
         if (message != other.message) return false
         if (!payload.contentEquals(other.payload)) return false
@@ -35,7 +43,8 @@ public data class ProtocolMessagePayloadInput(
         var result = parentExchange.hashCode()
         result = 31 * result + message.hashCode()
         result = 31 * result + payload.contentHashCode()
-        return result
+        result = 31 * result + context.hashCode()
+        return 31 * result + truncated.hashCode()
     }
 }
 
@@ -45,10 +54,13 @@ public data class ProtocolMessagePresentation(
     public val contentType: String,
     public val text: String,
     public val schemaName: String? = null,
+    /** Protocol-owned captured fields; Traffic renders these without parsing protocol payloads itself. */
+    public val fields: List<InspectionField> = emptyList(),
 ) {
     init {
         require(title.isNotBlank()) { "Protocol message presentation title must not be blank." }
         require(contentType.isNotBlank()) { "Protocol message presentation content type must not be blank." }
+        require(fields.size <= 32) { "Protocol message metadata exceeds its display bound." }
     }
 }
 
@@ -63,6 +75,9 @@ public interface ProtocolMessagePayloadDecoder {
     public val priority: Int
 
     public fun decode(input: ProtocolMessagePayloadInput): ProtocolMessagePresentation?
+
+    /** Optional bounded historical metadata lookup needed for operation correlation, never run by a composable. */
+    public fun contextQuery(input: ProtocolMessagePayloadInput): ProtocolMessageContextQuery? = null
 }
 
 /** Stable normalized identity for one protocol-message presentation decoder. */
@@ -101,4 +116,8 @@ public class ProtocolMessagePresentationRegistry(
         }
         return null
     }
+
+    /** Lets the highest-priority applicable decoder request context without application-owned protocol parsing. */
+    public fun contextQuery(input: ProtocolMessagePayloadInput): ProtocolMessageContextQuery? =
+        decodersByProtocol[input.message.protocol].orEmpty().firstNotNullOfOrNull { it.contextQuery(input) }
 }

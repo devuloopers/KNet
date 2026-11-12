@@ -6,6 +6,7 @@ import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePayloadI
 import com.devuloopers.knet.application.contract.traffic.ProtocolMessagePresentation
 import com.devuloopers.knet.traffic.model.TrafficDirection
 import com.devuloopers.knet.traffic.model.message.MessageProtocolId
+import com.devuloopers.knet.traffic.inspection.InspectionField
 
 /** Descriptor-backed gRPC decoder plugged into the protocol-neutral presentation registry. */
 class GrpcProtocolMessageDecoder(
@@ -16,6 +17,7 @@ class GrpcProtocolMessageDecoder(
     override val priority: Int = 100
 
     override fun decode(input: ProtocolMessagePayloadInput): ProtocolMessagePresentation? {
+        if (input.truncated || input.parentExchange.id != input.message.exchangeId) return null
         val identity = GrpcMethodIdentity.fromTarget(input.parentExchange.request.head.target) ?: return null
         val direction = when (input.message.direction) {
             TrafficDirection.CLIENT_TO_SERVER -> GrpcPayloadDirection.REQUEST
@@ -33,6 +35,8 @@ class GrpcProtocolMessageDecoder(
                 contentType = "application/json",
                 text = decoded.json,
                 schemaName = decoded.messageType,
+                fields = listOf(InspectionField("Service", identity.serviceName), InspectionField("Method", identity.methodName),
+                    InspectionField("Message type", decoded.messageType)),
             )
             is GrpcPayloadDecodeResult.Unavailable -> null
         }

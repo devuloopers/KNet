@@ -26,7 +26,11 @@ fun KNetHorizontalScrollbar(
     scrollState: ScrollState,
     modifier: Modifier = Modifier,
 ) {
-    val visible by remember(scrollState) { derivedStateOf { scrollState.maxValue > 0 } }
+    val visible by remember(scrollState) {
+        derivedStateOf {
+            shouldShowScrollbar(viewportSize = scrollState.viewportSize, maximumScrollOffset = scrollState.maxValue)
+        }
+    }
     if (!visible) return
     Column(modifier = modifier) {
         Spacer(modifier = Modifier.height(KNetTheme.spacing.sm))

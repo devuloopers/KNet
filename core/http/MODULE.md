@@ -59,3 +59,13 @@ Live HTTP response streaming is implemented for HTTP/1.1 and the JVM AUTO/exact-
 and encoded responses retain the existing bounded terminal result. HTTP/1.0 intentionally uses the terminal
 compatibility event because its narrow socket adapter is not a long-lived streaming transport. SSE interpretation
 remains outside this module in `:engine:sse`.
+
+## Source-preserving GraphQL HTTP replay
+
+GraphQL JSON envelopes are sent without trimming their captured bytes. The execution use case skips URL
+reconstruction when supplied parameter rows already describe the target. Exact HTTP/1.1 uses the existing
+JVM raw-URI transport with HTTP/1.1 explicitly selected, preserving interleaved repeated parameter order.
+Protocol selection participates in its bounded pool key. Streaming blocking reads run interruptibly on
+Dispatchers.IO, so a slow frame cannot block the collector dispatcher or prevent cancellation. Mock/custom
+Ktor engines retain their existing test/extension route. Loopback GET/POST capture/replay and the existing
+HTTP/1.0, HTTP/2 and SSE cancellation suites qualify these paths.

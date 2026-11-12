@@ -75,7 +75,7 @@ object BodyFormatterRegistry {
         val mime = contentType.substringBefore(";").trim().lowercase()
 
         when {
-            mime.contains("graphql") -> return graphQLFormatter.format(headers, trimmed)
+            mime == "application/graphql" -> return graphQLFormatter.format(headers, trimmed)
             mime.startsWith("image/") -> return imageFormatter.format(headers, trimmed)
             mime.contains("x-www-form-urlencoded") -> return formDataFormatter.format(headers, trimmed)
             mime.contains("event-stream") -> return sseFormatter.format(headers, trimmed)

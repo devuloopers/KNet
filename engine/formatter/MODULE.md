@@ -34,3 +34,16 @@ implement narrow `:core:domain` extension contracts without owning API Studio st
 ## Migration direction
 
 Consume `BodyRef` through explicit body readers and return derived views without copying entire captured bodies by default.
+
+## GraphQL HTTP adapter
+
+`GraphQLHttpRequestFormatter` adapts protocol-owned GET/POST extraction and bounded AST formatting to
+`BodyFormat.GraphQL`. It also exposes typed changed-field URL/JSON edits to authoring consumers.
+The deliberate dependency is `:engine:formatter` -> `:engine:protocol`; there is no inverse edge.
+It retains no AST/cache and does not own transport lifecycle or stored source. Source and diagnostic
+metadata travel with the viewer projection. Descriptors derive names from the selected AST operation;
+a supplied operationName that is absent from the document cannot become a generated operation title.
+
+Read-only GraphQL Variables/Extensions use the shared two-space JSON printer through a strict bounded reader/writer.
+The display adapter formats complete JSON independently of the decoder's raw facts and authoring buffers. Invalid
+or over-budget input remains unchanged; parsing and output expansion are bounded before rendering.

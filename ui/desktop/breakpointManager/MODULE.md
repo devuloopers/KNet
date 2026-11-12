@@ -6,6 +6,9 @@ Owns breakpoint rule management and live intercepted-request/response presentati
 
 ## Owns
 
+- The Intercepts page uses UI core's shared screen header and page layout, matching its navigation title and
+  inheriting consistent typography, insets, minimum header height and responsive placement of the global switch.
+
 - Breakpoint Manager ViewModel, rules table, intercept queue, editors, and edit-only presentation state.
 - Live Intercept drawer content and exit-state retention, hosted in the shared `:ui:core` drawer shell.
 - Canonical `HttpMethod` selection and token mapping for method-specific rules.
@@ -48,3 +51,11 @@ defensive body prefix per active request during resolution and retains only desc
 The drawer never infers wire protocol from GraphQL, JSON, or another semantic format. It reads client and
 upstream protocol directly from canonical heads and source directly from `TrafficOrigin`, keeping future
 request kinds additive.
+
+## GraphQL HTTP editing
+
+The selected interception prepares GET GraphQL URL fields off-thread alongside its bounded body view.
+Structured Params edits replace only the corresponding target parameters, preserving authority and
+body ownership (`Unchanged`). POST uses the existing body editor with source-preserving JSON updates.
+Raw parameter rows remain available; edited targets are re-prepared asynchronously without replacing
+the entire drawer. The presentation dependency on `:engine:formatter` is an adapter boundary only.

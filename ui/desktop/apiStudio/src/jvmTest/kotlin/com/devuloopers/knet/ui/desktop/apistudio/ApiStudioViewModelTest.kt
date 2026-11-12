@@ -99,6 +99,7 @@ private fun KeyValueEntry.asPair(): Pair<String, String> = key to value
 
 class TestHttpExecutor : HttpExecutor {
     var lastExecutedUrl: String = ""
+    var lastBody: OutboundRequestBody = OutboundRequestBody.None
     var lastMethod: HttpMethod = HttpMethod.GET
     var lastHeaders: Map<String, String> = emptyMap()
     var lastAuth: ApiRequestAuth = ApiRequestAuth.None
@@ -115,6 +116,7 @@ class TestHttpExecutor : HttpExecutor {
     ): ExecutionResult {
         lastExecutedUrl = url
         lastMethod = method
+        lastBody = body
         lastHeaders = headers
         lastAuth = auth
         lastHttpVersionPreference = httpVersionPreference
@@ -360,6 +362,170 @@ class ApiStudioViewModelTest {
     @AfterTest
     fun tearDown() {
         Dispatchers.resetMain()
+    }
+
+    @Test
+    fun `GET Traffic import prettifies Query Variables and Extensions without modifying or sending the request`() = runTest(testDispatcher) {
+        val executor = TestHttpExecutor()
+        val repository = TestCollectionsRepository()
+        val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(executor), collectionsRepository = repository)
+        val source = "https://fixture.test/startup?trace=a%2bb&query=query+BootStrapQuery+%7B+bootstrap+%7B+id+%7D+%7D" +
+            "&variables=%7B%22device%22%3A%22ANDROID%22%2C%22language%22%3A%22en%22%7D&trace=2" +
+            "&extensions=%7B%22client%22%3A%7B%22name%22%3A%22fixture%22%7D%7D"
+        val id = viewModel.importRequestSpec(com.devuloopers.knet.domain.network.model.NetworkRequestSpec(method = HttpMethod.GET, url = source))
+        testDispatcher.scheduler.advanceUntilIdle()
+        val editor = viewModel.uiState.value.editorState
+        val fields = assertNotNull(editor.graphQLParameters).graphQl
+        assertTrue(fields.queryText.contains("\n"), "The imported query should be indented")
+        assertEquals("{\n  \"device\": \"ANDROID\",\n  \"language\": \"en\"\n}", fields.variablesText)
+        assertTrue(fields.extensionsText.contains("\n    \"name\": \"fixture\"\n"))
+        assertEquals("", fields.operationName, "Do not invent an operationName URL parameter")
+        assertEquals(source, editor.url)
+        assertEquals("", editor.bodyState.payloadText)
+        assertEquals("", executor.lastExecutedUrl, "Sharing must not execute the request")
+        viewModel.updateActiveSubTab(com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab.PARAMS)
+        viewModel.updateGraphQlState(fields.copy(activeSubTab = com.devuloopers.knet.ui.desktop.httppanel.model.GraphQlSubTab.VARIABLES))
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(source, viewModel.uiState.value.editorState.url, "Changing tabs must not serialize pretty text")
+        assertEquals(source, repository.getRequestById(id)?.url)
+        viewModel.executeRequest(); testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(source, executor.lastExecutedUrl)
+        assertEquals(HttpMethod.GET, executor.lastMethod)
+        assertEquals(OutboundRequestBody.None, executor.lastBody)
+    }
+
+    @Test
+    fun `saved GET GraphQL request reopens with pretty initial editor fields and unchanged source`() = runTest(testDispatcher) {
+        val repository = TestCollectionsRepository()
+        val source = "https://fixture.test/startup?query=query+Read+%7B+x+%7D&variables=%7B%22id%22%3A7%7D&extensions=%7B%22client%22%3Atrue%7D"
+        val request = SavedApiRequest(id = "graphql-draft", name = "Read", method = HttpMethod.GET, url = source)
+        repository.drafts[request.id] = request
+        val executor = TestHttpExecutor()
+        val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(executor), collectionsRepository = repository,
+            initialSettings = WorkspaceLayoutSettings(activeSessionId = SessionContextSerializer.serialize(SessionContext.UnsavedDraft(request.id))))
+        testDispatcher.scheduler.advanceUntilIdle()
+        val state = viewModel.uiState.value.editorState
+        val fields = assertNotNull(state.graphQLParameters).graphQl
+        assertTrue(fields.queryText.contains("\n"))
+        assertEquals("{\n  \"id\": 7\n}", fields.variablesText)
+        assertEquals("{\n  \"client\": true\n}", fields.extensionsText)
+        assertEquals(source, state.url)
+        assertEquals("", state.bodyState.payloadText)
+        assertEquals(request, repository.drafts[request.id])
+        assertEquals("", executor.lastExecutedUrl)
+    }
+
+    @Test
+    fun `GET authoring keeps incomplete variables and query keystrokes while publishing diagnostics`() = runTest(testDispatcher) {
+        val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(TestHttpExecutor()))
+        viewModel.importRequestSpec(com.devuloopers.knet.domain.network.model.NetworkRequestSpec(method = HttpMethod.GET,
+            url = "https://fixture.test/startup?query=query+Read+%7Bx%7D"))
+        testDispatcher.scheduler.advanceUntilIdle()
+        viewModel.updateActiveSubTab(com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab.PARAMS)
+        for (variables in listOf("{", "{\"id\":", "{\"id\": 7}")) {
+            val previous = viewModel.uiState.value.editorState.graphQLParameters!!.graphQl
+            viewModel.updateGraphQlState(previous.copy(payload = previous.payload.copy(variablesText = variables)))
+            testDispatcher.scheduler.advanceUntilIdle()
+            val current = viewModel.uiState.value.editorState.graphQLParameters!!
+            assertEquals(variables, current.graphQl.variablesText)
+            assertEquals(previous.queryText, current.graphQl.queryText)
+        }
+        for (query in listOf("q", "query Read {", "query Read { x }")) {
+            val previous = viewModel.uiState.value.editorState.graphQLParameters!!.graphQl
+            viewModel.updateGraphQlState(previous.copy(payload = previous.payload.copy(queryText = query)))
+            testDispatcher.scheduler.advanceUntilIdle()
+            assertEquals(query, viewModel.uiState.value.editorState.graphQLParameters!!.graphQl.queryText)
+        }
+        val authored = viewModel.uiState.value.editorState.graphQLParameters!!.graphQl
+        viewModel.updateHeaders(entries("X-Fixture" to "updated"))
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(authored, viewModel.uiState.value.editorState.graphQLParameters!!.graphQl,
+            "Unrelated edits must not reformat authoring buffers")
+        assertNull(viewModel.uiState.value.editorState.graphQLParameters!!.diagnostic)
+        assertEquals("", viewModel.uiState.value.editorState.bodyState.payloadText)
+    }
+
+    @Test
+    fun `POST import structured editing and execution preserve source and unknown JSON envelope fields`() = runTest(testDispatcher) {
+        val executor = TestHttpExecutor()
+        val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(executor))
+        val source = " \n{\"query\":\"query Read { x }\",\"client\":{\"id\":7}}\n "
+        viewModel.importRequestSpec(com.devuloopers.knet.domain.network.model.NetworkRequestSpec(method = HttpMethod.POST,
+            url = "https://fixture.test/startup", headers = listOf("Content-Type" to "application/json"), bodyPayload = source))
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertNull(viewModel.uiState.value.editorState.graphQLParameters)
+        assertEquals(source, viewModel.uiState.value.editorState.bodyState.payloadText)
+        viewModel.executeRequest(); testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(HttpMethod.POST, executor.lastMethod)
+        assertEquals(source, (executor.lastBody as OutboundRequestBody.GraphQl).content)
+        val state = viewModel.uiState.value.editorState.bodyState.graphQlState
+        viewModel.updateGraphQlState(state.copy(payload = state.payload.copy(variablesText = "{\"id\":7}")))
+        testDispatcher.scheduler.advanceUntilIdle()
+        viewModel.executeRequest(); testDispatcher.scheduler.advanceUntilIdle()
+        assertTrue((executor.lastBody as OutboundRequestBody.GraphQl).content.contains("\"client\":{\"id\":7}"))
+        assertEquals("https://fixture.test/startup", executor.lastExecutedUrl)
+    }
+
+    @Test
+    fun `GET GraphQL import edits save restore and execution preserve method source and untouched encoding`() = runTest(testDispatcher) {
+        val executor = TestHttpExecutor()
+        val repository = TestCollectionsRepository()
+        val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(executor), collectionsRepository = repository)
+        val original = "https://fixture.test/startup?flag&query=query%20BootStrapQuery%20%7B%20bootstrap%20%7B%20id%20%7D%20%7D&tracking=a%2bb&tracking=2"
+        val id = viewModel.importRequestSpec(com.devuloopers.knet.domain.network.model.NetworkRequestSpec(method = HttpMethod.GET, url = original))
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals("", executor.lastExecutedUrl, "Import must not send a request")
+        val editor = viewModel.uiState.value.editorState
+        val parameters = assertNotNull(editor.graphQLParameters)
+        assertTrue(parameters.graphQl.queryText.contains("BootStrapQuery"))
+        assertEquals(RequestBodyMode.NONE, editor.bodyState.mode)
+        assertEquals("", editor.bodyState.payloadText)
+        viewModel.executeRequest(); testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(original, executor.lastExecutedUrl)
+        assertEquals(HttpMethod.GET, executor.lastMethod)
+        assertEquals(OutboundRequestBody.None, executor.lastBody)
+        viewModel.updateActiveSubTab(com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab.PARAMS)
+        viewModel.updateGraphQlState(parameters.graphQl.copy(payload = parameters.graphQl.payload.copy(variablesText = """{"value":"+ & café"}""")))
+        testDispatcher.scheduler.advanceUntilIdle()
+        val changed = viewModel.uiState.value.editorState.url
+        assertTrue(changed.startsWith(original + "&variables="))
+        assertEquals("", viewModel.uiState.value.editorState.bodyState.payloadText)
+        viewModel.executeRequest(); testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(changed, executor.lastExecutedUrl)
+        assertEquals(OutboundRequestBody.None, executor.lastBody)
+        val saved = assertNotNull(repository.getRequestById(id))
+        assertEquals(changed, saved.url)
+        assertEquals(com.devuloopers.knet.domain.clientNetwork.model.RequestBodyType.NONE, saved.body.type)
+        val restored = com.devuloopers.knet.ui.desktop.apistudio.model.RequestDomainConverter.run { saved.toEditorState(editor) }
+        assertEquals(HttpMethod.GET, restored.method)
+        assertEquals(changed, restored.url)
+        assertEquals("", restored.bodyState.payloadText)
+    }
+
+    @Test
+    fun `GET mutation authoring shows an error and never executes it`() = runTest(testDispatcher) {
+        val executor = TestHttpExecutor()
+        val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(executor))
+        viewModel.importRequestSpec(com.devuloopers.knet.domain.network.model.NetworkRequestSpec(method = HttpMethod.GET,
+            url = "https://fixture.test/graphql?query=mutation+Write+%7B+save+%7D"))
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(com.devuloopers.knet.domain.graphql.GraphQLHttpDiagnostic.GET_OPERATION_NOT_QUERY,
+            viewModel.uiState.value.editorState.graphQLParameters?.diagnostic)
+        viewModel.executeRequest(); testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals("", executor.lastExecutedUrl)
+        assertTrue(viewModel.uiState.value.errorMessage.orEmpty().contains("GET"))
+    }
+
+    @Test
+    fun `GET preparation cannot leak into a newly selected ordinary request`() = runTest(testDispatcher) {
+        val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(TestHttpExecutor()))
+        viewModel.importRequestSpec(com.devuloopers.knet.domain.network.model.NetworkRequestSpec(method = HttpMethod.GET,
+            url = "https://fixture.test/graphql?query=query+Old+%7Bx%7D"))
+        viewModel.importRequestSpec(com.devuloopers.knet.domain.network.model.NetworkRequestSpec(method = HttpMethod.POST,
+            url = "https://fixture.test/events", bodyPayload = "{}"))
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertNull(viewModel.uiState.value.editorState.graphQLParameters)
+        assertEquals("https://fixture.test/events", viewModel.uiState.value.editorState.url)
     }
 
     @Test

@@ -45,7 +45,8 @@ sealed interface NetworkConditionPlan {
 /**
  * Aggregate rule-scoped bandwidth clock shared by every proxy channel and HTTP/2 stream.
  * Reservations use monotonic time, do not accumulate idle burst credit, and rebase immediately
- * when a live profile rate changes.
+ * when a live profile rate changes. Transport callbacks update counters only; one subscriber-owned
+ * timer publishes aggregate telemetry every second, independently of profile and packet frequency.
  */
 class NetworkConditionEngine(
     private val configuration: () -> NetworkConditionConfiguration,
@@ -195,7 +196,8 @@ class NetworkConditionEngine(
         val delay = saturatingAdd(bandwidthDelay, fixedDelay)
         if (delay <= 0L) return NetworkConditionPlan.PassThrough
         delayedUnits.incrementAndGet()
-        publish()
+        // Scheduler events only change counters. The subscriber-owned clock publishes one aggregate per second;
+        // publishing here would turn every shaped chunk into a chart tick and a presentation allocation.
         return NetworkConditionPlan.Delay(delay, profile, effective.ruleId)
     }
 
@@ -229,7 +231,6 @@ class NetworkConditionEngine(
     /** Records a scheduler-level flow fault such as bounded-queue rejection. */
     internal fun recordFaultedFlow() {
         faultedFlows.incrementAndGet()
-        publish()
     }
 
     /** Makes deterministic tests and non-coroutine embedders able to request the latest aggregate counters. */

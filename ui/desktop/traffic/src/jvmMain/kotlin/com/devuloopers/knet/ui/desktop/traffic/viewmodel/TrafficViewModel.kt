@@ -2,6 +2,7 @@
 
 package com.devuloopers.knet.ui.desktop.traffic.viewmodel
 
+import com.devuloopers.knet.traffic.model.absoluteUrl
 import com.devuloopers.knet.application.usecase.traffic.LoadTrafficExchangeDetailsResult
 import com.devuloopers.knet.application.usecase.traffic.LoadTrafficExchangeDetailsUseCase
 import com.devuloopers.knet.application.usecase.traffic.ClearTrafficHistoryUseCase
@@ -302,7 +303,10 @@ class TrafficViewModel(
                             return@flow
                         }
 
-                        emit(InspectorPreparedState.loading(tx.transactionId))
+                        // A same-item refresh retains its own prepared detail. Replacing it with an
+                        // empty loading state would clear the body/overview between every live update.
+                        emit(_uiState.value.preparedState.forSelection(tx.transactionId)
+                            ?: InspectorPreparedState.loading(tx.transactionId))
 
                         val pendingExchange = pendingBreakpoints
                             .firstOrNull { event -> event.candidate.exchangeId.value == tx.transactionId }
@@ -348,6 +352,8 @@ class TrafficViewModel(
                                 transactionId = tx.transactionId,
                                 exchange = exchange,
                                 requestPayloadSpec = requestBodySpec,
+                                requestParameterSpec = PayloadInspectionSpec.fromGraphQLParameters(
+                                    exchange.request.head.method.token, exchange.request.absoluteUrl()),
                                 responsePayloadSpec = responseBodySpec,
                                 requestBodyTruncated = requestBody?.endOfBody == false,
                                 responseBodyTruncated = responseBody?.endOfBody == false,
@@ -355,22 +361,30 @@ class TrafficViewModel(
                             )
                         }
 
-                        if (pendingExchange == null && tx.status > 0 && prepared.loadState == InspectorLoadState.READY) {
-                            preparedStateCache.put(prepared)
-                        }
-
                         emit(prepared)
                     }
                     combine(
                         preparation,
                         observeInspectionAnnotationsUseCase.execute(ExchangeId(tx.transactionId))
-                            .onStart { emit(emptyList()) },
+                            .onStart {
+                                emit(_uiState.value.preparedState.forSelection(tx.transactionId)?.annotations
+                                    ?: preparedStateCache[tx.transactionId]?.annotations.orEmpty())
+                            },
                     ) { prepared, annotations ->
                         prepared.copy(annotations = annotations)
                     }
                 }
                 .collect { prepared ->
-                    _uiState.update { it.copy(preparedState = prepared) }
+                    val owner = prepared.transactionId.takeIf(String::isNotBlank)
+                    if (_uiState.value.selectedTransactionId != owner) return@collect
+                    // Retain annotations together with terminal payloads, inside the existing LRU
+                    // byte budget. Active streams must continue loading current capture progress.
+                    if (prepared.loadState == InspectorLoadState.READY && prepared.exchange?.terminalOutcome != null) {
+                        preparedStateCache.put(prepared)
+                    }
+                    _uiState.update { current ->
+                        if (current.selectedTransactionId == owner) current.copy(preparedState = prepared) else current
+                    }
                 }
         }
 
@@ -406,6 +420,7 @@ class TrafficViewModel(
                                     totalCount = page.totalCount,
                                     nextCursor = page.nextCursor,
                                     selectedMessageId = selected,
+                                    isBodyLoading = selected != null,
                                 )
                             }
                             .catch { error ->
@@ -418,7 +433,10 @@ class TrafficViewModel(
                     }
                 }
                 .collect { messages ->
-                    _uiState.update { current -> current.copy(protocolMessages = messages) }
+                    _uiState.update { current ->
+                        if (current.selectedTransactionId != messages.exchangeId.takeIf(String::isNotBlank)) current
+                        else current.copy(protocolMessages = messages.retainPreparedSelection(current.protocolMessages))
+                    }
                 }
         }
 
@@ -432,20 +450,18 @@ class TrafficViewModel(
                     state.preparedState.exchange,
                 ) }
                 .distinctUntilChanged()
-                .flatMapLatest { (_, message, parentExchange) ->
-                    if (message == null) {
-                        flowOf<LoadProtocolMessageBodyResult?>(null)
-                    } else {
-                        flow {
-                            emit(withContext(backgroundDispatcher) {
-                                loadProtocolMessageBodyUseCase.execute(message, parentExchange)
-                            })
-                        }
+                .mapLatest { selection ->
+                    val (_, message, parentExchange) = selection
+                    val result = message?.let {
+                        withContext(backgroundDispatcher) { loadProtocolMessageBodyUseCase.execute(it, parentExchange) }
                     }
+                    selection to result
                 }
-                .collect { result ->
+                .collect { (selection, result) ->
                     _uiState.update { current ->
                         val messages = current.protocolMessages
+                        if (messages.exchangeId != selection.first || messages.selectedMessage != selection.second ||
+                            current.preparedState.exchange != selection.third) return@update current
                         val updated = when (result) {
                             null -> messages.copy(
                                 selectedBodyBytes = null,
@@ -665,9 +681,7 @@ class TrafficViewModel(
 
             is TrafficIntent.SelectTransaction -> {
                 _uiState.update { current ->
-                    val preparedState = intent.id
-                        ?.let { id -> current.preparedState.forSelection(id) ?: InspectorPreparedState.loading(id) }
-                        ?: InspectorPreparedState()
+                    val preparedState = preparedForSelection(current, intent.id)
                     current.copy(
                         selectedTransactionId = intent.id,
                         preparedState = preparedState,
@@ -681,6 +695,7 @@ class TrafficViewModel(
 
             is TrafficIntent.SelectProtocolMessage -> {
                 _uiState.update { current ->
+                    if (current.protocolMessages.selectedMessageId == intent.id) return@update current
                     current.copy(
                         protocolMessages = current.protocolMessages.copy(
                             selectedMessageId = intent.id,
@@ -829,6 +844,11 @@ class TrafficViewModel(
         )
     }
 
+    /** Select cached detail atomically with the row, never displaying another capture's body while loading. */
+    private fun preparedForSelection(state: TrafficState, id: String?): InspectorPreparedState =
+        id?.let { state.preparedState.forSelection(it) ?: preparedStateCache[it] ?: InspectorPreparedState.loading(it) }
+            ?: InspectorPreparedState()
+
     /**
      * Joins durable page metadata with the bounded pending-breakpoint projection by ExchangeId.
      *
@@ -928,9 +948,7 @@ class TrafficViewModel(
             ?.takeIf { id -> visibleRows.any { row -> row.transactionId == id } }
             ?: visibleRows.firstOrNull()?.transactionId
         _uiState.update { state ->
-            val preparedState = selectedId
-                ?.let { id -> state.preparedState.forSelection(id) ?: InspectorPreparedState.loading(id) }
-                ?: InspectorPreparedState()
+            val preparedState = preparedForSelection(state, selectedId)
             state.copy(
                 transactions = rows,
                 filteredTransactions = visibleRows,

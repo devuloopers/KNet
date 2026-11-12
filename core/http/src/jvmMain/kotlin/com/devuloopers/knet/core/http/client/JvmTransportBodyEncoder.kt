@@ -18,7 +18,7 @@ internal fun OutboundRequestBody.encodeForTransport(): EncodedTransportBody = wh
         val trimmed = content.trim()
         val json = when {
             trimmed.isBlank() -> "{}"
-            trimmed.startsWith('{') -> trimmed
+            trimmed.startsWith('{') -> content
             else -> "{\"query\": \"${trimmed.escapeJsonString()}\"}"
         }
         EncodedTransportBody(json.encodeToByteArray(), "application/json")

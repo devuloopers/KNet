@@ -10,6 +10,24 @@ import kotlin.test.assertTrue
 
 class NetworkThroughputSamplerTest {
     @Test
+    fun `six thousand chunk updates fill sixty seconds without accelerating the graph or losing bytes`() {
+        val sampler = NetworkThroughputSampler()
+        assertNull(sampler.accept(snapshot(time = 0L, uploaded = 0L, downloaded = 0L)))
+        repeat(6_000) { index ->
+            val chunk = index + 1L
+            val history = sampler.accept(snapshot(time = chunk * 10_000_000L,
+                uploaded = chunk * 25L, downloaded = chunk * 125L))
+            if (chunk % 100L == 0L) {
+                val completed = requireNotNull(history)
+                assertEquals((chunk / 100L).toInt(), completed.sampleCount)
+                assertEquals(100_000L, completed.currentDownloadBitsPerSecond)
+                assertEquals(20_000L, completed.currentUploadBitsPerSecond)
+                assertTrue(completed.currentSampleIsValid)
+            } else assertNull(history, "Subsecond events must not advance the chart")
+        }
+    }
+
+    @Test
     fun `cumulative bytes become independent rates over actual elapsed time`() {
         val sampler = NetworkThroughputSampler()
 
@@ -24,17 +42,21 @@ class NetworkThroughputSamplerTest {
     }
 
     @Test
-    fun `counter reset and zero elapsed time produce invalid zero samples`() {
+    fun `counter reset invalidates one interval and duplicate timestamps cannot advance history`() {
         val sampler = NetworkThroughputSampler()
-        sampler.accept(snapshot(time = 1L, uploaded = 10L, downloaded = 20L))
+        sampler.accept(snapshot(time = 0L, uploaded = 10L, downloaded = 20L))
 
-        val reset = sampler.accept(snapshot(time = 2L, uploaded = 1L, downloaded = 2L))!!
+        val reset = sampler.accept(snapshot(time = 1_000_000_000L, uploaded = 1L, downloaded = 2L))!!
         assertFalse(reset.currentSampleIsValid)
         assertEquals(0L, reset.currentDownloadBitsPerSecond)
+        assertEquals(1, reset.sampleCount)
 
-        val zeroElapsed = sampler.accept(snapshot(time = 2L, uploaded = 2L, downloaded = 3L))!!
-        assertFalse(zeroElapsed.currentSampleIsValid)
-        assertEquals(0L, zeroElapsed.currentUploadBitsPerSecond)
+        assertNull(sampler.accept(snapshot(time = 1_000_000_000L, uploaded = 2L, downloaded = 3L)))
+        val recovered = requireNotNull(sampler.accept(snapshot(time = 2_000_000_000L, uploaded = 101L, downloaded = 202L)))
+        assertTrue(recovered.currentSampleIsValid)
+        assertEquals(800L, recovered.currentUploadBitsPerSecond)
+        assertEquals(1_600L, recovered.currentDownloadBitsPerSecond)
+        assertEquals(2, recovered.sampleCount)
     }
 
     @Test
@@ -47,6 +69,52 @@ class NetworkThroughputSamplerTest {
         )!!
 
         assertFalse(history.currentSampleIsValid)
+        assertEquals(3, history.sampleCount)
+    }
+
+    @Test
+    fun `out of order and duplicate readings neither consume slots nor change the rate baseline`() {
+        val sampler = NetworkThroughputSampler()
+        sampler.accept(snapshot(time = 0L, uploaded = 0L, downloaded = 0L))
+        assertNull(sampler.accept(snapshot(time = 500_000_000L, uploaded = 1_250L, downloaded = 6_250L)))
+        assertNull(sampler.accept(snapshot(time = 500_000_000L, uploaded = 99_000L, downloaded = 99_000L)))
+        assertNull(sampler.accept(snapshot(time = 400_000_000L, uploaded = 0L, downloaded = 0L)))
+        val history = requireNotNull(sampler.accept(snapshot(time = 1_000_000_000L, uploaded = 2_500L, downloaded = 12_500L)))
+        assertEquals(1, history.sampleCount)
+        assertEquals(100_000L, history.currentDownloadBitsPerSecond)
+        assertEquals(20_000L, history.currentUploadBitsPerSecond)
+        assertTrue(history.currentSampleIsValid)
+    }
+
+    @Test
+    fun `subsecond counter reset remains invalid even if new counters pass the old baseline`() {
+        val sampler = NetworkThroughputSampler()
+        sampler.accept(snapshot(time = 0L, uploaded = 0L, downloaded = 0L))
+        assertNull(sampler.accept(snapshot(time = 500_000_000L, uploaded = 100L, downloaded = 1_000L)))
+        assertNull(sampler.accept(snapshot(time = 750_000_000L, uploaded = 0L, downloaded = 0L)))
+        val reset = requireNotNull(sampler.accept(snapshot(time = 1_000_000_000L, uploaded = 2_500L, downloaded = 12_500L)))
+        assertFalse(reset.currentSampleIsValid)
+        assertEquals(0L, reset.currentDownloadBitsPerSecond)
+        val recovered = requireNotNull(sampler.accept(snapshot(time = 2_000_000_000L, uploaded = 5_000L, downloaded = 25_000L)))
+        assertTrue(recovered.currentSampleIsValid)
+        assertEquals(100_000L, recovered.currentDownloadBitsPerSecond)
+        assertEquals(20_000L, recovered.currentUploadBitsPerSecond)
+    }
+
+    @Test
+    fun `monitor restart drops pending observations and large gaps retain only bounded invalid slots`() {
+        val sampler = NetworkThroughputSampler(capacity = 3)
+        sampler.accept(snapshot(time = 0L, uploaded = 0L, downloaded = 0L))
+        assertNull(sampler.accept(snapshot(time = 500_000_000L, uploaded = 10L, downloaded = 20L)))
+        sampler.reset()
+        assertNull(sampler.accept(snapshot(time = 10_000_000_000L, uploaded = 100L, downloaded = 200L)))
+        val restarted = requireNotNull(sampler.accept(snapshot(time = 11_000_000_000L, uploaded = 200L, downloaded = 400L)))
+        assertEquals(1, restarted.sampleCount)
+        assertEquals(1_600L, restarted.currentDownloadBitsPerSecond)
+        val suspended = requireNotNull(sampler.accept(snapshot(time = Long.MAX_VALUE, uploaded = 1_000L, downloaded = 2_000L)))
+        assertEquals(3, suspended.sampleCount)
+        assertContentEquals(booleanArrayOf(false, false, false), suspended.validSamples)
+        assertContentEquals(longArrayOf(0L, 0L, 0L), suspended.downloadBitsPerSecond)
     }
 
     @Test
@@ -100,7 +168,7 @@ class NetworkThroughputSamplerTest {
     }
 
     @Test
-    fun `very large counters backward clocks and overflow resets never produce negative spikes`() {
+    fun `very large counters never produce negative rates and backward clocks do not add a point`() {
         val sampler = NetworkThroughputSampler()
         sampler.accept(snapshot(time = Long.MAX_VALUE - 1_000_000_000L, uploaded = Long.MAX_VALUE - 100L, downloaded = 0L))
         val large = requireNotNull(
@@ -110,10 +178,7 @@ class NetworkThroughputSamplerTest {
         assertTrue(large.currentUploadBitsPerSecond >= 0L)
         assertTrue(large.currentDownloadBitsPerSecond >= 0L)
 
-        val wrapped = requireNotNull(sampler.accept(snapshot(time = Long.MIN_VALUE, uploaded = 0L, downloaded = 0L)))
-        assertFalse(wrapped.currentSampleIsValid)
-        assertEquals(0L, wrapped.currentUploadBitsPerSecond)
-        assertEquals(0L, wrapped.currentDownloadBitsPerSecond)
+        assertNull(sampler.accept(snapshot(time = Long.MIN_VALUE, uploaded = 0L, downloaded = 0L)))
     }
 
     private fun snapshot(time: Long, uploaded: Long, downloaded: Long) = NetworkConditionRuntimeSnapshot(

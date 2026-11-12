@@ -14,12 +14,12 @@ class GraphQlRequestDescriptorStrategyTest {
     private val strategy = GraphQlRequestDescriptorStrategy()
 
     @Test
-    fun describe_prefersExplicitEnvelopeOperationName() {
+    fun describe_doesNotInventAnOperationForAnUnknownEnvelopeSelector() {
         val descriptor = strategy.describe(
             request("""{"operationName":"GetUser","query":"query DifferentName { user { id } }"}""")
         )
 
-        assertEquals("GetUser", descriptor?.suggestedName)
+        assertNull(descriptor?.suggestedName)
         assertEquals(RequestKindId.GRAPHQL, descriptor?.kind)
         assertEquals("GQL", descriptor?.badgeLabel)
     }
@@ -67,6 +67,20 @@ class GraphQlRequestDescriptorStrategyTest {
 
         assertEquals(RequestKindId.GRAPHQL, descriptor?.kind)
         assertEquals("GQL", descriptor?.badgeLabel)
+    }
+
+    @Test
+    fun describe_selectsExplicitOperationFromMultiOperationDocument() {
+        val descriptor = strategy.describe(request("""{"operationName":"GetUser","query":"query DifferentName { user { id } } query GetUser { user { name } }"}"""))
+        assertEquals("GetUser", descriptor?.suggestedName)
+    }
+
+    @Test
+    fun describe_resolvesNamedGetAtAnArbitraryEndpointWithoutABody() {
+        val input = RequestDescriptorInput(HttpMethod.GET, "https://fixture.test/startup?query=query+BootStrapQuery+%7B+bootstrap+%7B+id+%7D+%7D")
+        assertEquals("BootStrapQuery", strategy.describe(input)?.suggestedName)
+        assertEquals(RequestKindId.GRAPHQL, strategy.describe(input)?.kind)
+        assertNull(strategy.describe(input.copy(absoluteUrl = "https://fixture.test/startup?tracking=1")))
     }
 
     private fun request(

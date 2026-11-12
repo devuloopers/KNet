@@ -341,7 +341,7 @@ object NetworkConditionBuiltIns {
     )
     val LOSSY_UNSTABLE = profile(
         "lossy-unstable",
-        "Lossy / unstable",
+        "Unstable connection",
         latency = 200,
         jitter = 100,
         failure = NetworkFailureBehavior.SeededReset(10, 0x4b4e4554L),

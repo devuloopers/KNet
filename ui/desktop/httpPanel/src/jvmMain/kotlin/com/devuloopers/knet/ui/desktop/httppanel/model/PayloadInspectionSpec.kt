@@ -113,6 +113,14 @@ data class PayloadInspectionSpec(
             )
         }
 
+        /** Prepares a GET parameter viewer without synthesizing captured body bytes. Call off-thread. */
+        fun fromGraphQLParameters(method: String, url: String): PayloadInspectionSpec {
+            if (!method.equals("GET", true)) return EMPTY
+            val document = com.devuloopers.knet.engine.formatter.graphql.GraphQLHttpRequestFormatter.inspect(method, url)
+                ?: return EMPTY
+            return PayloadInspectionSpec(resolvedFormat = com.devuloopers.knet.engine.formatter.graphql.GraphQLHttpRequestFormatter.format(document))
+        }
+
         /**
          * Overload creating a [PayloadInspectionSpec] from a headers map and wire body text.
          *

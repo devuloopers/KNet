@@ -35,7 +35,6 @@ import androidx.compose.ui.window.Popup
 import androidx.compose.ui.window.PopupPositionProvider
 import androidx.compose.ui.window.PopupProperties
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionConfiguration
-import com.devuloopers.knet.domain.networkconditions.NetworkConditionProfile
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionProfileId
 import com.devuloopers.knet.ui.core.components.button.ButtonSize
 import com.devuloopers.knet.ui.core.components.button.ButtonVariant
@@ -48,6 +47,9 @@ import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.components.switch.KNetSwitch
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import com.devuloopers.knet.ui.desktop.networkconditions.model.noThrottlingProfileName
+import com.devuloopers.knet.ui.desktop.networkconditions.model.globalProfileOptions
+import com.devuloopers.knet.ui.desktop.networkconditions.model.selectedGlobalProfile
 
 /** Global settings shortcut hosted in Traffic without giving Traffic a second policy owner or ViewModel. */
 @Composable
@@ -61,10 +63,10 @@ fun NetworkConditionsQuickControl(
     modifier: Modifier = Modifier,
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val selected = configuration.profile(configuration.globalProfileId)
+    val selected = configuration.selectedGlobalProfile
     val label = if (!configuration.enabled) "Conditions: Off"
-        else "Global: ${selected?.name ?: "Domain rules only"}"
-    val options = remember(configuration.profiles) { listOf<NetworkConditionProfile?>(null) + configuration.profiles }
+        else "Global: ${selected?.name ?: noThrottlingProfileName}"
+    val options = remember(configuration.profiles) { configuration.globalProfileOptions }
     val density = LocalDensity.current
     val textMeasurer = rememberTextMeasurer()
     val textStyle = LocalTextStyle.current.merge(KNetTheme.typography.labelMedium)
@@ -129,13 +131,13 @@ fun NetworkConditionsQuickControl(
                                 onActivateProfile(profile?.id)
                             },
                             defaultItem = null,
-                            itemText = { it?.name ?: "Domain rules only" },
+                            itemText = { it?.name ?: noThrottlingProfileName },
                             modifier = Modifier.fillMaxWidth(),
                             size = KNetDropdownSize.Compact,
                         )
                         Text("Selecting a profile enables conditions. Matching rules override the global profile.",
                             style = KNetTheme.typography.bodySmall.copy(color = KNetTheme.colors.textSecondary))
-                        Text("Off bypasses all conditions. No throttling leaves matching rules active.",
+                        Text("Off bypasses all conditions. $noThrottlingProfileName leaves matching rules active.",
                             style = KNetTheme.typography.caption.copy(color = KNetTheme.colors.textSecondary))
                         HorizontalDivider()
                         KNetButton(
