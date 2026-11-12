@@ -19,7 +19,7 @@ import com.devuloopers.knet.ui.core.components.tabs.KNetTabRow
 import com.devuloopers.knet.ui.core.foundation.responsive.ResponsiveLayout
 import com.devuloopers.knet.ui.core.foundation.responsive.WindowSizeClass
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.ui.desktop.settings.components.AppearanceTab
+import com.devuloopers.knet.ui.desktop.settings.components.ScriptingTab
 import com.devuloopers.knet.ui.desktop.settings.components.NetworkProxyTab
 import com.devuloopers.knet.ui.desktop.settings.components.SettingsFooterBar
 import com.devuloopers.knet.ui.desktop.settings.components.SettingsSidebar
@@ -101,7 +101,7 @@ internal fun SettingsScreenContent(
                                     onIntent = onIntent,
                                     compact = compact,
                                 )
-                                SettingsTab.APPEARANCE -> AppearanceTab(
+                                SettingsTab.SCRIPTING -> ScriptingTab(
                                     state = state,
                                     onIntent = onIntent,
                                     compact = compact,

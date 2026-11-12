@@ -107,9 +107,19 @@ class LegacyPresetRetirementTest {
             val repository = RoomProtectedTrafficRepository(database.protectedTrafficDao(), scope)
             val imported = repository.configuration.first { it.configurationReady }.rules.first()
             assertFailsWith<IllegalArgumentException> { repository.upsertRule(imported.copy(id = ProtectedTrafficRuleId("forged"))) }
-            repository.upsertRule(imported.copy(origin = ProtectedTrafficRuleOrigin.USER, action = ProtectedTrafficAction.BLOCK))
+            repository.upsertRule(imported)
+            repository.upsertRule(imported.copy(enabled = false))
+            val disabled = repository.configuration.first { config -> config.rules.any { it.id == imported.id && !it.enabled } }
+                .rules.single { it.id == imported.id }
+            assertEquals(ProtectedTrafficRuleOrigin.MIGRATED_PRESET, disabled.origin)
+            assertFailsWith<IllegalArgumentException> { repository.upsertRule(disabled.copy(action = ProtectedTrafficAction.BLOCK)) }
+            repository.upsertRule(disabled.copy(origin = ProtectedTrafficRuleOrigin.USER, action = ProtectedTrafficAction.BLOCK))
             val edited = repository.configuration.first { config -> config.rules.any { it.id == imported.id && it.origin == ProtectedTrafficRuleOrigin.USER } }
-            assertEquals(ProtectedTrafficAction.BLOCK, edited.rules.single { it.id == imported.id }.action)
+            val saved = edited.rules.single { it.id == imported.id }
+            assertEquals(ProtectedTrafficAction.BLOCK, saved.action)
+            assertFalse(saved.enabled)
+            assertEquals(imported.destination, saved.destination)
+            assertEquals(imported.transport, saved.transport)
         } finally { scope.coroutineContext.job.cancelAndJoin(); database.close(); root.deleteRecursively() }
     }
 

@@ -18,7 +18,9 @@ Use these documents when deciding what the repository currently owns or supports
    [`graphql_websocket_qualification.md`](graphql_websocket_qualification.md), and
    [`sse_qualification.md`](sse_qualification.md). Network Conditions test coverage, missing edge cases, and
    promotion evidence are tracked in
-   [`network_conditions_test_gap_report.md`](network_conditions_test_gap_report.md).
+   [`network_conditions_test_gap_report.md`](network_conditions_test_gap_report.md). Protected Traffic manager
+   behavior and UI qualification are recorded in [`protected_traffic_rule_manager.md`](protected_traffic_rule_manager.md);
+   current automatic TLS fallback is documented in [`automatic_tls_fallback.md`](automatic_tls_fallback.md).
 5. The executable `RuntimeCapabilityCatalog` in
    `products/desktop/src/jvmMain/kotlin/com/devuloopers/knet/products/desktop/di/inspection/InspectionBindings.kt`
    — final product maturity (`SUPPORTED`, `EXPERIMENTAL`, or `UNAVAILABLE`).

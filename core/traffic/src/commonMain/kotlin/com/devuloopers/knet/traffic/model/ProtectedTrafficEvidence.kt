@@ -4,6 +4,8 @@ package com.devuloopers.knet.traffic.model
 public enum class ProtectionDecisionOrigin {
     /** The global fallback selected the action. */
     GLOBAL,
+    /** Temporary client/session-scoped fallback after an explicit certificate rejection. */
+    AUTOMATIC,
     /** A user-authored rule selected the action. */
     MANUAL,
     /** An enabled versioned service preset selected the action. */

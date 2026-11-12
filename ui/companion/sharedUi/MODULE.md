@@ -33,3 +33,6 @@ Depends only on `:ui:core`, companion presentation/core contracts, and portable 
 Android and iOS application targets host this module; this module never depends on a product target.
 Platform entry points supply observable presentation state, certificate guidance, and native scanner capability
 while retaining ownership of their lifecycles.
+
+The production Companion root uses UI core's fixed-dark KNetApplicationTheme. Explicit light previews remain
+component qualification surfaces; host appearance does not select the shipped Companion palette.

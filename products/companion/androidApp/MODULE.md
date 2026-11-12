@@ -48,3 +48,6 @@ Owns the installable Android companion APK, Android manifest, launcher lifecycle
 May depend on companion application, data, presentation, shared UI, Android connectivity, core modules,
 `:products:companion:di`, and the repository-standard Koin runtime solely to compose the executable product. Koin
 definitions remain product-owned; no reusable companion module depends on Koin or on this product.
+
+Native status/navigation bars use explicit dark styles and the existing dark scrim resource so system icons remain
+light under either OS appearance. Shared UI obtains its fixed-dark palette from UI core.

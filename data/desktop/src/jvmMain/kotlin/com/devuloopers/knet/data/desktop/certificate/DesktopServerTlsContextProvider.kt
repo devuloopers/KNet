@@ -20,6 +20,9 @@ class DesktopServerTlsContextProvider(
         certificateCache.getAsync(host, certificateAuthority, executor)
             .thenApplyAsync(
                 { leaf ->
+                    // Local certificate errors must surface as setup failures, not teach automatic passthrough.
+                    certificateAuthority.certificate.checkValidity()
+                    leaf.certificate.checkValidity()
                     SslContextBuilder.forServer(leaf.keyPair.private, leaf.certificate)
                         .sslProvider(SslProvider.JDK)
                         .applicationProtocolConfig(

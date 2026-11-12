@@ -244,6 +244,8 @@ data class ProtectedTrafficConfiguration(
     val enabledBuiltInGroups: Set<ProtectedServiceGroupId> = emptySet(),
     /** False until an authoritative, valid persisted snapshot has been loaded. */
     val configurationReady: Boolean = true,
+    /** Permit temporary passthrough after explicit inspection-certificate rejection under the global Inspect default. */
+    val automaticTlsFallbackEnabled: Boolean = true,
 ) {
     init {
         val duplicate = rules.groupBy(ProtectedTrafficRule::selectorKey).entries.firstOrNull { it.value.size > 1 }
@@ -292,6 +294,9 @@ sealed interface ProtectedTrafficDecisionEvidence {
 
     /** No rule matched, so the global default selected the action. */
     data object GlobalDefault : ProtectedTrafficDecisionEvidence
+
+    /** Runtime-only temporary passthrough; never a saved rule or historical Smart decision. */
+    data object AutomaticFallback : ProtectedTrafficDecisionEvidence
 }
 
 /**

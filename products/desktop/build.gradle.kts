@@ -79,6 +79,7 @@ compose.desktop {
 
         jvmArgs += listOf(
             "-Dapple.awt.application.name=$appName",
+            "-Dapple.awt.application.appearance=NSAppearanceNameDarkAqua",
             "-Dsun.java2d.d3d=true",
             "-Dsun.java2d.noddraw=true",
             "-Dsun.java2d.opengl=false"

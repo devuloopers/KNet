@@ -78,3 +78,7 @@ Opaque progress updates existing counters/version only while ACTIVE, with monoto
 Schema 35 separately adds nullable closure owner/reason/observation-time columns. Migration 34 to 35 preserves
 retained captures without fabricating close evidence. The guarded opaque terminal update commits provenance with
 final counters atomically; later progress or terminal events cannot replace it. See `docs/opaque_flow_closure_attribution.md`.
+
+Schema 36 adds the default-enabled automaticTlsFallbackEnabled preference independently of the retired Smart flag.
+Migration 35 to 36 retains existing actions/rules and history. Temporary decisions are never persisted; new AUTOMATIC
+provenance uses the existing opaque evidence fields. See `docs/automatic_tls_fallback.md`.

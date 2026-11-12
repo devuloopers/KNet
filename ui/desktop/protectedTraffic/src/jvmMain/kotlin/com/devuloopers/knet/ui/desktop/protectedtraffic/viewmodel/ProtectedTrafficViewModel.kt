@@ -7,12 +7,12 @@ import com.devuloopers.knet.application.usecase.protectedtraffic.ObserveProtecte
 import com.devuloopers.knet.application.usecase.protectedtraffic.SetProtectedTrafficDefaultActionUseCase
 import com.devuloopers.knet.application.usecase.protectedtraffic.UpsertProtectedTrafficRuleUseCase
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedDestinationSelector
-import com.devuloopers.knet.domain.protectedtraffic.ProtectedIpFamily
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedSourceApplicationId
+import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficDefaultHandling
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficAction
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficRule
+import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficRuleOrigin
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficRuleId
-import com.devuloopers.knet.domain.protectedtraffic.ProtectedTransportProtocol
 import com.devuloopers.knet.ui.desktop.protectedtraffic.model.ProtectedTrafficRuleDraft
 import com.devuloopers.knet.ui.desktop.protectedtraffic.model.ProtectedTrafficState
 import kotlin.uuid.ExperimentalUuidApi
@@ -43,83 +43,112 @@ class ProtectedTrafficViewModel(
         }
     }
 
-    /** Persists the global action applied when no explicit or built-in rule matches. */
-    fun selectDefaultAction(action: ProtectedTrafficAction): Unit = mutate { setDefaultAction(action) }
+    /** Updates presentation search without changing stored policy or rule order. */
+    fun updateSearchQuery(query: String): Unit = mutableState.update { it.copy(searchQuery = query) }
+
+    /** Persists the explicit proxy's supported fallback while preventing out-of-order duplicate writes. */
+    fun selectDefaultHandling(handling: ProtectedTrafficDefaultHandling) {
+        if (!state.value.configuration.configurationReady || state.value.isSettingDefault) return
+        mutableState.update { it.copy(isSettingDefault = true) }
+        mutate(onFinished = { mutableState.update { it.copy(isSettingDefault = false) } }) { setDefaultAction(handling) }
+    }
 
     /** Opens an empty rule editor. */
-    fun beginAddRule(): Unit = mutableState.update { it.copy(ruleDraft = ProtectedTrafficRuleDraft()) }
+    fun beginAddRule() {
+        if (!state.value.configuration.configurationReady || state.value.isSaving) return
+        mutableState.update { it.copy(ruleDraft = ProtectedTrafficRuleDraft(), draftError = null) }
+    }
 
-    /** Opens a user rule with its stable identity so Save edits rather than duplicates it. */
-    fun beginEditRule(rule: ProtectedTrafficRule): Unit = mutableState.update { current ->
-        current.copy(ruleDraft = ProtectedTrafficRuleDraft(
-            id = rule.id,
-            sourceApplication = rule.sourceApplication?.value.orEmpty(),
-            destination = when (val destination = rule.destination) {
+    /** Opens the latest saved rule by stable identity; stale or removed table rows cannot replace newer policy. */
+    fun beginEditRule(rule: ProtectedTrafficRule) {
+        val current = state.value
+        if (!current.configuration.configurationReady || current.isSaving || rule.id in current.pendingRuleIds) return
+        val latest = current.configuration.rules.firstOrNull {
+            it.id == rule.id && it.origin != ProtectedTrafficRuleOrigin.BUILT_IN
+        } ?: return
+        mutableState.update { it.copy(ruleDraft = ProtectedTrafficRuleDraft(
+            id = latest.id,
+            sourceApplication = latest.sourceApplication?.value.orEmpty(),
+            destination = when (val destination = latest.destination) {
                 is ProtectedDestinationSelector.Exact -> destination.value
                 is ProtectedDestinationSelector.WildcardDomain -> "*.${destination.suffix}"
                 is ProtectedDestinationSelector.Cidr -> "${destination.networkAddress}/${destination.prefixLength}"
                 null -> ""
             },
-            port = rule.port?.toString().orEmpty(),
-            transport = rule.transport ?: ProtectedTransportProtocol.TCP,
-            ipFamily = rule.ipFamily,
-            action = rule.action,
-        ))
+            port = latest.port?.toString().orEmpty(),
+            transport = latest.transport,
+            ipFamily = latest.ipFamily,
+            action = latest.action,
+        ), draftError = null) }
     }
 
     /** Replaces the active rule editor values. */
-    fun updateRuleDraft(draft: ProtectedTrafficRuleDraft): Unit = mutableState.update { it.copy(ruleDraft = draft) }
+    fun updateRuleDraft(draft: ProtectedTrafficRuleDraft) {
+        if (!state.value.isSaving && state.value.ruleDraft != null)
+            mutableState.update { it.copy(ruleDraft = draft, draftError = null) }
+    }
 
     /** Closes the rule editor without changing policy. */
-    fun dismissRuleDraft(): Unit = mutableState.update { it.copy(ruleDraft = null) }
+    fun dismissRuleDraft() {
+        if (!state.value.isSaving) mutableState.update { it.copy(ruleDraft = null, draftError = null) }
+    }
 
     /** Validates, normalizes, and persists the active user rule. */
     @OptIn(ExperimentalUuidApi::class)
-    fun saveRuleDraft(): Unit {
-        val draft = state.value.ruleDraft ?: return
-        mutate {
-            val application = draft.sourceApplication.trim().takeIf(String::isNotEmpty)
-                ?.let(::ProtectedSourceApplicationId)
-            val destination = draft.destination.trim().takeIf(String::isNotEmpty)
-                ?.let(ProtectedDestinationSelector::parse)
-            val port = draft.port.trim().takeIf(String::isNotEmpty)?.toIntOrNull()
-                ?: draft.port.takeIf(String::isNotBlank)?.let {
-                    throw IllegalArgumentException("Port must be a number between 1 and 65535.")
-                }
-            upsertRule(
-                ProtectedTrafficRule(
-                    id = draft.id ?: ProtectedTrafficRuleId("protected_${Uuid.random()}"),
-                    action = draft.action,
-                    enabled = draft.id?.let { id -> state.value.configuration.rules.firstOrNull { it.id == id }?.enabled } ?: true,
-                    sourceApplication = application,
-                    destination = destination,
-                    port = port,
-                    transport = draft.transport,
-                    ipFamily = draft.ipFamily,
-                ),
-            )
-            mutableState.update { current -> current.copy(ruleDraft = null, errorMessage = null) }
+    fun saveRuleDraft() {
+        val current = state.value
+        val draft = current.ruleDraft ?: return
+        if (current.isSaving || !current.configuration.configurationReady || draft.id in current.pendingRuleIds) return
+        mutableState.update { it.copy(isSaving = true, draftError = null) }
+        viewModelScope.launch {
+            try {
+                val existing = draft.id?.let { id -> current.configuration.rules.firstOrNull { it.id == id }
+                    ?: error("This rule was removed. Close the editor and add a new rule.") }
+                val application = draft.sourceApplication.trim().takeIf(String::isNotEmpty)?.let(::ProtectedSourceApplicationId)
+                val destination = draft.destination.trim().takeIf(String::isNotEmpty)?.let(ProtectedDestinationSelector::parse)
+                require(draft.isPortValid) { "Port must be a number between 1 and 65535, or empty for all ports." }
+                val port = draft.port.trim().takeIf(String::isNotEmpty)?.toInt()
+                val proposed = existing?.copy(sourceApplication = application, destination = destination, port = port,
+                    transport = draft.transport, ipFamily = draft.ipFamily, action = draft.action)
+                    ?: ProtectedTrafficRule(id = ProtectedTrafficRuleId("protected_${Uuid.random()}"), action = draft.action,
+                        sourceApplication = application, destination = destination, port = port,
+                        transport = draft.transport, ipFamily = draft.ipFamily)
+                // Imported exceptions may be toggled unchanged. A deliberate scope/action edit is a user rule.
+                val rule = if (existing?.origin == ProtectedTrafficRuleOrigin.MIGRATED_PRESET &&
+                    (proposed.selectorKey != existing.selectorKey || proposed.action != existing.action))
+                    proposed.copy(origin = ProtectedTrafficRuleOrigin.USER) else proposed
+                upsertRule(rule)
+                mutableState.update { it.copy(ruleDraft = null, draftError = null) }
+            } catch (failure: kotlinx.coroutines.CancellationException) { throw failure }
+            catch (failure: Exception) { mutableState.update { it.copy(draftError = failure.message ?: "Unable to save this rule.") } }
+            finally { mutableState.update { it.copy(isSaving = false) } }
         }
     }
 
-    /** Enables or disables one user-authored rule while preserving its selectors. */
-    fun setRuleEnabled(rule: ProtectedTrafficRule, enabled: Boolean): Unit =
-        mutate { upsertRule(rule.copy(enabled = enabled)) }
+    /** Enables/disables the latest authoritative row, retaining selectors and imported provenance. */
+    fun setRuleEnabled(rule: ProtectedTrafficRule, enabled: Boolean) = mutateRule(rule.id) { latest -> upsertRule(latest.copy(enabled = enabled)) }
 
-    /** Deletes one user-authored rule. */
-    fun deleteRule(ruleId: ProtectedTrafficRuleId): Unit = mutate { deleteRule.invoke(ruleId) }
+    /** Deletes a saved rule; repeat clicks cannot submit concurrent writes for the same identity. */
+    fun deleteRule(ruleId: ProtectedTrafficRuleId) = mutateRule(ruleId) { deleteRule.invoke(it.id) }
 
-    /** Dismisses the current mutation or validation error. */
+    /** Dismisses a non-editor mutation error. */
     fun clearError(): Unit = mutableState.update { it.copy(errorMessage = null) }
 
-    private fun mutate(block: suspend () -> Unit) {
+    private fun mutateRule(id: ProtectedTrafficRuleId, operation: suspend (ProtectedTrafficRule) -> Unit) {
+        val current = state.value
+        if (current.isSaving || id in current.pendingRuleIds || !current.configuration.configurationReady) return
+        val rule = current.configuration.rules.firstOrNull { it.id == id && it.origin != ProtectedTrafficRuleOrigin.BUILT_IN } ?: return
+        mutableState.update { it.copy(pendingRuleIds = it.pendingRuleIds + id) }
+        mutate(onFinished = { mutableState.update { it.copy(pendingRuleIds = it.pendingRuleIds - id) } }) { operation(rule) }
+    }
+
+    private fun mutate(onFinished: () -> Unit = {}, block: suspend () -> Unit) {
         viewModelScope.launch {
-            runCatching { block() }.onFailure { failure ->
-                if (failure is kotlinx.coroutines.CancellationException) throw failure
-                mutableState.update { current ->
-                    current.copy(errorMessage = failure.message ?: "Unable to update protected traffic policy.")
-                }
-            }
+            try { block() }
+            catch (failure: kotlinx.coroutines.CancellationException) { throw failure }
+            catch (failure: Exception) {
+                mutableState.update { it.copy(errorMessage = failure.message ?: "Unable to update protected traffic policy.") }
+            } finally { onFinished() }
         }
     }
 }

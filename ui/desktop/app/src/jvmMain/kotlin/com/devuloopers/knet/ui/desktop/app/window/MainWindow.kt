@@ -4,8 +4,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.ui.core.foundation.theme.ThemeMode
+import com.devuloopers.knet.ui.core.foundation.theme.KNetApplicationTheme
 import com.devuloopers.knet.ui.desktop.app.dialog.KNetDialogHost
 import com.devuloopers.knet.ui.desktop.app.host.KNetApplicationScaffold
 import com.devuloopers.knet.ui.desktop.app.navigation.NavigationRail
@@ -25,7 +24,7 @@ fun MainWindow(
     modifier: Modifier = Modifier
 ) {
     val destination by appState.navigationController.currentDestination.collectAsState()
-    KNetTheme(themeMode = ThemeMode.System) {
+    KNetApplicationTheme {
         KNetApplicationScaffold(
             modifier = modifier,
             navigationRail = {

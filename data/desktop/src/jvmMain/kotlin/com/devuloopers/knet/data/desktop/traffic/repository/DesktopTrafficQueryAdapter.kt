@@ -105,7 +105,7 @@ class DesktopTrafficQueryAdapter(
             } == true
         return TrafficConnectionIngress(
             IngressContext(kind, connection.clientIdentity?.let { ClientIdentity(it) }),
-            address, loopback,
+            address, loopback, CaptureSessionId(connection.sessionId),
         )
     }
 

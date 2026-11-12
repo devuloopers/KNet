@@ -30,7 +30,7 @@ import com.devuloopers.knet.products.desktop.runtime.ApplicationSettingsRuntimeS
 import com.devuloopers.knet.storage.database.KNetDatabase
 import com.devuloopers.knet.ui.core.foundation.resources.kNetLogoPainter
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.ui.core.foundation.theme.ThemeMode
+import com.devuloopers.knet.ui.core.foundation.theme.KNetApplicationTheme
 import com.devuloopers.knet.ui.desktop.app.window.MainWindow
 import com.devuloopers.knet.application.usecase.traffic.ClearTrafficHistoryUseCase
 import kotlinx.coroutines.CoroutineScope
@@ -221,7 +221,7 @@ object DesktopBootstrap {
                 title = AppMetadata.APP_DISPLAY_TITLE,
                 icon = kNetLogoPainter()
             ) {
-                KNetTheme(themeMode = ThemeMode.System) {
+                KNetApplicationTheme {
                     WindowBackgroundFlashingWorkaround(themeBackground = KNetTheme.colors.background)
                     MainWindow()
                 }

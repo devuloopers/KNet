@@ -14,6 +14,10 @@ data class Dimensions(
     val navigationWidth: Dp = 48.dp,
     val sidebarWidth: Dp = 240.dp,
     val tableRowHeight: Dp = 26.dp,
+    /** Readable saved-rule tables retain their columns and use shared horizontal overflow below this width. */
+    val managerTableMinWidth: Dp = 1080.dp,
+    /** Rows with inline switches and edit/delete controls. */
+    val managerTableRowHeight: Dp = 42.dp,
     val buttonHeightCompact: Dp = 24.dp,
     val buttonHeightStandard: Dp = 28.dp,
     val buttonHeightLarge: Dp = 34.dp,

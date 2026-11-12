@@ -70,4 +70,17 @@ class DesktopBootstrapTest {
             System.getProperty("apple.awt.application.name")
         )
     }
+
+    @Test
+    fun `mac startup overrides system appearance before native window creation`() {
+        val property = "apple.awt.application.appearance"
+        val previous = System.getProperty(property)
+        try {
+            System.setProperty(property, "system")
+            configurePlatformRendering(osName = "Mac OS X")
+            kotlin.test.assertEquals("NSAppearanceNameDarkAqua", System.getProperty(property))
+        } finally {
+            if (previous == null) System.clearProperty(property) else System.setProperty(property, previous)
+        }
+    }
 }

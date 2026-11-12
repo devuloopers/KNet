@@ -51,3 +51,6 @@ on this product.
   packet routing, profile installation, and background extension lifecycle before release.
 - `scripts/build-hev-socks5-tunnel.sh` pins the official Hev source revision and verifies that revision before every
   uncached native build.
+
+The app declares a dark native interface style and SwiftUI preferred color scheme. Loading/error and shared
+Companion content use UI core's fixed-dark application theme; these product flags do not create a separate palette.

@@ -59,6 +59,8 @@ internal fun OpaqueFlowInspectorPanel(flow: TrafficRowUiState, state: TrafficPro
             KNetInspectorParagraph(diagnostic.title, style = KNetTheme.typography.titleMedium, color = colors.textPrimary)
             KNetInspectorParagraph(diagnostic.explanation)
             diagnostic.evidence?.let { KNetInspectorParagraph(it, color = if (diagnostic.failure) colors.semantic.error else colors.textSecondary) }
+            if (flow.protectionOrigin == ProtectionDecisionOrigin.AUTOMATIC)
+                KNetInspectorParagraph("Automatically tunnelled — device rejected KNet’s certificate. This temporary decision preserves encryption; it does not prove certificate pinning.")
             diagnostic.possibleCauses?.let { KNetInspectorParagraph(it, style = KNetTheme.typography.caption) }
         }
         HorizontalDivider()
@@ -78,6 +80,13 @@ internal fun OpaqueFlowInspectorPanel(flow: TrafficRowUiState, state: TrafficPro
                 ProtectionActionButton(tunnel, actions, handling != null,
                     preferPrimary = !inspect.selected)
                 ProtectionActionButton(inspect, actions, handling != null)
+                ProtectionActionButton(selectedState.destinationAction(ProtectedTrafficAction.BLOCK), actions, handling != null)
+                val inherited = handling?.let { it.destinationRule == null } == true
+                KNetButton(onClick = { actions?.useDefault?.invoke() }, variant = ButtonVariant.Secondary,
+                    enabled = handling?.configurationReady == true && !selectedState.isApplying && actions?.useDefault != null && !inherited,
+                    modifier = Modifier.testTag("Protection use default")) {
+                    Text(if (inherited && handling.winningRule != null) "Inherited rule" else if (inherited) "Using default" else "Use default", maxLines = 1, softWrap = false)
+                }
             }
             if (state.isApplying && state.applyingAction == null)
                 KNetInspectorParagraph("Saving connection handling…", style = KNetTheme.typography.caption)
@@ -90,6 +99,7 @@ internal fun OpaqueFlowInspectorPanel(flow: TrafficRowUiState, state: TrafficPro
                         ProtectedTrafficAction.BLOCK -> "Block rule saved. Applies to new connections."
                         ProtectedTrafficAction.BYPASS -> "Bypass rule saved. Applies to new connections."
                     }
+                    TrafficProtectionFeedback.DefaultRestored -> "Destination override removed. Inherited handling applies to new connections."
                     is TrafficProtectionFeedback.Failed -> feedback.message
                 }, color = if (feedback is TrafficProtectionFeedback.Failed) colors.semantic.error else colors.semantic.success,
                     modifier = Modifier.testTag("Connection action feedback"))
@@ -126,12 +136,13 @@ internal fun OpaqueFlowInspectorPanel(flow: TrafficRowUiState, state: TrafficPro
             }
             Detail("Captured policy action", flow.policyAction?.name ?: "Unavailable")
             Detail("Captured decision source", flow.protectionOrigin?.let { when (it) {
+                ProtectionDecisionOrigin.AUTOMATIC -> "Automatic certificate-rejection fallback"
                 ProtectionDecisionOrigin.SMART -> "Automatic decision (historical)"
                 ProtectionDecisionOrigin.MANUAL -> "Manual rule"
                 ProtectionDecisionOrigin.PRESET -> "Imported exception"
                 ProtectionDecisionOrigin.GLOBAL -> "Global default"
             } } ?: "Unavailable")
-            Detail("Policy rule", flow.policyRuleId ?: "Global default")
+            Detail("Policy rule", flow.policyRuleId ?: if (flow.protectionOrigin == ProtectionDecisionOrigin.AUTOMATIC) "Temporary automatic decision" else "Global default")
             Detail("Source application", flow.sourceApplicationId ?: "Unavailable")
             Detail("Security", flow.opaqueSecurity?.name ?: "Unknown")
             Detail("Transport", flow.opaqueTransport?.name ?: "Unknown")
@@ -195,7 +206,8 @@ internal fun closureReasonLabel(reason: OpaqueFlowCloseReason?): String = when (
 private fun handlingLabel(handling: ProtectedTrafficFlowHandling): String {
     if (!handling.configurationReady) return "Loading…"
     val source = when {
-        handling.decision.evidence == ProtectedTrafficDecisionEvidence.GlobalDefault -> "Global default"
+        handling.decision.evidence == ProtectedTrafficDecisionEvidence.AutomaticFallback -> "Automatic fallback"
+        handling.decision.evidence == ProtectedTrafficDecisionEvidence.GlobalDefault -> if (handling.automaticFallbackEnabled) "Default with fallback" else "Global default"
         handling.winningRule?.sourceApplication != null -> "Application rule"
         handling.winningRule?.destination is ProtectedDestinationSelector.WildcardDomain -> "Domain rule"
         else -> "Saved rule"
@@ -230,10 +242,25 @@ private fun ProtectionActionButton(state: TrafficProtectionActionState, actions:
     val colors = if (selected) baseColors.copy(disabledContainerColor = baseColors.containerColor,
         disabledContentColor = baseColors.contentColor) else baseColors
     val label = when (state.status) {
-        TrafficProtectionActionStatus.ACTIVE -> if (state.action == ProtectedTrafficAction.TUNNEL) "Tunnelling enabled" else "Inspection enabled"
         TrafficProtectionActionStatus.SAVING -> "Saving…"
-        TrafficProtectionActionStatus.OVERRIDDEN -> if (state.action == ProtectedTrafficAction.TUNNEL) "Tunnel rule overridden" else "Inspection rule overridden"
-        else -> if (state.action == ProtectedTrafficAction.TUNNEL) "Always tunnel" else "Inspect next time"
+        TrafficProtectionActionStatus.ACTIVE -> when (state.action) {
+            ProtectedTrafficAction.TUNNEL -> "Tunnelling enabled"
+            ProtectedTrafficAction.INSPECT -> "Inspection enabled"
+            ProtectedTrafficAction.BLOCK -> "Blocking enabled"
+            ProtectedTrafficAction.BYPASS -> "Bypass enabled"
+        }
+        TrafficProtectionActionStatus.OVERRIDDEN -> when (state.action) {
+            ProtectedTrafficAction.TUNNEL -> "Tunnel rule overridden"
+            ProtectedTrafficAction.INSPECT -> "Inspection rule overridden"
+            ProtectedTrafficAction.BLOCK -> "Block rule overridden"
+            ProtectedTrafficAction.BYPASS -> "Bypass rule overridden"
+        }
+        else -> when (state.action) {
+            ProtectedTrafficAction.TUNNEL -> "Always tunnel"
+            ProtectedTrafficAction.INSPECT -> "Inspect next time"
+            ProtectedTrafficAction.BLOCK -> "Block"
+            ProtectedTrafficAction.BYPASS -> "Bypass"
+        }
     }
     KNetButton(onClick = { actions?.apply?.invoke(state.action) }, enabled = contextAvailable && actions != null && state.enabled,
         loading = state.status == TrafficProtectionActionStatus.SAVING, variant = variant, colors = colors,

@@ -85,9 +85,11 @@ HTTP/2 filtering matches either observed protocol leg, and the optional Stream c
 read only the stored canonical `StreamId`; presentation never infers a stream from row order or connection state.
 
 The opaque/TLS inspector separates immutable captured diagnostics from a live future-connection policy read.
-A dedicated TrafficProtectionViewModel observes one selected flow, dispatches exact-destination Tunnel/Inspect
-rules through application use cases, serializes mutations and reports feedback in place. Right-click actions use
-the same owner without navigating away. No temporary decision observer or automatic-decision menu remains.
+A dedicated TrafficProtectionViewModel observes one selected flow, dispatches exact-destination Tunnel/Inspect/Block
+rules or Use default through application use cases, serializes mutations and reports feedback in place. Right-click
+actions use the same owner without navigating away. Live temporary fallback is shown separately from saved rules
+and captured history; automatic tunnels explain the earlier rejection. Manual choices remain authoritative and reset
+removes only the exact destination override. See `docs/automatic_tls_fallback.md`.
 Diagnostic copy derives from typed captured evidence and never claims pinning is proven. Technical metadata is
 collapsed initially; legacy automatic provenance is labelled historical. Shared inspector components own paragraph
 wrapping, overflow, scrollbars and action reflow.

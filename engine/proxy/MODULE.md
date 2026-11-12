@@ -86,11 +86,15 @@ remain future maturity work.
 
 ## TLS diagnostics and explicit handling
 
-The policy boundary selects Inspect, Tunnel or Block from injected saved/default policy. It has no automatic failure,
-trial-progress or session-reset callbacks. Typed downstream rejection diagnostics retain independently tracked
-certificate-flight evidence: SNI selection, failed writes, unknown providers and potential resumption remain
-inconclusive. Opaque capture records rule/default provenance without temporary automatic identities. Raw relay,
-Network Conditions and terminal accounting remain independent of policy selection.
+The policy boundary selects Inspect, Tunnel or Block from injected policy and carries admitted client/capture context.
+A non-blocking downstream outcome callback retains the original request/decision epoch before close; the injected
+adapter decides whether explicit certificate rejection may teach temporary fallback. The engine owns no cache, Room
+access or service catalogue. Typed diagnostics retain independently tracked certificate-flight evidence: SNI selection,
+failed writes and unknown providers remain inconclusive. Resumption offers require independent full-server-flight
+proof; genuinely resumed handshakes cannot turn retained certificates into presentation evidence. The zero-copy
+metadata reader never retains buffers, certificate DER or encrypted payloads, and all handshake writes must succeed. Opaque capture records automatic
+provenance and the prior rejection trigger separately from manual/global choices. Raw relay, Network Conditions and
+terminal accounting remain independent. See `docs/automatic_tls_fallback.md`.
 
 ## Intentional delays and terminal delivery
 

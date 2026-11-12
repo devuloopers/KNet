@@ -13,6 +13,8 @@ import androidx.room.ColumnInfo
  */
 @Entity(tableName = "protected_traffic_settings")
 data class ProtectedTrafficSettingsEntity(
+    /** New automatic rejection fallback; independent of the retired Smart Compatibility setting. */
+    @ColumnInfo(defaultValue = "1") val automaticTlsFallbackEnabled: Boolean = true,
     @PrimaryKey val singletonId: Int = 1,
     val defaultAction: String,
     /** Retired setting retained only for schema compatibility; runtime policy never reads it. */

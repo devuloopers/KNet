@@ -34,6 +34,43 @@ class OpaqueFlowInspectorTest {
     private fun ProtectionFixture.state()=TrafficProtectionState(captured.id,ProtectedTrafficFlowHandling(captured.id,
         ProtectedTrafficDecision(ProtectedTrafficAction.INSPECT,ProtectedTrafficDecisionEvidence.GlobalDefault),true))
 
+    @Test fun `automatic tunnelling explains the previous rejection and offers explicit alternatives`() = onUiThread {
+        val fixture = ProtectionFixture()
+        val flow = fixture.captured.copy(policyAction = OpaqueFlowPolicyAction.TUNNEL, protectionOrigin = ProtectionDecisionOrigin.AUTOMATIC,
+            state = OpaqueFlowState.COMPLETED, terminalOutcome = ExchangeTerminalOutcome.Completed)
+        val handling = ProtectedTrafficFlowHandling(flow.id,
+            ProtectedTrafficDecision(ProtectedTrafficAction.TUNNEL, ProtectedTrafficDecisionEvidence.AutomaticFallback), true,
+            automaticFallbackEnabled = true)
+        var applied: ProtectedTrafficAction? = null
+        scene(flow.toTrafficRowUiState(1), TrafficProtectionState(flow.id, handling), TrafficProtectionActions({ applied = it }, {})).use { scene ->
+            scene.frame()
+            assertTrue(scene.nodes().any { it.text().startsWith("Automatically tunnelled") })
+            assertFalse(scene.nodes().any { it.text() == "Device rejected KNet’s certificate" })
+            for ((label, action) in listOf("Inspect next time" to ProtectedTrafficAction.INSPECT,
+                "Always tunnel" to ProtectedTrafficAction.TUNNEL, "Block" to ProtectedTrafficAction.BLOCK)) {
+                scene.click(label); scene.frame(); assertEquals(action, applied)
+            }
+            scene.save("automatic-fallback")
+        }
+        assertEquals("Closed", flow.toTrafficRowUiState(1).displayStatusLabel)
+    }
+
+    @Test fun `a saved manual tunnel exposes use default in the same inspector`() = onUiThread {
+        val fixture = ProtectionFixture()
+        val rule = ProtectedTrafficRule(ProtectedTrafficRuleId("manual"), action = ProtectedTrafficAction.TUNNEL,
+            destination = ProtectedDestinationSelector.parse(fixture.captured.serverName!!), port = 443, transport = ProtectedTransportProtocol.TCP)
+        val handling = ProtectedTrafficFlowHandling(fixture.captured.id,
+            ProtectedTrafficDecision(ProtectedTrafficAction.TUNNEL, ProtectedTrafficDecisionEvidence.Rule(rule.id, null)), true, rule, rule)
+        var reset = false
+        scene(fixture.captured.toTrafficRowUiState(1), fixture.state().copy(handling = handling),
+            TrafficProtectionActions({}, { reset = true })).use { scene ->
+            scene.frame(); scene.click("Use default"); scene.frame()
+            assertTrue(reset)
+            assertTrue(scene.nodes().any { it.text() == "Tunnelling enabled" })
+            scene.save("manual-override-reset")
+        }
+    }
+
     @Test fun `confirmed rejection reason remains readable with manual inline actions`()=onUiThread {
         val fixture=ProtectionFixture();var applied:ProtectedTrafficAction?=null
         scene(fixture.captured.toTrafficRowUiState(1),fixture.state(),TrafficProtectionActions({applied=it})).use { scene ->

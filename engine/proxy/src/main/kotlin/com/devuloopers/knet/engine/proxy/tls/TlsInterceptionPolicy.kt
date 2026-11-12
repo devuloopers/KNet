@@ -44,6 +44,14 @@ enum class TlsInterceptionPolicyAction {
     BYPASS,
 }
 
+/** Trusted client and capture generation used only to isolate temporary TLS fallback. */
+data class TlsInterceptionClientContext(
+    /** Current canonical capture generation. */
+    val sessionId: com.devuloopers.knet.traffic.id.CaptureSessionId,
+    /** Client scope derived before protocol parsing. */
+    val client: com.devuloopers.knet.traffic.model.TlsFallbackClientScope,
+)
+
 /**
  * Bounded connection identity supplied to the protected-traffic decision boundary.
  *
@@ -57,6 +65,10 @@ data class TlsInterceptionRequest(
     val connectPort: Int,
     val serverName: String? = null,
     val sourceApplication: TlsSourceApplicationId? = null,
+    /** Available only when admitted transport metadata and active capture establish client isolation. */
+    val clientContext: TlsInterceptionClientContext? = null,
+    /** Automatic fallback is selected only after a bounded ClientHello classification, including absent SNI. */
+    val clientHelloObserved: Boolean = false,
 
 ) {
     init {
@@ -79,6 +91,8 @@ data class TlsInterceptionDecision(
     val ruleId: TlsInterceptionRuleId? = null,
     val policyAction: TlsInterceptionPolicyAction = mode.toPolicyAction(),
     val policyGroupId: String? = null,
+    /** Epoch authorizing a later proven rejection; absent for manual/unsupported inspection. */
+    val automaticFallbackGeneration: Long? = null,
     /** Exact decision source retained in opaque capture. */
     val origin: com.devuloopers.knet.traffic.model.ProtectionDecisionOrigin = com.devuloopers.knet.traffic.model.ProtectionDecisionOrigin.GLOBAL,
 
@@ -100,6 +114,9 @@ private fun TlsInterceptionMode.toPolicyAction(): TlsInterceptionPolicyAction = 
 fun interface TlsInterceptionPolicy {
     /** Returns the action and optional rule evidence for [request]. */
     fun decide(request: TlsInterceptionRequest): TlsInterceptionDecision
+
+    /** Non-blocking downstream outcome callback; ordinary inspect-only policies do not learn. */
+    fun inspectionFailed(request: TlsInterceptionRequest, decision: TlsInterceptionDecision, failure: TlsInspectionFailure) = Unit
 
     companion object {
         /** Safe compatibility default retaining KNet's existing inspect-all behavior. */

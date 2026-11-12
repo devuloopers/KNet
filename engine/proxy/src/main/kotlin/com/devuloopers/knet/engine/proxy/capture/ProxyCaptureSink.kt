@@ -40,6 +40,9 @@ fun interface ProxyCaptureSink {
 
 /** Connection-scoped ordered capture ownership. */
 interface ProxyConnectionCapture : AutoCloseable {
+    /** Active canonical generation; unavailable capture cannot authorize automatic TLS learning. */
+    val sessionId: com.devuloopers.knet.traffic.id.CaptureSessionId? get() = null
+
     /** Starts one exchange using the transport-assigned stable identifier. */
     fun startExchange(
         exchangeId: ExchangeId,

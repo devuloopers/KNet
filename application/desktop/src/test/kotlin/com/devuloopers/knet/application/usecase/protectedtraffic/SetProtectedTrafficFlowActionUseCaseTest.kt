@@ -114,7 +114,7 @@ class SetProtectedTrafficFlowActionUseCaseTest {
     private class FakeRepository(initial: ProtectedTrafficConfiguration) : ProtectedTrafficRepository {
         override val configuration = MutableStateFlow(initial)
 
-        override suspend fun setDefaultAction(action: ProtectedTrafficAction) = Unit
+        override suspend fun setDefaultAction(action: ProtectedTrafficAction, automaticFallbackEnabled: Boolean) = Unit
         override suspend fun upsertRule(rule: ProtectedTrafficRule) {
             configuration.value = configuration.value.copy(
                 rules = configuration.value.rules.filterNot { it.id == rule.id } + rule,

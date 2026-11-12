@@ -6,5 +6,5 @@ package com.devuloopers.knet.ui.desktop.settings.model
 enum class SettingsTab(val displayName: String) {
     NETWORK_PROXY("Network & Proxy"),
     TRAFFIC_STORAGE("Traffic & Storage"),
-    APPEARANCE("Appearance"),
+    SCRIPTING("Scripting"),
 }

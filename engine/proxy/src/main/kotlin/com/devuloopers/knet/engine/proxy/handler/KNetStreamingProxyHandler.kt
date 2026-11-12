@@ -919,6 +919,7 @@ internal class KNetStreamingProxyHandler(
                     connectHost = host,
                     connectPort = port,
                     sourceApplication = sourceApplication(context),
+                    clientContext = tlsClientContext(context),
                 ),
             )
         }.getOrElse { failure ->
@@ -988,16 +989,15 @@ internal class KNetStreamingProxyHandler(
         port: Int,
         metadata: TlsClientHelloMetadata,
     ): Future<ClassifiedConnectRoute> {
-        val decision = runCatching {
-            tlsInterceptionPolicy.decide(
-                TlsInterceptionRequest(
+        val tlsRequest = TlsInterceptionRequest(
                     connectHost = host,
                     connectPort = port,
                     serverName = metadata.serverName,
                     sourceApplication = sourceApplication(context),
-                ),
-            )
-        }.getOrElse { failure ->
+                    clientContext = tlsClientContext(context),
+                    clientHelloObserved = true,
+                )
+        val decision = runCatching { tlsInterceptionPolicy.decide(tlsRequest) }.getOrElse { failure ->
             KNetLogger.warn(STREAMING_TAG) {
                 "SNI-aware protected traffic policy failed for $host:$port: ${failure::class.simpleName}"
             }
@@ -1005,7 +1005,7 @@ internal class KNetStreamingProxyHandler(
         }
         return when (decision.mode) {
             TlsInterceptionMode.INSPECT -> context.executor().newSucceededFuture(
-                ClassifiedConnectRoute.Inspect(decision),
+                ClassifiedConnectRoute.Inspect(decision, tlsRequest),
             )
             TlsInterceptionMode.BLOCK -> context.executor().newSucceededFuture(
                 ClassifiedConnectRoute.Block(decision),
@@ -1118,6 +1118,10 @@ internal class KNetStreamingProxyHandler(
                     PipelineHandlerNames.SSL,
                     PipelineHandlerNames.TLS_INSPECTION_OUTCOME,
                     TlsInspectionOutcomeHandler(tlsEvidence) { failure ->
+                        // Publish learning synchronously before this failure closes the channel and the client reconnects.
+                        // The original request/epoch fences capture rotation and policy changes during the handshake.
+                        runCatching { tlsInterceptionPolicy.inspectionFailed(route.request, route.decision, failure) }
+                            .onFailure { KNetLogger.warn(STREAMING_TAG) { "TLS fallback observation failed: ${it::class.simpleName}" } }
                         startOpaqueTlsCapture(
                             context = context,
                             host = connectHost,
@@ -1407,7 +1411,8 @@ internal class KNetStreamingProxyHandler(
             ),
             policyGroupId = decision.policyGroupId,
             protectionOrigin = decision.origin,
-            inspectionFailureReason = failureReason,
+            inspectionFailureReason = failureReason ?: com.devuloopers.knet.traffic.model.InspectionFailureReason.CERTIFICATE_REJECTED
+                .takeIf { decision.origin == com.devuloopers.knet.traffic.model.ProtectionDecisionOrigin.AUTOMATIC },
             sourceApplicationId = context.channel().attr(ProxyChannelAttributes.SOURCE_APPLICATION_ID).get(),
             appliedNetworkCondition = context.channel()
                 .attr(ProxyChannelAttributes.APPLIED_NETWORK_CONDITION)
@@ -1418,6 +1423,13 @@ internal class KNetStreamingProxyHandler(
         ),
     )
         return delegate
+    }
+
+    /** Missing capture or anonymous loopback bridges cannot authorize cross-connection learning. */
+    private fun tlsClientContext(context: ChannelHandlerContext): com.devuloopers.knet.engine.proxy.tls.TlsInterceptionClientContext? {
+        val session = connectionCapture?.sessionId ?: return null
+        val client = context.channel().attr(ProxyChannelAttributes.TLS_FALLBACK_CLIENT).get() ?: return null
+        return com.devuloopers.knet.engine.proxy.tls.TlsInterceptionClientContext(session, client)
     }
 
     /** Returns a validated typed source identity supplied by the trusted ingress boundary. */
@@ -1790,7 +1802,7 @@ internal class KNetStreamingProxyHandler(
     /** Prepared result of one bounded ClientHello policy lookup. */
     private sealed interface ClassifiedConnectRoute {
         /** Continue through KNet's certificate-backed TLS inspection pipeline. */
-        data class Inspect(val decision: TlsInterceptionDecision) : ClassifiedConnectRoute
+        data class Inspect(val decision: TlsInterceptionDecision, val request: TlsInterceptionRequest) : ClassifiedConnectRoute
 
         /** Relay the original ClientHello and all following bytes through [upstream]. */
         data class Tunnel(

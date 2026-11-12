@@ -17,6 +17,7 @@ import kotlinx.coroutines.launch
 class TrafficProtectionViewModel(
     private val observeHandling: ObserveProtectedTrafficFlowHandlingUseCase,
     private val setFlowAction: SetProtectedTrafficFlowActionUseCase,
+    private val resetFlowAction: ResetProtectedTrafficFlowActionUseCase,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(TrafficProtectionState())
     /** Live state for the currently selected opaque record. */
@@ -53,6 +54,7 @@ class TrafficProtectionViewModel(
         mutate(OpaqueFlowId(flowId), action) {
             when (setFlowAction.execute(OpaqueFlowId(flowId), action, scope)) {
                 is SetProtectedTrafficFlowActionResult.Saved -> TrafficProtectionFeedback.Saved(action)
+                SetProtectedTrafficFlowActionResult.DefaultRestored -> TrafficProtectionFeedback.DefaultRestored
                 SetProtectedTrafficFlowActionResult.MissingFlow -> error("The selected protected flow no longer exists.")
                 SetProtectedTrafficFlowActionResult.SourceApplicationUnavailable -> error("A verified source application is unavailable for this flow.")
                 SetProtectedTrafficFlowActionResult.DestinationUnavailable -> error("The selected flow has no valid destination.")
@@ -68,7 +70,21 @@ class TrafficProtectionViewModel(
         applyFlowAction(flowId.value, action, ProtectedTrafficQuickRuleScope.DESTINATION)
     }
 
-    private fun mutate(flowId: OpaqueFlowId, action: ProtectedTrafficAction, block: suspend () -> TrafficProtectionFeedback) {
+    /** Restores inherited policy without changing application/wildcard rules or captured history. */
+    fun useDefaultHandling() {
+        val state = mutableState.value
+        val flowId = state.flowId ?: return
+        if (state.isLoading || state.isApplying || state.handling?.configurationReady != true) return
+        mutate(flowId, null) {
+            when (resetFlowAction.execute(flowId)) {
+                SetProtectedTrafficFlowActionResult.DefaultRestored -> TrafficProtectionFeedback.DefaultRestored
+                SetProtectedTrafficFlowActionResult.MissingFlow -> error("The selected protected flow no longer exists.")
+                else -> error("The selected flow has no valid destination.")
+            }
+        }
+    }
+
+    private fun mutate(flowId: OpaqueFlowId, action: ProtectedTrafficAction?, block: suspend () -> TrafficProtectionFeedback) {
         if (mutation?.isActive == true) return
         mutableState.update { state -> state.copy(isApplying = true,
             applyingAction = action.takeIf { state.flowId == flowId }, feedback = null) }

@@ -54,6 +54,7 @@ class DesktopProxyRuntimeAdapter(
     private val proxyRuntimeRepository: ProxyRuntimeRepository,
     private val canonicalCaptureSessionFactory: CanonicalCaptureSessionFactory,
     private val breakpointCaptureAvailability: BreakpointCaptureAvailability,
+    private val automaticTlsFallback: com.devuloopers.knet.application.contract.protectedtraffic.AutomaticTlsFallback? = null,
 ) : ProxyRuntime, CaptureSessionControl {
 
     private val lifecycleMutex = Mutex()
@@ -94,6 +95,7 @@ class DesktopProxyRuntimeAdapter(
             val captureSink = SwitchableProxyCaptureSink(session)
             synchronized(canonicalCallbackLock) {
                 canonicalCaptureSession = session
+                automaticTlsFallback?.activateSession(session.sessionId)
                 switchableCaptureSink = captureSink
             }
             breakpointCaptureAvailability.setCaptureAvailable(true)
@@ -211,6 +213,7 @@ class DesktopProxyRuntimeAdapter(
             val current = canonicalCaptureSession
             switchableCaptureSink?.pause()
             canonicalCaptureSession = null
+            automaticTlsFallback?.activateSession(null)
             current
         }
         _captureState.value = CaptureSessionState.Paused
@@ -241,6 +244,7 @@ class DesktopProxyRuntimeAdapter(
                 checkNotNull(switchableCaptureSink) { "Running proxy must own a switchable capture sink." }
                     .replaceTarget(replacement)
                 canonicalCaptureSession = replacement
+                automaticTlsFallback?.activateSession(replacement.sessionId)
             }
             breakpointCaptureAvailability.setCaptureAvailable(true)
             _captureState.value = CaptureSessionState.Capturing(replacement.sessionId)
@@ -279,6 +283,7 @@ class DesktopProxyRuntimeAdapter(
             checkNotNull(switchableCaptureSink) { "Running proxy must own a switchable capture sink." }
                 .replaceTarget(replacement)
             canonicalCaptureSession = replacement
+            automaticTlsFallback?.activateSession(replacement.sessionId)
             current
         }
         _captureState.value = CaptureSessionState.Capturing(replacement.sessionId)
@@ -309,6 +314,7 @@ class DesktopProxyRuntimeAdapter(
             val session = canonicalCaptureSession
             switchableCaptureSink?.pause()
             canonicalCaptureSession = null
+            automaticTlsFallback?.activateSession(null)
             switchableCaptureSink = null
             session
         }
@@ -346,6 +352,7 @@ class DesktopProxyRuntimeAdapter(
             val current = canonicalCaptureSession
             switchableCaptureSink?.pause()
             canonicalCaptureSession = null
+            automaticTlsFallback?.activateSession(null)
             switchableCaptureSink = null
             current
         }

@@ -113,7 +113,9 @@ hexagonal-architecture term `port` or implying a network socket port.
 
 ## Protected TLS handling
 
-ProtectedTrafficRepository owns saved default/rule configuration. Selected-flow observation reads only authoritative
-configuration and retained flow metadata; it never opens a socket or mutates capture history. Typed Traffic actions
-save the exact destination/port/transport rule and await committed publication. Automatic learning, temporary entry
-APIs, toggle/Forget/promote use cases and device-security invalidation subscriptions have been retired.
+ProtectedTrafficRepository owns saved default/rule configuration, including the separate automatic-rejection fallback
+preference. AutomaticTlsFallback is a bounded, non-blocking runtime contract; temporary keys contain client/session
+and exact destination metadata. Selected-flow observation combines its current state with authoritative configuration
+and retained admission evidence without opening sockets or mutating history. Typed Traffic actions save Inspect,
+Tunnel or Block overrides, or restore inherited handling, and await committed publication. Explicit choices invalidate
+relevant temporary decisions and remain authoritative. See `docs/automatic_tls_fallback.md`.

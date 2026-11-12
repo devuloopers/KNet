@@ -22,6 +22,29 @@ import kotlin.test.assertTrue
 
 /** Restart, validation, retired-setting compatibility, and corrupt-state coverage for the Room repository. */
 class RoomProtectedTrafficRepositoryTest {
+    @Test fun `automatic mode defaults on and inspect only persists independently of the retired setting`() = runTest {
+        val root = Files.createTempDirectory("knet-automatic-setting-").toFile()
+        val file = root.resolve("traffic.db")
+        var scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+        var database = DatabaseFactory.create(file)
+        try {
+            var repository = RoomProtectedTrafficRepository(database.protectedTrafficDao(), scope)
+            assertTrue(repository.configuration.first { it.configurationReady }.automaticTlsFallbackEnabled)
+            repository.setDefaultAction(ProtectedTrafficAction.INSPECT, false)
+            repository.configuration.first { it.configurationReady && !it.automaticTlsFallbackEnabled }
+            scope.coroutineContext.job.cancelAndJoin()
+            database.close()
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+            database = DatabaseFactory.create(file)
+            repository = RoomProtectedTrafficRepository(database.protectedTrafficDao(), scope)
+            val restored = repository.configuration.first { it.configurationReady }
+            assertEquals(ProtectedTrafficAction.INSPECT, restored.defaultAction)
+            assertFalse(restored.automaticTlsFallbackEnabled)
+            repository.setDefaultAction(ProtectedTrafficAction.INSPECT, true)
+            assertTrue(repository.configuration.first { it.configurationReady && it.automaticTlsFallbackEnabled }.rules.isEmpty())
+        } finally { scope.coroutineContext.job.cancelAndJoin(); database.close(); root.deleteRecursively() }
+    }
+
     @Test
     fun `saved rules and default handling survive restart`() = runTest {
         val root = Files.createTempDirectory("knet-protected-traffic-").toFile()

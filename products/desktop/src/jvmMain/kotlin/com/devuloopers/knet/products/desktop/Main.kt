@@ -16,12 +16,16 @@ fun main() {
 
 /**
  * Configures platform-specific rendering flags, hardware acceleration pipelines,
- * and live window resizing optimizations before Compose Desktop initializes its first window.
+ * fixed native macOS appearance and live window resizing before Compose Desktop initializes its first window.
  *
  * @param osName Operating system name string, defaulting to the JVM `os.name` system property.
  */
 fun configurePlatformRendering(osName: String = System.getProperty("os.name").orEmpty()) {
     System.setProperty("apple.awt.application.name", AppMetadata.APP_NAME)
+    // AWT reads the native appearance during toolkit startup, before the first Compose window exists.
+    if (osName.contains("mac", ignoreCase = true)) {
+        System.setProperty("apple.awt.application.appearance", "NSAppearanceNameDarkAqua")
+    }
     enableSynchronousMetalWindowResize(osName)
     configureWindowsRenderingPipeline(osName)
 }

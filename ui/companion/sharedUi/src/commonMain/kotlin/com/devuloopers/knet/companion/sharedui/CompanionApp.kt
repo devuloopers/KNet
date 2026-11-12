@@ -11,8 +11,7 @@ import com.devuloopers.knet.companion.sharedui.navigation.CompanionNavHost
 import com.devuloopers.knet.companion.sharedui.scanner.CompanionInvitationScanner
 import com.devuloopers.knet.companion.sharedui.scanner.UnavailableCompanionInvitationScanner
 import com.devuloopers.knet.companion.sharedui.screen.certificate.CertificateInstallationGuidance
-import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.ui.core.foundation.theme.ThemeMode
+import com.devuloopers.knet.ui.core.foundation.theme.KNetApplicationTheme
 
 /**
  * Root companion UI rendered by every Compose Multiplatform product.
@@ -33,7 +32,7 @@ public fun KNetCompanionApp(
     certificateInstallationGuidance: CertificateInstallationGuidance,
     invitationScanner: CompanionInvitationScanner = UnavailableCompanionInvitationScanner
 ) {
-    KNetTheme(themeMode = ThemeMode.System) {
+    KNetApplicationTheme {
         Surface(
             modifier = modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background,

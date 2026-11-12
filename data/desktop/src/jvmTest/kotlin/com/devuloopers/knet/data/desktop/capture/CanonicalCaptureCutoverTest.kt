@@ -55,6 +55,14 @@ import kotlin.test.assertTrue
 /** Proves composition selects one persistence authority for a new proxy capture session. */
 class CanonicalCaptureCutoverTest {
 
+    private fun learnTemporary(automatic: com.devuloopers.knet.application.contract.protectedtraffic.AutomaticTlsFallback) {
+        val session = assertNotNull(automatic.state.value.sessionId)
+        val epoch = assertNotNull(automatic.authorize(com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficConfiguration(), "fixture-ca"))
+        val key = assertNotNull(com.devuloopers.knet.application.contract.protectedtraffic.automaticTlsFallbackKey(session,
+            com.devuloopers.knet.traffic.model.TlsFallbackClientScope.LocalDesktop, "api.example.com", 443, null))
+        assertTrue(automatic.record(key, epoch))
+    }
+
     /** Verifies clear swaps the active writer, deletes the old session, and keeps capture running. */
     @Test
     fun `active canonical clear rotates session before deleting history`() = runTest {
@@ -62,6 +70,7 @@ class CanonicalCaptureCutoverTest {
         val database = DatabaseFactory.create(root.resolve("traffic.db"))
         val bodyStore = FileBodyStore(root.resolve("bodies"))
         val breakpointCoordinator = BreakpointCoordinator()
+        val automatic = com.devuloopers.knet.data.desktop.protectedtraffic.InMemoryAutomaticTlsFallback(backgroundScope)
         val repository = DesktopProxyRuntimeAdapter(
             proxyRuntimeRepository = ProxyRuntimeRepository(
                 certificateAuthority = CertificateAuthority.generate(),
@@ -70,6 +79,7 @@ class CanonicalCaptureCutoverTest {
             ),
             canonicalCaptureSessionFactory = CanonicalCaptureSessionFactory(database, bodyStore, bodyStore),
             breakpointCaptureAvailability = breakpointCoordinator,
+            automaticTlsFallback = automatic,
         )
         val trafficRepository = DesktopTrafficMaintenanceAdapter(
             database = database,
@@ -78,6 +88,8 @@ class CanonicalCaptureCutoverTest {
         try {
             assertIs<ProxyStartResult.Running>(repository.start(configuration(availableLoopbackPort())))
             val oldSessionId = assertNotNull(database.canonicalCaptureDao().observeLatestSessionId().first())
+            assertEquals(oldSessionId, automatic.state.value.sessionId?.value)
+            learnTemporary(automatic)
 
             val preparation = ClearTrafficHistoryUseCase(repository, trafficRepository).execute()
 
@@ -86,11 +98,15 @@ class CanonicalCaptureCutoverTest {
             assertEquals(1, database.canonicalCaptureDao().countActiveSessions())
             val newSessionId = assertNotNull(database.canonicalCaptureDao().observeLatestSessionId().first())
             assertTrue(newSessionId != oldSessionId)
+            assertEquals(newSessionId, automatic.state.value.sessionId?.value)
+            assertTrue(automatic.state.value.keys.isEmpty())
 
             repository.stop(ProxyStopReason.USER_REQUEST)
 
             assertEquals("CLOSED", database.canonicalCaptureDao().getSession(newSessionId)?.state)
             assertEquals(0, database.canonicalCaptureDao().countActiveSessions())
+            assertNull(automatic.state.value.sessionId)
+            assertTrue(automatic.state.value.keys.isEmpty())
         } finally {
             repository.close()
             database.close()
@@ -105,6 +121,7 @@ class CanonicalCaptureCutoverTest {
         val database = DatabaseFactory.create(root.resolve("traffic.db"))
         val bodyStore = FileBodyStore(root.resolve("bodies"))
         val breakpointCoordinator = BreakpointCoordinator()
+        val automatic = com.devuloopers.knet.data.desktop.protectedtraffic.InMemoryAutomaticTlsFallback(backgroundScope)
         val repository = DesktopProxyRuntimeAdapter(
             proxyRuntimeRepository = ProxyRuntimeRepository(
                 certificateAuthority = CertificateAuthority.generate(),
@@ -113,12 +130,17 @@ class CanonicalCaptureCutoverTest {
             ),
             canonicalCaptureSessionFactory = CanonicalCaptureSessionFactory(database, bodyStore, bodyStore),
             breakpointCaptureAvailability = breakpointCoordinator,
+            automaticTlsFallback = automatic,
         )
         try {
             val started = assertIs<ProxyStartResult.Running>(repository.start(configuration(availableLoopbackPort())))
             val firstSession = assertIs<CaptureSessionState.Capturing>(repository.captureState.value).sessionId
+            assertEquals(firstSession, automatic.state.value.sessionId)
+            learnTemporary(automatic)
 
             assertEquals(CapturePauseResult.PAUSED, repository.pause())
+            assertNull(automatic.state.value.sessionId)
+            assertTrue(automatic.state.value.keys.isEmpty())
             assertIs<CaptureSessionState.Paused>(repository.captureState.value)
             val stillRunning = assertIs<com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState.Running>(
                 repository.state.value,
@@ -132,6 +154,8 @@ class CanonicalCaptureCutoverTest {
 
             val resumed = assertIs<CaptureResumeResult.Capturing>(repository.resume())
             assertTrue(resumed.sessionId != firstSession)
+            assertEquals(resumed.sessionId, automatic.state.value.sessionId)
+            assertTrue(automatic.state.value.keys.isEmpty())
             assertEquals(1, database.canonicalCaptureDao().countActiveSessions())
             val afterResume = assertIs<com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState.Running>(
                 repository.state.value,

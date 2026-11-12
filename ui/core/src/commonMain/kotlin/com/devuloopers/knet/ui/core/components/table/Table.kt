@@ -13,6 +13,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.semantics.Role
 import com.devuloopers.knet.ui.core.components.divider.HorizontalDivider
@@ -41,25 +42,32 @@ fun KNetTableHeader(
 }
 
 /**
- * High-density IDE Table Row.
+ * Selectable IDE table row with shared density and interaction policy.
+ * @param onClick Opens the selected item.
+ * @param selected Whether this item is selected.
+ * @param modifier Layout and accessibility metadata supplied by the caller.
+ * @param enabled Whether the row accepts selection.
+ * @param rowHeight Design-system density token, including manager rows with embedded controls.
+ * @param content Cells laid out within the row.
  */
 @Composable
 fun KNetRow(
     onClick: () -> Unit,
     selected: Boolean = false,
     modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    rowHeight: Dp = KNetTheme.dimensions.tableRowHeight,
     content: @Composable RowScope.() -> Unit
 ) {
     val themeColors = KNetTheme.colors
-    val dimensions = KNetTheme.dimensions
     val bg = if (selected) themeColors.interaction.selectedOverlay else Color.Transparent
 
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(dimensions.tableRowHeight)
+            .height(rowHeight)
             .background(bg)
-            .selectable(selected = selected, role = Role.Button, onClick = onClick)
+            .selectable(selected = selected, enabled = enabled, role = Role.Button, onClick = onClick)
             .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         content = content

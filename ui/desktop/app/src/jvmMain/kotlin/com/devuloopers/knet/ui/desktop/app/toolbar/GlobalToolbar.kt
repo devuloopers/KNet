@@ -21,7 +21,6 @@ import com.devuloopers.knet.ui.core.components.toolbar.KNetToolbar
 import com.devuloopers.knet.ui.core.components.toolbar.ToolbarGroup
 import com.devuloopers.knet.ui.core.components.toolbar.ToolbarSeparator
 import com.devuloopers.knet.ui.core.components.toolbar.ToolbarSpacer
-import com.devuloopers.knet.ui.core.foundation.theme.ThemeMode
 
 /**
  * Compact IDE global toolbar composable adhering to refined button density and surface hierarchy rules.
@@ -30,8 +29,6 @@ import com.devuloopers.knet.ui.core.foundation.theme.ThemeMode
 fun KNetGlobalToolbar(
     searchQuery: String,
     onSearchQueryChange: (String) -> Unit,
-    currentThemeMode: ThemeMode,
-    onThemeModeToggle: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     KNetToolbar(modifier = modifier) {
@@ -81,16 +78,7 @@ fun KNetGlobalToolbar(
                 icon = Icons.Default.Settings,
                 contentDescription = "Settings"
             )
-            KNetButton(
-                onClick = onThemeModeToggle,
-                variant = ButtonVariant.Secondary
-            ) {
-                Text(
-                    text = "Theme: ${currentThemeMode.name} ▾",
-                    maxLines = 1,
-                    softWrap = false
-                )
-            }
+
         }
     }
 }

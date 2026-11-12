@@ -6,6 +6,7 @@ struct KNetCompanionApp: App {
         WindowGroup {
             CompanionRootView()
                 .ignoresSafeArea()
+                .preferredColorScheme(.dark)
         }
     }
 }

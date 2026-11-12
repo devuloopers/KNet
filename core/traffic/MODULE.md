@@ -39,3 +39,7 @@ OpaqueFlowProgress carries validated cumulative counters and a positive lifecycl
 OpaqueFlowClosure carries a validated initiator, observation reason and Unix timestamp independently of terminal
 delivery outcome. Opaque termination/snapshots retain it optionally so legacy or unobserved closures remain unknown.
 It represents first observed transport evidence, not a decrypted result or remote application cause.
+
+TlsFallbackClientScope derives bounded client isolation from admitted ingress/source-address metadata. New AUTOMATIC
+provenance is distinct from historical SMART evidence; opaque TLS state remains transport-level rather than an
+encrypted HTTP result. See `docs/automatic_tls_fallback.md`.

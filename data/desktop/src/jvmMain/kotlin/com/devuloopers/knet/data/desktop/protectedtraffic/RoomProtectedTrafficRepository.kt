@@ -41,13 +41,14 @@ class RoomProtectedTrafficRepository(
             ProtectedTrafficConfiguration(
                 defaultAction = settings?.defaultAction?.decodeAction() ?: ProtectedTrafficAction.INSPECT,
                 rules = rules.map(ProtectedTrafficRuleEntity::toDomain),
+                automaticTlsFallbackEnabled = settings?.automaticTlsFallbackEnabled ?: true,
             )
         }.getOrElse { fallback }
     }.stateIn(scope, SharingStarted.Eagerly, fallback)
 
-    override suspend fun setDefaultAction(action: ProtectedTrafficAction) = mutation.withLock {
+    override suspend fun setDefaultAction(action: ProtectedTrafficAction, automaticFallbackEnabled: Boolean) = mutation.withLock {
         val existing = dao.getSettings() ?: ProtectedTrafficSettingsEntity(defaultAction = ProtectedTrafficAction.INSPECT.name)
-        dao.upsertSettings(existing.copy(defaultAction = action.name))
+        dao.upsertSettings(existing.copy(defaultAction = action.name, automaticTlsFallbackEnabled = automaticFallbackEnabled))
     }
 
     override suspend fun upsertRule(rule: ProtectedTrafficRule) = mutation.withLock {

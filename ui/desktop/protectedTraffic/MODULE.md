@@ -9,8 +9,10 @@ Owns Protected Traffic settings for explicit TLS policy management.
 - The Protected Traffic settings screen, immutable state, and use-case-driven ViewModel actions.
 - Default TLS inspect/tunnel behavior, scope/action explanations, ordered rule presentation, and explicit inspect,
   tunnel, or block editing. This control applies to proxy CONNECT routes, not plain HTTP or UDP/QUIC traffic.
-- Exact/wildcard host, application identity, transport, security, protocol, and port selector fields.
+- Exact/wildcard host, IP/CIDR, application identity, transport, address-family and port selector fields.
+- Searchable, virtualized manager table with per-rule enable, edit and delete actions, plus a shared animated drawer.
 - Saved-rule editing and imported legacy exception visibility; no service catalogue or preset toggle controls.
+  Unchanged imported saves/toggles retain provenance; match/action edits become user rules under the same identity.
 
 ## Does not own
 
@@ -31,3 +33,19 @@ this settings ViewModel observes configuration without subscribing to runtime co
 inspector remains independent of whether this screen is open. The UI edits typed policy values and never parses
 TLS ClientHello bytes, opens sockets, trusts companion-provided identity without application validation, or
 reconstructs opaque payloads.
+
+## Rule manager interaction
+
+Literal, case-insensitive multi-term search filters presentation only; it preserves policy order and includes rules
+saved from Traffic through the observed repository configuration. Fields retain wildcard/all-port/all-transport and
+address-family scope when editing. The editor uses the latest saved identity, keeps validation and persistence
+failures inline, and prevents duplicate saves or replacing/dismissing an in-flight save. Per-rule mutations and
+default handling retain their own pending state. A deleted draft cannot silently recreate a removed rule.
+
+`:ui:core` owns manager density/minimum width, pinned table scrollbars, compact layout classification and the
+animated drawer shell with independently scrolling content and fixed actions. Connection diagnostics remain in
+Traffic, and saved changes apply to new connections. See `docs/protected_traffic_rule_manager.md` for qualification.
+
+The default dropdown offers Inspect with automatic fallback, Inspect only, Tunnel and Block. The preference is
+persisted atomically through the application use case; explicit rule actions retain their existing values. Temporary
+learning has no preset catalogue, observed-connection screen or persistent rule row. See `docs/automatic_tls_fallback.md`.

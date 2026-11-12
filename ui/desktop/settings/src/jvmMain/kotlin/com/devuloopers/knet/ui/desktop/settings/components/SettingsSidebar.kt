@@ -9,7 +9,7 @@ import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
-import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Code
 import androidx.compose.material.icons.filled.Router
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -79,10 +79,10 @@ fun SettingsSidebar(
             Spacer(modifier = Modifier.height(4.dp))
 
             SidebarNavItem(
-                label = "Appearance",
-                icon = Icons.Default.Palette,
-                isSelected = activeTab == SettingsTab.APPEARANCE,
-                onClick = { onTabSelected(SettingsTab.APPEARANCE) },
+                label = "Scripting",
+                icon = Icons.Default.Code,
+                isSelected = activeTab == SettingsTab.SCRIPTING,
+                onClick = { onTabSelected(SettingsTab.SCRIPTING) },
             )
         }
         KNetVerticalScrollbar(

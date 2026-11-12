@@ -53,10 +53,12 @@ fun KNetInspectorParagraph(text: String, modifier: Modifier = Modifier,
 /**
  * Inspector actions retain their intrinsic label width and move to another line when the viewport is narrow.
  * @param modifier Layout and accessibility metadata supplied by the caller.
+ * @param horizontalAlignment Alignment for each line of actions within the shared viewport.
  * @param content Theme buttons; consumers do not impose feature-specific resize breakpoints.
  */
 @Composable
-fun KNetInspectorActions(modifier: Modifier = Modifier, content: @Composable FlowRowScope.() -> Unit) {
-    FlowRow(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm),
+fun KNetInspectorActions(modifier: Modifier = Modifier, horizontalAlignment: Alignment.Horizontal = Alignment.Start,
+    content: @Composable FlowRowScope.() -> Unit) {
+    FlowRow(modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm, horizontalAlignment),
         verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.sm), content = content)
 }

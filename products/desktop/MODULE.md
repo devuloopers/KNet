@@ -68,7 +68,12 @@ No ViewModel constructor supplies a production fallback implementation.
 
 ## Protected TLS handling
 
-The composition root binds persisted configuration, the pure TLS rule adapter and application use cases. No automatic
-learner, clock/limits injection, entry observer or lifecycle job is instantiated. protectedTrafficQualification covers
-saved policy, compatible storage, real manual-rule TLS reconnects, shaping, Traffic/UI and product composition;
-physical device and entitlement gates remain separate.
+The composition root binds persisted configuration, the TLS rule adapter, one bounded automatic-rejection cache and
+application use cases. The cache uses the product-owned coroutine scope; authority identity/validity and canonical
+session lifecycle fence temporary decisions. Both manager and Traffic actions share the same state. The existing
+protectedTrafficQualification gate covers explicit policy and automatic reconnects, compatible storage, actual shaping,
+Traffic/UI and composition. Physical device and entitlement gates remain separate. See `docs/automatic_tls_fallback.md`.
+
+Desktop bootstrap uses the shared fixed-dark application theme. Startup and packaged JVM arguments also pin native
+macOS appearance before the first AWT window is created. The resize-background workaround uses the same dark tokens.
+See `docs/fixed_dark_application_appearance.md` for validation and native appearance scope.

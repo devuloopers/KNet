@@ -1,6 +1,7 @@
 package com.devuloopers.knet.companion.android
 
 import android.os.Bundle
+import androidx.activity.SystemBarStyle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -27,7 +28,9 @@ class MainActivity : ComponentActivity() {
     /** Creates the UI host and product-owned native effect boundary. */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // Keep system icons legible over KNet's fixed dark surface even when Android uses a light theme.
+        val darkScrim = getColor(R.color.knet_background)
+        enableEdgeToEdge(statusBarStyle = SystemBarStyle.dark(darkScrim), navigationBarStyle = SystemBarStyle.dark(darkScrim))
         val effectHandler = AndroidCompanionEffectHandler(
             activity = this,
             onAction = { action -> companionViewModel?.dispatch(action) },

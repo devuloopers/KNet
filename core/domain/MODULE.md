@@ -67,3 +67,7 @@ were removed. Adding a breakpoint protocol no longer changes `:core:domain`.
 Application settings use Kotlin time and a validated proxy-port value at the domain boundary. Consumers observe
 or atomically transform the latest application settings through focused use cases; workspace presentation uses a
 separate atomic update use case. Neither contract contains platform runtime collaborators.
+
+Protected Traffic defaults distinguish automatic Inspect from Inspect only, Tunnel and Block. Manual rule actions
+and their precedence are unchanged; AutomaticFallback is runtime decision evidence, not a saved action or preset.
+See `docs/automatic_tls_fallback.md`.

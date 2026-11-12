@@ -15,7 +15,36 @@ import kotlin.test.*
 @OptIn(ExperimentalCoroutinesApi::class)
 class TrafficProtectionViewModelTest {
     private fun ProtectionFixture.viewModel()=TrafficProtectionViewModel(
-        ObserveProtectedTrafficFlowHandlingUseCase(query,repository),SetProtectedTrafficFlowActionUseCase(query,repository))
+        ObserveProtectedTrafficFlowHandlingUseCase(query,repository,fallback),SetProtectedTrafficFlowActionUseCase(query,repository,fallback), ResetProtectedTrafficFlowActionUseCase(query,repository,fallback))
+
+    @Test fun `automatic fallback can be overridden blocked and reset across selection changes`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val fixture = ProtectionFixture()
+        val session = com.devuloopers.knet.traffic.id.CaptureSessionId("current")
+        fixture.context = fixture.context!!.copy(sessionId = session)
+        val key = com.devuloopers.knet.application.contract.protectedtraffic.automaticTlsFallbackKey(session,
+            com.devuloopers.knet.traffic.model.tlsFallbackClientScope(fixture.context!!.ingress, fixture.context!!.downstreamHost),
+            fixture.captured.serverName!!, 443, null)!!
+        fixture.fallbackState.value = com.devuloopers.knet.application.contract.protectedtraffic.AutomaticTlsFallbackState(session, 1, setOf(key))
+        val vm = fixture.viewModel(); val store = ViewModelStore().apply { put("vm", vm) }
+        try {
+            vm.selectFlow(fixture.captured.id); runCurrent()
+            assertEquals(ProtectedTrafficDecisionEvidence.AutomaticFallback, vm.uiState.value.handling!!.decision.evidence)
+            vm.applyDestinationAction(ProtectedTrafficAction.INSPECT); runCurrent()
+            assertTrue(vm.uiState.value.destinationAction(ProtectedTrafficAction.INSPECT).selected)
+            assertTrue(fixture.fallbackState.value.keys.isEmpty())
+            vm.selectFlow(OpaqueFlowId("other")); runCurrent(); vm.selectFlow(fixture.captured.id); runCurrent()
+            assertTrue(vm.uiState.value.destinationAction(ProtectedTrafficAction.INSPECT).selected)
+            vm.applyDestinationAction(ProtectedTrafficAction.BLOCK); runCurrent()
+            assertTrue(vm.uiState.value.destinationAction(ProtectedTrafficAction.BLOCK).selected)
+            vm.useDefaultHandling(); runCurrent()
+            assertIs<TrafficProtectionFeedback.DefaultRestored>(vm.uiState.value.feedback)
+            assertNull(vm.uiState.value.handling!!.destinationRule)
+            assertEquals(ProtectedTrafficDecisionEvidence.GlobalDefault, vm.uiState.value.handling!!.decision.evidence)
+            assertTrue(fixture.repository.configuration.value.rules.isEmpty())
+            assertEquals(OpaqueFlowPolicyAction.INSPECT, fixture.captured.policyAction)
+        } finally { store.clear(); Dispatchers.resetMain() }
+    }
 
     @Test fun `tunnel and inspect update one rule in place while captured failure remains unchanged`()=runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
@@ -190,7 +219,7 @@ class TrafficProtectionViewModelTest {
             override suspend fun upsertRule(rule:ProtectedTrafficRule) {writes++;pending=rule}
         }
         val vm=TrafficProtectionViewModel(ObserveProtectedTrafficFlowHandlingUseCase(fixture.query,repository),
-            SetProtectedTrafficFlowActionUseCase(fixture.query,repository))
+            SetProtectedTrafficFlowActionUseCase(fixture.query,repository), ResetProtectedTrafficFlowActionUseCase(fixture.query,repository,fixture.fallback))
         val store=ViewModelStore().apply {put("vm",vm)}
         try {
             vm.selectFlow(fixture.captured.id);runCurrent()
@@ -213,7 +242,7 @@ class TrafficProtectionViewModelTest {
             override suspend fun upsertRule(rule:ProtectedTrafficRule)=Unit
         }
         val vm=TrafficProtectionViewModel(ObserveProtectedTrafficFlowHandlingUseCase(fixture.query,repository),
-            SetProtectedTrafficFlowActionUseCase(fixture.query,repository))
+            SetProtectedTrafficFlowActionUseCase(fixture.query,repository), ResetProtectedTrafficFlowActionUseCase(fixture.query,repository,fixture.fallback))
         val store=ViewModelStore().apply {put("vm",vm)}
         try {
             vm.selectFlow(fixture.captured.id);runCurrent();vm.applyDestinationAction(ProtectedTrafficAction.TUNNEL);runCurrent()

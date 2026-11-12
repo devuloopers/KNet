@@ -24,6 +24,9 @@ components. Production code targets JVM desktop, Android, iOS ARM64, and iOS Sim
   centered label-and-chevron group
   without changing width calculation or the default edge-separated arrangement; both arrangements retain the
   shared label-to-chevron spacing token.
+- A manager-table viewport with one finite shared width for header and virtualized rows, theme-owned minimum
+  width and row density, viewport-pinned scrollbars, and an empty state that remains visible during horizontal
+  overflow. Table rows support disabled interaction and the shared manager density token.
 - A generic multi-select dropdown that reuses the same anchor and popup contract, keeps the menu open across
   toggles, and gives each accessible checkbox row one interaction owner. Feature-specific option types remain
   outside `:ui:core`.
@@ -39,7 +42,8 @@ components. Production code targets JVM desktop, Android, iOS ARM64, and iOS Sim
   only at the design-system maximum.
 - Controlled split-pane primitives whose ratios remain owned by their feature screens.
 - A shared inspector content viewport with minimum readable width, horizontal/vertical scrollbars, explanatory
-  paragraph wrapping, and intrinsic-width actions that reflow without feature-specific resize breakpoints.
+  paragraph wrapping, and intrinsic-width actions that reflow without feature-specific resize breakpoints; action
+  lines can align to either edge within the shared layout.
 - A theme-owned overflow menu for secondary actions with accessible naming and disabled-item semantics.
 - An opt-in `KNetAnimatedDetailsLayout` that reserves inspector width alongside a list, clips stable-width
   content during reveal/collapse, uses shared motion and responsive tokens, and snaps for reduced motion.
@@ -81,3 +85,9 @@ Prefer one cohesive component API over parallel overload families when state suc
 Feature code must use the asynchronous foundation clipboard API and must never import AWT clipboard types directly.
 Platform-specific behavior should adapt an existing common component contract rather than create a second public
 component family.
+
+## Production appearance
+
+KNetApplicationTheme is the shared fixed-dark boundary for desktop and Companion roots. It ignores host appearance;
+explicit KNetTheme light/system palettes remain available for previews and future work. See
+`docs/fixed_dark_application_appearance.md`.

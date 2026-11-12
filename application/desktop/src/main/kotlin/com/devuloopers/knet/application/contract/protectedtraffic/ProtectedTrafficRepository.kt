@@ -11,8 +11,8 @@ public interface ProtectedTrafficRepository {
     /** Current validated configuration containing user rules and any imported legacy exceptions. */
     public val configuration: StateFlow<ProtectedTrafficConfiguration>
 
-    /** Persists the global fallback [action]. */
-    public suspend fun setDefaultAction(action: ProtectedTrafficAction)
+    /** Atomically persists [action] and whether the global Inspect default permits temporary TLS fallback. */
+    public suspend fun setDefaultAction(action: ProtectedTrafficAction, automaticFallbackEnabled: Boolean = false)
 
     /** Creates or replaces one user-authored [rule] after duplicate validation. */
     public suspend fun upsertRule(rule: ProtectedTrafficRule)

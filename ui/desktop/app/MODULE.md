@@ -24,3 +24,6 @@ Compose feature screens and application-facing state; do not depend directly on 
 ## Migration direction
 
 Navigation may resolve product-provided ViewModels through Koin Compose, but every binding declaration lives in `:products:desktop`.
+
+MainWindow uses UI core's fixed-dark KNetApplicationTheme, including its shared dialog and overlay hosts. The legacy
+global toolbar has no theme selector or theme callbacks. Host appearance does not select the application palette.

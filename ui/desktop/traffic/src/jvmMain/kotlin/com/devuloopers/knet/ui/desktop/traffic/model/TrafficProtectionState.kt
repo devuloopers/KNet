@@ -8,6 +8,8 @@ import com.devuloopers.knet.traffic.id.OpaqueFlowId
 sealed interface TrafficProtectionFeedback {
     /** A future-flow rule has been saved. */
     data class Saved(val action: ProtectedTrafficAction) : TrafficProtectionFeedback
+    /** The destination override was removed and inherited policy restored. */
+    data object DefaultRestored : TrafficProtectionFeedback
     /** A persistence or missing-history problem prevented the action. */
     data class Failed(val message: String) : TrafficProtectionFeedback
 }
@@ -83,4 +85,6 @@ fun TrafficProtectionState.destinationAction(action: ProtectedTrafficAction): Tr
 data class TrafficProtectionActions(
     /** Saves exact-destination handling for future connections. */
     val apply: (ProtectedTrafficAction) -> Unit,
+    /** Removes this destination override; null when the host does not provide reset controls. */
+    val useDefault: (() -> Unit)? = null,
 )

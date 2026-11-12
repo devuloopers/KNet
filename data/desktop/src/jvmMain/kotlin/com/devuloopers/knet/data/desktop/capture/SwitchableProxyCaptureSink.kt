@@ -51,6 +51,9 @@ internal class SwitchableProxyCaptureSink(initialTarget: ProxyCaptureSink) : Pro
         private var observedTarget: Target? = null
         private var binding: Binding? = null
 
+        override val sessionId: com.devuloopers.knet.traffic.id.CaptureSessionId?
+            get() = synchronized(lock) { bindCurrentTarget()?.sessionId }
+
         fun observeInitialTarget() {
             synchronized(lock) {
                 bindCurrentTarget()

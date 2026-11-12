@@ -37,6 +37,10 @@ object ProxyChannelAttributes {
     /** Connection-scoped non-blocking capture side output supplied by the proxy server. */
     val CONNECTION_CAPTURE: AttributeKey<ProxyConnectionCapture> = AttributeKey.valueOf("knet.connectionCapture")
 
+    /** Client scope derived from admitted transport metadata before any CONNECT or TLS bytes are read. */
+    val TLS_FALLBACK_CLIENT: AttributeKey<com.devuloopers.knet.traffic.model.TlsFallbackClientScope> =
+        AttributeKey.valueOf("knet.tlsFallbackClient")
+
     /** OS-verified source application supplied only by a trusted ingress adapter. */
     val SOURCE_APPLICATION_ID: AttributeKey<String> = AttributeKey.valueOf("knet.sourceApplicationId")
 

@@ -29,7 +29,7 @@ import org.koin.dsl.module
 
 /** Canonical traffic maintenance/query adapters and traffic application workflows. */
 internal val trafficBindings: Module = module {
-    viewModel { TrafficProtectionViewModel(get(), get()) }
+    viewModel { TrafficProtectionViewModel(get(), get(), get()) }
     single {
         DesktopTrafficMaintenanceAdapter(
             database = get(),

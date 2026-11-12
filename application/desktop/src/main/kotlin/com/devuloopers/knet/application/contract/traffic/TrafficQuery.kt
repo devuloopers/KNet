@@ -222,4 +222,6 @@ public data class TrafficConnectionIngress(
     public val downstreamHost: String?,
     /** Whether the recorded numeric address is loopback; never inferred from a request header. */
     public val downstreamIsLoopback: Boolean = false,
+    /** Capture generation owning this retained transport admission. */
+    public val sessionId: CaptureSessionId? = null,
 )

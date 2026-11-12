@@ -13,9 +13,31 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class KNetDatabaseMigrationTest {
+    @Test fun `version 35 enables new fallback while preserving legacy preferences explicit action and rules`() {
+        val root = Files.createTempDirectory("knet-v35-auto-fallback-").toFile()
+        val file = root.resolve("traffic.db")
+        try {
+            createDatabaseFromExportedSchema(file, 35)
+            BundledSQLiteDriver().open(file.absolutePath).use { connection ->
+                connection.execSQL("INSERT INTO protected_traffic_settings (singletonId,defaultAction,smartCompatibilityEnabled) VALUES (1,'BLOCK',0)")
+                connection.execSQL("INSERT INTO protected_traffic_rules (id,enabled,action,port,origin) VALUES ('manual',1,'INSPECT',443,'USER')")
+            }
+            val database = DatabaseFactory.create(file)
+            try {
+                runBlocking {
+                    val settings = database.protectedTrafficDao().getSettings()!!
+                    assertEquals("BLOCK", settings.defaultAction)
+                    assertEquals(false, settings.smartCompatibilityEnabled)
+                    assertEquals(true, settings.automaticTlsFallbackEnabled)
+                    assertEquals("INSPECT", database.protectedTrafficDao().getRules().single().action)
+                }
+            } finally { database.close() }
+        } finally { root.deleteRecursively() }
+    }
+
     @Test
     fun `every retained schema generation migrates without deleting canonical sessions`() {
-        listOf(13, 18, 22, 24, 27, 28, 29, 30, 31, 32, 33, 34).forEach { version ->
+        listOf(13, 18, 22, 24, 27, 28, 29, 30, 31, 32, 33, 34, 35).forEach { version ->
             val root = Files.createTempDirectory("knet-v$version-migration-").toFile()
             val databaseFile = root.resolve("traffic.db")
             try {

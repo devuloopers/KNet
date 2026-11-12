@@ -1,5 +1,8 @@
 package com.devuloopers.knet.data.desktop.protectedtraffic
 
+import com.devuloopers.knet.application.contract.protectedtraffic.*
+import com.devuloopers.knet.engine.proxy.tls.TlsInspectionFailure
+import com.devuloopers.knet.traffic.model.InspectionFailureReason
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedDestinationSelector
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedSourceApplicationId
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficAction
@@ -26,6 +29,8 @@ import com.devuloopers.knet.traffic.model.ProtectionDecisionOrigin
 class ProtectedTrafficTlsInterceptionPolicy(
     private val configuration: () -> ProtectedTrafficConfiguration,
     private val policy: ProtectedTrafficPolicy = ProtectedTrafficPolicy(),
+    private val automaticFallback: AutomaticTlsFallback? = null,
+    private val inspectionAuthorityIdentity: () -> String? = { null },
 ) : TlsInterceptionPolicy {
     /** Evaluates one CONNECT route against the latest atomically published policy snapshot. */
     override fun decide(request: TlsInterceptionRequest): TlsInterceptionDecision {
@@ -35,6 +40,7 @@ class ProtectedTrafficTlsInterceptionPolicy(
             ?.takeIf(ProtectedDestinationSelector.Exact::isIpLiteral)
             ?.value
         val activeConfiguration = configuration()
+        val generation = automaticFallback?.authorize(activeConfiguration, inspectionAuthorityIdentity())
         val domainDecision = policy.evaluate(
             activeConfiguration,
             ProtectedTrafficRequest(
@@ -45,6 +51,12 @@ class ProtectedTrafficTlsInterceptionPolicy(
                 transport = ProtectedTransportProtocol.TCP,
             ),
         )
+        val key = automaticTlsFallbackKey(request.clientContext?.sessionId, request.clientContext?.client,
+            destination, request.connectPort, request.sourceApplication?.value)
+        val eligible = generation != null && key != null && request.clientHelloObserved &&
+            domainDecision.evidence == ProtectedTrafficDecisionEvidence.GlobalDefault && domainDecision.action == ProtectedTrafficAction.INSPECT
+        if (eligible && key in automaticFallback!!.state.value.keys)
+            return TlsInterceptionDecision(TlsInterceptionMode.TUNNEL, origin = ProtectionDecisionOrigin.AUTOMATIC)
         val mode = when (domainDecision.action) {
             ProtectedTrafficAction.INSPECT -> TlsInterceptionMode.INSPECT
             ProtectedTrafficAction.TUNNEL, ProtectedTrafficAction.BYPASS -> TlsInterceptionMode.TUNNEL
@@ -56,6 +68,7 @@ class ProtectedTrafficTlsInterceptionPolicy(
             mode = mode,
             ruleId = ruleId,
             policyAction = TlsInterceptionPolicyAction.valueOf(domainDecision.action.name),
+            automaticFallbackGeneration = generation.takeIf { eligible },
             policyGroupId = ruleEvidence?.groupId?.value,
             origin = when {
                 ruleEvidence?.groupId != null || ruleEvidence != null && activeConfiguration.rules.any {
@@ -65,6 +78,19 @@ class ProtectedTrafficTlsInterceptionPolicy(
                 else -> ProtectionDecisionOrigin.GLOBAL
             },
         )
+    }
+
+    /** Records only explicit downstream certificate rejection from the originally authorized inspection epoch. */
+    override fun inspectionFailed(request: TlsInterceptionRequest, decision: TlsInterceptionDecision, failure: TlsInspectionFailure) {
+        val generation = decision.automaticFallbackGeneration ?: return
+        if (!failure.certificatePresented || failure.reason != InspectionFailureReason.CERTIFICATE_REJECTED ||
+            decision.mode != TlsInterceptionMode.INSPECT || decision.origin != ProtectionDecisionOrigin.GLOBAL) return
+        // Re-evaluation synchronizes certificate/settings changes and gives new manual rules precedence.
+        val current = decide(request)
+        if (current.automaticFallbackGeneration != generation || current.mode != TlsInterceptionMode.INSPECT) return
+        val key = automaticTlsFallbackKey(request.clientContext?.sessionId, request.clientContext?.client,
+            request.serverName ?: request.connectHost, request.connectPort, request.sourceApplication?.value) ?: return
+        automaticFallback?.record(key, generation)
     }
 
 }

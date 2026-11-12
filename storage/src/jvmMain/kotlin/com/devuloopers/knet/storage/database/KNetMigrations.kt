@@ -4,6 +4,13 @@ import androidx.room.migration.Migration
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.execSQL
 
+/** Enables the new rejection fallback by default without changing saved actions, rules or historical decisions. */
+internal object Migration35To36 : Migration(35, 36) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("ALTER TABLE protected_traffic_settings ADD COLUMN automaticTlsFallbackEnabled INTEGER NOT NULL DEFAULT 1")
+    }
+}
+
 /** Adds nullable close provenance without fabricating evidence for retained captures. */
 internal object Migration34To35 : Migration(34, 35) {
     override fun migrate(connection: SQLiteConnection) {

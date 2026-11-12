@@ -8,6 +8,7 @@ import com.devuloopers.knet.application.usecase.protectedtraffic.UpsertProtected
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedDestinationSelector
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedServiceGroupId
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedSourceApplicationId
+import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficDefaultHandling
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficAction
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficConfiguration
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficRule
@@ -44,7 +45,7 @@ class ProtectedTrafficViewModelTest {
         val viewModel = viewModel(repository)
         advanceUntilIdle()
 
-        viewModel.selectDefaultAction(ProtectedTrafficAction.TUNNEL)
+        viewModel.selectDefaultHandling(ProtectedTrafficDefaultHandling.TUNNEL)
         viewModel.beginAddRule()
         viewModel.updateRuleDraft(
             ProtectedTrafficRuleDraft(
@@ -79,7 +80,7 @@ class ProtectedTrafficViewModelTest {
         viewModel.saveRuleDraft()
         advanceUntilIdle()
 
-        assertTrue(viewModel.state.value.errorMessage.orEmpty().isNotBlank())
+        assertTrue(viewModel.state.value.draftError.orEmpty().isNotBlank())
         assertTrue(repository.configuration.value.enabledBuiltInGroups.isEmpty())
     }
 
@@ -93,7 +94,7 @@ class ProtectedTrafficViewModelTest {
         advanceUntilIdle()
         viewModel.beginAddRule()
         val draft = viewModel.state.value.ruleDraft
-        viewModel.selectDefaultAction(ProtectedTrafficAction.BLOCK)
+        viewModel.selectDefaultHandling(ProtectedTrafficDefaultHandling.BLOCK)
         advanceUntilIdle()
         assertEquals(ProtectedTrafficAction.BLOCK, repository.configuration.value.defaultAction)
         assertEquals(listOf(rule), repository.configuration.value.rules)
@@ -128,8 +129,8 @@ class ProtectedTrafficViewModelTest {
         override val configuration = MutableStateFlow(ProtectedTrafficConfiguration())
 
 
-        override suspend fun setDefaultAction(action: ProtectedTrafficAction) {
-            configuration.value = configuration.value.copy(defaultAction = action)
+        override suspend fun setDefaultAction(action: ProtectedTrafficAction, automaticFallbackEnabled: Boolean) {
+            configuration.value = configuration.value.copy(defaultAction = action, automaticTlsFallbackEnabled = automaticFallbackEnabled)
         }
 
         override suspend fun upsertRule(rule: ProtectedTrafficRule) {

@@ -36,8 +36,7 @@ import com.devuloopers.knet.companion.ios.runtime.IosCompanionRuntime
 import com.devuloopers.knet.companion.presentation.viewmodel.CompanionViewModel
 import com.devuloopers.knet.companion.sharedui.KNetCompanionApp
 import com.devuloopers.knet.companion.sharedui.screen.certificate.CertificateInstallationGuidance
-import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
-import com.devuloopers.knet.ui.core.foundation.theme.ThemeMode
+import com.devuloopers.knet.ui.core.foundation.theme.KNetApplicationTheme
 import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.KoinApplication
 import org.koin.compose.viewmodel.koinViewModel
@@ -101,7 +100,7 @@ private fun ReadyCompanionProduct(bootstrap: IosCompanionBootstrap, presenter: (
 
 @Composable
 private fun BootstrapSurface(failed: Boolean) {
-    KNetTheme(themeMode = ThemeMode.System) {
+    KNetApplicationTheme {
         Surface(
             modifier = Modifier.fillMaxSize(),
             color = MaterialTheme.colorScheme.background,

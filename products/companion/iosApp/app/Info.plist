@@ -32,6 +32,8 @@
     <string>KNet Companion uses the camera only to scan a pairing QR code shown by KNet Desktop.</string>
     <key>NSLocalNetworkUsageDescription</key>
     <string>KNet Companion discovers and connects to the KNet Desktop you paired on your local network.</string>
+    <key>UIUserInterfaceStyle</key>
+    <string>Dark</string>
     <key>UILaunchScreen</key>
     <dict/>
     <key>UIRequiredDeviceCapabilities</key>

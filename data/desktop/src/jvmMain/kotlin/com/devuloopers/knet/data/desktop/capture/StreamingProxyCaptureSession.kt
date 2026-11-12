@@ -135,7 +135,7 @@ class StreamingProxyCaptureSession internal constructor(
 
 /** One real downstream connection and its monotonically ordered canonical events. */
 private class StreamingConnectionCapture(
-    private val sessionId: CaptureSessionId,
+    override val sessionId: CaptureSessionId,
     private val connectionId: ConnectionId,
     private val metadata: ProxyCaptureConnectionMetadata,
     private val ingress: CaptureIngress,

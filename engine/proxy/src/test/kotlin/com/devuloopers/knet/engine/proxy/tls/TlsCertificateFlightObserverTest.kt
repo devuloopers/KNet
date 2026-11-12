@@ -21,12 +21,15 @@ class TlsCertificateFlightObserverTest {
     @Test fun `TLS 13 certificate flight requires a successful transport completion`() = exercise("TLSv1.3", true)
     @Test fun `failed TLS 12 flight cannot establish presentation`() = exercise("TLSv1.2", false)
     @Test fun `failed TLS 13 flight cannot establish presentation`() = exercise("TLSv1.3", false)
-    @Test fun `offered session resumption never turns retained certificates into presentation evidence`() =
+    @Test fun `offered resumption with an actual full server flight establishes independent presentation evidence`() =
         exercise("TLSv1.3", true, TlsResumptionOffer.OFFERED)
-    @Test fun `incomplete ClientHello evidence cannot establish presentation from encrypted output`() =
+    @Test fun `unknown client metadata requires independently observed full server certificate flight`() =
         exercise("TLSv1.2", true, TlsResumptionOffer.UNKNOWN)
 
-    private fun exercise(protocol: String, writeSucceeds: Boolean, resumption: TlsResumptionOffer = TlsResumptionOffer.NONE) {
+    @Test fun `an earlier failed TLS 13 write cannot be hidden by successful later writes`() =
+        exercise("TLSv1.3", true, TlsResumptionOffer.OFFERED, failFirstWrite = true)
+
+    private fun exercise(protocol: String, writeSucceeds: Boolean, resumption: TlsResumptionOffer = TlsResumptionOffer.NONE, failFirstWrite: Boolean = false) {
         val serverContext = SslContextBuilder.forServer(leaf.keyPair.private, leaf.certificate)
             .sslProvider(SslProvider.JDK).protocols(protocol).build()
         val evidence = DownstreamTlsEvidence(resumption).also { it.contextInstalled(serverContext) }
@@ -41,11 +44,12 @@ class TlsCertificateFlightObserverTest {
             server.writeInbound(hello)
             server.runPendingTasks()
             assertTrue(transport.pending.isNotEmpty(), "JSSE must produce its server certificate flight")
-            assertEquals(if (resumption == TlsResumptionOffer.NONE) TlsCertificatePresentation.NOT_PRESENTED else TlsCertificatePresentation.UNKNOWN, evidence.presentation,
+            assertEquals(TlsCertificatePresentation.NOT_PRESENTED, evidence.presentation,
                 "Producing or buffering a certificate flight does not prove transmission")
-            transport.complete(writeSucceeds)
+            if (failFirstWrite) assertTrue(transport.pending.size > 1)
+            transport.complete(writeSucceeds, failFirstWrite)
             server.runPendingTasks()
-            assertEquals(if (resumption != TlsResumptionOffer.NONE) TlsCertificatePresentation.UNKNOWN else if (writeSucceeds) TlsCertificatePresentation.PRESENTED else TlsCertificatePresentation.NOT_PRESENTED,
+            assertEquals(if (writeSucceeds && !failFirstWrite) TlsCertificatePresentation.PRESENTED else TlsCertificatePresentation.NOT_PRESENTED,
                 evidence.presentation)
         } finally {
             transport.complete(false)
@@ -66,13 +70,13 @@ class TlsCertificateFlightObserverTest {
             }
         }
 
-        fun complete(success: Boolean) {
+        fun complete(success: Boolean, failFirst: Boolean = false) {
             holding = false
             val writes = pending.toList()
             pending.clear()
-            writes.forEach { (message, promise) ->
+            writes.forEachIndexed { index, (message, promise) ->
                 ReferenceCountUtil.release(message)
-                if (success) promise.trySuccess() else promise.tryFailure(IOException("Test transport write failed"))
+                if (success && !(failFirst && index == 0)) promise.trySuccess() else promise.tryFailure(IOException("Test transport write failed"))
             }
         }
     }

@@ -3440,3 +3440,59 @@ all six architecture checks, ledger validation and `git diff --check` passed. Re
 model, relay and data closure cases. Inspector renders were inspected. Verification used isolated build outputs
 without launching or modifying the running app/database. Rebuild/relaunch and new physical-device capture remain
 the acceptance step. See [the qualification report](opaque_flow_closure_attribution.md).
+## Fixed dark application appearance (2026-11-11) [COMPLETED]
+
+Removed Settings and legacy global-toolbar theme controls. The Scripting category retains the existing default
+language setting. Desktop and Companion production roots now use one fixed-dark UI-core boundary; light/system
+preview infrastructure remains available. Native macOS startup/package appearance, Android system bars and iOS
+app-window appearance follow the fixed-dark policy.
+
+All 96 targeted tests passed across five outputs, zero failures/errors/skips. Headless wide/compact Settings checks
+simulate light/dark/light system changes and verify fixed palettes, removed controls and working scripting selection.
+Desktop, Android and iOS simulator Kotlin compilation, all six architecture checks, plist validation, Swift syntax
+parsing and git diff --check passed. Both Settings renders were inspected. Builds were isolated; no apps were
+launched or user theme/database modified. Rebuild/relaunch loads the policy. See
+[the implementation report](fixed_dark_application_appearance.md).
+## Protected Traffic rule manager (2026-11-11) [COMPLETED]
+
+Replace rule cards with a searchable table and shared side-drawer editor. Keep default TLS handling compact in the
+header, preserve authoritative saved policy/Traffic integration, imported rule provenance and existing selectors.
+Use UI-core table overflow, responsive classes and drawer sizing. Verify search, CRUD, async/error states, legacy
+selectors, external updates, narrow/larger-text layouts and shared component regressions.
+
+Delivered the searchable, virtualized rule table with enable/edit/delete controls, compact default TLS dropdown and
+shared animated drawer. Traffic-saved rules remain live through the authoritative configuration flow. Edits retain
+stable identity, disabled state and wildcard/all-port/all-transport/IP-family scope. Imported exceptions keep their
+origin for unchanged saves/toggles and become user rules on deliberate match/action edits, verified against Room.
+Inline validation, pending guards, failure recovery and stale/deleted-row handling are covered.
+
+Both feature qualification gates, breakpoint-manager regressions, desktop compilation and UI-core Android/iOS
+simulator compilation passed in 2m 55s. XML evidence: 1,029 tests across 26 distinct task outputs, including 22 Protected
+Traffic tests; zero failures/errors/skips. All six architecture checks, ledger validation and git diff --check passed.
+Wide/compact/larger-text/editor/empty renders were inspected. Verification used isolated build outputs, with no app
+launch or user database mutation. Physical acceptance remains separate. See
+[the manager report](protected_traffic_rule_manager.md).
+
+## Automatic TLS rejection fallback (2026-11-11 to 2026-11-12) [COMPLETED]
+
+Add default-enabled, temporary TLS passthrough after confirmed downstream certificate rejection, scoped to the
+client session and exact destination/port with verified application identity where available. Explicit manual
+Inspect/Tunnel/Block rules remain authoritative. Add Inspect with automatic fallback / Inspect only / Tunnel / Block
+to the existing default control, plus durable future-connection choices and Use default in Traffic. Keep metadata,
+network shaping and historical evidence honest. Bound decisions to 30 minutes/session lifetime, clear them on
+certificate changes and explicit inspection, and never learn from generic failures. Verify classification, expiry,
+scoping, precedence, Room compatibility, real reconnects, UI and regression gates without launching the desktop app.
+
+Initial targeted verification passed, including real TLS 1.2, TLS 1.3 and mTLS rejection/reconnect cases proving origin
+certificate preservation, no HTTP replay, opaque Room metadata and retained 100 kbps shaping. Added targeted
+invalidation to preserve unrelated temporary traffic, explicit Block/Use default UI actions, session/authority epochs,
+expiry, client isolation and schema-36 compatibility checks. Final regression and visual qualification passed below.
+
+The first complete feature-gate run passed in 6m 37s. A final audit identified origin TLS resumption offers as a
+coverage gap: actual full handshakes now use independent bounded outgoing server-flight evidence rather than
+rejecting every offer as inconclusive. Genuine resumed TLS 1.2/1.3, declined offers, HRR/CCS and mixed write outcomes
+have dedicated regressions. The final combined feature gates, breakpoint-manager regressions and desktop
+compilation passed in 6m 25s: 1,064 tests across 26 distinct outputs, zero failures/errors/skips. All six architecture
+checks, ledger validation and git diff --check passed. Automatic/manual inspector and wide/compact manager renders
+were inspected. No desktop app or user database was opened; physical service acceptance remains pending.
+See [the implementation and qualification report](automatic_tls_fallback.md).

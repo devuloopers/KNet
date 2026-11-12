@@ -28,6 +28,17 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 class SwitchableProxyCaptureSinkTest {
+    @Test fun `TLS learning context follows replacement capture and disappears while paused or closed`() {
+        val firstId = com.devuloopers.knet.traffic.id.CaptureSessionId("first")
+        val secondId = com.devuloopers.knet.traffic.id.CaptureSessionId("second")
+        val switchable = SwitchableProxyCaptureSink(RecordingSink(firstId))
+        val connection = assertNotNull(switchable.openConnection(connectionMetadata()))
+        assertEquals(firstId, connection.sessionId)
+        switchable.pause(); assertNull(connection.sessionId)
+        switchable.replaceTarget(RecordingSink(secondId)); assertEquals(secondId, connection.sessionId)
+        connection.close(); assertNull(connection.sessionId)
+    }
+
     @Test
     fun `existing transport connection uses replacement capture target after clear`() {
         val first = RecordingSink()
@@ -82,16 +93,17 @@ class SwitchableProxyCaptureSinkTest {
         assertEquals(listOf("next"), second.exchangeIds)
     }
 
-    private class RecordingSink : ProxyCaptureSink {
+    private class RecordingSink(private val sessionId: com.devuloopers.knet.traffic.id.CaptureSessionId? = null) : ProxyCaptureSink {
         val connections = mutableListOf<RecordingConnection>()
         val exchangeIds = mutableListOf<String>()
         val responseExchangeIds = mutableListOf<String>()
 
         override fun openConnection(metadata: ProxyCaptureConnectionMetadata): ProxyConnectionCapture =
-            RecordingConnection(exchangeIds, responseExchangeIds).also(connections::add)
+            RecordingConnection(sessionId, exchangeIds, responseExchangeIds).also(connections::add)
     }
 
     private class RecordingConnection(
+        override val sessionId: com.devuloopers.knet.traffic.id.CaptureSessionId?,
         private val exchangeIds: MutableList<String>,
         private val responseExchangeIds: MutableList<String>,
     ) : ProxyConnectionCapture {

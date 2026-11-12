@@ -200,6 +200,8 @@ class KNetProxyServer(
                                 )
                             }.getOrNull()
                         }
+                        channel.attr(ProxyChannelAttributes.TLS_FALLBACK_CLIENT).set(
+                            com.devuloopers.knet.traffic.model.tlsFallbackClientScope(attributedIngress, downstream.host))
                         channel.attr(ProxyChannelAttributes.CONNECTION_CAPTURE).set(connectionCapture)
                         channel.attr(ProxyChannelAttributes.SOURCE_APPLICATION_ID).set(attributedIngress.sourceApplicationId)
                         channel.closeFuture().addListener { connectionCapture?.close() }

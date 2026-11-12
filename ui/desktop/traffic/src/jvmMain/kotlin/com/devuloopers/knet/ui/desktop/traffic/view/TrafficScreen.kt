@@ -199,6 +199,7 @@ fun TrafficScreen(
                         protectionState = protectionState,
                         protectionActions = com.devuloopers.knet.ui.desktop.traffic.model.TrafficProtectionActions(
                             apply = protectionViewModel::applyDestinationAction,
+                            useDefault = protectionViewModel::useDefaultHandling,
                         ),
                         selectedTransaction = state.selectedTransaction,
                         activeTab = state.activeInspectorTab,

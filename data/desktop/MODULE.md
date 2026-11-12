@@ -97,10 +97,14 @@ unowned background scope that can survive database/application shutdown.
 
 ## Protected TLS handling
 
-The TLS adapter selects only persisted manual/imported rules or the configured default; it never learns from failures.
-The Room repository ignores the retired automatic setting while retaining its legacy column for compatible storage.
-Canonical capture preserves TLS diagnostics and reads historical automatic origin/identity evidence without activating
-it. New captures write no automatic identity. Saved rules remain editable/removable and no service catalogue is injected.
+The TLS adapter gives saved manual/imported rules priority over the global default. Under automatic Inspect it may
+record a temporary exact client/session decision after explicit downstream certificate rejection and proven certificate
+presentation. InMemoryAutomaticTlsFallback owns the bounded 30-minute cache and one product-scoped expiry job;
+late epochs, unavailable admission, invalid authorities and ordinary failures cannot learn. Session lifecycle clears
+ownership and manual changes forget affected entries. Canonical capture records new AUTOMATIC provenance separately
+from retired SMART history; no new smartEntryId or permanent rule is created. Room stores only the global preference
+and existing rules. The certificate provider validates its root/leaf before TLS context creation. No service catalogue
+is injected. See `docs/automatic_tls_fallback.md`.
 
 A single session-owned 500 ms sampler coalesces changed opaque counters into monotonic progress events. It joins before shutdown; non-blocking transport observations and terminal snapshots are serialized per flow. Flush samples counters before its barrier. No payload is retained for opaque traffic.
 

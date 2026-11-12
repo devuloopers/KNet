@@ -17,6 +17,17 @@ internal class ProtectionFixture {
         terminalOutcome=ExchangeTerminalOutcome.Failed(TrafficTerminationReason.Transport.DOWNSTREAM_TLS_HANDSHAKE_FAILED))
     var record: OpaqueFlowSnapshot? = captured
     var context: TrafficConnectionIngress? = TrafficConnectionIngress(IngressContext(IngressKind.LanPairedDevice,ClientIdentity("device-a")),"127.0.0.1",true)
+    val fallbackState = MutableStateFlow(AutomaticTlsFallbackState())
+    val fallback = object : AutomaticTlsFallback {
+        override val state = fallbackState
+        override fun activateSession(sessionId: CaptureSessionId?) { fallbackState.value = AutomaticTlsFallbackState(sessionId, state.value.generation + 1) }
+        override fun authorize(configuration: ProtectedTrafficConfiguration, authorityIdentity: String?) = state.value.generation
+        override fun record(key: AutomaticTlsFallbackKey, generation: Long): Boolean {
+            fallbackState.value = state.value.copy(keys = state.value.keys + key); return true
+        }
+        override fun forget(rule: ProtectedTrafficRule) { clear() }
+        override fun clear() { fallbackState.value = state.value.copy(generation = state.value.generation + 1, keys = emptySet()) }
+    }
     var reads=0
     var beforeRead: suspend (OpaqueFlowId)->Unit = {}
     var beforeSave: suspend ()->Unit = {}
@@ -24,7 +35,7 @@ internal class ProtectionFixture {
     val repository = Repository()
     inner class Repository : ProtectedTrafficRepository {
         override val configuration=MutableStateFlow(ProtectedTrafficConfiguration())
-        override suspend fun setDefaultAction(action:ProtectedTrafficAction) { configuration.value=configuration.value.copy(defaultAction=action) }
+        override suspend fun setDefaultAction(action:ProtectedTrafficAction, automaticFallbackEnabled:Boolean) { configuration.value=configuration.value.copy(defaultAction=action, automaticTlsFallbackEnabled=automaticFallbackEnabled) }
         override suspend fun upsertRule(rule:ProtectedTrafficRule) { beforeSave(); writes++; configuration.value=configuration.value.copy(rules=configuration.value.rules.filterNot { it.id==rule.id }+rule) }
         override suspend fun deleteRule(ruleId:ProtectedTrafficRuleId) { configuration.value=configuration.value.copy(rules=configuration.value.rules.filterNot { it.id==ruleId }) }
     }

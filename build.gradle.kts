@@ -1089,6 +1089,15 @@ tasks.register<VerifyNetworkProtectionReportsTask>("networkProtectionQualificati
     ))
     reports.from(reportDirectories.map { directories -> directories.map { relative -> layout.projectDirectory.dir(relative).asFileTree.matching { include("TEST-*.xml") } } })
     requiredSuites.set(listOf(
+        "com.devuloopers.knet.engine.proxy.tls.TlsServerFlightMetadataTest",
+        "com.devuloopers.knet.engine.proxy.tls.TlsResumedCertificateFlightTest",
+        "com.devuloopers.knet.traffic.model.TlsFallbackClientScopeTest",
+        "com.devuloopers.knet.data.desktop.protectedtraffic.AutomaticTlsFallbackTest",
+        "com.devuloopers.knet.data.desktop.protectedtraffic.AutomaticTlsFallbackSocketTest",
+        "com.devuloopers.knet.application.usecase.protectedtraffic.AutomaticTlsFallbackHandlingTest",
+        "com.devuloopers.knet.ui.desktop.protectedtraffic.model.ProtectedRuleSearchTest",
+        "com.devuloopers.knet.ui.desktop.protectedtraffic.viewmodel.ProtectedTrafficManagerViewModelTest",
+        "com.devuloopers.knet.ui.desktop.protectedtraffic.view.ProtectedTrafficSettingsTest",
         "com.devuloopers.knet.companion.connectivity.transport.UdpAssociationLifecycleTest",
         "com.devuloopers.knet.companion.connectivity.transport.LivePacketPolicyTest",
         "com.devuloopers.knet.companion.application.usecase.MaintainCompanionPacketPolicyUseCaseTest",
