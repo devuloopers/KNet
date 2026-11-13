@@ -4,12 +4,17 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.HorizontalScrollbar
 import androidx.compose.foundation.ScrollbarStyle
 import androidx.compose.foundation.VerticalScrollbar
+import androidx.compose.foundation.gestures.scrollBy
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsDraggedAsState
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.rememberScrollbarAdapter
@@ -23,6 +28,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -42,6 +48,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.menu.KNetContextMenuArea
 import com.devuloopers.knet.ui.desktop.codeeditor.api.CodeEditorStrings
 import com.devuloopers.knet.ui.desktop.codeeditor.algorithm.FoldRegion
@@ -59,6 +66,11 @@ import com.devuloopers.knet.ui.desktop.codeeditor.theme.CodeEditorSemanticColors
 import com.devuloopers.knet.ui.desktop.codeeditor.theme.CodeEditorTokens
 import com.devuloopers.knet.ui.desktop.codeeditor.theme.EditorColors
 import com.devuloopers.knet.ui.desktop.codeeditor.viewport.EditorVisualLineMap
+import com.devuloopers.knet.ui.desktop.codeeditor.viewport.EditorScrollbarAdapter
+import com.devuloopers.knet.ui.desktop.codeeditor.viewport.rememberEditorLineHeights
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.job
 
 /**
  * Virtualized editor viewport over immutable document, language, fold, and search projections.
@@ -99,9 +111,9 @@ internal fun LazyCodeBody(
     shouldRequestEditorFocus: Boolean,
     onOpenSearch: (() -> Unit)?,
     onCloseSearch: (() -> Unit)?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    lazyListState: LazyListState = rememberLazyListState(),
 ) {
-    val lazyListState = rememberLazyListState()
     val horizontalScrollState = rememberScrollState()
     val visualLineMap = remember(snapshot.lineCount, foldRegions, collapsedFoldStartLines, isFoldingEnabled) {
         EditorVisualLineMap.build(
@@ -111,13 +123,6 @@ internal fun LazyCodeBody(
         )
     }
 
-    LaunchedEffect(caret.line, visualLineMap) {
-        val documentEnd = EditorPosition(snapshot.lineCount - 1, snapshot.line(snapshot.lineCount - 1).length)
-        if (!shouldRevealCaretForSelection(selection, documentEnd)) return@LaunchedEffect
-        val targetVisualLine = visualLineMap.toVisibleLine(caret.line) ?: return@LaunchedEffect
-        val isVisible = lazyListState.layoutInfo.visibleItemsInfo.any { it.index == targetVisualLine }
-        if (!isVisible) lazyListState.animateScrollToItem(targetVisualLine)
-    }
 
     val maximumDigits = remember(snapshot.lineCount) { snapshot.lineCount.toString().length.coerceAtLeast(3) }
     val gutterWidth = remember(maximumDigits) {
@@ -159,6 +164,47 @@ internal fun LazyCodeBody(
     val currentSelection by rememberUpdatedState(selection)
     val currentCaret by rememberUpdatedState(caret)
     val lineTextLayouts = remember { mutableMapOf<Int, TextLayoutResult>() }
+    var textWidthPixels by remember { mutableStateOf(0) }
+    val scrollbarInteractions = remember { MutableInteractionSource() }
+    val isScrollbarDragged by scrollbarInteractions.collectIsDraggedAsState()
+    val effectiveCollapsedStarts = if (isFoldingEnabled) collapsedFoldStartLines else emptySet()
+    // New fold analysis with no collapsed regions does not change displayed source geometry.
+    val geometryFolds = if (effectiveCollapsedStarts.isEmpty()) emptyList() else foldRegions
+    val geometryMap = remember(snapshot.lineCount, geometryFolds, effectiveCollapsedStarts) {
+        EditorVisualLineMap.build(snapshot.lineCount, geometryFolds, effectiveCollapsedStarts)
+    }
+    val heights = rememberEditorLineHeights(snapshot, geometryMap, textWidthPixels, isWordWrapEnabled,
+        fontSize, lineHeight, tokenizedDocument, semanticColors, isScrollbarDragged)
+    val verticalAdapter = remember(lazyListState, heights) { heights?.let { EditorScrollbarAdapter(lazyListState, it) } }
+    val scrollbarGutter = CodeEditorTokens.ScrollbarHitZoneWidth
+    val bottomGutter = if (isWordWrapEnabled) 0.dp else scrollbarGutter
+    var caretRevealJob by remember { mutableStateOf<Job?>(null) }
+    val currentMap by rememberUpdatedState(visualLineMap)
+
+    // Only explicit caret movement navigates. Delayed syntax/fold analysis cannot replay an old reveal.
+    LaunchedEffect(caret) {
+        if (isScrollbarDragged || isSelectionGestureActive) return@LaunchedEffect
+        val documentEnd = EditorPosition(snapshot.lineCount - 1, snapshot.line(snapshot.lineCount - 1).length)
+        if (!shouldRevealCaretForSelection(selection, documentEnd)) return@LaunchedEffect
+        caretRevealJob = currentCoroutineContext().job
+        val targetRow = currentMap.toVisibleLine(caret.line) ?: return@LaunchedEffect
+        if (lazyListState.layoutInfo.visibleItemsInfo.none { it.index == targetRow }) {
+            lazyListState.scrollToItem(targetRow)
+            withFrameNanos { }
+        }
+        val item = lazyListState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == targetRow }
+            ?: return@LaunchedEffect
+        val layout = lineTextLayouts[caret.line] ?: return@LaunchedEffect
+        val visualLine = layout.getLineForOffset(caret.column.coerceIn(0, layout.layoutInput.text.length))
+        val top = item.offset + layout.getLineTop(visualLine)
+        val bottom = item.offset + layout.getLineBottom(visualLine)
+        val viewportHeight = lazyListState.layoutInfo.viewportSize.height
+        if (top < 0) lazyListState.scrollBy(top)
+        else if (bottom > viewportHeight) lazyListState.scrollBy(bottom - viewportHeight)
+    }
+    LaunchedEffect(isScrollbarDragged, isSelectionGestureActive) {
+        if (isScrollbarDragged || isSelectionGestureActive) caretRevealJob?.cancel()
+    }
     val searchMatchesByLine: Map<Int, List<EditorRange>> = remember(searchResult) {
         searchResult?.matches.orEmpty().groupBy({ it.range.start.line }, { it.range })
     }
@@ -222,7 +268,8 @@ internal fun LazyCodeBody(
                             onCaretChange(position)
                             runCatching { focusRequester.requestFocus() }
                         },
-                        updateSelection = onSelectionChange
+                        updateSelection = onSelectionChange,
+                        onManualScroll = { caretRevealJob?.cancel() }
                     )
                     .pointerHoverIcon(PointerIcon.Text)
                     .onPreviewKeyEvent { event ->
@@ -293,6 +340,7 @@ internal fun LazyCodeBody(
                 )
 
                 LazyCodeBodyContent(
+                    modifier = Modifier.fillMaxSize().padding(end = scrollbarGutter, bottom = bottomGutter),
                     snapshot = snapshot,
                     visualLineMap = visualLineMap,
                     mode = mode,
@@ -323,21 +371,29 @@ internal fun LazyCodeBody(
                     onUndo = onUndo,
                     onRedo = onRedo,
                     onTextLayout = { lineIndex, layout ->
-                        if (layout == null) lineTextLayouts.remove(lineIndex) else lineTextLayouts[lineIndex] = layout
+                        if (layout == null) lineTextLayouts.remove(lineIndex) else {
+                            lineTextLayouts[lineIndex] = layout
+                            textWidthPixels = layout.layoutInput.constraints.maxWidth
+                        }
                     }
                 )
 
-                VerticalScrollbar(
-                    adapter = rememberScrollbarAdapter(lazyListState),
-                    modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().pointerHoverIcon(PointerIcon.Default),
-                    style = scrollbarStyle
-                )
+                if (verticalAdapter != null) {
+                    VerticalScrollbar(
+                        adapter = verticalAdapter,
+                        interactionSource = scrollbarInteractions,
+                        modifier = Modifier.align(Alignment.CenterEnd).fillMaxHeight().padding(bottom = bottomGutter)
+                            .pointerHoverIcon(PointerIcon.Default),
+                        style = scrollbarStyle
+                    )
+                }
                 if (!isWordWrapEnabled) {
                     HorizontalScrollbar(
                         adapter = rememberScrollbarAdapter(horizontalScrollState),
                         modifier = Modifier
                             .align(Alignment.BottomStart)
                             .fillMaxWidth()
+                            .padding(end = scrollbarGutter)
                             .height(CodeEditorTokens.ScrollbarThickness)
                             .pointerHoverIcon(PointerIcon.Default),
                         style = scrollbarStyle

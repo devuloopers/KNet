@@ -10,6 +10,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.devuloopers.knet.application.contract.apistudio.CapturedApiStudioRequest
+import com.devuloopers.knet.ui.core.components.split.SplitPaneDividerStyle
 import com.devuloopers.knet.ui.core.components.split.HorizontalSplitPane
 import com.devuloopers.knet.ui.core.components.surface.KNetSurface
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
@@ -166,6 +167,7 @@ fun TrafficScreen(
 
             // 3. Central Workspace (Table + Right Docked Resizable Inspector Split)
             HorizontalSplitPane(
+                dividerStyle = SplitPaneDividerStyle.SINGLE_LINE,
                 splitRatio = inspectorSplitRatio,
                 onSplitRatioChange = { inspectorSplitRatio = it },
                 firstPane = { paneModifier ->

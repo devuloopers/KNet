@@ -153,3 +153,47 @@ and disabled accessibility actions. All 225 relevant tests passed: Traffic 115, 
 and protocol engine 19. Desktop/shared Android/iOS UI compilation, architecture and existing frame-geometry tests
 also passed. The compact render is `/tmp/knet-graphql-query-shortcut-overview.png`; verification evidence is
 `/tmp/knet-graphql-query-shortcut-verification.log`.
+
+## Single divider follow-up (2026-11-13)
+
+Traffic's table and inspector share one continuous theme-owned 1 dp vertical divider. The shared horizontal split
+has an opt-in `SINGLE_LINE` style with an overlaid 8 dp resize target; hovering, focusing or dragging colors the
+same line blue without widening it or changing pane geometry. Existing split callers retain their gutter style.
+The inspector root, tabs, table header and statistics footer no longer contribute adjoining vertical borders.
+The table keeps its internal scrollbars and row-selection outline.
+
+Verified 152 tests (32 shared UI/core, 120 Traffic), desktop compilation, all six architecture checks and shared
+UI Android/iOS simulator compilation. Pixel-level render checks cover one logical pixel at densities 1 and 2,
+wide/compact actual Traffic composition, hover exit and stable sizing. Pointer tests begin within the invisible
+hit area, continue outside the moving target and clamp at the configured limits; keyboard focus/arrows retain
+accessible range semantics. Reviewed `/tmp/knet-traffic-single-divider-1440.png` and
+`/tmp/knet-traffic-single-divider-1024.png`, plus shared hover/density renders.
+Final log: `/tmp/knet-traffic-divider-check.log`.
+
+## Scrollbar clearance follow-up (2026-11-13)
+
+The Traffic list now reserves the UI-core measured-overflow scrollbar gutter before resolving column widths.
+Both header and rows use that content width and horizontal offset, with clipping before the scrollbar lane.
+Header background/separators remain full-width and the horizontal scrollbar track stops before the lane.
+Short/empty lists reclaim the gutter; empty lists also suppress stale scrollbar state from the previous page.
+The vertical thumb is inset inside the gutter so its edge does not compete with the split-pane resize target.
+
+Verified **155 tests (UI core 32, Traffic 123), zero failures/errors/skips**, desktop compilation, all six
+architecture checks, shared UI Android compilation and iOS simulator compilation. Rendered pixel checks cover
+text and selected-row clearance at wide/narrow larger-text sizes, horizontal/vertical scrolling, and list-size
+transitions. Pointer interaction verifies the thumb scrolls beside the divider without resizing the panes.
+Reviewed `/tmp/knet-traffic-scrollbar-wide.png` and
+`/tmp/knet-traffic-scrollbar-narrow-scrolled-larger-text.png`. Log: `/tmp/knet-traffic-scrollbar-check.log`.
+
+## Complete selected-row frame (2026-11-13)
+
+Traffic paints its selected-row frame at the visible row viewport boundary, after scrollbar clearance and before
+horizontal scrolling. The source cells and selected fill retain their shared column offset, while all four frame
+edges remain visible even when the table is wider than the pane. Lazy row offsets move the frame with vertical
+scrolling; partially visible rows are clipped within the list. The existing scrollbar lane remains clear.
+The frame adds no hit target and does not change row selection, context menus, or column sizing.
+
+Validation: two pixel-based regressions failed on the missing right edge before the fix and passed afterward.
+All 125 Traffic tests, desktop compilation, and six architecture checks passed. Wide/narrow frame renders
+confirm four visible edges and a clear scrollbar lane; horizontal offsets and vertical/selection changes are
+covered. Log: `/tmp/knet-traffic-selection-check.log`.

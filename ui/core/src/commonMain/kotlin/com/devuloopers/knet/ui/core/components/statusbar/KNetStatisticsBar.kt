@@ -1,7 +1,8 @@
 package com.devuloopers.knet.ui.core.components.statusbar
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import com.devuloopers.knet.ui.core.foundation.border.KNetBorderEdges
+import com.devuloopers.knet.ui.core.foundation.border.knetBorder
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -17,16 +18,17 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * Leading and trailing groups align to opposite edges when space permits; their intrinsic widths remain readable
  * in narrow panes and at large font scales. The scrollbar stays pinned to the visible footer.
  * @param modifier Host-owned placement, without feature-specific minimum widths or resize thresholds.
+ * @param borderEdges Standalone frame or horizontal separators for a shared split boundary.
  * @param leading Count or summary content at the starting edge.
  * @param trailing Live statistics and totals at the ending edge.
  */
 @Composable
-fun KNetStatisticsBar(modifier: Modifier = Modifier, leading: @Composable RowScope.() -> Unit,
+fun KNetStatisticsBar(modifier: Modifier = Modifier, borderEdges: KNetBorderEdges = KNetBorderEdges.ALL, leading: @Composable RowScope.() -> Unit,
     trailing: @Composable RowScope.() -> Unit) {
     val horizontal = rememberScrollState()
     val spacing = KNetTheme.spacing
     BoxWithConstraints(modifier.fillMaxWidth().height(KNetTheme.dimensions.statisticsBarHeight)
-        .background(KNetTheme.colors.background).border(KNetTheme.dimensions.borderWidth, KNetTheme.colors.border)) {
+        .background(KNetTheme.colors.background).knetBorder(borderEdges)) {
         val contentWidth = (maxWidth - spacing.lg * 2).coerceAtLeast(0.dp)
         Box(Modifier.fillMaxSize().padding(horizontal = spacing.lg).horizontalScroll(horizontal)) {
             Row(Modifier.widthIn(min = contentWidth).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically,

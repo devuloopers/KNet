@@ -2,6 +2,7 @@ package com.devuloopers.knet.ui.desktop.codeeditor.modifier
 
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.isPrimaryPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
@@ -37,7 +38,8 @@ internal fun Modifier.editorPointerInput(
     currentSelectionState: EditorSelection?,
     currentCaret: EditorPosition,
     updateCaret: (EditorPosition) -> Unit,
-    updateSelection: (EditorSelection?) -> Unit
+    updateSelection: (EditorSelection?) -> Unit,
+    onManualScroll: () -> Unit,
 ): Modifier = this.pointerInput(
     snapshot,
     visualLineMap,
@@ -54,6 +56,7 @@ internal fun Modifier.editorPointerInput(
             val event = awaitPointerEvent(PointerEventPass.Initial)
             val isPressed = event.buttons.isPrimaryPressed
             val isShiftPressed = event.keyboardModifiers.isShiftPressed
+            if (event.type == PointerEventType.Scroll || event.type == PointerEventType.Press) onManualScroll()
 
             if (event.changes.isNotEmpty()) {
                 val position = event.changes.first().position
@@ -75,7 +78,7 @@ internal fun Modifier.editorPointerInput(
                 if (dragOwner == EditorPointerDragOwner.Text) {
                     autoScrollController.handleDragPointerLazy(
                         mouseY = position.y,
-                        containerHeightPx = containerHeightPx,
+                        containerHeightPx = containerHeightPx - if (hasHorizontalScrollbar) scrollbarWidthPx else 0f,
                         thresholdPx = autoScrollThresholdPx,
                         lazyListState = lazyListState
                     )
@@ -88,7 +91,7 @@ internal fun Modifier.editorPointerInput(
                         lineHeightPx = lineHeightPx,
                         charWidthPx = charWidthPx,
                         gutterWidthPx = gutterWidthPx,
-                        containerWidthPx = containerWidthPx,
+                        containerWidthPx = (containerWidthPx - scrollbarWidthPx).coerceAtLeast(0f),
                         lineTextLayoutMap = lineTextLayoutMap
                     )
 

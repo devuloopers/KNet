@@ -32,6 +32,8 @@ data class Dimensions(
     val iconSizeMedium: Dp = 16.dp,
     val iconSizeLarge: Dp = 20.dp,
     val splitterSize: Dp = 4.dp,
+    /** Invisible splitter interaction width, independent of the painted divider thickness. */
+    val splitterHitTargetSize: Dp = 8.dp,
     val scrollbarWidth: Dp = 8.dp,
     val borderWidth: Dp = 1.dp,
     val dividerThickness: Dp = 1.dp,

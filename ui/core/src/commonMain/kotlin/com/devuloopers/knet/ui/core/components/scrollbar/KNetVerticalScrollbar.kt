@@ -7,6 +7,9 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 /**
  * Theme-aware vertical scrollbar for finite [ScrollState] content.
@@ -54,6 +57,19 @@ fun KNetVerticalScrollbar(
     if (!visible) return
 
     PlatformKNetVerticalScrollbar(lazyListState = lazyListState, modifier = modifier)
+}
+
+/**
+ * Theme-owned content clearance for a virtualized list's visible scrollbar, including breathing space.
+ * Header and row viewports consume the same value so clipped content cannot pass beneath the pinned chrome.
+ * No gutter is reserved until measured list overflow proves that the scrollbar is needed.
+ */
+@Composable
+fun rememberVerticalScrollbarGutter(lazyListState: LazyListState): Dp {
+    val visible by remember(lazyListState) {
+        derivedStateOf { shouldShowScrollbar(lazyListState.canScrollBackward, lazyListState.canScrollForward) }
+    }
+    return if (visible) KNetTheme.dimensions.scrollbarWidth + KNetTheme.spacing.sm else 0.dp
 }
 
 /** Renders the platform-appropriate finite vertical scrollbar chrome. */

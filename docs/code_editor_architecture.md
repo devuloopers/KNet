@@ -214,3 +214,29 @@ contracts. The Compose artifact will replace the narrow KNet `:ui:core` adapters
 clipboard, context-menu, and design-token implementations.
 
 This is a packaging operation, not an editor-engine rewrite.
+
+## Stable wrapped scrolling
+
+The vertical thumb uses `EditorScrollbarAdapter` and an immutable `EditorLineHeightIndex`, rather than
+Compose's visible-item average. A multi-screen string remains one logical row; entering that row must not
+change the estimated document height or the relationship between thumb position and document offset.
+Sparse prefix-height exceptions support absolute pixel lookup in either direction, with 64-bit totals.
+A uniform document retains no per-row height arrays; each exceptional row retains 12 bytes of numeric data.
+
+A cacheless `TextMeasurer` prepares wrapped heights on `Dispatchers.Default` for the immutable snapshot,
+actual text constraint width, typography, and collapsed-fold projection. Short printable ASCII rows that
+are guaranteed to fit bypass paragraph layout; other rows use the same semantic spans and Compose paragraph
+engine as the visible renderer. Paragraph objects are released rather than retained for the whole document.
+Obsolete work is cancelled at bounded checkpoints. The thumb becomes available after matching geometry is
+ready; ordinary lazy wheel scrolling remains available during preparation. Syntax-only geometry refreshes
+wait for the active thumb drag to finish. Fold analysis without collapsed regions does not invalidate geometry.
+
+The text viewport reserves the existing 16 dp scrollbar interaction lane at the right, and also at the bottom
+when horizontal scrolling is enabled. Source text, selection paint, and the caret stay inside the content
+bounds. Scrollbar tracks exclude the opposite scrollbar's lane.
+
+Caret reveal is triggered by an explicit line/column change, including search navigation within a tall row.
+Delayed syntax/fold metadata cannot replay a stale reveal. Pointer presses, wheel scrolling, scrollbar dragging,
+and selection gestures cancel an in-flight reveal; releasing a manual gesture does not replay it. Selecting the
+whole document continues to preserve the viewport. Request/response bodies and API Studio inherit these rules
+through the same editor, without feature-specific scrolling implementations.

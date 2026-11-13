@@ -121,3 +121,15 @@ Inspector scroll offsets reset through retained, measured ScrollState instances.
 viewport measurements, and horizontal scrollbar chrome is hidden until a measured viewport proves overflow.
 This avoids transient header-height changes during selection; wide/narrow per-frame regressions are documented
 in `docs/traffic_inspector_redesign.md`.
+
+## Split boundary ownership
+
+`HorizontalSplitPane` exposes the opt-in `SINGLE_LINE` divider style. The design system paints one divider and
+owns an independently sized invisible input target, color-only hover/focus/drag feedback, and keyboard/pointer
+ratio limits. Existing callers keep the gutter style. `KNetBorderEdges.HORIZONTAL` and `Modifier.knetBorder`
+retain top/bottom separators while allowing one parent splitter to own the adjoining vertical boundary.
+The statistics bar accepts this same border policy. See `docs/traffic_inspector_redesign.md`.
+
+The vertical scrollbar's shared measured-overflow gutter helper owns the chrome width and breathing space.
+Manager tables and Traffic consume the same policy for aligned header/row viewports; absent overflow reserves
+no gutter. The scrollbar itself remains pinned outside the content viewport.

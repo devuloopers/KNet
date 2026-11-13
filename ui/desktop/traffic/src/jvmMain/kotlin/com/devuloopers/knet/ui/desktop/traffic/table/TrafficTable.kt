@@ -1,7 +1,8 @@
 package com.devuloopers.knet.ui.desktop.traffic.table
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
+import com.devuloopers.knet.ui.core.foundation.border.KNetBorderEdges
+import com.devuloopers.knet.ui.core.foundation.border.knetBorder
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
@@ -30,6 +31,9 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import com.devuloopers.knet.ui.core.components.scrollbar.rememberVerticalScrollbarGutter
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -186,11 +190,14 @@ fun TrafficTable(
                 .fillMaxWidth()
                 .weight(1f)
         ) {
-            val columnLayout = remember(columnWidths, columnVisibility, maxWidth) {
+            val scrollbarGutter = rememberVerticalScrollbarGutter(listState)
+            val verticalGutter = if (transactions.isNotEmpty()) scrollbarGutter else 0.dp
+            val contentViewportWidth = (maxWidth - verticalGutter).coerceAtLeast(0.dp)
+            val columnLayout = remember(columnWidths, columnVisibility, contentViewportWidth) {
                 resolveTrafficColumnLayout(
                     widths = columnWidths,
                     visibility = columnVisibility,
-                    viewportWidthDp = maxWidth.value,
+                    viewportWidthDp = contentViewportWidth.value,
                 )
             }
 
@@ -199,16 +206,21 @@ fun TrafficTable(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(TrafficTableMetrics.rowHeight)
-                        .horizontalScroll(horizontalScrollState),
+                        .background(themeColors.panelHeader)
+                        .knetBorder(KNetBorderEdges.HORIZONTAL),
                 ) {
-                    TableHeaderRow(
-                        columnVisibility = columnVisibility,
-                        columnLayout = columnLayout,
-                        onColumnResize = columnResizeActions.onResize,
-                        onColumnResizeFinished = columnResizeActions.onResizeFinished,
-                        onResetColumnWidth = columnResizeActions.onReset,
-                        modifier = Modifier.width(columnLayout.tableWidthDp.dp),
-                    )
+                    Box(Modifier.fillMaxSize().padding(end = verticalGutter)
+                        .semantics { contentDescription = "Scroll traffic column headers" }
+                        .horizontalScroll(horizontalScrollState)) {
+                        TableHeaderRow(
+                            columnVisibility = columnVisibility,
+                            columnLayout = columnLayout,
+                            onColumnResize = columnResizeActions.onResize,
+                            onColumnResizeFinished = columnResizeActions.onResizeFinished,
+                            onResetColumnWidth = columnResizeActions.onReset,
+                            modifier = Modifier.width(columnLayout.tableWidthDp.dp),
+                        )
+                    }
                 }
 
                 Column(
@@ -239,6 +251,8 @@ fun TrafficTable(
                             Box(
                                 modifier = Modifier
                                     .fillMaxSize()
+                                    .padding(end = verticalGutter)
+                                    .trafficSelectionOutline(listState, selectedId)
                                     .horizontalScroll(horizontalScrollState),
                             ) {
                                 LazyColumn(
@@ -344,22 +358,25 @@ fun TrafficTable(
                                 }
                             }
                         }
-                        KNetVerticalScrollbar(
+                        if (transactions.isNotEmpty()) KNetVerticalScrollbar(
                             lazyListState = listState,
                             modifier = Modifier
                                 .align(Alignment.CenterEnd)
-                                .fillMaxHeight(),
+                                .fillMaxHeight()
+                                // Keep the thumb inside the shared gutter and clear of the adjacent splitter hit area.
+                                .padding(end = KNetTheme.spacing.xs)
+                                .semantics { contentDescription = "Scroll traffic rows" },
                         )
                     }
                     KNetHorizontalScrollbar(
                         scrollState = horizontalScrollState,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().padding(end = verticalGutter),
                     )
                 }
             }
         }
 
-        KNetStatisticsBar(Modifier.testTag("Traffic statistics"), leading = {
+        KNetStatisticsBar(Modifier.testTag("Traffic statistics"), borderEdges = KNetBorderEdges.HORIZONTAL, leading = {
             Text(
                 text = requestCountLabel(
                     loadedCount = transactions.size,
@@ -419,7 +436,6 @@ private fun TableHeaderRow(
     KNetTableHeader(
         modifier = modifier
             .height(TrafficTableMetrics.rowHeight)
-            .border(width = 1.dp, color = themeColors.border)
     ) {
         val visibleColumns = TrafficColumn.entries.filter(columnVisibility::isVisible)
         visibleColumns.forEachIndexed { index, column ->
@@ -546,9 +562,6 @@ private fun TableRowItem(
         modifier = Modifier
             .height(TrafficTableMetrics.rowHeight)
             .then(rowBackgroundModifier)
-            .then(
-                if (isSelected) Modifier.border(width = 2.dp, color = themeColors.accent) else Modifier
-            )
     ) {
         // # (Serial Number)
         if (columnVisibility.isVisible(TrafficColumn.SERIAL_NUMBER)) {

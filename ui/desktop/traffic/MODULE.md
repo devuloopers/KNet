@@ -140,3 +140,18 @@ Traffic prepares GET query data off-thread into `InspectorPreparedState.requestP
 includes its size in cache accounting and uses the existing exchange identity/cancellation fences.
 View query targets Params for GET and Body for POST, resetting the shared Query sub-tab. The source
 URL is unchanged for header copy and cross-feature transfer; missing/ambiguous data remains honest.
+
+## Single table/inspector divider
+
+Traffic opts into the UI-core single-line split boundary. Inspector chrome, table header and statistics footer
+omit adjoining side frames through shared primitives; the splitter alone paints the vertical seam. The larger
+invisible resize target overlays the pane edges, with no visible gutter or hover-induced width change.
+Internal scrollbars and selected-row outlines remain owned by the table. Rendered/pointer/keyboard verification
+is recorded in `docs/traffic_inspector_redesign.md`.
+
+Traffic measures and horizontally scrolls headers/rows within the same shared scrollbar gutter. Text and
+selection paint are clipped before the lane, header chrome extends across it, and the horizontal track excludes
+it. The vertical thumb is inset clear of the neighboring splitter target; empty lists do not retain stale chrome.
+The selected-row frame is painted at the visible content boundary, so horizontal scrolling cannot hide its
+left/right edges. Lazy row positions keep it aligned during vertical scrolling and selection changes.
+See the scrollbar follow-up in `docs/traffic_inspector_redesign.md`.

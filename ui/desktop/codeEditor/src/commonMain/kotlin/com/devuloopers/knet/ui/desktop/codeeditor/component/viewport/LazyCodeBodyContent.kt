@@ -29,6 +29,7 @@ import com.devuloopers.knet.ui.desktop.codeeditor.viewport.EditorVisualLineMap
  */
 @Composable
 internal fun LazyCodeBodyContent(
+    modifier: Modifier = Modifier,
     snapshot: EditorDocumentSnapshot,
     visualLineMap: EditorVisualLineMap,
     mode: LazyCodeBodyMode,
@@ -62,7 +63,7 @@ internal fun LazyCodeBodyContent(
 ) {
     LazyColumn(
         state = lazyListState,
-        modifier = Modifier.fillMaxSize().pointerHoverIcon(PointerIcon.Text)
+        modifier = modifier.fillMaxSize().pointerHoverIcon(PointerIcon.Text)
     ) {
         items(
             count = visualLineMap.visibleLineCount,

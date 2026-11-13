@@ -3823,3 +3823,83 @@ All 69 relevant tests passed across UI core (24), Protected Traffic (24) and app
 errors or skips. Desktop and UI-core Android/iOS simulator compilation, all six architecture checks and
 git diff --check passed. Actual manager and narrow/larger-text renders were reviewed. Builds used isolated outputs
 without opening the desktop application or user database.
+
+## Traffic single-divider boundary (2026-11-13) [COMPLETED]
+
+Replace the layered table/inspector seam with one theme-owned 1 dp separator. Add an opt-in reusable split-pane
+style with an overlaid 8 dp hit target and stable hover/drag/focus emphasis. Remove adjoining vertical frames
+from the Traffic inspector, tabs, table header and statistics footer while retaining horizontal separators and
+the table's internal scrollbars. Verify rendered boundary pixels, hover exit, pointer drag, keyboard resizing,
+compact layout and existing Traffic inspector behavior; other split layouts retain their current default style.
+
+Implemented `SplitPaneDividerStyle.SINGLE_LINE` in UI core with one theme divider and an overlaid theme-owned
+8 dp input target. Hover/focus/drag change color only. Traffic opts in; existing callers retain the gutter style.
+A shared horizontal-border policy removes competing side frames from the header, tabs and statistics bar; the
+inspector outer frame is removed. Row selection and the existing internal scrollbars remain intact.
+
+Qualification passed **152 tests (UI core 32, Traffic 120), zero failures/errors/skips**, desktop compilation,
+all six architecture checks, shared UI Android compilation and iOS simulator compilation. Pixel tests verify
+one logical-pixel boundary at both pixel densities, default-style compatibility, no layout shift on hover, hover
+exit, dragging from the invisible target through pointer capture, keyboard limits, and the actual wide/compact
+Traffic table/header/footer/inspector composition. Wide/compact and interaction renders were reviewed.
+Final log: `/tmp/knet-traffic-divider-check.log`. No product installation or user database access was required.
+
+## Traffic scrollbar content clearance (2026-11-13) [COMPLETED]
+
+Reserve a shared UI-core scrollbar gutter before measuring/scrolling Traffic columns. Clip header and rows to
+the same reduced viewport, keep scrollbar chrome pinned outside it, and shorten the horizontal track by the
+same gutter. Preserve the single split divider. Verify wide/narrow and larger-text renders, horizontal/vertical
+scrolling and empty/short-list transitions so content and selected-row paint never occupy the scrollbar lane.
+
+Implemented the measured-overflow gutter policy as a shared UI-core helper, reused by manager tables and Traffic.
+Traffic now resolves column widths against the content viewport, clips header/rows before the scrollbar lane,
+keeps the header background and separator full-width, and excludes the gutter from the horizontal track. Empty
+lists suppress stale scrollbar chrome. The vertical thumb is inset within the gutter to avoid the adjacent split
+resize target.
+
+Qualification passed **155 tests (UI core 32, Traffic 123), zero failures/errors/skips**, desktop compilation,
+all six architecture checks and shared UI Android/iOS simulator compilation. New rendered regressions check
+all pixels in the clearance lane, selected-row paint, wide/narrow and larger-text layouts, horizontal/vertical
+scrolling, short/empty/overflow transitions, and actual thumb dragging beside the divider without pane resizing.
+Wide and narrow/scrolled renders were reviewed. Log: `/tmp/knet-traffic-scrollbar-check.log`.
+
+## Stable wrapped body scrolling (2026-11-13) [COMPLETED]
+
+Fix shared code-editor thumb jumps around very tall wrapped logical lines. Replace visible-item average metrics
+with width/document-specific height tracking while retaining lazy rendering and compact sparse numeric data.
+Prevent fold/syntax refreshes and caret reveal from overriding manual scrollbar gestures; reserve scrollbar
+clearance for code content. Cover long fields, forward/reverse dragging, stationary thumb stability, viewport
+resizing/folding, request/response reuse, search/caret navigation, selection and unwrapped behavior.
+
+Completed with a shared sparse prefix-height index, background cacheless Compose text measurement, and a
+pixel-based scrollbar adapter. Long wrapped fields no longer change document geometry as they enter the
+viewport. Pointer/wheel/selection gestures cancel caret reveal; syntax and uncollapsed fold refreshes cannot
+replay it. Explicit navigation reveals the correct visual part of a tall row. Right/bottom scrollbar lanes
+keep source text and selection inside the content viewport.
+
+Validation: 14 new regression cases (5 geometry unit cases and 9 rendered Compose interaction/layout cases),
+including a 566-line document with a 64 KiB wrapped Unicode field, forward/reverse and endpoint thumb dragging,
+stationary held-pointer stability, active editable rows, caret/search navigation, whole-document selection,
+late folding, resizing/collapsing, larger text, gutter pixel clearance, and unwrapped mode. The 100,000-row
+uniform geometry case retains no per-row arrays; exceptional rows retain 12 bytes of numeric data each.
+All 346 tests passed across codeEditor (99), httpPanel (54), Traffic (123), API Studio (62), and Intercepts (8).
+Desktop compilation and all six architecture checks passed. Rendered evidence is in
+`/tmp/knet-editor-scroll-long-field.png`, `/tmp/knet-editor-scroll-larger-text-clearance.png`, and
+`/tmp/knet-editor-scroll-unwrapped.png`; build log: `/tmp/knet-editor-scroll-final.log`.
+Automated qualification did not open the running desktop app or original capture. The user subsequently
+confirmed that the scrolling and complete selected-row frame fixes work in the running app.
+
+## Complete Traffic row selection outline (2026-11-13) [COMPLETED]
+
+Pin the selected-row frame to the visible table viewport rather than the horizontally scrolling column width.
+Keep all four edges visible before the scrollbar lane, preserve text clearance and shared header/row alignment,
+and verify wide/narrow layouts, horizontal offsets, vertical scrolling, and selection changes with rendered pixels.
+
+Moved the Traffic selected-row outline from the horizontally scrolling cells to viewport-owned drawing after
+scrollbar clearance. All four edges remain visible before the scrollbar lane; vertical lazy-row positions move
+the frame without an input overlay. Two rendered regressions reproduced the missing right edge before the fix
+and now verify complete frame pixels at wide/narrow sizes, both horizontal endpoints, selection/vertical-scroll
+updates, stale-edge removal, and an untouched scrollbar gutter. All 125 Traffic tests passed with zero
+failures/errors/skips, along with desktop compilation and all six architecture checks. Reviewed
+`/tmp/knet-traffic-scrollbar-complete-selection-680.png` and the 1200 px render.
+Build log: `/tmp/knet-traffic-selection-check.log`.

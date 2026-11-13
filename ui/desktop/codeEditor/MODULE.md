@@ -31,7 +31,9 @@ The detailed design and extension guide is the repository-level
   dispatcher. Stable command identities prevent asynchronous enabled-state changes from recreating toolbar nodes.
 - Viewport-contained word wrapping by default, variable-height logical rows, and wrapped-row-aware caret
   navigation. Horizontal scrolling remains an explicit standalone-consumer opt-out.
-- Cooperative cancellation checkpoints for syntax, folding, and search work.
+- Stable document-based vertical scrollbar geometry, sparse wrapped-height tracking, reserved scrollbar lanes,
+  and manual-scroll priority over automatic caret reveal.
+- Cooperative cancellation checkpoints for syntax, folding, search, and viewport geometry work.
 
 ## Does not own
 
@@ -138,6 +140,8 @@ when the document-end caret is not composed.
   larger edited lines are temporarily unstyled until background convergence.
 - The ordinary unfolded viewport uses an identity map without per-line mapping arrays.
 - Collapsed-fold mappings allocate only while folds are actually collapsed.
+- Wrapped heights are measured off-thread with a cacheless text measurer; only numeric height exceptions
+  survive preparation. Uniform rows retain no per-row geometry array or off-screen text layouts.
 - Word wrapping changes only visual layout. It never inserts document newlines, changes logical line numbers,
   or alters serialized request, response, GraphQL, or script text.
 - Long-running syntax, folding, and search loops invoke cancellation checkpoints every bounded block.

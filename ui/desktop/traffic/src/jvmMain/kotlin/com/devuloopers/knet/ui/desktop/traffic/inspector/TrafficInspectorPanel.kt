@@ -1,6 +1,7 @@
 package com.devuloopers.knet.ui.desktop.traffic.inspector
 
-import androidx.compose.foundation.border
+import com.devuloopers.knet.ui.core.foundation.border.KNetBorderEdges
+import com.devuloopers.knet.ui.core.foundation.border.knetBorder
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -66,7 +67,7 @@ fun TrafficInspectorPanel(
     val shownTab = if (activeTab == InspectorTab.MESSAGES && !supportsMessages) InspectorTab.OVERVIEW else activeTab
 
     KNetSurface(
-        modifier = modifier.fillMaxSize().border(width = 1.dp, color = themeColors.border),
+        modifier = modifier.fillMaxSize(),
         color = themeColors.surface
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
@@ -76,7 +77,7 @@ fun TrafficInspectorPanel(
                 KNetTabRow(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .border(width = 1.dp, color = themeColors.border)
+                        .knetBorder(KNetBorderEdges.HORIZONTAL)
                 ) {
                     KNetTab(
                         title = "Overview",

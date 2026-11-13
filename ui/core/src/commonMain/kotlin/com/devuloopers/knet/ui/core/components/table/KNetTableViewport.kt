@@ -22,6 +22,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.ui.core.components.scrollbar.KNetHorizontalScrollbar
 import com.devuloopers.knet.ui.core.components.scrollbar.KNetVerticalScrollbar
+import com.devuloopers.knet.ui.core.components.scrollbar.rememberVerticalScrollbarGutter
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 
 /**
@@ -39,9 +40,9 @@ fun KNetTableViewport(listState: LazyListState, modifier: Modifier = Modifier,
     val spacing = KNetTheme.spacing
     val dimensions = KNetTheme.dimensions
     val horizontal = rememberScrollState()
-    val verticalOverflow by remember(listState) { derivedStateOf { listState.canScrollBackward || listState.canScrollForward } }
+    val scrollbarGutter = rememberVerticalScrollbarGutter(listState)
     val horizontalOverflow by remember(horizontal) { derivedStateOf { horizontal.maxValue > 0 } }
-    val verticalGutter = if (emptyContent == null && verticalOverflow) dimensions.scrollbarWidth + spacing.sm else 0.dp
+    val verticalGutter = if (emptyContent == null) scrollbarGutter else 0.dp
     val horizontalGutter = if (horizontalOverflow) dimensions.scrollbarWidth + spacing.sm else 0.dp
     var headerHeightPx by remember { mutableIntStateOf(0) }
     val headerHeight = with(LocalDensity.current) { headerHeightPx.toDp() }
