@@ -95,4 +95,26 @@ class DesktopModulesTest {
         assertTrue(capabilities.get("mobile-companion") == null)
         assertTrue(capabilities.get("vpn") == null)
     }
+    @Test
+    fun `persisted query use cases share capture catalog and container close clears ephemeral sources`() = kotlinx.coroutines.test.runTest {
+        val application = startKoin { modules(listOf(module { single { DesktopConfiguration.load() } }) + DesktopModules.all) }
+        val catalog = application.koin.get<com.devuloopers.knet.application.contract.graphql.GraphQLPersistedQueryCatalog>()
+        assertTrue(catalog === com.devuloopers.knet.engine.protocol.inspector.graphql.GraphQLPersistedQueryRuntime.catalog)
+        val observer = application.koin.get<com.devuloopers.knet.application.usecase.graphql.ObserveGraphQLPersistedQueriesUseCase>()
+        val source = "query CompositionRead { item { id } }"
+        val hash = com.devuloopers.knet.engine.protocol.inspector.graphql.GraphQLQueryHashing.sha256(source)
+        val endpoint = catalog.endpoint("https://composition.test/graphql")!!
+        val file = java.nio.file.Files.createTempFile("knet-query-composition-", ".json")
+        try {
+            java.nio.file.Files.writeString(file, "{\"${hash.value}\":\"$source\"}")
+            val importer = application.koin.get<com.devuloopers.knet.application.usecase.graphql.ImportGraphQLPersistedQueriesUseCase>()
+            assertEquals(com.devuloopers.knet.application.contract.graphql.GraphQLManifestImportResult.Imported(1),
+                importer.execute(endpoint.value, file.toString()))
+            assertEquals(source, catalog.lookup(endpoint, hash)?.query)
+            assertTrue(observer.execute().value > 0)
+            application.close()
+            assertTrue(catalog.lookup(endpoint, hash) == null)
+        } finally { java.nio.file.Files.deleteIfExists(file); application.close() }
+    }
+
 }

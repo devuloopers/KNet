@@ -44,4 +44,27 @@ class GraphQLHttpEditingTest {
         assertNull(GraphQLQuerySynchronizer.extractOperationName(source))
         assertEquals(source, GraphQLQuerySynchronizer.updateOperationName(source, "B"))
     }
+    @Test fun `APQ edits refresh only existing valid hash metadata and preserve manual extension edits`() {
+        val extensions = """{"persistedQuery":{"version":1,"sha256Hash":"${"a".repeat(64)}","custom":7},"trace":{"keep":true}}"""
+        val previous = StructuredPayloadState.GraphQL(extensionsText = extensions)
+        val current = previous.copy(queryText = " query New { field }\n")
+        val changes = GraphQLHttpRequestFormatter.changedFields(previous, current)
+        assertEquals(setOf(GraphQLHttpParameter.QUERY, GraphQLHttpParameter.EXTENSIONS), changes.keys)
+        assertTrue(changes[GraphQLHttpParameter.EXTENSIONS]!!.contains("\"custom\":7"))
+        val decoded = GraphQLHttpRequestFormatter.inspect("POST", "/graphql", body = GraphQLHttpRequestFormatter.updateJsonBody("{}", changes).getOrThrow().encodeToByteArray())!!
+        assertNull(decoded.diagnostic)
+        assertEquals(current.queryText, decoded.queryText)
+        val manual = current.copy(extensionsText = extensions.replace("true", "false"))
+        assertEquals(manual.extensionsText, GraphQLHttpRequestFormatter.changedFields(previous, manual)[GraphQLHttpParameter.EXTENSIONS])
+        assertEquals(setOf(GraphQLHttpParameter.VARIABLES), GraphQLHttpRequestFormatter.changedFields(previous, previous.copy(variablesText = "{\"id\":2}")).keys)
+    }
+
+    @Test fun `invalid and excessively nested extensions cannot trigger hash rewriting or recursive parsing`() {
+        for (extensions in listOf("{broken", "{}", "{\"persistedQuery\":{\"version\":2,\"sha256Hash\":\"${"a".repeat(64)}\"}}",
+            "{\"nested\":" + "[".repeat(150) + "0" + "]".repeat(150) + "}")) {
+            val previous = StructuredPayloadState.GraphQL(extensionsText = extensions)
+            assertEquals(setOf(GraphQLHttpParameter.QUERY), GraphQLHttpRequestFormatter.changedFields(previous, previous.copy(queryText = "{ field }")).keys)
+        }
+    }
+
 }

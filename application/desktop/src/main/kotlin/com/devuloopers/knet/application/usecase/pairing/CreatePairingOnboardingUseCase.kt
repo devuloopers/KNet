@@ -21,6 +21,7 @@ import com.devuloopers.knet.pairing.PairingInvitation
 /**
  * Secret-bearing onboarding data; presentations must avoid logs, analytics, and persistent state.
  *
+ * @property bootstrapId non-secret correlation identity for this exact one-time QR.
  * @property desktopDisplayName bounded name shown during companion confirmation.
  * @property controlEndpoint reachable secure endpoint shown in the desktop guidance.
  * @property expiresAtEpochMillis absolute expiry used by the presentation countdown.
@@ -28,6 +29,7 @@ import com.devuloopers.knet.pairing.PairingInvitation
  * @property qrPayload exact canonical content encoded into the QR image.
  */
 public data class PairingOnboardingDescriptor(
+    public val bootstrapId: CompanionBootstrapId,
     public val desktopDisplayName: CompanionDesktopDisplayName,
     public val controlEndpoint: CompanionServiceEndpoint,
     public val expiresAtEpochMillis: Long,
@@ -132,6 +134,7 @@ public class CreatePairingOnboardingUseCase(
         )
         val payload = payloadCodec.encode(bootstrap)
         return PairingOnboardingDescriptor(
+            bootstrapId = bootstrap.id,
             desktopDisplayName = environment.desktopDisplayName,
             controlEndpoint = environment.controlEndpoint,
             expiresAtEpochMillis = pairingInvitation.expiresAtEpochMillis,

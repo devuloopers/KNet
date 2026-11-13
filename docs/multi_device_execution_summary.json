@@ -1,0 +1,145 @@
+{
+  "scope": "multi-device automated qualification; physical-device, native gestures and eight real-LAN fixtures excluded",
+  "outputs": [
+    {
+      "module": ":core:companion",
+      "task": "jvmTest",
+      "tests": 32,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": ":application:desktop",
+      "task": "test",
+      "tests": 75,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": ":application:companion",
+      "task": "jvmTest",
+      "tests": 60,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": ":connectivity:desktop",
+      "task": "multiDeviceControlQualification",
+      "tests": 31,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": ":connectivity:companion",
+      "task": "testAndroidHostTest",
+      "tests": 85,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": ":data:desktop",
+      "task": "jvmTest",
+      "tests": 122,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": ":data:desktop",
+      "task": "canonicalTrafficScaleQualification",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": ":storage",
+      "task": "jvmTest",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": ":engine:proxy",
+      "task": "test",
+      "tests": 164,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": ":engine:protocol",
+      "task": "test",
+      "tests": 60,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": ":ui:desktop:app",
+      "task": "jvmTest",
+      "tests": 35,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": ":ui:desktop:traffic",
+      "task": "jvmTest",
+      "tests": 130,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": ":products:desktop",
+      "task": "test",
+      "tests": 50,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": ":products:companion:androidApp",
+      "task": "testDebugUnitTest",
+      "tests": 13,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": ":products:companion:di",
+      "task": "testAndroidHostTest",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "module": ":products:companion:iosPacketTunnel",
+      "task": "iosSimulatorArm64Test",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "total": {
+    "tests": 875,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "refinement": {
+    "feature": "Device tab eligibility, confirmed offline Close/Clear and online Clear retention",
+    "new_regression_cases": 10,
+    "log": "/Users/devuloopers/.codex/verification/knet-multi-device/tab-close-qualification.log",
+    "physical_verification": "pending"
+  }
+}

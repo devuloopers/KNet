@@ -268,6 +268,8 @@ public class IosCompanionInspectionController(
             TunnelOptionKey.DESKTOP_ID to registration.desktopId.value,
             TunnelOptionKey.PROXY_HOST to registration.proxyEndpoint.host,
             TunnelOptionKey.PROXY_PORT to registration.proxyEndpoint.port,
+            "controlHost" to registration.controlEndpoint.host,
+            "controlPort" to registration.controlEndpoint.port,
             TunnelOptionKey.AUTHORIZATION to authorizationValue,
             TunnelOptionKey.ROOT_CERTIFICATE to registration.rootCertificate.copyBytes().base64(),
             TunnelOptionKey.ROOT_SHA256 to registration.rootCertificateSha256.value,

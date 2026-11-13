@@ -1,63 +1,87 @@
 package com.devuloopers.knet.companion.sharedui.screen.home
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawingPadding
-import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.companion.presentation.action.CompanionAction
-import com.devuloopers.knet.companion.presentation.state.CompanionHomeUiState
-import com.devuloopers.knet.companion.sharedui.component.CompanionBrandHeader
+import com.devuloopers.knet.companion.presentation.state.*
+import com.devuloopers.knet.companion.sharedui.component.*
+import com.devuloopers.knet.companion.sharedui.generated.resources.*
+import com.devuloopers.knet.ui.core.components.button.ButtonVariant
+import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
+import org.jetbrains.compose.resources.stringResource
 
-/** Reactive inspection Home. Its fixed header and stable card geometry prevent asynchronous state jumps. */
+/** Operational Home has one primary circle, truthful native capture status and a single inset summary. */
 @Composable
-internal fun CompanionHomeScreen(
-    state: CompanionHomeUiState,
-    onAction: (CompanionAction) -> Unit,
-) {
-    Box(
-        modifier = Modifier.fillMaxSize().background(KNetTheme.colors.background).safeDrawingPadding(),
-        contentAlignment = Alignment.TopCenter,
-    ) {
-        Column(modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
-            CompanionBrandHeader(
-                modifier = Modifier.fillMaxWidth().widthIn(max = HomeContentWidth)
-                    .padding(horizontal = KNetTheme.spacing.lg, vertical = KNetTheme.spacing.xl),
-            )
-            HorizontalDivider(color = KNetTheme.colors.border.copy(alpha = 0.7f))
-            Column(
-                modifier = Modifier.fillMaxWidth().weight(1f).verticalScroll(rememberScrollState())
-                    .padding(horizontal = KNetTheme.spacing.lg, vertical = KNetTheme.spacing.xxl),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.lg),
-            ) {
-                CompanionHomeHeroCard(state)
-                CompanionInspectionControlCard(state, onAction)
-                CompanionReadinessSummary(state)
-                CompanionInspectionConfiguration(state)
-                CompanionHomePrivacyNote()
-                Spacer(modifier = Modifier.height(KNetTheme.spacing.lg))
+internal fun CompanionHomeScreen(state: CompanionHomeUiState, onAction: (CompanionAction) -> Unit) {
+    CompanionHeroPage {
+        CompanionHomeHero(state)
+        CompanionInspectionControl(state, onAction)
+        CompanionReadinessSummary(state)
+        CompanionFootnote(stringResource(when {
+            state.readiness == CompanionHomeReadiness.UNAVAILABLE -> Res.string.home_auto_checking
+            state.inspectionControl == CompanionHomeInspectionControl.Stop -> Res.string.home_active_note
+            state.inspectionControl == CompanionHomeInspectionControl.Starting ||
+                state.inspectionControl == CompanionHomeInspectionControl.Stopping -> Res.string.home_inspection_busy_summary
+            else -> Res.string.home_ready_note
+        }))
+        state.failureNotice?.let { notice ->
+            CompanionPanel {
+                CompanionInfo(notice.failure.message, KNetIcons.Warning, KNetTheme.colors.semantic.warning)
+                if (notice is CompanionHomeFailureNotice.Dismissible) CompanionActionButton(stringResource(Res.string.dismiss),
+                    { onAction(CompanionAction.ClearFailure) }, variant = ButtonVariant.Ghost)
             }
         }
     }
 }
 
+/** Native lifecycle owns both interactivity and the center glyph; busy circles never dispatch actions. */
 @Composable
-internal fun homeAnimationDuration(): Int =
-    if (KNetTheme.motion.animationsEnabled) KNetTheme.motion.durationSlow else KNetTheme.motion.durationInstant
-
-internal val HomeContentWidth = 560.dp
+private fun CompanionInspectionControl(state: CompanionHomeUiState, onAction: (CompanionAction) -> Unit) {
+    val control = state.inspectionControl
+    val unavailable = state.readiness == CompanionHomeReadiness.UNAVAILABLE && control is CompanionHomeInspectionControl.Start
+    val busy = control == CompanionHomeInspectionControl.Starting || control == CompanionHomeInspectionControl.Stopping
+    val enabled = when (control) {
+        is CompanionHomeInspectionControl.Start -> unavailable || control.enabled
+        is CompanionHomeInspectionControl.Retry -> control.enabled
+        CompanionHomeInspectionControl.Starting, CompanionHomeInspectionControl.Stopping -> false
+        else -> true
+    }
+    val caption = when {
+        unavailable -> Res.string.switch_desktop
+        control == CompanionHomeInspectionControl.Stopping -> Res.string.home_stopping_title
+        control == CompanionHomeInspectionControl.Stop -> Res.string.stop_inspection
+        control == CompanionHomeInspectionControl.Starting -> Res.string.home_preparing_title
+        control == CompanionHomeInspectionControl.ContinueVpnSetup -> Res.string.continue_vpn_setup
+        control is CompanionHomeInspectionControl.Retry -> Res.string.retry
+        else -> Res.string.start_inspection
+    }
+    val label = when {
+        unavailable -> Res.string.control_switch
+        control == CompanionHomeInspectionControl.Stopping -> Res.string.control_stopping
+        control == CompanionHomeInspectionControl.Stop -> Res.string.control_stop
+        control == CompanionHomeInspectionControl.Starting -> Res.string.control_starting
+        control == CompanionHomeInspectionControl.ContinueVpnSetup -> Res.string.control_allow
+        control is CompanionHomeInspectionControl.Retry -> Res.string.retry
+        else -> Res.string.control_start
+    }
+    val symbol = when {
+        unavailable -> CompanionControlSymbol.DESKTOP
+        control == CompanionHomeInspectionControl.Stop || control == CompanionHomeInspectionControl.Stopping -> CompanionControlSymbol.STOP
+        control == CompanionHomeInspectionControl.ContinueVpnSetup -> CompanionControlSymbol.SHIELD
+        control is CompanionHomeInspectionControl.Retry -> CompanionControlSymbol.RETRY
+        else -> CompanionControlSymbol.POWER
+    }
+    CompanionRoundControl(CompanionRoundControlState(symbol, stringResource(label), stringResource(caption),
+        tone = when {
+            control == CompanionHomeInspectionControl.Stop -> CompanionControlTone.SUCCESS
+            unavailable -> CompanionControlTone.ACCENT
+            else -> CompanionControlTone.ACCENT
+        }, busy = busy, enabled = enabled), onClick = if (busy) null else {
+        { onAction(when {
+            unavailable -> CompanionAction.OpenDesktopsRequested
+            control == CompanionHomeInspectionControl.Stop -> CompanionAction.StopInspectionRequested
+            control == CompanionHomeInspectionControl.ContinueVpnSetup -> CompanionAction.VpnConsentRequested
+            else -> CompanionAction.StartInspectionRequested
+        }) }
+    })
+}

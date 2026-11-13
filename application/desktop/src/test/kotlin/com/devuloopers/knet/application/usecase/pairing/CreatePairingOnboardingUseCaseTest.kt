@@ -1,5 +1,6 @@
 package com.devuloopers.knet.application.usecase.pairing
 
+import kotlinx.coroutines.flow.MutableStateFlow
 import com.devuloopers.knet.companion.model.CompanionDesktopDisplayName
 import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.application.contract.pairing.CompanionOnboardingStore
@@ -57,6 +58,7 @@ class CreatePairingOnboardingUseCaseTest {
         assertEquals(8_181, decoded.rootCertificateEndpoint.port)
         assertEquals(onboardingStore.pending?.invitation?.pairing?.id, store.pendingInvitation?.id)
         assertEquals(onboardingStore.pending?.id, decoded.id)
+        assertEquals(decoded.id, descriptor.bootstrapId)
         assertFalse(
             store.pendingInvitation?.secretDigest.orEmpty().contains(
                 onboardingStore.pending?.invitation?.pairing?.secret.orEmpty(),
@@ -66,10 +68,12 @@ class CreatePairingOnboardingUseCaseTest {
     }
 
     private class RecordingCompanionOnboardingStore : CompanionOnboardingStore {
+        override val pendingIds = MutableStateFlow<Set<CompanionBootstrapId>>(emptySet())
         var pending: PendingCompanionOnboarding? = null
 
         override suspend fun put(pending: PendingCompanionOnboarding) {
             this.pending = pending
+            pendingIds.value = pendingIds.value + pending.id
         }
 
         override suspend fun claim(

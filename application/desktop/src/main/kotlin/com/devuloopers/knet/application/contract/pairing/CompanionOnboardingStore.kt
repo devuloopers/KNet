@@ -2,6 +2,7 @@ package com.devuloopers.knet.application.contract.pairing
 
 import com.devuloopers.knet.companion.model.CompanionBootstrapId
 import com.devuloopers.knet.companion.model.CompanionPairingInvitation
+import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Pending complete invitation protected by a distinct one-time bootstrap secret digest.
@@ -27,6 +28,9 @@ public data class PendingCompanionOnboarding(
 
 /** Atomic, bounded storage for secret-protected companion onboarding responses. */
 public interface CompanionOnboardingStore {
+    /** Non-secret snapshot of unconsumed IDs, updated atomically with put/claim/pruning and bounded by storage. */
+    public val pendingIds: StateFlow<Set<CompanionBootstrapId>>
+
     /** Publishes [pending] without retaining the plaintext retrieval secret. */
     public suspend fun put(pending: PendingCompanionOnboarding)
 

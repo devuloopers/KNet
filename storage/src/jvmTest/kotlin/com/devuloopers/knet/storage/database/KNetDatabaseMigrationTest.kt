@@ -37,7 +37,7 @@ class KNetDatabaseMigrationTest {
 
     @Test
     fun `every retained schema generation migrates without deleting canonical sessions`() {
-        listOf(13, 18, 22, 24, 27, 28, 29, 30, 31, 32, 33, 34, 35).forEach { version ->
+        listOf(13, 18, 22, 24, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36).forEach { version ->
             val root = Files.createTempDirectory("knet-v$version-migration-").toFile()
             val databaseFile = root.resolve("traffic.db")
             try {

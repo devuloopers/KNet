@@ -97,6 +97,11 @@ private fun ByteArray?.contentEqualsNullable(other: ByteArray?): Boolean = when 
     else -> contentEquals(other)
 }
 
+/** Body-free viewport retained per selected device; positions are bounded by Compose to the available content. */
+data class TrafficViewport(val row: Int = 0, val offset: Int = 0, val horizontal: Int = 0) {
+    init { require(row >= 0 && offset >= 0 && horizontal >= 0) }
+}
+
 /**
  * Top-level immutable UI state for `:ui:desktop:traffic` workspace.
  *
@@ -120,6 +125,10 @@ private fun ByteArray?.contentEqualsNullable(other: ByteArray?): Boolean = when 
  * @property columnWidths Shared persisted widths used by both Traffic table headers and rows.
  */
 data class TrafficState(
+    /** Authenticated source for every row, aggregate and asynchronous detail in this workspace. */
+    val source: com.devuloopers.knet.application.contract.traffic.TrafficSource = com.devuloopers.knet.application.contract.traffic.TrafficSource.All,
+    /** Last viewport of this device workspace. */
+    val viewport: TrafficViewport = TrafficViewport(),
     val transactions: List<TrafficRowUiState> = emptyList(),
     val filteredTransactions: List<TrafficRowUiState> = emptyList(),
     val totalAvailableCount: Long = 0L,

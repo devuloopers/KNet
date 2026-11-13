@@ -18,6 +18,10 @@ Owns the Compose Multiplatform companion interface shared by Android and iOS pro
   is reused without hardcoding Android Settings copy into the shared screen.
 - An `iosMain` UIKit controller factory that reactively hosts the same shared UI in the iOS product.
 - Pure route and restored-stack mappings that can be verified without a device.
+- Certificate setup starts with a checking phase. Exact trusted roots show Verified/Continue with optional file
+  details; only missing trust offers download/install guidance. Unavailable/rejected checks expose the reason and
+  Retry, without inferring installation state. The shared progress indicator follows verified trust independently
+  of whether a file was exported during this session.
 
 ## Does not own
 
@@ -36,3 +40,17 @@ while retaining ownership of their lifecycles.
 
 The production Companion root uses UI core's fixed-dark KNetApplicationTheme. Explicit light previews remain
 component qualification surfaces; host appearance does not select the shipped Companion palette.
+
+## Mobile redesign and saved desktops
+
+Uses the approved circular controls, vector brand header, inline desktop selector, compact setup milestones and
+reusable status panels. Hero pages scroll on compact/larger-text layouts; instruction pages keep bottom actions
+reachable. Busy circles are non-interactive, expose progress semantics and obey the KNet reduced-motion policy. Desktop management, QR add flow, ordered handoff/recovery, forget confirmation and the
+app-owned VPN explanation render typed presentation state. Platform-specific certificate instructions remain typed
+as Android/iOS guidance. Large bitmap heroes and their unused packaged resources have been removed.
+See `docs/companion_ui.md` for screen coverage, workflow behavior and qualification boundaries.
+
+Scan enters native permission directly. Denials keep Connect visible, and an explicit later tap opens the app-owned
+Settings sheet when prompting is blocked. Pending intent is saveable; native permission state remains product-owned.
+The shared QR-image secondary button stays available without camera access. See `docs/companion_ui.md` for the
+permission state boundary and remaining physical checks.

@@ -38,6 +38,7 @@ class CompanionHomeUiStateTest {
     @Test
     fun restoredHomeShowsCheckingWhileLiveTrustVerificationIsPending() {
         val home = CompanionUiState(
+            activeRegistration = registration(),
             certificate = CompanionCertificateState.Verifying,
             network = CompanionNetworkState.Available(metered = false),
         ).toCompanionHomeUiState()
@@ -49,6 +50,7 @@ class CompanionHomeUiStateTest {
     @Test
     fun authenticatedDesktopAndTrustedCertificateProduceReadyStartControl() {
         val home = CompanionUiState(
+            activeRegistration = registration(),
             certificate = CompanionCertificateState.Trusted(FINGERPRINT, 1_000L),
             network = CompanionNetworkState.Available(metered = false),
             desktopAvailability = CompanionDesktopAvailability.Available(DESKTOP_ID, 2_000L),
@@ -64,6 +66,7 @@ class CompanionHomeUiStateTest {
     @Test
     fun runningInspectionProducesActiveStopControlAndActualTransportPath() {
         val home = CompanionUiState(
+            activeRegistration = registration(),
             certificate = CompanionCertificateState.Trusted(FINGERPRINT, 1_000L),
             network = CompanionNetworkState.Available(metered = false),
             connection = CompanionConnectionState.Connected(DESKTOP_ID, CompanionTransportKind.DIRECT_LAN, 2_000L),
@@ -83,6 +86,7 @@ class CompanionHomeUiStateTest {
             true,
         )
         val home = CompanionUiState(
+            activeRegistration = registration(),
             certificate = CompanionCertificateState.Trusted(FINGERPRINT, 1_000L),
             network = CompanionNetworkState.Available(metered = false),
             desktopAvailability = CompanionDesktopAvailability.Unavailable(DESKTOP_ID, failure),
@@ -101,6 +105,7 @@ class CompanionHomeUiStateTest {
             true,
         )
         val home = CompanionUiState(
+            activeRegistration = registration(),
             certificate = CompanionCertificateState.VerificationDeferred(failure),
             network = CompanionNetworkState.Available(metered = false),
             desktopAvailability = CompanionDesktopAvailability.Unavailable(DESKTOP_ID, failure),
@@ -164,6 +169,30 @@ class CompanionHomeUiStateTest {
 
         assertEquals(CompanionHomeCertificateStatus.NEEDS_ATTENTION, home.certificateStatus)
         assertEquals(CompanionHomeReadiness.NEEDS_ATTENTION, home.readiness)
+        assertEquals(false, assertIs<CompanionHomeInspectionControl.Start>(home.inspectionControl).enabled)
+    }
+
+    @Test
+    fun anotherDesktopsAvailabilityCannotEnableStartAfterSelectionChanges() {
+        val selected = registration()
+        val home = CompanionUiState(activeRegistration = selected,
+            certificate = CompanionCertificateState.Trusted(FINGERPRINT, 1_000L),
+            network = CompanionNetworkState.Available(false),
+            desktopAvailability = CompanionDesktopAvailability.Available(CompanionDesktopId("another"), 2_000L),
+        ).toCompanionHomeUiState()
+        assertEquals(CompanionHomeDesktopStatus.CHECKING, home.desktopStatus)
+        assertEquals(false, assertIs<CompanionHomeInspectionControl.Start>(home.inspectionControl).enabled)
+    }
+
+    @Test
+    fun trustForAnotherRootDoesNotEnableHttpsOrCapture() {
+        val home = CompanionUiState(activeRegistration = registration(),
+            certificate = CompanionCertificateState.Trusted(Sha256Fingerprint("c".repeat(64)), 1_000L),
+            network = CompanionNetworkState.Available(false),
+            desktopAvailability = CompanionDesktopAvailability.Available(DESKTOP_ID, 2_000L),
+        ).toCompanionHomeUiState()
+        assertEquals(CompanionHomeCertificateStatus.NEEDS_ATTENTION, home.certificateStatus)
+        assertEquals(CompanionHomeHttpsCapability.LIMITED, home.httpsCapability)
         assertEquals(false, assertIs<CompanionHomeInspectionControl.Start>(home.inspectionControl).enabled)
     }
 

@@ -89,7 +89,11 @@ public class PairCompanionDeviceUseCase(
     private val registrations: CompanionRegistrationRepository,
     private val nowEpochMillis: () -> Long,
 ) {
-    public suspend fun execute(invitation: CompanionPairingInvitation): PairCompanionDeviceResult {
+    /** Pairs [invitation], retaining any other desktop selection when [makeActive] is false. */
+    public suspend fun execute(
+        invitation: CompanionPairingInvitation,
+        makeActive: Boolean = true,
+    ): PairCompanionDeviceResult {
         if (nowEpochMillis() >= invitation.pairing.expiresAtEpochMillis) {
             return PairCompanionDeviceResult.Rejected(
                 CompanionFailure(CompanionFailureCode.INVITATION_EXPIRED, "Pairing invitation expired.", false),
@@ -146,7 +150,7 @@ public class PairCompanionDeviceUseCase(
                 try {
                     withContext(NonCancellable) {
                         credentials.write(credentialReference, paired.credential)
-                        registrations.upsert(registration, makeActive = true)
+                        registrations.upsert(registration, makeActive = makeActive)
                     }
                     PairCompanionDeviceResult.Paired(registration)
                 } catch (cancelled: CancellationException) {

@@ -67,6 +67,8 @@ public data class TrafficPageQuery(
     public val schemes: Set<HttpScheme> = emptySet(),
     public val protocols: Set<ApplicationProtocol> = emptySet(),
     public val recordFilter: TrafficRecordFilter = TrafficRecordFilter.ALL,
+    /** Source restriction evaluated by storage before pagination and aggregate counts. */
+    public val source: TrafficSource = TrafficSource.All,
 ) {
     init {
         require(limit in 1..1_000) { "Traffic page limit must be between 1 and 1000." }

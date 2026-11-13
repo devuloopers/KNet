@@ -18,6 +18,8 @@ public data class TrafficFacetQuery(
     public val methods: Set<HttpMethod> = emptySet(),
     public val statuses: Set<HttpStatus> = emptySet(),
     public val protocols: Set<ApplicationProtocol> = emptySet(),
+    /** Same authenticated source restriction used by the visible page. */
+    public val source: TrafficSource = TrafficSource.All,
 )
 
 /** Exact aggregate counts for the Traffic request-scheme facet. */

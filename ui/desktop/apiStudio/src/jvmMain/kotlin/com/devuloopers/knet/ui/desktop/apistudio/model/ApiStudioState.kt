@@ -28,5 +28,11 @@ data class ApiStudioState(
     val selectedRequestId: String? = null,
     val isRestoring: Boolean = true,
     val persistenceErrorMessage: String? = null,
-    val isSaveDialogOpen: Boolean = false
+    val isSaveDialogOpen: Boolean = false,
+    /** Ephemeral read-only lookup, excluded from persistence and outgoing editor buffers. */
+    val persistedQueryPreview: com.devuloopers.knet.engine.formatter.model.BodyFormat.GraphQL? = null,
+    /** Feedback for the latest endpoint-scoped manifest import. */
+    val manifestImportResult: com.devuloopers.knet.application.contract.graphql.GraphQLManifestImportResult? = null,
+    /** Prevents parallel manifest reads from the same document. */
+    val isImportingManifest: Boolean = false
 )

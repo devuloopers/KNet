@@ -77,7 +77,9 @@ enum class GraphQLBodySubTab(val label: String, val codeLanguage: CodeLanguage) 
      */
     fun getEmptyState(format: BodyFormat.GraphQL, rawJsonText: String): Pair<String, String>? = when (this) {
         QUERY -> if (format.queryText.isBlank()) {
-            "No GraphQL Query" to "This GraphQL payload does not define a query document."
+            if (format.persistedQuery != null) "Query source unavailable" to
+                "This request contains a persisted-query hash. Capture its full document or import a matching manifest in API Studio."
+            else "No GraphQL Query" to "This GraphQL payload does not define a query document."
         } else null
         VARIABLES -> {
             val hasVars = format.variablesJson.isNotBlank() && format.variablesJson.trim() != "{}"
@@ -192,6 +194,13 @@ fun GraphQLBodyViewer(
         Text(text = "Source: ${format.source.label}", style = typography.caption,
             color = themeColors.textMuted, maxLines = 1, softWrap = false,
             modifier = Modifier.padding(horizontal = spacing.sm, vertical = spacing.xxs))
+        format.persistedQuery?.let { metadata ->
+            KNetInspectorParagraph("Persisted query · SHA-256 ${metadata.hash.value}",
+                Modifier.fillMaxWidth().padding(horizontal = spacing.sm, vertical = spacing.xxs))
+            KNetInspectorParagraph("Query document: ${format.queryProvenance.label}",
+                Modifier.fillMaxWidth().padding(horizontal = spacing.sm, vertical = spacing.xxs),
+                color = themeColors.textSecondary)
+        }
         format.diagnostic?.let { KNetInspectorParagraph(it.description,
             Modifier.fillMaxWidth().padding(horizontal = spacing.sm, vertical = spacing.xxs), color = themeColors.semantic.warning) }
 

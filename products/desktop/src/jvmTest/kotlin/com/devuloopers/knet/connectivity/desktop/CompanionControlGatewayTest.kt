@@ -55,17 +55,235 @@ import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLServerSocketFactory
 import javax.net.ssl.SSLSocket
 import javax.net.ssl.TrustManagerFactory
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.toJavaDuration
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import kotlin.io.encoding.Base64
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 
 class CompanionControlGatewayTest {
+    @Test
+    fun ktorCertificateChallengeReturnsBodyless204WithoutLengthAndRejectsReplay(): Unit = kotlinx.coroutines.runBlocking {
+        val fixture = ktorFixture()
+        try {
+            val credential = pairDevice(fixture.pairing, setOf(DeviceScope.SETUP_ARTIFACT_READ), "certificate-device")
+            val nonce = "c".repeat(43)
+            val uri = java.net.URI("https://localhost:${fixture.port}${CompanionCertificateProtocol.TRUST_CHALLENGE_PATH}")
+            val request = java.net.http.HttpRequest.newBuilder(uri)
+                .header("Authorization", "Bearer certificate-device:$credential")
+                .header(CompanionCertificateProtocol.CHALLENGE_HEADER, nonce)
+                .POST(java.net.http.HttpRequest.BodyPublishers.noBody()).build()
+            val response = fixture.client.send(request, java.net.http.HttpResponse.BodyHandlers.ofByteArray())
+            assertEquals(204, response.statusCode())
+            assertTrue(response.headers().firstValue("Content-Length").isEmpty)
+            assertTrue(response.body().isEmpty())
+            assertEquals(nonce, response.headers().firstValue(CompanionCertificateProtocol.CHALLENGE_HEADER).orElse(""))
+            val replay = fixture.client.send(request, java.net.http.HttpResponse.BodyHandlers.ofByteArray())
+            assertEquals(409, replay.statusCode())
+        } finally { fixture.close() }
+    }
+
+    @Test
+    fun ktorTlsEndpointPreservesHttpsAndRejectsUnauthenticatedUpgrade() = kotlinx.coroutines.runBlocking {
+        val fixture = ktorFixture()
+        try {
+            val uri = java.net.URI("https://localhost:${fixture.port}${CompanionControlProtocol.NETWORK_CONDITIONS_PATH}")
+            val request = java.net.http.HttpRequest.newBuilder(uri).header("Authorization", "Bearer device-1:${fixture.credential}").GET().build()
+            val response = fixture.client.send(request, java.net.http.HttpResponse.BodyHandlers.ofByteArray())
+            assertEquals(200, response.statusCode())
+            assertEquals(fixture.policies.value, PacketConditionConfigurationCodec.decode(response.body()))
+            assertEquals("no-store", response.headers().firstValue("Cache-Control").orElse(""))
+            assertTrue(runCatching { fixture.connect("Bearer device-1:invalidcredential000") }.isFailure)
+            assertTrue(runCatching { fixture.connect("Bearer device-1:${fixture.credential}", origin = "https://untrusted.test") }.isFailure)
+            assertTrue(fixture.presence.presence.value.isEmpty())
+        } finally { fixture.close() }
+    }
+
+    @Test
+    fun twoRealWebSocketsPushPoliciesAcknowledgeAndFenceReconnects() = kotlinx.coroutines.runBlocking {
+        val fixture = ktorFixture()
+        try {
+            val secondCredential = pairDevice(fixture.pairing, setOf(DeviceScope.PROXY_STREAM), "device-2")
+            val first = fixture.connect("Bearer device-1:${fixture.credential}")
+            val second = fixture.connect("Bearer device-2:$secondCredential")
+            first.send(com.devuloopers.knet.companion.model.CompanionSessionMessageKind.START, 1)
+            second.send(com.devuloopers.knet.companion.model.CompanionSessionMessageKind.START, 1)
+            assertEquals("WELCOME", first.next().kind.name)
+            assertEquals("WELCOME", second.next().kind.name)
+            assertEquals(1L, first.next().revision)
+            assertEquals(1L, second.next().revision)
+            assertEquals(2, fixture.presence.presence.value.size)
+            first.socket.sendText(com.devuloopers.knet.companion.model.CompanionSessionProtocol.encode(
+                com.devuloopers.knet.companion.model.CompanionSessionMessage(com.devuloopers.knet.companion.model.CompanionSessionMessageKind.POLICY_ACK,
+                    "run", sequence = 2, revision = 1, acknowledgement = com.devuloopers.knet.companion.model.CompanionPolicyAcknowledgement.APPLIED)), true).join()
+            eventually { fixture.presence.presence.value[RegisteredDeviceId("device-1")]?.policy?.revision == 1L }
+            fixture.policies.value = PacketConditionConfiguration(enabled = true, downloadBitsPerSecond = 100_000)
+            assertEquals(2L, first.nextConfiguration().revision)
+            assertEquals(2L, second.nextConfiguration().revision)
+            val replacement = fixture.connect("Bearer device-1:${fixture.credential}")
+            replacement.send(com.devuloopers.knet.companion.model.CompanionSessionMessageKind.START, 1)
+            assertEquals("WELCOME", replacement.next().kind.name)
+            assertEquals(1L, replacement.nextConfiguration().revision)
+            first.socket.abort()
+            kotlinx.coroutines.delay(50)
+            assertEquals(com.devuloopers.knet.application.contract.device.DevicePresenceStatus.CONNECTED,
+                fixture.presence.presence.value[RegisteredDeviceId("device-1")]?.status)
+            replacement.send(com.devuloopers.knet.companion.model.CompanionSessionMessageKind.STOP, 2)
+            eventually { RegisteredDeviceId("device-1") !in fixture.presence.presence.value }
+            assertTrue(RegisteredDeviceId("device-2") in fixture.presence.presence.value)
+            second.send(com.devuloopers.knet.companion.model.CompanionSessionMessageKind.STOP, 2)
+            eventually { fixture.presence.presence.value.isEmpty() }
+        } finally { fixture.close() }
+    }
+
+    @Test
+    fun malformedRealSessionDoesNotPoisonListenerAndRepeatedDisconnectsReleaseCapacity() = kotlinx.coroutines.runBlocking {
+        val fixture = ktorFixture(maximumSessions = 2)
+        try {
+            val invalid = fixture.connect("Bearer device-1:${fixture.credential}")
+            invalid.socket.sendText("{\"kind\":\"START\",\"runId\":\"run\",\"version\":99}", true).join()
+            eventually { invalid.finished }
+            repeat(25) {
+                val peer = fixture.connect("Bearer device-1:${fixture.credential}")
+                peer.send(com.devuloopers.knet.companion.model.CompanionSessionMessageKind.START, 1)
+                assertEquals("WELCOME", peer.next().kind.name)
+                peer.nextConfiguration()
+                peer.send(com.devuloopers.knet.companion.model.CompanionSessionMessageKind.STOP, 2)
+                eventually { peer.finished }
+            }
+            assertTrue(fixture.presence.presence.value.isEmpty())
+        } finally { fixture.close() }
+    }
+
+    @Test fun realControlSessionsHaveBoundedLifecycleAtTenDevices() = kotlinx.coroutines.runBlocking {
+        val fixture = ktorFixture(maximumSessions = 12)
+        try {
+            fun resourceSnapshot(count: Int) {
+                val memory = java.lang.management.ManagementFactory.getMemoryMXBean().heapMemoryUsage.used
+                val threads = java.lang.management.ManagementFactory.getThreadMXBean().threadCount
+                println("Multi-device control sample: devices=$count heapUsedBytes=$memory jvmThreads=$threads")
+            }
+            resourceSnapshot(0)
+            val peers = (0 until 10).map { index ->
+                val id = "load-device-$index"
+                val credential = pairDevice(fixture.pairing, setOf(DeviceScope.PROXY_STREAM), id)
+                fixture.connect("Bearer $id:$credential").also { peer ->
+                    peer.send(com.devuloopers.knet.companion.model.CompanionSessionMessageKind.START, 1)
+                    assertEquals("WELCOME", peer.next().kind.name)
+                    peer.nextConfiguration()
+                    if (index in listOf(0, 1, 9)) resourceSnapshot(index + 1)
+                }
+            }
+            assertEquals(10, fixture.presence.presence.value.size)
+            peers.forEach { it.send(com.devuloopers.knet.companion.model.CompanionSessionMessageKind.STOP, 2) }
+            eventually { fixture.presence.presence.value.isEmpty() }
+            eventually { peers.all { it.finished } }
+        } finally { fixture.close() }
+    }
+
+    @Test fun futureAcknowledgementDuplicateEventBinaryAndOversizedFramesCloseOnlyTheirChannel() = kotlinx.coroutines.runBlocking {
+        val fixture = ktorFixture()
+        try {
+            val operations: List<(TestWebSocket) -> Unit> = listOf(
+                { peer -> peer.send(com.devuloopers.knet.companion.model.CompanionSessionMessageKind.HEARTBEAT, 1) },
+                { peer -> peer.socket.sendBinary(java.nio.ByteBuffer.wrap(byteArrayOf(1)), true).join() },
+                { peer -> peer.socket.sendText("x".repeat(8193), true).join() },
+                { peer -> peer.socket.sendText(com.devuloopers.knet.companion.model.CompanionSessionProtocol.encode(
+                    com.devuloopers.knet.companion.model.CompanionSessionMessage(com.devuloopers.knet.companion.model.CompanionSessionMessageKind.POLICY_ACK,
+                        "run", sequence = 2, revision = 999, acknowledgement = com.devuloopers.knet.companion.model.CompanionPolicyAcknowledgement.APPLIED)), true).join() })
+            for (operation in operations) {
+                val peer = fixture.connect("Bearer device-1:${fixture.credential}")
+                peer.send(com.devuloopers.knet.companion.model.CompanionSessionMessageKind.START, 1)
+                assertEquals("WELCOME", peer.next().kind.name); peer.nextConfiguration()
+                operation(peer)
+                eventually { peer.finished }
+            }
+        } finally { fixture.close() }
+    }
+
+    private suspend fun eventually(predicate: () -> Boolean) {
+        kotlinx.coroutines.withTimeout(5_000) { while (!predicate()) kotlinx.coroutines.delay(10) }
+    }
+
+    private suspend fun ktorFixture(maximumSessions: Int = 8): KtorFixture {
+        val authority = CertificateAuthority.generate()
+        val leaf = LeafCertificateGenerator.generate("localhost", authority)
+        val keyStore = KeyStore.getInstance("PKCS12").apply {
+            load(null, CharArray(0))
+            setKeyEntry("knet-companion", leaf.keyPair.private, CharArray(0), arrayOf(leaf.certificate, authority.certificate))
+        }
+        val pairing = pairingCoordinator()
+        val credential = pairDevice(pairing, setOf(DeviceScope.PROXY_STREAM))
+        val policies = MutableStateFlow(PacketConditionConfiguration.Disabled)
+        val presence = com.devuloopers.knet.application.coordinator.device.DevicePresenceCoordinator({ System.nanoTime() / 1_000_000 })
+        val handler = CompanionControlGateway("127.0.0.1", 0, serverFactory(authority), { authority.certificate.encoded },
+            pairing, redemptionUseCase(), packetConditions = { policies.value }, nowEpochMillis = { 1_000L })
+        val gateway = com.devuloopers.knet.connectivity.desktop.gateway.KtorCompanionControlGateway("127.0.0.1", 0, keyStore,
+            handler, pairing, presence, policies, maximumSessions)
+        gateway.start()
+        val listening = kotlinx.coroutines.withTimeout(10_000) {
+            gateway.state.first { it is com.devuloopers.knet.connectivity.desktop.gateway.CompanionControlGatewayState.Listening }
+        } as com.devuloopers.knet.connectivity.desktop.gateway.CompanionControlGatewayState.Listening
+        val trustStore = KeyStore.getInstance("PKCS12").apply { load(null, null); setCertificateEntry("root", authority.certificate) }
+        val managers = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm()).apply { init(trustStore) }
+        val tls = SSLContext.getInstance("TLS").apply { init(null, managers.trustManagers, SecureRandom()) }
+        val client = java.net.http.HttpClient.newBuilder().sslContext(tls).connectTimeout(5.seconds.toJavaDuration()).build()
+        return KtorFixture(gateway, pairing, credential, policies, presence, listening.port, client)
+    }
+
+    private class KtorFixture(val gateway: com.devuloopers.knet.connectivity.desktop.gateway.KtorCompanionControlGateway,
+        val pairing: PairingCoordinator, val credential: String, val policies: MutableStateFlow<PacketConditionConfiguration>,
+        val presence: com.devuloopers.knet.application.coordinator.device.DevicePresenceCoordinator,
+        val port: Int, val client: java.net.http.HttpClient) : AutoCloseable {
+        private val peers = mutableListOf<TestWebSocket>()
+        fun connect(authorization: String, origin: String? = null): TestWebSocket {
+            val listener = TestWebSocket()
+            val builder = client.newWebSocketBuilder().header("Authorization", authorization)
+                .connectTimeout(5.seconds.toJavaDuration())
+            origin?.let { builder.header("Origin", it) }
+            listener.socket = builder.buildAsync(java.net.URI("wss://localhost:$port/companion/session"), listener).get(5, java.util.concurrent.TimeUnit.SECONDS)
+            peers += listener
+            return listener
+        }
+        override fun close() { peers.forEach { it.socket.abort() }; client.shutdownNow(); gateway.close() }
+    }
+
+    private class TestWebSocket : java.net.http.WebSocket.Listener {
+        lateinit var socket: java.net.http.WebSocket
+        val messages = java.util.concurrent.LinkedBlockingQueue<String>(32)
+        private val partial = StringBuilder()
+        @Volatile var finished = false
+        override fun onOpen(webSocket: java.net.http.WebSocket) { webSocket.request(1) }
+        override fun onText(webSocket: java.net.http.WebSocket, data: CharSequence, last: Boolean): java.util.concurrent.CompletionStage<*>? {
+            partial.append(data)
+            check(partial.length <= 8192)
+            if (last) { check(messages.offer(partial.toString())); partial.clear() }
+            webSocket.request(1)
+            return null
+        }
+        override fun onClose(webSocket: java.net.http.WebSocket, statusCode: Int, reason: String): java.util.concurrent.CompletionStage<*>? {
+            finished = true; return null
+        }
+        override fun onError(webSocket: java.net.http.WebSocket, error: Throwable) { finished = true }
+        fun send(kind: com.devuloopers.knet.companion.model.CompanionSessionMessageKind, sequence: Long) {
+            socket.sendText(com.devuloopers.knet.companion.model.CompanionSessionProtocol.encode(
+                com.devuloopers.knet.companion.model.CompanionSessionMessage(kind, "run", sequence)), true).join()
+        }
+        fun next() = com.devuloopers.knet.companion.model.CompanionSessionProtocol.decode(checkNotNull(messages.poll(5, java.util.concurrent.TimeUnit.SECONDS)))
+        fun nextConfiguration(): com.devuloopers.knet.companion.model.CompanionSessionMessage {
+            repeat(5) { val message = next(); if (message.kind == com.devuloopers.knet.companion.model.CompanionSessionMessageKind.CONFIGURATION) return message }
+            error("No complete configuration")
+        }
+    }
+
+
     @Test
     fun authenticatedCompanionReadsTheCurrentBoundedPacketConditions() = runTest {
         val certificateAuthority = CertificateAuthority.generate()
@@ -478,13 +696,14 @@ class CompanionControlGatewayTest {
     private suspend fun pairDevice(
         pairing: PairingCoordinator,
         scopes: Set<DeviceScope> = setOf(DeviceScope.SETUP_ARTIFACT_READ),
+        deviceId: String = "device-1",
     ): String {
         val invitation = pairing.createInvitation(scopes)
         val result = pairing.complete(
             PairingCompletionRequest(
                 invitationId = invitation.id,
                 invitationSecret = invitation.secret,
-                deviceId = RegisteredDeviceId("device-1"),
+                deviceId = RegisteredDeviceId(deviceId),
                 displayName = "Pixel",
                 publicKeyEncoded = "public-key",
                 proofSignatureEncoded = "valid-proof",
@@ -644,10 +863,12 @@ class CompanionControlGatewayTest {
     }
 
     private class MemoryCompanionOnboardingStore : CompanionOnboardingStore {
+        override val pendingIds = MutableStateFlow<Set<CompanionBootstrapId>>(emptySet())
         private val records = mutableMapOf<CompanionBootstrapId, PendingCompanionOnboarding>()
 
         override suspend fun put(pending: PendingCompanionOnboarding) {
             records[pending.id] = pending
+            pendingIds.value = records.keys.toSet()
         }
 
         override suspend fun claim(
@@ -661,6 +882,7 @@ class CompanionControlGatewayTest {
                 retrievalSecretDigest != pending.retrievalSecretDigest
             ) return null
             records.remove(id)
+            pendingIds.value = records.keys.toSet()
             return pending.invitation
         }
     }

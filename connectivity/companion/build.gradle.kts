@@ -17,6 +17,7 @@ kotlin {
 
         withHostTestBuilder {}.configure {
             isIncludeAndroidResources = false
+            isReturnDefaultValues = true
         }
     }
 
@@ -29,6 +30,7 @@ kotlin {
             api(project(":core:companion"))
             implementation(project(":core:logger"))
             implementation(libs.ktor.client.core)
+            implementation(libs.ktor.client.websockets)
             implementation(libs.kotlinx.coroutines.core)
         }
         androidMain.dependencies {

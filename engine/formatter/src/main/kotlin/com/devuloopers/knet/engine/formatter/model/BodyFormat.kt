@@ -172,9 +172,20 @@ sealed interface BodyFormat {
         val diagnostic: com.devuloopers.knet.domain.graphql.GraphQLHttpDiagnostic? = null,
         /** Request selector, distinct from a document-derived name. */
         val suppliedOperationName: String? = null,
+        /** Validated hash metadata independent from the displayed document. */
+        val persistedQuery: com.devuloopers.knet.domain.graphql.GraphQLPersistedQuery? = null,
+        /** Provenance of this read-only document; never serialized into the request. */
+        val queryProvenance: com.devuloopers.knet.domain.graphql.GraphQLQueryProvenance =
+            if (queryText.isBlank()) com.devuloopers.knet.domain.graphql.GraphQLQueryProvenance.UNAVAILABLE
+            else com.devuloopers.knet.domain.graphql.GraphQLQueryProvenance.REQUEST,
     ) : BodyFormat, HasTextContent {
         override val badgeLabel: String
-            get() = if (!operationName.isNullOrEmpty()) "GQL: $operationName" else "GQL: $operationType"
+            get() = when {
+                !operationName.isNullOrEmpty() -> "GQL: $operationName"
+                operationType.isNotEmpty() -> "GQL: $operationType"
+                persistedQuery != null -> "GQL: Persisted"
+                else -> "GQL"
+            }
         override val textContent: String get() = queryText
     }
 

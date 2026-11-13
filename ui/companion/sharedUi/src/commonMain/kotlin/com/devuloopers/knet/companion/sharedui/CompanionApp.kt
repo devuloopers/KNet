@@ -5,6 +5,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.companion.presentation.action.CompanionAction
 import com.devuloopers.knet.companion.presentation.state.CompanionUiState
 import com.devuloopers.knet.companion.sharedui.navigation.CompanionNavHost
@@ -33,17 +37,29 @@ public fun KNetCompanionApp(
     invitationScanner: CompanionInvitationScanner = UnavailableCompanionInvitationScanner
 ) {
     KNetApplicationTheme {
-        Surface(
-            modifier = modifier.fillMaxSize(),
-            color = MaterialTheme.colorScheme.background,
-        ) {
-            CompanionNavHost(
-                state = state,
-                onAction = onAction,
-                onExitRequested = onExitRequested,
-                invitationScanner = invitationScanner,
-                certificateInstallationGuidance = certificateInstallationGuidance,
-            )
+        KNetTheme(colors = KNetTheme.colors, typography = KNetTheme.typography.copy(
+                display = KNetTheme.typography.display.copy(fontSize = 21.sp, lineHeight = 26.sp),
+                heading = KNetTheme.typography.heading.copy(fontSize = 19.sp, lineHeight = 25.sp),
+                titleLarge = KNetTheme.typography.titleLarge.copy(fontSize = 17.sp, lineHeight = 23.sp),
+                titleMedium = KNetTheme.typography.titleMedium.copy(fontSize = 16.sp, lineHeight = 22.sp),
+                bodyMedium = KNetTheme.typography.bodyMedium.copy(fontSize = 16.sp, lineHeight = 22.sp),
+                bodySmall = KNetTheme.typography.bodySmall.copy(fontSize = 14.sp, lineHeight = 20.sp),
+                labelMedium = KNetTheme.typography.labelMedium.copy(fontSize = 12.sp, lineHeight = 16.sp)),
+            shapes = KNetTheme.shapes.copy(small = RoundedCornerShape(12.dp), medium = RoundedCornerShape(12.dp),
+                large = RoundedCornerShape(14.dp), extraLarge = RoundedCornerShape(22.dp)),
+            motion = KNetTheme.motion) {
+            Surface(
+                modifier = modifier.fillMaxSize(),
+                color = MaterialTheme.colorScheme.background,
+            ) {
+                CompanionNavHost(
+                    state = state,
+                    onAction = onAction,
+                    onExitRequested = onExitRequested,
+                    invitationScanner = invitationScanner,
+                    certificateInstallationGuidance = certificateInstallationGuidance,
+                )
+            }
         }
     }
 }

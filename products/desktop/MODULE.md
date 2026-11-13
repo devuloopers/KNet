@@ -77,3 +77,14 @@ Traffic/UI and composition. Physical device and entitlement gates remain separat
 Desktop bootstrap uses the shared fixed-dark application theme. Startup and packaged JVM arguments also pin native
 macOS appearance before the first AWT window is created. The resize-background workaround uses the same dark tokens.
 See `docs/fixed_dark_application_appearance.md` for validation and native appearance scope.
+
+## Persisted-query composition
+
+Binds one process-local verified GraphQL catalog, bounded native manifest reader and import/observation use cases.
+Container shutdown clears ephemeral source mappings. File reads retain at most the import limit plus one overflow
+marker byte; the protocol extension owns validation and no database migration is needed.
+See `docs/graphql_persisted_queries.md`.
+
+## Multi-device workspace and control sessions (2026-11-13)
+
+The composition root binds the shared Ktor endpoint, presence, telemetry and workspace use cases. The macOS adapter uses JBR native custom title-bar capability and measured hit regions; unsupported runtimes retain complete system decorations. macOS run/package tasks select a Java 21 JetBrains runtime by default through the existing toolchain resolver; knet.desktop.javaHome can override it. IDE launches on unsupported runtimes retain native decorations.

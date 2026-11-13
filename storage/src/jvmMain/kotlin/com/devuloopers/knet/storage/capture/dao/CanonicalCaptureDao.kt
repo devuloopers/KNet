@@ -24,6 +24,19 @@ import kotlinx.coroutines.flow.Flow
 /** Ordered persistence operations used by one canonical session writer. */
 @Dao
 interface CanonicalCaptureDao {
+    /**
+     * Registered source identities with retained displayable traffic, including zero-byte opaque flows.
+     * Indexed existence probes stop at the first record per identity rather than scanning all its traffic.
+     */
+    @Query(
+        "SELECT id FROM registered_devices WHERE EXISTS (SELECT 1 FROM traffic_connections " +
+            "WHERE ingressKind IN ('LAN_PAIRED_DEVICE','COMPANION_DIRECT','COMPANION_RELAY') " +
+            "AND clientIdentity = registered_devices.id " +
+            "AND (EXISTS (SELECT 1 FROM traffic_exchanges WHERE connectionId = traffic_connections.id) " +
+            "OR EXISTS (SELECT 1 FROM opaque_flows WHERE connectionId = traffic_connections.id)))",
+    )
+    fun observeDeviceIdsWithTraffic(): Flow<List<String>>
+
     /** Creates a capture session without replacing an existing lifecycle. */
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertSession(session: CaptureSessionEntity): Long
@@ -162,6 +175,7 @@ interface CanonicalCaptureDao {
     /** Counts opaque flows matching a bounded Traffic search. */
     @Query(
         "SELECT COUNT(*) FROM opaque_flows WHERE (:sessionId IS NULL OR sessionId = :sessionId) " +
+            "AND (:sourceKind = 'ALL' OR (:sourceKind = 'DEVICE' AND connectionId IN (SELECT id FROM traffic_connections WHERE ingressKind IN ('LAN_PAIRED_DEVICE','COMPANION_DIRECT','COMPANION_RELAY') AND clientIdentity IS NOT NULL AND clientIdentity != '' AND clientIdentity = :sourceDeviceId)) OR (:sourceKind = 'OTHER' AND connectionId NOT IN (SELECT id FROM traffic_connections WHERE ingressKind IN ('LAN_PAIRED_DEVICE','COMPANION_DIRECT','COMPANION_RELAY') AND clientIdentity IS NOT NULL AND clientIdentity != ''))) " +
             "AND (:searchPattern IS NULL OR destinationHost LIKE :searchPattern ESCAPE '\\' " +
             "OR serverName LIKE :searchPattern ESCAPE '\\' " +
             "OR sourceApplicationId LIKE :searchPattern ESCAPE '\\' " +
@@ -179,6 +193,8 @@ interface CanonicalCaptureDao {
         sessionId: String?,
         searchPattern: String?,
         recordFilter: String,
+        sourceKind: String = "ALL",
+        sourceDeviceId: String? = null,
     ): Long
 
     /** Loads the newest payload-opaque flow window for Traffic's first-page merge. */
@@ -207,6 +223,7 @@ interface CanonicalCaptureDao {
             "(SELECT COUNT(*) FROM opaque_flows AS retained_flow " +
             "WHERE retained_flow.captureSequence <= opaque_flows.captureSequence) AS historySequence " +
             "FROM opaque_flows WHERE (:sessionId IS NULL OR sessionId = :sessionId) " +
+            "AND (:sourceKind = 'ALL' OR (:sourceKind = 'DEVICE' AND connectionId IN (SELECT id FROM traffic_connections WHERE ingressKind IN ('LAN_PAIRED_DEVICE','COMPANION_DIRECT','COMPANION_RELAY') AND clientIdentity IS NOT NULL AND clientIdentity != '' AND clientIdentity = :sourceDeviceId)) OR (:sourceKind = 'OTHER' AND connectionId NOT IN (SELECT id FROM traffic_connections WHERE ingressKind IN ('LAN_PAIRED_DEVICE','COMPANION_DIRECT','COMPANION_RELAY') AND clientIdentity IS NOT NULL AND clientIdentity != ''))) " +
             "AND (:cursorStartedAt IS NULL OR startedAtEpochMillis < :cursorStartedAt " +
             "OR (startedAtEpochMillis = :cursorStartedAt AND ('opaque:' || id) < :cursorStableKey)) " +
             "AND (:searchPattern IS NULL OR destinationHost LIKE :searchPattern ESCAPE '\\' " +
@@ -230,6 +247,8 @@ interface CanonicalCaptureDao {
         searchPattern: String?,
         recordFilter: String,
         limit: Int,
+        sourceKind: String = "ALL",
+        sourceDeviceId: String? = null,
     ): List<CanonicalOpaqueFlowPageRow>
 
     /** Loads one oldest-first opaque-flow page using the shared Traffic chronological cursor. */
@@ -238,6 +257,7 @@ interface CanonicalCaptureDao {
             "(SELECT COUNT(*) FROM opaque_flows AS retained_flow " +
             "WHERE retained_flow.captureSequence <= opaque_flows.captureSequence) AS historySequence " +
             "FROM opaque_flows WHERE (:sessionId IS NULL OR sessionId = :sessionId) " +
+            "AND (:sourceKind = 'ALL' OR (:sourceKind = 'DEVICE' AND connectionId IN (SELECT id FROM traffic_connections WHERE ingressKind IN ('LAN_PAIRED_DEVICE','COMPANION_DIRECT','COMPANION_RELAY') AND clientIdentity IS NOT NULL AND clientIdentity != '' AND clientIdentity = :sourceDeviceId)) OR (:sourceKind = 'OTHER' AND connectionId NOT IN (SELECT id FROM traffic_connections WHERE ingressKind IN ('LAN_PAIRED_DEVICE','COMPANION_DIRECT','COMPANION_RELAY') AND clientIdentity IS NOT NULL AND clientIdentity != ''))) " +
             "AND (:cursorStartedAt IS NULL OR startedAtEpochMillis > :cursorStartedAt " +
             "OR (startedAtEpochMillis = :cursorStartedAt AND ('opaque:' || id) > :cursorStableKey)) " +
             "AND (:searchPattern IS NULL OR destinationHost LIKE :searchPattern ESCAPE '\\' " +
@@ -261,6 +281,8 @@ interface CanonicalCaptureDao {
         searchPattern: String?,
         recordFilter: String,
         limit: Int,
+        sourceKind: String = "ALL",
+        sourceDeviceId: String? = null,
     ): List<CanonicalOpaqueFlowPageRow>
 
     /** Emits a compact invalidation scalar for one canonical session's opaque flows. */
@@ -304,6 +326,7 @@ interface CanonicalCaptureDao {
     /** Counts exchanges matching the same indexed filters used by paged Traffic queries. */
     @Query(
         "SELECT COUNT(*) FROM traffic_exchanges WHERE (:sessionId IS NULL OR sessionId = :sessionId) " +
+            "AND (:sourceKind = 'ALL' OR (:sourceKind = 'DEVICE' AND connectionId IN (SELECT id FROM traffic_connections WHERE ingressKind IN ('LAN_PAIRED_DEVICE','COMPANION_DIRECT','COMPANION_RELAY') AND clientIdentity IS NOT NULL AND clientIdentity != '' AND clientIdentity = :sourceDeviceId)) OR (:sourceKind = 'OTHER' AND connectionId NOT IN (SELECT id FROM traffic_connections WHERE ingressKind IN ('LAN_PAIRED_DEVICE','COMPANION_DIRECT','COMPANION_RELAY') AND clientIdentity IS NOT NULL AND clientIdentity != ''))) " +
             "AND (:searchPattern IS NULL OR host LIKE :searchPattern ESCAPE '\\' " +
             "OR pathAndQuery LIKE :searchPattern ESCAPE '\\' " +
             "OR method LIKE :searchPattern ESCAPE '\\' " +
@@ -326,6 +349,8 @@ interface CanonicalCaptureDao {
         filterProtocols: Int,
         protocols: List<String>,
         failedOnly: Int,
+        sourceKind: String = "ALL",
+        sourceDeviceId: String? = null,
     ): Long
 
     /**
@@ -336,6 +361,7 @@ interface CanonicalCaptureDao {
             "COALESCE(SUM(CASE WHEN scheme = 'http' THEN 1 ELSE 0 END), 0) AS httpCount, " +
             "COALESCE(SUM(CASE WHEN scheme = 'https' THEN 1 ELSE 0 END), 0) AS httpsCount " +
             "FROM traffic_exchanges WHERE (:sessionId IS NULL OR sessionId = :sessionId) " +
+            "AND (:sourceKind = 'ALL' OR (:sourceKind = 'DEVICE' AND connectionId IN (SELECT id FROM traffic_connections WHERE ingressKind IN ('LAN_PAIRED_DEVICE','COMPANION_DIRECT','COMPANION_RELAY') AND clientIdentity IS NOT NULL AND clientIdentity != '' AND clientIdentity = :sourceDeviceId)) OR (:sourceKind = 'OTHER' AND connectionId NOT IN (SELECT id FROM traffic_connections WHERE ingressKind IN ('LAN_PAIRED_DEVICE','COMPANION_DIRECT','COMPANION_RELAY') AND clientIdentity IS NOT NULL AND clientIdentity != ''))) " +
             "AND (:searchPattern IS NULL OR host LIKE :searchPattern ESCAPE '\\' " +
             "OR pathAndQuery LIKE :searchPattern ESCAPE '\\' " +
             "OR method LIKE :searchPattern ESCAPE '\\' " +
@@ -353,6 +379,8 @@ interface CanonicalCaptureDao {
         statuses: List<Int>,
         filterProtocols: Int,
         protocols: List<String>,
+        sourceKind: String = "ALL",
+        sourceDeviceId: String? = null,
     ): CanonicalTrafficFacetRow
 
     /** Loads one database-filtered newest-first keyset page across one or every retained session. */
@@ -425,6 +453,7 @@ interface CanonicalCaptureDao {
             "(SELECT COUNT(*) FROM traffic_exchanges AS retained_exchange " +
             "WHERE retained_exchange.captureSequence <= traffic_exchanges.captureSequence) AS historySequence " +
             "FROM traffic_exchanges WHERE (:sessionId IS NULL OR sessionId = :sessionId) " +
+            "AND (:sourceKind = 'ALL' OR (:sourceKind = 'DEVICE' AND connectionId IN (SELECT id FROM traffic_connections WHERE ingressKind IN ('LAN_PAIRED_DEVICE','COMPANION_DIRECT','COMPANION_RELAY') AND clientIdentity IS NOT NULL AND clientIdentity != '' AND clientIdentity = :sourceDeviceId)) OR (:sourceKind = 'OTHER' AND connectionId NOT IN (SELECT id FROM traffic_connections WHERE ingressKind IN ('LAN_PAIRED_DEVICE','COMPANION_DIRECT','COMPANION_RELAY') AND clientIdentity IS NOT NULL AND clientIdentity != ''))) " +
             "AND (:cursorStartedAt IS NULL OR startedAtEpochMillis < :cursorStartedAt " +
             "OR (startedAtEpochMillis = :cursorStartedAt AND ('http:' || id) < :cursorStableKey)) " +
             "AND (:searchPattern IS NULL OR host LIKE :searchPattern ESCAPE '\\' " +
@@ -453,6 +482,8 @@ interface CanonicalCaptureDao {
         protocols: List<String>,
         failedOnly: Int,
         limit: Int,
+        sourceKind: String = "ALL",
+        sourceDeviceId: String? = null,
     ): List<CanonicalExchangePageRow>
 
     /** Loads one oldest-first exchange page using the shared Traffic chronological cursor. */
@@ -461,6 +492,7 @@ interface CanonicalCaptureDao {
             "(SELECT COUNT(*) FROM traffic_exchanges AS retained_exchange " +
             "WHERE retained_exchange.captureSequence <= traffic_exchanges.captureSequence) AS historySequence " +
             "FROM traffic_exchanges WHERE (:sessionId IS NULL OR sessionId = :sessionId) " +
+            "AND (:sourceKind = 'ALL' OR (:sourceKind = 'DEVICE' AND connectionId IN (SELECT id FROM traffic_connections WHERE ingressKind IN ('LAN_PAIRED_DEVICE','COMPANION_DIRECT','COMPANION_RELAY') AND clientIdentity IS NOT NULL AND clientIdentity != '' AND clientIdentity = :sourceDeviceId)) OR (:sourceKind = 'OTHER' AND connectionId NOT IN (SELECT id FROM traffic_connections WHERE ingressKind IN ('LAN_PAIRED_DEVICE','COMPANION_DIRECT','COMPANION_RELAY') AND clientIdentity IS NOT NULL AND clientIdentity != ''))) " +
             "AND (:cursorStartedAt IS NULL OR startedAtEpochMillis > :cursorStartedAt " +
             "OR (startedAtEpochMillis = :cursorStartedAt AND ('http:' || id) > :cursorStableKey)) " +
             "AND (:searchPattern IS NULL OR host LIKE :searchPattern ESCAPE '\\' " +
@@ -489,6 +521,8 @@ interface CanonicalCaptureDao {
         protocols: List<String>,
         failedOnly: Int,
         limit: Int,
+        sourceKind: String = "ALL",
+        sourceDeviceId: String? = null,
     ): List<CanonicalExchangePageRow>
 
     /** Resolves presentation ordinals across the merged retained HTTP and opaque history. */
@@ -496,13 +530,13 @@ interface CanonicalCaptureDao {
         "SELECT stableKey, historySequence FROM (" +
             "SELECT stableKey, ROW_NUMBER() OVER (ORDER BY startedAtEpochMillis ASC, stableKey ASC) AS historySequence " +
             "FROM (" +
-            "SELECT startedAtEpochMillis, 'http:' || id AS stableKey FROM traffic_exchanges " +
+            "SELECT startedAtEpochMillis, 'http:' || id AS stableKey FROM traffic_exchanges WHERE 1 = 1 AND (:sourceKind = 'ALL' OR (:sourceKind = 'DEVICE' AND connectionId IN (SELECT id FROM traffic_connections WHERE ingressKind IN ('LAN_PAIRED_DEVICE','COMPANION_DIRECT','COMPANION_RELAY') AND clientIdentity IS NOT NULL AND clientIdentity != '' AND clientIdentity = :sourceDeviceId)) OR (:sourceKind = 'OTHER' AND connectionId NOT IN (SELECT id FROM traffic_connections WHERE ingressKind IN ('LAN_PAIRED_DEVICE','COMPANION_DIRECT','COMPANION_RELAY') AND clientIdentity IS NOT NULL AND clientIdentity != ''))) " +
             "UNION ALL " +
-            "SELECT startedAtEpochMillis, 'opaque:' || id AS stableKey FROM opaque_flows" +
+            "SELECT startedAtEpochMillis, 'opaque:' || id AS stableKey FROM opaque_flows WHERE 1 = 1 AND (:sourceKind = 'ALL' OR (:sourceKind = 'DEVICE' AND connectionId IN (SELECT id FROM traffic_connections WHERE ingressKind IN ('LAN_PAIRED_DEVICE','COMPANION_DIRECT','COMPANION_RELAY') AND clientIdentity IS NOT NULL AND clientIdentity != '' AND clientIdentity = :sourceDeviceId)) OR (:sourceKind = 'OTHER' AND connectionId NOT IN (SELECT id FROM traffic_connections WHERE ingressKind IN ('LAN_PAIRED_DEVICE','COMPANION_DIRECT','COMPANION_RELAY') AND clientIdentity IS NOT NULL AND clientIdentity != ''))) " +
             ")" +
             ") WHERE stableKey IN (:stableKeys)",
     )
-    suspend fun getTrafficHistorySequences(stableKeys: List<String>): List<CanonicalTrafficHistorySequenceRow>
+    suspend fun getTrafficHistorySequences(stableKeys: List<String>, sourceKind: String = "ALL", sourceDeviceId: String? = null): List<CanonicalTrafficHistorySequenceRow>
 
     /** Attaches response metadata only when the exchange version advances and remains non-terminal. */
     @Query(
@@ -826,4 +860,61 @@ interface CanonicalCaptureDao {
         check(deleteClosedSession(sessionId) == 1) { "Canonical session must be closed before deletion." }
         return bodyIds.size
     }
+
+    /** Bounded source-owned exchange IDs; an active session can never enter this deletion batch. */
+    @Query("SELECT id FROM traffic_exchanges WHERE sessionId IN (SELECT id FROM capture_sessions WHERE state != 'ACTIVE') AND (:sourceKind = 'ALL' OR (:sourceKind = 'DEVICE' AND connectionId IN (SELECT id FROM traffic_connections WHERE ingressKind IN ('LAN_PAIRED_DEVICE','COMPANION_DIRECT','COMPANION_RELAY') AND clientIdentity IS NOT NULL AND clientIdentity != '' AND clientIdentity = :sourceDeviceId)) OR (:sourceKind = 'OTHER' AND connectionId NOT IN (SELECT id FROM traffic_connections WHERE ingressKind IN ('LAN_PAIRED_DEVICE','COMPANION_DIRECT','COMPANION_RELAY') AND clientIdentity IS NOT NULL AND clientIdentity != ''))) LIMIT :limit")
+    suspend fun getSourceClearExchangeIds(sourceKind: String, sourceDeviceId: String?, limit: Int): List<String>
+
+    /** Bounded terminal-session opaque IDs, including unclassified legacy rows in Other. */
+    @Query("SELECT id FROM opaque_flows WHERE sessionId IN (SELECT id FROM capture_sessions WHERE state != 'ACTIVE') AND (:sourceKind = 'ALL' OR (:sourceKind = 'DEVICE' AND connectionId IN (SELECT id FROM traffic_connections WHERE ingressKind IN ('LAN_PAIRED_DEVICE','COMPANION_DIRECT','COMPANION_RELAY') AND clientIdentity IS NOT NULL AND clientIdentity != '' AND clientIdentity = :sourceDeviceId)) OR (:sourceKind = 'OTHER' AND connectionId NOT IN (SELECT id FROM traffic_connections WHERE ingressKind IN ('LAN_PAIRED_DEVICE','COMPANION_DIRECT','COMPANION_RELAY') AND clientIdentity IS NOT NULL AND clientIdentity != ''))) LIMIT :limit")
+    suspend fun getSourceClearOpaqueIds(sourceKind: String, sourceDeviceId: String?, limit: Int): List<String>
+
+    /** Queues body files in SQL, avoiding a heap-sized list for a large message stream. Shared references survive. */
+    @Query("INSERT OR IGNORE INTO deletion_outbox (sessionId, bodyId, operation, createdAtEpochMillis, attemptCount, lastErrorCode) " +
+        "SELECT sessionId, id, 'DELETE_BODY', :requestedAt, 0, NULL FROM body_objects WHERE (exchangeId IN (:exchangeIds) OR id IN (SELECT requestBodyId FROM traffic_exchanges WHERE id IN (:exchangeIds)) OR id IN (SELECT responseBodyId FROM traffic_exchanges WHERE id IN (:exchangeIds)) OR id IN (SELECT bodyId FROM duplex_messages WHERE exchangeId IN (:exchangeIds))) " +
+        "AND NOT EXISTS (SELECT 1 FROM traffic_exchanges AS kept WHERE kept.id NOT IN (:exchangeIds) AND (kept.requestBodyId = body_objects.id OR kept.responseBodyId = body_objects.id)) " +
+        "AND NOT EXISTS (SELECT 1 FROM duplex_messages AS kept WHERE kept.exchangeId NOT IN (:exchangeIds) AND kept.bodyId = body_objects.id)")
+    suspend fun queueSourceBodies(exchangeIds: List<String>, requestedAt: Long): Long
+
+    /** Removes only body metadata whose files were admitted to the durable deletion outbox. */
+    @Query("DELETE FROM body_objects WHERE (exchangeId IN (:exchangeIds) OR id IN (SELECT requestBodyId FROM traffic_exchanges WHERE id IN (:exchangeIds)) OR id IN (SELECT responseBodyId FROM traffic_exchanges WHERE id IN (:exchangeIds)) OR id IN (SELECT bodyId FROM duplex_messages WHERE exchangeId IN (:exchangeIds))) AND id IN (SELECT bodyId FROM deletion_outbox)")
+    suspend fun deleteQueuedSourceBodies(exchangeIds: List<String>): Int
+
+    /** Deletes child messages before their selected parents, leaving other devices' streams intact. */
+    @Query("DELETE FROM duplex_messages WHERE exchangeId IN (:exchangeIds)")
+    suspend fun deleteSourceMessages(exchangeIds: List<String>): Int
+
+    /** Deletes semantic annotations owned by the selected exchanges. */
+    @Query("DELETE FROM inspection_annotations WHERE exchangeId IN (:exchangeIds)")
+    suspend fun deleteSourceAnnotations(exchangeIds: List<String>): Int
+
+    /** Deletes only the admitted terminal-session exchange batch. */
+    @Query("DELETE FROM traffic_exchanges WHERE id IN (:exchangeIds)")
+    suspend fun deleteSourceExchanges(exchangeIds: List<String>): Int
+
+    /** Deletes only the admitted terminal-session opaque batch. */
+    @Query("DELETE FROM opaque_flows WHERE id IN (:flowIds)")
+    suspend fun deleteSourceOpaqueFlows(flowIds: List<String>): Int
+
+    /**
+     * Crash-safe bounded selected-source maintenance after capture rotation has drained the previous writer.
+     * Connection/session metadata stays available to retained siblings and ordinary retention cleanup.
+     * Returns the number of removed visible records; zero marks completion.
+     */
+    @Transaction
+    suspend fun queueAndDeleteSourceBatch(sourceKind: String, sourceDeviceId: String?, requestedAt: Long, limit: Int): Int {
+        require(limit in 1..256 && requestedAt >= 0L)
+        val exchangeIds = getSourceClearExchangeIds(sourceKind, sourceDeviceId, limit)
+        val flowIds = getSourceClearOpaqueIds(sourceKind, sourceDeviceId, limit)
+        if (exchangeIds.isNotEmpty()) {
+            queueSourceBodies(exchangeIds, requestedAt)
+            deleteQueuedSourceBodies(exchangeIds)
+            deleteSourceMessages(exchangeIds)
+            deleteSourceAnnotations(exchangeIds)
+            deleteSourceExchanges(exchangeIds)
+        }
+        if (flowIds.isNotEmpty()) deleteSourceOpaqueFlows(flowIds)
+        return exchangeIds.size + flowIds.size
+    }
+
 }

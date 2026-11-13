@@ -52,6 +52,14 @@ class InMemoryAutomaticTlsFallback(
         }
     }
 
+    override fun rotateCaptureSession(sessionId: CaptureSessionId) = synchronized(lock) {
+        prune()
+        val retained = deadlines.entries.map { (key, deadline) -> key.copy(sessionId = sessionId) to deadline }
+        deadlines.clear()
+        retained.forEach { (key, deadline) -> deadlines[key] = deadline }
+        mutableState.value = state.value.copy(sessionId = sessionId, generation = state.value.generation + 1, keys = deadlines.keys.toSet())
+    }
+
     override fun authorize(configuration: ProtectedTrafficConfiguration, authorityIdentity: String?): Long? = synchronized(lock) {
         if (this.configuration != configuration || authority != authorityIdentity) {
             val retainUnrelated = this.configuration?.let { previous -> previous.configurationReady &&

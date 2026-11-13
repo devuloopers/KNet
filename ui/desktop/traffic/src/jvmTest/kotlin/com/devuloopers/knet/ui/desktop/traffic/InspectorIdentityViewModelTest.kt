@@ -143,6 +143,40 @@ class InspectorIdentityViewModelTest {
         assertEquals(2, port.detailReads.getValue("newest"))
     }
 
+    @Test
+    fun `verified persisted mapping refreshes selected Traffic payload without an empty inspector state`() = runTest(dispatcher) {
+        val formatter = com.devuloopers.knet.engine.formatter.graphql.GraphQLHttpRequestFormatter
+        formatter.persistedQueryCatalog.clear()
+        val query = "query CachedRead { item { id } }"
+        val hash = java.security.MessageDigest.getInstance("SHA-256").digest(query.encodeToByteArray()).joinToString("") { "%02x".format(it.toInt() and 255) }
+        val extensions = """{"persistedQuery":{"version":1,"sha256Hash":"$hash"}}"""
+        val target = "/graphql?extensions=" + java.net.URLEncoder.encode(extensions, Charsets.UTF_8)
+        val base = exchange("persisted", 2_000L)
+        val captured = base.copy(request = base.request.copy(head = base.request.head.copy(target = RequestTarget.Absolute(
+            HttpScheme.fromToken("https"), Authority("api.example", 443), target))))
+        val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = DetailPort(listOf(captured)))
+        advanceUntilIdle()
+        assertEquals(InspectorLoadState.READY, viewModel.uiState.value.preparedState.loadState)
+        val unknown = viewModel.uiState.value.preparedState.requestParameterSpec.resolvedFormat as com.devuloopers.knet.engine.formatter.model.BodyFormat.GraphQL
+        assertEquals("", unknown.queryText)
+        formatter.inspect("POST", "https://api.example/graphql", body =
+            "{\"query\":\"$query\",\"extensions\":$extensions}".encodeToByteArray(), learnCaptured = true)
+        runCurrent()
+        assertEquals(InspectorLoadState.READY, viewModel.uiState.value.preparedState.loadState)
+        advanceUntilIdle()
+        val resolved = viewModel.uiState.value.preparedState.requestParameterSpec.resolvedFormat as com.devuloopers.knet.engine.formatter.model.BodyFormat.GraphQL
+        assertEquals("CachedRead", resolved.operationName)
+        val state = viewModel.uiState.value
+        val overview = com.devuloopers.knet.ui.desktop.traffic.model.inspectorPresentation(state.selectedTransaction!!,
+            state.preparedState, com.devuloopers.knet.ui.desktop.traffic.model.ProtocolMessagesUiState())
+        assertEquals(com.devuloopers.knet.ui.desktop.httppanel.model.GraphQLQueryAvailability.AVAILABLE, overview.graphQLQueryAvailability)
+        assertEquals("CachedRead", overview.documents.single().fields.single { it.label == "Operation name" }.value)
+
+        assertEquals(com.devuloopers.knet.domain.graphql.GraphQLQueryProvenance.CAPTURED_TRAFFIC, resolved.queryProvenance)
+        assertEquals(target, (viewModel.uiState.value.preparedState.exchange!!.request.head.target as RequestTarget.Absolute).pathAndQuery)
+        formatter.persistedQueryCatalog.clear()
+    }
+
     private class DetailPort(
         private val snapshots: List<HttpExchangeSnapshot>,
         private val delayedExchangeId: String? = null,

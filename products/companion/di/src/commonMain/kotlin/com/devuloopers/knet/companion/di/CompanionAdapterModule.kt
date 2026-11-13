@@ -28,4 +28,5 @@ internal fun companionAdapterModule(): Module = module {
     }
     single<CompanionInspectionController> { get<CompanionPlatformAdapters>().inspectionController }
     single<CompanionControlTransport> { get<CompanionPlatformAdapters>().controlTransport }
+    single<com.devuloopers.knet.companion.application.contract.CompanionSessionTransport> { get<CompanionPlatformAdapters>().sessionTransport }
 }

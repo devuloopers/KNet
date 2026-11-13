@@ -29,6 +29,13 @@ public interface CompanionPlatformAdapters : AutoCloseable {
     /** Executes pairing and credential-rotation requests through authenticated pinned TLS. */
     public val controlTransport: CompanionControlTransport
 
+    /** Persistent VPN control transport. Older injected adapters explicitly report unsupported capability. */
+    public val sessionTransport: com.devuloopers.knet.companion.application.contract.CompanionSessionTransport
+        get() = com.devuloopers.knet.companion.application.contract.CompanionSessionTransport { _, _ ->
+            throw com.devuloopers.knet.companion.application.contract.CompanionSessionException(
+                com.devuloopers.knet.companion.application.contract.CompanionSessionFailure.UNSUPPORTED)
+        }
+
     /** Retrieves the authenticated KNet root certificate advertised by the paired desktop. */
     public val rootCertificateSource: CompanionRootCertificateSource
 

@@ -119,6 +119,11 @@ class ApiStudioExecutionPipelineE2ETest {
         val collectionsRepository = TestCollectionsRepository()
 
         return ApiStudioViewModel(
+            observeGraphQLPersistedQueriesUseCase = com.devuloopers.knet.application.usecase.graphql.ObserveGraphQLPersistedQueriesUseCase(
+                com.devuloopers.knet.engine.formatter.graphql.GraphQLHttpRequestFormatter.persistedQueryCatalog),
+            importGraphQLPersistedQueriesUseCase = com.devuloopers.knet.application.usecase.graphql.ImportGraphQLPersistedQueriesUseCase(
+                com.devuloopers.knet.engine.formatter.graphql.GraphQLHttpRequestFormatter.persistedQueryCatalog,
+                com.devuloopers.knet.application.contract.graphql.GraphQLManifestReader { _, _ -> error("No test manifest selected") }),
             executeApiStudioRequestUseCase = com.devuloopers.knet.application.usecase.apistudio.ExecuteApiStudioRequestUseCase(
                 executeRequest = com.devuloopers.knet.domain.clientNetwork.usecase.ExecuteClientApiRequestUseCase(executor),
                 formatResponseBody = com.devuloopers.knet.domain.clientNetwork.usecase.FormatResponseBodyUseCase(),

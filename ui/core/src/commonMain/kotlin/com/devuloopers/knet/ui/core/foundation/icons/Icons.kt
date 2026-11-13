@@ -48,6 +48,8 @@ object KNetIcons {
     val Visibility: ImageVector = Icons.Default.Visibility
     val VisibilityOff: ImageVector = Icons.Default.VisibilityOff
     val Hub: ImageVector = Icons.Default.Hub
+    /** Native camera permission and scan-entry affordance. */
+    val Camera: ImageVector = Icons.Default.PhotoCamera
     val QrCodeScanner: ImageVector = Icons.Default.QrCodeScanner
     val Shield: ImageVector = Icons.Default.Shield
     val Lock: ImageVector = Icons.Default.Lock

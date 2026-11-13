@@ -7,9 +7,11 @@ internal fun resolveCameraPermissionState(
     granted: Boolean,
     permissionRequested: Boolean,
     shouldShowRationale: Boolean,
+    requestInProgress: Boolean = false,
 ): CompanionInvitationScannerState = when {
     granted -> CompanionInvitationScannerState.STARTING
-    !permissionRequested -> CompanionInvitationScannerState.PERMISSION_REQUIRED
+    requestInProgress -> CompanionInvitationScannerState.PERMISSION_REQUESTING
     shouldShowRationale -> CompanionInvitationScannerState.PERMISSION_DENIED
+    !permissionRequested -> CompanionInvitationScannerState.PERMISSION_REQUIRED
     else -> CompanionInvitationScannerState.PERMISSION_PERMANENTLY_DENIED
 }

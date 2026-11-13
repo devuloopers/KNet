@@ -168,3 +168,9 @@ internal object Migration22To23 : Migration(22, 23) {
         )
     }
 }
+/** Adds source admission lookup without rewriting retained connection identity or traffic records. */
+internal object Migration36To37 : Migration(36, 37) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("CREATE INDEX IF NOT EXISTS index_connection_source_identity ON traffic_connections (ingressKind, clientIdentity, id)")
+    }
+}

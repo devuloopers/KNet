@@ -9,6 +9,16 @@ import androidx.compose.ui.unit.dp
  */
 @Immutable
 data class Dimensions(
+    /** Desktop device workspace strip uses one shared height and one-line width budget. */
+    val workspaceTabHeight: Dp = 40.dp,
+    val workspaceTabMinWidth: Dp = 140.dp,
+    val workspaceTabMaxWidth: Dp = 360.dp,
+    /** Compact tab controls are vertically centered within the existing workspace strip. */
+    val workspaceTabControlHeight: Dp = 32.dp,
+    val workspaceTabCornerRadius: Dp = 8.dp,
+    val workspaceTabGap: Dp = 6.dp,
+    /** Space reserved for native macOS traffic lights when drawing into full-window content. */
+    val nativeWindowControlsInset: Dp = 84.dp,
     val toolbarHeight: Dp = 32.dp,
     /** Shared manager headers reserve consistent title/subtitle height before feature content begins. */
     val screenHeaderMinHeight: Dp = 48.dp,

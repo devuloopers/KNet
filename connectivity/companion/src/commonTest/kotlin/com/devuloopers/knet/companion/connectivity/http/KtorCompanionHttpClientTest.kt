@@ -17,6 +17,7 @@ import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFails
 import kotlinx.coroutines.test.runTest
 
 class KtorCompanionHttpClientTest {
@@ -143,6 +144,75 @@ class KtorCompanionHttpClientTest {
             )
         }
     }
+
+    @Test
+    fun noContentWithoutLengthPreservesTheChallengeAndReleasesTheClient() = runTest {
+        var released = 0
+        val nonce = "a".repeat(43)
+        val provider = MockCompanionKtorClientProvider {
+            MockEngine { respond(ByteArray(0), HttpStatusCode.NoContent,
+                headersOf(CompanionCertificateProtocol.CHALLENGE_HEADER, nonce)) }
+        }.withRelease { released++ }
+        val response = KtorCompanionHttpClient(provider).execute(challengeRequest())
+        assertEquals(204, response.statusCode)
+        assertEquals(nonce, response.headers[CompanionCertificateProtocol.CHALLENGE_HEADER.lowercase()])
+        assertContentEquals(ByteArray(0), response.copyBody())
+        assertEquals(1, released)
+    }
+
+    @Test
+    fun legacyExplicitZeroLengthNoContentIsStillAccepted() = runTest {
+        val provider = MockCompanionKtorClientProvider {
+            MockEngine { respond(ByteArray(0), HttpStatusCode.NoContent, headersOf(HttpHeaders.ContentLength, "0")) }
+        }
+        assertContentEquals(ByteArray(0), KtorCompanionHttpClient(provider).execute(challengeRequest()).copyBody())
+    }
+
+    @Test
+    fun bodyBearingResponseStillRequiresDeclaredLength() = runTest {
+        val provider = MockCompanionKtorClientProvider {
+            MockEngine { respond("root-material", HttpStatusCode.OK) }
+        }
+        assertFailsWith<IllegalArgumentException> { KtorCompanionHttpClient(provider).execute(challengeRequest(1024)) }
+    }
+
+    @Test
+    fun noContentRejectsInvalidOrNonzeroDeclaredLengths() = runTest {
+        for (length in listOf("1", "-1", "+0", "", "zero", "0, 0", "9999999999999999999999999")) {
+            val provider = MockCompanionKtorClientProvider {
+                MockEngine { respond(ByteArray(0), HttpStatusCode.NoContent, headersOf(HttpHeaders.ContentLength, length)) }
+            }
+            assertFails("Invalid 204 length: $length") {
+                KtorCompanionHttpClient(provider).execute(challengeRequest(1024))
+            }
+        }
+    }
+
+    @Test
+    fun noContentRejectsTransferCoding() = runTest {
+        val provider = MockCompanionKtorClientProvider {
+            MockEngine { respond(ByteArray(0), HttpStatusCode.NoContent,
+                headersOf(HttpHeaders.ContentLength to listOf("0"), HttpHeaders.TransferEncoding to listOf("chunked"))) }
+        }
+        assertFailsWith<IllegalArgumentException> { KtorCompanionHttpClient(provider).execute(challengeRequest()) }
+    }
+
+    @Test
+    fun noContentCannotReturnBodyBytesEvenWhenCallerAllowsALargerResponse() = runTest {
+        val provider = MockCompanionKtorClientProvider {
+            MockEngine { respond("unexpected", HttpStatusCode.NoContent) }
+        }
+        assertFailsWith<IllegalStateException> { KtorCompanionHttpClient(provider).execute(challengeRequest(1024)) }
+    }
+
+    private fun challengeRequest(maximumBytes: Int = 0) = CompanionHttpRequest(
+        endpoint = CompanionServiceEndpoint("192.0.2.10", 8183, CompanionEndpointScheme.HTTPS),
+        method = CompanionHttpMethod.POST,
+        path = CompanionCertificateProtocol.TRUST_CHALLENGE_PATH,
+        additionalHeaders = mapOf(CompanionCertificateProtocol.CHALLENGE_HEADER to "a".repeat(43)),
+        maximumResponseBytes = maximumBytes,
+        security = pinnedSecurity(),
+    )
 
     private fun pinnedSecurity(): CompanionHttpSecurity.PinnedRoot = CompanionHttpSecurity.PinnedRoot(
         rootCertificate = CompanionRootCertificate(byteArrayOf(1, 2, 3)),

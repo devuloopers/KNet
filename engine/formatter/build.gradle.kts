@@ -3,6 +3,7 @@ plugins {
 }
 
 dependencies {
+    implementation(project(":application:desktop"))
     implementation(project(":core:domain"))
     implementation(project(":engine:sse"))
     implementation(project(":engine:protocol"))

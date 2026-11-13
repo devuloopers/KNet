@@ -3,6 +3,7 @@
 package com.devuloopers.knet.companion.packettunnel
 
 import com.devuloopers.knet.companion.packettunnel.network.LocalSocks5Gateway
+import com.devuloopers.knet.companion.packettunnel.options.ipAddressFamily
 import com.devuloopers.knet.companion.packettunnel.options.IpAddressFamily
 import com.devuloopers.knet.companion.packettunnel.options.TunnelException
 import com.devuloopers.knet.companion.packettunnel.options.TunnelFailure
@@ -26,6 +27,7 @@ import platform.NetworkExtension.NEPacketTunnelProvider
 public class KNetPacketTunnelRuntime {
     private var gateway: LocalSocks5Gateway? = null
     private var engine: HevTunnelEngine? = null
+    private var controlSession: com.devuloopers.knet.companion.packettunnel.network.NativeCompanionControlSession? = null
 
     public fun start(
         provider: NEPacketTunnelProvider,
@@ -72,6 +74,10 @@ public class KNetPacketTunnelRuntime {
                         }
                     }
                     NSLog("companion_event=tunnel_started")
+                    controlSession = com.devuloopers.knet.companion.packettunnel.network.NativeCompanionControlSession(startOptions, onRevoked = {
+                        provider.cancelTunnelWithError(TunnelFailure.PROXY_IDENTITY_REJECTED.exception().asNSError())
+                        reset()
+                    }).also { control -> control.start() }
                     completionHandler(null)
                 } catch (error: TunnelException) {
                     fail("packet_engine", error, completionHandler)
@@ -101,11 +107,9 @@ public class KNetPacketTunnelRuntime {
         val ipv4Exclusions = DNS_SERVERS.map { server ->
             NEIPv4Route(destinationAddress = server, subnetMask = HOST_IPV4_MASK)
         }.toMutableList()
-        if (options.proxyAddressFamily == IpAddressFamily.IPV4) {
-            ipv4Exclusions += NEIPv4Route(
-                destinationAddress = options.proxyHost,
-                subnetMask = HOST_IPV4_MASK,
-            )
+        val directHosts = listOfNotNull(options.proxyHost, options.controlHost).distinct()
+        directHosts.filter { host -> ipAddressFamily(host) == IpAddressFamily.IPV4 }.forEach { host ->
+            ipv4Exclusions += NEIPv4Route(destinationAddress = host, subnetMask = HOST_IPV4_MASK)
         }
         ipv4.excludedRoutes = ipv4Exclusions
         settings.IPv4Settings = ipv4
@@ -115,13 +119,8 @@ public class KNetPacketTunnelRuntime {
             networkPrefixLengths = listOf(NSNumber(int = TUNNEL_IPV6_PREFIX)),
         )
         ipv6.includedRoutes = listOf(NEIPv6Route.defaultRoute())
-        if (options.proxyAddressFamily == IpAddressFamily.IPV6) {
-            ipv6.excludedRoutes = listOf(
-                NEIPv6Route(
-                    destinationAddress = options.proxyHost,
-                    networkPrefixLength = NSNumber(int = HOST_IPV6_PREFIX),
-                ),
-            )
+        ipv6.excludedRoutes = directHosts.filter { host -> ipAddressFamily(host) == IpAddressFamily.IPV6 }.map { host ->
+            NEIPv6Route(destinationAddress = host, networkPrefixLength = NSNumber(int = HOST_IPV6_PREFIX))
         }
         settings.IPv6Settings = ipv6
 
@@ -147,6 +146,8 @@ public class KNetPacketTunnelRuntime {
     }
 
     private fun reset() {
+        controlSession?.close()
+        controlSession = null
         engine?.stop()
         engine = null
         gateway?.stop()

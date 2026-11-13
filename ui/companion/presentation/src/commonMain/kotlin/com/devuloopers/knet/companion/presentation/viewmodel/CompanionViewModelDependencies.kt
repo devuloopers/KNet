@@ -15,7 +15,7 @@ import com.devuloopers.knet.companion.application.usecase.CompanionDesktopAvaila
 import com.devuloopers.knet.companion.application.usecase.ObserveCompanionRegistrationsUseCase
 import com.devuloopers.knet.companion.application.usecase.PairCompanionDeviceUseCase
 import com.devuloopers.knet.companion.application.usecase.RefreshCompanionCredentialUseCase
-import com.devuloopers.knet.companion.application.usecase.SelectCompanionRegistrationUseCase
+import com.devuloopers.knet.companion.application.usecase.SwitchCompanionDesktopUseCase
 import com.devuloopers.knet.companion.application.usecase.StartCompanionInspectionUseCase
 import com.devuloopers.knet.companion.application.usecase.StopCompanionInspectionUseCase
 import com.devuloopers.knet.companion.application.usecase.VerifyCompanionCertificateTrustUseCase
@@ -30,7 +30,6 @@ import com.devuloopers.knet.companion.application.usecase.VerifyCompanionCertifi
  * @property pair completes pairing and commits the resulting registration safely.
  * @property observeRegistrations observes durable registrations and active selection.
  * @property observeCertificateEnrollments observes durable certificate-onboarding completion.
- * @property selectRegistration changes the active desktop.
  * @property observeConnection observes transport lifecycle state.
  * @property observeNetwork observes native network reachability.
  * @property observeDiscovery observes native DNS-SD discovery lifecycle without platform handles.
@@ -51,7 +50,8 @@ public data class CompanionViewModelDependencies(
     public val pair: PairCompanionDeviceUseCase,
     public val observeRegistrations: ObserveCompanionRegistrationsUseCase,
     public val observeCertificateEnrollments: ObserveCompanionCertificateEnrollmentsUseCase,
-    public val selectRegistration: SelectCompanionRegistrationUseCase,
+    /** Authenticates and serializes a desktop handoff, stopping any old capture first. */
+    public val switchDesktop: SwitchCompanionDesktopUseCase,
     public val observeConnection: ObserveCompanionConnectionUseCase,
     public val observeNetwork: ObserveCompanionNetworkUseCase,
     public val observeDiscovery: ObserveCompanionDiscoveryUseCase,

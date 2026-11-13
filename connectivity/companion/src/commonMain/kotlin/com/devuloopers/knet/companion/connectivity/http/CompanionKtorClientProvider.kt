@@ -11,6 +11,7 @@ internal fun interface CompanionKtorClientProvider {
 internal class CompanionKtorClientHandle(
     val client: HttpClient,
     val requestHost: String? = null,
+    val sessionFailure: () -> com.devuloopers.knet.companion.application.contract.CompanionSessionFailure? = { null },
     private val securityFailure: (Throwable) -> CompanionHttpSecurityException? = { null },
     private val releasePlatformResources: () -> Unit = {},
 ) {

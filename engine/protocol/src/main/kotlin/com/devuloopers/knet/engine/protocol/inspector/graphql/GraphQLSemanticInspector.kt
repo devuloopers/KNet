@@ -7,12 +7,13 @@ import com.devuloopers.knet.traffic.inspection.InspectionDocument
 import com.devuloopers.knet.traffic.inspection.InspectionField
 import com.devuloopers.knet.traffic.inspection.InspectorId
 import com.devuloopers.knet.traffic.model.HttpExchangeSnapshot
+import com.devuloopers.knet.traffic.model.absoluteUrl
 import com.devuloopers.knet.traffic.model.http.RequestTarget
 
 /** Stable generic annotation identities shared by GraphQL Traffic presentation and rule suggestions. */
 internal object GraphQLInspectionSchema {
     val inspectorId: InspectorId = InspectorId("graphql")
-    const val VERSION: Long = 2L
+    const val VERSION: Long = 3L
     const val DOCUMENT_KIND: String = GraphQLInspectionMetadata.DOCUMENT_KIND
     const val OPERATION_TYPE_FIELD: String = "Operation type"
     const val OPERATION_NAME_FIELD: String = "Operation name"
@@ -64,8 +65,9 @@ class GraphQLSemanticInspector(
             }
             bytes
         }
-        val document = parser.decodeHttp(input.exchange.request.head.method.token, target, contentType, bodyBytes,
-            bodyComplete = input.requestBody?.truncated != true) ?: return null
+        val document = parser.decodeHttp(input.exchange.request.head.method.token, input.exchange.request.absoluteUrl(), contentType, bodyBytes,
+            bodyComplete = input.requestBody?.truncated != true, learnCaptured = true,
+            headers = input.exchange.request.head.headers.map { it.name.value to it.value }) ?: return null
         val primary = document.selectedOperation ?: document.matchableOperations.firstOrNull()
         val operationType = primary?.type?.label
         val operationName = primary?.name
@@ -85,6 +87,8 @@ class GraphQLSemanticInspector(
                     InspectionField(GraphQLInspectionSchema.BATCH_SIZE_FIELD, it.toString())
                 },
                 InspectionField(GraphQLInspectionSchema.SOURCE_FIELD, document.source.label),
+                document.persistedQuery?.let { InspectionField(GraphQLInspectionMetadata.PERSISTED_QUERY_HASH_FIELD, it.hash.value) },
+                document.persistedQuery?.let { InspectionField(GraphQLInspectionMetadata.QUERY_DOCUMENT_SOURCE_FIELD, document.queryProvenance.label) },
                 document.diagnostic?.let { InspectionField(GraphQLInspectionSchema.DIAGNOSTIC_FIELD, it.description) },
                 InspectionField(GraphQLInspectionSchema.REQUEST_TARGET_FIELD, target),
             ),

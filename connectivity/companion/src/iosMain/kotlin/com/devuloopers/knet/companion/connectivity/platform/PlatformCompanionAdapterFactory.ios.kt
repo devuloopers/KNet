@@ -36,6 +36,8 @@ public actual class PlatformCompanionAdapterFactory(
             desktopDiscovery = desktopDiscovery,
             invitationResolver = DefaultCompanionInvitationResolver(KtorCompanionBootstrapClient(httpClient)),
             controlTransport = KtorCompanionControlTransport(httpClient),
+            sessionTransport = com.devuloopers.knet.companion.connectivity.control.KtorCompanionSessionTransport(
+                IosCompanionKtorClientProvider()),
             rootCertificateSource = IosCompanionRootCertificateSource(httpClient),
             certificateInstallationArtifactSource = DarwinCompanionCertificateInstallationArtifactSource(httpClient),
             trustVerifier = IosCompanionCertificateTrustVerifier(httpClient),

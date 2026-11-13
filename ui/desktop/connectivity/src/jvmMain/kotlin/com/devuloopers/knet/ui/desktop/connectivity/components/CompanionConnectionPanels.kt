@@ -72,10 +72,10 @@ internal fun CompanionExpiredPanel(onIntent: (ConnectDeviceIntent) -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        CompanionMessagePanel("This invitation expired and its QR has been removed.", error = false)
+        CompanionMessagePanel("This QR code has expired. Click to regenerate.", error = false)
         KNetButton(onClick = { onIntent(ConnectDeviceIntent.RefreshCompanionInvitation) }) {
             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-            Text("Create new QR")
+            Text("Regenerate QR")
         }
     }
 }

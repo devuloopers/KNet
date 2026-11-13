@@ -25,6 +25,7 @@ import com.devuloopers.knet.traffic.model.http.HttpMethod
 import com.devuloopers.knet.ui.desktop.breakpointmanager.model.BreakpointManagerState
 import com.devuloopers.knet.ui.desktop.breakpointmanager.model.ResolvedInterceptPayload
 import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
+import com.devuloopers.knet.application.usecase.graphql.ObserveGraphQLPersistedQueriesUseCase
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -49,6 +50,7 @@ class BreakpointManagerViewModel(
     private val resolveProtocolMessageBreakpointUseCase: ResolveProtocolMessageBreakpointUseCase,
     private val breakpointProtocolRuleUseCase: BreakpointProtocolRuleUseCase,
     private val describeRequestUseCase: DescribeRequestUseCase,
+    observeGraphQLPersistedQueriesUseCase: ObserveGraphQLPersistedQueriesUseCase,
     private val ioDispatcher: CoroutineDispatcher,
 ) : ViewModel() {
 
@@ -109,9 +111,10 @@ class BreakpointManagerViewModel(
         // Resolve only the selected payload. mapLatest cancels obsolete work when the user moves
         // through the queue, while a one-entry cache keeps presentation memory strictly bounded.
         viewModelScope.launch {
-            uiState
-                .map { state: BreakpointManagerState -> state.activeEvent }
-                .distinctUntilChangedBy { it?.id }
+            combine(
+                uiState.map { state: BreakpointManagerState -> state.activeEvent }.distinctUntilChangedBy { it?.id },
+                observeGraphQLPersistedQueriesUseCase.execute(),
+            ) { event, _ -> event }
                 .collectLatest { event ->
                     if (event == null) return@collectLatest
                     val payload = withContext(ioDispatcher) { resolvePayload(event) }
@@ -333,9 +336,13 @@ class BreakpointManagerViewModel(
 
     private fun resolvePayload(event: com.devuloopers.knet.application.contract.breakpoint.PendingBreakpoint):
         ResolvedInterceptPayload {
-        val requestBodySpec = PayloadInspectionSpec.fromBytes(
+        val requestBodySpec = PayloadInspectionSpec.fromRequest(
+            method = event.candidate.request.head.method.token,
+            url = event.candidate.request.absoluteUrl(),
             body = event.candidate.requestBody?.copyBytes(),
             headers = event.candidate.request.head.headers.map { it.name.value to it.value },
+            bodyComplete = event.candidate.requestObservedBodyBytes == (event.candidate.requestBody?.size?.toLong() ?: 0L),
+            learnCaptured = true,
         )
         val responseBodySpec = event.candidate.response?.let { response ->
             PayloadInspectionSpec.fromBytes(

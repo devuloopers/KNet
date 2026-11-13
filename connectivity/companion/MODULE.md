@@ -76,3 +76,25 @@ proxy engine. Custom `X509TrustManager` implementations remain prohibited; Andro
 platform trust factories. `commonMain` must not import native APIs, declare a native-context abstraction, or pass a
 platform dependency through `Any`. Implementation presence does not by itself promote the product-level Mobile
 Companion or VPN capabilities; release maturity remains governed by the runtime catalog and physical-device gates.
+
+## Multi-device workspace and control sessions (2026-11-13)
+
+Native Ktor OkHttp/Darwin clients reuse paired TLS/root/pin validation for persistent VPN-owned control sessions. Session transport exposes bounded typed messages and sanitized failure categories. Android host tests use default Android stub values so actual OkHttp sockets can be exercised without a device.
+
+
+## Bodyless certificate challenge responses
+
+The shared HTTP client accepts a successful 204 certificate challenge without Content-Length and tolerates
+legacy explicit zero lengths. It rejects body bytes, nonzero/malformed lengths and transfer coding on a 204.
+Ordinary responses still require a bounded declared length. Root/platform TLS validation, transport pinning,
+authentication and exact nonce comparison remain owned by their existing adapters. Common and real native
+OkHttp TLS regression fixtures cover the response-framing boundary for both Companion platforms.
+
+## Android VPN socket teardown
+
+The local SOCKS gateway contains expected I/O failures at each accepted connection's coroutine boundary.
+VPN stop closes tracked sockets before cancelling workers, so blocked greeting, command, payload and UDP
+control reads terminate without reaching Android's uncaught-exception handler. Completion always closes
+the client and releases its connection permit. Cancellation and non-I/O programming failures still propagate.
+An injectable execution context retains a gateway-owned child job and makes late worker failures observable
+in real-socket host tests; it does not change the production dispatcher or connection limits.

@@ -92,6 +92,7 @@ object FakeTrafficViewModelFactory {
         customSessionCatalogPort: TrafficSessionCatalog? = null,
         customProxyRuntime: ProxyRuntime? = null,
         customCaptureSessionControl: CaptureSessionControl? = null,
+        customTrafficMaintenance: TrafficMaintenance? = null,
         customInspectionAnnotationPort: InspectionAnnotationStore? = null,
         customWorkspacePreferencesRepository: WidgetPreferencesRepository? = null,
         pendingBreakpointFlow: StateFlow<List<PendingBreakpoint>> = MutableStateFlow(emptyList()),
@@ -182,6 +183,8 @@ object FakeTrafficViewModelFactory {
         }
 
         return TrafficViewModel(
+            observeGraphQLPersistedQueriesUseCase = com.devuloopers.knet.application.usecase.graphql.ObserveGraphQLPersistedQueriesUseCase(
+                com.devuloopers.knet.engine.formatter.graphql.GraphQLHttpRequestFormatter.persistedQueryCatalog),
             observeLatestTrafficSessionUseCase = ObserveLatestTrafficSessionUseCase(
                 customSessionCatalogPort ?: object : TrafficSessionCatalog {
                     override val latestSessionId: Flow<CaptureSessionId?> =
@@ -189,6 +192,8 @@ object FakeTrafficViewModelFactory {
                 },
             ),
             queryTrafficPageUseCase = QueryTrafficPageUseCase(fakeTrafficQueryPort),
+            resolveTrafficSourceUseCase = com.devuloopers.knet.application.usecase.traffic.ResolveCapturedTrafficSourceUseCase(fakeTrafficQueryPort),
+            initialSource = com.devuloopers.knet.application.contract.traffic.TrafficSource.All,
             queryTrafficFacetsUseCase = QueryTrafficFacetsUseCase(customTrafficFacetReader),
             observeTrafficGenerationsUseCase = ObserveTrafficGenerationsUseCase(fakeTrafficQueryPort),
             observeProtocolMessageChangesUseCase = ObserveProtocolMessageChangesUseCase(protocolMessages),
@@ -199,7 +204,7 @@ object FakeTrafficViewModelFactory {
             ),
             clearTrafficHistoryUseCase = ClearTrafficHistoryUseCase(
                 captureSessionControl = fakeCaptureControl,
-                trafficMaintenance = object : TrafficMaintenance {
+                trafficMaintenance = customTrafficMaintenance ?: object : TrafficMaintenance {
                     override suspend fun clearTerminalTraffic() = Unit
                 },
             ),

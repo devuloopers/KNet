@@ -8,6 +8,8 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberNavBackStack
 import androidx.navigation3.ui.NavDisplay
 import com.devuloopers.knet.companion.presentation.action.CompanionAction
+import com.devuloopers.knet.companion.presentation.state.CompanionDesktopManagementState
+import com.devuloopers.knet.companion.sharedui.screen.desktops.*
 import com.devuloopers.knet.companion.presentation.state.CompanionUiState
 import com.devuloopers.knet.companion.presentation.state.toCompanionHomeUiState
 import com.devuloopers.knet.companion.presentation.flow.resolveFlowStage
@@ -28,7 +30,17 @@ internal fun CompanionNavHost(
     invitationScanner: CompanionInvitationScanner,
     certificateInstallationGuidance: CertificateInstallationGuidance,
 ) {
-    val requiredRoute = CompanionNavigator.routeFor(state.resolveFlowStage())
+    val adding = state.desktopManagement == CompanionDesktopManagementState.Adding
+    val handoff = state.desktopManagement is CompanionDesktopManagementState.Switching ||
+        state.desktopManagement is CompanionDesktopManagementState.SwitchFailed
+    val requiredRoute = if (adding) CompanionRoute.ConnectDesktop else CompanionNavigator.routeFor(state.resolveFlowStage())
+    val onBack: () -> Unit = {
+        if (!state.operationInProgress || (state.invitationScannerVisible && !state.invitationCommitInProgress)) when {
+            state.invitationScannerVisible -> onAction(CompanionAction.InvitationScannerDismissed)
+            adding || handoff -> onAction(CompanionAction.OpenDesktopsRequested)
+            else -> onExitRequested()
+        }
+    }
     val backStack = rememberNavBackStack(companionNavigationConfiguration, requiredRoute)
 
     LaunchedEffect(requiredRoute) {
@@ -47,16 +59,7 @@ internal fun CompanionNavHost(
         NavDisplay(
             backStack = visibleBackStack,
             modifier = Modifier.fillMaxSize(),
-            onBack = {
-                when (requiredRoute) {
-                    CompanionRoute.ConnectDesktop -> if (state.invitationScannerVisible) {
-                        onAction(CompanionAction.InvitationScannerDismissed)
-                    } else {
-                        onExitRequested()
-                    }
-                    else -> onExitRequested()
-                }
-            },
+            onBack = onBack,
             entryProvider = entryProvider {
                 entry(CompanionRoute.ConnectDesktop) {
                     ConnectDesktopScreen(
@@ -78,11 +81,21 @@ internal fun CompanionNavHost(
             },
         )
     }
-    if (requiredRoute == CompanionRoute.InspectionHome) {
-        navigationContent()
-    } else {
-        CompanionSetupScaffold(progress = state.toCompanionSetupProgress()) {
-            navigationContent()
-        }
+    CompanionSetupScaffold(
+        progress = if (!handoff && requiredRoute != CompanionRoute.InspectionHome )
+            (if (adding) com.devuloopers.knet.companion.sharedui.component.CompanionSetupProgress.Scanning
+                else state.toCompanionSetupProgress()) else null,
+        registration = if (adding) null else state.activeRegistration,
+        enabled = !state.operationInProgress && !handoff,
+        onDesktops = { onAction(CompanionAction.OpenDesktopsRequested) },
+        onBack = if (adding || handoff || state.invitationScannerVisible) onBack else null,
+    ) {
+        if (handoff) CompanionDesktopSwitchScreen(state, onAction) else navigationContent()
     }
+    if (state.desktopManagement == CompanionDesktopManagementState.Listing ||
+        state.desktopManagement is CompanionDesktopManagementState.ConfirmForget
+    ) CompanionDesktopsSheet(state, onAction)
+    if (state.inspectionPermissionRequired && !handoff && !adding &&
+        state.desktopManagement == CompanionDesktopManagementState.Closed
+    ) CompanionVpnConsentSheet(state, onAction)
 }

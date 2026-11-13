@@ -4,6 +4,14 @@ import com.devuloopers.knet.companion.model.CompanionDesktopId
 
 /** User intents accepted by the shared companion ViewModel. */
 public sealed interface CompanionAction {
+    /** Opens saved desktops from setup or Home. */
+    public data object OpenDesktopsRequested : CompanionAction
+    /** Opens QR pairing while preserving the current selected desktop. */
+    public data object AddDesktopRequested : CompanionAction
+    /** Leaves desktop management or cancels an idle add flow. */
+    public data object DesktopManagementDismissed : CompanionAction
+    /** Opens the explicit confirmation before removing one desktop. */
+    public data class ConfirmForgetDesktopRequested(public val desktopId: CompanionDesktopId) : CompanionAction
     /** Replaces the Connect illustration with the shared inline invitation scanner. */
     public data object ScanInvitationRequested : CompanionAction
 

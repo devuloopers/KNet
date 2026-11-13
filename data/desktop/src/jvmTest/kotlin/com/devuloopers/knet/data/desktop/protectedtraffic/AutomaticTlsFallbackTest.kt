@@ -19,6 +19,21 @@ class AutomaticTlsFallbackTest {
         clientContext = TlsInterceptionClientContext(session, client), clientHelloObserved = true)
     private val rejected = TlsInspectionFailure(InspectionFailureReason.CERTIFICATE_REJECTED, TlsCertificatePresentation.PRESENTED)
 
+    @Test fun `source clear rotation preserves decisions and deadlines while fencing late evidence`() = runTest {
+        val cache = InMemoryAutomaticTlsFallback(backgroundScope, lifetimeMillis = 1000, elapsedMillis = { testScheduler.currentTime })
+        cache.activateSession(session)
+        val generation = assertNotNull(cache.authorize(ProtectedTrafficConfiguration(configurationReady = true), "root"))
+        val key = assertNotNull(automaticTlsFallbackKey(session, client, "api.example.com", 443, null))
+        assertTrue(cache.record(key, generation))
+        advanceTimeBy(500)
+        val next = CaptureSessionId("replacement")
+        cache.rotateCaptureSession(next)
+        assertEquals(setOf(key.copy(sessionId = next)), cache.state.value.keys)
+        assertFalse(cache.record(key, generation))
+        advanceTimeBy(500); runCurrent()
+        assertTrue(cache.state.value.keys.isEmpty(), "Rotation cannot renew the original lease")
+    }
+
     @Test fun `confirmed rejection automatically tunnels a new classified connection without creating a saved rule`() = runTest {
         val cache = InMemoryAutomaticTlsFallback(backgroundScope, elapsedMillis = { testScheduler.currentTime })
         cache.activateSession(session)

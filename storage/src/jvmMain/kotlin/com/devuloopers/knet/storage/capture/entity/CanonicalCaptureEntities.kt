@@ -51,6 +51,7 @@ data class CaptureSessionEntity(
     indices = [
         Index(value = ["sessionId", "openedAtEpochMillis", "id"], name = "index_connection_session_opened_id"),
         Index(value = ["sessionId", "state"], name = "index_connection_session_state"),
+        Index(value = ["ingressKind", "clientIdentity", "id"], name = "index_connection_source_identity"),
     ],
 )
 data class TrafficConnectionEntity(

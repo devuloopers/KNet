@@ -1,5 +1,7 @@
 package com.devuloopers.knet.ui.desktop.apistudio.view
 
+import com.devuloopers.knet.ui.desktop.apistudio.file.GraphQLManifestFilePicker
+import com.devuloopers.knet.ui.desktop.apistudio.file.NativeGraphQLManifestFilePicker
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.Text
@@ -53,7 +55,8 @@ fun ApiStudioScreen(
     protocolContributions: List<ApiStudioWorkspaceContribution> = emptyList(),
     capturedImport: CapturedApiStudioRequest? = null,
     onCapturedImportConsumed: () -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    manifestFilePicker: GraphQLManifestFilePicker = NativeGraphQLManifestFilePicker,
 ) {
     val themeColors = KNetTheme.colors
     var responseSplitRatio by remember { mutableStateOf(0.5f) }
@@ -261,6 +264,17 @@ fun ApiStudioScreen(
                                                 color = themeColors.semantic.error
                                             )
                                         )
+                                    }
+
+                                    uiState.persistedQueryPreview?.let { preview ->
+                                        PersistedQueryToolbar(preview, uiState.manifestImportResult, uiState.isImportingManifest) {
+                                            manifestFilePicker.choose { result ->
+                                                result.fold(
+                                                    onSuccess = { path -> path?.let(viewModel::importPersistedQueryManifest) },
+                                                    onFailure = { viewModel.reportManifestPickerFailure() },
+                                                )
+                                            }
+                                        }
                                     }
 
                                     RequestEditorPanel(

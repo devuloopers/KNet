@@ -22,6 +22,7 @@ import com.devuloopers.knet.companion.application.usecase.PairCompanionDeviceUse
 import com.devuloopers.knet.companion.application.usecase.RecoverCompanionEndpointUseCase
 import com.devuloopers.knet.companion.application.usecase.RefreshCompanionCredentialUseCase
 import com.devuloopers.knet.companion.application.usecase.SelectCompanionRegistrationUseCase
+import com.devuloopers.knet.companion.application.usecase.SwitchCompanionDesktopUseCase
 import com.devuloopers.knet.companion.application.usecase.StartCompanionInspectionUseCase
 import com.devuloopers.knet.companion.application.usecase.StopCompanionInspectionUseCase
 import com.devuloopers.knet.companion.application.usecase.VerifyCompanionCertificateTrustUseCase
@@ -36,6 +37,7 @@ internal fun companionApplicationModule(): Module = module {
     single { ObserveCompanionRegistrationsUseCase(get()) }
     single { ObserveCompanionCertificateEnrollmentsUseCase(get()) }
     single { SelectCompanionRegistrationUseCase(get()) }
+    single { SwitchCompanionDesktopUseCase(get(), get(), get(), get(), get(), get(), get()) }
     single { RecoverCompanionEndpointUseCase(get(), get(), get(), get()) }
     single<CompanionEndpointResolver> { get<RecoverCompanionEndpointUseCase>() }
     single<CompanionDesktopAvailabilityMonitor> {
@@ -53,6 +55,7 @@ internal fun companionApplicationModule(): Module = module {
     single { ObserveCompanionCertificateStoreChangesUseCase(get()) }
     single { FetchCompanionPacketConditionsUseCase(get(), get()) }
     single { com.devuloopers.knet.companion.application.usecase.MaintainCompanionPacketPolicyUseCase(get<FetchCompanionPacketConditionsUseCase>(), get()) }
+    single { com.devuloopers.knet.companion.application.usecase.MaintainCompanionSessionUseCase(get(), get(), get(), get()) }
     single { StartCompanionInspectionUseCase(get(), get(), get(), get(), get(), get()) }
     single { StopCompanionInspectionUseCase(get(), get()) }
     single { ObserveCompanionInspectionUseCase(get()) }

@@ -127,3 +127,20 @@ and cancellation. No history or payload parsing runs in composables. See `docs/t
 GraphQLInspectionMetadata provides stable document/legacy-field identity shared by the semantic producer and
 presentation adapters. It preserves stored annotation shape; Traffic can omit duplicated preview fields without
 removing source annotations. See `docs/traffic_inspector_redesign.md`.
+
+Companion QR presentation observes exact-bootstrap availability through `ObservePairingOnboardingUseCase`. The
+onboarding descriptor exposes only a non-secret correlation ID in addition to its existing ephemeral payload.
+The storage contract publishes a replayable pending-ID snapshot, so consumption before observation cannot leave
+a used QR visible. See `docs/companion_ui.md` for lifecycle and qualification details.
+
+## GraphQL persisted-query contracts
+
+Owns endpoint-scoped source-catalog and bounded local-manifest-reader contracts, typed atomic import results, and
+import/observation use cases. Protocol parsing, hashing, cache policy and native IO remain in outer implementations.
+View models consume the use cases; no query source is added to saved request state. See `docs/graphql_persisted_queries.md`.
+
+## Multi-device workspace and control sessions (2026-11-13)
+
+Typed TrafficSource, device roster/presence and workspace preference contracts, source telemetry sampling, source resolution and scoped Clear workflows live here. DevicePresenceCoordinator fences every authenticated VPN generation with monotonic leases.
+
+Device tab eligibility combines retained identities with presence and the payload-free `DeviceTrafficHistory` boundary. Connected/reconnecting devices remain visible without traffic; offline devices require at least one retained HTTP exchange or opaque flow. Pairing is unaffected by hiding a tab.

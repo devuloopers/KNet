@@ -86,6 +86,7 @@ import kotlinx.coroutines.test.setMain
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertNotEquals
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
@@ -320,12 +321,19 @@ class ApiStudioViewModelTest {
         breakpointControl: BreakpointControl = fakeBreakpointControl,
         collectionsRepository: TestCollectionsRepository = TestCollectionsRepository(),
         initialSettings: WorkspaceLayoutSettings = WorkspaceLayoutSettings(),
-        layoutUseCases: Pair<GetWorkspaceLayoutUseCase, UpdateWorkspaceLayoutUseCase>? = null
+        layoutUseCases: Pair<GetWorkspaceLayoutUseCase, UpdateWorkspaceLayoutUseCase>? = null,
+        manifestReader: com.devuloopers.knet.application.contract.graphql.GraphQLManifestReader =
+            com.devuloopers.knet.application.contract.graphql.GraphQLManifestReader { _, _ -> error("No test manifest selected") },
     ): ApiStudioViewModel {
         val (getLayoutUseCase, updateLayoutUseCase) =
             layoutUseCases ?: createTestLayoutUseCases(initialSettings)
         val (observeApplicationSettings, updateApplicationSettings) = createTestApplicationSettingsUseCases()
         return ApiStudioViewModel(
+            observeGraphQLPersistedQueriesUseCase = com.devuloopers.knet.application.usecase.graphql.ObserveGraphQLPersistedQueriesUseCase(
+                com.devuloopers.knet.engine.formatter.graphql.GraphQLHttpRequestFormatter.persistedQueryCatalog),
+            importGraphQLPersistedQueriesUseCase = com.devuloopers.knet.application.usecase.graphql.ImportGraphQLPersistedQueriesUseCase(
+                com.devuloopers.knet.engine.formatter.graphql.GraphQLHttpRequestFormatter.persistedQueryCatalog,
+                manifestReader),
             executeApiStudioRequestUseCase = ExecuteApiStudioRequestUseCase(
                 executeRequest = executeUseCase,
                 formatResponseBody = FormatResponseBodyUseCase(),
@@ -361,7 +369,76 @@ class ApiStudioViewModelTest {
 
     @AfterTest
     fun tearDown() {
+        com.devuloopers.knet.engine.formatter.graphql.GraphQLHttpRequestFormatter.persistedQueryCatalog.clear()
         Dispatchers.resetMain()
+    }
+
+    private val persistedQuery = "query PersistedRead { item { id } }"
+    private val persistedHash get() = java.security.MessageDigest.getInstance("SHA-256").digest(persistedQuery.encodeToByteArray())
+        .joinToString("") { "%02x".format(it.toInt() and 255) }
+    private val persistedExtensions get() = """{"persistedQuery":{"version":1,"sha256Hash":"$persistedHash"}}"""
+    private val persistedBody get() = """{"variables":{"id":1},"extensions":$persistedExtensions,"client":{"keep":true}}"""
+
+    @Test
+    fun `hash only POST replay keeps source while verified manifest updates only the read only preview`() = runTest(testDispatcher) {
+        val executor = TestHttpExecutor()
+        val manifest = "{\"$persistedHash\":\"$persistedQuery\"}".encodeToByteArray()
+        val repository = TestCollectionsRepository()
+        val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(executor), collectionsRepository = repository,
+            manifestReader = com.devuloopers.knet.application.contract.graphql.GraphQLManifestReader { _, _ -> manifest })
+        val id = viewModel.importRequestSpec(com.devuloopers.knet.domain.network.model.NetworkRequestSpec(
+            method = HttpMethod.POST, url = "https://persisted-studio.test/graphql", bodyPayload = persistedBody))
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals("", viewModel.uiState.value.editorState.bodyState.graphQlState.queryText)
+        assertEquals(com.devuloopers.knet.domain.graphql.GraphQLQueryProvenance.UNAVAILABLE,
+            viewModel.uiState.value.persistedQueryPreview?.queryProvenance)
+        viewModel.executeRequest(); testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(persistedBody, (executor.lastBody as OutboundRequestBody.GraphQl).content)
+        viewModel.importPersistedQueryManifest("manifest.json"); testDispatcher.scheduler.advanceUntilIdle()
+        val preview = assertNotNull(viewModel.uiState.value.persistedQueryPreview)
+        assertEquals(com.devuloopers.knet.domain.graphql.GraphQLQueryProvenance.IMPORTED_MANIFEST, preview.queryProvenance)
+        assertTrue(preview.queryText.contains("query PersistedRead"))
+        assertEquals("", viewModel.uiState.value.editorState.bodyState.graphQlState.queryText)
+        assertEquals(persistedBody, viewModel.uiState.value.editorState.bodyState.payloadText)
+        assertFalse(viewModel.uiState.value.isImportingManifest)
+        assertEquals(com.devuloopers.knet.application.contract.graphql.GraphQLManifestImportResult.Imported(1), viewModel.uiState.value.manifestImportResult)
+        assertEquals(persistedBody, repository.getRequestById(id)?.body?.content)
+        viewModel.executeRequest(); testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(persistedBody, (executor.lastBody as OutboundRequestBody.GraphQl).content)
+    }
+
+    @Test
+    fun `GET query edit refreshes hash and structured extension buffer without adding a body`() = runTest(testDispatcher) {
+        val executor = TestHttpExecutor()
+        val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(executor))
+        val url = "https://persisted-studio.test/graphql?extensions=" + java.net.URLEncoder.encode(persistedExtensions, Charsets.UTF_8)
+        viewModel.importRequestSpec(com.devuloopers.knet.domain.network.model.NetworkRequestSpec(method = HttpMethod.GET, url = url))
+        testDispatcher.scheduler.advanceUntilIdle()
+        viewModel.updateActiveSubTab(com.devuloopers.knet.ui.desktop.httppanel.model.InspectorSubTab.PARAMS)
+        val fields = viewModel.uiState.value.editorState.graphQLParameters!!.graphQl
+        val query = "query Changed { item { id } }"
+        viewModel.updateGraphQlState(fields.copy(payload = fields.payload.copy(queryText = query)))
+        testDispatcher.scheduler.advanceUntilIdle()
+        val editor = viewModel.uiState.value.editorState
+        val decoded = com.devuloopers.knet.engine.formatter.graphql.GraphQLHttpRequestFormatter.inspect("GET", editor.url)!!
+        assertNull(decoded.diagnostic)
+        assertEquals(query, decoded.queryText)
+        assertNotEquals(persistedHash, decoded.persistedQuery?.hash?.value)
+        assertTrue(editor.graphQLParameters!!.graphQl.extensionsText.contains(decoded.persistedQuery!!.hash.value))
+        viewModel.executeRequest(); testDispatcher.scheduler.advanceUntilIdle()
+        assertEquals(OutboundRequestBody.None, executor.lastBody)
+    }
+
+    @Test
+    fun `lookup refresh cannot publish an old persisted preview over an ordinary selected document`() = runTest(testDispatcher) {
+        val viewModel = createTestViewModel(ExecuteClientApiRequestUseCase(TestHttpExecutor()))
+        viewModel.importRequestSpec(com.devuloopers.knet.domain.network.model.NetworkRequestSpec(
+            method = HttpMethod.POST, url = "https://persisted-studio.test/graphql", bodyPayload = persistedBody))
+        viewModel.importRequestSpec(com.devuloopers.knet.domain.network.model.NetworkRequestSpec(
+            method = HttpMethod.GET, url = "https://ordinary.test/items"))
+        testDispatcher.scheduler.advanceUntilIdle()
+        assertNull(viewModel.uiState.value.persistedQueryPreview)
+        assertEquals("https://ordinary.test/items", viewModel.uiState.value.editorState.url)
     }
 
     @Test

@@ -27,6 +27,7 @@ import com.devuloopers.knet.application.usecase.breakpoint.PrepareBreakpointRule
 import com.devuloopers.knet.application.contract.breakpoint.PendingBreakpoint
 import com.devuloopers.knet.application.contract.breakpoint.PendingProtocolMessageBreakpoint
 import com.devuloopers.knet.application.usecase.inspection.ObserveInspectionAnnotationsUseCase
+import com.devuloopers.knet.application.contract.traffic.TrafficSource
 import com.devuloopers.knet.application.contract.traffic.TrafficPageQuery
 import com.devuloopers.knet.application.contract.traffic.TrafficRecordFilter
 import com.devuloopers.knet.application.contract.traffic.TrafficFacetQuery
@@ -62,6 +63,7 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.*
 import kotlin.time.Duration.Companion.milliseconds
 import com.devuloopers.knet.domain.rules.usecase.ObserveRulesUseCase
+import com.devuloopers.knet.application.usecase.graphql.ObserveGraphQLPersistedQueriesUseCase
 import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.http.HttpMethod as CanonicalHttpMethod
 import com.devuloopers.knet.traffic.model.http.HttpStatus as CanonicalHttpStatus
@@ -78,6 +80,8 @@ import kotlinx.coroutines.sync.withLock
 class TrafficViewModel(
     private val observeLatestTrafficSessionUseCase: ObserveLatestTrafficSessionUseCase,
     private val queryTrafficPageUseCase: QueryTrafficPageUseCase,
+    private val resolveTrafficSourceUseCase: com.devuloopers.knet.application.usecase.traffic.ResolveCapturedTrafficSourceUseCase,
+    private val initialSource: TrafficSource,
     private val queryTrafficFacetsUseCase: QueryTrafficFacetsUseCase,
     private val observeTrafficGenerationsUseCase: ObserveTrafficGenerationsUseCase,
     private val observeProtocolMessageChangesUseCase: ObserveProtocolMessageChangesUseCase,
@@ -96,6 +100,7 @@ class TrafficViewModel(
     private val prepareCapturedNetworkRequestUseCase: PrepareCapturedNetworkRequestUseCase,
     private val observeInspectionAnnotationsUseCase: ObserveInspectionAnnotationsUseCase,
     private val describeRequestUseCase: DescribeRequestUseCase,
+    observeGraphQLPersistedQueriesUseCase: ObserveGraphQLPersistedQueriesUseCase,
     private val prepareBreakpointRuleDraftUseCase: PrepareBreakpointRuleDraftUseCase,
     observeRulesUseCase: ObserveRulesUseCase,
     observePendingBreakpointsUseCase: ObservePendingBreakpointsUseCase,
@@ -121,9 +126,95 @@ class TrafficViewModel(
             revision = 0L,
         ),
     )
+    private var sourceGeneration = 0L
+    private val sourceWorkspaces = object : LinkedHashMap<TrafficSource, TrafficState>(4, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<TrafficSource, TrafficState>?): Boolean = size > 3
+    }
+    private var pendingSources: Map<String, TrafficSource?> = emptyMap()
+
+    /** Switches views synchronously, retaining at most four body-free row windows and bounded shared prepared data. */
+    fun selectSource(source: TrafficSource) {
+        val previous = _uiState.value
+        if (source == previous.source) return
+        sourceGeneration++
+        // Remove the target before admitting the departing view, preserving three dormant windows plus the active one.
+        val restored = sourceWorkspaces.remove(source) ?: TrafficState(source = source)
+        sourceWorkspaces[previous.source] = previous.copy(preparedState = InspectorPreparedState(),
+            protocolMessages = ProtocolMessagesUiState(), activeBreakpointRules = emptyList(),
+            prefilledBreakpointRule = null, prefilledBreakpointProtocolValues = emptyList(), isBreakpointDrawerVisible = false)
+        filterRefreshJob?.cancel()
+        breakpointDraftJob?.cancel()
+        durableAnnotationJob?.cancel()
+        durableTransactions = restored.transactions.filter { row -> row.interception !is TrafficInterceptionUiState.Paused }
+        _uiState.value = restored.copy(source = source, sessionId = previous.sessionId, captureState = previous.captureState,
+            engineState = previous.engineState, localIpAddress = previous.localIpAddress,
+            engineErrorMessage = previous.engineErrorMessage, activeBreakpointRules = previous.activeBreakpointRules,
+            columnWidths = previous.columnWidths, columnVisibility = previous.columnVisibility,
+            preparedState = InspectorPreparedState(), protocolMessages = ProtocolMessagesUiState(),
+            nextPageCursor = null, isPageLoading = false, isClearingHistory = previous.isClearingHistory)
+        publishTrafficProjection()
+        filterRefreshJob = viewModelScope.launch { loadTrafficPage(TrafficPageLoadMode.REFRESH_NEWEST) }
+    }
+
+    /**
+     * Clears the explicit source captured by Clear or a confirmed background-tab Close.
+     * The target never follows selection changes; duplicate clicks during deletion are ignored.
+     * Storage owns capture rotation and full-history deletion, independent of the active search filters.
+     */
+    fun clearSource(clearedSource: TrafficSource) {
+        if (_uiState.value.isClearingHistory) return
+        _uiState.update { state -> state.copy(isClearingHistory = true, trafficErrorMessage = null) }
+        viewModelScope.launch {
+            try {
+                clearTrafficHistoryUseCase.execute(clearedSource)
+                sourceWorkspaces.remove(clearedSource)
+                val clearedCurrent = pageLoadMutex.withLock {
+                    if (_uiState.value.source != clearedSource) return@withLock false
+                    durableAnnotationJob?.cancel()
+                    durableTransactions = emptyList()
+                    interceptionHistory.clear()
+                    _uiState.update { state ->
+                        state.copy(
+                            transactions = emptyList(),
+                            filteredTransactions = emptyList(),
+                            totalAvailableCount = 0L,
+                            selectedTransactionId = null,
+                            preparedState = InspectorPreparedState(),
+                            nextPageCursor = null,
+                            pageGeneration = 0L,
+                            facetCounts = TrafficFacetCounts(),
+                        )
+                    }
+                    true
+                }
+                // The bounded shared cache has no source index. Release stale preview references while
+                // keeping a sibling workspace's directly held inspector state and row window unchanged.
+                preparedStateCache.clear()
+                if (clearedCurrent) {
+                    publishTrafficProjection()
+                    loadTrafficPage(TrafficPageLoadMode.REPLACE, expectedSource = clearedSource)
+                }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                KNetLogger.error("TrafficViewModel", error) { "Traffic history clear failed." }
+                _uiState.update { state ->
+                    state.copy(trafficErrorMessage = "Traffic history could not be cleared.")
+                }
+            } finally {
+                _uiState.update { state -> state.copy(isClearingHistory = false) }
+            }
+        }
+    }
+
+    /** Stores a departing viewport against its source even when Compose disposes it after selection changed. */
+    fun retainViewport(source: TrafficSource, viewport: com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport) {
+        if (_uiState.value.source == source) _uiState.update { it.copy(viewport = viewport) }
+        else sourceWorkspaces[source]?.let { sourceWorkspaces[source] = it.copy(viewport = viewport) }
+    }
+
     private val pageLoadMutex = Mutex()
     private val messagePageLoadMutex = Mutex()
-    private val clearPresentationMutex = Mutex()
     private var filterRefreshJob: Job? = null
     private var breakpointDraftJob: Job? = null
     private var pendingDescriptorJob: Job? = null
@@ -150,6 +241,7 @@ class TrafficViewModel(
         transactionId: String,
         onSpecReady: (CapturedApiStudioRequest) -> Unit
     ) {
+        val ownerGeneration = sourceGeneration
         viewModelScope.launch(backgroundDispatcher) {
             val spec = when (val result = prepareCapturedNetworkRequestUseCase.execute(ExchangeId(transactionId))) {
                 is PrepareCapturedNetworkRequestResult.Found -> result.spec
@@ -186,6 +278,7 @@ class TrafficViewModel(
                     emptyList()
                 }
                 withContext(Dispatchers.Main) {
+                    if (ownerGeneration != sourceGeneration) return@withContext
                     onSpecReady(
                         CapturedApiStudioRequest(
                             sourceExchangeId = transactionId,
@@ -262,6 +355,7 @@ class TrafficViewModel(
                 pendingProtocolMessages = events
                 events.forEach(::rememberInterception)
                 publishTrafficProjection()
+                schedulePendingRequestDescriptors()
             }
             .launchIn(viewModelScope)
 
@@ -289,9 +383,10 @@ class TrafficViewModel(
 
         // Reactive Transaction Payload Preparation via flatMapLatest
         viewModelScope.launch {
-            _uiState
-                .map { it.selectedTransaction }
-                .distinctUntilChanged()
+            combine(
+                _uiState.map { it.selectedTransaction }.distinctUntilChanged(),
+                observeGraphQLPersistedQueriesUseCase.execute().onEach { preparedStateCache.clear() },
+            ) { transaction, _ -> transaction }
                 .flatMapLatest { tx ->
                     if (tx == null) {
                         return@flatMapLatest flowOf(InspectorPreparedState())
@@ -339,9 +434,13 @@ class TrafficViewModel(
                             }
 
                             // Single pass: decode bytes + resolve BodyFormat off-thread together.
-                            val requestBodySpec = PayloadInspectionSpec.fromBytes(
-                                requestBody?.copyBytes(),
-                                requestHeaders,
+                            val requestBodySpec = PayloadInspectionSpec.fromRequest(
+                                method = exchange.request.head.method.token,
+                                url = exchange.request.absoluteUrl(),
+                                body = requestBody?.copyBytes(),
+                                headers = requestHeaders,
+                                bodyComplete = requestBody?.endOfBody != false,
+                                learnCaptured = true,
                             )
                             val responseBodySpec = PayloadInspectionSpec.fromBytes(
                                 responseBody?.copyBytes(),
@@ -353,7 +452,7 @@ class TrafficViewModel(
                                 exchange = exchange,
                                 requestPayloadSpec = requestBodySpec,
                                 requestParameterSpec = PayloadInspectionSpec.fromGraphQLParameters(
-                                    exchange.request.head.method.token, exchange.request.absoluteUrl()),
+                                    exchange.request.head.method.token, exchange.request.absoluteUrl(), learnCaptured = true),
                                 responsePayloadSpec = responseBodySpec,
                                 requestBodyTruncated = requestBody?.endOfBody == false,
                                 responseBodyTruncated = responseBody?.endOfBody == false,
@@ -568,6 +667,12 @@ class TrafficViewModel(
                         .conflate()
                         .onEach { delay(75.milliseconds) }
                         .collect { generation ->
+                            // A pause can be published before its asynchronous canonical admission commits.
+                            // Retry only unresolved owners on durable changes; never guess a source from headers.
+                            if ((pendingBreakpoints.map { it.candidate.exchangeId.value } +
+                                    pendingProtocolMessages.map { it.candidate.exchangeId.value }).any { pendingSources[it] == null }) {
+                                schedulePendingRequestDescriptors()
+                            }
                             if (generation.generation > _uiState.value.pageGeneration) {
                                 loadTrafficPage(TrafficPageLoadMode.REFRESH_NEWEST)
                             }
@@ -590,46 +695,7 @@ class TrafficViewModel(
                 }
             }
 
-            is TrafficIntent.ClearFeed -> {
-                viewModelScope.launch {
-                    clearPresentationMutex.withLock {
-                        if (_uiState.value.isClearingHistory) return@withLock
-                        _uiState.update { state -> state.copy(isClearingHistory = true, trafficErrorMessage = null) }
-                        try {
-                            clearTrafficHistoryUseCase.execute()
-                            pageLoadMutex.withLock {
-                                durableAnnotationJob?.cancel()
-                                preparedStateCache.clear()
-                                durableTransactions = emptyList()
-                                interceptionHistory.clear()
-                                _uiState.update { state ->
-                                    state.copy(
-                                        transactions = emptyList(),
-                                        filteredTransactions = emptyList(),
-                                        totalAvailableCount = 0L,
-                                        selectedTransactionId = null,
-                                        preparedState = InspectorPreparedState(),
-                                        nextPageCursor = null,
-                                        pageGeneration = 0L,
-                                        facetCounts = TrafficFacetCounts(),
-                                    )
-                                }
-                            }
-                            publishTrafficProjection()
-                            loadTrafficPage(TrafficPageLoadMode.REPLACE)
-                        } catch (error: CancellationException) {
-                            throw error
-                        } catch (error: Exception) {
-                            KNetLogger.error("TrafficViewModel", error) { "Traffic history clear failed." }
-                            _uiState.update { state ->
-                                state.copy(trafficErrorMessage = "Traffic history could not be cleared.")
-                            }
-                        } finally {
-                            _uiState.update { state -> state.copy(isClearingHistory = false) }
-                        }
-                    }
-                }
-            }
+            is TrafficIntent.ClearFeed -> clearSource(_uiState.value.source)
 
             is TrafficIntent.ToggleAutoScroll -> {
                 _uiState.update { it.copy(autoScroll = !it.autoScroll) }
@@ -857,17 +923,20 @@ class TrafficViewModel(
      * without changing identity, ordering, or sequence numbering.
      */
     private fun publishTrafficProjection() {
-        val pendingByExchange = pendingBreakpoints.associateBy { event -> event.candidate.exchangeId.value }
-        val pendingMessagesByExchange = pendingProtocolMessages
+        val source = _uiState.value.source
+        val visiblePending = pendingBreakpoints.filter { event -> source == TrafficSource.All || pendingSources[event.candidate.exchangeId.value] == source }
+        val visibleMessages = pendingProtocolMessages.filter { event -> source == TrafficSource.All || pendingSources[event.candidate.exchangeId.value] == source }
+        val pendingByExchange = visiblePending.associateBy { event -> event.candidate.exchangeId.value }
+        val pendingMessagesByExchange = visibleMessages
             .groupBy { event -> event.candidate.exchangeId.value }
             .mapValues { (_, events) -> events.first() }
         val durableByExchange = durableTransactions.associateBy(TrafficRowUiState::transactionId)
         val maximumDurableSequence = durableTransactions.maxOfOrNull(TrafficRowUiState::sequenceNumber) ?: 0L
         val provisionalCandidates = buildList {
-            pendingBreakpoints.forEach { event ->
+            visiblePending.forEach { event ->
                 add(Triple(event.candidate.exchangeId.value, event.candidate.startedAtEpochMillis, event.id))
             }
-            pendingProtocolMessages.forEach { event ->
+            visibleMessages.forEach { event ->
                 add(Triple(event.candidate.exchangeId.value, event.candidate.startedAtEpochMillis, event.id))
             }
         }
@@ -959,9 +1028,11 @@ class TrafficViewModel(
     }
 
     /** Loads one keyset page and never retains more than [MAX_TRAFFIC_ROWS] body-free rows. */
-    private suspend fun loadTrafficPage(mode: TrafficPageLoadMode) {
+    private suspend fun loadTrafficPage(mode: TrafficPageLoadMode, expectedSource: TrafficSource? = null) {
         pageLoadMutex.withLock {
             val before = _uiState.value
+            if (expectedSource != null && before.source != expectedSource) return
+            val requestedSourceGeneration = sourceGeneration
             val sessionId = before.sessionId ?: return
             val cursor = when (mode) {
                 TrafficPageLoadMode.REPLACE,
@@ -972,6 +1043,7 @@ class TrafficViewModel(
             try {
                 val page = queryTrafficPageUseCase.execute(
                     TrafficPageQuery(
+                        source = before.source,
                         sessionId = null,
                         cursor = cursor,
                         limit = TRAFFIC_PAGE_SIZE,
@@ -988,6 +1060,7 @@ class TrafficViewModel(
                 } else {
                     queryTrafficFacetsUseCase.execute(
                         TrafficFacetQuery(
+                            source = before.source,
                             sessionId = null,
                             searchContains = before.searchQuery.trim().takeIf { it.isNotBlank() },
                             methods = before.selectedMethodFilter.toCanonicalMethods(),
@@ -997,7 +1070,7 @@ class TrafficViewModel(
                     )
                 }
                 val latestState = _uiState.value
-                if (latestState.sessionId != sessionId) return
+                if (latestState.sessionId != sessionId || latestState.source != before.source || sourceGeneration != requestedSourceGeneration) return
                 val httpRows = page.items.map { item ->
                     item.exchange
                         .toTrafficRowUiState(item.historySequence.value)
@@ -1120,12 +1193,16 @@ class TrafficViewModel(
     private fun schedulePendingRequestDescriptors() {
         pendingDescriptorJob?.cancel()
         val events = pendingBreakpoints
-        if (events.isEmpty()) {
+        val pendingExchangeIds = (events.map { event -> event.candidate.exchangeId } +
+            pendingProtocolMessages.map { event -> event.candidate.exchangeId }).distinct()
+        if (pendingExchangeIds.isEmpty()) {
             pendingRequestDescriptors = emptyMap()
+            pendingSources = emptyMap()
             return
         }
         val rulesById = _uiState.value.activeBreakpointRules.associateBy { it.id }
         pendingDescriptorJob = viewModelScope.launch {
+            val sources = withContext(backgroundDispatcher) { pendingExchangeIds.associate { id -> id.value to resolveTrafficSourceUseCase.execute(id) } }
             val descriptors = withContext(backgroundDispatcher) {
                 events.associate { event ->
                     val requestBody = event.candidate.requestBody
@@ -1150,8 +1227,9 @@ class TrafficViewModel(
                     )
                 }
             }
-            if (pendingBreakpoints.map(PendingBreakpoint::id) == events.map(PendingBreakpoint::id)) {
+            if ((pendingBreakpoints.map { it.candidate.exchangeId } + pendingProtocolMessages.map { it.candidate.exchangeId }).distinct() == pendingExchangeIds) {
                 pendingRequestDescriptors = descriptors
+                pendingSources = sources
                 publishTrafficProjection()
             }
         }
@@ -1243,7 +1321,7 @@ class TrafficViewModel(
     }
 
     private fun createInitialState(): TrafficState {
-        return TrafficState(
+        return TrafficState(source = initialSource,
             transactions = emptyList(),
             filteredTransactions = emptyList(),
             selectedTransactionId = null,

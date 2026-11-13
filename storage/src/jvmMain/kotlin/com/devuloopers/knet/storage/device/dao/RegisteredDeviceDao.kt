@@ -28,6 +28,10 @@ abstract class RegisteredDeviceDao {
     )
     abstract fun observeRegisteredDevices(): Flow<List<RegisteredDeviceEntity>>
 
+    /** Historical roster retains revoked identities; callers cannot infer authorization from this query. */
+    @Query("SELECT * FROM registered_devices ORDER BY registeredAtEpochMillis ASC, id ASC")
+    abstract fun observeRetainedDevices(): Flow<List<RegisteredDeviceEntity>>
+
     /** Updates last-seen time only when the identity is present and active. */
     @Query(
         "UPDATE registered_devices SET lastSeenAtEpochMillis = :seenAtEpochMillis " +

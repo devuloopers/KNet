@@ -14,6 +14,9 @@ import com.devuloopers.knet.application.contract.traffic.TrafficPageCursor
 import com.devuloopers.knet.application.contract.traffic.TrafficPageItem
 import com.devuloopers.knet.application.contract.traffic.TrafficPageQuery
 import com.devuloopers.knet.application.contract.traffic.TrafficQuery
+import com.devuloopers.knet.application.contract.traffic.TrafficSource
+import com.devuloopers.knet.application.contract.traffic.TrafficMaintenance
+import com.devuloopers.knet.identity.RegisteredDeviceId
 import com.devuloopers.knet.application.contract.traffic.TrafficSessionCatalog
 import com.devuloopers.knet.application.contract.inspection.InspectionAnnotationStore
 import com.devuloopers.knet.traffic.id.BodyId
@@ -474,6 +477,163 @@ class TrafficPagingViewModelTest {
             state.prefilledBreakpointRule?.protocolCriteria,
         )
         assertEquals(emptyList(), state.prefilledBreakpointProtocolValues)
+    }
+
+    @Test fun `paused source resolves after asynchronous capture admission becomes durable`() = runTest(dispatcher) {
+        val source = com.devuloopers.knet.application.contract.traffic.TrafficSource.Device(com.devuloopers.knet.identity.RegisteredDeviceId("paired"))
+        val captured = snapshot("delayed", 4000).copy(connectionId = com.devuloopers.knet.traffic.id.ConnectionId("connection"))
+        val changes = MutableSharedFlow<TrafficGeneration>(extraBufferCapacity = 8)
+        var durable = false
+        val base = FakePagedPort(0)
+        val port = object : TrafficQuery by base {
+            override val generations = changes
+            override suspend fun getExchange(exchangeId: ExchangeId) = captured.takeIf { durable && it.id == exchangeId }
+            override suspend fun getConnectionIngress(connectionId: com.devuloopers.knet.traffic.id.ConnectionId) =
+                com.devuloopers.knet.application.contract.traffic.TrafficConnectionIngress(
+                    com.devuloopers.knet.traffic.model.IngressContext(com.devuloopers.knet.traffic.model.IngressKind.CompanionDirect,
+                        com.devuloopers.knet.traffic.model.ClientIdentity("paired")), "127.0.0.1")
+        }
+        val pending = MutableStateFlow<List<PendingBreakpoint>>(emptyList())
+        val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = port, pendingBreakpointFlow = pending)
+        advanceUntilIdle(); viewModel.selectSource(source); advanceUntilIdle()
+        pending.value = listOf(PendingBreakpoint("pending", "rule", BreakpointCandidate(captured.id, BreakpointPhase.REQUEST,
+            captured.request, startedAtEpochMillis = captured.startedAtEpochMillis)))
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.transactions.isEmpty(), "Unverified ownership cannot leak into a selected device")
+        durable = true
+        changes.emit(TrafficGeneration(CaptureSessionId("fake-session"), 2))
+        advanceUntilIdle()
+        assertEquals("delayed", viewModel.uiState.value.transactions.single().transactionId)
+        assertTrue(viewModel.uiState.value.transactions.single().interception is TrafficInterceptionUiState.Paused)
+    }
+
+    @Test
+    fun `device workspaces restore filters selection and a departing viewport without changing capture`() = runTest(dispatcher) {
+        val sourceA = com.devuloopers.knet.application.contract.traffic.TrafficSource.Device(com.devuloopers.knet.identity.RegisteredDeviceId("a"))
+        val sourceB = com.devuloopers.knet.application.contract.traffic.TrafficSource.Device(com.devuloopers.knet.identity.RegisteredDeviceId("b"))
+        val base = FakePagedPort(1)
+        val seen = mutableListOf<TrafficPageQuery>()
+        val port = object : TrafficQuery by base {
+            override suspend fun query(query: TrafficPageQuery): TrafficPage {
+                seen += query
+                return base.query(query.copy(cursor = null)).copy(items = listOf(TrafficPageItem(
+                    captureSequence = TrafficCaptureSequence(1), historySequence = TrafficHistorySequence(1), exchange = snapshot(query.source.preferenceKey, 10))))
+            }
+        }
+        val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = port)
+        advanceUntilIdle()
+        viewModel.selectSource(sourceA); advanceUntilIdle()
+        viewModel.processIntent(TrafficIntent.Search("GET")); advanceUntilIdle()
+        viewModel.processIntent(TrafficIntent.SelectTransaction(sourceA.preferenceKey)); advanceUntilIdle()
+        viewModel.selectSource(sourceB)
+        viewModel.retainViewport(sourceA, com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport(7, 11, 22))
+        advanceUntilIdle()
+        assertEquals("", viewModel.uiState.value.searchQuery)
+        assertEquals(sourceB.preferenceKey, viewModel.uiState.value.transactions.single().transactionId)
+        viewModel.selectSource(sourceA); advanceUntilIdle()
+        assertEquals("GET", viewModel.uiState.value.searchQuery)
+        assertEquals(sourceA.preferenceKey, viewModel.uiState.value.selectedTransactionId)
+        assertEquals(7, viewModel.uiState.value.viewport.row)
+        assertEquals(22, viewModel.uiState.value.viewport.horizontal)
+        assertTrue(seen.filter { it.source == sourceA }.any { it.searchContains == "GET" })
+        assertTrue(seen.any { it.source == sourceB })
+    }
+
+    @Test
+    fun `clear retains its original source while switching cannot erase the new workspace`() = runTest(dispatcher) {
+        val sourceA = com.devuloopers.knet.application.contract.traffic.TrafficSource.Device(com.devuloopers.knet.identity.RegisteredDeviceId("a"))
+        val sourceB = com.devuloopers.knet.application.contract.traffic.TrafficSource.Device(com.devuloopers.knet.identity.RegisteredDeviceId("b"))
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        var cleared: com.devuloopers.knet.application.contract.traffic.TrafficSource? = null
+        val maintenance = object : com.devuloopers.knet.application.contract.traffic.TrafficMaintenance {
+            override suspend fun clearTerminalTraffic() = error("Scoped clear must not call global deletion")
+            override suspend fun clearSourceTraffic(source: com.devuloopers.knet.application.contract.traffic.TrafficSource) {
+                cleared = source; entered.complete(Unit); release.await()
+            }
+        }
+        val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = FakePagedPort(2), customTrafficMaintenance = maintenance)
+        advanceUntilIdle()
+        viewModel.selectSource(sourceA); advanceUntilIdle()
+        viewModel.processIntent(TrafficIntent.ClearFeed)
+        runCurrent(); entered.await()
+        viewModel.selectSource(sourceB); runCurrent()
+        release.complete(Unit); advanceUntilIdle()
+        assertEquals(sourceA, cleared)
+        assertEquals(sourceB, viewModel.uiState.value.source)
+        assertEquals(2, viewModel.uiState.value.transactions.size)
+    }
+
+    @Test
+    fun `background Close clears only its explicit source despite filters and duplicate clicks`() = runTest(dispatcher) {
+        val sourceA = TrafficSource.Device(RegisteredDeviceId("a"))
+        val sourceB = TrafficSource.Device(RegisteredDeviceId("b"))
+        val rows = mutableMapOf<TrafficSource, List<HttpExchangeSnapshot>>(sourceA to listOf(snapshot("a", 1)), sourceB to listOf(snapshot("b", 2)))
+        val queriedSources = mutableListOf<TrafficSource>()
+        val port = object : TrafficQuery by FakePagedPort(0) {
+            override suspend fun query(query: TrafficPageQuery): TrafficPage {
+                queriedSources += query.source
+                val matching = rows[query.source].orEmpty().filter { query.searchContains.isNullOrEmpty() || it.id.value.contains(query.searchContains!!) }
+                return TrafficPage(matching.map { TrafficPageItem(TrafficCaptureSequence(1), TrafficHistorySequence(1), it) },
+                    nextCursor = null, totalCount = matching.size.toLong(), generation = 1)
+            }
+        }
+        val release = CompletableDeferred<Unit>()
+        val clears = mutableListOf<TrafficSource>()
+        val maintenance = object : TrafficMaintenance {
+            override suspend fun clearTerminalTraffic() = error("Never clear globally")
+            override suspend fun clearSourceTraffic(source: TrafficSource) {
+                clears += source; release.await(); rows.remove(source)
+            }
+        }
+        val owner = androidx.lifecycle.ViewModelStore()
+        try {
+            val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = port, customTrafficMaintenance = maintenance)
+            owner.put("traffic", viewModel)
+            advanceUntilIdle()
+            viewModel.selectSource(sourceA); advanceUntilIdle()
+            viewModel.processIntent(TrafficIntent.Search("no-match")); advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.transactions.isEmpty())
+            viewModel.selectSource(sourceB); advanceUntilIdle()
+            assertEquals("b", viewModel.uiState.value.transactions.single().transactionId)
+            val siblingQueryCount = queriedSources.count { it == sourceB }
+            viewModel.clearSource(sourceA)
+            viewModel.clearSource(sourceA)
+            runCurrent()
+            assertEquals(listOf<TrafficSource>(sourceA), clears)
+            release.complete(Unit); advanceUntilIdle()
+            assertEquals(sourceB, viewModel.uiState.value.source)
+            assertEquals("b", viewModel.uiState.value.transactions.single().transactionId)
+            assertEquals(siblingQueryCount, queriedSources.count { it == sourceB }, "Background Close must not replace the current row window")
+            viewModel.selectSource(sourceA); advanceUntilIdle()
+            assertTrue(viewModel.uiState.value.transactions.isEmpty(), "Closed tab must not restore stale cached rows")
+            assertEquals("", viewModel.uiState.value.searchQuery, "The closed background workspace cache is discarded")
+            assertEquals(listOf<TrafficSource>(sourceA), clears)
+        } finally { owner.clear() }
+    }
+
+    @Test
+    fun `failed source deletion preserves displayed traffic and allows retry`() = runTest(dispatcher) {
+        var fail = true
+        val maintenance = object : TrafficMaintenance {
+            override suspend fun clearTerminalTraffic() { if (fail) error("Storage unavailable") }
+        }
+        val owner = androidx.lifecycle.ViewModelStore()
+        try {
+            val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = FakePagedPort(2), customTrafficMaintenance = maintenance)
+            owner.put("traffic", viewModel)
+            advanceUntilIdle()
+            viewModel.clearSource(viewModel.uiState.value.source)
+            advanceUntilIdle()
+            assertEquals(2, viewModel.uiState.value.transactions.size)
+            assertNotNull(viewModel.uiState.value.trafficErrorMessage)
+            assertEquals(false, viewModel.uiState.value.isClearingHistory)
+            fail = false
+            viewModel.clearSource(viewModel.uiState.value.source)
+            advanceUntilIdle()
+            assertNull(viewModel.uiState.value.trafficErrorMessage)
+            assertEquals(false, viewModel.uiState.value.isClearingHistory)
+        } finally { owner.clear() }
     }
 
     private class FakePagedPort(rowCount: Int) : TrafficQuery {

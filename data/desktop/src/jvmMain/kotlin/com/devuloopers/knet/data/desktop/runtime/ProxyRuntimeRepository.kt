@@ -34,6 +34,7 @@ class ProxyRuntimeRepository(
     private val keyManagerProvider: KeyManagerProvider? = null,
     private val breakpointGate: BreakpointGate,
     private val ingressAttribution: IngressAttributionLookup? = null,
+    private val transferObserver: com.devuloopers.knet.traffic.model.TrafficTransferObserver? = null,
     private val streamInspectorFactories: List<ProxyStreamInspectorFactory> = emptyList(),
     private val streamTransformerFactories: List<ProxyStreamTransformerFactory> = emptyList(),
     private val duplexInspectorFactories: List<ProxyDuplexInspectorFactory> = emptyList(),
@@ -127,6 +128,7 @@ class ProxyRuntimeRepository(
                 pipelineInitializers = pipelineInitializers,
                 captureSink = captureSink,
                 ingressAttribution = ingressAttribution,
+                transferObserver = transferObserver,
                 requiresFullResponseAggregation = { request ->
                     breakpointGate.mayIntercept(request, BreakpointPhase.RESPONSE)
                 },

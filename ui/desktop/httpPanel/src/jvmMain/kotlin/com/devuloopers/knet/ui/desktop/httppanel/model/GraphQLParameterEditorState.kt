@@ -26,7 +26,7 @@ data class GraphQLParameterEditorState(
             val document = GraphQLHttpRequestFormatter.inspect(method, url) ?: return null
             val formatted = if (prettify) GraphQLHttpRequestFormatter.format(document) else null
             return GraphQLParameterEditorState(GraphQlState(payload = StructuredPayloadState.GraphQL(
-                queryText = formatted?.queryText ?: document.queryText,
+                queryText = if (document.queryText.isBlank()) "" else formatted?.queryText ?: document.queryText,
                 variablesText = formatted?.variablesJson ?: document.variablesJson,
                 extensionsText = formatted?.extensionsJson ?: document.extensionsJson,
                 operationName = document.suppliedOperationName.orEmpty(),

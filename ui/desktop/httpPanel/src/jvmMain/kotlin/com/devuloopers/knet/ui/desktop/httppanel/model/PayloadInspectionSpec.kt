@@ -113,10 +113,22 @@ data class PayloadInspectionSpec(
             )
         }
 
+        /** Prepares captured request data with its endpoint, without teaching from authoring buffers by default. */
+        fun fromRequest(method: String, url: String, body: ByteArray?, headers: List<Pair<String, String>> = emptyList(),
+            bodyComplete: Boolean = true, learnCaptured: Boolean = false): PayloadInspectionSpec {
+            val spec = fromBytes(body, headers)
+            if (method.equals("GET", true)) return spec
+            val contentType = headers.firstOrNull { it.first.equals("Content-Type", true) }?.second.orEmpty()
+            val document = com.devuloopers.knet.engine.formatter.graphql.GraphQLHttpRequestFormatter.inspect(
+                method, url, contentType, spec.rawBody.encodeToByteArray(), bodyComplete, learnCaptured) ?: return spec
+            if (document.source == com.devuloopers.knet.domain.graphql.GraphQLHttpSource.JSON_BATCH) return spec
+            return spec.copy(resolvedFormat = com.devuloopers.knet.engine.formatter.graphql.GraphQLHttpRequestFormatter.format(document))
+        }
+
         /** Prepares a GET parameter viewer without synthesizing captured body bytes. Call off-thread. */
-        fun fromGraphQLParameters(method: String, url: String): PayloadInspectionSpec {
+        fun fromGraphQLParameters(method: String, url: String, learnCaptured: Boolean = false): PayloadInspectionSpec {
             if (!method.equals("GET", true)) return EMPTY
-            val document = com.devuloopers.knet.engine.formatter.graphql.GraphQLHttpRequestFormatter.inspect(method, url)
+            val document = com.devuloopers.knet.engine.formatter.graphql.GraphQLHttpRequestFormatter.inspect(method, url, learnCaptured = learnCaptured)
                 ?: return EMPTY
             return PayloadInspectionSpec(resolvedFormat = com.devuloopers.knet.engine.formatter.graphql.GraphQLHttpRequestFormatter.format(document))
         }
@@ -150,7 +162,7 @@ private fun BodyFormat?.estimatedRetainedCharacters(rawBody: String): Long = whe
             operationName.orEmpty().length +
             queryText.length +
             variablesJson.length +
-            extensionsJson.length
+            extensionsJson.length + persistedQuery?.hash?.value.orEmpty().length
     }
     is BodyFormat.JsonStream -> frames.sumOf { frame -> frame.length.toLong() }
     is BodyFormat.FormData -> pairs.sumOf { (name, value) -> name.length.toLong() + value.length }

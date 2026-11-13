@@ -42,6 +42,9 @@ public interface RegisteredDeviceStore {
 
     /** Observes active registered identities for presentation and explicit session association. */
     public fun observeRegisteredDevices(): Flow<List<RegisteredDevice>>
+
+    /** Retained identity roster for historical tabs, including revoked devices without authorizing them. */
+    public fun observeRetainedDevices(): Flow<List<RegisteredDevice>> = observeRegisteredDevices()
 }
 
 /** Atomic trusted-device storage. Plain invitation secrets and credentials are never accepted. */

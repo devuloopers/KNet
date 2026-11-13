@@ -371,9 +371,9 @@ abstract class VerifyKotlinFirstSourcesTask : DefaultTask() {
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val implicitApiSources: ConfigurableFileCollection
 
-    /** JVM source files allowed to adapt Compose clipboard entries to the desktop runtime. */
+    /** JVM platform adapters allowed to use AWT clipboard or native-window event subscription. */
     @get:Input
-    abstract val allowedAwtClipboardPaths: ListProperty<String>
+    abstract val allowedAwtPlatformAdapterPaths: ListProperty<String>
 
     /** Verifies common-source portability and prohibited production Java/coroutine shortcuts. */
     @TaskAction
@@ -413,7 +413,7 @@ abstract class VerifyKotlinFirstSourcesTask : DefaultTask() {
             lineViolations + factoryConstructorViolation
         }
 
-        val approvedClipboardPaths = allowedAwtClipboardPaths.get().toSet()
+        val approvedClipboardPaths = allowedAwtPlatformAdapterPaths.get().toSet()
         val productionViolations = productionSources.files.sortedBy { it.path }.flatMap { source ->
             val relativePath = source.relativeTo(repositoryRoot).invariantSeparatorsPath
             source.codeLines().flatMap { (lineNumber, line) ->
@@ -437,7 +437,7 @@ abstract class VerifyKotlinFirstSourcesTask : DefaultTask() {
                         AWT_CLIPBOARD_REFERENCE.containsMatchIn(line) &&
                         relativePath !in approvedClipboardPaths
                     ) {
-                        add("$relativePath:$lineNumber uses AWT clipboard outside the platform adapter")
+                        add("$relativePath:$lineNumber uses AWT Toolkit/clipboard outside a platform adapter")
                     }
                 }
             }
@@ -497,7 +497,7 @@ abstract class VerifyKotlinFirstSourcesTask : DefaultTask() {
         const val COMPANION_COMMON_SOURCE_PREFIX = "connectivity/companion/src/commonMain/"
         const val COMPANION_EXPECT_FACTORY_PATH =
             "connectivity/companion/src/commonMain/kotlin/com/devuloopers/knet/companion/connectivity/platform/PlatformCompanionAdapterFactory.kt"
-        val COMPANION_NATIVE_CONTEXT_REFERENCE = Regex("""\b[A-Za-z0-9_.]*Context\b""")
+        val COMPANION_NATIVE_CONTEXT_REFERENCE = Regex("""\b(?:[A-Za-z_][A-Za-z0-9_]*\.)*(?:Context|[A-Z][A-Za-z0-9_]*Context)\b""")
         val COMPANION_OPAQUE_ANY_DECLARATION = Regex("""\b[A-Za-z_][A-Za-z0-9_]*\s*:\s*Any\??\s*[,)=]""")
         val RUN_BLOCKING_REFERENCE = Regex("""(?:import kotlinx\.coroutines\.runBlocking|\brunBlocking\s*[({])""")
         val JAVA_UUID_REFERENCE = Regex("""\bjava\.util\.UUID\b""")
@@ -781,8 +781,12 @@ val verifyKotlinFirstSources by tasks.registering(VerifyKotlinFirstSourcesTask::
             "products/companion/iosPacketTunnel/src/**/*.kt",
         )
     })
-    allowedAwtClipboardPaths.set(
-        listOf("ui/core/src/jvmMain/kotlin/com/devuloopers/knet/ui/core/foundation/clipboard/ClipboardText.jvm.kt"),
+    allowedAwtPlatformAdapterPaths.set(
+        listOf(
+            "ui/core/src/jvmMain/kotlin/com/devuloopers/knet/ui/core/foundation/clipboard/ClipboardText.jvm.kt",
+            // Toolkit is used only for native window events in this product/platform adapter.
+            "products/desktop/src/jvmMain/kotlin/com/devuloopers/knet/products/desktop/window/MacDeviceTitleBar.kt",
+        ),
     )
 }
 
@@ -1148,4 +1152,100 @@ subprojects {
     tasks.matching { task -> task.name == "check" }.configureEach {
         dependsOn(rootProject.tasks.named("verifyArchitectureFoundation"))
     }
+}
+
+/** Checks executed multi-device regression reports independently of task success and native hardware claims. */
+abstract class VerifyMultiDeviceReportsTask : DefaultTask() {
+    /** Per-task XML output directories provided by each module's actual buildDirectory. */
+    @get:InputFiles @get:PathSensitive(PathSensitivity.RELATIVE)
+    abstract val reportDirectories: ConfigurableFileCollection
+    /** New regression suites which must be present in those outputs. */
+    @get:Input abstract val requiredSuites: ListProperty<String>
+    /** Reproducible machine-readable execution totals for this gate. */
+    @get:OutputFile abstract val summaryFile: RegularFileProperty
+
+    /** Fails on missing/empty reports, failed cases or absent required regressions. */
+    @TaskAction fun verify() {
+        val parser = DocumentBuilderFactory.newInstance().apply {
+            setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
+            setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+            setAttribute(XMLConstants.ACCESS_EXTERNAL_DTD, "")
+            setAttribute(XMLConstants.ACCESS_EXTERNAL_SCHEMA, "")
+        }.newDocumentBuilder()
+        val suites = mutableSetOf<String>()
+        var total = 0
+        var skipped = 0
+        val counts = reportDirectories.files.sortedBy { it.path }.map { directory ->
+            val files = directory.listFiles { file -> file.name.startsWith("TEST-") && file.extension == "xml" }.orEmpty()
+            check(files.isNotEmpty()) { "Multi-device test reports missing: $directory" }
+            var count = 0
+            files.forEach { file ->
+                val suite = parser.parse(file).documentElement
+                check(listOf("failures", "errors").all { suite.getAttribute(it).ifEmpty { "0" }.toInt() == 0 }) { "Failed multi-device regression: $file" }
+                val cases = suite.getElementsByTagName("testcase")
+                for (index in 0 until cases.length) suites += (cases.item(index) as org.w3c.dom.Element).getAttribute("classname")
+                skipped += suite.getAttribute("skipped").ifEmpty { "0" }.toInt()
+                count += suite.getAttribute("tests").toInt()
+            }
+            check(count > 0) { "Empty multi-device test reports: $directory" }
+            total += count
+            count
+        }
+        check(requiredSuites.get().all { required -> suites.any { it == required || it.endsWith(".$required") } }) {
+            "Required multi-device regression suite missing: ${requiredSuites.get().filterNot { required -> suites.any { it == required || it.endsWith(".$required") } }}"
+        }
+        check(skipped == 0) { "Multi-device automated gate has $skipped skipped cases; inspect them before claiming qualification." }
+        val summary = summaryFile.get().asFile
+        summary.parentFile.mkdirs()
+        summary.writeText("{\"tests\":$total,\"failures\":0,\"skipped\":$skipped,\"taskCounts\":[${counts.joinToString(",")}]}\n")
+        logger.lifecycle("Multi-device qualification: $total tests across ${counts.size} task outputs. Hardware/native gestures remain separate.")
+    }
+}
+
+/** Complete affected JVM/Android test outputs required by the multi-device gate. */
+val multiDeviceTestTasks = mapOf(
+    ":core:companion" to "jvmTest", ":application:desktop" to "test", ":application:companion" to "jvmTest",
+    ":connectivity:desktop" to "multiDeviceControlQualification", ":connectivity:companion" to "testAndroidHostTest",
+    ":data:desktop" to "jvmTest", ":storage" to "jvmTest", ":engine:proxy" to "test", ":engine:protocol" to "test",
+    ":ui:desktop:app" to "jvmTest", ":ui:desktop:traffic" to "jvmTest", ":products:desktop" to "test",
+    ":products:companion:androidApp" to "testDebugUnitTest", ":products:companion:di" to "testAndroidHostTest",
+)
+
+/** Desktop/Android qualification with complete affected test outputs and build artifacts, without app launch. */
+tasks.register<VerifyMultiDeviceReportsTask>("multiDeviceQualification") {
+    group = "verification"
+    description = "Qualifies authenticated multi-device workspaces, control channels, source storage, native builds and regressions."
+    dependsOn("verifyArchitectureFoundation", ":products:desktop:createDistributable", ":products:companion:androidApp:assembleDebug", ":data:desktop:canonicalTrafficScaleQualification")
+    dependsOn(multiDeviceTestTasks.map { (module, task) -> "$module:$task" })
+    reportDirectories.from(multiDeviceTestTasks.map { (module, task) -> project(module).layout.buildDirectory.dir("test-results/$task") })
+    reportDirectories.from(project(":data:desktop").layout.buildDirectory.dir("test-results/canonicalTrafficScaleQualification"))
+    requiredSuites.set(listOf(
+        "com.devuloopers.knet.data.desktop.capture.CanonicalTrafficScaleBaselineTest",
+        "com.devuloopers.knet.companion.model.CompanionSessionProtocolTest",
+        "com.devuloopers.knet.ui.desktop.traffic.TrafficPagingViewModelTest",
+        "com.devuloopers.knet.engine.proxy.handler.SourceTrafficMeterHandlerTest",
+        "com.devuloopers.knet.connectivity.desktop.gateway.ControlSessionOutboundTest",
+        "com.devuloopers.knet.connectivity.desktop.gateway.ControlConnectionAdmissionTest",
+        "com.devuloopers.knet.application.device.DevicePresenceCoordinatorTest",
+        "com.devuloopers.knet.application.device.ObserveDeviceWorkspacesUseCaseTest",
+        "com.devuloopers.knet.data.desktop.capture.CanonicalTrafficHistoryQueryTest",
+        "com.devuloopers.knet.companion.application.usecase.MaintainCompanionSessionUseCaseTest",
+        "com.devuloopers.knet.companion.connectivity.control.AndroidCompanionSessionTransportTest",
+        "com.devuloopers.knet.data.desktop.traffic.SourceTrafficMetersTest",
+        "com.devuloopers.knet.ui.desktop.app.workspace.DeviceWorkspaceViewModelTest",
+        "com.devuloopers.knet.ui.desktop.app.workspace.DeviceWorkspacePresentationTest",
+        "com.devuloopers.knet.products.desktop.window.NativeTitleBarPolicyTest",
+    ))
+    summaryFile.set(layout.buildDirectory.file("reports/multi-device/automated-summary.json"))
+}
+
+/** Simulator/device-target compile and Simulator tests; signed NetworkExtension hardware checks stay manual. */
+tasks.register<VerifyMultiDeviceReportsTask>("multiDeviceAppleQualification") {
+    group = "verification"
+    description = "Qualifies the iOS extension's multi-device session lifecycle and native linkage without hardware."
+    dependsOn(":products:companion:iosPacketTunnel:iosSimulatorArm64Test", ":products:companion:iosPacketTunnel:linkDebugFrameworkIosSimulatorArm64",
+        ":products:companion:iosPacketTunnel:compileKotlinIosArm64")
+    reportDirectories.from(project(":products:companion:iosPacketTunnel").layout.buildDirectory.dir("test-results/iosSimulatorArm64Test"))
+    requiredSuites.set(listOf("com.devuloopers.knet.companion.packettunnel.network.NativeCompanionControlSessionTest"))
+    summaryFile.set(layout.buildDirectory.file("reports/multi-device/apple-summary.json"))
 }

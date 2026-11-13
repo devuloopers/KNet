@@ -47,3 +47,10 @@ a supplied operationName that is absent from the document cannot become a genera
 Read-only GraphQL Variables/Extensions use the shared two-space JSON printer through a strict bounded reader/writer.
 The display adapter formats complete JSON independently of the decoder's raw facts and authoring buffers. Invalid
 or over-budget input remains unchanged; parsing and output expansion are bounded before rendering.
+
+## Persisted-query projection
+
+The GraphQL adapter also consumes `:application:desktop` catalog contracts through the protocol runtime. It owns no
+second cache. Its read-only format carries hash/provenance, while changed-field edits preserve hash-only requests and
+refresh an existing valid APQ hash only after an explicit Query edit. Exact source is hashed before display formatting.
+See `docs/graphql_persisted_queries.md`.

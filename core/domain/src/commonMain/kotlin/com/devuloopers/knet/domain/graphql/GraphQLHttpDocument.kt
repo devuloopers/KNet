@@ -26,6 +26,10 @@ enum class GraphQLOperationType(val label: String) {
 enum class GraphQLHttpDiagnostic(val description: String) {
     /** The document was not supplied. */
     MISSING_QUERY("No query document was supplied. Persisted-query metadata cannot reconstruct it."),
+    /** Persisted-query metadata is not a supported SHA-256 version-1 envelope. */
+    INVALID_PERSISTED_QUERY("Persisted-query metadata requires version 1 and a 64-character SHA-256 hash."),
+    /** The supplied query does not match its hash; forwarding remains unchanged. */
+    PERSISTED_QUERY_HASH_MISMATCH("The supplied query does not match its persisted-query SHA-256 hash."),
     /** Envelope fields have invalid types or JSON. */
     MALFORMED_ENVELOPE("GraphQL parameters have invalid JSON or field types."),
     /** UTF-8 form encoding was invalid. */
@@ -78,11 +82,24 @@ data class GraphQLHttpDocument(
     val matchableOperations: List<GraphQLHttpOperation> = emptyList(),
     /** Explanation for incomplete or invalid derived facts. */
     val diagnostic: GraphQLHttpDiagnostic? = null,
+    /** Validated persisted-query protocol metadata; absent for ordinary requests or invalid metadata. */
+    val persistedQuery: GraphQLPersistedQuery? = null,
+    /** Where the displayed document came from; never changes the canonical request source. */
+    val queryProvenance: GraphQLQueryProvenance = if (queryText.isBlank()) GraphQLQueryProvenance.UNAVAILABLE else GraphQLQueryProvenance.REQUEST,
+    /** Lookup-only source kept separate from the captured query field. */
+    val resolvedQueryText: String? = null,
+    /** Bounded individual batch envelopes used for lookup and conservative operation matching. */
+    val batchEntries: List<GraphQLHttpDocument> = emptyList(),
 ) {
+    /** True for a legitimate hash-only request whose source has not been observed or imported. */
+    val isPersistedQueryUnresolved: Boolean
+        get() = persistedQuery != null && queryText.isBlank() && resolvedQueryText == null
+
     /** Conservative derived-data cache weight, excluding the canonical request. */
     val estimatedRetainedBytes: Long
         get() = (queryText.length.toLong() + formattedQuery.length + variablesJson.length +
-            extensionsJson.length + suppliedOperationName.orEmpty().length) * 2L + matchableOperations.size * 512L
+            extensionsJson.length + suppliedOperationName.orEmpty().length + resolvedQueryText.orEmpty().length) * 2L +
+            matchableOperations.size * 512L + batchEntries.sumOf { it.estimatedRetainedBytes }
 }
 
 /** Closed HTTP envelope field set. @property wireName Case-sensitive transport parameter name. */
@@ -95,4 +112,27 @@ enum class GraphQLHttpParameter(val wireName: String) {
     OPERATION_NAME("operationName"),
     /** Implementer-scoped JSON metadata. */
     EXTENSIONS("extensions"),
+}
+
+/** Validated lowercase SHA-256 identity, independent of a server-specific operation name. */
+@kotlin.jvm.JvmInline
+value class GraphQLQueryHash(val value: String) {
+    init { require(value.length == 64 && value.all { it in '0'..'9' || it in 'a'..'f' }) }
+}
+
+/** Recognized Apollo APQ/persisted-query version-1 metadata. */
+data class GraphQLPersistedQuery(val hash: GraphQLQueryHash, val version: Int = 1) {
+    init { require(version == 1) }
+}
+
+/** Provenance of a derived display document; lookup data never enters request editing buffers. */
+enum class GraphQLQueryProvenance(val label: String) {
+    /** Document text is present in this request. */
+    REQUEST("Request"),
+    /** Exact hash-to-source mapping was verified from complete captured traffic. */
+    CAPTURED_TRAFFIC("Captured traffic"),
+    /** Exact mapping was explicitly supplied in a validated local manifest. */
+    IMPORTED_MANIFEST("Imported manifest"),
+    /** No matching document has been observed or imported. */
+    UNAVAILABLE("Query source unavailable"),
 }

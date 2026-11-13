@@ -22,6 +22,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Text
 import com.devuloopers.knet.ui.core.foundation.icons.KNetIcons
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -126,6 +127,9 @@ fun TrafficTable(
     canLoadMore: Boolean = false,
     onLoadMore: () -> Unit = {},
     throughputIndicator: (@Composable () -> Unit)? = null,
+    viewportKey: String = "all",
+    initialViewport: com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport = com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport(),
+    onRetainViewport: (com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport) -> Unit = {},
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -135,11 +139,15 @@ fun TrafficTable(
             .fillMaxSize()
             .background(themeColors.background)
     ) {
-        val listState = androidx.compose.foundation.lazy.rememberLazyListState()
-        val horizontalScrollState = rememberScrollState()
+        val listState = remember(viewportKey) { androidx.compose.foundation.lazy.LazyListState(initialViewport.row, initialViewport.offset) }
+        val horizontalScrollState = remember(viewportKey) { androidx.compose.foundation.ScrollState(initialViewport.horizontal) }
+        DisposableEffect(viewportKey, listState, horizontalScrollState) {
+            onDispose { onRetainViewport(com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport(
+                listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset, horizontalScrollState.value)) }
+        }
         val todayDateState = remember { mutableStateOf(KNetDateTime.currentDateKey()) }
-        val lastAutoScrollSequence = remember { mutableStateOf<Long?>(null) }
-        val lastAutoScrollEnabled = remember { mutableStateOf(false) }
+        val lastAutoScrollSequence = remember(viewportKey) { mutableStateOf<Long?>(null) }
+        val lastAutoScrollEnabled = remember(viewportKey) { mutableStateOf(false) }
 
         LaunchedEffect(Unit) {
             while (true) {

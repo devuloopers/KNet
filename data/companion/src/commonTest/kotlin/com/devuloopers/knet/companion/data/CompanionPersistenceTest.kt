@@ -115,6 +115,33 @@ class CompanionPersistenceTest {
     }
 
     @Test
+    fun multipleDesktopsSelectionAndIndependentRootsSurviveReloadAndRepair() = runTest {
+        val store = MemoryRecordStore()
+        val repository = VersionedCompanionStateRepository(store)
+        val office = registration(displayName = "Office Mac")
+        val personal = registration("desktop-2", "Personal MacBook").copy(rootCertificateSha256 = Sha256Fingerprint("c".repeat(64)))
+        repository.upsert(office, true)
+        repository.upsert(personal, false)
+        assertEquals(office, repository.activeRegistration.value)
+        repository.complete(CompanionCertificateEnrollment(office.desktopId, office.rootCertificateSha256, 1_500L))
+        repository.complete(CompanionCertificateEnrollment(personal.desktopId, personal.rootCertificateSha256, 1_500L))
+        repository.setActive(personal.desktopId)
+        repository.upsert(personal.copy(desktopDisplayName = CompanionDesktopDisplayName("Renamed MacBook")), false)
+        val restored = VersionedCompanionStateRepository(store)
+        assertEquals(2, restored.registrations.value.size)
+        assertEquals(personal.desktopId, restored.activeRegistration.value?.desktopId)
+        assertEquals("Renamed MacBook", restored.activeRegistration.value?.desktopDisplayName?.value)
+        assertEquals(2, restored.enrollments.value.size)
+        assertTrue(restored.enrollments.value.any { it.matches(office) })
+        assertTrue(restored.enrollments.value.any { it.matches(personal) })
+        restored.remove(office.desktopId)
+        val afterRemoval = VersionedCompanionStateRepository(store)
+        assertEquals(personal.desktopId, afterRemoval.activeRegistration.value?.desktopId)
+        assertEquals(1, afterRemoval.enrollments.value.size)
+        assertTrue(afterRemoval.enrollments.value.single().matches(personal))
+    }
+
+    @Test
     fun certificateEnrollmentRestoresForTheSameDesktopRoot() = runTest {
         val store = MemoryRecordStore()
         val registration = registration()

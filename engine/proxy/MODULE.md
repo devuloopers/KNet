@@ -113,3 +113,7 @@ Raw relay closure attribution records incoming EOF or explicit local close befor
 Shutdown/reset intent is marked on the owning event loop before channel close listeners can end capture. Generic
 I/O errors and indistinguishable opposite EOFs remain Unknown. Provenance is independent of delivery outcome;
 see `docs/opaque_flow_closure_attribution.md` for signal ownership and qualification.
+
+## Multi-device workspace and control sessions (2026-11-13)
+
+A duplex admission-boundary handler counts inbound bytes and only successful downstream writes, without retaining buffers. All protocol decoders and opaque tunnels inherit the same verified source. Control endpoint traffic bypasses this pipeline.

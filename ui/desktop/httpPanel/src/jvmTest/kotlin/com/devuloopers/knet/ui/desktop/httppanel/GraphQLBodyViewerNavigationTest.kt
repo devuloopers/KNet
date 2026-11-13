@@ -73,6 +73,31 @@ class GraphQLBodyViewerNavigationTest {
         }
     }
 
+    @Test fun `persisted query viewer renders unknown and resolved provenance with original raw JSON retained`() = EventQueue.invokeAndWait {
+        val hash = "a".repeat(64)
+        val metadata = com.devuloopers.knet.domain.graphql.GraphQLPersistedQuery(com.devuloopers.knet.domain.graphql.GraphQLQueryHash(hash))
+        val current = mutableStateOf(BodyFormat.GraphQL("", null, "", "{}", persistedQuery = metadata))
+        ImageComposeScene(680, 700, content = { KNetTheme { GraphQLBodyViewer(current.value, "{\"extensions\":{}}") } }).use { scene ->
+            scene.frame()
+            fun has(text: String) = scene.nodes().any { node -> node.config.getOrNull(SemanticsProperties.Text).orEmpty().any { text in it.text } }
+            assertTrue(has("Query source unavailable"))
+            assertTrue(has(hash))
+            scene.render(++nanos * 1_000_000_000).use { rendered -> rendered.encodeToData()?.use {
+                File("/tmp/knet-persisted-query-unavailable.png").writeBytes(it.bytes)
+            }}
+            current.value = current.value.copy(queryText = "query Verified { item { id } }", operationType = "Query", operationName = "Verified",
+                queryProvenance = com.devuloopers.knet.domain.graphql.GraphQLQueryProvenance.IMPORTED_MANIFEST)
+            scene.frame()
+            assertTrue(has("Imported manifest"))
+            assertFalse(has("Query source unavailable"))
+            scene.render(++nanos * 1_000_000_000).use { rendered -> rendered.encodeToData()?.use {
+                File("/tmp/knet-persisted-query-resolved.png").writeBytes(it.bytes)
+            }}
+            scene.tab("Raw JSON").config[SemanticsActions.OnClick].action!!.invoke(); scene.frame()
+            assertTrue(has("1 line"))
+        }
+    }
+
     private var nanos = 0L
     private fun ImageComposeScene.frame() { repeat(3) { render(++nanos * 1_000_000_000).close() } }
     private fun ImageComposeScene.nodes(): List<SemanticsNode> = semanticsOwners.flatMap { owner ->

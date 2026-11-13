@@ -1,5 +1,6 @@
 package com.devuloopers.knet.ui.desktop.traffic.inspector
 
+import com.devuloopers.knet.ui.desktop.httppanel.model.persistedQueryDocument
 import com.devuloopers.knet.ui.core.foundation.border.KNetBorderEdges
 import com.devuloopers.knet.ui.core.foundation.border.knetBorder
 import androidx.compose.foundation.layout.*
@@ -59,7 +60,8 @@ fun TrafficInspectorPanel(
     val selectedMessages = selectedTransaction?.let { protocolMessages.forSelection(it.transactionId) }
         ?: ProtocolMessagesUiState()
     val presentation = if (selectedTransaction != null && selectedTransaction.rowKind == TrafficRowKind.HTTP_EXCHANGE)
-        remember(selectedTransaction, selectedPrepared.exchange, selectedPrepared.annotations, selectedMessages.exchangeId,
+        remember(selectedTransaction, selectedPrepared.exchange, selectedPrepared.annotations,
+            selectedPrepared.requestPayloadSpec.persistedQueryDocument, selectedPrepared.requestParameterSpec.persistedQueryDocument, selectedMessages.exchangeId,
             selectedMessages.totalCount, selectedMessages.items.map { it.protocol }.distinct()) {
             inspectorPresentation(selectedTransaction, selectedPrepared, selectedMessages)
         } else null

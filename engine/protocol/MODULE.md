@@ -42,6 +42,14 @@ modules; HTTP/3 remains unavailable until a real implementation passes its confo
 operation selection, AST formatting and source-preserving envelope edits. It reuses the existing graphql-java
 version with per-call depth/token/character limits; parser defaults are never changed globally.
 The common `:core:domain` GraphQL contracts distinguish source, supplied selector, resolved operation and
-diagnostic. Breakpoints, Network Conditions and semantic schema version 2 consume these same facts.
+diagnostic. Breakpoints, Network Conditions and semantic schema version 3 consume these same facts.
 Ambiguous/invalid requests cannot produce named operation matches; raw forwarding is unchanged.
 The older `GraphQLDocumentParser` API is a compatibility adapter, including GraphQL WebSocket use.
+
+## GraphQL persisted queries
+
+Owns exact UTF-8 SHA-256 validation, APQ metadata extraction, endpoint-scoped resolution and the synchronized
+256-entry/4 MiB/30-minute LRU catalog implementing the application contract. Complete captured bodies (including
+bounded Content-Encoding decoding) and atomic local manifests can teach source mappings; authoring cannot.
+Resolved documents stay separate from captured query fields and drive conservative live operation matching.
+Semantic schema version 3 adds persisted hash and source provenance. See `docs/graphql_persisted_queries.md`.

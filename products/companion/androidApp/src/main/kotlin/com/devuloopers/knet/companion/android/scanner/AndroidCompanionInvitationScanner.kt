@@ -1,6 +1,7 @@
 package com.devuloopers.knet.companion.android.scanner
 
 import android.Manifest
+import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -36,19 +37,25 @@ import kotlinx.coroutines.flow.asStateFlow
 internal class AndroidCompanionInvitationScanner(
     private val activity: ComponentActivity,
 ) : CompanionInvitationScanner {
+    // This installation-local marker distinguishes a fresh request from an unresolved denial after recreation.
+    // A grant clears it, so a later one-time permission expiry is eligible for a fresh native request.
+    private val permissionHistory = activity.getSharedPreferences("knet_camera_permission", Context.MODE_PRIVATE)
+    private var permissionRequested: Boolean = permissionHistory.getBoolean("unresolved_request", false)
     private val mutableState: MutableStateFlow<CompanionInvitationScannerState> = MutableStateFlow(
         resolveCameraPermissionState(
             granted = hasCameraPermission(),
-            permissionRequested = false,
-            shouldShowRationale = false,
+            permissionRequested = permissionRequested,
+            shouldShowRationale = activity.shouldShowRequestPermissionRationale(Manifest.permission.CAMERA),
         ),
     )
-    private var permissionRequested: Boolean = false
+    private var permissionRequestInProgress: Boolean = false
     private var closed: Boolean = false
     private val permissionLauncher = activity.registerForActivityResult(
         ActivityResultContracts.RequestPermission(),
     ) { granted ->
-        permissionRequested = true
+        permissionRequestInProgress = false
+        if (closed) return@registerForActivityResult
+        rememberPermissionRequest(unresolved = !granted)
         mutableState.value = resolveCameraPermissionState(
             granted = granted,
             permissionRequested = true,
@@ -56,7 +63,7 @@ internal class AndroidCompanionInvitationScanner(
         )
     }
     private val lifecycleObserver = LifecycleEventObserver { _, event ->
-        if (event == Lifecycle.Event.ON_RESUME && !closed) refreshPermissionState()
+        if (event == Lifecycle.Event.ON_RESUME && !closed && !permissionRequestInProgress) refreshPermissionState()
     }
 
     override val state: StateFlow<CompanionInvitationScannerState> = mutableState.asStateFlow()
@@ -66,12 +73,22 @@ internal class AndroidCompanionInvitationScanner(
     }
 
     override fun requestCameraPermission() {
-        if (closed) return
+        if (closed || permissionRequestInProgress) return
         if (hasCameraPermission()) {
+            rememberPermissionRequest(unresolved = false)
             mutableState.value = CompanionInvitationScannerState.STARTING
         } else {
-            permissionRequested = true
-            permissionLauncher.launch(Manifest.permission.CAMERA)
+            val previousUnresolvedRequest = permissionRequested
+            rememberPermissionRequest(unresolved = true)
+            permissionRequestInProgress = true
+            mutableState.value = CompanionInvitationScannerState.PERMISSION_REQUESTING
+            try {
+                permissionLauncher.launch(Manifest.permission.CAMERA)
+            } catch (_: IllegalStateException) {
+                permissionRequestInProgress = false
+                rememberPermissionRequest(unresolved = previousUnresolvedRequest)
+                mutableState.value = CompanionInvitationScannerState.FAILED
+            }
         }
     }
 
@@ -154,11 +171,19 @@ internal class AndroidCompanionInvitationScanner(
         permissionLauncher.unregister()
     }
 
+    private fun rememberPermissionRequest(unresolved: Boolean) {
+        permissionRequested = unresolved
+        permissionHistory.edit().putBoolean("unresolved_request", unresolved).apply()
+    }
+
     private fun refreshPermissionState() {
+        val granted = hasCameraPermission()
+        if (granted && permissionRequested) rememberPermissionRequest(unresolved = false)
         mutableState.value = resolveCameraPermissionState(
-            granted = hasCameraPermission(),
+            granted = granted,
             permissionRequested = permissionRequested,
             shouldShowRationale = activity.shouldShowRequestPermissionRationale(Manifest.permission.CAMERA),
+            requestInProgress = permissionRequestInProgress,
         )
     }
 

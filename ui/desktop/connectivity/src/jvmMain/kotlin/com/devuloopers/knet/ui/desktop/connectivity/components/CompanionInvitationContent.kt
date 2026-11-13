@@ -20,6 +20,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -45,7 +47,7 @@ internal fun CompanionInvitationContent(
         verticalAlignment = Alignment.Top,
     ) {
         KNetSurface(
-            modifier = Modifier.size(270.dp),
+            modifier = Modifier.size(270.dp).semantics { contentDescription = "Companion pairing QR code" },
             color = Color.White,
             shape = KNetTheme.shapes.large,
         ) {

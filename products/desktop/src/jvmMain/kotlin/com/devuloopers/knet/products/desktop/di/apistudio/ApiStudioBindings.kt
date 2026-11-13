@@ -1,5 +1,8 @@
 package com.devuloopers.knet.products.desktop.di.apistudio
 
+import com.devuloopers.knet.application.usecase.graphql.ImportGraphQLPersistedQueriesUseCase
+import com.devuloopers.knet.application.contract.graphql.GraphQLManifestReader
+import com.devuloopers.knet.products.desktop.graphql.DesktopGraphQLManifestReader
 import com.devuloopers.knet.application.contract.script.ScriptExecutor
 import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolAuthoring
 import com.devuloopers.knet.application.contract.apistudio.ApiStudioProtocolAuthoringRegistry
@@ -89,6 +92,8 @@ import org.koin.dsl.bind
 
 /** API Studio transport, scripting adapter, collections persistence, and promotion workflow. */
 internal val apiStudioBindings: Module = module {
+    single<GraphQLManifestReader> { DesktopGraphQLManifestReader() }
+    factory { ImportGraphQLPersistedQueriesUseCase(get(), get()) }
     single {
         val certificates: CertificateRuntimeRepository = get()
         KNetApiClient(
@@ -226,6 +231,8 @@ internal val apiStudioBindings: Module = module {
     }
     viewModel {
         ApiStudioViewModel(
+            importGraphQLPersistedQueriesUseCase = get(),
+            observeGraphQLPersistedQueriesUseCase = get(),
             executeApiStudioRequestUseCase = get(),
             observeProxyRuntimeStateUseCase = get(),
             observeTrafficCaptureStateUseCase = get(),

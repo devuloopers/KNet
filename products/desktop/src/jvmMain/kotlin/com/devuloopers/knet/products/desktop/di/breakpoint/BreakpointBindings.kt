@@ -70,6 +70,7 @@ internal val breakpointBindings: Module = module {
 
     viewModel {
         BreakpointManagerViewModel(
+            observeGraphQLPersistedQueriesUseCase = get(),
             getRulesUseCase = get(),
             observeGlobalInterceptionUseCase = get(),
             observePendingBreakpointsUseCase = get(),

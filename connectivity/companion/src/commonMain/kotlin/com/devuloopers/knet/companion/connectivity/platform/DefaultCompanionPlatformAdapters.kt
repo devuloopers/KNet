@@ -16,6 +16,7 @@ internal class DefaultCompanionPlatformAdapters(
     override val desktopDiscovery: CompanionDesktopDiscovery,
     override val invitationResolver: CompanionInvitationResolver,
     override val controlTransport: CompanionControlTransport,
+    override val sessionTransport: com.devuloopers.knet.companion.application.contract.CompanionSessionTransport,
     override val rootCertificateSource: CompanionRootCertificateSource,
     override val certificateInstallationArtifactSource: CompanionCertificateInstallationArtifactSource,
     override val trustVerifier: CompanionCertificateTrustVerifier,

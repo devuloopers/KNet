@@ -2,6 +2,7 @@ package com.devuloopers.knet.ui.desktop.traffic.model
 
 import com.devuloopers.knet.domain.request.descriptor.RequestKindId
 import com.devuloopers.knet.application.contract.inspection.GraphQLInspectionMetadata
+import com.devuloopers.knet.ui.desktop.httppanel.model.persistedQueryDocument
 import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQLQueryAvailability
 import com.devuloopers.knet.ui.desktop.httppanel.model.graphQLQueryAvailability
 import com.devuloopers.knet.traffic.inspection.InspectionAnnotation
@@ -57,12 +58,16 @@ internal fun inspectorPresentation(row: TrafficRowUiState, prepared: InspectorPr
     val details = prepared.forSelection(row.transactionId)
     val exchange = details?.exchange?.takeIf { it.id.value == row.transactionId }
     val page = messages.forSelection(row.transactionId)
+    val persistedDocument = (if (exchange?.request?.head?.method?.token.equals("GET", true)) details?.requestParameterSpec
+        else details?.requestPayloadSpec)?.persistedQueryDocument
     val capturedDocuments = details?.annotations.orEmpty().filter { it.exchangeId.value == row.transactionId &&
         it.state == InspectionAnnotationState.COMPLETED }
         .groupBy { it.inspectorId }
         .values.mapNotNull { versions -> versions.maxWithOrNull(compareBy<InspectionAnnotation> { it.schemaVersion }.thenBy { it.createdAtEpochMillis }) }
         .mapNotNull { it.document }
         .filter { it.fields.isNotEmpty() || !it.summary.isNullOrBlank() }
+        .let { documents -> if (persistedDocument == null) documents else
+            documents.filterNot { it.kind == GraphQLInspectionMetadata.DOCUMENT_KIND } + persistedDocument }
     val responseHeaders = exchange?.response?.head?.headers.orEmpty()
     val contentType = responseHeaders.uniqueHeader("content-type") ?: row.contentType.orEmpty()
     val mime = contentType.substringBefore(';').trim()

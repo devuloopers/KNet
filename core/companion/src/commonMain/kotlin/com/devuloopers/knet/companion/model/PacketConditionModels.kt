@@ -1,6 +1,7 @@
 package com.devuloopers.knet.companion.model
 
 /** Packet-layer conditions applied to opaque UDP flows in the companion VPN/TUN data plane. */
+@kotlinx.serialization.Serializable
 public data class PacketConditionConfiguration(
     public val enabled: Boolean = false,
     public val uploadBitsPerSecond: Long? = null,

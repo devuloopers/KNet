@@ -14,6 +14,8 @@ internal data class TunnelStartOptions(
     val rootCertificate: ByteArray,
     val rootSha256: String,
     val transportSha256: String,
+    val controlHost: String? = null,
+    val controlPort: UShort? = null,
 ) {
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -28,7 +30,7 @@ internal data class TunnelStartOptions(
         if (authorization != other.authorization) return false
         if (!rootCertificate.contentEquals(other.rootCertificate)) return false
         if (rootSha256 != other.rootSha256) return false
-        if (transportSha256 != other.transportSha256) return false
+        if (transportSha256 != other.transportSha256 || controlHost != other.controlHost || controlPort != other.controlPort) return false
 
         return true
     }
@@ -42,6 +44,8 @@ internal data class TunnelStartOptions(
         result = 31 * result + rootCertificate.contentHashCode()
         result = 31 * result + rootSha256.hashCode()
         result = 31 * result + transportSha256.hashCode()
+        result = 31 * result + (controlHost?.hashCode() ?: 0)
+        result = 31 * result + (controlPort?.hashCode() ?: 0)
         return result
     }
 }
@@ -61,6 +65,13 @@ internal object TunnelStartOptionsParser {
         }.getOrNull() ?: invalid()
         val rootSha256 = options.string(TunnelOptionKey.ROOT_SHA256)
         val transportSha256 = options.string(TunnelOptionKey.TRANSPORT_SHA256)
+        val hasControl = options.containsKey(TunnelOptionKey.CONTROL_HOST.wireName) || options.containsKey(TunnelOptionKey.CONTROL_PORT.wireName)
+        val controlHost = if (hasControl) options.string(TunnelOptionKey.CONTROL_HOST) else null
+        val controlNumber = if (hasControl) options.number(TunnelOptionKey.CONTROL_PORT) ?: invalid() else null
+        val controlPort = controlNumber?.toInt()
+        if (controlNumber != null && controlNumber.toDouble() != controlPort!!.toDouble()) invalid()
+        if ((controlHost == null) != (controlPort == null) ||
+            controlHost != null && (ipAddressFamily(controlHost) == null || controlPort !in 1..65535)) invalid()
 
         if (
             schemaVersion != SCHEMA_VERSION ||
@@ -85,6 +96,8 @@ internal object TunnelStartOptionsParser {
             rootCertificate = rootCertificate,
             rootSha256 = rootSha256,
             transportSha256 = transportSha256,
+            controlHost = controlHost,
+            controlPort = controlPort?.toUShort(),
         )
     }
 
@@ -110,6 +123,8 @@ private enum class TunnelOptionKey(val wireName: String) {
     SCHEMA_VERSION("schemaVersion"),
     DESKTOP_ID("desktopId"),
     PROXY_HOST("proxyHost"),
+    CONTROL_HOST("controlHost"),
+    CONTROL_PORT("controlPort"),
     PROXY_PORT("proxyPort"),
     AUTHORIZATION("authorization"),
     ROOT_CERTIFICATE("rootCertificate"),

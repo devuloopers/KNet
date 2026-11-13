@@ -31,9 +31,12 @@ kotlin {
     sourceSets {
         iosMain.dependencies {
             implementation(project(":core:companion"))
+            implementation(project(":connectivity:companion"))
+            implementation(libs.kotlinx.coroutines.core)
         }
         iosTest.dependencies {
             implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test)
         }
     }
 }

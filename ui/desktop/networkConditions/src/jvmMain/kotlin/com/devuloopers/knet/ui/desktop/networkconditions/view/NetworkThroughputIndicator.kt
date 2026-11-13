@@ -35,7 +35,8 @@ import com.devuloopers.knet.ui.desktop.networkconditions.model.formatNetworkRate
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun NetworkThroughputIndicator(history: NetworkThroughputHistory, onOpenOverview: () -> Unit, modifier: Modifier = Modifier) {
+fun NetworkThroughputIndicator(history: NetworkThroughputHistory, onOpenOverview: () -> Unit, modifier: Modifier = Modifier,
+    scopeDescription: String = "Actual throughput across KNet, independent of Traffic filters. Open Network Conditions Overview.") {
     val download = when {
         history.sampleCount == 0 -> formatNetworkRate(0L)
         history.currentSampleIsValid -> formatNetworkRate(history.currentDownloadBitsPerSecond)
@@ -53,7 +54,7 @@ fun NetworkThroughputIndicator(history: NetworkThroughputHistory, onOpenOverview
         with(density) { measurer.measure("999.9 Mbps", style = style, maxLines = 1, softWrap = false).size.width.toDp() }
     }
     TooltipArea(tooltip = {
-        KNetTooltip("Actual throughput across KNet, independent of Traffic filters. Open Network Conditions Overview.")
+        KNetTooltip(scopeDescription)
     }, modifier = modifier) {
         Row(Modifier.clickable(role = Role.Button, onClickLabel = "Open Network Conditions Overview", onClick = onOpenOverview)
             .handCursor().semantics(mergeDescendants = true) {

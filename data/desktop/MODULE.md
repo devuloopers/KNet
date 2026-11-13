@@ -119,3 +119,9 @@ Real-socket close qualification also checks database reopening, independent of e
 Optional protocol-message context queries use durable capture ordering within the selected exchange, newest first,
 with a bounded limit. The adapter returns message/body metadata; lazy body access remains application-owned.
 No wall-clock or per-direction sequence is used to correlate multiplexed operations.
+
+## Multi-device workspace and control sessions (2026-11-13)
+
+Canonical SQL adapters scope history, facets, cursors and bounded crash-safe deletion by verified source. Primitive SourceTrafficMeters observe real proxy socket bytes independently of capture admission. Workspace selection uses existing DataStore preferences.
+
+`DesktopDeviceTrafficHistoryAdapter` observes indexed Room existence projections for device tab eligibility across all retained sessions. Membership includes zero-byte TLS records, deduplicates identities and loads no traffic payloads or filtered page windows.

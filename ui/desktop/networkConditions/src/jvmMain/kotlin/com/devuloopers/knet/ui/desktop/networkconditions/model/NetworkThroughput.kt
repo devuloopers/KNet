@@ -42,7 +42,7 @@ data class NetworkThroughputHistory(
  * @param capacity Maximum number of one-second slots, including missing intervals.
  * @param maximumSampleIntervalNanos Longest interval whose average rate is useful; longer gaps stay invalid.
  */
-internal class NetworkThroughputSampler(
+class NetworkThroughputSampler(
     private val capacity: Int = NetworkThroughputHistory.DEFAULT_CAPACITY,
     private val maximumSampleIntervalNanos: Long = DEFAULT_MAXIMUM_SAMPLE_INTERVAL_NANOS,
 ) {

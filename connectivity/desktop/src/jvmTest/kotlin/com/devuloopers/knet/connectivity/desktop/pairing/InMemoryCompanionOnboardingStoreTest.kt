@@ -17,6 +17,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.first
+import com.devuloopers.knet.application.usecase.pairing.ObservePairingOnboardingUseCase
+import com.devuloopers.knet.application.usecase.pairing.PairingOnboardingAvailability
 
 class InMemoryCompanionOnboardingStoreTest {
     @Test
@@ -48,6 +53,36 @@ class InMemoryCompanionOnboardingStoreTest {
         assertFailsWith<IllegalStateException> {
             store.put(pending("bootstrap-2", expiresAt = 2_000L))
         }
+    }
+
+    @Test
+    fun availabilityFollowsOnlyAuthenticatedClaimsAndLateCollectorsSeeConsumption() = runTest {
+        val store = InMemoryCompanionOnboardingStore(nowEpochMillis = { 1_000L })
+        val first = CompanionBootstrapId("bootstrap-1")
+        val second = CompanionBootstrapId("bootstrap-2")
+        val observe = ObservePairingOnboardingUseCase(store)
+        store.put(pending(first.value, 2_000L))
+        store.put(pending(second.value, 2_000L))
+        assertEquals(PairingOnboardingAvailability.AVAILABLE, observe.execute(first).first())
+        assertNull(store.claim(first, "wrong", 1_000L))
+        assertEquals(setOf(first, second), store.pendingIds.value)
+        store.claim(first, "digest", 1_000L)
+        assertEquals(PairingOnboardingAvailability.UNAVAILABLE, observe.execute(first).first())
+        assertEquals(PairingOnboardingAvailability.AVAILABLE, observe.execute(second).first())
+        assertEquals(setOf(second), store.pendingIds.value)
+        assertNull(store.claim(first, "digest", 1_000L))
+        assertNull(store.claim(second, "digest", 2_000L))
+        assertEquals(emptySet(), store.pendingIds.value)
+    }
+
+    @Test
+    fun concurrentRedemptionHasOneWinnerAndCannotRestoreAvailability() = runTest {
+        val store = InMemoryCompanionOnboardingStore(nowEpochMillis = { 1_000L })
+        val id = CompanionBootstrapId("bootstrap-1")
+        store.put(pending(id.value, 2_000L))
+        val claims = List(8) { async { store.claim(id, "digest", 1_000L) } }.awaitAll()
+        assertEquals(1, claims.count { it != null })
+        assertEquals(emptySet(), store.pendingIds.value)
     }
 
     private fun pending(id: String, expiresAt: Long): PendingCompanionOnboarding = PendingCompanionOnboarding(

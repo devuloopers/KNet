@@ -66,8 +66,11 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.*
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 
+@OptIn(ExperimentalCoroutinesApi::class)
 class CompanionUseCasesTest {
     @Test
     fun expiredInvitationIsRejectedBeforePairing() = runTest {
@@ -574,6 +577,149 @@ class CompanionUseCasesTest {
         assertEquals(0, verifierCalls)
     }
 
+    @Test
+    fun addingDesktopPreservesExistingSelectionAndOtherPairings() = runTest {
+        val previous = registration().copy(desktopId = CompanionDesktopId("previous"))
+        val repo = FakeRegistrationRepository()
+        repo.upsert(previous, true)
+        val credentials = FakeCredentialStore()
+        val pair = PairCompanionDeviceUseCase(identityProvider(), displayNameProvider(), FakePairingClient(), credentials, repo) { 1_000L }
+        val result = assertIs<PairCompanionDeviceResult.Paired>(pair.execute(invitation(), makeActive = false))
+        assertEquals(previous, repo.activeRegistration.value)
+        assertEquals(setOf(previous.desktopId, result.registration.desktopId), repo.registrations.value.map { it.desktopId }.toSet())
+        assertEquals(1, credentials.values.size)
+    }
+
+    @Test
+    fun handoffStopsBeforeAuthenticatingAndResumesOnlyTheSelectedEnrolledDesktop() = runTest {
+        val env = SwitchEnvironment()
+        env.enrollTarget()
+        env.inspection.mutableState.value = CompanionInspectionState.Running(com.devuloopers.knet.companion.model.CompanionInspectionMode.DEVICE_VPN, 1_000L, true)
+        val phases = mutableListOf<CompanionDesktopSwitchPhase>()
+        assertIs<CompanionDesktopSwitchResult.Selected>(env.switch.execute(env.target.desktopId, onPhase = phases::add))
+        assertEquals(CompanionDesktopSwitchPhase.entries.toList(), phases)
+        assertEquals(env.target, env.repo.activeRegistration.value)
+        assertEquals(env.target, env.inspection.startedConfiguration?.registration)
+        assertEquals(1, env.inspection.stopCalls)
+        assertEquals(2, env.repo.registrations.value.size)
+    }
+
+    @Test
+    fun switchingIdleDesktopDoesNotStartCapture() = runTest {
+        val env = SwitchEnvironment()
+        env.enrollTarget()
+        assertIs<CompanionDesktopSwitchResult.Selected>(env.switch.execute(env.target.desktopId))
+        assertNull(env.inspection.startedConfiguration)
+        assertEquals(env.target, env.repo.activeRegistration.value)
+    }
+
+    @Test
+    fun unreachableSwitchRetainsOldSelectionAndStopsCapture() = runTest {
+        val env = SwitchEnvironment()
+        env.resolve = { CompanionEndpointRecoveryResult.Rejected(CompanionFailure(CompanionFailureCode.TRANSPORT_UNAVAILABLE, "Desktop unavailable.", true)) }
+        assertIs<CompanionDesktopSwitchResult.Failed>(env.switch.execute(env.target.desktopId, resumeInspection = true))
+        assertEquals(env.source, env.repo.activeRegistration.value)
+        assertEquals(CompanionInspectionState.Stopped, env.inspection.state.value)
+        assertEquals(1, env.transport.disconnectCalls)
+        assertNull(env.inspection.startedConfiguration)
+    }
+
+    @Test
+    fun missingOnboardingOrMissingTrustOrWrongRootNeverAutomaticallyStartsCapture() = runTest {
+        for (scenario in 0..2) {
+            val env = SwitchEnvironment()
+            if (scenario > 0) env.enrollTarget()
+            env.trust = when (scenario) {
+                1 -> CompanionCertificateState.InstallationRequired
+                2 -> CompanionCertificateState.Trusted(Sha256Fingerprint("f".repeat(64)), 1_000L)
+                else -> CompanionCertificateState.Trusted(env.target.rootCertificateSha256, 1_000L)
+            }
+            assertIs<CompanionDesktopSwitchResult.Selected>(env.switch.execute(env.target.desktopId, resumeInspection = true))
+            assertEquals(env.target, env.repo.activeRegistration.value)
+            assertNull(env.inspection.startedConfiguration)
+        }
+    }
+
+    @Test
+    fun resumedDesktopStillRequiresNativeVpnConsent() = runTest {
+        val env = SwitchEnvironment()
+        env.enrollTarget()
+        env.inspection.preparation = CompanionInspectionPreparationResult.ConsentRequired
+        val result = assertIs<CompanionDesktopSwitchResult.Selected>(env.switch.execute(env.target.desktopId, resumeInspection = true))
+        assertTrue(result.consentRequired)
+        assertNull(env.inspection.startedConfiguration)
+    }
+
+    @Test
+    fun failedRestartReportsSelectedTargetAndReleasesResources() = runTest {
+        val env = SwitchEnvironment()
+        env.enrollTarget()
+        env.inspection.startResult = CompanionInspectionStartResult.Failed(CompanionFailure(CompanionFailureCode.VPN_START_FAILED, "Cannot start VPN.", true))
+        assertIs<CompanionDesktopSwitchResult.Failed>(env.switch.execute(env.target.desktopId, resumeInspection = true))
+        assertEquals(env.target, env.repo.activeRegistration.value)
+        assertEquals(2, env.inspection.stopCalls)
+        assertEquals(2, env.transport.disconnectCalls)
+    }
+
+    @Test
+    fun missingAndAlreadySelectedTargetsDoNotInterruptCurrentCapture() = runTest {
+        val env = SwitchEnvironment()
+        assertIs<CompanionDesktopSwitchResult.Failed>(env.switch.execute(CompanionDesktopId("absent")))
+        assertIs<CompanionDesktopSwitchResult.Selected>(env.switch.execute(env.source.desktopId))
+        assertEquals(0, env.inspection.stopCalls)
+    }
+
+    @Test
+    fun handoffsAreSerializedAndCancellationLeavesSelectionConsistent() = runTest {
+        val env = SwitchEnvironment()
+        val release = CompletableDeferred<Unit>()
+        var probes = 0
+        env.resolve = { target -> probes++; release.await(); CompanionEndpointRecoveryResult.Recovered(target) }
+        val first = launch { env.switch.execute(env.target.desktopId) }
+        runCurrent()
+        val second = launch { env.switch.execute(env.target.desktopId) }
+        runCurrent()
+        assertEquals(1, probes)
+        first.cancelAndJoin()
+        runCurrent()
+        assertEquals(2, probes)
+        assertEquals(env.source, env.repo.activeRegistration.value)
+        release.complete(Unit)
+        second.join()
+        assertEquals(env.target, env.repo.activeRegistration.value)
+        assertEquals(2, env.inspection.stopCalls)
+    }
+
+    private class SwitchEnvironment {
+        val source = registration()
+        val target = source.copy(desktopId = CompanionDesktopId("desktop-2"),
+            desktopDisplayName = CompanionDesktopDisplayName("Personal MacBook"),
+            credentialReference = CompanionCredentialReference("second-secret"),
+            rootCertificateSha256 = Sha256Fingerprint("c".repeat(64)))
+        val repo = FakeRegistrationRepository().apply {
+            mutableRegistrations.value = listOf(source, target)
+            mutableActive.value = source
+        }
+        val enrollments = FakeCertificateEnrollmentRepository(repo)
+        val credentials = FakeCredentialStore().apply { values[source.credentialReference] = "first-secret"; values[target.credentialReference] = "second-secret" }
+        val inspection = FakeInspectionController(CompanionInspectionPreparationResult.Ready)
+        val transport = FakeTransport()
+        var trust: CompanionCertificateState = CompanionCertificateState.Trusted(target.rootCertificateSha256, 1_000L)
+        var resolve: suspend (CompanionRegistration) -> CompanionEndpointRecoveryResult = { CompanionEndpointRecoveryResult.Recovered(it) }
+        private val verifier = VerifyCompanionCertificateTrustUseCase(repo, credentials,
+            CompanionRootCertificateSource { _, _ -> CompanionCertificateDownloadResult.Downloaded(CompanionCertificateArtifact(byteArrayOf(1), "root.crt")) },
+            CompanionCertificateTrustVerifier { _, _, _ -> trust }) { 1_000L }
+        private val connect = ConnectCompanionUseCase(repo, credentials,
+            CompanionNetworkObserver { MutableStateFlow(CompanionNetworkState.Available(false)) }, transport, { 1_000L }, passThroughEndpointResolver())
+        val switch = SwitchCompanionDesktopUseCase(repo, enrollments, inspection, StopCompanionInspectionUseCase(inspection, transport),
+            CompanionEndpointResolver { registration ->
+                assertEquals(CompanionInspectionState.Stopped, inspection.state.value)
+                assertTrue(transport.disconnectCalls > 0)
+                resolve(registration)
+            }, verifier, StartCompanionInspectionUseCase(repo, connect, verifier, inspection, transport))
+        suspend fun enrollTarget() { enrollments.complete(CompanionCertificateEnrollment(target.desktopId, target.rootCertificateSha256, 1_000L)) }
+    }
+
     private class StartEnvironment(
         preparation: CompanionInspectionPreparationResult,
         fetchedPacketConditions: PacketConditionConfiguration? = null,
@@ -761,9 +907,9 @@ class CompanionUseCasesTest {
     }
 
     private class FakeInspectionController(
-        private val preparation: CompanionInspectionPreparationResult,
+        var preparation: CompanionInspectionPreparationResult,
     ) : CompanionInspectionController {
-        private val mutableState = MutableStateFlow<CompanionInspectionState>(CompanionInspectionState.Stopped)
+        val mutableState = MutableStateFlow<CompanionInspectionState>(CompanionInspectionState.Stopped)
         override val state: StateFlow<CompanionInspectionState> = mutableState
         var startedConfiguration: CompanionInspectionConfiguration? = null
         var startResult: CompanionInspectionStartResult = CompanionInspectionStartResult.Started

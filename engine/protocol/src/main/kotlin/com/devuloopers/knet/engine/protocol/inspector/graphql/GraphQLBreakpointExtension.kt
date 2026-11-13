@@ -114,7 +114,7 @@ class GraphQLBreakpointExtension(
         val contentType = request.head.headers.firstOrNull {
             it.name.value.equals(CONTENT_TYPE_HEADER, ignoreCase = true)
         }?.value.orEmpty()
-        val document = parser.decodeHttp(request.head.method.token, absoluteUrl, contentType, bodyBytes) ?: return null
+        val document = parser.decodeHttp(request.head.method.token, absoluteUrl, contentType, bodyBytes, learnCaptured = true, headers = request.head.headers.map { it.name.value to it.value }) ?: return null
         return GraphQLBreakpointObservation(document.matchableOperations.map {
             GraphQLBreakpointOperation(it.name, it.type)
         })

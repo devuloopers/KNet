@@ -34,30 +34,34 @@ import platform.darwin.dispatch_queue_create
 internal class IosCompanionInvitationScanner : CompanionInvitationScanner {
     private val mutableState = MutableStateFlow(resolveState())
     private var activeCapture: IosQrCapture? = null
+    private var permissionRequestInProgress: Boolean = false
     private var closed: Boolean = false
     private val applicationObserver = NSNotificationCenter.defaultCenter.addObserverForName(
         name = UIApplicationDidBecomeActiveNotification,
         `object` = null,
         queue = NSOperationQueue.mainQueue,
     ) {
-        if (!closed && activeCapture == null) mutableState.value = resolveState()
+        if (!closed && activeCapture == null && !permissionRequestInProgress) mutableState.value = resolveState()
     }
 
     override val state: StateFlow<CompanionInvitationScannerState> = mutableState.asStateFlow()
 
     override fun requestCameraPermission() {
-        if (closed) return
+        if (closed || permissionRequestInProgress) return
         when (AVCaptureDevice.authorizationStatusForMediaType(AVMediaTypeVideo)) {
             AVAuthorizationStatusAuthorized -> mutableState.value = CompanionInvitationScannerState.STARTING
-            AVAuthorizationStatusNotDetermined -> AVCaptureDevice.requestAccessForMediaType(
-                AVMediaTypeVideo,
-            ) { granted: Boolean ->
-                dispatch_async(dispatch_get_main_queue()) {
-                    if (!closed) {
-                        mutableState.value = if (granted) {
-                            CompanionInvitationScannerState.STARTING
-                        } else {
-                            CompanionInvitationScannerState.PERMISSION_PERMANENTLY_DENIED
+            AVAuthorizationStatusNotDetermined -> {
+                permissionRequestInProgress = true
+                mutableState.value = CompanionInvitationScannerState.PERMISSION_REQUESTING
+                AVCaptureDevice.requestAccessForMediaType(AVMediaTypeVideo) { granted: Boolean ->
+                    dispatch_async(dispatch_get_main_queue()) {
+                        permissionRequestInProgress = false
+                        if (!closed) {
+                            mutableState.value = if (granted) {
+                                CompanionInvitationScannerState.STARTING
+                            } else {
+                                CompanionInvitationScannerState.PERMISSION_PERMANENTLY_DENIED
+                            }
                         }
                     }
                 }

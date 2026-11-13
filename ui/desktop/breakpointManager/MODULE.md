@@ -59,3 +59,9 @@ Structured Params edits replace only the corresponding target parameters, preser
 body ownership (`Unchanged`). POST uses the existing body editor with source-preserving JSON updates.
 Raw parameter rows remain available; edited targets are re-prepared asynchronously without replacing
 the entire drawer. The presentation dependency on `:engine:formatter` is an adapter boundary only.
+
+## Persisted-query updates
+
+Observes catalog revision through an injected use case and refreshes the selected paused payload in place. Prepared
+read-only source may resolve a hash while editable request buffers retain the original hash-only fields.
+See `docs/graphql_persisted_queries.md`.

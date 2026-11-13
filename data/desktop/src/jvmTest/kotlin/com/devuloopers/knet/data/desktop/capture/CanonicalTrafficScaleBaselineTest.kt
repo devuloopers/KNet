@@ -59,6 +59,15 @@ class CanonicalTrafficScaleBaselineTest {
                 dao = dao,
                 bodyStore = FileBodyStore(root.resolve("bodies")),
             )
+            val source = com.devuloopers.knet.application.contract.traffic.TrafficSource.Device(com.devuloopers.knet.identity.RegisteredDeviceId("scale-device"))
+            val sourceQueryMillis = measureTimeMillis {
+                val page = queryAdapter.query(filteredQuery(sessionId).copy(source = source))
+                assertEquals(FIXTURE_ROWS.toLong() / FILTER_INTERVAL, page.totalCount)
+                assertEquals(PAGE_SIZE, page.items.size)
+                assertEquals(0, queryAdapter.query(filteredQuery(sessionId).copy(source = com.devuloopers.knet.application.contract.traffic.TrafficSource.Other)).totalCount)
+            }
+            assertTrue(sourceQueryMillis < MAX_FILTERED_QUERY_MILLIS, "Device-filtered 100,000-row query exceeded budget: $sourceQueryMillis ms")
+            println("Multi-device indexed query: rows=$FIXTURE_ROWS elapsedMillis=$sourceQueryMillis")
             var firstPage = queryAdapter.query(filteredQuery(sessionId))
             val queryMillis = measureTimeMillis {
                 firstPage = queryAdapter.query(filteredQuery(sessionId))
@@ -98,8 +107,8 @@ class CanonicalTrafficScaleBaselineTest {
         sequenceVersion = FIXTURE_ROWS.toLong() + 1L,
         openedAtEpochMillis = 1L,
         closedAtEpochMillis = 100_001L,
-        ingressKind = "LOCAL",
-        clientIdentity = null,
+        ingressKind = "COMPANION_DIRECT",
+        clientIdentity = "scale-device",
         downstreamHost = null,
         downstreamPort = null,
         listenerHost = "127.0.0.1",

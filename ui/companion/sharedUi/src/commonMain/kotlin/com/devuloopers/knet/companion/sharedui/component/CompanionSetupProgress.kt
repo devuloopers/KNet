@@ -1,6 +1,5 @@
 package com.devuloopers.knet.companion.sharedui.component
 
-import com.devuloopers.knet.companion.model.CompanionCertificateState
 import com.devuloopers.knet.companion.presentation.state.CompanionCertificateExportState
 import com.devuloopers.knet.companion.presentation.state.CompanionUiState
 
@@ -20,7 +19,8 @@ internal enum class CompanionSetupProgress {
 /** Maps authoritative companion state to one deterministic onboarding milestone. */
 internal fun CompanionUiState.toCompanionSetupProgress(): CompanionSetupProgress = when {
     activeRegistration == null -> CompanionSetupProgress.Scanning
-    certificateExport !is CompanionCertificateExportState.Saved -> CompanionSetupProgress.DesktopConnected
-    certificate is CompanionCertificateState.Trusted -> CompanionSetupProgress.CertificateVerified
+    hasTrustedActiveCertificate -> CompanionSetupProgress.CertificateVerified
+    (certificateExport as? CompanionCertificateExportState.Saved)?.desktopId != activeRegistration?.desktopId ->
+        CompanionSetupProgress.DesktopConnected
     else -> CompanionSetupProgress.CertificateDownloaded
 }

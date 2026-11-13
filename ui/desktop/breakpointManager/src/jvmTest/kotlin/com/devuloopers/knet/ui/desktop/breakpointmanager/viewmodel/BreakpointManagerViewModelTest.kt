@@ -146,6 +146,8 @@ class BreakpointManagerViewModelTest {
             listOf(HttpRequestDescriptorStrategy()),
         ),
     ): BreakpointManagerViewModel = BreakpointManagerViewModel(
+            observeGraphQLPersistedQueriesUseCase = com.devuloopers.knet.application.usecase.graphql.ObserveGraphQLPersistedQueriesUseCase(
+                com.devuloopers.knet.engine.formatter.graphql.GraphQLHttpRequestFormatter.persistedQueryCatalog),
         getRulesUseCase = GetRulesUseCase(rules),
         observeGlobalInterceptionUseCase = ObserveGlobalInterceptionUseCase(rules),
         observePendingBreakpointsUseCase = ObservePendingBreakpointsUseCase(breakpoints),
@@ -290,6 +292,29 @@ class BreakpointManagerViewModelTest {
 
         assertEquals(event.id, breakpoints.lastResolution?.first)
         assertIs<BreakpointDecision.ContinueUnchanged>(breakpoints.lastResolution?.second)
+    }
+
+    @Test
+    fun `persisted lookup refreshes selected interception payload without replacing the paused body`() = runTest {
+        val formatter = com.devuloopers.knet.engine.formatter.graphql.GraphQLHttpRequestFormatter
+        formatter.persistedQueryCatalog.clear()
+        val query = "query PauseRead { item { id } }"
+        val hash = java.security.MessageDigest.getInstance("SHA-256").digest(query.encodeToByteArray()).joinToString("") { "%02x".format(it.toInt() and 255) }
+        val extensions = """{"persistedQuery":{"version":1,"sha256Hash":"$hash"}}"""
+        val raw = "{\"extensions\":$extensions}"
+        val event = pending("persisted", BreakpointPhase.REQUEST, raw)
+        val viewModel = viewModel()
+        breakpoints.emit(listOf(event))
+        testScheduler.advanceUntilIdle()
+        assertEquals("", (viewModel.uiState.value.resolvedPayloads[event.id]!!.requestPayloadSpec.resolvedFormat as com.devuloopers.knet.engine.formatter.model.BodyFormat.GraphQL).queryText)
+        formatter.inspect("POST", "https://api.example.test/graphql", body =
+            "{\"query\":\"$query\",\"extensions\":$extensions}".encodeToByteArray(), learnCaptured = true)
+        testScheduler.advanceUntilIdle()
+        val payload = viewModel.uiState.value.resolvedPayloads[event.id]!!.requestPayloadSpec
+        assertEquals("PauseRead", (payload.resolvedFormat as com.devuloopers.knet.engine.formatter.model.BodyFormat.GraphQL).operationName)
+        assertEquals(raw, payload.rawBody)
+        assertEquals(raw, event.candidate.requestBody!!.copyBytes().decodeToString())
+        formatter.persistedQueryCatalog.clear()
     }
 
     private fun pending(

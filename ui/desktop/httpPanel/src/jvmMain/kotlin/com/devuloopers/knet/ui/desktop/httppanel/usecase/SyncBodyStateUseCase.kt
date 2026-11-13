@@ -48,14 +48,14 @@ class SyncBodyStateUseCase(
     fun updateGraphQlState(currentState: RequestBodyState, newGraphQlState: GraphQlState): RequestBodyState {
         val changes = GraphQLHttpRequestFormatter.changedFields(
             currentState.graphQlState.payload, newGraphQlState.payload)
+        val synchronizedState = newGraphQlState.copy(payload = newGraphQlState.payload.copy(
+            extensionsText = changes[com.devuloopers.knet.domain.graphql.GraphQLHttpParameter.EXTENSIONS]
+                ?: newGraphQlState.extensionsText))
         val serializedPayload = if (changes.isEmpty()) currentState.payloadText else
             GraphQLHttpRequestFormatter.updateJsonBody(currentState.payloadText, changes)
-                .getOrElse { strategyRegistry.serialize(RequestBodyType.GRAPHQL, newGraphQlState.payload) }
+                .getOrElse { strategyRegistry.serialize(RequestBodyType.GRAPHQL, synchronizedState.payload) }
 
-        return currentState.copy(
-            graphQlState = newGraphQlState,
-            payloadText = serializedPayload
-        )
+        return currentState.copy(graphQlState = synchronizedState, payloadText = serializedPayload)
     }
 
     /**

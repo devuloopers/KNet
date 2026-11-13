@@ -50,3 +50,14 @@ storage, transport connection, certificate trust, VPN consent/start/stop, recove
 
 Depends inward only on companion/identity/pairing core models. Platform adapters and products depend on this
 module, never the reverse.
+
+## Saved desktop handoff
+
+`SwitchCompanionDesktopUseCase` serializes stop, authenticated endpoint resolution, selection and optional restart.
+It preserves registrations on failure and gates automatic resumption on exact-root onboarding and fresh trust,
+including native consent. Pairing can commit an inactive registration without replacing the selected desktop.
+Endpoint recovery preserves selection when authenticating an inactive saved desktop. See `docs/companion_ui.md`.
+
+## Multi-device workspace and control sessions (2026-11-13)
+
+MaintainCompanionSessionUseCase owns one VPN control run, bounded reconnects, identity-change cancellation, revisioned native policy acknowledgements and the independent policy safety lease. Older peers retain authenticated HTTPS policy recovery.

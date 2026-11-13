@@ -90,10 +90,19 @@ public interface CaptureSessionControl {
      * @return Typed preparation outcome used for diagnostics and tests.
      */
     public suspend fun rotateForTrafficClear(): CaptureClearPreparation
+
+    /** Drains capture for a selected-source clear while preserving unrelated forwarding policy decisions. */
+    public suspend fun rotateForSourceTrafficClear(): CaptureClearPreparation = rotateForTrafficClear()
 }
 
 /** Application boundary for deleting terminal traffic metadata and owned body objects. */
 public interface TrafficMaintenance {
     /** Clears terminal canonical sessions while preserving any active session. */
     public suspend fun clearTerminalTraffic()
+
+    /** Removes only one source's terminal history after the active capture writer has been rotated/drained. */
+    public suspend fun clearSourceTraffic(source: TrafficSource) {
+        require(source == TrafficSource.All) { "This maintenance adapter does not implement source-scoped clearing." }
+        clearTerminalTraffic()
+    }
 }

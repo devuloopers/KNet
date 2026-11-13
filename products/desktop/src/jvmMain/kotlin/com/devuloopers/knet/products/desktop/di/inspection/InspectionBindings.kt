@@ -33,9 +33,15 @@ import com.devuloopers.knet.storage.database.KNetDatabase
 import org.koin.core.module.Module
 import org.koin.dsl.bind
 import org.koin.dsl.module
+import org.koin.dsl.onClose
+import com.devuloopers.knet.application.contract.graphql.GraphQLPersistedQueryCatalog
+import com.devuloopers.knet.application.usecase.graphql.ObserveGraphQLPersistedQueriesUseCase
+import com.devuloopers.knet.engine.protocol.inspector.graphql.GraphQLPersistedQueryRuntime
 
 /** Semantic inspectors, persisted annotations, capability truth, and bounded scheduling. */
 internal val inspectionBindings: Module = module {
+    single<GraphQLPersistedQueryCatalog> { GraphQLPersistedQueryRuntime.catalog }.onClose { it?.clear() }
+    factory { ObserveGraphQLPersistedQueriesUseCase(get()) }
     single { SseLimits() }
     single { GrpcDescriptorRegistry() }
     single { GrpcProtocolMessageDecoder(get()) } bind ProtocolMessagePayloadDecoder::class

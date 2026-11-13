@@ -48,7 +48,9 @@ private fun CertificateVerifiedPreview() {
         ),
         onAction = {},
         onExitRequested = {},
-        certificateInstallationGuidance = CertificateInstallationGuidance(steps = emptyList()),
+        certificateInstallationGuidance = CertificateInstallationGuidance(
+            steps = listOf("Install the downloaded KNet certificate in device Settings."),
+        ),
     )
 }
 

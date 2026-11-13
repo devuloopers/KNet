@@ -5,6 +5,8 @@ import com.devuloopers.knet.domain.graphql.GraphQLHttpDocument
 import com.devuloopers.knet.domain.graphql.GraphQLHttpOperation
 import com.devuloopers.knet.domain.graphql.GraphQLHttpParameter
 import com.devuloopers.knet.domain.graphql.GraphQLHttpSource
+import com.devuloopers.knet.domain.graphql.GraphQLPersistedQuery
+import com.devuloopers.knet.domain.graphql.GraphQLQueryHash
 import graphql.language.AstPrinter
 import graphql.language.FragmentDefinition
 import graphql.language.OperationDefinition
@@ -32,6 +34,7 @@ class GraphQLHttpDecoder {
         contentType: String = "",
         body: ByteArray? = null,
         bodyComplete: Boolean = true,
+        resolvePersisted: ((GraphQLHttpDocument) -> GraphQLHttpDocument)? = null,
     ): GraphQLHttpDocument? {
         val get = method.equals("GET", true)
         val source = if (get) GraphQLHttpSource.URL_PARAMETERS else GraphQLHttpSource.JSON_BODY
@@ -57,32 +60,32 @@ class GraphQLHttpDecoder {
                         if (value.isNotEmpty()) put(name, parseJson(value) ?: JsonPrimitive(value))
                     } else if (value.isNotEmpty()) put(name, JsonPrimitive(value))
                 }
-            }, source, get = true, rawParameters = fields)
+            }, source, get = true, rawParameters = fields, resolvePersisted = resolvePersisted)
             return decoded.takeIf { hint || looksLikeDocument(it.queryText.trim()) || it.queryText.isBlank() }
         }
         if (!method.equals("POST", true)) return if (hint) failure(source, GraphQLHttpDiagnostic.MISSING_QUERY) else null
-        if (!bodyComplete) return if (hint || body?.decodeToString()?.contains("\"query\"") == true) failure(source, GraphQLHttpDiagnostic.TRUNCATED) else null
+        if (body != null && body.size > MAXIMUM_INPUT_CHARACTERS) return failure(source, GraphQLHttpDiagnostic.LIMIT_EXCEEDED)
+        if (!bodyComplete) return if (hint || body?.decodeToString()?.let { "\"query\"" in it || "\"persistedQuery\"" in it } == true) failure(source, GraphQLHttpDiagnostic.TRUNCATED) else null
         if (body == null || body.isEmpty()) return if (hint) failure(source, GraphQLHttpDiagnostic.MISSING_QUERY) else null
-        if (body.size > MAXIMUM_INPUT_CHARACTERS) return failure(source, GraphQLHttpDiagnostic.LIMIT_EXCEEDED)
         val text = try { strictUtf8(body).trim() } catch (_: Exception) {
             return if (hint) failure(source, GraphQLHttpDiagnostic.MALFORMED_ENCODING) else null
         }
         if (!withinJsonDepth(text)) return failure(source, GraphQLHttpDiagnostic.LIMIT_EXCEEDED)
         val root = parseJson(text)
         return when {
-            root is JsonObject && (hint || envelopeHint(root)) -> decodeEnvelope(root, source).takeIf {
+            root is JsonObject && (hint || envelopeHint(root)) -> decodeEnvelope(root, source, resolvePersisted = resolvePersisted).takeIf {
                 hint || looksLikeDocument(it.queryText.trim()) || it.queryText.isBlank()
             }
             root is JsonArray -> {
                 if (root.size > MAXIMUM_OPERATIONS) return failure(GraphQLHttpSource.JSON_BATCH, GraphQLHttpDiagnostic.LIMIT_EXCEEDED)
                 val envelopes = root.filterIsInstance<JsonObject>()
                 if (envelopes.isEmpty() || envelopes.none(::envelopeHint)) return null
-                val decoded = envelopes.map { decodeEnvelope(it, GraphQLHttpSource.JSON_BATCH) }
+                val decoded = envelopes.map { decodeEnvelope(it, GraphQLHttpSource.JSON_BATCH, resolvePersisted = resolvePersisted) }
                 val diagnostic = decoded.firstNotNullOfOrNull { it.diagnostic }
                     ?: GraphQLHttpDiagnostic.MALFORMED_ENVELOPE.takeIf { envelopes.size != root.size }
                 GraphQLHttpDocument(source = GraphQLHttpSource.JSON_BATCH,
-                    matchableOperations = if (diagnostic == null) decoded.flatMap { it.matchableOperations } else emptyList(),
-                    diagnostic = diagnostic)
+                    matchableOperations = if (diagnostic == null && decoded.none { it.isPersistedQueryUnresolved }) decoded.flatMap { it.matchableOperations } else emptyList(),
+                    diagnostic = diagnostic, batchEntries = decoded)
             }
             root == null && (contentType.substringBefore(';').trim().equals("application/graphql", true) || looksLikeDocument(text)) ->
                 decodeDocument(GraphQLHttpDocument(GraphQLHttpSource.RAW_DOCUMENT, queryText = text))
@@ -97,7 +100,8 @@ class GraphQLHttpDecoder {
     ).formattedQuery
 
     private fun decodeEnvelope(root: JsonObject, source: GraphQLHttpSource, get: Boolean = false,
-        rawParameters: Map<String, String>? = null): GraphQLHttpDocument {
+        rawParameters: Map<String, String>? = null,
+        resolvePersisted: ((GraphQLHttpDocument) -> GraphQLHttpDocument)? = null): GraphQLHttpDocument {
         fun string(name: String): String? = (root[name] as? JsonPrimitive)?.takeIf { it.isString }?.content
         val query = string("query").orEmpty()
         val name = string("operationName")?.let { if (get && it.isEmpty()) null else it }
@@ -107,13 +111,25 @@ class GraphQLHttpDecoder {
             root["operationName"]?.let { it != JsonNull && (it !is JsonPrimitive || !it.isString) } == true ||
             listOf(variables, extensions).any { it != null && it != JsonNull && it !is JsonObject } ||
             name?.let { it.length > MAXIMUM_NAME_CHARACTERS || it.isNotEmpty() && !NAME.matches(it) } == true
-        val document = GraphQLHttpDocument(source = source, queryText = query,
+        val persisted = (extensions as? JsonObject)?.get("persistedQuery")
+        val hash = (persisted as? JsonObject)?.get("sha256Hash") as? JsonPrimitive
+        val version = (persisted as? JsonObject)?.get("version") as? JsonPrimitive
+        val metadata = if (hash?.isString == true && HASH.matches(hash.content) && version?.isString == false && version.intOrNull == 1)
+            GraphQLPersistedQuery(GraphQLQueryHash(hash.content.lowercase())) else null
+        val document = GraphQLHttpDocument(source = source, queryText = query, persistedQuery = metadata,
             variablesJson = variables?.takeUnless { it == JsonNull }?.let { rawParameters?.get("variables") ?: it.toString() }.orEmpty(),
             extensionsJson = extensions?.takeUnless { it == JsonNull }?.let { rawParameters?.get("extensions") ?: it.toString() }.orEmpty(),
             suppliedOperationName = name)
         if (malformed) return document.copy(diagnostic = GraphQLHttpDiagnostic.MALFORMED_ENVELOPE)
-        return decodeDocument(document, get)
+        val decoded = if (query.isBlank() && metadata != null) document else decodeDocument(document, get)
+        if (persisted != null && metadata == null) return decoded.copy(
+            diagnostic = GraphQLHttpDiagnostic.INVALID_PERSISTED_QUERY, matchableOperations = emptyList())
+        return resolvePersisted?.invoke(decoded) ?: decoded
     }
+
+    /** Parses a lookup-only source using the original operation selector and HTTP method constraints. */
+    fun decodeResolvedDocument(input: GraphQLHttpDocument, query: String, get: Boolean): GraphQLHttpDocument =
+        decodeDocument(input.copy(queryText = query, formattedQuery = query, diagnostic = null), get)
 
     private fun decodeDocument(input: GraphQLHttpDocument, get: Boolean = false): GraphQLHttpDocument {
         val query = input.queryText
@@ -175,6 +191,7 @@ class GraphQLHttpDecoder {
         private const val MAXIMUM_NAME_CHARACTERS = 256
         private const val MAXIMUM_PARAMETERS = 4_096
         private val DECLARATION = Regex("^(query|mutation|subscription|fragment)\\b")
+        private val HASH = Regex("[0-9a-fA-F]{64}")
         private val NAME = Regex("[_A-Za-z][_0-9A-Za-z]*")
         private val FIELDS = GraphQLHttpParameter.entries.mapTo(mutableSetOf()) { it.wireName }
         private val HINT_FIELDS = setOf("query", "operationName", "extensions")
@@ -288,7 +305,8 @@ class GraphQLHttpDecoder {
 
         // The JSON parser is recursive; reject deeply nested envelopes before invoking it. Strings and escapes
         // are scanned explicitly so braces in GraphQL source never count toward JSON nesting.
-        private fun withinJsonDepth(text: String): Boolean {
+        /** Checks recursive JSON depth before allocating a JSON tree; strings and escapes do not count. */
+        fun withinJsonDepth(text: String): Boolean {
             var depth = 0; var quoted = false; var escaped = false
             for (char in text) {
                 if (quoted) { if (escaped) escaped = false else if (char == '\\') escaped = true else if (char == '"') quoted = false }

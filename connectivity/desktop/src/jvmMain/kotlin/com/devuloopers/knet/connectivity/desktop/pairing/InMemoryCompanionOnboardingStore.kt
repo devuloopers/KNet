@@ -6,6 +6,9 @@ import com.devuloopers.knet.application.contract.pairing.PendingCompanionOnboard
 import com.devuloopers.knet.companion.model.CompanionBootstrapId
 import com.devuloopers.knet.companion.model.CompanionPairingInvitation
 import java.security.MessageDigest
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -22,6 +25,11 @@ public class InMemoryCompanionOnboardingStore(
     private val lock: Mutex = Mutex()
     private val records: MutableMap<CompanionBootstrapId, PendingCompanionOnboarding> = mutableMapOf()
 
+    private val mutablePendingIds = MutableStateFlow<Set<CompanionBootstrapId>>(emptySet())
+
+    /** Only currently pending opaque identities leave this store; secret-bearing records remain private. */
+    override val pendingIds: StateFlow<Set<CompanionBootstrapId>> = mutablePendingIds.asStateFlow()
+
     init {
         require(maximumRecords in 1..MAXIMUM_CONFIGURABLE_RECORDS) {
             "Companion onboarding record limit is invalid."
@@ -35,6 +43,7 @@ public class InMemoryCompanionOnboardingStore(
                 "Companion onboarding capacity is exhausted."
             }
             records[pending.id] = pending
+            publishPendingIds()
         }
     }
 
@@ -46,11 +55,19 @@ public class InMemoryCompanionOnboardingStore(
         removeExpired(nowEpochMillis)
         val pending = records[id] ?: return@withLock null
         if (!pending.retrievalSecretDigest.constantTimeEquals(retrievalSecretDigest)) return@withLock null
-        records.remove(id)?.invitation
+        val claimed = records.remove(id)?.invitation
+        // Publish under the same lock as one-shot consumption, before the gateway returns the invitation.
+        publishPendingIds()
+        claimed
     }
 
     private fun removeExpired(nowEpochMillis: Long) {
         records.entries.removeIf { (_, pending) -> nowEpochMillis >= pending.expiresAtEpochMillis }
+        publishPendingIds()
+    }
+
+    private fun publishPendingIds() {
+        mutablePendingIds.value = records.keys.toSet()
     }
 
     private fun String.constantTimeEquals(other: String): Boolean = MessageDigest.isEqual(

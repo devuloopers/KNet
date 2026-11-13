@@ -107,3 +107,25 @@ production-target compilation. The Android product gate adds unit tests, lint, a
 product gate links the iOS Simulator framework only: it does not build/sign the Xcode application, launch it, or
 exercise `NEPacketTunnelProvider`. Physical Android behavior and a paid-team, entitlement-signed iOS device build
 remain release gates.
+
+## Android VPN stop crash qualification (2026-11-13)
+
+The connected Samsung's crash buffer identified `SocketException: Socket closed` escaping the local SOCKS
+gateway's UDP control read during VPN shutdown. Its supervisor isolated sibling jobs but did not consume the
+unhandled exception, which reached Android's process crash handler. The accepted-client coroutine now contains
+I/O termination across greeting, command, initial-payload and UDP-control phases. Existing completion cleanup
+still closes/untracks the socket and returns its flow permit; cancellation and other failures still propagate.
+
+Five real-socket regressions explicitly capture background coroutine failures and join workers before checking
+the result. They cover open UDP with delayed packets, incomplete negotiation/payload, 70 successive control resets
+(exceeding the 64-flow limit), active protected TCP shutdown, and repeated gateway lifetimes. Four tests reproduced
+the original failure before the fix. All 98 connectivity Android host tests and 13 Android product unit tests
+passed, along with all six architecture checks and debug APK assembly.
+
+Installed the matching-signer APK over the existing Companion on the connected Samsung SM-A505F without clearing
+data. Three real VPN start/stop cycles returned to Ready to inspect with the same process and Verified certificate.
+Logs contain three inspection-start and three inspection-stop events with no new fatal/socket-closure exception.
+The app was left ready with VPN stopped. This qualifies the reported device/path, not the broader Android/OEM
+lifecycle matrix. Evidence: `/Users/devuloopers/.codex/verification/knet-vpn-stop/qualification.log`,
+`device-crash-before.log`, `regression-before-failures.txt`, `device-lifecycle-check.json` and `device-after.log`
+under the same verification directory.

@@ -21,7 +21,9 @@ Provides shared companion UI state, user actions, one-shot platform effects, and
 - Camera submission gating that ignores results outside the scanner route and ignores duplicate frames while the
   first invitation is resolving; rejected camera input returns to an explicit retry state.
 - Authoritative certificate rechecks after platform trust-store notifications, with stale results rejected when
-  the active desktop changes during verification.
+  the active desktop/root or verification attempt changes. Exact already-trusted roots can complete enrollment
+  without exporting another certificate file. Setup retries distinguish unavailable verification from missing trust;
+  authoritative removal/rejection reopens setup while temporary outages retain an already enrolled Home.
 - Secret-free certificate-export and verification lifecycle diagnostics through the shared core logger.
 
 ## Does not own
@@ -34,3 +36,11 @@ Provides shared companion UI state, user actions, one-shot platform effects, and
 Depends only on `:application:companion`, `:core:companion`, `:core:logger`, AndroidX Lifecycle ViewModel, and
 coroutines. Product modules provide lifecycle stores and effect handlers without adding platform types to common
 state.
+
+## Desktop management
+
+Owns typed manager/add/confirm/switch/failure overlay state and guards duplicate foreground actions. Handoffs use
+`SwitchCompanionDesktopUseCase`, retaining prior capture intent for explicit retry. Pairing preserves other saved
+desktops and cancels only before remote credential commit. Home ignores availability from other desktop identities
+and requires trust for the selected root. Shared UI renders these states without taking over native resources.
+See `docs/companion_ui.md`.

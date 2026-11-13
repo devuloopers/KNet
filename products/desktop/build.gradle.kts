@@ -54,6 +54,7 @@ dependencies {
     implementation(project(":storage"))
     implementation(project(":ui:core"))
 
+    implementation(libs.jbr.api)
     implementation(libs.datastore.preferences)
     implementation(libs.kotlinx.coroutines.swing)
     implementation(libs.koin.core)
@@ -76,6 +77,14 @@ val nativePackageVersion: String = providers.gradleProperty("knet.desktop.packag
 compose.desktop {
     application {
         mainClass = "com.devuloopers.knet.products.desktop.MainKt"
+        // A supported JBR preserves native macOS gestures for the integrated device title bar.
+        val configuredJavaHome = providers.gradleProperty("knet.desktop.javaHome")
+        if (System.getProperty("os.name").startsWith("Mac", ignoreCase = true)) {
+            javaHome = configuredJavaHome.orElse(javaToolchains.launcherFor {
+                languageVersion.set(JavaLanguageVersion.of(21))
+                vendor.set(JvmVendorSpec.JETBRAINS)
+            }.map { launcher -> launcher.metadata.installationPath.asFile.absolutePath }).get()
+        } else configuredJavaHome.orNull?.let { javaHome = it }
 
         jvmArgs += listOf(
             "-Dapple.awt.application.name=$appName",

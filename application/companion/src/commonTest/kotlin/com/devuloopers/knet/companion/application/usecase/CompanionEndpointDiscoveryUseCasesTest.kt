@@ -429,6 +429,22 @@ class CompanionEndpointDiscoveryUseCasesTest {
         assertEquals(1, discovery.startCalls)
     }
 
+    @Test
+    fun authenticatingInactiveSavedDesktopDoesNotSelectItDuringEndpointRecovery() = runTest {
+        val selected = registration(desktopId = CompanionDesktopId("selected-desktop"))
+        val target = registration()
+        val repository = FakeRegistrationRepository(selected)
+        repository.upsert(target, false)
+        val discovery = FakeDiscovery()
+        val resolver = recovery(repository, discovery) { _, _, _ ->
+            CompanionEndpointReconciliationResult.Verified(descriptor())
+        }
+        val recovered = assertIs<CompanionEndpointRecoveryResult.Recovered>(resolver.resolve(target))
+        assertEquals(CANONICAL_ID, recovered.registration.desktopId)
+        assertEquals(selected, repository.activeRegistration.value)
+        assertEquals(2, repository.registrations.value.size)
+    }
+
     private fun recovery(
         repository: FakeRegistrationRepository,
         discovery: FakeDiscovery,

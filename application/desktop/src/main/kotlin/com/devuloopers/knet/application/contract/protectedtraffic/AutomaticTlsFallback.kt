@@ -35,6 +35,9 @@ public interface AutomaticTlsFallback {
     public val state: StateFlow<AutomaticTlsFallbackState>
     /** Replaces session ownership and forgets every prior decision and in-flight learning token. */
     public fun activateSession(sessionId: CaptureSessionId?)
+    /** Rebinds unexpired decisions across a capture-only writer rotation; forwarding identity is unchanged. */
+    public fun rotateCaptureSession(sessionId: CaptureSessionId) { activateSession(sessionId) }
+
     /** Synchronizes policy/authority; returns an epoch only when automatic inspection is allowed. */
     public fun authorize(configuration: ProtectedTrafficConfiguration, authorityIdentity: String?): Long?
     /** Records a proven rejection only if the original authorized epoch/session remains current. */

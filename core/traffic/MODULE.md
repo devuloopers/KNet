@@ -43,3 +43,7 @@ It represents first observed transport evidence, not a decrypted result or remot
 TlsFallbackClientScope derives bounded client isolation from admitted ingress/source-address metadata. New AUTOMATIC
 provenance is distinct from historical SMART evidence; opaque TLS state remains transport-level rather than an
 encrypted HTTP result. See `docs/automatic_tls_fallback.md`.
+
+## Multi-device workspace and control sessions (2026-11-13)
+
+The payload-free TrafficTransferObserver/counter ports allow proxy byte observation without a dependency on application UI or simulator ownership.

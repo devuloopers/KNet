@@ -1,7 +1,10 @@
 package com.devuloopers.knet.data.desktop.traffic.repository
 
 import com.devuloopers.knet.application.contract.traffic.BodyStore
+import com.devuloopers.knet.application.contract.traffic.TrafficSource
 import com.devuloopers.knet.application.contract.traffic.TrafficMaintenance
+import com.devuloopers.knet.data.desktop.capture.storageKind
+import kotlinx.coroutines.yield
 import com.devuloopers.knet.core.logger.KNetLogger
 import com.devuloopers.knet.core.logger.LogTags
 import com.devuloopers.knet.data.desktop.capture.BodyDeletionReconciler
@@ -42,6 +45,21 @@ class DesktopTrafficMaintenanceAdapter(
                     "Traffic clear reached its bounded maintenance pass limit; remaining sessions will retry."
                 }
             }
+        }
+    }
+
+    /** Reuses the global writer barrier but never deletes a shared session or another source's rows. */
+    override suspend fun clearSourceTraffic(source: TrafficSource) {
+        if (source == TrafficSource.All) return clearTerminalTraffic()
+        withContext(Dispatchers.IO) {
+            val dao = database.canonicalCaptureDao()
+            val requestedAt = Clock.System.now().toEpochMilliseconds()
+            while (dao.queueAndDeleteSourceBatch(source.storageKind(), (source as? TrafficSource.Device)?.id?.value,
+                    requestedAt, 128) != 0) {
+                BodyDeletionReconciler(dao, canonicalBodyStore).reconcile(256)
+                yield()
+            }
+            BodyDeletionReconciler(dao, canonicalBodyStore).reconcile(256)
         }
     }
 

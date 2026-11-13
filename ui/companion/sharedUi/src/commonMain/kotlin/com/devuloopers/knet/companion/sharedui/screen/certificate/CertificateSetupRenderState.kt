@@ -7,6 +7,12 @@ import com.devuloopers.knet.companion.presentation.state.CompanionUiState
 
 /** Strongly typed visual phase for the reactive certificate setup route. */
 internal sealed interface CertificateSetupPhase {
+    /** Initial trust evaluation, before offering any certificate export. */
+    data object Checking : CertificateSetupPhase
+
+    /** A failed or deferred check requires an explicit retry rather than assuming a missing certificate. */
+    data object VerificationUnavailable : CertificateSetupPhase
+
     data object Download : CertificateSetupPhase
 
     data class Installation(
@@ -14,7 +20,7 @@ internal sealed interface CertificateSetupPhase {
     ) : CertificateSetupPhase
 
     data class Verified(
-        val savedExport: CompanionCertificateExportState.Saved,
+        val savedExport: CompanionCertificateExportState.Saved?,
     ) : CertificateSetupPhase
 }
 
@@ -40,28 +46,38 @@ internal data class CertificateSetupRenderState(
 ) {
     val busy: Boolean = downloadInProgress || verificationInProgress
 
-    val canContinue: Boolean = phase is CertificateSetupPhase.Verified &&
-        verification is CertificateVerificationRenderState.Trusted &&
-        !busy
+    val canContinue: Boolean = phase is CertificateSetupPhase.Verified && !busy
 }
 
 internal fun CompanionUiState.toCertificateSetupRenderState(): CertificateSetupRenderState {
     val export = certificateExport
-    val saved = export as? CompanionCertificateExportState.Saved
+    val saved = (export as? CompanionCertificateExportState.Saved)
+        ?.takeIf { it.desktopId == activeRegistration?.desktopId }
     val currentCertificate = certificate
     val currentFailure = failure
+    val checking = currentCertificate == CompanionCertificateState.Unknown ||
+        currentCertificate == CompanionCertificateState.Verifying
     return CertificateSetupRenderState(
         phase = when {
-            saved == null -> CertificateSetupPhase.Download
-            currentCertificate is CompanionCertificateState.Trusted -> CertificateSetupPhase.Verified(saved)
-            else -> CertificateSetupPhase.Installation(saved)
+            hasTrustedActiveCertificate -> CertificateSetupPhase.Verified(saved)
+            export is CompanionCertificateExportState.Saving -> CertificateSetupPhase.Download
+            checking && currentFailure == null -> saved?.let { CertificateSetupPhase.Installation(it) }
+                ?: CertificateSetupPhase.Checking
+            currentCertificate == CompanionCertificateState.InstallationRequired ->
+                saved?.let { CertificateSetupPhase.Installation(it) } ?: CertificateSetupPhase.Download
+            else -> CertificateSetupPhase.VerificationUnavailable
         },
         downloadInProgress = export is CompanionCertificateExportState.Saving,
-        verificationInProgress = operationInProgress || currentCertificate is CompanionCertificateState.Verifying,
+        verificationInProgress = operationInProgress || (checking && currentFailure == null),
         verification = when {
             currentFailure != null -> CertificateVerificationRenderState.Failed(currentFailure)
-            currentCertificate is CompanionCertificateState.Verifying -> CertificateVerificationRenderState.Verifying
-            currentCertificate is CompanionCertificateState.Trusted -> CertificateVerificationRenderState.Trusted
+            checking -> CertificateVerificationRenderState.Verifying
+            currentCertificate is CompanionCertificateState.VerificationDeferred ->
+                CertificateVerificationRenderState.Failed(currentCertificate.reason)
+            hasTrustedActiveCertificate -> CertificateVerificationRenderState.Trusted
+            currentCertificate is CompanionCertificateState.Trusted -> CertificateVerificationRenderState.Rejected(
+                "The verified certificate does not match the paired desktop.",
+            )
             currentCertificate is CompanionCertificateState.Rejected -> {
                 CertificateVerificationRenderState.Rejected(currentCertificate.reason.message)
             }

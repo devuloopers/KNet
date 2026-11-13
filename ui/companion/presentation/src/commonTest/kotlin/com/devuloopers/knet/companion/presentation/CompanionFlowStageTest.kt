@@ -4,6 +4,8 @@ import com.devuloopers.knet.companion.model.CompanionDesktopDisplayName
 import com.devuloopers.knet.companion.model.CompanionEndpointScheme
 import com.devuloopers.knet.companion.model.CompanionCertificateState
 import com.devuloopers.knet.companion.model.CompanionCertificateEnrollment
+import com.devuloopers.knet.companion.model.CompanionFailure
+import com.devuloopers.knet.companion.model.CompanionFailureCode
 import com.devuloopers.knet.companion.model.CompanionCredentialReference
 import com.devuloopers.knet.companion.model.CompanionDesktopId
 import com.devuloopers.knet.companion.model.CompanionRegistration
@@ -93,6 +95,21 @@ class CompanionFlowStageTest {
                 ),
             ).resolveFlowStage(),
         )
+    }
+
+    @Test
+    fun `removed or rejected certificates reopen setup while a temporary outage preserves enrolled home`() {
+        val active = registration()
+        val enrolled = CompanionUiState(activeRegistration = active, certificateEnrollment =
+            CompanionCertificateEnrollment(active.desktopId, active.rootCertificateSha256, 2_000L))
+        val failure = CompanionFailure(CompanionFailureCode.TRANSPORT_UNAVAILABLE, "Desktop unavailable.", true)
+        for (certificate in listOf(CompanionCertificateState.InstallationRequired,
+            CompanionCertificateState.Rejected(failure),
+            CompanionCertificateState.Trusted(Sha256Fingerprint("c".repeat(64)), 2_000L))) {
+            assertEquals(CompanionFlowStage.CERTIFICATE_SETUP, enrolled.copy(certificate = certificate).resolveFlowStage())
+        }
+        assertEquals(CompanionFlowStage.INSPECTION_HOME,
+            enrolled.copy(certificate = CompanionCertificateState.VerificationDeferred(failure)).resolveFlowStage())
     }
 
     private fun registration(): CompanionRegistration = CompanionRegistration(

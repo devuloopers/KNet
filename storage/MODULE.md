@@ -82,3 +82,9 @@ final counters atomically; later progress or terminal events cannot replace it. 
 Schema 36 adds the default-enabled automaticTlsFallbackEnabled preference independently of the retired Smart flag.
 Migration 35 to 36 retains existing actions/rules and history. Temporary decisions are never persisted; new AUTOMATIC
 provenance uses the existing opaque evidence fields. See `docs/automatic_tls_fallback.md`.
+
+## Multi-device workspace and control sessions (2026-11-13)
+
+Schema 37 adds the verified ingress/client/connection lookup index. Migration 36-to-37 preserves all prior records. Source predicates run before paging/counting; shared sessions and bodies are retained when another source still owns them.
+
+Device tab membership is a Room-observed registered-identity projection with indexed connection/exchange/opaque-flow existence probes. Empty connections cannot retain a tab. Source deletion and retention invalidate membership automatically; no schema change is required.

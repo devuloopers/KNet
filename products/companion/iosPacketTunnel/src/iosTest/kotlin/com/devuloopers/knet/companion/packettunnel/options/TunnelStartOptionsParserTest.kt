@@ -53,6 +53,17 @@ class TunnelStartOptionsParserTest {
         assertInvalid(validOptions().toMutableMap().apply { this["unsupportedPolicy"] = "BYPASS" })
     }
 
+    @Test fun validatesOptionalControlEndpointWithoutBreakingOlderProviders() {
+        val base = validOptions()
+        assertEquals(null, TunnelStartOptionsParser.parse(base).controlHost)
+        val complete = base + mapOf("controlHost" to "192.168.1.25", "controlPort" to 8183)
+        assertEquals(8183.toUShort(), TunnelStartOptionsParser.parse(complete).controlPort)
+        for (extra in listOf(mapOf("controlHost" to "192.168.1.25"), mapOf("controlPort" to 8183),
+            mapOf("controlHost" to 123, "controlPort" to "8183"), mapOf("controlHost" to "desktop.local", "controlPort" to 8183),
+            mapOf("controlHost" to "192.168.1.25", "controlPort" to 0), mapOf("controlHost" to "192.168.1.25", "controlPort" to 65536),
+            mapOf("controlHost" to "192.168.1.25", "controlPort" to 8183.5))) assertInvalid(base + extra)
+    }
+
     private fun assertInvalid(options: Map<Any?, *>) {
         val error = assertFailsWith<TunnelException> { TunnelStartOptionsParser.parse(options) }
         assertEquals(TunnelFailure.INVALID_START_OPTIONS, error.failure)

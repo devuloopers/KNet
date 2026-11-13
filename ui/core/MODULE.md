@@ -133,3 +133,13 @@ The statistics bar accepts this same border policy. See `docs/traffic_inspector_
 The vertical scrollbar's shared measured-overflow gutter helper owns the chrome width and breathing space.
 Manager tables and Traffic consume the same policy for aligned header/row viewports; absent overflow reserves
 no gutter. The scrollbar itself remains pinned outside the content viewport.
+
+## Multi-device workspace and control sessions (2026-11-13)
+
+Workspace tabs own theme tokens, bounded single-line overflow, selectable semantics and measured interactive rectangles. They contain no native APIs, pairing or socket logic.
+
+Workspace tabs expose an optional independently focusable Close button with a stable layout slot, accessible description, shared hover help and disabled state. The button stays inside the measured native interactive bounds and cannot trigger tab selection when activated.
+
+The compact-tab appearance uses theme-owned 32 dp rounded controls, 6 dp gaps, tonal inactive surfaces and a blue selected outline/tint inside the existing 40 dp strip. Device identity suffixes have independent secondary typography. Hover/focus painting does not change measured tab dimensions or native interactive bounds.
+
+Workspace tab names size to content within a 360 dp cap; the row retains horizontal overflow. Full-label hover help anchors only to the name so it cannot overlap the independent Close help. Secondary identity text and actions retain their own width.

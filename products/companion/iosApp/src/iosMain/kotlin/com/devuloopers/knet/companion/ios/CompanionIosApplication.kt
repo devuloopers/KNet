@@ -135,6 +135,7 @@ private fun BootstrapSurface(failed: Boolean) {
 
 @Composable
 private fun iosCertificateGuidance(): CertificateInstallationGuidance = CertificateInstallationGuidance(
+    platform = com.devuloopers.knet.companion.sharedui.screen.certificate.CertificateInstallationPlatform.IOS,
     steps = listOf(
         stringResource(Res.string.certificate_guidance_open_profile),
         stringResource(Res.string.certificate_guidance_install_profile),

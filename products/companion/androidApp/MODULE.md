@@ -51,3 +51,8 @@ definitions remain product-owned; no reusable companion module depends on Koin o
 
 Native status/navigation bars use explicit dark styles and the existing dark scrim resource so system icons remain
 light under either OS appearance. Shared UI obtains its fixed-dark palette from UI core.
+
+Camera permission requests publish an explicit in-flight state, suppress duplicate launches and defer resume
+refresh until the native result. Installation-local unresolved-request history survives recreation, is cleared on
+grant, and does not store a denial count. The shared UI owns the recovery sheet; Android owns Settings and the prompt.
+See `docs/companion_ui.md` for the permission entry flow and physical qualification boundary.

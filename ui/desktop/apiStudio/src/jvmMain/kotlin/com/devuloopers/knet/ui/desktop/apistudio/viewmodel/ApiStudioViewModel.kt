@@ -1,5 +1,9 @@
 package com.devuloopers.knet.ui.desktop.apistudio.viewmodel
 
+import com.devuloopers.knet.application.usecase.graphql.ImportGraphQLPersistedQueriesUseCase
+import com.devuloopers.knet.application.usecase.graphql.ObserveGraphQLPersistedQueriesUseCase
+import com.devuloopers.knet.application.contract.graphql.GraphQLManifestImportResult
+import com.devuloopers.knet.application.contract.graphql.GraphQLManifestFailure
 import com.devuloopers.knet.domain.graphql.GraphQLHttpDiagnostic
 import com.devuloopers.knet.engine.formatter.graphql.GraphQLHttpRequestFormatter
 import com.devuloopers.knet.ui.desktop.httppanel.model.GraphQLParameterEditorState
@@ -92,6 +96,8 @@ class ApiStudioViewModel(
     private val autoSaveApiSessionUseCase: AutoSaveApiSessionUseCase,
     private val getSavedRequestUseCase: GetSavedRequestUseCase,
     private val saveRequestToCollectionUseCase: SaveRequestToCollectionUseCase,
+    private val importGraphQLPersistedQueriesUseCase: ImportGraphQLPersistedQueriesUseCase,
+    observeGraphQLPersistedQueriesUseCase: ObserveGraphQLPersistedQueriesUseCase,
     private val ioDispatcher: CoroutineDispatcher,
     private val responseStreamInterpreters: HttpResponseStreamInterpreterRegistry =
         HttpResponseStreamInterpreterRegistry(),
@@ -148,6 +154,41 @@ class ApiStudioViewModel(
 
     init {
         restoreWorkspaceDocument()
+        viewModelScope.launch {
+            combine(
+                uiState.map { Triple(it.editorState.method, it.editorState.url, it.editorState.bodyState.payloadText) }
+                    .distinctUntilChanged(),
+                observeGraphQLPersistedQueriesUseCase.execute(),
+            ) { request, _ -> request }.collectLatest { (method, url, body) ->
+                delay(REQUEST_NAME_DEBOUNCE_MS)
+                val preview = withContext(ioDispatcher) {
+                    GraphQLHttpRequestFormatter.inspect(method.token, url, body = body.encodeToByteArray())
+                        ?.takeIf { it.persistedQuery != null }?.let(GraphQLHttpRequestFormatter::format)
+                }
+                _uiState.update { it.copy(persistedQueryPreview = preview) }
+            }
+        }
+    }
+
+    /** Imports a selected manifest for this endpoint only; documents remain read-only lookup data. */
+    fun importPersistedQueryManifest(path: String) {
+        if (uiState.value.isImportingManifest) return
+        val endpoint = uiState.value.editorState.url
+        val owner = documentRevision
+        _uiState.update { it.copy(isImportingManifest = true, manifestImportResult = null) }
+        viewModelScope.launch {
+            try {
+                val result = withContext(ioDispatcher) { importGraphQLPersistedQueriesUseCase.execute(endpoint, path) }
+                _uiState.update { it.copy(manifestImportResult = result.takeIf { owner == documentRevision }) }
+            } finally {
+                _uiState.update { it.copy(isImportingManifest = false) }
+            }
+        }
+    }
+
+    /** Reports native picker failures without exposing local file paths or content. */
+    fun reportManifestPickerFailure() {
+        _uiState.update { it.copy(manifestImportResult = GraphQLManifestImportResult.Rejected(GraphQLManifestFailure.UNREADABLE_FILE)) }
     }
 
     /** Updates the target URL and its derived query-parameter rows. */
@@ -203,7 +244,8 @@ class ApiStudioViewModel(
                 .getOrElse { return@mutateEditor editor }
             editor.copy(url = updatedUrl,
                 queryParams = UrlQueryStringParser.parseQueryParams(updatedUrl).mapIndexed { index, (name, value) -> KeyValueEntry("query-$index", name, value) },
-                graphQLParameters = parameters.copy(graphQl = graphQlState))
+                graphQLParameters = parameters.copy(graphQl = graphQlState.copy(payload = graphQlState.payload.copy(
+                    extensionsText = changes[com.devuloopers.knet.domain.graphql.GraphQLHttpParameter.EXTENSIONS] ?: graphQlState.payload.extensionsText))))
         } else editor.copy(bodyState = syncBodyStateUseCase.updateGraphQlState(editor.bodyState, graphQlState))
     }
 
@@ -532,7 +574,8 @@ class ApiStudioViewModel(
                             currentEditor.url, body = currentEditor.bodyState.payloadText.encodeToByteArray())?.diagnostic
                     else null
                 }
-                if (graphQLDiagnostic != null && graphQLDiagnostic != GraphQLHttpDiagnostic.MISSING_QUERY)
+                if (graphQLDiagnostic != null && graphQLDiagnostic !in setOf(GraphQLHttpDiagnostic.MISSING_QUERY,
+                    GraphQLHttpDiagnostic.INVALID_PERSISTED_QUERY, GraphQLHttpDiagnostic.PERSISTED_QUERY_HASH_MISMATCH))
                     throw IllegalArgumentException(graphQLDiagnostic.description)
                 executeApiStudioRequestUseCase.executeStreaming(executionDocument, activeProxyPort()).collect { event ->
                     coroutineContext.ensureActive()

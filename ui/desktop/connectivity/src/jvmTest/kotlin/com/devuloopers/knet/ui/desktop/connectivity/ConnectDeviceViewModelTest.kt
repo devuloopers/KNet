@@ -17,6 +17,11 @@ import com.devuloopers.knet.application.contract.proxy.ProxyStopResult
 import com.devuloopers.knet.application.usecase.connectivity.wifi.ObserveWifiSharingUseCase
 import com.devuloopers.knet.application.coordinator.pairing.PairingCoordinator
 import com.devuloopers.knet.application.usecase.pairing.CreatePairingOnboardingUseCase
+import com.devuloopers.knet.application.usecase.pairing.ObservePairingOnboardingUseCase
+import com.devuloopers.knet.application.usecase.pairing.RedeemPairingOnboardingUseCase
+import com.devuloopers.knet.application.usecase.pairing.PairingOnboardingRedemptionResult
+import com.devuloopers.knet.companion.model.CompanionBootstrapRedemptionRequest
+import com.devuloopers.knet.companion.model.CompanionBootstrapSecret
 import com.devuloopers.knet.application.usecase.pairing.PairingOnboardingEnvironment
 import com.devuloopers.knet.application.usecase.pairing.PairingOnboardingEnvironmentProvider
 import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUseCase
@@ -145,7 +150,7 @@ class ConnectDeviceViewModelTest {
     }
 
     @Test
-    fun `opening companion drawer creates version two QR and closing removes secret from state`() = runTest(dispatcher) {
+    fun `opening companion drawer creates version three QR and closing removes secret from state`() = runTest(dispatcher) {
         val wifi = FakeWifiSharingPort().apply { mutableState.value = activeState() }
         val viewModel = createViewModel(FakeProxyRuntime(runningPort = 8_080), wifi)
         runCurrent()
@@ -213,12 +218,81 @@ class ConnectDeviceViewModelTest {
         viewModel.processIntent(ConnectDeviceIntent.CloseDrawer)
     }
 
+    @Test
+    fun `successful QR redemption removes it immediately and regeneration stays fresh after replay`() = runTest(dispatcher) {
+        val store = MemoryCompanionOnboardingStore()
+        val wifi = FakeWifiSharingPort().apply { mutableState.value = activeState() }
+        val viewModel = createViewModel(FakeProxyRuntime(8_080), wifi, onboardingStore = store)
+        runCurrent()
+        viewModel.processIntent(ConnectDeviceIntent.OpenCompanionConnection)
+        runCurrent()
+        val first = assertIs<CompanionInvitationUiState.Ready>(viewModel.uiState.value.companionInvitation)
+        val bootstrap = CompanionBootstrapPayloadCodec().decode(first.qrPayload)
+        val redemption = RedeemPairingOnboardingUseCase(SequentialPairingCryptography(), store) { 1_000L }
+        val request = CompanionBootstrapRedemptionRequest(bootstrap.id, bootstrap.retrievalSecret)
+        assertIs<PairingOnboardingRedemptionResult.Redeemed>(redemption.execute(request))
+        runCurrent()
+        // No countdown tick has elapsed: the one-time claim itself invalidates presentation.
+        assertIs<CompanionInvitationUiState.Expired>(viewModel.uiState.value.companionInvitation)
+        advanceTimeBy(2_000L)
+        runCurrent()
+        assertIs<CompanionInvitationUiState.Expired>(viewModel.uiState.value.companionInvitation)
+        viewModel.processIntent(ConnectDeviceIntent.RefreshCompanionInvitation)
+        runCurrent()
+        val fresh = assertIs<CompanionInvitationUiState.Ready>(viewModel.uiState.value.companionInvitation)
+        assertTrue(first.qrPayload != fresh.qrPayload)
+        assertIs<PairingOnboardingRedemptionResult.Rejected>(redemption.execute(request))
+        runCurrent()
+        assertEquals(fresh, viewModel.uiState.value.companionInvitation)
+        viewModel.processIntent(ConnectDeviceIntent.CloseDrawer)
+    }
+
+    @Test
+    fun `invalid or old QR redemption cannot expire the currently displayed QR`() = runTest(dispatcher) {
+        val store = MemoryCompanionOnboardingStore()
+        val wifi = FakeWifiSharingPort().apply { mutableState.value = activeState() }
+        val viewModel = createViewModel(FakeProxyRuntime(8_080), wifi, onboardingStore = store)
+        runCurrent()
+        viewModel.processIntent(ConnectDeviceIntent.OpenCompanionConnection)
+        runCurrent()
+        val old = CompanionBootstrapPayloadCodec().decode(assertIs<CompanionInvitationUiState.Ready>(viewModel.uiState.value.companionInvitation).qrPayload)
+        viewModel.processIntent(ConnectDeviceIntent.RefreshCompanionInvitation)
+        runCurrent()
+        val fresh = assertIs<CompanionInvitationUiState.Ready>(viewModel.uiState.value.companionInvitation)
+        val current = CompanionBootstrapPayloadCodec().decode(fresh.qrPayload)
+        val redemption = RedeemPairingOnboardingUseCase(SequentialPairingCryptography(), store) { 1_000L }
+        assertIs<PairingOnboardingRedemptionResult.Rejected>(redemption.execute(
+            CompanionBootstrapRedemptionRequest(current.id, CompanionBootstrapSecret("x".repeat(32)))))
+        assertIs<PairingOnboardingRedemptionResult.Redeemed>(redemption.execute(
+            CompanionBootstrapRedemptionRequest(old.id, old.retrievalSecret)))
+        runCurrent()
+        assertEquals(fresh, viewModel.uiState.value.companionInvitation)
+        viewModel.processIntent(ConnectDeviceIntent.CloseDrawer)
+        assertIs<PairingOnboardingRedemptionResult.Redeemed>(redemption.execute(
+            CompanionBootstrapRedemptionRequest(current.id, current.retrievalSecret)))
+        runCurrent()
+        assertIs<CompanionInvitationUiState.Idle>(viewModel.uiState.value.companionInvitation)
+    }
+
+    @Test
+    fun `redemption before observation starts never exposes a used QR`() = runTest(dispatcher) {
+        val store = MemoryCompanionOnboardingStore().apply { consumeOnPut = true }
+        val wifi = FakeWifiSharingPort().apply { mutableState.value = activeState() }
+        val viewModel = createViewModel(FakeProxyRuntime(8_080), wifi, onboardingStore = store)
+        runCurrent()
+        viewModel.processIntent(ConnectDeviceIntent.OpenCompanionConnection)
+        runCurrent()
+        assertIs<CompanionInvitationUiState.Expired>(viewModel.uiState.value.companionInvitation)
+        viewModel.processIntent(ConnectDeviceIntent.CloseDrawer)
+    }
+
     private fun createViewModel(
         proxy: FakeProxyRuntime,
         wifi: FakeWifiSharingPort,
         proxyPort: Int = 8_080,
         nowEpochMillis: () -> Long = { 1_000L },
         environmentGate: CompletableDeferred<Unit>? = null,
+        onboardingStore: MemoryCompanionOnboardingStore = MemoryCompanionOnboardingStore(),
     ): ConnectDeviceViewModel {
         val cryptography = SequentialPairingCryptography()
         return ConnectDeviceViewModel(
@@ -241,7 +315,7 @@ class ConnectDeviceViewModelTest {
                         rootCertificateEndpoint = CompanionServiceEndpoint(
                             active.session.networkAddress.address,
                             8_181,
-                            false,
+                            CompanionEndpointScheme.HTTP,
                         ),
                         controlEndpoint = CompanionServiceEndpoint(active.session.networkAddress.address, 8_183, CompanionEndpointScheme.HTTPS),
                         proxyEndpoint = CompanionServiceEndpoint(active.session.networkAddress.address, 8_182, CompanionEndpointScheme.HTTPS),
@@ -251,9 +325,10 @@ class ConnectDeviceViewModelTest {
                     )
                 },
                 cryptography = cryptography,
-                onboardingStore = MemoryCompanionOnboardingStore(),
+                onboardingStore = onboardingStore,
                 payloadCodec = CompanionBootstrapPayloadCodec(),
             ),
+            observePairingOnboarding = ObservePairingOnboardingUseCase(onboardingStore),
             nowEpochMillis = nowEpochMillis,
         )
     }
@@ -320,13 +395,20 @@ class ConnectDeviceViewModelTest {
     }
 
     private class MemoryCompanionOnboardingStore : CompanionOnboardingStore {
-        override suspend fun put(pending: PendingCompanionOnboarding) = Unit
-
-        override suspend fun claim(
-            id: CompanionBootstrapId,
-            retrievalSecretDigest: String,
-            nowEpochMillis: Long,
-        ): CompanionPairingInvitation? = null
+        override val pendingIds = MutableStateFlow<Set<CompanionBootstrapId>>(emptySet())
+        private val records = mutableMapOf<CompanionBootstrapId, PendingCompanionOnboarding>()
+        var consumeOnPut = false
+        override suspend fun put(pending: PendingCompanionOnboarding) {
+            if (!consumeOnPut) records[pending.id] = pending
+            pendingIds.value = records.keys.toSet()
+        }
+        override suspend fun claim(id: CompanionBootstrapId, retrievalSecretDigest: String, nowEpochMillis: Long): CompanionPairingInvitation? {
+            val pending = records[id] ?: return null
+            if (pending.retrievalSecretDigest != retrievalSecretDigest || nowEpochMillis >= pending.expiresAtEpochMillis) return null
+            records.remove(id)
+            pendingIds.value = records.keys.toSet()
+            return pending.invitation
+        }
     }
 
     private class SequentialPairingCryptography : PairingCryptography {

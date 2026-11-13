@@ -28,3 +28,7 @@ pairing invitations, pinned endpoints, certificate trust, connection state, insp
 
 May depend only on `:core:identity`, `:core:pairing`, and `:core:connectivity`. It must compile for Android,
 JVM, and iOS without platform APIs.
+
+## Multi-device workspace and control sessions (2026-11-13)
+
+The versioned, bounded Companion session envelope and policy acknowledgement vocabulary live here. JSON serialization is a wire codec only; no sockets or presence registry enter core.

@@ -1,5 +1,6 @@
 package com.devuloopers.knet.products.desktop.bootstrap
 
+import com.devuloopers.knet.products.desktop.window.MacDeviceTitleBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -223,7 +224,9 @@ object DesktopBootstrap {
             ) {
                 KNetApplicationTheme {
                     WindowBackgroundFlashingWorkaround(themeBackground = KNetTheme.colors.background)
-                    MainWindow()
+                    MacDeviceTitleBar { inset, regions ->
+                        MainWindow(titleBarInsetStart = inset, onTitleBarInteractiveBoundsChanged = regions)
+                    }
                 }
             }
         }

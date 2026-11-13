@@ -3,6 +3,7 @@ package com.devuloopers.knet.application.usecase.traffic
 import com.devuloopers.knet.application.contract.traffic.CaptureClearPreparation
 import com.devuloopers.knet.application.contract.traffic.CaptureSessionControl
 import com.devuloopers.knet.application.contract.traffic.TrafficMaintenance
+import com.devuloopers.knet.application.contract.traffic.TrafficSource
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -23,9 +24,10 @@ public class ClearTrafficHistoryUseCase(
      *
      * @return Capture preparation performed before deletion.
      */
-    public suspend fun execute(): CaptureClearPreparation = operationMutex.withLock {
-        val preparation = captureSessionControl.rotateForTrafficClear()
-        trafficMaintenance.clearTerminalTraffic()
+    public suspend fun execute(source: TrafficSource = TrafficSource.All): CaptureClearPreparation = operationMutex.withLock {
+        val preparation = if (source == TrafficSource.All) captureSessionControl.rotateForTrafficClear()
+            else captureSessionControl.rotateForSourceTrafficClear()
+        trafficMaintenance.clearSourceTraffic(source)
         preparation
     }
 }

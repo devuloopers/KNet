@@ -99,6 +99,7 @@ class KNetProxyServer(
     private val captureSink: ProxyCaptureSink? = null,
     private val ingressContext: IngressContext = IngressContext(IngressKind.Local),
     private val ingressAttribution: IngressAttributionLookup? = null,
+    private val transferObserver: com.devuloopers.knet.traffic.model.TrafficTransferObserver? = null,
     private val requiresFullResponseAggregation: (HttpRequestSnapshot) -> Boolean = { false },
     private val runtimeMetrics: ProxyRuntimeMetrics = ProxyRuntimeMetrics(),
     private val streamInspectorFactories: List<ProxyStreamInspectorFactory> = emptyList(),
@@ -207,6 +208,9 @@ class KNetProxyServer(
                         channel.closeFuture().addListener { connectionCapture?.close() }
                         activeChannels.add(channel)
                         val pipeline = channel.pipeline()
+                        transferObserver?.open(attributedIngress)?.let { meter ->
+                            pipeline.addLast("source-transfer-meter", com.devuloopers.knet.engine.proxy.handler.SourceTrafficMeterHandler(meter))
+                        }
 
                         pipeline.addLast(
                             PipelineHandlerNames.READ_TIMEOUT,

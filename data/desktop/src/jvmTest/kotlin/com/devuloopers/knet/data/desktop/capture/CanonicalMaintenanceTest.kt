@@ -26,6 +26,35 @@ import kotlin.test.assertTrue
 /** Regression tests for bounded canonical startup recovery and global retention. */
 class CanonicalMaintenanceTest {
 
+    @Test fun `source clear batches hundreds of records and preserves a shared body until its last source clears`() = runTest {
+        val root = Files.createTempDirectory("knet-source-clear-bodies-").toFile()
+        val database = DatabaseFactory.create(root.resolve("traffic.db"))
+        val store = FileBodyStore(root.resolve("bodies"))
+        val dao = database.canonicalCaptureDao()
+        try {
+            dao.insertSession(closedSession("shared", 1))
+            for (source in listOf("a", "b")) dao.insertConnection(openConnection().copy(id = source, sessionId = "shared",
+                ingressKind = "COMPANION_DIRECT", clientIdentity = source))
+            val sharedId = BodyId("shared-body")
+            val writer = store.openWrite(sharedId, BodyWritePolicy(maximumStoredBytes = 1024))
+            writer.append(byteArrayOf(1, 2, 3)); val body = writer.complete().body
+            dao.insertBody(bodyEntity("shared", "a-0", sharedId.value, body.storedBytes, store.storageKey(sharedId).value))
+            repeat(300) { index -> dao.insertExchange(exchangeReferencingRequestBody(sharedId.value).copy(
+                id = "a-$index", sessionId = "shared", connectionId = "a", connectionSequence = index.toLong() + 1)) }
+            dao.insertExchange(exchangeReferencingRequestBody(sharedId.value).copy(id = "b-0", sessionId = "shared", connectionId = "b"))
+            val maintenance = com.devuloopers.knet.data.desktop.traffic.repository.DesktopTrafficMaintenanceAdapter(database, store)
+            fun source(id: String) = com.devuloopers.knet.application.contract.traffic.TrafficSource.Device(com.devuloopers.knet.identity.RegisteredDeviceId(id))
+            maintenance.clearSourceTraffic(source("a"))
+            assertTrue(dao.getSourceClearExchangeIds("DEVICE", "a", 256).isEmpty())
+            assertNotNull(dao.getExchange("b-0"))
+            assertNotNull(dao.getBody(sharedId.value))
+            maintenance.clearSourceTraffic(source("b"))
+            assertNull(dao.getBody(sharedId.value))
+            assertTrue(dao.getDeletionWork(256).isEmpty())
+            assertNotNull(dao.getSession("shared"))
+        } finally { database.close(); root.deleteRecursively() }
+    }
+
     /** Verifies oldest closed sessions are evicted transactionally and body files converge through the outbox. */
     @Test
     fun `retention enforces count and byte limits without touching newer sessions`() = runTest {

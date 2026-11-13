@@ -15,6 +15,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -63,7 +65,8 @@ import org.koin.compose.getKoin
 fun KNetWorkspaceHost(
     destination: DesktopDestination,
     onNavigateToDestination: (DesktopDestination) -> Unit = {},
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onClearTraffic: (() -> Unit)? = null,
 ) {
     val apiStudioViewModel: ApiStudioViewModel = koinViewModel()
     val collectionsViewModel: CollectionsViewModel = koinViewModel()
@@ -81,6 +84,13 @@ fun KNetWorkspaceHost(
         active = destination == DesktopDestination.Traffic || destination == DesktopDestination.NetworkConditions)
     val protectedTrafficViewModel: ProtectedTrafficViewModel = koinViewModel()
     val trafficState by trafficViewModel.uiState.collectAsState()
+    val deviceWorkspaces: DeviceWorkspaceViewModel = koinViewModel()
+    val deviceWorkspaceState by deviceWorkspaces.state.collectAsState()
+    LaunchedEffect(deviceWorkspaceState.source) { trafficViewModel.selectSource(deviceWorkspaceState.source) }
+    DisposableEffect(destination) {
+        deviceWorkspaces.setMonitoring(destination == DesktopDestination.Traffic)
+        onDispose { deviceWorkspaces.setMonitoring(false) }
+    }
     val drawerEvent = breakpointState.activeEvent?.takeIf { event ->
         trafficState.transactions.any { row ->
             val interception = row.interception as? TrafficInterceptionUiState.Paused
@@ -99,6 +109,7 @@ fun KNetWorkspaceHost(
             DesktopDestination.Traffic -> {
                 val networkConditionsState by networkConditionsViewModel.state.collectAsState()
                 TrafficScreen(
+                    onClearFeed = onClearTraffic,
                     protectionViewModel = trafficProtectionViewModel,
                     viewModel = trafficViewModel,
                     networkConditionsControl = {
@@ -112,10 +123,10 @@ fun KNetWorkspaceHost(
                         )
                     },
                     throughputIndicator = {
-                        NetworkThroughputIndicator(networkConditionsState.throughput, onOpenOverview = {
+                        NetworkThroughputIndicator(deviceWorkspaceState.throughput, onOpenOverview = {
                             networkConditionsViewModel.selectTab(NetworkConditionsTab.OVERVIEW)
                             onNavigateToDestination(DesktopDestination.NetworkConditions)
-                        })
+                        }, scopeDescription = "Observed proxy bytes for the selected device or Other traffic, including protocol framing. Open the global Network Conditions Overview.")
                     },
                     onSendToApiStudio = { captured ->
                         if (captured.kind == RequestKindId.WEBSOCKET ||

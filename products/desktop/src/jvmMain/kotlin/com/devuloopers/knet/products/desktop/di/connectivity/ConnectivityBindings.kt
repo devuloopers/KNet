@@ -1,5 +1,7 @@
 package com.devuloopers.knet.products.desktop.di.connectivity
 
+import kotlinx.coroutines.flow.map
+
 import com.devuloopers.knet.application.coordinator.connectivity.ConnectivityCoordinator
 import com.devuloopers.knet.application.contract.connectivity.wifi.WifiSharing
 import com.devuloopers.knet.application.coordinator.pairing.PairingCoordinator
@@ -14,6 +16,7 @@ import com.devuloopers.knet.application.usecase.pairing.PairingOnboardingEnviron
 import com.devuloopers.knet.application.usecase.pairing.CompanionDiscoveryEnvironment
 import com.devuloopers.knet.application.usecase.pairing.CompanionDiscoveryEnvironmentProvider
 import com.devuloopers.knet.application.usecase.pairing.CreatePairingOnboardingUseCase
+import com.devuloopers.knet.application.usecase.pairing.ObservePairingOnboardingUseCase
 import com.devuloopers.knet.application.usecase.pairing.RedeemPairingOnboardingUseCase
 import com.devuloopers.knet.application.usecase.connectivity.wifi.ObserveWifiSharingUseCase
 import com.devuloopers.knet.companion.model.CompanionDesktopId
@@ -84,6 +87,8 @@ internal val connectivityBindings: Module = module {
     single<RegisteredDeviceStore> { get<RoomRegisteredDeviceStore>() }
     single<TrustedDeviceStore> { get<RoomRegisteredDeviceStore>() }
     single { PairingCoordinator(get(), get(), ::currentEpochMillis) }
+    single { com.devuloopers.knet.application.coordinator.device.DevicePresenceCoordinator({ System.nanoTime() / 1_000_000L }) }
+    single<com.devuloopers.knet.application.contract.device.DevicePresenceReader> { get<com.devuloopers.knet.application.coordinator.device.DevicePresenceCoordinator>() }
     single<CompanionOnboardingStore> { InMemoryCompanionOnboardingStore() }
     single { CompanionBootstrapPayloadCodec() }
     single { CompanionBootstrapRedemptionCodec() }
@@ -192,6 +197,7 @@ internal val connectivityBindings: Module = module {
         }
     }
     factory { CreatePairingOnboardingUseCase(get(), get(), get(), get(), get()) }
+    factory { ObservePairingOnboardingUseCase(get()) }
     viewModel {
         ConnectDeviceViewModel(
             startLoopbackProxy = get(),
@@ -199,6 +205,7 @@ internal val connectivityBindings: Module = module {
             observeWifiSharing = get(),
             observeApplicationSettings = get(),
             createPairingOnboarding = get(),
+            observePairingOnboarding = get(),
             nowEpochMillis = ::currentEpochMillis,
         )
     }
@@ -261,7 +268,15 @@ internal val connectivityBindings: Module = module {
             nowEpochMillis = ::currentEpochMillis,
         )
     }
-    single { CompanionControlGatewayRuntime(get<CompanionControlGateway>()) }
+    single {
+        val identity = get<CertificateRuntimeRepository>().companionTlsIdentity(CompanionControlGateway.TLS_SERVER_NAME)
+        com.devuloopers.knet.connectivity.desktop.gateway.KtorCompanionControlGateway(
+            COMPANION_LAN_BIND_HOST, COMPANION_CONTROL_GATEWAY_PORT, identity.serverKeyStore,
+            get<CompanionControlGateway>(), get(), get(),
+            get<NetworkConditionsRepository>().configuration.map { configuration -> configuration.toPacketConditionConfiguration() },
+        )
+    }
+    single { CompanionControlGatewayRuntime(get<com.devuloopers.knet.connectivity.desktop.gateway.KtorCompanionControlGateway>()) }
 }
 
 private const val SETUP_PORTAL_PORT: Int = 8181

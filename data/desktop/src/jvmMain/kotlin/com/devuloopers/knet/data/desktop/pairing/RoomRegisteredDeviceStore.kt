@@ -53,6 +53,9 @@ class RoomRegisteredDeviceStore(
     override fun observeRegisteredDevices(): Flow<List<RegisteredDevice>> =
         dao.observeRegisteredDevices().map { rows -> rows.map { row -> row.toDomain() } }
 
+    override fun observeRetainedDevices(): Flow<List<RegisteredDevice>> =
+        dao.observeRetainedDevices().map { rows -> rows.map { row -> row.toDomain() } }
+
     override suspend fun putInvitation(invitation: PendingPairingInvitation) {
         dao.putInvitation(invitation.toEntity(), nowMillis(), maximumPendingInvitations)
     }

@@ -159,3 +159,9 @@ selected data tests 6. Desktop compilation, architecture gates and whitespace ch
 
 Logs: /tmp/knet-graphql-studio-prettify-baseline.log and /tmp/knet-graphql-studio-prettify-verification.log.
 The desktop application was not relaunched; rebuild/relaunch for manual confirmation.
+
+## Persisted-query follow-up
+
+The HTTP APQ source catalog, manifest import, source-preserving hash edits and current inspector/rule resolution
+are documented in [GraphQL persisted queries](graphql_persisted_queries.md). Hashes remain non-reversible; verified
+source can now be learned from complete capture or imported explicitly without rewriting the wire request.

@@ -31,3 +31,13 @@ Navigation may resolve product-provided ViewModels through Koin Compose, but eve
 
 MainWindow uses UI core's fixed-dark KNetApplicationTheme, including its shared dialog and overlay hosts. The legacy
 global toolbar has no theme selector or theme callbacks. Host appearance does not select the application palette.
+
+## Multi-device workspace and control sessions (2026-11-13)
+
+The device workspace ViewModel consumes application use cases only. It combines durable names with current presence, persists selection and owns one selected-source speed subscriber while Traffic is visible.
+
+Offline tabs with retained traffic expose Close and share the toolbar Clear confirmation. The target identity is captured independently of selection; cancellation is non-destructive, and reconnecting during confirmation keeps the tab. Connected Close is disabled with hover help. Hidden selected tabs fall back to Other traffic without stealing focus on later reconnect. Pairing remains saved.
+
+Device tab presentation separates the existing display name and unique identity suffix for compact-tab styling. Source keys, roster visibility, status, selection and Close/Clear callbacks retain their existing behavior.
+
+Tab label cleanup removes a Companion-generated trailing four-character suffix only when it matches that exact identity. The same normalized label feeds the tab and confirmation; original names, pairing records and case-sensitive identity keys remain unchanged. Collision-safe desktop suffixes are retained.

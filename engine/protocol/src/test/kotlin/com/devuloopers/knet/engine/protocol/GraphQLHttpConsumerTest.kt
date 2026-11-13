@@ -73,7 +73,7 @@ class GraphQLHttpConsumerTest {
         val document = inspector.inspect(SemanticInspectionInput(exchange, null, null))!!
         assertEquals("GraphQL Query: BootStrapQuery", document.title)
         assertEquals("URL parameters", document.fields.single { it.label == "Source" }.value)
-        assertEquals(2L, inspector.schemaVersion)
+        assertEquals(3L, inspector.schemaVersion)
         val invalid = exchange.copy(request = get("/graphql?query=mutation+Write+%7Bx%7D"))
         val invalidDocument = inspector.inspect(SemanticInspectionInput(invalid, null, null))!!
         assertEquals("Mutation", invalidDocument.fields.single { it.label == "Operation type" }.value)

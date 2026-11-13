@@ -26,11 +26,12 @@ class CompanionSetupProgressTest {
     }
 
     @Test
-    fun pairedStateAdvancesHalfwayTowardCertificateMilestone() {
+    fun pairedStateActivatesTrustWhileCheckingExistingCertificate() {
         val progress = CompanionUiState(activeRegistration = REGISTRATION).toCompanionSetupProgress()
 
         assertEquals(CompanionSetupProgress.DesktopConnected, progress)
-        assertEquals(0.5f, progress.toVisualState().firstConnectorProgress)
+        assertEquals(1f, progress.toVisualState().firstConnectorProgress)
+        assertEquals(CompanionSetupNodeState.Active, progress.toVisualState().certificate)
     }
 
     @Test
@@ -56,6 +57,16 @@ class CompanionSetupProgressTest {
         assertEquals(CompanionSetupProgress.CertificateVerified, progress)
         assertEquals(1f, progress.toVisualState().secondConnectorProgress)
         assertEquals(CompanionSetupNodeState.Active, progress.toVisualState().inspection)
+    }
+
+    @Test
+    fun trustedExistingCertificateCompletesTheMilestoneWithoutDownloadingAgain() {
+        val state = CompanionUiState(activeRegistration = REGISTRATION,
+            certificate = CompanionCertificateState.Trusted(ROOT_FINGERPRINT, 2_000L))
+        assertEquals(CompanionSetupProgress.CertificateVerified, state.toCompanionSetupProgress())
+        assertEquals(CompanionSetupProgress.DesktopConnected,
+            state.copy(certificate = CompanionCertificateState.Trusted(Sha256Fingerprint("c".repeat(64)), 2_000L))
+                .toCompanionSetupProgress())
     }
 
     private companion object {

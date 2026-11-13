@@ -114,7 +114,7 @@ class GraphQLHttpDecoderTest {
     }
 
     @Test fun `missing hash only invalid and truncated documents never invent a query`() {
-        assertEquals(GraphQLHttpDiagnostic.MISSING_QUERY, decoder.decode("GET", "/graphql?extensions=${encode("""{"persistedQuery":{"sha256Hash":"fixture"}}""")}")!!.diagnostic)
+        assertEquals(GraphQLHttpDiagnostic.INVALID_PERSISTED_QUERY, decoder.decode("GET", "/graphql?extensions=${encode("""{"persistedQuery":{"sha256Hash":"fixture"}}""")}")!!.diagnostic)
         assertEquals(GraphQLHttpDiagnostic.MISSING_QUERY, decoder.decode("POST", "/graphql", body = "{\"operationName\":\"Missing\"}".encodeToByteArray())!!.diagnostic)
         assertEquals(GraphQLHttpDiagnostic.INVALID_DOCUMENT, post("query Incomplete {").diagnostic)
         assertEquals(GraphQLHttpDiagnostic.TRUNCATED, decoder.decode("POST", "/graphql", body = "{\"query\":\"{ x }\"}".encodeToByteArray(), bodyComplete = false)!!.diagnostic)

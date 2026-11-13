@@ -89,7 +89,8 @@ class GraphQLNetworkConditionExtension(
             header.name.value.equals(CONTENT_TYPE_HEADER, ignoreCase = true)
         }?.value.orEmpty()
         val document = parser.decodeHttp(input.request.head.method.token, absoluteUrl, contentType,
-            input.requestBody?.copyBytes(), input.requestBodyComplete) ?: return null
+            input.requestBody?.copyBytes(), input.requestBodyComplete, learnCaptured = true,
+            headers = input.request.head.headers.map { it.name.value to it.value }) ?: return null
         return Observation(document.matchableOperations.map { Operation(it.name, it.type.token()) })
     }
 
@@ -169,6 +170,10 @@ class GraphQLNetworkConditionExtension(
             .firstOrNull { candidate -> candidate.kind == GraphQLInspectionSchema.DOCUMENT_KIND }
             ?: return null
         val fields = document.fields.associate { field -> field.label to field.value.trim() }
+        // A capture-time unknown hash may have become resolvable since this annotation was written.
+        // Fall through to the current bounded decoder rather than permanently returning a broad rule.
+        if (fields[com.devuloopers.knet.application.contract.inspection.GraphQLInspectionMetadata.QUERY_DOCUMENT_SOURCE_FIELD] ==
+            com.devuloopers.knet.domain.graphql.GraphQLQueryProvenance.UNAVAILABLE.label) return null
         if (fields[GraphQLInspectionSchema.DIAGNOSTIC_FIELD] != null) return createCriteria(emptyList())
         val batchSize = fields[GraphQLInspectionSchema.BATCH_SIZE_FIELD]?.toIntOrNull() ?: 1
         if (batchSize > 1) return createCriteria(emptyList())

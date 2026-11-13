@@ -34,6 +34,9 @@ import com.devuloopers.knet.engine.simulator.NetworkConditionEngine
 
 /** Proxy transport runtime, breakpoint gate, capture session, and proxy-control composition. */
 internal val proxyBindings: Module = module {
+    single { com.devuloopers.knet.data.desktop.traffic.SourceTrafficMeters(System::nanoTime) }
+    single<com.devuloopers.knet.traffic.model.TrafficTransferObserver> { get<com.devuloopers.knet.data.desktop.traffic.SourceTrafficMeters>() }
+    single<com.devuloopers.knet.application.contract.device.SourceTrafficTelemetry> { get<com.devuloopers.knet.data.desktop.traffic.SourceTrafficMeters>() }
     single { CoroutineScope(SupervisorJob() + Dispatchers.Default) }.onClose { it?.cancel() }
     single { GraphQLWebSocketBreakpointLayer(get()) } bind WebSocketSemanticBreakpointLayer::class
     single {
@@ -71,6 +74,7 @@ internal val proxyBindings: Module = module {
             keyManagerProvider = certificateManager::getKeyManagerFactory,
             breakpointGate = get(),
             ingressAttribution = get<IngressAttributionLookup>(),
+            transferObserver = get(),
             streamInspectorFactories = listOf(GrpcStreamInspectorFactory(), SseStreamInspectorFactory(get())),
             streamTransformerFactories = listOf(
                 get<GrpcMessageBreakpointTransformerFactory>(),

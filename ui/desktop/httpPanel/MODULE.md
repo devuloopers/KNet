@@ -74,3 +74,10 @@ Composables do not parse or pretty-print JSON; raw parameter/body views and edit
 GET GraphQL authoring preparation also prettifies initial Query/Variables/Extensions through the same bounded
 formatters, independently of the canonical URL. Validation-only preparation disables display formatting so active
 buffers and incomplete input are retained by API Studio and interception.
+
+## Persisted-query inspection and editing
+
+Endpoint-aware preparation exposes verified persisted-query source with hash/provenance and an honest unavailable
+state. Query source from a lookup never hydrates editable GET/POST query fields. Explicit Query edits synchronize
+existing APQ hashes and the Extensions buffer; variable/tab changes preserve untouched source and metadata.
+The same adapters serve API Studio and interception. See `docs/graphql_persisted_queries.md`.

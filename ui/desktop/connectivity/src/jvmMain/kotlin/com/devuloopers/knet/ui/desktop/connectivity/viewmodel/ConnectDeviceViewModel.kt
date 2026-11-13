@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.application.contract.proxy.ProxyStartResult
 import com.devuloopers.knet.application.usecase.connectivity.wifi.ObserveWifiSharingUseCase
 import com.devuloopers.knet.application.usecase.pairing.CreatePairingOnboardingUseCase
+import com.devuloopers.knet.application.usecase.pairing.ObservePairingOnboardingUseCase
+import com.devuloopers.knet.application.usecase.pairing.PairingOnboardingAvailability
 import com.devuloopers.knet.application.usecase.proxy.ObserveProxyRuntimeStateUseCase
 import com.devuloopers.knet.application.usecase.proxy.StartLoopbackProxyUseCase
 import com.devuloopers.knet.connectivity.model.WifiSharingState
@@ -21,6 +23,9 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.launchIn
@@ -37,6 +42,7 @@ class ConnectDeviceViewModel(
     observeWifiSharing: ObserveWifiSharingUseCase,
     observeApplicationSettings: ObserveApplicationSettingsUseCase,
     private val createPairingOnboarding: CreatePairingOnboardingUseCase,
+    private val observePairingOnboarding: ObservePairingOnboardingUseCase,
     private val nowEpochMillis: () -> Long,
 ) : ViewModel() {
     private val operationMutex = Mutex()
@@ -145,33 +151,37 @@ class ConnectDeviceViewModel(
                 ) {
                     return@launch
                 }
-                while (true) {
-                    val remainingSeconds = remainingSeconds(descriptor.expiresAtEpochMillis)
-                    if (remainingSeconds <= 0L) {
-                        mutableUiState.update { current ->
-                            if (current.isCompanionDrawerVisible) {
-                                current.copy(companionInvitation = CompanionInvitationUiState.Expired)
-                            } else {
-                                current
-                            }
-                        }
-                        break
+                val countdown = flow {
+                    while (true) {
+                        emit(remainingSeconds(descriptor.expiresAtEpochMillis))
+                        delay(COUNTDOWN_TICK_MILLIS)
                     }
-                    mutableUiState.update { current ->
-                        current.copy(
-                            companionInvitation = CompanionInvitationUiState.Ready(
-                                qrPayload = descriptor.qrPayload,
-                                desktopDisplayName = descriptor.desktopDisplayName.value,
-                                host = descriptor.controlEndpoint.host,
-                                controlPort = descriptor.controlEndpoint.port,
-                                expiresAtEpochMillis = descriptor.expiresAtEpochMillis,
-                                remainingSeconds = remainingSeconds,
-                                networkVersion = expectedNetworkVersion,
-                            ),
+                }
+                // A single collector owns the displayed QR. Consumption and countdown cannot race to restore
+                // Ready, and cancellation detaches the old identity before refresh/close/network replacement.
+                combine(countdown, observePairingOnboarding.execute(descriptor.bootstrapId)) { remaining, availability ->
+                    if (remaining <= 0L || availability == PairingOnboardingAvailability.UNAVAILABLE) {
+                        CompanionInvitationUiState.Expired
+                    } else {
+                        CompanionInvitationUiState.Ready(
+                            qrPayload = descriptor.qrPayload,
+                            desktopDisplayName = descriptor.desktopDisplayName.value,
+                            host = descriptor.controlEndpoint.host,
+                            controlPort = descriptor.controlEndpoint.port,
+                            expiresAtEpochMillis = descriptor.expiresAtEpochMillis,
+                            remainingSeconds = remaining,
+                            networkVersion = expectedNetworkVersion,
                         )
                     }
-                    delay(COUNTDOWN_TICK_MILLIS)
-                }
+                }.onEach { invitation ->
+                    mutableUiState.update { current ->
+                        if (current.isCompanionDrawerVisible &&
+                            current.activeSharing?.session?.networkVersion == expectedNetworkVersion) {
+                            current.copy(companionInvitation = invitation)
+                        } else current
+                    }
+                }.first { it == CompanionInvitationUiState.Expired }
+
             } catch (cancellation: CancellationException) {
                 throw cancellation
             } catch (_: Exception) {

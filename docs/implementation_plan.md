@@ -1,5 +1,107 @@
 # KNet Implementation Plan
 
+## Companion VPN stop crash (2026-11-13) [COMPLETED]
+
+Investigate the connected Android device's crash during VPN stop, repair the transport lifecycle at its
+owning boundary, and cover active TCP/UDP shutdown and peer-disconnect races with real-socket regressions.
+Verify the affected Companion tests and Android build while preserving pairing and certificate state.
+
+The device crash was an uncaught SocketException from an open SOCKS UDP control reader during teardown.
+Contained expected I/O errors at the accepted-client boundary while retaining completion cleanup and normal
+cancellation/error propagation. Five new real-socket cases cover open UDP/queued work, incomplete negotiation,
+peer resets beyond the connection limit, active direct TCP, and repeated gateway lifetimes. Four cases failed
+against the original handler. Passed 111 Android host/product tests, all six architecture checks and APK assembly.
+Updated the connected Samsung in place and verified three VPN start/stop cycles with the same process, retained
+pairing/certificate, and clean inspection start/stop logs. Left the app ready with VPN stopped.
+
+## Device tab labels and overflow (2026-11-13) [COMPLETED]
+
+Show one identity suffix by removing only the matching generated Companion suffix from the displayed name.
+Keep stored names and identities intact. Allow content-sized tabs up to 360 dp, retain one-line horizontal
+overflow, and show the complete label on name hover using the shared tooltip. Preserve tab styling and actions.
+
+Verified 70 UI tests (32 UI-core and 38 app-shell), zero failures/errors/skips, all six architecture checks
+and desktop distribution creation. Inspected the rendered Samsung label, natural widths and long-name
+ellipsis. Hover entry/exit and independent Close help are covered by rendered interaction tests.
+
+## Companion certificate challenge response (2026-11-13) [COMPLETED]
+
+Investigate the connected Android Companion's verification failure. Its log reports a platform-trusted
+transport IllegalArgumentException after the installed-root lookup. Reproduce the shared HTTP client's
+handling of the desktop's successful bodyless 204 response, preserve TLS/root/transport pinning and nonce
+validation, add common/native HTTP interoperability regressions, and verify Android/iOS builds.
+
+Fixed bodyless 204 handling in the shared client. Nine new regression cases cover common framing, native
+OkHttp TLS and the production Ktor gateway. Passed 173 automated executions (93 Android, 51 desktop, 29 iOS
+Simulator), all architecture checks, Android APK assembly and both Apple-target compilation checks. Updated
+the connected Samsung without clearing app data and observed Certificate verified; VPN start remains user-owned.
+
+## Compact device tab styling (2026-11-13) [COMPLETED]
+
+Match the supplied compact-tab reference: separate rounded controls, a blue selected outline/tint,
+quiet inactive surfaces, spacing between tabs and secondary identity text. Reuse KNet theme tokens
+and preserve the 40 dp strip height, overflow, native hit regions, presence, selection and Close/Clear
+behavior. Verify existing rendered interaction checks and the desktop build without launching KNet.
+
+Verified 67 UI tests (32 UI-core and 35 app-shell), zero failures/errors/skips, all six architecture checks
+and desktop distribution creation. Inspected the actual rendered compact tabs at 2x display density.
+
+## Device tab visibility and scoped close (2026-11-13) [COMPLETED — PHYSICAL CHECKS PENDING]
+
+Show connected/reconnecting devices and offline devices with locally retained HTTP or opaque traffic.
+Hide offline empty devices without removing pairing. Add confirmed offline tab Close and route offline
+Traffic Clear through the same confirmation; online Clear keeps the tab. Keep Other traffic as a stable
+fallback, preserve other devices' history, and test source targeting, cancellation, reconnect races,
+zero-byte TLS history, storage invalidation, and title-bar close accessibility without launching KNet.
+
+Implemented with 10 new regression cases. Both qualification gates passed: 875 tests, zero failures/errors/skips,
+all six architecture checks, desktop distribution, Android APK and Apple build/test gates. Physical Close/Clear
+and native-window verification remains with the user. See [qualification](multi_device_qualification.md).
+
+## Multi-device Traffic workspace and macOS title bar (2026-11-13) [COMPLETED — PHYSICAL CHECKS PENDING]
+
+Add Chrome-style device tabs using existing authenticated Companion identities and display names. Keep each
+device's Traffic rows, counts, filters, inspector state, actual throughput and Clear operation separate while
+background capture continues. Retain selectable offline tabs/history and put traffic without a verified paired
+identity in an explicit Other traffic view. Use VPN-owned authenticated WebSocket presence with bounded leases,
+reconnect fencing and existing pinned desktop trust. Keep capture start/pause, Network Conditions and existing
+policy matching global. Preserve native macOS window controls and behavior; Windows/Linux custom decorations
+and recognition/merging after Companion identity loss are deferred.
+
+The detailed phases, module ownership, automated test matrix, migration/resource checks and physical/native
+qualification checklist are in [Multi-device implementation plan](multi_device_implementation_plan.md).
+Implementation includes typed source/presence contracts, indexed canonical-history isolation, scoped Clear,
+source telemetry, device workspace state and the native macOS adapter. Qualification is tracked in
+[Multi-device qualification](multi_device_qualification.md). The approved control transport is Ktor WebSockets/Netty on desktop and pinned native Ktor clients on Companion.
+It carries presence, revisioned packet policies, apply acknowledgements and session notifications. HTTPS
+pairing, refresh, certificate verification and recovery remain available. Both qualification gates passed:
+875 automated tests with no failures or skips, including resource/scale checks. Desktop and Android builds
+plus Apple Simulator/framework/device-target checks passed. Physical-device, real-LAN and native-window
+gesture verification remains assigned to the user.
+
+## Companion certificate check before download (2026-11-12) [COMPLETED — PHYSICAL CHECKS PENDING]
+
+Check the active desktop's exact certificate after QR pairing before presenting download/install actions.
+Already-trusted certificates may continue without a new export; missing trust opens setup, while unavailable
+verification shows a retry path. Preserve system installation, authenticated trust challenges, durable enrollment
+and separate inspection consent. Cover trusted/missing/rejected/offline states, repeated scans, desktop/root changes,
+late results and removal in shared presentation/UI tests, then compile Android and iOS product paths.
+
+Delivered verification-first Checking/Verified/Download/Installation/Retry phases in the common Companion UI.
+An exact already-trusted root can explicitly continue and persist enrollment without exporting a new file.
+Download is offered for missing trust; a failed/deferred check exposes its reason and Retry. Progress follows trust
+independently of exported files. Attempt/desktop/root fences reject stale callbacks, incomplete verifier results
+become retryable, and enrollment save failures can retry without downloading. Authoritative removal/rejection
+reopens setup; temporary outages preserve an already enrolled Home. Inspection and VPN consent stay separate.
+
+Added 21 regression cases, including two rendered-screen checks. Four new regressions failed against the original
+implementation before the repair. Final shared, Android-host/product and iOS Simulator qualification passed all
+440 tests with zero failures/errors/skips. Android debug APK assembly, iOS Simulator framework linking, iOS device
+and shared-platform compilation, all six architecture checks and git diff --check passed. Product apps were not
+installed or launched and physical certificate installation/trust checks remain pending. Builds used isolated
+outputs. Logs: /tmp/knet-companion-certificate-check-baseline.log and
+/tmp/knet-companion-certificate-check-qualification.log.
+
 ## Traffic throughput initial zero readings (2026-11-12) [COMPLETED]
 
 Show 0 kbps for both Traffic footer directions before the first sample and after monitoring resets. Preserve
@@ -3823,6 +3925,137 @@ All 69 relevant tests passed across UI core (24), Protected Traffic (24) and app
 errors or skips. Desktop and UI-core Android/iOS simulator compilation, all six architecture checks and
 git diff --check passed. Actual manager and narrow/larger-text renders were reviewed. Builds used isolated outputs
 without opening the desktop application or user database.
+
+## Companion complete redesign and saved desktops (2026-11-12) [COMPLETED — PHYSICAL CHECKS PENDING]
+
+Implement the approved six design boards across the shared Android/iOS interface: connection and camera
+access, verification-first certificate setup, platform installation guidance, operational Home, saved-desktop
+management, safe switching, permission explanations and recovery. Keep KNet theme tokens, compact reusable
+chrome and status rows, scrollable content with reachable bottom actions, and authoritative runtime states.
+Preserve existing registrations and independently scoped certificate enrollments; serialize handoffs, stop
+inspection before switching, authenticate the target, and resume only when its certificate setup permits it.
+Add application/presentation and rendered UI regression cases, review actual renders including compact/larger
+text layouts, and run shared qualification plus Android/iOS builds. Physical-device checks remain separate.
+
+Delivered all 18 proposed screens/states across the shared Android/iOS root, reusable mobile chrome/status/actions,
+verification-first setup, platform guidance, native scanner integration, VPN explanation and recovery. Saved desktop
+management supports add, switch and confirmed forget without clearing other pairings. Handoffs stop capture before
+identity verification and selection; explicit retry retains prior running intent while fresh trust/onboarding and
+native consent remain mandatory. Inactive endpoint recovery cannot select a desktop early. Home rejects stale
+availability and mismatched-root trust. Removed obsolete bitmap artwork and repaired the verified Android preview.
+
+All 469 relevant automated test executions passed with zero failures/errors/skips, including domain, presentation,
+persistence, actual shared UI interactions/renders, Android adapters and iOS simulator coverage. Shared qualification,
+iOS foundation qualification, all six architecture checks, Android app unit tests/debug APK assembly and iOS simulator
+framework linking passed. Final builds used isolated outputs and did not install or launch either product. Render
+review covered every proposed state plus compact/larger-text layouts. See `docs/companion_ui.md` for screen mapping,
+handoff semantics and remaining physical-device checks. Verification logs: `/tmp/knet-companion-redesign-final.log`
+and `/tmp/knet-companion-redesign-preview-check.log`.
+
+## Companion circular-control design (2026-11-13) [COMPLETED — PHYSICAL CHECKS PENDING]
+
+Replace the previous Companion visual treatment with the approved 21 individual mobile mockups: branded header,
+inline desktop selection, compact setup progress, circular primary controls and one quiet status panel. Apply the
+same visual language to camera access, pairing, certificate setup, Home lifecycle, desktop handoffs and permission
+explanations. Preserve the existing verification-first and safe multi-desktop behavior. Review rendered screens,
+cover interactions and compact/larger-text layouts, and run shared qualification plus Android/iOS builds. Physical
+device checks remain pending; no app installation or user database access is part of this phase.
+
+Delivered the approved 21 individual Companion screen/state designs through reusable circular controls, branded
+chrome, inline desktop selection, setup milestones, quiet status panels and mobile typography. Primary circles
+and captions form one accessible action; busy states expose progress without accepting taps. Green marks verified
+trust and running inspection, while transport connectivity alone never claims capture is active. Progress is static
+with reduced motion. Native preview leaves composition during pairing. Guidance keeps native Settings actions
+reachable, and compact/larger-text layouts preserve scroll access without clipping content.
+
+All 474 automated tests passed with zero failures/errors/skips, including 36 shared UI tests, actual rendered
+interactions, reduced-motion image checks and the existing safe pairing/handoff/persistence coverage. Reviewed
+all 21 screen/state renders plus compact and larger-text variants. Shared qualification, iOS foundation qualification,
+all six architecture checks, Android app unit tests/debug APK assembly, iOS simulator framework linking and
+`git diff --check` passed. Builds used isolated outputs without installing/launching a product or accessing the user
+database. Physical camera, certificate installation, VPN and multi-desktop checks remain pending as documented in
+`docs/companion_ui.md`. Final log: `/tmp/knet-companion-circular-final.log`; debug APK:
+`/tmp/knet-companion-circular-build/products/companion/androidApp/outputs/apk/debug/androidApp-debug.apk`.
+
+## Companion direct camera permission flow (2026-11-13) [COMPLETED — PHYSICAL CHECKS PENDING]
+
+Make Scan request native camera permission immediately, retain Connect after denial, and retry only after another
+explicit Scan tap while the OS permits prompting. When Settings is required, that tap opens the approved KNet
+bottom sheet with Open Settings, Choose QR image and Not now. Automatically open the scanner after a grant,
+including return from Settings. Keep gallery pairing independent of camera permission and render its main-screen
+action as a visible secondary button. Cover denial/retry, blocked access, duplicate taps, Settings return, gallery
+fallback and compact layouts, then run shared/Android/iOS qualification without launching either product.
+
+Delivered direct Scan-to-native permission entry, OS-state-based retry/Settings routing, the approved dismissible
+camera recovery sheet, automatic scanner opening after a grant and a bordered QR-image button with a shared KNet
+image icon. Removed the extra full-screen permission step. Native adapters guard in-flight requests; Android
+retains unresolved denial history across recreation and clears it on grant for later permission expiry. Gallery
+selection remains independent of camera permission and cancels pending camera intent.
+
+All 481 automated tests passed with zero failures/errors/skips, including 41 shared UI tests and 13 Android app
+unit tests. Added regressions for asynchronous grant, duplicate taps, repeated denial, blocked access, Settings
+return with/without grant, Not now/close dismissal, gallery fallback, existing grants and compact/larger-text
+sheet actions. Reviewed actual normal/large sheet renders and the main QR-image button. Shared and iOS foundation
+qualification, all six architecture checks, Android debug APK assembly, iOS simulator framework linking and
+`git diff --check` passed. No product was installed/launched and no user database was opened. Physical permission
+prompts, Settings return and real camera scanning remain pending. Final log: `/tmp/knet-companion-permission-final.log`.
+
+## Desktop QR invalidation after Companion scan (2026-11-13) [COMPLETED — PHYSICAL SCAN CHECK PENDING]
+
+Observe availability of the exact one-time bootstrap displayed by Connect Device. Once Desktop accepts its
+redemption, remove the QR from presentation immediately and show This QR code has expired with a Regenerate QR
+action. Preserve timed expiry, one-use enforcement, refresh/network/close lifecycle and the current Companion
+pairing exchange. Cover valid/invalid/replayed redemption, late events from older QR codes, immediate consumption,
+manual regeneration and rendered recovery without opening the desktop application or user database.
+
+Delivered replayable, non-secret availability for the exact displayed bootstrap through an application use case.
+The bounded onboarding store publishes its pending identity snapshot under the same lock as one-shot consumption
+and expiry pruning. The drawer combines availability and its existing countdown in one collector, removes the
+QR on valid redemption and offers This QR code has expired. Click to regenerate. / Regenerate QR. Regeneration
+is explicit; late redemption/replay of an older QR cannot expire its replacement. Closing/network replacement
+cancels the old observer. No Companion wire format, secret lifetime or pairing acceptance policy changed.
+
+All 119 relevant tests passed with zero failures/errors/skips: application desktop 62, connectivity desktop 35,
+Connect Device 14 and product gateway 8. New coverage checks immediate invalidation without a countdown tick,
+invalid and replayed input, late old scans, regeneration, pre-observation consumption, concurrent one-shot claims,
+exact-identity isolation, rendered QR removal and compact/larger-text recovery. Desktop product compilation,
+all six architecture checks and git diff --check passed. Actual normal/compact drawer renders were reviewed.
+Qualification used isolated outputs without launching the desktop application or user database. A real Companion
+camera scan remains a manual check. Final log: `/tmp/knet-qr-consumed-final.log`.
+
+## GraphQL persisted-query support (2026-11-13) [COMPLETED]
+
+Recognize Apollo persisted-query envelopes in GET/POST, distinguish hash-only requests from malformed/missing
+documents, and display the hash and query provenance. Learn bounded endpoint-scoped mappings only from complete
+captured documents whose original bytes match the supplied SHA-256; support explicit manifest import and keep
+unknown source unavailable. Derived query resolution must never rewrite the captured request or silently insert
+documents into replay/edit buffers. Repair hash-only API Studio hydration and preserve extensions/variables.
+Cover malformed metadata, exact hashing, scope isolation, cache bounds/expiry, APQ fallback capture, import,
+operation matching, source-preserving edits and actual shared viewer behavior before desktop qualification.
+
+Core implementation is in place: typed persisted metadata/provenance, verified endpoint-scoped bounded catalog,
+GET/POST/batch resolution, atomic manifest validation/import, source-preserving edits, shared viewers and live
+rule matching. First qualification passed protocol/formatter/shared HTTP-panel tests and desktop compilation.
+Remaining qualification covers reactive Traffic/interception preparation, API Studio replay/import and rendered
+unknown/resolved states before final status.
+
+Capture-to-Room APQ sequencing, product catalog/use-case composition/cleanup and compressed-source learning now
+have passing integration/unit coverage. A final review identified two current-view details to qualify: Overview/query
+shortcut invalidation and quick-add fallback when an older annotation recorded source as unavailable. Both now use
+current verified facts while retaining original annotations/bytes. Final focused regression run is in progress.
+
+Completed qualification: **449 tests passed, zero failures/errors/skips** across protocol (60), formatter (63),
+application (66), shared HTTP panel (54), Traffic (119), interception (8), API Studio (62), selected product/DI
+suites (8), and capture/persistence/semantic integration suites (9). Desktop compilation, all six architecture
+checks and `git diff --check` passed. New coverage includes exact hashes, provenance/source isolation, bounded
+cache/import/encoding behavior, concurrent access, raw-preserving editing and replay, reactive Overview/query
+shortcut/quick-add facts, actual shared viewer rendering, Room capture and DI cleanup. Reviewed unknown/resolved
+viewer and compact import toolbar renders. Final log: `/tmp/knet-persisted-final.log`.
+
+Implementation and automated qualification are complete; physical-client APQ/device checks remain manual as
+listed in `docs/graphql_persisted_queries.md`. No product was installed/launched or user database accessed. No
+new library or Room migration was added. Catalog mappings remain bounded and process-local rather than being
+persisted in saved requests.
 
 ## Traffic single-divider boundary (2026-11-13) [COMPLETED]
 

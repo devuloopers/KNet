@@ -3,6 +3,7 @@ package com.devuloopers.knet.companion.connectivity.transport
 import com.devuloopers.knet.companion.model.PacketConditionConfiguration
 import com.devuloopers.knet.companion.model.UnsupportedTrafficPolicy
 import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.net.DatagramPacket
@@ -25,6 +26,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.coroutineContext
 
 /**
@@ -32,6 +34,7 @@ import kotlin.coroutines.coroutineContext
  *
  * TCP is always carried through the authenticated desktop gateway. DNS is the sole UDP control dependency allowed
  * to leave directly, on a socket protected from the VPN. Other UDP is rejected unless explicit bypass is selected.
+ * [executionContext] schedules blocking socket workers; the gateway owns and cancels its own child job.
  */
 internal class LocalSocks5Gateway(
     private val transport: AndroidCompanionProxyTransport,
@@ -41,13 +44,12 @@ internal class LocalSocks5Gateway(
     private val directTcpPorts: Set<Int> = DIRECT_DNS_TCP_PORTS,
     private val maximumUdpDestinations: Int = MAXIMUM_UDP_DESTINATIONS,
     private val udpFlowIdleTimeoutNanos: Long = UDP_FLOW_IDLE_TIMEOUT_NANOS,
+    executionContext: CoroutineContext = Dispatchers.IO.limitedParallelism(MAXIMUM_ACTIVE_FLOWS * 2 + 2),
 ) : AutoCloseable {
     private val running = AtomicBoolean(false)
     private val started = AtomicBoolean(false)
     private val activeFlows = Semaphore(MAXIMUM_ACTIVE_FLOWS)
-    private val gatewayScope = CoroutineScope(
-        SupervisorJob() + Dispatchers.IO.limitedParallelism(MAXIMUM_ACTIVE_FLOWS * 2 + 2),
-    )
+    private val gatewayScope = CoroutineScope(executionContext + SupervisorJob(executionContext[Job]))
     private val resourcesLock = Any()
     private val resources: MutableSet<AutoCloseable> = mutableSetOf()
     private val packetRuntime = AndroidPacketConditionRuntime(packetConditions)
@@ -110,7 +112,15 @@ internal class LocalSocks5Gateway(
             }
             track(client)
             // Completion also runs if shutdown cancels this child before its body starts.
-            gatewayScope.launch { handle(client) }.invokeOnCompletion {
+            gatewayScope.launch {
+                try {
+                    handle(client)
+                } catch (_: IOException) {
+                    // VPN teardown closes sockets before cancelling workers to unblock native reads.
+                    // Peer resets/timeouts can also end any SOCKS phase. End only this connection;
+                    // let cancellation and programming failures propagate, then release its slot below.
+                }
+            }.invokeOnCompletion {
                 untrack(client)
                 runCatching(client::close)
                 activeFlows.release()

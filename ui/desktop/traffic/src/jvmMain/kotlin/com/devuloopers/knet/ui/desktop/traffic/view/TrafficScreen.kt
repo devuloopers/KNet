@@ -34,6 +34,7 @@ import androidx.compose.ui.text.AnnotatedString
 /**
  * Top-level Live Traffic Workspace Screen composable bound strictly to :ui:core design tokens and parameter objects.
  * @param throughputIndicator Shell-composed actual throughput display; Traffic owns placement, not measurements.
+ * @param onClearFeed Optional shell routing for device presence and offline-close confirmation.
  */
 @Composable
 fun TrafficScreen(
@@ -44,6 +45,7 @@ fun TrafficScreen(
     modifier: Modifier = Modifier,
     networkConditionsControl: @Composable () -> Unit = {},
     throughputIndicator: (@Composable () -> Unit)? = null,
+    onClearFeed: (() -> Unit)? = null,
 ) {
     val state by viewModel.uiState.collectAsState()
     val protectionState by protectionViewModel.uiState.collectAsState()
@@ -73,11 +75,11 @@ fun TrafficScreen(
             )
         }
 
-    val toolbarActions = remember(viewModel) {
+    val toolbarActions = remember(viewModel, onClearFeed) {
         TrafficToolbarActions(
             onStartCapture = { viewModel.processIntent(TrafficIntent.StartCapture) },
             onPauseCapture = { viewModel.processIntent(TrafficIntent.PauseCapture) },
-            onClearFeed = { viewModel.processIntent(TrafficIntent.ClearFeed) },
+            onClearFeed = onClearFeed ?: { viewModel.processIntent(TrafficIntent.ClearFeed) },
             onAutoScrollToggle = { viewModel.processIntent(TrafficIntent.ToggleAutoScroll) }
         )
     }
@@ -196,6 +198,9 @@ fun TrafficScreen(
                         canLoadMore = state.nextPageCursor != null && !state.isPageLoading,
                         onLoadMore = { viewModel.processIntent(TrafficIntent.LoadNextPage) },
                         throughputIndicator = throughputIndicator,
+                        viewportKey = state.source.preferenceKey,
+                        initialViewport = state.viewport,
+                        onRetainViewport = { viewModel.retainViewport(state.source, it) },
                         modifier = paneModifier
                     )
                 },

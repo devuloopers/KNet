@@ -13,6 +13,9 @@ public enum class CompanionInvitationScannerState {
     /** Camera access has not been requested yet. */
     PERMISSION_REQUIRED,
 
+    /** A native permission prompt is pending; further requests must be ignored until it completes. */
+    PERMISSION_REQUESTING,
+
     /** Camera access was denied but may still be requested again. */
     PERMISSION_DENIED,
 
@@ -40,7 +43,10 @@ public interface CompanionInvitationScanner : AutoCloseable {
     /** Current portable permission and camera lifecycle state. */
     public val state: StateFlow<CompanionInvitationScannerState>
 
-    /** Requests native camera permission in response to an explicit user action. */
+    /**
+     * Requests native permission for an explicit user action, publishing PERMISSION_REQUESTING before the prompt.
+     * Repeated calls while pending are ignored; completion publishes the granted/denied state even after recreation.
+     */
     public fun requestCameraPermission()
 
     /** Opens the native application settings when camera permission cannot be requested again. */

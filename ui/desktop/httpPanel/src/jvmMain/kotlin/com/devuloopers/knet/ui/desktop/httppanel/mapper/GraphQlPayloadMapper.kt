@@ -78,10 +78,12 @@ class GraphQlPayloadMapper(
         }
 
         // If payload is a JSON object containing GraphQL fields
-        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+        if (trimmed.startsWith("{") && trimmed.endsWith("}") &&
+            com.devuloopers.knet.engine.formatter.graphql.GraphQLHttpRequestFormatter.isWithinJsonBounds(trimmed)) {
             try {
                 val dto = jsonFormatter.decodeFromString<GraphQlPayloadDto>(trimmed)
-                if (dto.query != null || dto.operationName != null) {
+                if (dto.query != null || dto.operationName != null ||
+                    (dto.extensions as? JsonObject)?.containsKey("persistedQuery") == true) {
                     val formattedQuery = dto.query?.let { graphQlFormatter.formatQuery(it) } ?: ""
                     val varsStr = dto.variables?.let { jsonFormatter.encodeToString(it) }
                         ?: GraphQlState.DEFAULT_JSON_OBJECT_PLACEHOLDER
@@ -122,7 +124,7 @@ class GraphQlPayloadMapper(
      * @return Serialized JSON string suitable for HTTP transport.
      */
     fun serializeFromUi(state: GraphQlState): String {
-        val trimmedQuery = state.queryText.trim()
+        val trimmedQuery = state.queryText
         val trimmedOpName = state.operationName.trim()
         val varsJsonElement = parseJsonElementOrNull(state.variablesText)
         val extJsonElement = parseJsonElementOrNull(state.extensionsText)
@@ -135,7 +137,7 @@ class GraphQlPayloadMapper(
         }
 
         val dto = GraphQlPayloadDto(
-            query = trimmedQuery.ifEmpty { null },
+            query = trimmedQuery.takeIf(String::isNotBlank),
             operationName = trimmedOpName.ifEmpty { null },
             variables = varsJsonElement,
             extensions = extJsonElement
@@ -146,7 +148,7 @@ class GraphQlPayloadMapper(
 
     private fun parseJsonElementOrNull(jsonStr: String): JsonElement? {
         val trimmed = jsonStr.trim()
-        if (trimmed.isEmpty()) return null
+        if (trimmed.isEmpty() || !com.devuloopers.knet.engine.formatter.graphql.GraphQLHttpRequestFormatter.isWithinJsonBounds(trimmed)) return null
         return try {
             val element = jsonFormatter.parseToJsonElement(trimmed)
             if (element is JsonObject && element.isEmpty()) null else element

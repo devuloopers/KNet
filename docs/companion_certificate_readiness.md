@@ -24,10 +24,12 @@ Network Extension calls remain in `iosMain` or the iOS product targets.
 4. Pairing completion proves the device identity over pinned TLS. The desktop consumes the invitation once and
    returns a bounded credential grant. Public registration values are persisted separately from the
    platform-protected credential.
-5. `DownloadCompanionRootCertificateUseCase` reads the active registration and credential ephemerally. The
-   authenticated endpoint returns the exact DER root; mismatched bytes are rejected.
-6. The installation artifact is platform-specific. Android exports the DER `.crt`; iOS downloads and validates a
-   `.mobileconfig` containing the expected `com.apple.security.root` payload.
+5. After pairing, `VerifyCompanionCertificateTrustUseCase` retrieves authenticated root material in memory and
+   checks the exact paired root against platform trust and the challenge below. Already-trusted users can continue
+   without another exported file; unavailable checks offer Retry instead of assuming installation is missing.
+6. Only when setup is required, `DownloadCompanionRootCertificateUseCase` reads the active registration and
+   credential ephemerally. Android exports the exact DER `.crt`; iOS downloads and validates a `.mobileconfig`
+   containing the expected `com.apple.security.root` payload. Mismatched bytes are rejected.
 7. The user completes the system-owned installation/trust flow. Download and installation are separate states.
 8. `VerifyCompanionCertificateTrustUseCase` confirms the expected root again. Android first requires an exact
    `AndroidCAStore` fingerprint match. iOS evaluates the platform-trusted chain through the Security framework.
@@ -37,6 +39,20 @@ Network Extension calls remain in `iosMain` or the iOS product targets.
     the replay window, and echoes it in the response header.
 11. The companion reports `Trusted` only when platform TLS trust, hostname verification, paired root/transport
     identity, desktop authentication, and exact nonce echo all succeed.
+
+## Verification-first onboarding
+
+After pairing, certificate setup renders Checking while the existing verifier checks the active desktop's root.
+An already-trusted exact root opens the Verified/Continue phase without downloading or exporting another file.
+Missing trust offers download and the platform-owned installation steps. Deferred or rejected checks show their
+reason and Retry; a desktop/network failure is never treated as proof that the certificate is missing.
+
+Download/export remains separate from installation and trust. A downloaded file cannot enable Continue, and its
+details are optional on the Verified screen. Explicit Continue re-verifies the root and records durable enrollment;
+it does not start inspection or grant VPN consent. Pending verification is fenced by attempt, desktop identity and
+root fingerprint, so cancelled or late results cannot overwrite a newer check or a replacement certificate.
+An authoritative removal/rejection reopens setup even after enrollment. Temporary unavailability preserves an
+already enrolled Home, with inspection readiness still checked independently.
 
 `CompanionCertificateState` distinguishes `Unknown`, `InstallationRequired`, `Verifying`, `Trusted`,
 `VerificationDeferred`, and typed rejection. Desktop connection and inspection readiness remain separate state
@@ -83,6 +99,13 @@ iOS Network Extension lifecycles have their own preparation, consent, start, fai
 
 ## Qualification boundary
 
+The verification-first onboarding update on 2026-11-12 added 21 cases covering existing trust without export,
+first installation, retry, repeated QR pairing, certificate removal/replacement, stale results, duplicate Continue,
+incomplete verifier results, enrollment persistence failure and common rendered screens. All 440 tests across
+shared workflows/persistence/UI, Android host/product and iOS Simulator gates passed; the Android debug APK
+assembled and the iOS Simulator product framework linked. Product apps were not installed or launched.
+See /tmp/knet-companion-certificate-check-qualification.log for this local qualification run.
+
 Unit and host integration tests cover invitation/credential replay, proof and scope validation, atomic refresh,
 state mapping, stale-result rejection, PKIX/root-pin validation, authenticated root delivery, trust-store rechecks,
 nonce echo/replay bounds, and unauthenticated denial. The companion gates also compile Android and iOS production
@@ -92,3 +115,31 @@ Those automated checks do not install or launch a mobile app. A manual physical 
 verified the companion VPN inspection path, so Android Companion and Android VPN inspection are cataloged as
 experimental. Android OEM/version coverage, iOS profile trust, and the entitlement-signed iOS packet tunnel remain
 release qualification steps; physical iOS packet-tunnel inspection stays unavailable in the runtime catalog.
+
+
+## Bodyless challenge response interoperability (2026-11-13)
+
+A connected Android device reported `transport_unavailable`, `trust_mode=platform_trusted`, and
+`reason=IllegalArgumentException` even though its exact installed-root lookup succeeded. The shared client
+required Content-Length on every response. After the control gateway moved to Ktor/Netty, successful certificate
+challenges returned HTTP 204 with no Content-Length. The old socket gateway included an explicit zero length,
+which hid this incompatibility in earlier fixtures.
+
+[HTTP/1.1 framing, RFC 9112 section 6.3](https://www.rfc-editor.org/rfc/rfc9112.html#section-6.3) defines 204 responses
+as bodyless, and [RFC 9110 section 8.6](https://www.rfc-editor.org/rfc/rfc9110.html#section-8.6) prohibits a server
+from sending Content-Length on a 204. The shared client now accepts the absent header for 204, tolerates legacy
+explicit zero, and rejects nonzero/malformed lengths, transfer coding and observable body bytes. Other responses
+retain required declared-length and size checks. TLS trust, certificate pins, authentication and nonce echo
+validation are unchanged.
+
+Added common response-framing cases, real OkHttp TLS interoperability tests, and a Ktor desktop challenge test
+covering the absent header, nonce echo and replay rejection. Verification passed 173 automated executions:
+93 Android transport cases, 51 desktop cases and 29 iOS Simulator cases, with zero failures/errors/skips.
+All six architecture checks, Android APK assembly and iOS device/Simulator compilation passed.
+
+The updated APK's signing identity was checked against the installed application before an in-place update
+on the connected Samsung SM-A505F (Android API 31). Pairing was retained. The real app changed from
+Couldn’t verify certificate to Certificate verified / Installed and trusted, and logged
+`verification_completed result=trusted`. It was left at Continue; VPN activation was not started.
+Logs: `/Users/devuloopers/.codex/verification/knet-certificate-204/qualification-final.log` and
+`/Users/devuloopers/.codex/verification/knet-certificate-204/device-verification.log`.

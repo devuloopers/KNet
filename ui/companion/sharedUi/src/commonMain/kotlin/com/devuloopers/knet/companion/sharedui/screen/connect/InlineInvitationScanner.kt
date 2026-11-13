@@ -1,5 +1,6 @@
 package com.devuloopers.knet.companion.sharedui.screen.connect
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -22,6 +23,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.companion.presentation.action.CompanionAction
@@ -147,33 +150,19 @@ private fun BoxScope.ScannerTarget(hasFailure: Boolean) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.lg),
     ) {
-        Box(
-            modifier = Modifier
-                .size(136.dp)
-                .border(3.dp, targetColor, RoundedCornerShape(20.dp)),
-            contentAlignment = Alignment.Center,
-        ) {
-            if (hasFailure) {
-                Icon(
-                    imageVector = KNetIcons.Close,
-                    contentDescription = null,
-                    tint = KNetTheme.colors.semantic.error,
-                    modifier = Modifier.size(42.dp),
-                )
+        Canvas(Modifier.size(220.dp)) {
+            val arm = 30.dp.toPx()
+            val inset = 4.dp.toPx()
+            val stroke = 3.dp.toPx()
+            listOf(Offset(inset, inset), Offset(size.width - inset, inset),
+                Offset(inset, size.height - inset), Offset(size.width - inset, size.height - inset)).forEach { corner ->
+                val xDirection = if (corner.x < center.x) 1 else -1
+                val yDirection = if (corner.y < center.y) 1 else -1
+                drawLine(targetColor, corner, Offset(corner.x + arm * xDirection, corner.y), stroke, StrokeCap.Round)
+                drawLine(targetColor, corner, Offset(corner.x, corner.y + arm * yDirection), stroke, StrokeCap.Round)
             }
         }
-        Text(
-            text = stringResource(
-                if (hasFailure) Res.string.scan_invitation_retry else Res.string.scan_invitation_active,
-            ),
-            style = KNetTheme.typography.bodySmall,
-            color = KNetTheme.colors.textPrimary,
-            textAlign = TextAlign.Center,
-            modifier = Modifier
-                .clip(KNetTheme.shapes.small)
-                .background(KNetTheme.colors.surfaceVariant.copy(alpha = 0.9f))
-                .padding(horizontal = KNetTheme.spacing.md, vertical = KNetTheme.spacing.sm),
-        )
+
     }
 }
 
@@ -211,7 +200,7 @@ private fun InlineScannerMessage(
             }
             Text(
                 text = message,
-                style = KNetTheme.typography.bodySmall,
+                style = KNetTheme.typography.bodyMedium,
                 color = KNetTheme.colors.textPrimary,
                 textAlign = TextAlign.Center,
             )

@@ -177,20 +177,26 @@ public class CompanionControlGateway(
         socket.soTimeout = REQUEST_TIMEOUT_MILLIS
         socket.startHandshake()
         val request = readRequest(socket) ?: return socket.respond(400, "bad_request")
+        val result = dispatch(request)
+        socket.respond(result.statusCode, result.reason, result.mediaType, result.body, result.extraHeaders)
+    }
+
+    /** Shared authenticated HTTP semantics used by both the legacy test listener and Ktor control endpoint. */
+    internal suspend fun dispatch(request: ControlGatewayRequest): ControlGatewayResponse {
         if (request.method == "POST" && request.path == CompanionBootstrapProtocol.REDEEM_PATH) {
-            return redeemBootstrap(socket, request)
+            return redeemBootstrap(request)
         }
         if (request.method == "POST" && request.path == CompanionControlProtocol.PAIR_PATH) {
-            return completePairing(socket, request)
+            return completePairing(request)
         }
         if (request.method == "POST" && request.path == CompanionControlProtocol.REFRESH_PATH) {
-            return refreshCredential(socket, request)
+            return refreshCredential(request)
         }
         if (request.method == "POST" && request.path == CompanionControlProtocol.RECONCILE_PATH) {
-            return reconcileEndpoint(socket, request)
+            return reconcileEndpoint(request)
         }
-        if (request.body.isNotEmpty()) return socket.respond(400, "body_not_allowed")
-        val authorization = request.authorization ?: return socket.respond(401, "authorization_required")
+        if (request.body.isNotEmpty()) return response(400, "body_not_allowed")
+        val authorization = request.authorization ?: return response(401, "authorization_required")
         val requiredScope = if (
             request.method == "GET" && request.path == CompanionControlProtocol.NETWORK_CONDITIONS_PATH
         ) {
@@ -204,13 +210,13 @@ public class CompanionControlGateway(
             requiredScope,
         )
         if (authentication !is DeviceAuthenticationResult.Authenticated) {
-            return socket.respond(401, "authorization_rejected")
+            return response(401, "authorization_rejected")
         }
-        when {
+        return when {
             request.method == "GET" && request.path == CompanionControlProtocol.NETWORK_CONDITIONS_PATH -> {
                 val body = runCatching { PacketConditionConfigurationCodec.encode(packetConditions()) }
-                    .getOrElse { return socket.respond(503, "network_conditions_unavailable") }
-                socket.respond(
+                    .getOrElse { return response(503, "network_conditions_unavailable") }
+                response(
                     statusCode = 200,
                     reason = "OK",
                     mediaType = CompanionControlProtocol.NETWORK_CONDITIONS_RESPONSE_MEDIA_TYPE,
@@ -220,9 +226,9 @@ public class CompanionControlGateway(
             request.method == "GET" && request.path == CompanionCertificateProtocol.ROOT_CERTIFICATE_PATH -> {
                 val certificate = rootCertificateDer()
                 if (certificate.isEmpty() || certificate.size > CompanionCertificateProtocol.MAXIMUM_ROOT_CERTIFICATE_BYTES) {
-                    socket.respond(503, "certificate_unavailable")
+                    response(503, "certificate_unavailable")
                 } else {
-                    socket.respond(
+                    response(
                         statusCode = 200,
                         reason = "OK",
                         mediaType = CompanionCertificateProtocol.ROOT_CERTIFICATE_MEDIA_TYPE,
@@ -233,13 +239,13 @@ public class CompanionControlGateway(
             request.method == "GET" && request.path == CompanionCertificateProtocol.APPLE_PROFILE_PATH -> {
                 val certificate = rootCertificateDer()
                 if (certificate.isEmpty() || certificate.size > CompanionCertificateProtocol.MAXIMUM_ROOT_CERTIFICATE_BYTES) {
-                    socket.respond(503, "certificate_unavailable")
+                    response(503, "certificate_unavailable")
                 } else {
                     val profile = AppleRootCertificateProfileRenderer.render(certificate).encodeToByteArray()
                     if (profile.size > CompanionCertificateProtocol.MAXIMUM_INSTALLATION_ARTIFACT_BYTES) {
-                        socket.respond(503, "certificate_profile_unavailable")
+                        response(503, "certificate_profile_unavailable")
                     } else {
-                        socket.respond(
+                        response(
                             statusCode = 200,
                             reason = "OK",
                             mediaType = CompanionCertificateProtocol.APPLE_PROFILE_MEDIA_TYPE,
@@ -252,13 +258,13 @@ public class CompanionControlGateway(
                 }
             }
             request.method == "POST" && request.path == CompanionCertificateProtocol.TRUST_CHALLENGE_PATH -> {
-                val challenge = request.challenge ?: return socket.respond(400, "challenge_required")
+                val challenge = request.challenge ?: return response(400, "challenge_required")
                 when (claimChallenge(authorization.deviceId, challenge)) {
-                    ChallengeClaim.REPLAYED -> return socket.respond(409, "challenge_replayed")
-                    ChallengeClaim.CAPACITY_REACHED -> return socket.respond(429, "challenge_capacity_reached")
+                    ChallengeClaim.REPLAYED -> return response(409, "challenge_replayed")
+                    ChallengeClaim.CAPACITY_REACHED -> return response(429, "challenge_capacity_reached")
                     ChallengeClaim.ACCEPTED -> Unit
                 }
-                socket.respond(
+                response(
                     statusCode = 204,
                     reason = "No Content",
                     mediaType = "application/octet-stream",
@@ -266,19 +272,19 @@ public class CompanionControlGateway(
                     extraHeaders = mapOf(CompanionCertificateProtocol.CHALLENGE_HEADER to challenge.value),
                 )
             }
-            else -> socket.respond(404, "not_found")
+            else -> response(404, "not_found")
         }
     }
 
-    private suspend fun redeemBootstrap(socket: SSLSocket, request: ControlGatewayRequest) {
+    private suspend fun redeemBootstrap(request: ControlGatewayRequest): ControlGatewayResponse {
         if (request.contentType != CompanionBootstrapProtocol.REQUEST_MEDIA_TYPE) {
-            return socket.respond(415, "unsupported_media_type")
+            return response(415, "unsupported_media_type")
         }
         val redemption = runCatching { redemptionCodec.decode(request.body) }.getOrNull()
-            ?: return socket.respond(400, "invalid_redemption_request")
-        when (val result = redeemOnboarding.execute(redemption)) {
-            PairingOnboardingRedemptionResult.Rejected -> socket.respond(401, "invitation_rejected")
-            is PairingOnboardingRedemptionResult.Redeemed -> socket.respond(
+            ?: return response(400, "invalid_redemption_request")
+        return when (val result = redeemOnboarding.execute(redemption)) {
+            PairingOnboardingRedemptionResult.Rejected -> response(401, "invitation_rejected")
+            is PairingOnboardingRedemptionResult.Redeemed -> response(
                 statusCode = 200,
                 reason = "OK",
                 mediaType = CompanionBootstrapProtocol.RESPONSE_MEDIA_TYPE,
@@ -287,16 +293,16 @@ public class CompanionControlGateway(
         }
     }
 
-    private suspend fun completePairing(socket: SSLSocket, request: ControlGatewayRequest) {
-        if (request.authorization != null) return socket.respond(400, "authorization_not_allowed")
+    private suspend fun completePairing(request: ControlGatewayRequest): ControlGatewayResponse {
+        if (request.authorization != null) return response(400, "authorization_not_allowed")
         if (request.contentType != CompanionControlProtocol.PAIR_REQUEST_MEDIA_TYPE) {
-            return socket.respond(415, "unsupported_media_type")
+            return response(415, "unsupported_media_type")
         }
         val completion = runCatching { pairingCompletionCodec.decode(request.body) }.getOrNull()
-            ?: return socket.respond(400, "invalid_pairing_request")
-        when (val result = pairing.complete(completion)) {
-            is PairingCompletionResult.Rejected -> socket.respond(401, "pairing_rejected")
-            is PairingCompletionResult.Paired -> socket.respond(
+            ?: return response(400, "invalid_pairing_request")
+        return when (val result = pairing.complete(completion)) {
+            is PairingCompletionResult.Rejected -> response(401, "pairing_rejected")
+            is PairingCompletionResult.Paired -> response(
                 statusCode = 200,
                 reason = "OK",
                 mediaType = CompanionControlProtocol.PAIR_RESPONSE_MEDIA_TYPE,
@@ -311,17 +317,17 @@ public class CompanionControlGateway(
         }
     }
 
-    private suspend fun refreshCredential(socket: SSLSocket, request: ControlGatewayRequest) {
+    private suspend fun refreshCredential(request: ControlGatewayRequest): ControlGatewayResponse {
         if (request.contentType != CompanionControlProtocol.REFRESH_REQUEST_MEDIA_TYPE) {
-            return socket.respond(415, "unsupported_media_type")
+            return response(415, "unsupported_media_type")
         }
-        val authorization = request.authorization ?: return socket.respond(401, "authorization_required")
+        val authorization = request.authorization ?: return response(401, "authorization_required")
         val refresh = runCatching { refreshRequestCodec.decode(request.body) }.getOrNull()
-            ?: return socket.respond(400, "invalid_refresh_request")
-        if (refresh.deviceId != authorization.deviceId) return socket.respond(401, "authorization_rejected")
-        when (val result = pairing.refreshCredential(authorization.deviceId, authorization.credential)) {
-            is PairingCredentialRefreshResult.Rejected -> socket.respond(401, "authorization_rejected")
-            is PairingCredentialRefreshResult.Refreshed -> socket.respond(
+            ?: return response(400, "invalid_refresh_request")
+        if (refresh.deviceId != authorization.deviceId) return response(401, "authorization_rejected")
+        return when (val result = pairing.refreshCredential(authorization.deviceId, authorization.credential)) {
+            is PairingCredentialRefreshResult.Rejected -> response(401, "authorization_rejected")
+            is PairingCredentialRefreshResult.Refreshed -> response(
                 statusCode = 200,
                 reason = "OK",
                 mediaType = CompanionControlProtocol.REFRESH_RESPONSE_MEDIA_TYPE,
@@ -335,24 +341,24 @@ public class CompanionControlGateway(
         }
     }
 
-    private suspend fun reconcileEndpoint(socket: SSLSocket, request: ControlGatewayRequest) {
+    private suspend fun reconcileEndpoint(request: ControlGatewayRequest): ControlGatewayResponse {
         if (request.contentType != CompanionControlProtocol.RECONCILE_REQUEST_MEDIA_TYPE) {
-            return socket.respond(415, "unsupported_media_type")
+            return response(415, "unsupported_media_type")
         }
-        val authorization = request.authorization ?: return socket.respond(401, "authorization_required")
+        val authorization = request.authorization ?: return response(401, "authorization_required")
         val authentication = pairing.authenticate(
             authorization.deviceId,
             authorization.credential,
             DeviceScope.SETUP_ARTIFACT_READ,
         )
         if (authentication !is DeviceAuthenticationResult.Authenticated) {
-            return socket.respond(401, "authorization_rejected")
+            return response(401, "authorization_rejected")
         }
         val reconciliation = runCatching { endpointCodec.decodeRequest(request.body) }.getOrNull()
-            ?: return socket.respond(400, "invalid_endpoint_request")
-        val descriptor = endpointDescriptor() ?: return socket.respond(503, "endpoint_unavailable")
-        if (!descriptor.accepts(reconciliation.desktopId)) return socket.respond(409, "desktop_identity_mismatch")
-        socket.respond(
+            ?: return response(400, "invalid_endpoint_request")
+        val descriptor = endpointDescriptor() ?: return response(503, "endpoint_unavailable")
+        if (!descriptor.accepts(reconciliation.desktopId)) return response(409, "desktop_identity_mismatch")
+        return response(
             statusCode = 200,
             reason = "OK",
             mediaType = CompanionControlProtocol.RECONCILE_RESPONSE_MEDIA_TYPE,
@@ -450,6 +456,13 @@ public class CompanionControlGateway(
         scope.cancel()
     }
 
+    private fun response(statusCode: Int, token: String): ControlGatewayResponse =
+        response(statusCode, statusReason(statusCode), "text/plain; charset=utf-8", token.encodeToByteArray())
+
+    private fun response(statusCode: Int, reason: String, mediaType: String, body: ByteArray,
+        extraHeaders: Map<String, String> = emptyMap()): ControlGatewayResponse =
+        ControlGatewayResponse(statusCode, reason, mediaType, body, extraHeaders)
+
     private fun SSLSocket.respond(statusCode: Int, token: String) {
         respond(statusCode, statusReason(statusCode), "text/plain; charset=utf-8", token.encodeToByteArray())
     }
@@ -518,7 +531,7 @@ private enum class ChallengeClaim {
     CAPACITY_REACHED,
 }
 
-private data class ControlGatewayRequest(
+internal data class ControlGatewayRequest(
     val method: String,
     val path: String,
     val authorization: ControlGatewayAuthorization?,
@@ -553,7 +566,11 @@ private data class ControlGatewayRequest(
     }
 }
 
-private data class ControlGatewayAuthorization(
+internal data class ControlGatewayAuthorization(
     val deviceId: RegisteredDeviceId,
     val credential: String,
 )
+
+/** Bounded HTTP result, independent of listener sockets so the WebSocket upgrade can share the same endpoint. */
+internal data class ControlGatewayResponse(val statusCode: Int, val reason: String, val mediaType: String,
+    val body: ByteArray, val extraHeaders: Map<String, String> = emptyMap())

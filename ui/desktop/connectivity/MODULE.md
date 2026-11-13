@@ -17,10 +17,12 @@ onboarding.
 - Inline card/drawer failure feedback derived from typed operation state and typed Wi-Fi runtime failures,
   including a non-terminal listener recovery presentation. The feature does not render a separate screen-level
   notification banner for successful proxy startup.
-- Feature-owned companion onboarding presentation using the same shared drawer shell: canonical version-2 QR,
+- Feature-owned companion onboarding presentation using the same shared drawer shell: canonical version-3 QR,
   reachable desktop details, expiry countdown, refresh/recovery actions, and ordered setup guidance. Narrative
   guidance wraps within the drawer while compact identifiers and endpoints remain single-line. The secret-bearing
-  QR exists only in ViewModel memory and is removed when the drawer closes or the invitation expires.
+  QR exists only in ViewModel memory and is removed when the drawer closes, the invitation expires or Desktop
+  accepts its one-time redemption. Exact-bootstrap availability comes through an application use case and shares
+  one collector with the countdown; a consumed QR shows expired recovery and explicit Regenerate QR.
 - Mapping application/core connectivity state into user-facing labels and recoverable actions.
 
 ## Does not own

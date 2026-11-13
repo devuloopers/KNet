@@ -49,3 +49,12 @@ private executor lifecycle. The control gateway bounds requests and retained non
 one generic rejection, consumes invitations once, rotates credentials with compare-and-set storage, and rejects
 old-credential replay. It also redeems complete companion invitations only after TLS and an independently digested
 one-time bootstrap secret, while the open Wi-Fi portal continues to expose only public root-certificate material.
+
+The bounded onboarding store publishes non-secret pending IDs under the same mutex as creation, authenticated
+one-shot consumption and expiry pruning. Invalid/replayed claims cannot remove a live matching identity, and
+consumed records retain no tombstone or status history. This supports desktop QR invalidation through the
+application observation use case; see `docs/companion_ui.md` for presentation and qualification boundaries.
+
+## Multi-device workspace and control sessions (2026-11-13)
+
+KtorCompanionControlGateway hosts authenticated WebSocket sessions and the existing HTTPS operations on one TLS endpoint. Explicit queue/admission limits separate long-lived control sessions from short HTTPS operations. It never enters capture or network shaping.

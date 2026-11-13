@@ -98,9 +98,10 @@ public fun CompanionUiState.toCompanionHomeUiState(): CompanionHomeUiState {
     val hasMatchingCertificateEnrollment = activeRegistration?.let { registration ->
         certificateEnrollment?.matches(registration)
     } == true
-    val liveCertificateTrusted = certificate is CompanionCertificateState.Trusted
+    val liveCertificateTrusted = hasTrustedActiveCertificate
     val certificateStatus = when (certificate) {
-        is CompanionCertificateState.Trusted -> CompanionHomeCertificateStatus.VERIFIED
+        is CompanionCertificateState.Trusted -> if (liveCertificateTrusted) CompanionHomeCertificateStatus.VERIFIED
+            else CompanionHomeCertificateStatus.NEEDS_ATTENTION
         CompanionCertificateState.Unknown,
         CompanionCertificateState.Verifying,
         -> if (hasMatchingCertificateEnrollment) {
@@ -117,12 +118,23 @@ public fun CompanionUiState.toCompanionHomeUiState(): CompanionHomeUiState {
         is CompanionCertificateState.Rejected,
         -> CompanionHomeCertificateStatus.NEEDS_ATTENTION
     }
+    // Availability probes can complete after a selection changes. Never apply another desktop's result.
+    val availability = desktopAvailability.takeIf { observed ->
+        val desktopId = when (observed) {
+            CompanionDesktopAvailability.Idle -> null
+            is CompanionDesktopAvailability.Available -> observed.desktopId
+            is CompanionDesktopAvailability.Checking -> observed.desktopId
+            is CompanionDesktopAvailability.Unavailable -> observed.desktopId
+            is CompanionDesktopAvailability.Failed -> observed.desktopId
+        }
+        desktopId == activeRegistration?.desktopId
+    } ?: CompanionDesktopAvailability.Idle
     val desktopStatus = when {
         inspection is CompanionInspectionState.Running || connection is CompanionConnectionState.Connected ->
             CompanionHomeDesktopStatus.AVAILABLE
-        desktopAvailability is CompanionDesktopAvailability.Available -> CompanionHomeDesktopStatus.AVAILABLE
-        desktopAvailability is CompanionDesktopAvailability.Unavailable -> CompanionHomeDesktopStatus.UNAVAILABLE
-        desktopAvailability is CompanionDesktopAvailability.Failed -> CompanionHomeDesktopStatus.SECURITY_FAILURE
+        availability is CompanionDesktopAvailability.Available -> CompanionHomeDesktopStatus.AVAILABLE
+        availability is CompanionDesktopAvailability.Unavailable -> CompanionHomeDesktopStatus.UNAVAILABLE
+        availability is CompanionDesktopAvailability.Failed -> CompanionHomeDesktopStatus.SECURITY_FAILURE
         else -> CompanionHomeDesktopStatus.CHECKING
     }
     val tunnelStatus = when {
@@ -177,7 +189,7 @@ public fun CompanionUiState.toCompanionHomeUiState(): CompanionHomeUiState {
     }
     val inspectionFailure = (inspection as? CompanionInspectionState.Failed)?.failure
     val connectionFailure = (connection as? CompanionConnectionState.Failed)?.failure
-    val availabilityFailure = when (val availability = desktopAvailability) {
+    val availabilityFailure = when (val availability = availability) {
         is CompanionDesktopAvailability.Failed -> availability.failure
         is CompanionDesktopAvailability.Unavailable -> availability.reason
         else -> null

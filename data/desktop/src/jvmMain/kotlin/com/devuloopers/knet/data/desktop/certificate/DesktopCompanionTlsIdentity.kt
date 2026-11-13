@@ -12,6 +12,8 @@ import javax.net.ssl.SSLServerSocketFactory
 class DesktopCompanionTlsIdentity private constructor(
     /** Socket factory containing a KNet-CA-signed server identity. */
     val serverSocketFactory: SSLServerSocketFactory,
+    /** In-memory server key material for the embedded control endpoint; never serialized or exposed to UI. */
+    val serverKeyStore: KeyStore,
     rootCertificate: ByteArray,
     /** Lowercase SHA-256 fingerprint of the KNet root certificate. */
     val rootCertificateSha256: String,
@@ -51,6 +53,7 @@ class DesktopCompanionTlsIdentity private constructor(
             val rootFingerprint = root.sha256()
             return DesktopCompanionTlsIdentity(
                 serverSocketFactory = context.serverSocketFactory,
+                serverKeyStore = keyStore,
                 rootCertificate = root,
                 rootCertificateSha256 = rootFingerprint,
                 transportIdentitySha256 = rootFingerprint,

@@ -29,6 +29,7 @@ import org.koin.dsl.module
 
 /** Canonical traffic maintenance/query adapters and traffic application workflows. */
 internal val trafficBindings: Module = module {
+    factory { com.devuloopers.knet.application.usecase.traffic.ResolveCapturedTrafficSourceUseCase(get()) }
     viewModel { TrafficProtectionViewModel(get(), get(), get()) }
     single {
         DesktopTrafficMaintenanceAdapter(
@@ -64,8 +65,11 @@ internal val trafficBindings: Module = module {
 
     viewModel {
         TrafficViewModel(
+            observeGraphQLPersistedQueriesUseCase = get(),
             observeLatestTrafficSessionUseCase = get(),
             queryTrafficPageUseCase = get(),
+            resolveTrafficSourceUseCase = get(),
+            initialSource = com.devuloopers.knet.application.contract.traffic.TrafficSource.Other,
             queryTrafficFacetsUseCase = get(),
             observeTrafficGenerationsUseCase = get(),
             observeProtocolMessageChangesUseCase = get(),

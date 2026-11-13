@@ -21,7 +21,7 @@ internal class IosCompanionKtorClientProvider : CompanionKtorClientProvider {
         var securityFailure: CompanionHttpSecurityException? = null
         val client = try {
             HttpClient(Darwin) {
-                configureCompanionClient()
+                configureCompanionClient(session = request.path == com.devuloopers.knet.companion.model.CompanionSessionProtocol.PATH)
                 engine {
                     if (validation != null) {
                         handleChallenge { _, _, challenge, completionHandler ->
@@ -32,7 +32,7 @@ internal class IosCompanionKtorClientProvider : CompanionKtorClientProvider {
                                 )
                                 IosTlsValidationResult.Accepted -> completionHandler(
                                     NSURLSessionAuthChallengeUseCredential,
-                                    challenge.proposedCredential,
+                                    NSURLCredential.create(trust = checkNotNull(challenge.protectionSpace.serverTrust)),
                                 )
                                 is IosTlsValidationResult.Rejected -> {
                                     securityFailure = result.failure

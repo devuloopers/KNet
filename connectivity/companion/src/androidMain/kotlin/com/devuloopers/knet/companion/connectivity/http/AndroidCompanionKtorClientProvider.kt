@@ -12,7 +12,6 @@ import java.net.InetAddress
 import java.security.cert.CertificateException
 import java.security.cert.CertPathValidatorException
 import java.security.cert.X509Certificate
-import javax.net.ssl.HttpsURLConnection
 import javax.net.ssl.SSLPeerUnverifiedException
 import okhttp3.Dns
 import okhttp3.OkHttpClient
@@ -22,10 +21,25 @@ internal class AndroidCompanionKtorClientProvider : CompanionKtorClientProvider 
     override fun create(request: CompanionHttpRequest): CompanionKtorClientHandle {
         val validation = request.security.toAndroidValidation()
         val logicalHost = request.tlsServerName
+        val sessionFailure = java.util.concurrent.atomic.AtomicReference<com.devuloopers.knet.companion.application.contract.CompanionSessionFailure?>(null)
         val client = HttpClient(OkHttp) {
-            configureCompanionClient()
+            configureCompanionClient(session = request.path == com.devuloopers.knet.companion.model.CompanionSessionProtocol.PATH, nativeWebSocketFraming = true)
             engine {
                 config {
+                    if (request.path == com.devuloopers.knet.companion.model.CompanionSessionProtocol.PATH) {
+                        pingInterval(15, java.util.concurrent.TimeUnit.SECONDS)
+                        // OkHttp reports non-401 upgrade failures as IOException, discarding the typed status
+                        // before Ktor's response pipeline. Preserve only a closed reason, never response text.
+                        addInterceptor { chain ->
+                            chain.proceed(chain.request()).also { response ->
+                                sessionFailure.set(when (response.code) {
+                                    401, 403 -> com.devuloopers.knet.companion.application.contract.CompanionSessionFailure.UNAUTHORIZED
+                                    404, 426 -> com.devuloopers.knet.companion.application.contract.CompanionSessionFailure.UNSUPPORTED
+                                    else -> null
+                                })
+                            }
+                        }
+                    }
                     if (logicalHost != null) {
                         dns(PairedEndpointDns(logicalHost, request.endpoint.host))
                     }
@@ -36,6 +50,7 @@ internal class AndroidCompanionKtorClientProvider : CompanionKtorClientProvider 
         return CompanionKtorClientHandle(
             client = client,
             requestHost = logicalHost,
+            sessionFailure = { sessionFailure.get() },
             securityFailure = { failure -> validation?.classifyHandshakeFailure(failure) },
         )
     }
@@ -94,21 +109,21 @@ internal class AndroidCompanionKtorClientProvider : CompanionKtorClientProvider 
                 val trustManager = AndroidPairedTlsTrustFactory.trustManager(rootCertificate)
                 builder.sslSocketFactory(AndroidPairedTlsTrustFactory.socketFactory(rootCertificate), trustManager)
             }
-            val platformHostnameVerifier = HttpsURLConnection.getDefaultHostnameVerifier()
+            val platformHostnameVerifier = OkHttpClient().hostnameVerifier
             builder.hostnameVerifier { _, session ->
                 val peerCertificates = try {
                     session.peerCertificates.filterIsInstance<X509Certificate>()
                 } catch (_: SSLPeerUnverifiedException) {
-                    throw CompanionHttpSecurityException.TrustRejected()
+                    return@hostnameVerifier false
                 }
                 if (!platformHostnameVerifier.verify(CompanionCertificateProtocol.TLS_SERVER_NAME, session)) {
-                    throw CompanionHttpSecurityException.IdentityRejected()
+                    return@hostnameVerifier false
                 }
                 if (
                     !peerCertificates.matchesPinnedTransportIdentity(transportIdentitySha256) ||
                     !peerCertificates.isServedByRoot(rootCertificate)
                 ) {
-                    throw CompanionHttpSecurityException.IdentityRejected()
+                    return@hostnameVerifier false
                 }
                 true
             }

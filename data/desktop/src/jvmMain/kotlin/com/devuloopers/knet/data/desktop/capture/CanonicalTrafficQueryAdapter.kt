@@ -16,6 +16,7 @@ import com.devuloopers.knet.application.contract.traffic.TrafficPageItem
 import com.devuloopers.knet.application.contract.traffic.TrafficPageQuery
 import com.devuloopers.knet.application.contract.traffic.TrafficQuery
 import com.devuloopers.knet.application.contract.traffic.TrafficRecordFilter
+import com.devuloopers.knet.application.contract.traffic.TrafficSource
 import com.devuloopers.knet.application.contract.traffic.TrafficSortDirection
 import com.devuloopers.knet.storage.capture.dao.CanonicalCaptureDao
 import com.devuloopers.knet.storage.capture.entity.CanonicalExchangeEntity
@@ -72,7 +73,8 @@ internal class CanonicalTrafficQueryAdapter(
             )
         }
         val selectedSessionId = query.sessionId ?: sessionId
-        val cursor = query.cursor?.let { CanonicalTrafficCursorCodec.decode(it, query.direction) }
+        val scope = query.cursorScope()
+        val cursor = query.cursor?.let { CanonicalTrafficCursorCodec.decode(it, query.direction, scope) }
         val methods = query.methods.map { it.token }.ifEmpty { listOf(UNUSED_METHOD) }
         val statuses = query.statuses.map { it.code }.ifEmpty { listOf(UNUSED_STATUS) }
         val schemes = query.schemes.map { it.token }.ifEmpty { listOf(UNUSED_SCHEME) }
@@ -92,6 +94,8 @@ internal class CanonicalTrafficQueryAdapter(
         val totalCount = cursor?.totalCount ?: run {
             val httpCount = if (includeHttpExchanges) {
                 dao.countExchangePageMatches(
+                sourceKind = query.source.storageKind(),
+                sourceDeviceId = (query.source as? TrafficSource.Device)?.id?.value,
                     sessionId = selectedSessionId?.value,
                     searchPattern = searchPattern,
                     filterMethods = filterMethods,
@@ -112,6 +116,8 @@ internal class CanonicalTrafficQueryAdapter(
                     selectedSessionId?.value,
                     searchPattern,
                     opaqueRecordFilter,
+                    query.source.storageKind(),
+                    (query.source as? TrafficSource.Device)?.id?.value,
                 )
             } else {
                 0L
@@ -120,6 +126,8 @@ internal class CanonicalTrafficQueryAdapter(
         }
         val exchangeRows = if (!includeHttpExchanges) emptyList() else when (query.direction) {
             TrafficSortDirection.NEWEST_FIRST -> dao.getNewestExchangeChronologicalPage(
+                sourceKind = query.source.storageKind(),
+                sourceDeviceId = (query.source as? TrafficSource.Device)?.id?.value,
                 sessionId = selectedSessionId?.value,
                 cursorStartedAt = cursor?.startedAtEpochMillis,
                 cursorStableKey = cursor?.stableKey,
@@ -136,6 +144,8 @@ internal class CanonicalTrafficQueryAdapter(
                 limit = query.limit + 1,
             )
             TrafficSortDirection.OLDEST_FIRST -> dao.getOldestExchangeChronologicalPage(
+                sourceKind = query.source.storageKind(),
+                sourceDeviceId = (query.source as? TrafficSource.Device)?.id?.value,
                 sessionId = selectedSessionId?.value,
                 cursorStartedAt = cursor?.startedAtEpochMillis,
                 cursorStableKey = cursor?.stableKey,
@@ -155,6 +165,8 @@ internal class CanonicalTrafficQueryAdapter(
         val opaqueRows = if (includeOpaqueFlows) {
             when (query.direction) {
                 TrafficSortDirection.NEWEST_FIRST -> dao.getNewestOpaqueFlowChronologicalPage(
+                sourceKind = query.source.storageKind(),
+                sourceDeviceId = (query.source as? TrafficSource.Device)?.id?.value,
                     sessionId = selectedSessionId?.value,
                     cursorStartedAt = cursor?.startedAtEpochMillis,
                     cursorStableKey = cursor?.stableKey,
@@ -163,6 +175,8 @@ internal class CanonicalTrafficQueryAdapter(
                     limit = query.limit + 1,
                 )
                 TrafficSortDirection.OLDEST_FIRST -> dao.getOldestOpaqueFlowChronologicalPage(
+                sourceKind = query.source.storageKind(),
+                sourceDeviceId = (query.source as? TrafficSource.Device)?.id?.value,
                     sessionId = selectedSessionId?.value,
                     cursorStartedAt = cursor?.startedAtEpochMillis,
                     cursorStableKey = cursor?.stableKey,
@@ -188,7 +202,7 @@ internal class CanonicalTrafficQueryAdapter(
         val historySequences = selectedRows
             .map(CanonicalMergedTrafficRow::stableKey)
             .takeIf { stableKeys -> stableKeys.isNotEmpty() }
-            ?.let { stableKeys -> dao.getTrafficHistorySequences(stableKeys) }
+            ?.let { stableKeys -> dao.getTrafficHistorySequences(stableKeys, query.source.storageKind(), (query.source as? TrafficSource.Device)?.id?.value) }
             ?.associate { row -> row.stableKey to row.historySequence }
             .orEmpty()
         val pageExchangeRows = selectedRows.mapNotNull { row ->
@@ -231,6 +245,7 @@ internal class CanonicalTrafficQueryAdapter(
                         stableKey = row.stableKey,
                         totalCount = totalCount,
                         direction = query.direction,
+                        scope = scope,
                     ),
                 )
             },
@@ -256,6 +271,8 @@ internal class CanonicalTrafficQueryAdapter(
         val statuses = query.statuses.map { status -> status.code }.ifEmpty { listOf(UNUSED_STATUS) }
         val protocols = query.protocols.map { protocol -> protocol.token }.ifEmpty { listOf(UNUSED_PROTOCOL) }
         val row = dao.getTrafficFacetCounts(
+            sourceKind = query.source.storageKind(),
+            sourceDeviceId = (query.source as? TrafficSource.Device)?.id?.value,
             sessionId = (query.sessionId ?: sessionId)?.value,
             searchPattern = query.searchContains?.takeIf { value -> value.isNotBlank() }
                 ?.let(::escapedContainsPattern),
@@ -272,6 +289,8 @@ internal class CanonicalTrafficQueryAdapter(
                 sessionId = (query.sessionId ?: sessionId)?.value,
                 searchPattern = query.searchContains?.takeIf(String::isNotBlank)?.let(::escapedContainsPattern),
                 recordFilter = TrafficRecordFilter.ALL.name,
+                sourceKind = query.source.storageKind(),
+                sourceDeviceId = (query.source as? TrafficSource.Device)?.id?.value,
             )
         } else {
             0L
@@ -318,6 +337,7 @@ private data class CanonicalPageKey(
     val stableKey: String,
     val totalCount: Long,
     val direction: TrafficSortDirection,
+    val scope: String,
 )
 
 /** One type-safe row participating in a shared chronological HTTP/opaque merge. */
@@ -343,19 +363,19 @@ private object CanonicalTrafficCursorCodec {
     /** Encodes a page key without leaking its fields through the application API. */
     fun encode(key: CanonicalPageKey): TrafficPageCursor {
         val payload = "$CURSOR_VERSION|${key.direction.name}|${key.startedAtEpochMillis}|" +
-            "${key.stableKey}|${key.totalCount}"
+            "${key.stableKey}|${key.totalCount}|${key.scope}"
         return TrafficPageCursor(
             base64.encode(payload.encodeToByteArray())
         )
     }
 
     /** Decodes and validates a cursor against the requested direction. */
-    fun decode(cursor: TrafficPageCursor, direction: TrafficSortDirection): CanonicalPageKey {
+    fun decode(cursor: TrafficPageCursor, direction: TrafficSortDirection, scope: String): CanonicalPageKey {
         val payload = runCatching {
             base64.decode(cursor.value).decodeToString()
         }.getOrElse { throw IllegalArgumentException("Invalid canonical traffic cursor.") }
-        val components = payload.split('|', limit = 5)
-        require(components.size == 5 && components[0] == CURSOR_VERSION) {
+        val components = payload.split('|', limit = 6)
+        require(components.size == 6 && components[0] == CURSOR_VERSION) {
             "Unsupported canonical traffic cursor."
         }
         val encodedDirection = runCatching { TrafficSortDirection.valueOf(components[1]) }
@@ -371,8 +391,27 @@ private object CanonicalTrafficCursorCodec {
         val totalCount = components[4].toLongOrNull()
             ?: throw IllegalArgumentException("Invalid canonical traffic cursor total count.")
         require(totalCount >= 0L) { "Canonical traffic cursor total count must not be negative." }
-        return CanonicalPageKey(startedAtEpochMillis, stableKey, totalCount, encodedDirection)
+        require(components[5] == scope) { "Traffic cursor source or filters do not match the query." }
+        return CanonicalPageKey(startedAtEpochMillis, stableKey, totalCount, encodedDirection, scope)
     }
 
-    private const val CURSOR_VERSION = "c3"
+    private const val CURSOR_VERSION = "c4"
+}
+
+/** Storage tokens stay inside the data adapter; application callers use the closed source hierarchy. */
+internal fun TrafficSource.storageKind(): String = when (this) {
+    TrafficSource.All -> "ALL"
+    TrafficSource.Other -> "OTHER"
+    is TrafficSource.Device -> "DEVICE"
+}
+
+/** Prevents reusing a count-bearing keyset cursor with another device, session or set of filters. */
+private fun TrafficPageQuery.cursorScope(): String {
+    val fields = listOf(source.preferenceKey, sessionId?.value.orEmpty(), searchContains.orEmpty(),
+        methods.map { method -> method.token }.sorted().joinToString(","),
+        statuses.map { status -> status.code }.sorted().joinToString(","),
+        schemes.map { scheme -> scheme.token }.sorted().joinToString(","),
+        protocols.map { protocol -> protocol.token }.sorted().joinToString(","), recordFilter.name)
+    val framed = fields.joinToString("") { value -> "${value.length}:$value" }
+    return Base64.UrlSafe.encode(java.security.MessageDigest.getInstance("SHA-256").digest(framed.encodeToByteArray()))
 }

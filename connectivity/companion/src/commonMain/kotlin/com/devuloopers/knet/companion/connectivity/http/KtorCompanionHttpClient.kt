@@ -10,6 +10,7 @@ import io.ktor.client.statement.bodyAsChannel
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
+import io.ktor.http.HttpStatusCode
 import io.ktor.http.URLProtocol
 import io.ktor.http.content.ByteArrayContent
 import io.ktor.utils.io.readAvailable
@@ -54,13 +55,24 @@ internal class KtorCompanionHttpClient(
                 require(values.size == 1) { "Companion HTTP response contains duplicate headers." }
                 name.lowercase() to values.single()
             }
-            val declaredLength = requireNotNull(responseHeaders[HttpHeaders.ContentLength.lowercase()]?.toLongOrNull()) {
+            val noContent = response.status == HttpStatusCode.NoContent
+            val rawLength = responseHeaders[HttpHeaders.ContentLength.lowercase()]
+            // RFC 9112 section 6.3 defines a 204 as bodyless. Ktor/Netty correctly omits Content-Length
+            // for the certificate challenge. Retain compatibility with older peers that sent explicit zero.
+            val declaredLength = if (noContent && rawLength == null) 0L else requireNotNull(
+                rawLength?.takeIf { value -> value.isNotEmpty() && value.all { character -> character in '0'..'9' } }?.toLongOrNull(),
+            ) {
                 "Companion HTTP response must provide a valid content length."
             }
             require(declaredLength in 0..request.maximumResponseBytes.toLong()) {
                 "Companion HTTP response body exceeds the configured limit."
             }
-            val body = response.bodyAsChannel().readBounded(request.maximumResponseBytes)
+            if (noContent) {
+                require(declaredLength == 0L && responseHeaders[HttpHeaders.TransferEncoding.lowercase()] == null) {
+                    "Companion no-content response must not declare a body or transfer coding."
+                }
+            }
+            val body = response.bodyAsChannel().readBounded(if (noContent) 0 else request.maximumResponseBytes)
             require(body.size.toLong() == declaredLength) { "Companion HTTP response body length is invalid." }
             return CompanionHttpResponse(response.status.value, responseHeaders, body)
         } catch (cancelled: CancellationException) {
@@ -86,10 +98,19 @@ private fun Throwable.findSecurityFailure(): CompanionHttpSecurityException? {
 }
 
 /** Applies the invariant companion transport policy to an engine-specific client. */
-internal fun HttpClientConfig<*>.configureCompanionClient() {
+internal fun HttpClientConfig<*>.configureCompanionClient(session: Boolean = false, nativeWebSocketFraming: Boolean = false) {
     expectSuccess = false
     followRedirects = false
-    install(HttpTimeout) {
+    if (session) install(io.ktor.client.plugins.websocket.WebSockets) {
+        // OkHttp owns its native frame decoder and rejects Ktor maxFrameSize mutation.
+        // The shared transport still rejects every encoded control message above 8 KiB.
+        if (!nativeWebSocketFraming) maxFrameSize = com.devuloopers.knet.companion.model.CompanionSessionProtocol.MAXIMUM_MESSAGE_BYTES.toLong()
+        pingIntervalMillis = 15_000L
+        channels {
+            incoming = bounded(16, io.ktor.websocket.ChannelOverflow.CLOSE)
+            outgoing = bounded(16, io.ktor.websocket.ChannelOverflow.SUSPEND)
+        }
+    } else install(HttpTimeout) {
         connectTimeoutMillis = 5_000L
         requestTimeoutMillis = 15_000L
         socketTimeoutMillis = 10_000L

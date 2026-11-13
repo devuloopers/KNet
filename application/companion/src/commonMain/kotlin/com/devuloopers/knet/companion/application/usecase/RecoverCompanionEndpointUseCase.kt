@@ -316,7 +316,12 @@ public class RecoverCompanionEndpointUseCase(
             return CompanionEndpointRecoveryResult.Recovered(registration)
         }
         val migrated = try {
-            registrations.migrateIdentity(registration.desktopId, updated, makeActive = true)
+            // Authenticating a saved, inactive desktop during a handoff must not select it early.
+            registrations.migrateIdentity(
+                registration.desktopId,
+                updated,
+                makeActive = registrations.activeRegistration.value?.desktopId == registration.desktopId,
+            )
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (_: Throwable) {

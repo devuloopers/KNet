@@ -106,3 +106,10 @@ The formatter dependency exposes bounded protocol adapters rather than importing
 Initial GraphQL GET import/URL loading/restoration opens prettified authoring fields without serializing them back
 into the URL. Once hydrated, validation and unrelated editor mutations retain current buffers; source edits explicitly
 clear the old projection before preparing the new URL. Merely selecting Query/Variables/Extensions is not a payload edit.
+
+## Persisted queries
+
+Owns ephemeral read-only query previews, native JSON manifest selection and typed import feedback through injected
+application use cases. The toolbar never inserts lookup source into the request. A debounced, latest-only preview
+observes editor identity and catalog revision; replay and saved drafts retain actual wire fields.
+See `docs/graphql_persisted_queries.md`.

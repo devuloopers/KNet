@@ -141,6 +141,13 @@ includes its size in cache accounting and uses the existing exchange identity/ca
 View query targets Params for GET and Body for POST, resetting the shared Query sub-tab. The source
 URL is unchanged for header copy and cross-feature transfer; missing/ambiguous data remains honest.
 
+## Persisted-query updates
+
+Selected request preparation includes the absolute endpoint and observes verified catalog revisions. Derived cache
+entries are invalidated without clearing the selected inspector. Current read-only hash/source/operation facts and
+query availability can refresh Overview without rewriting captured annotations or request bytes.
+See `docs/graphql_persisted_queries.md`.
+
 ## Single table/inspector divider
 
 Traffic opts into the UI-core single-line split boundary. Inspector chrome, table header and statistics footer
@@ -155,3 +162,9 @@ it. The vertical thumb is inset clear of the neighboring splitter target; empty 
 The selected-row frame is painted at the visible content boundary, so horizontal scrolling cannot hide its
 left/right edges. Lazy row positions keep it aligned during vertical scrolling and selection changes.
 See the scrollbar follow-up in `docs/traffic_inspector_redesign.md`.
+
+## Multi-device workspace and control sessions (2026-11-13)
+
+Traffic ViewModel scopes every query/provisional row and fences asynchronous page/export work with a source generation. At most four body-free workspace windows retain filters, selection and scroll; prepared payloads remain in the existing bounded cache.
+
+The shell routes offline Clear through the same confirmation as tab Close. `clearSource` accepts an explicit target so a background tab can be cleared without selecting it, changing current filters or reloading a sibling workspace. Repeated clicks while clearing are ignored; failures surface through the existing error banner and retained history remains available for retry.

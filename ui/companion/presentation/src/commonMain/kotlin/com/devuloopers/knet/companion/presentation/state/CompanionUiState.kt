@@ -31,6 +31,10 @@ public data class CompanionUiState(
     public val registrations: List<CompanionRegistration> = emptyList(),
     public val activeRegistration: CompanionRegistration? = null,
     public val invitationScannerVisible: Boolean = false,
+    /** True once remote pairing can rotate a credential; this short commit stage cannot be cancelled by Back. */
+    public val invitationCommitInProgress: Boolean = false,
+    /** Current desktop manager, add flow or serialized handoff overlay. */
+    public val desktopManagement: CompanionDesktopManagementState = CompanionDesktopManagementState.Closed,
     public val connection: CompanionConnectionState = CompanionConnectionState.Disconnected,
     public val desktopAvailability: CompanionDesktopAvailability = CompanionDesktopAvailability.Idle,
     public val inspection: CompanionInspectionState = CompanionInspectionState.Stopped,
@@ -42,4 +46,10 @@ public data class CompanionUiState(
     public val inspectionPermissionRequired: Boolean = false,
     public val operationInProgress: Boolean = false,
     public val failure: CompanionFailure? = null,
-)
+) {
+    /** Only authoritative trust for the selected desktop's exact root can complete certificate setup. */
+    public val hasTrustedActiveCertificate: Boolean
+        get() = activeRegistration?.rootCertificateSha256?.let { expectedRoot ->
+            (certificate as? CompanionCertificateState.Trusted)?.rootCertificateSha256 == expectedRoot
+        } == true
+}

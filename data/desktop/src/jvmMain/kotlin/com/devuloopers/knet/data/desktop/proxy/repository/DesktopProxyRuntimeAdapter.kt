@@ -265,7 +265,11 @@ class DesktopProxyRuntimeAdapter(
      * The stable proxy capture sink redirects subsequent exchanges to the replacement session. The
      * old adapter terminalizes unfinished capture state without closing any client transport channel.
      */
-    override suspend fun rotateForTrafficClear(): CaptureClearPreparation = lifecycleMutex.withLock {
+    override suspend fun rotateForTrafficClear(): CaptureClearPreparation = rotateForClear(false)
+
+    override suspend fun rotateForSourceTrafficClear(): CaptureClearPreparation = rotateForClear(true)
+
+    private suspend fun rotateForClear(preservePolicies: Boolean): CaptureClearPreparation = lifecycleMutex.withLock {
         retirementOwner.awaitDrained()
         val running = _runtimeState.value as? ProxyRuntimeState.Running
         if (running == null) {
@@ -283,7 +287,8 @@ class DesktopProxyRuntimeAdapter(
             checkNotNull(switchableCaptureSink) { "Running proxy must own a switchable capture sink." }
                 .replaceTarget(replacement)
             canonicalCaptureSession = replacement
-            automaticTlsFallback?.activateSession(replacement.sessionId)
+            if (preservePolicies) automaticTlsFallback?.rotateCaptureSession(replacement.sessionId)
+            else automaticTlsFallback?.activateSession(replacement.sessionId)
             current
         }
         _captureState.value = CaptureSessionState.Capturing(replacement.sessionId)

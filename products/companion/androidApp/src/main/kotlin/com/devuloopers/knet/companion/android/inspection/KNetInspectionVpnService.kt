@@ -112,8 +112,8 @@ class KNetInspectionVpnService : VpnService(), AndroidSocketProtector {
         KNetLogger.info(LogTags.PROXY) { "companion_event=inspection_started mode=device_vpn" }
         // Exactly one refresh owner per running service session; it is cancelled before native teardown.
         packetPolicyJob = serviceScope.launch {
-            val maintain = GlobalContext.get().get<com.devuloopers.knet.companion.application.usecase.MaintainCompanionPacketPolicyUseCase>()
-            maintain.execute(request.configuration.registration, request.configuration.packetConditions,
+            val maintain = GlobalContext.get().get<com.devuloopers.knet.companion.application.usecase.MaintainCompanionSessionUseCase>()
+            maintain.execute(request.configuration.registration, kotlin.uuid.Uuid.random().toString(), request.configuration.packetConditions,
                 com.devuloopers.knet.companion.application.contract.CompanionPacketPolicySink(forwarder::updatePacketConditions))
         }
     }
