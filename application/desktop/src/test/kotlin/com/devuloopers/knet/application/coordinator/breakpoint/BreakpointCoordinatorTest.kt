@@ -32,6 +32,69 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class BreakpointCoordinatorTest {
+    @Test fun `device capture pause prevents new HTTP pauses while preserving existing owners and pipeline requirements`() = runTest {
+        val first = com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(com.devuloopers.knet.identity.RegisteredDeviceId("first"))
+        val second = com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(com.devuloopers.knet.identity.RegisteredDeviceId("second"))
+        val coordinator = BreakpointCoordinator()
+        val rule = BreakpointRule("recording", urlPattern = "*", phase = BreakpointPhase.REQUEST)
+        coordinator.replaceWorkspaceRules(mapOf(first to listOf(rule), second to listOf(rule)))
+        val firstDecision = async { coordinator.intercept(candidate("first-before", byteArrayOf(1)).copy(workspace = first)) }
+        val secondDecision = async { coordinator.intercept(candidate("second-before", byteArrayOf(1)).copy(workspace = second)) }
+        runCurrent()
+        val pending = coordinator.pendingBreakpoints.value.toList()
+        val requirements = coordinator.requirements.value
+        assertEquals(2, pending.size)
+
+        coordinator.setCaptureAdmission(com.devuloopers.knet.application.contract.traffic.CaptureAdmissionPolicy(false,
+            mapOf(second to true)))
+        assertEquals(pending, coordinator.pendingBreakpoints.value)
+        assertEquals(requirements, coordinator.requirements.value)
+        assertFalse(coordinator.mayInterceptFor(first, candidate("prefilter", byteArrayOf()).request, BreakpointPhase.REQUEST))
+        assertTrue(coordinator.mayInterceptFor(second, candidate("prefilter", byteArrayOf()).request, BreakpointPhase.REQUEST))
+        assertSame(BreakpointDecision.ContinueUnchanged,
+            coordinator.intercept(candidate("first-paused", byteArrayOf(1)).copy(workspace = first)))
+        for (entry in pending) assertTrue(coordinator.resolve(entry.id, BreakpointDecision.ContinueUnchanged))
+        assertSame(BreakpointDecision.ContinueUnchanged, firstDecision.await())
+        assertSame(BreakpointDecision.ContinueUnchanged, secondDecision.await())
+
+        coordinator.setCaptureAdmission(com.devuloopers.knet.application.contract.traffic.CaptureAdmissionPolicy())
+        assertTrue(coordinator.mayInterceptFor(first, candidate("resumed", byteArrayOf()).request, BreakpointPhase.REQUEST))
+    }
+
+    @Test fun `workspace pause ownership and scoped drop preserve sibling pending decisions`() = runTest {
+        val a = com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(com.devuloopers.knet.identity.RegisteredDeviceId("a"))
+        val b = com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(com.devuloopers.knet.identity.RegisteredDeviceId("b"))
+        val coordinator = BreakpointCoordinator(BreakpointLimits(maxPendingConnections=4,maxPendingBytes=100,maxEditableBodyBytes=16))
+        val rule = BreakpointRule("shared",urlPattern="*",phase=BreakpointPhase.REQUEST)
+        coordinator.replaceWorkspaceRules(mapOf(a to listOf(rule),b to listOf(rule)))
+        val first = async { coordinator.intercept(candidate("a",byteArrayOf(1)).copy(workspace=a)) }
+        val second = async { coordinator.intercept(candidate("b",byteArrayOf(2)).copy(workspace=b)) }
+        runCurrent()
+        assertEquals(setOf(a,b),coordinator.pendingBreakpoints.value.map { it.candidate.workspace }.toSet())
+        assertEquals(1,com.devuloopers.knet.application.usecase.breakpoint.ClearPendingBreakpointsUseCase(coordinator).execute(a))
+        runCurrent()
+        assertSame(BreakpointDecision.Drop,first.await())
+        assertEquals(b,coordinator.pendingBreakpoints.value.single().candidate.workspace)
+        coordinator.replaceWorkspaceRules(mapOf(a to emptyList(),b to emptyList()))
+        assertTrue(coordinator.resolve(coordinator.pendingBreakpoints.value.single().id,BreakpointDecision.ContinueUnchanged))
+        assertSame(BreakpointDecision.ContinueUnchanged,second.await())
+    }
+
+    @Test fun `one workspace cannot exhaust every pending slot and other traffic never inherits a shared definition`() = runTest {
+        val a = com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(com.devuloopers.knet.identity.RegisteredDeviceId("a"))
+        val b = com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(com.devuloopers.knet.identity.RegisteredDeviceId("b"))
+        val coordinator = BreakpointCoordinator(BreakpointLimits(maxPendingConnections=4,maxPendingBytes=100,maxEditableBodyBytes=16))
+        val rule = BreakpointRule("shared",urlPattern="*",phase=BreakpointPhase.REQUEST)
+        coordinator.replaceWorkspaceRules(mapOf(a to listOf(rule),b to listOf(rule)))
+        val first=(1..2).map { index -> async { coordinator.intercept(candidate("a-$index",byteArrayOf(1)).copy(workspace=a)) } }
+        runCurrent()
+        assertSame(BreakpointDecision.ContinueUnchanged,coordinator.intercept(candidate("excess",byteArrayOf(1)).copy(workspace=a)))
+        assertSame(BreakpointDecision.ContinueUnchanged,coordinator.intercept(candidate("other",byteArrayOf(1))))
+        val sibling=async { coordinator.intercept(candidate("b",byteArrayOf(1)).copy(workspace=b)) }
+        runCurrent(); assertEquals(3,coordinator.pendingBreakpoints.value.size)
+        coordinator.clear(); (first+sibling).forEach { it.await() }
+    }
+
     @Test
     fun `typed port criterion is enforced independently from portless URL pattern`() = runTest {
         val coordinator = BreakpointCoordinator()

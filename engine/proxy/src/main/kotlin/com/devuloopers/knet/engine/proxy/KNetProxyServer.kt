@@ -108,6 +108,8 @@ class KNetProxyServer(
     private val duplexInspectorFactories: List<ProxyDuplexInspectorFactory> = emptyList(),
     private val duplexTransformerFactories: List<ProxyDuplexTransformerFactory> = emptyList(),
     private val tlsInterceptionPolicy: TlsInterceptionPolicy = TlsInterceptionPolicy.InspectAll,
+    /** Scoped response prefilter; the original callback remains for single-policy embedders. */
+    private val requiresWorkspaceResponseAggregation: ((com.devuloopers.knet.domain.policy.PolicyWorkspace, HttpRequestSnapshot) -> Boolean)? = null,
 ) {
 
     companion object {
@@ -514,7 +516,10 @@ class KNetProxyServer(
         admissionController = admissionController,
         certificateExecutor = cryptoExecutor,
         connectionCapture = connectionCapture,
-        requiresFullResponseAggregation = requiresFullResponseAggregation,
+        requiresFullResponseAggregation = { request ->
+            requiresWorkspaceResponseAggregation?.invoke(com.devuloopers.knet.engine.proxy.pipeline.policyWorkspace(channel), request)
+                ?: requiresFullResponseAggregation(request)
+        },
         streamId = streamId,
         downstreamProtocol = downstreamProtocol,
         httpTwoUpstreamPool = httpTwoUpstreamPool,

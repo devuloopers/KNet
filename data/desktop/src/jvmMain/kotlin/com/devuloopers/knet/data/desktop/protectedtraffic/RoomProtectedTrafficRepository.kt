@@ -68,7 +68,7 @@ class RoomProtectedTrafficRepository(
     }
 }
 
-private fun ProtectedTrafficRule.toEntity(): ProtectedTrafficRuleEntity {
+internal fun ProtectedTrafficRule.toEntity(): ProtectedTrafficRuleEntity {
     val destinationKind: String?
     val destinationValue: String?
     val destinationPrefixLength: Int?
@@ -115,7 +115,7 @@ private fun ProtectedTrafficRule.toEntity(): ProtectedTrafficRuleEntity {
     )
 }
 
-private fun ProtectedTrafficRuleEntity.toDomain(): ProtectedTrafficRule = ProtectedTrafficRule(
+internal fun ProtectedTrafficRuleEntity.toDomain(): ProtectedTrafficRule = ProtectedTrafficRule(
     id = ProtectedTrafficRuleId(id),
     enabled = enabled,
     action = action.decodeAction(),
@@ -127,7 +127,7 @@ private fun ProtectedTrafficRuleEntity.toDomain(): ProtectedTrafficRule = Protec
     origin = ProtectedTrafficRuleOrigin.valueOf(origin),
 )
 
-private fun ProtectedTrafficRuleEntity.decodeDestination(): ProtectedDestinationSelector? = when (destinationKind) {
+internal fun ProtectedTrafficRuleEntity.decodeDestination(): ProtectedDestinationSelector? = when (destinationKind) {
     null -> null
     "exact-host" -> ProtectedDestinationSelector.Exact(checkNotNull(destinationValue), isIpLiteral = false)
     "exact-ip" -> ProtectedDestinationSelector.Exact(checkNotNull(destinationValue), isIpLiteral = true)
@@ -140,4 +140,4 @@ private fun ProtectedTrafficRuleEntity.decodeDestination(): ProtectedDestination
     else -> error("Unknown protected destination kind.")
 }
 
-private fun String.decodeAction(): ProtectedTrafficAction = ProtectedTrafficAction.valueOf(this)
+internal fun String.decodeAction(): ProtectedTrafficAction = ProtectedTrafficAction.valueOf(this)

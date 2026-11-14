@@ -44,11 +44,15 @@ class GrpcMessageBreakpointTransformerFactory(
         require(maximumEditableMessageBytes > 0) { "Maximum editable gRPC message bytes must be positive." }
     }
 
-    override fun create(
-        request: HttpRequestSnapshot,
-        streamId: StreamId?,
-        capture: ProxyExchangeCapture?,
-    ): ProxyStreamTransformer? {
+    override fun create(request: HttpRequestSnapshot, streamId: StreamId?, capture: ProxyExchangeCapture?): ProxyStreamTransformer? =
+        createBound(request, streamId, capture, gate)
+
+    override fun createForWorkspace(workspace: com.devuloopers.knet.domain.policy.PolicyWorkspace,
+        request: HttpRequestSnapshot, streamId: StreamId?, capture: ProxyExchangeCapture?): ProxyStreamTransformer? =
+        createBound(request, streamId, capture, com.devuloopers.knet.application.contract.breakpoint.WorkspaceProtocolMessageGate(gate, workspace))
+
+    private fun createBound(request: HttpRequestSnapshot, streamId: StreamId?, capture: ProxyExchangeCapture?,
+        gate: ProtocolMessageBreakpointGate): ProxyStreamTransformer? {
         if (capture == null || request.head.method != HttpMethod.POST) return null
         val isHttpTwo = (request.head.protocol as? ApplicationProtocol.Standard)?.value ==
             StandardApplicationProtocol.HTTP_2

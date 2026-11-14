@@ -56,6 +56,8 @@ inside them are not current capability claims:
 - [`deep_architecture_scalability_engineering_audit.md`](deep_architecture_scalability_engineering_audit.md)
 - [`target_architecture_and_implementation_plan.md`](target_architecture_and_implementation_plan.md)
 - [`implementation_plan.md`](implementation_plan.md)
+- [`device_policy_libraries_implementation_plan.md`](device_policy_libraries_implementation_plan.md) — implemented
+  shared/private rule definitions, independent per-device activation, migration and qualification matrix.
 - [`multi_device_qualification.md`](multi_device_qualification.md) — multi-device automated evidence, resource bounds and hardware verification checklist.
 - [`protocol_qualification_2026-11-14.md`](protocol_qualification_2026-11-14.md) — 1,045-case protocol gate run, connected Android matrix, isolated TLS/WSS/gRPC controls and remaining release blockers.
 - [`physical_android_qualification_2026-11-14.md`](physical_android_qualification_2026-11-14.md) — connected Samsung results, measured global/per-host shaping, lifecycle recovery and open data-path defects.
@@ -82,3 +84,7 @@ checking the current module contracts, runtime catalog, and focused gate.
 
 - [Traffic Clear performance](traffic_clear_performance.md) covers v38 reference indexes, metadata completion,
   deferred file cleanup/retry, UI refresh coalescing, migration and scale-test evidence.
+
+- [Device policy libraries qualification](device_policy_libraries_qualification.md): scoped-library scenarios, real sockets and disposable two-device Android evidence.
+- [Per-device capture qualification](device_capture_qualification.md): independent Start/Pause recording, streaming cut boundaries, authenticated sockets and remaining physical acceptance.
+- [Inspector stability audit](inspector_stability_audit.md): TLS action flashing, live policy projection and frame-level checks across the supported inspector views.

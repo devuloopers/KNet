@@ -86,6 +86,8 @@ fun AddEditBreakpointRuleDrawer(
         protocolValues: List<ProtocolCriteriaValue>,
     ) -> Unit,
     modifier: Modifier = Modifier,
+    libraryContent: @Composable () -> Unit = {},
+    saving: Boolean = false,
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -96,7 +98,7 @@ fun AddEditBreakpointRuleDrawer(
         modifier = modifier,
     ) {
         val initialRule = remember { rule }
-        val initialIsEditingExistingRule = remember { isEditingExistingRule }
+        val initialIsEditingExistingRule = isEditingExistingRule
         var urlPattern by remember { mutableStateOf(initialRule?.urlPattern ?: "") }
         var portInput by remember {
             mutableStateOf((initialRule?.portCriteria as? BreakpointPortCriteria.Exact)?.value?.toString().orEmpty())
@@ -104,7 +106,7 @@ fun AddEditBreakpointRuleDrawer(
         var portWasEdited by remember { mutableStateOf(initialRule != null) }
         var selectedMethod by remember { mutableStateOf(initialRule?.method) }
         var selectedPhase by remember { mutableStateOf(initialRule?.phase ?: BreakpointPhase.BOTH) }
-        var enabled by remember { mutableStateOf(initialRule?.enabled ?: true) }
+        val enabled = initialRule?.enabled ?: true
 
         val defaultProtocolId = protocolDefinitions.firstOrNull {
             it.protocolId == BreakpointProtocolId.HTTP
@@ -172,6 +174,7 @@ fun AddEditBreakpointRuleDrawer(
                         .padding(horizontal = 20.dp, vertical = 18.dp),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
+            libraryContent()
             // URL and port are authored independently so default ports never become hidden matching behavior.
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
                 val compact = maxWidth < 420.dp
@@ -326,22 +329,6 @@ fun AddEditBreakpointRuleDrawer(
                 }
             }
 
-            // Enable Rule Switch
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Enable rule immediately",
-                    style = typography.bodyMedium.copy(color = themeColors.textPrimary)
-                )
-                KNetSwitch(
-                    checked = enabled,
-                    onCheckedChange = { enabled = it }
-                )
-            }
-
                 Spacer(Modifier.height(2.dp))
                 }
                 KNetVerticalScrollbar(
@@ -382,9 +369,10 @@ fun AddEditBreakpointRuleDrawer(
                         }
                     },
                     variant = ButtonVariant.Primary,
-                    enabled = urlPattern.isNotBlank() && isPortValid && selectedProtocol != null
+                    enabled = !saving && urlPattern.isNotBlank() && isPortValid && selectedProtocol != null,
+                    loading = saving,
                 ) {
-                    Text("Save Rule")
+                    Text(if (initialIsEditingExistingRule) "Save rule" else "Save and enable")
                 }
             }
         }

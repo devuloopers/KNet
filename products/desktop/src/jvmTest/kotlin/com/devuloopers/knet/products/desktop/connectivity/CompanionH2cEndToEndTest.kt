@@ -57,6 +57,28 @@ import kotlin.test.*
 
 /** Real authenticated TLS carrier -> CONNECT -> production proxy -> native H2/gRPC origin. */
 class CompanionH2cEndToEndTest {
+    @Test fun `same H2 grpc endpoint pauses only its authenticated device in request and response phases`(): Unit = kotlinx.coroutines.runBlocking {
+        val a = com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(RegisteredDeviceId("h2c-device"))
+        val b = com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(RegisteredDeviceId("h2c-second"))
+        for (phase in listOf(com.devuloopers.knet.domain.rules.model.BreakpointPhase.REQUEST,com.devuloopers.knet.domain.rules.model.BreakpointPhase.RESPONSE)) {
+            val coordinator = com.devuloopers.knet.application.coordinator.breakpoint.BreakpointCoordinator()
+            coordinator.replaceWorkspaceRules(mapOf(a to listOf(com.devuloopers.knet.domain.rules.model.BreakpointRule("shared",urlPattern="*",phase=phase)),b to emptyList()))
+            Fixture(coordinator).use { fixture ->
+                val primary = fixture.connect()
+                val secondary = fixture.connect(credential=fixture.secondCredential,deviceId="h2c-second")
+                val held = fixture.stream(primary,"Unary"); held.send(message("held"),true)
+                await { coordinator.pendingBreakpoints.value.isNotEmpty() }
+                val pending = coordinator.pendingBreakpoints.value.single()
+                assertEquals(a,pending.candidate.workspace); assertEquals(phase,pending.candidate.phase)
+                val sibling = fixture.stream(secondary,"Unary"); sibling.send(message("sibling"),true)
+                assertContentEquals(message("sibling"),sibling.result().body)
+                assertEquals(pending.id,coordinator.pendingBreakpoints.value.single().id)
+                coordinator.resolve(pending.id,com.devuloopers.knet.application.contract.breakpoint.BreakpointDecision.ContinueUnchanged)
+                assertContentEquals(message("held"),held.result().body)
+            }
+        }
+    }
+
     @Test
     fun `authenticated H2C preserves all grpc cardinalities trailers capture and source identity`() {
         Fixture().use { fixture ->
@@ -197,7 +219,7 @@ class CompanionH2cEndToEndTest {
         }
     }
 
-    private class Fixture : AutoCloseable {
+    private class Fixture(private val coordinator: com.devuloopers.knet.application.coordinator.breakpoint.BreakpointCoordinator? = null) : AutoCloseable {
         val capture = Capture()
         val inspectionCertificates = java.util.concurrent.atomic.AtomicInteger()
         val originParents = CopyOnWriteArrayList<Channel>()
@@ -220,8 +242,9 @@ class CompanionH2cEndToEndTest {
         private val leaf = LeafCertificateGenerator.generate(CompanionCertificateProtocol.TLS_SERVER_NAME, authority)
         private val crypto = JvmPairingCrypto()
         private val credential = crypto.randomToken(48)
+        val secondCredential = crypto.randomToken(48)
         private val attributions = IngressAttributionRegistry()
-        private val store = DeviceStore(crypto.digest(credential))
+        private val store = DeviceStore(mapOf("h2c-device" to crypto.digest(credential),"h2c-second" to crypto.digest(secondCredential)))
         private val proxy = KNetProxyServer(
             port = ServerSocket(0).use { it.localPort },
             serverTlsContextProvider = ServerTlsContextProvider { host, _ ->
@@ -234,6 +257,11 @@ class CompanionH2cEndToEndTest {
             ingressAttribution = attributions,
             captureSink = capture,
             streamInspectorFactories = listOf(GrpcStreamInspectorFactory()),
+            pipelineInitializers = coordinator?.let { gate -> listOf<(io.netty.channel.ChannelPipeline)->Unit>({ pipeline ->
+                pipeline.addLast(com.devuloopers.knet.engine.interceptor.KNetBreakpointRequestAggregator(gate))
+                pipeline.addLast(com.devuloopers.knet.engine.interceptor.KNetInterceptorHandler(gate))
+            }) }.orEmpty(),
+            requiresWorkspaceResponseAggregation = { workspace, request -> coordinator?.mayInterceptFor(workspace,request,com.devuloopers.knet.domain.rules.model.BreakpointPhase.RESPONSE)==true },
         ).apply { start() }
         private val gateway = AuthenticatedProxyGateway(
             bindHost = "127.0.0.1", bindPort = 0,
@@ -243,7 +271,7 @@ class CompanionH2cEndToEndTest {
             attributions = attributions,
         ).apply { start() }
 
-        fun connect(credential: String = this.credential, innerTls: Boolean = false): Channel {
+        fun connect(credential: String = this.credential, innerTls: Boolean = false, deviceId: String = "h2c-device"): Channel {
             val ready = CompletableFuture<Channel>()
             val ssl = SslContextBuilder.forClient().trustManager(authority.certificate).build()
             val channel = Bootstrap().group(group).channel(NioSocketChannel::class.java)
@@ -280,7 +308,7 @@ class CompanionH2cEndToEndTest {
             clients += channel
             val connect = DefaultFullHttpRequest(HttpVersion.HTTP_1_1, io.netty.handler.codec.http.HttpMethod.CONNECT, "127.0.0.1:$originPort")
             connect.headers().set(HttpHeaderNames.HOST, "127.0.0.1:$originPort")
-                .set("Proxy-Authorization", "Bearer h2c-device:$credential")
+                .set("Proxy-Authorization", "Bearer $deviceId:$credential")
             channel.writeAndFlush(connect).syncUninterruptibly()
             return ready.get(5, TimeUnit.SECONDS)
         }
@@ -425,11 +453,11 @@ class CompanionH2cEndToEndTest {
     }
 
     /** Starts with one previously paired ephemeral identity; real credential authentication remains enabled. */
-    private class DeviceStore(digest: String) : TrustedDeviceStore {
-        private val device = TrustedDevice(RegisteredDevice(RegisteredDeviceId("h2c-device"), "H2C fixture", DeviceRegistrationKind.PAIRED_COMPANION, 1, 1),
-            "ephemeral-test-key", digest, setOf(DeviceScope.PROXY_STREAM), 1, Long.MAX_VALUE)
-        override suspend fun getDevice(id: RegisteredDeviceId): TrustedDevice? = device.takeIf { it.id == id }
-        override fun observeDevices(): Flow<List<TrustedDevice>> = MutableStateFlow(listOf(device))
+    private class DeviceStore(digests: Map<String,String>) : TrustedDeviceStore {
+        private val devices = digests.map { (id,digest) -> TrustedDevice(RegisteredDevice(RegisteredDeviceId(id), "H2C fixture", DeviceRegistrationKind.PAIRED_COMPANION, 1, 1),
+            "ephemeral-test-key", digest, setOf(DeviceScope.PROXY_STREAM), 1, Long.MAX_VALUE) }
+        override suspend fun getDevice(id: RegisteredDeviceId): TrustedDevice? = devices.firstOrNull { it.id == id }
+        override fun observeDevices(): Flow<List<TrustedDevice>> = MutableStateFlow(devices)
         override suspend fun putDevice(device: TrustedDevice) = error("Unused")
         override suspend fun putInvitation(invitation: PendingPairingInvitation) = error("Unused")
         override suspend fun claimInvitation(id: PairingInvitationId, secretDigest: String, nowEpochMillis: Long): PendingPairingInvitation? = null

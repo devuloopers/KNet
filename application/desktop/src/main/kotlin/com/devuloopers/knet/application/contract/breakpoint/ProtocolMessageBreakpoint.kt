@@ -7,6 +7,7 @@ import com.devuloopers.knet.traffic.id.ProtocolMessageId
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.TrafficDirection
 import com.devuloopers.knet.traffic.model.message.ProtocolMessageKind
+import com.devuloopers.knet.domain.policy.PolicyWorkspace
 import kotlinx.coroutines.flow.StateFlow
 
 /** One complete, bounded framed message offered to the application breakpoint gate. */
@@ -27,6 +28,8 @@ public data class ProtocolMessageBreakpointCandidate(
     public val body: BreakpointBody,
     public val retainedTransportBytes: Long = 0L,
     public val startedAtEpochMillis: Long,
+    /** Verified execution workspace captured before parsing or UI selection. */
+    public val workspace: PolicyWorkspace = PolicyWorkspace.Other,
 ) {
     init {
         require(protocolRoute.isNotEmpty()) { "A protocol message route must not be empty." }
@@ -70,6 +73,10 @@ public data class PendingProtocolMessageBreakpoint(
 
 /** Engine-facing gate for framed application-protocol messages. */
 public interface ProtocolMessageBreakpointGate {
+    /** Scoped prefilter; legacy test adapters preserve their existing behavior. */
+    public fun mayInterceptMessageFor(workspace: PolicyWorkspace, request: HttpRequestSnapshot,
+        protocolRoute: List<BreakpointProtocolId>, direction: TrafficDirection): Boolean = mayInterceptMessage(request, protocolRoute, direction)
+
     /** Cheap request-head prefilter used before a protocol adapter buffers complete messages. */
     public fun mayInterceptMessage(
         request: HttpRequestSnapshot,

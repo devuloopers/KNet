@@ -79,6 +79,7 @@ public class CompanionControlGateway(
     private val nowEpochMillis: () -> Long,
     private val maximumConnections: Int = DEFAULT_MAXIMUM_CONNECTIONS,
     private val maximumTrackedChallenges: Int = DEFAULT_MAXIMUM_TRACKED_CHALLENGES,
+    private val packetConditionsForDevice: ((com.devuloopers.knet.identity.RegisteredDeviceId) -> PacketConditionConfiguration)? = null,
 ) : CompanionControlGatewayLifecycle {
     private val running: AtomicBoolean = AtomicBoolean(false)
     private val closed: AtomicBoolean = AtomicBoolean(false)
@@ -214,7 +215,7 @@ public class CompanionControlGateway(
         }
         return when {
             request.method == "GET" && request.path == CompanionControlProtocol.NETWORK_CONDITIONS_PATH -> {
-                val body = runCatching { PacketConditionConfigurationCodec.encode(packetConditions()) }
+                val body = runCatching { PacketConditionConfigurationCodec.encode(packetConditionsForDevice?.invoke(authorization.deviceId) ?: packetConditions()) }
                     .getOrElse { return response(503, "network_conditions_unavailable") }
                 response(
                     statusCode = 200,

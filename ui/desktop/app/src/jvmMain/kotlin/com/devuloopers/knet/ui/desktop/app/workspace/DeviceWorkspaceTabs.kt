@@ -16,9 +16,9 @@ fun DeviceWorkspaceTabs(state: DeviceWorkspaceState, onSelect: (TrafficSource) -
     onInteractiveBoundsChanged: (List<androidx.compose.ui.geometry.Rect>) -> Unit = {},
     onClose: (com.devuloopers.knet.identity.RegisteredDeviceId) -> Unit = {}, closeInProgress: Boolean = false) {
     val labels = deviceWorkspaceTabLabels(state.devices)
-    val tabs = listOf(WorkspaceTabItem("other", "Other traffic")) + state.devices.map { entry ->
+    val tabs = listOf(WorkspaceTabItem("other", "Other traffic" + pendingLabel(state.pendingCounts[com.devuloopers.knet.domain.policy.PolicyWorkspace.Other]))) + state.devices.map { entry ->
         val label = labels.getValue(entry.device.id)
-        WorkspaceTabItem(TrafficSource.Device(entry.device.id).preferenceKey, label.name, when (entry.status) {
+        WorkspaceTabItem(TrafficSource.Device(entry.device.id).preferenceKey, label.name + pendingLabel(state.pendingCounts[com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(entry.device.id)]), when (entry.status) {
             DevicePresenceStatus.CONNECTED -> WorkspaceTabStatus.CONNECTED
             DevicePresenceStatus.RECONNECTING -> WorkspaceTabStatus.RECONNECTING
             DevicePresenceStatus.OFFLINE -> WorkspaceTabStatus.OFFLINE
@@ -66,3 +66,6 @@ internal fun deviceWorkspaceTabLabels(entries: List<com.devuloopers.knet.applica
         identity to DeviceWorkspaceTabLabel(name, identity.value.takeLast(length))
     }
 }
+
+/** A paused-count suffix is visible even when its owning workspace is not selected. */
+private fun pendingLabel(count: Int?): String = count?.takeIf { it > 0 }?.let { " · $it paused" }.orEmpty()

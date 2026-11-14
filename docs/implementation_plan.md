@@ -1,5 +1,90 @@
 # KNet Implementation Plan
 
+## Inspector selection stability audit (2026-11-14) [COMPLETED]
+
+Fix Future connections resetting to Loading/unselected buttons on equivalent TLS row changes. Render
+current saved/default policy immediately from canonical bounded row metadata and the explicit source,
+then reconcile against canonical flow/ingress asynchronously. Never reuse another target's action or
+historical evidence, never infer automatic fallback from a different connection, and fence callbacks
+against an obsolete selected row. Keep policy previews live while metadata is loading and resolve missing
+history/errors authoritatively. Audit the remaining inspector sections and verify stable mounting/layout
+for HTTP, GraphQL, gRPC, WebSocket/GraphQL WS, SSE and opaque traffic with headless rendered tests.
+
+The complete gate passed **1,708 tests across 33 outputs**, zero failures/errors/skips, and desktop
+packaging passed. All 385 affected application/inspector/design-system/app-host cases passed. Tests
+compare identical TLS action pixels/bounds/nodes across 24 transient frames and check protocol navigation
+across 168 row-change frames. See [the inspector audit](inspector_stability_audit.md) for findings and limits.
+
+## Per-device Start/Pause Capture (2026-11-14) [COMPLETED]
+
+Scope toolbar commands and status to the captured authenticated device or Other traffic. Keep one proxy,
+control service and canonical writer. A device starts recording only when explicitly started; switching
+or reconnecting does not change its process-session recording choice. Restarting the desktop begins
+with capture stopped, matching the existing lifecycle. Start/Pause commands retain their original source
+through tab switches; port changes retain every source's choice. Low-level administrative global APIs
+remain available for existing headless integrations.
+
+Pause terminalizes only that source's active capture handles without closing transport sockets or
+rotating siblings' capture ownership. Existing recorded requests/streams end at the pause boundary;
+resume records new complete requests/streams, never fabricating missed HTTP body bytes or frames.
+Forwarding, device presence, Network Conditions and Protected Traffic continue. Prevent new breakpoint
+pauses for the stopped source while preserving already pending decisions for explicit resolution.
+Other traffic, including API Studio capture routing, uses its own admission state.
+
+Verify source identity, independent commands/status, rapid switching/retries, existing keep-alive/H2
+connections, in-flight bodies/messages/opaque tunnels, pending interception ownership, live shaping,
+clear/rotation/reconnect and lifecycle cleanup with unit, Room, rendered UI and real-socket scenarios.
+Run the complete policy/protocol regression gate and package desktop/Android without launching desktop.
+
+Qualification passed **1,698 tests across 33 complete outputs**, with zero failures/errors/skips,
+including six new authenticated socket cases and partial HTTP/framed/opaque capture cuts. Desktop and
+Android packaging, shared UI Apple compilation, architecture and ledger validation passed. The paused
+record label is Capture Paused. See [capture evidence and physical boundaries](device_capture_qualification.md).
+
+## Automatic exact-rule replacement (2026-11-14) [COMPLETED]
+
+Remove the replacement opt-in from all rule editors. Save atomically disables an exact matching
+activation only for its captured device, retains previous definitions and sibling activations, and
+reports committed replacement IDs for a short named-device confirmation. Overlapping matches retain
+normal precedence; inactive edits, stale revisions, authorization and rollback safeguards remain.
+Qualify same-library replacements, selector differences, concurrent saves and all three manager flows.
+Traffic quick-add must reopen the active Network Conditions alternative after replacement, retaining
+the inactive-only edit path without activating it.
+
+The complete gate passed **1,674 tests across 33 outputs**, with zero failures/errors/skips.
+Real Room rollback/concurrency, all three manager flows, confirmation expiry and an authenticated
+queued-stream replacement scenario passed. Desktop/Android packaging, shared UI Apple simulator
+compilation and architecture/ledger checks passed. Physical UI acceptance was not rerun for this follow-up.
+
+## Rule availability wording (2026-11-14) [COMPLETED]
+
+Use Available to with All devices or Only this device and its captured name across all three rule
+editors. Reuse the same labels in rule lists, explain that creation enables only its captured device,
+and remove library/workspace terminology from availability help and deletion messages. Keep storage
+ownership and per-device activation semantics unchanged. All 231 affected application/design-system/manager
+tests passed without failures or skips; Apple simulator compilation and desktop packaging passed.
+
+## Shared rule libraries and per-device activation (2026-11-14) [COMPLETED]
+
+Implemented Shared/private rule definitions and independent device activation across Intercepts,
+Network Conditions and Protected Traffic. Creation chooses All devices or Only this device;
+both workflows atomically enable only the captured workspace. New devices discover Shared definitions
+without inheriting activation. Matching uses full authenticated identity, independently of selected tabs.
+
+Room v39 preserves legacy rules/settings for existing registered devices and Other traffic. Workspace
+settings, bandwidth budgets, queues, telemetry, TLS fallback and pending ownership are separated. WSS/HTTPS
+packet-policy delivery resolves the authenticated principal. Editors and delete confirmations freeze their
+original target, revision and disclosed usage; Shared impact, private duplication and automatic exact replacement
+are supported. Clear/Close retain policy; explicit Forget removes registration/credentials and private policy.
+
+Initial qualification passed 1,664 automated cases across 33 complete task outputs with zero failures/skips,
+architecture and ledger gates, three sustained/resource cases, 13 Apple native control cases, desktop/Android
+packages and Apple compile/link checks. Both attached Android phones passed eight payload-verified requests
+for independent upload/download budgets and interception ownership. Additional desktop UI, actual Companion
+TUN/UDP and signed Apple hardware acceptance remains explicitly separate. See
+[the plan](device_policy_libraries_implementation_plan.md) and
+[the evidence report](device_policy_libraries_qualification.md).
+
 ## Traffic Clear performance and deferred cleanup (2026-11-14) [COMPLETED]
 
 Remove full-table body-reference scans with a preserved-data migration, batch deletion acknowledgements,

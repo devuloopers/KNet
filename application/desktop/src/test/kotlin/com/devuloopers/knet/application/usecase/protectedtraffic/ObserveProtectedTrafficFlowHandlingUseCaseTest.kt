@@ -11,6 +11,94 @@ import kotlin.test.*
 /** Read-only scope matching and live policy changes cannot rewrite historical capture evidence. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class ObserveProtectedTrafficFlowHandlingUseCaseTest {
+    @Test fun `invalid retained target metadata cannot throw during immediate presentation`() = runTest {
+        val fixture = ProtectionFixture()
+        fixture.repository.setDefaultAction(ProtectedTrafficAction.TUNNEL)
+        val useCase = ObserveProtectedTrafficFlowHandlingUseCase(fixture.query, fixture.repository)
+        assertNull(useCase.currentManualHandling(fixture.captured.copy(serverName = "https://invalid.test/path"),
+            com.devuloopers.knet.application.contract.traffic.TrafficSource.Other))
+        assertNull(useCase.currentManualHandling(fixture.captured.copy(destination = TrafficEndpoint("127.0.0.1", null)),
+            com.devuloopers.knet.application.contract.traffic.TrafficSource.Other))
+    }
+
+    @Test fun `manual presentation is immediate read only and never guesses automatic fallback or mixed source identity`() = runTest {
+        val fixture = ProtectionFixture()
+        val useCase = ObserveProtectedTrafficFlowHandlingUseCase(fixture.query, fixture.repository, fixture.fallback)
+        val source = com.devuloopers.knet.application.contract.traffic.TrafficSource.Other
+        assertNull(useCase.currentManualHandling(fixture.captured, source), "Learned fallback needs canonical connection/session metadata")
+        val exact = ProtectedTrafficRule(ProtectedTrafficRuleId("saved"), action = ProtectedTrafficAction.TUNNEL,
+            destination = ProtectedDestinationSelector.parse(fixture.captured.serverName!!), port = 443, transport = ProtectedTransportProtocol.TCP)
+        fixture.repository.upsertRule(exact)
+        val preview = assertNotNull(useCase.currentManualHandling(fixture.captured, source))
+        assertEquals(exact, preview.destinationRule)
+        assertEquals(ProtectedTrafficAction.TUNNEL, preview.decision.action)
+        assertEquals(0, fixture.reads)
+        assertEquals(1, fixture.writes, "Reading a policy preview must not create or mutate a rule")
+        assertNull(useCase.currentManualHandling(fixture.captured, com.devuloopers.knet.application.contract.traffic.TrafficSource.All))
+        fixture.repository.configuration.value = fixture.repository.configuration.value.copy(configurationReady = false)
+        assertNull(useCase.currentManualHandling(fixture.captured, source))
+    }
+
+    @Test fun `policy stays live during a delayed canonical lookup with no loading gap between preview and resolved handling`() = runTest {
+        val fixture = ProtectionFixture()
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        fixture.beforeRead = { gate.await() }
+        val exact = ProtectedTrafficRule(ProtectedTrafficRuleId("saved"), action = ProtectedTrafficAction.TUNNEL,
+            destination = ProtectedDestinationSelector.parse(fixture.captured.serverName!!), port = 443, transport = ProtectedTransportProtocol.TCP)
+        fixture.repository.upsertRule(exact)
+        val useCase = ObserveProtectedTrafficFlowHandlingUseCase(fixture.query, fixture.repository)
+        val values = mutableListOf<ProtectedTrafficFlowHandling?>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            useCase.observeSelection(fixture.captured, com.devuloopers.knet.application.contract.traffic.TrafficSource.Other).toList(values)
+        }
+        runCurrent()
+        assertEquals(ProtectedTrafficAction.TUNNEL, values.last()?.decision?.action)
+        fixture.repository.upsertRule(exact.copy(action = ProtectedTrafficAction.INSPECT))
+        runCurrent()
+        assertEquals(ProtectedTrafficAction.INSPECT, values.last()?.decision?.action)
+        gate.complete(Unit); runCurrent()
+        assertEquals(ProtectedTrafficAction.INSPECT, values.last()?.decision?.action)
+        assertTrue(values.none { it == null }, "A resolved manual choice must never flash through Loading/default")
+        assertEquals(1, fixture.reads)
+    }
+
+    @Test fun `missing canonical history supersedes a preview and later rule updates cannot resurrect it`() = runTest {
+        val fixture = ProtectionFixture()
+        fixture.repository.setDefaultAction(ProtectedTrafficAction.TUNNEL)
+        val gate = kotlinx.coroutines.CompletableDeferred<Unit>()
+        fixture.beforeRead = { gate.await() }
+        val values = mutableListOf<ProtectedTrafficFlowHandling?>()
+        val useCase = ObserveProtectedTrafficFlowHandlingUseCase(fixture.query, fixture.repository)
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            useCase.observeSelection(fixture.captured, com.devuloopers.knet.application.contract.traffic.TrafficSource.Other).toList(values)
+        }
+        runCurrent(); assertNotNull(values.last())
+        fixture.record = null; gate.complete(Unit); runCurrent()
+        assertNull(values.last())
+        fixture.repository.setDefaultAction(ProtectedTrafficAction.BLOCK); runCurrent()
+        assertNull(values.last())
+    }
+
+    @Test fun `same hostname policy previews remain separated by full device identity and canonical ingress wins`() = runTest {
+        val fixture = ProtectionFixture()
+        val first = com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(com.devuloopers.knet.identity.RegisteredDeviceId("first"))
+        val second = com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(com.devuloopers.knet.identity.RegisteredDeviceId("second"))
+        val repository = object : com.devuloopers.knet.application.contract.protectedtraffic.ProtectedTrafficRepository by fixture.repository {
+            override fun forWorkspace(workspace: com.devuloopers.knet.domain.policy.PolicyWorkspace): com.devuloopers.knet.application.contract.protectedtraffic.ProtectedTrafficRepository =
+                object : com.devuloopers.knet.application.contract.protectedtraffic.ProtectedTrafficRepository by fixture.repository {
+                    override val configuration = MutableStateFlow(ProtectedTrafficConfiguration(defaultAction =
+                        if (workspace == first) ProtectedTrafficAction.TUNNEL else ProtectedTrafficAction.BLOCK))
+                }
+        }
+        val useCase = ObserveProtectedTrafficFlowHandlingUseCase(fixture.query, repository)
+        assertEquals(ProtectedTrafficAction.TUNNEL, useCase.currentManualHandling(fixture.captured,
+            com.devuloopers.knet.application.contract.traffic.TrafficSource.Device(first.id))?.decision?.action)
+        assertEquals(ProtectedTrafficAction.BLOCK, useCase.currentManualHandling(fixture.captured,
+            com.devuloopers.knet.application.contract.traffic.TrafficSource.Device(second.id))?.decision?.action)
+        fixture.context = fixture.context!!.copy(ingress = IngressContext(IngressKind.LanPairedDevice, ClientIdentity(second.id.value)))
+        assertEquals(ProtectedTrafficAction.BLOCK, useCase(fixture.captured.id).first()?.decision?.action)
+    }
+
     @Test fun `IPv6 flow with SNI follows saved policy without changing historical rejection`()=runTest {
         val fixture=ProtectionFixture()
         val values=mutableListOf<ProtectedTrafficFlowHandling?>()

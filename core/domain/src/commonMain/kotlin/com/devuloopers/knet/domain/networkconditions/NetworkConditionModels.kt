@@ -243,7 +243,7 @@ data class NetworkConditionConfiguration(
         require(customProfileIds.distinct().size == customProfiles.size) { "Profile IDs must be unique." }
         require(customProfileIds.none(builtInProfileIds::contains)) { "Custom profile IDs cannot replace built-in profiles." }
         require(rules.map { it.id }.distinct().size == rules.size) { "Rule IDs must be unique." }
-        require(rules.map { it.target to it.protocolCriteria }.distinct().size == rules.size) {
+        require(rules.filter { it.enabled }.map { it.target to it.protocolCriteria }.distinct().size == rules.count { it.enabled }) {
             "Equivalent network condition targets and protocol criteria are not allowed."
         }
         require(globalProfileId == null || globalProfileId in allProfileIds) { "Global profile is missing." }

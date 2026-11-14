@@ -102,6 +102,46 @@ class PrepareNetworkConditionRuleUseCaseTest {
     }
 
     @Test
+    fun `traffic quick-add prefers the active equivalent after automatic replacement`() = runTest {
+        val target = NetworkConditionTarget.parse("api.example.test", 8443)
+        val previous = NetworkConditionRule(
+            NetworkConditionRuleId("previous"), target, NetworkConditionBuiltIns.SLOW_3G.id,
+            enabled = false,
+        )
+        val active = previous.copy(id = NetworkConditionRuleId("active"),
+            profileId = NetworkConditionBuiltIns.NO_THROTTLING.id, enabled = true)
+        val exchange = exchange(RequestTarget.AuthorityForm(Authority("api.example.test", 8443)))
+
+        for (rules in listOf(listOf(previous, active), listOf(active, previous))) {
+            val result = assertIs<PrepareNetworkConditionRuleResult.Ready>(
+                PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange),
+                    FakeRepository(NetworkConditionConfiguration(rules = rules))).execute(exchange.id),
+            )
+            assertEquals(active.id, result.existingRuleId)
+            assertEquals(active.profileId, result.suggestedProfileId)
+        }
+    }
+
+    @Test
+    fun `traffic quick-add can still reopen an inactive saved equivalent`() = runTest {
+        val target = NetworkConditionTarget.parse("api.example.test", 8443)
+        val inactive = NetworkConditionRule(
+            NetworkConditionRuleId("inactive"), target, NetworkConditionBuiltIns.SLOW_3G.id,
+            enabled = false,
+        )
+        val repository = FakeRepository(NetworkConditionConfiguration(rules = listOf(inactive)))
+        val exchange = exchange(RequestTarget.AuthorityForm(Authority("api.example.test", 8443)))
+
+        val result = assertIs<PrepareNetworkConditionRuleResult.Ready>(
+            PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange), repository).execute(exchange.id),
+        )
+
+        assertEquals(inactive.id, result.existingRuleId)
+        assertEquals(inactive.profileId, result.suggestedProfileId)
+        assertEquals(listOf(inactive), repository.configuration.value.rules)
+    }
+
+    @Test
     fun `display-only relative targets are never reparsed as network authorities`() = runTest {
         val exchange = exchange(RequestTarget.Origin("/video.ts?host=wrong.example"))
         val result = PrepareNetworkConditionRuleUseCase(

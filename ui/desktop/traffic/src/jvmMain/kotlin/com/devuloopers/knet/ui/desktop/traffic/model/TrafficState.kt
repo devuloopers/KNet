@@ -169,6 +169,7 @@ data class TrafficState(
     val activeBreakpointRules: List<BreakpointRule> = emptyList(),
     val isBreakpointDrawerVisible: Boolean = false,
     val prefilledBreakpointRule: BreakpointRule? = null,
+    val breakpointWorkspace: com.devuloopers.knet.domain.policy.PolicyWorkspace = com.devuloopers.knet.domain.policy.PolicyWorkspace.Other,
     val prefilledBreakpointProtocolValues: List<ProtocolCriteriaValue> = emptyList(),
 ) {
     /** Effective follow state for the active source; never persisted as a guessed viewport position. */

@@ -38,11 +38,19 @@ import com.devuloopers.knet.storage.protectedtraffic.entity.ProtectedServiceGrou
 import com.devuloopers.knet.storage.protectedtraffic.entity.ProtectedTrafficRuleEntity
 import com.devuloopers.knet.storage.protectedtraffic.entity.ProtectedTrafficSettingsEntity
 
+import com.devuloopers.knet.storage.policy.entity.*
+import com.devuloopers.knet.storage.policy.dao.DevicePolicyDao
+
 /**
  * Room Database contract definition for KNet JVM Desktop persistence.
  */
 @Database(
     entities = [
+        PolicyWorkspaceEntity::class,
+        PolicyLibraryRevisionEntity::class,
+        BreakpointActivationEntity::class,
+        ConditionActivationEntity::class,
+        ProtectionActivationEntity::class,
         CollectionEntity::class,
         CollectionFolderEntity::class,
         SavedRequestEntity::class,
@@ -68,7 +76,7 @@ import com.devuloopers.knet.storage.protectedtraffic.entity.ProtectedTrafficSett
         ProtectedTrafficRuleEntity::class,
         ProtectedServiceGroupEntity::class,
     ],
-    version = 38,
+    version = 39,
     autoMigrations = [
         AutoMigration(from = 13, to = 14, spec = Migration13To14::class),
         AutoMigration(from = 14, to = 15),
@@ -90,6 +98,9 @@ import com.devuloopers.knet.storage.protectedtraffic.entity.ProtectedTrafficSett
     ],
 )
 abstract class KNetDatabase : RoomDatabase() {
+
+    /** Device policy bindings and execution settings. */
+    abstract fun devicePolicyDao(): DevicePolicyDao
 
     abstract fun collectionDao(): CollectionDao
 

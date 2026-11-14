@@ -26,6 +26,7 @@ class TrafficProtectionSelectionPersistenceTest {
         val first=DatabaseFactory.create(file)
         val firstScope=CoroutineScope(SupervisorJob()+Dispatchers.Default)
         try {
+            first.registeredDeviceDao().upsertRegisteredDevice(com.devuloopers.knet.storage.device.entity.RegisteredDeviceEntity("device-a","Device A","PAIRED_COMPANION",1,1,null))
             val dao=first.canonicalCaptureDao()
             dao.insertSession(CaptureSessionEntity(session.value,1L,null,"ACTIVE",0L))
             dao.insertConnection(CanonicalCaptureEntityMapper.connection(CaptureEvent.ConnectionOpened(session,connection,1,1,
@@ -39,7 +40,7 @@ class TrafficProtectionSelectionPersistenceTest {
                 terminalErrorCode=TrafficTerminationReason.Transport.DOWNSTREAM_CANCELLED.code.value)
             dao.insertOpaqueFlow(entity)
             dao.insertOpaqueFlow(entity.copy(id="other-history",captureSequence=0,connectionSequence=3,startedAtEpochMillis=3,completedAtEpochMillis=4))
-            val repository=RoomProtectedTrafficRepository(first.protectedTrafficDao(),firstScope)
+            val repository=policyRepository(first,firstScope)
             withTimeout(10000){repository.configuration.first {it.configurationReady}}
             val query=DesktopTrafficQueryAdapter(dao,FileBodyStore(root.resolve("bodies")))
             val result=SetProtectedTrafficFlowActionUseCase(query,repository).execute(flowId,ProtectedTrafficAction.TUNNEL,ProtectedTrafficQuickRuleScope.DESTINATION)
@@ -54,7 +55,7 @@ class TrafficProtectionSelectionPersistenceTest {
         val reopened=DatabaseFactory.create(file)
         val reopenedScope=CoroutineScope(SupervisorJob()+Dispatchers.Default)
         try {
-            val repository=RoomProtectedTrafficRepository(reopened.protectedTrafficDao(),reopenedScope)
+            val repository=policyRepository(reopened,reopenedScope)
             withTimeout(10000){repository.configuration.first {it.configurationReady}}
             val query=DesktopTrafficQueryAdapter(reopened.canonicalCaptureDao(),FileBodyStore(root.resolve("bodies")))
             val observe=ObserveProtectedTrafficFlowHandlingUseCase(query,repository)
@@ -81,4 +82,10 @@ class TrafficProtectionSelectionPersistenceTest {
             assertEquals(InspectionFailureReason.CERTIFICATE_REJECTED,captured.inspectionFailureReason)
         } finally {reopenedScope.coroutineContext.job.cancelAndJoin();reopened.close();root.deleteRecursively()}
     }
+    private fun policyRepository(database: com.devuloopers.knet.storage.database.KNetDatabase, scope: CoroutineScope): com.devuloopers.knet.application.contract.protectedtraffic.ProtectedTrafficRepository =
+        com.devuloopers.knet.data.desktop.policy.PolicyRepositoryViews(
+            com.devuloopers.knet.data.desktop.policy.RoomDevicePolicyLibrary(database,scope),
+            com.devuloopers.knet.application.coordinator.breakpoint.BreakpointCoordinator(),scope)
+            .protection(com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(com.devuloopers.knet.identity.RegisteredDeviceId("device-a")))
+
 }

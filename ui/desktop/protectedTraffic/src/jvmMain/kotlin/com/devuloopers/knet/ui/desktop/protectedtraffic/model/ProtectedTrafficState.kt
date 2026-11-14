@@ -1,5 +1,7 @@
 package com.devuloopers.knet.ui.desktop.protectedtraffic.model
 
+import com.devuloopers.knet.domain.policy.*
+import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficRule
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedIpFamily
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficAction
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficConfiguration
@@ -8,6 +10,13 @@ import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficRuleId
 
 /** Immutable presentation state for protected-traffic policy management. */
 data class ProtectedTrafficState(
+    val workspace: PolicyWorkspace = PolicyWorkspace.Other,
+    val workspaceName: String = "Other traffic",
+    val workspaceNames: Map<PolicyWorkspace, String> = emptyMap(),
+    val pendingDeletion: PolicyDeletionRequest? = null,
+    /** Brief confirmation issued only from a committed exact-match replacement. */
+    val replacementNotice: com.devuloopers.knet.ui.core.components.policy.RuleReplacementNoticeState? = null,
+    val definitions: List<PolicyDefinition<ProtectedTrafficRule>> = emptyList(),
     /** Authoritative saved default and rules. */
     val configuration: ProtectedTrafficConfiguration = ProtectedTrafficConfiguration(configurationReady = false),
     /** Currently edited manual rule, if an editor is open. */
@@ -52,6 +61,10 @@ data class ProtectedTrafficRuleDraft(
     val ipFamily: ProtectedIpFamily? = null,
     /** Handling applied to matching new connections. */
     val action: ProtectedTrafficAction = ProtectedTrafficAction.TUNNEL,
+    val context: RuleEditContext = RuleEditContext(),
+    val workspaceName: String = "Other traffic",
+    val usageNames: List<String> = emptyList(),
+    val originalRule: ProtectedTrafficRule? = null,
 ) {
     /** Blank port means all ports; invalid pasted input is rejected rather than silently rewritten. */
     val isPortValid: Boolean get() = port.isBlank() || port.trim().toIntOrNull()?.let { it in 1..65_535 } == true

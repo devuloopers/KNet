@@ -6,6 +6,7 @@ import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.model.HttpRequestSnapshot
 import com.devuloopers.knet.traffic.model.HttpResponseSnapshot
 import com.devuloopers.knet.traffic.model.TrafficOrigin
+import com.devuloopers.knet.domain.policy.PolicyWorkspace
 import kotlinx.coroutines.flow.StateFlow
 
 /** Bounded immutable body value exposed to an authorized breakpoint editor. */
@@ -56,6 +57,8 @@ public data class BreakpointCandidate(
     public val retainedTransportBytes: Long = 0L,
     public val origin: TrafficOrigin = TrafficOrigin.ProxyClient,
     public val startedAtEpochMillis: Long,
+    /** Verified execution workspace captured before parsing or UI selection. */
+    public val workspace: PolicyWorkspace = PolicyWorkspace.Other,
 ) {
     init {
         require(requestObservedBodyBytes >= 0L) { "Observed request body bytes must not be negative." }
@@ -155,6 +158,9 @@ public data class BreakpointLimits(
 
 /** Engine-facing application contract containing no Netty, persistence, or UI types. */
 public interface BreakpointGate {
+    /** Scoped cheap prefilter, using admitted identity instead of desktop selection. */
+    public fun mayInterceptFor(workspace: PolicyWorkspace, request: HttpRequestSnapshot, phase: BreakpointPhase): Boolean = mayIntercept(request, phase)
+
     /** Current immutable aggregation/body requirements. */
     public val requirements: StateFlow<BreakpointRequirements>
 
@@ -193,4 +199,7 @@ public interface BreakpointCaptureAvailability {
      * alter [BreakpointGate.requirements], so transport pipelines and client connections stay stable.
      */
     public suspend fun setCaptureAvailable(available: Boolean)
+
+    /** Changes new-pause admission per source while preserving every already pending decision. */
+    public suspend fun setCaptureAdmission(policy: com.devuloopers.knet.application.contract.traffic.CaptureAdmissionPolicy): Unit = Unit
 }

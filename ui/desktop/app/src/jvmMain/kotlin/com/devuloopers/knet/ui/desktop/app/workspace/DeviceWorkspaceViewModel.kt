@@ -24,7 +24,8 @@ import kotlinx.coroutines.launch
  */
 data class DeviceWorkspaceState(val devices: List<DeviceWorkspaceEntry> = emptyList(),
     val source: TrafficSource = TrafficSource.Other, val throughput: NetworkThroughputHistory = NetworkThroughputHistory(),
-    val clearConfirmation: DeviceTrafficClearConfirmation? = null)
+    val clearConfirmation: DeviceTrafficClearConfirmation? = null,
+    val pendingCounts: Map<com.devuloopers.knet.domain.policy.PolicyWorkspace, Int> = emptyMap())
 
 /**
  * Snapshot of a user-requested destructive action; switching tabs never retargets this confirmation.

@@ -17,6 +17,10 @@ fun interface ProxyStreamTransformerFactory {
         streamId: StreamId?,
         capture: ProxyExchangeCapture?,
     ): ProxyStreamTransformer?
+    /** Binds admitted policy identity even when capture is paused or unavailable. */
+    fun createForWorkspace(workspace: com.devuloopers.knet.domain.policy.PolicyWorkspace,
+        request: HttpRequestSnapshot, streamId: StreamId?, capture: ProxyExchangeCapture?): ProxyStreamTransformer? = create(request, streamId, capture)
+
 }
 
 /**

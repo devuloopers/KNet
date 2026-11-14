@@ -105,7 +105,7 @@ object DesktopBootstrap {
         // then closes SQLite. Cancellation alone would race a transaction's final rollback/commit.
         ApplicationLifecycle.registerResource("proxy-policy-scope", CoroutineScopeShutdownResource(koin.get()))
 
-        val rulesRepository = koin.get<RulesRepositoryImpl>()
+        val rulesRepository = koin.get<com.devuloopers.knet.data.desktop.policy.PolicyRepositoryViews>()
         ApplicationLifecycle.registerResource("rules-repository", object : ShutdownAware {
             override fun close() {
                 rulesRepository.close()

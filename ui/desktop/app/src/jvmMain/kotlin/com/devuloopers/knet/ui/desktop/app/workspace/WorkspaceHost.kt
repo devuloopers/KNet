@@ -86,7 +86,22 @@ fun KNetWorkspaceHost(
     val trafficState by trafficViewModel.uiState.collectAsState()
     val deviceWorkspaces: DeviceWorkspaceViewModel = koinViewModel()
     val deviceWorkspaceState by deviceWorkspaces.state.collectAsState()
-    LaunchedEffect(deviceWorkspaceState.source) { trafficViewModel.selectSource(deviceWorkspaceState.source) }
+    LaunchedEffect(deviceWorkspaceState.source) {
+        trafficViewModel.selectSource(deviceWorkspaceState.source)
+        val workspace = when (val selected = deviceWorkspaceState.source) {
+            is com.devuloopers.knet.application.contract.traffic.TrafficSource.Device -> com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(selected.id)
+            else -> com.devuloopers.knet.domain.policy.PolicyWorkspace.Other
+        }
+        breakpointViewModel.selectWorkspace(workspace)
+        networkConditionsViewModel.selectWorkspace(workspace)
+        protectedTrafficViewModel.selectWorkspace(workspace)
+    }
+    LaunchedEffect(trafficState.prefilledBreakpointRule?.id) {
+        trafficState.prefilledBreakpointRule?.let { prepared ->
+            breakpointViewModel.openPreparedDraft(prepared, trafficState.prefilledBreakpointProtocolValues, trafficState.breakpointWorkspace)
+            trafficViewModel.closeBreakpointDrawer()
+        }
+    }
     DisposableEffect(destination) {
         deviceWorkspaces.setMonitoring(destination == DesktopDestination.Traffic)
         onDispose { deviceWorkspaces.setMonitoring(false) }
@@ -146,12 +161,23 @@ fun KNetWorkspaceHost(
                 )
 
                 AddEditBreakpointRuleDrawer(
-                    visible = trafficState.isBreakpointDrawerVisible,
-                    rule = trafficState.prefilledBreakpointRule,
-                    isEditingExistingRule = false,
+                    visible = breakpointState.isAddEditDrawerVisible,
+                    rule = breakpointState.editingRule,
+                    isEditingExistingRule = breakpointState.editingContext.expectedRevision != null,
+                    libraryContent = {
+                        com.devuloopers.knet.ui.core.components.policy.RuleLibraryEditor(
+                            com.devuloopers.knet.ui.core.components.policy.RuleLibraryEditorState(breakpointState.editingWorkspaceName,
+                                if (breakpointState.editingContext.availability == com.devuloopers.knet.domain.policy.RuleAvailability.Shared)
+                                    com.devuloopers.knet.ui.core.components.policy.RuleLibraryLocation.SHARED
+                                else com.devuloopers.knet.ui.core.components.policy.RuleLibraryLocation.PRIVATE,
+                                breakpointState.editingContext.expectedRevision != null, breakpointState.editingUsageNames,
+                                sharedDefinition = breakpointState.editingContext.originalAvailability == com.devuloopers.knet.domain.policy.RuleAvailability.Shared),
+                            breakpointViewModel::setDraftShared, breakpointViewModel::duplicateDraft)
+                    },
+                    saving = breakpointState.isSaving,
                     protocolDefinitions = breakpointState.protocolDefinitions,
-                    initialProtocolValues = trafficState.prefilledBreakpointProtocolValues,
-                    onDismiss = trafficViewModel::closeBreakpointDrawer,
+                    initialProtocolValues = breakpointState.editingProtocolValues,
+                    onDismiss = breakpointViewModel::closeDrawer,
                     onSave = { urlPattern, portCriteria, method, phase, enabled, protocolId, protocolValues ->
                         breakpointViewModel.saveRule(
                             urlPattern,
@@ -162,7 +188,6 @@ fun KNetWorkspaceHost(
                             protocolId,
                             protocolValues,
                         )
-                        trafficViewModel.closeBreakpointDrawer()
                     },
                 )
             }
@@ -288,6 +313,21 @@ fun KNetWorkspaceHost(
             ),
             modifier = Modifier.fillMaxSize(),
         )
+
+        val replacementNotice = when (destination) {
+            DesktopDestination.Traffic, DesktopDestination.Breakpoints -> breakpointState.replacementNotice
+            DesktopDestination.NetworkConditions -> {
+                val networkState by networkConditionsViewModel.state.collectAsState()
+                networkState.replacementNotice
+            }
+            DesktopDestination.ProtectedTraffic -> {
+                val protectionState by protectedTrafficViewModel.state.collectAsState()
+                protectionState.replacementNotice
+            }
+            else -> null
+        }
+        com.devuloopers.knet.ui.core.components.policy.RuleReplacementNotice(replacementNotice,
+            Modifier.align(Alignment.BottomCenter).padding(KNetTheme.spacing.lg))
     }
 }
 

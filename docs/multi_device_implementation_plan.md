@@ -24,6 +24,10 @@
 8. Custom Windows/Linux window decorations, automatic replacement of an old device registration, per-device
    shaping profiles, and per-device capture start/pause are outside this increment.
 
+Subsequent increments add [per-device policy activation](device_policy_libraries_implementation_plan.md)
+and [per-device Start/Pause Capture](device_capture_qualification.md). The original exclusions above
+describe the first multi-device increment; the current implementation board tracks these follow-ups.
+
 ## Existing foundations and missing work
 
 Repository inspection confirmed these implementation boundaries on 2026-11-13. This is feasibility evidence,
@@ -81,18 +85,22 @@ Rules:
 
 ## Scope of existing controls
 
+The table below includes the delivered workspace and subsequent policy-library increments.
+Shared/private definitions and independent device activation are implemented and documented in
+[`device_policy_libraries_implementation_plan.md`](device_policy_libraries_implementation_plan.md).
+
 | Surface or action | Behavior in this increment |
 |---|---|
 | Traffic rows, counters, filters and facets | Only the selected source, with source filtering applied before paging/counting. |
 | Overview, bodies, headers, messages and timeline | Only the selected record; reject stale results from a previous tab. |
 | Search, auto-scroll, selected record and inspector tabs | Restore each source's own lightweight workspace state. |
 | Download/upload footer | Actual observed rates for the selected source; initialize/reset at `0 kbps`. |
-| Start/Pause Capture | Remain desktop-wide. Communicate this scope in existing help/accessibility text. Pausing capture does not disconnect devices. |
+| Start/Pause Capture | Source-specific follow-up: the selected device or Other traffic owns recording admission; one proxy/writer remains shared. Pause preserves forwarding and pending actions. See [capture qualification](device_capture_qualification.md). |
 | Clear | Clear the selected source's captured history without deleting another source's records or stopping forwarding. |
 | API Studio import/copy/export actions, where available | Act on selected records; imported API Studio execution remains desktop-origin traffic. |
-| Network Conditions quick control and full screen | Keep current global/domain/protocol policy semantics and global monitoring. Selecting a device does not silently change a policy's scope. |
-| Protected Traffic and breakpoint rules | Keep their existing matching scope. Selecting a device is not a new rule-matching criterion. |
-| Live interception | Preserve pending decisions when switching devices. Another device's paused exchange must remain discoverable through existing interception management. |
+| Network Conditions quick control and full screen | Resolve the selected workspace's baseline, activation and telemetry. Shared definitions remain reusable; execution is independent per authenticated device. |
+| Protected Traffic and breakpoint rules | Show Shared and owned private definitions with independent activations/defaults. Creation captures the selected identity; runtime uses verified ingress, never the selected tab. |
+| Live interception | Preserve pending ownership when switching devices, show owning-device pending counts and scope matching/drop actions independently. |
 | Other sidebar destinations | Remain shared screens. Remember the Traffic source when navigating away and back. |
 
 ## Authenticated presence protocol

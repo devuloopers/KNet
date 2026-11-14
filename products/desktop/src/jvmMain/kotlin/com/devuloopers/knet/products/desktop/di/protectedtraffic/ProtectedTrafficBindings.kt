@@ -23,15 +23,15 @@ internal val protectedTrafficBindings: Module = module {
     single<com.devuloopers.knet.application.contract.protectedtraffic.AutomaticTlsFallback> {
         com.devuloopers.knet.data.desktop.protectedtraffic.InMemoryAutomaticTlsFallback(get<CoroutineScope>())
     }
-    single { RoomProtectedTrafficRepository(get<KNetDatabase>().protectedTrafficDao(), get<CoroutineScope>()) } bind
-        ProtectedTrafficRepository::class
+    single<ProtectedTrafficRepository> { get<com.devuloopers.knet.data.desktop.policy.PolicyRepositoryViews>().protection() }
     single {
         val repository = get<ProtectedTrafficRepository>()
         val certificates = get<com.devuloopers.knet.data.desktop.runtime.CertificateRuntimeRepository>()
         val fingerprint = java.security.MessageDigest.getInstance("SHA-256").digest(certificates.rootCertificateDer())
             .joinToString("") { "%02x".format(it) }
         ProtectedTrafficTlsInterceptionPolicy(configuration = { repository.configuration.value }, automaticFallback = get(),
-            inspectionAuthorityIdentity = { fingerprint.takeIf { certificates.inspectionAuthorityValid() } })
+            inspectionAuthorityIdentity = { fingerprint.takeIf { certificates.inspectionAuthorityValid() } },
+            configurationForWorkspace = { workspace -> get<com.devuloopers.knet.application.contract.device.DevicePolicyLibrary>().snapshot.value.runtimeProtection(workspace) })
     } bind TlsInterceptionPolicy::class
     factory { ObserveProtectedTrafficConfigurationUseCase(get()) }
     factory { SetProtectedTrafficDefaultActionUseCase(get(), get()) }

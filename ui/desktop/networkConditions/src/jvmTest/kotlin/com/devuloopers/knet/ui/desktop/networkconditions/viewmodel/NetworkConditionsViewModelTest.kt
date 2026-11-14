@@ -82,9 +82,11 @@ class NetworkConditionsViewModelTest {
         val repository = FakeRepository()
         val exchange = exchange()
         val viewModel = NetworkConditionsViewModel(
-            repository = repository,
+            repository = com.devuloopers.knet.application.usecase.networkconditions.ManageNetworkConditionsUseCase(repository),
             runtimeTelemetry = FakeTelemetry(),
             prepareRule = PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange), repository),
+
+            protocolRules = com.devuloopers.knet.application.usecase.networkconditions.NetworkConditionProtocolRuleUseCase(com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolRegistry()),
         )
         advanceUntilIdle()
 
@@ -114,9 +116,11 @@ class NetworkConditionsViewModelTest {
             ),
         )
         val viewModel = NetworkConditionsViewModel(
-            repository = repository,
+            repository = com.devuloopers.knet.application.usecase.networkconditions.ManageNetworkConditionsUseCase(repository),
             runtimeTelemetry = FakeTelemetry(),
             prepareRule = PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository),
+
+            protocolRules = com.devuloopers.knet.application.usecase.networkconditions.NetworkConditionProtocolRuleUseCase(com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolRegistry()),
         )
         advanceUntilIdle()
 
@@ -132,9 +136,11 @@ class NetworkConditionsViewModelTest {
     fun `manual wildcard rule can be created and edited without losing disabled state`() = runTest(dispatcher) {
         val repository = FakeRepository()
         val viewModel = NetworkConditionsViewModel(
-            repository = repository,
+            repository = com.devuloopers.knet.application.usecase.networkconditions.ManageNetworkConditionsUseCase(repository),
             runtimeTelemetry = FakeTelemetry(),
             prepareRule = PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository),
+
+            protocolRules = com.devuloopers.knet.application.usecase.networkconditions.NetworkConditionProtocolRuleUseCase(com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolRegistry()),
         )
         advanceUntilIdle()
 
@@ -147,9 +153,11 @@ class NetworkConditionsViewModelTest {
 
         val created = repository.configuration.value.rules.single()
         assertEquals("*.example.test:443", created.target.displayValue)
-        assertEquals(false, created.enabled)
+        assertEquals(true, created.enabled)
+        viewModel.setRuleEnabled(created, false)
+        advanceUntilIdle()
 
-        viewModel.beginEditRule(created)
+        viewModel.beginEditRule(repository.configuration.value.rules.single())
         viewModel.updateDraftPort("")
         viewModel.confirmRuleDraft()
         advanceUntilIdle()
@@ -165,9 +173,11 @@ class NetworkConditionsViewModelTest {
         val repository = FakeRepository(deleteProfiles = false)
         val telemetry = FakeTelemetry()
         val viewModel = NetworkConditionsViewModel(
-            repository = repository,
+            repository = com.devuloopers.knet.application.usecase.networkconditions.ManageNetworkConditionsUseCase(repository),
             runtimeTelemetry = telemetry,
             prepareRule = PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository),
+
+            protocolRules = com.devuloopers.knet.application.usecase.networkconditions.NetworkConditionProtocolRuleUseCase(com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolRegistry()),
         )
         viewModel.startRuntimeMonitoring()
         advanceUntilIdle()
@@ -194,9 +204,11 @@ class NetworkConditionsViewModelTest {
         val repository = FakeRepository()
         val telemetry = FakeTelemetry()
         val viewModel = NetworkConditionsViewModel(
-            repository = repository,
+            repository = com.devuloopers.knet.application.usecase.networkconditions.ManageNetworkConditionsUseCase(repository),
             runtimeTelemetry = telemetry,
             prepareRule = PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository),
+
+            protocolRules = com.devuloopers.knet.application.usecase.networkconditions.NetworkConditionProtocolRuleUseCase(com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolRegistry()),
         )
         viewModel.startRuntimeMonitoring()
         advanceUntilIdle()
@@ -232,8 +244,10 @@ class NetworkConditionsViewModelTest {
     fun `off 4g and 100 kbps switches retain one graph tick per second despite chunk telemetry`() = runTest(dispatcher) {
         val repository = FakeRepository()
         val telemetry = FakeTelemetry()
-        val viewModel = NetworkConditionsViewModel(repository, telemetry,
-            PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository))
+        val viewModel = NetworkConditionsViewModel(com.devuloopers.knet.application.usecase.networkconditions.ManageNetworkConditionsUseCase(repository), telemetry,
+            PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository),
+            protocolRules = com.devuloopers.knet.application.usecase.networkconditions.NetworkConditionProtocolRuleUseCase(com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolRegistry()),
+        )
         viewModel.startRuntimeMonitoring()
         advanceUntilIdle()
         telemetry.mutable.value = NetworkConditionRuntimeSnapshot(sampledAtNanos = 1_000_000_000L)
@@ -263,9 +277,11 @@ class NetworkConditionsViewModelTest {
     fun `master global profile and reset actions preserve saved profiles and rules`() = runTest(dispatcher) {
         val repository = FakeRepository()
         val viewModel = NetworkConditionsViewModel(
-            repository = repository,
+            repository = com.devuloopers.knet.application.usecase.networkconditions.ManageNetworkConditionsUseCase(repository),
             runtimeTelemetry = FakeTelemetry(),
             prepareRule = PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository),
+
+            protocolRules = com.devuloopers.knet.application.usecase.networkconditions.NetworkConditionProtocolRuleUseCase(com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolRegistry()),
         )
         advanceUntilIdle()
         val custom = NetworkConditionProfile(
@@ -305,9 +321,11 @@ class NetworkConditionsViewModelTest {
         )
         val repository = FakeRepository(NetworkConditionConfiguration(rules = listOf(rule)))
         val viewModel = NetworkConditionsViewModel(
-            repository = repository,
+            repository = com.devuloopers.knet.application.usecase.networkconditions.ManageNetworkConditionsUseCase(repository),
             runtimeTelemetry = FakeTelemetry(),
             prepareRule = PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository),
+
+            protocolRules = com.devuloopers.knet.application.usecase.networkconditions.NetworkConditionProtocolRuleUseCase(com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolRegistry()),
         )
         advanceUntilIdle()
 
@@ -340,9 +358,11 @@ class NetworkConditionsViewModelTest {
         val repository = FakeRepository()
         val telemetry = FakeTelemetry()
         val viewModel = NetworkConditionsViewModel(
-            repository = repository,
+            repository = com.devuloopers.knet.application.usecase.networkconditions.ManageNetworkConditionsUseCase(repository),
             runtimeTelemetry = telemetry,
             prepareRule = PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository),
+
+            protocolRules = com.devuloopers.knet.application.usecase.networkconditions.NetworkConditionProtocolRuleUseCase(com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolRegistry()),
         )
         viewModel.startRuntimeMonitoring()
         advanceUntilIdle()
@@ -368,7 +388,7 @@ class NetworkConditionsViewModelTest {
         val fieldId = ProtocolCriteriaFieldId("operation")
         val extension = EditorExtension(protocolId, fieldId)
         val viewModel = NetworkConditionsViewModel(
-            repository = repository,
+            repository = com.devuloopers.knet.application.usecase.networkconditions.ManageNetworkConditionsUseCase(repository),
             runtimeTelemetry = FakeTelemetry(),
             prepareRule = PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository),
             protocolRules = NetworkConditionProtocolRuleUseCase(
@@ -409,8 +429,10 @@ class NetworkConditionsViewModelTest {
     fun `tab changes leave policy and monitoring intact and traffic quick add returns to rules`() = runTest(dispatcher) {
         val repository = FakeRepository()
         val telemetry = FakeTelemetry()
-        val viewModel = NetworkConditionsViewModel(repository, telemetry,
-            PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository))
+        val viewModel = NetworkConditionsViewModel(com.devuloopers.knet.application.usecase.networkconditions.ManageNetworkConditionsUseCase(repository), telemetry,
+            PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository),
+            protocolRules = com.devuloopers.knet.application.usecase.networkconditions.NetworkConditionProtocolRuleUseCase(com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolRegistry()),
+        )
         advanceUntilIdle()
         val originalConfiguration = repository.configuration.value
         assertEquals(NetworkConditionsTab.OVERVIEW, viewModel.state.value.activeTab)
@@ -449,8 +471,10 @@ class NetworkConditionsViewModelTest {
     fun `shared host keeps one sampler across traffic and overview and stops on departure or disposal`() = runTest(dispatcher) {
         val repository = FakeRepository()
         val telemetry = FakeTelemetry()
-        val viewModel = NetworkConditionsViewModel(repository, telemetry,
-            PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository))
+        val viewModel = NetworkConditionsViewModel(com.devuloopers.knet.application.usecase.networkconditions.ManageNetworkConditionsUseCase(repository), telemetry,
+            PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository),
+            protocolRules = com.devuloopers.knet.application.usecase.networkconditions.NetworkConditionProtocolRuleUseCase(com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolRegistry()),
+        )
         val active = mutableStateOf(true)
         val traffic = mutableStateOf(true)
         lateinit var scene: ImageComposeScene
@@ -510,8 +534,10 @@ class NetworkConditionsViewModelTest {
     @Test
     fun `manual add selects rules and configuration updates preserve the selected tab`() = runTest(dispatcher) {
         val repository = FakeRepository()
-        val viewModel = NetworkConditionsViewModel(repository, FakeTelemetry(),
-            PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository))
+        val viewModel = NetworkConditionsViewModel(com.devuloopers.knet.application.usecase.networkconditions.ManageNetworkConditionsUseCase(repository), FakeTelemetry(),
+            PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository),
+            protocolRules = com.devuloopers.knet.application.usecase.networkconditions.NetworkConditionProtocolRuleUseCase(com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolRegistry()),
+        )
         advanceUntilIdle()
         viewModel.selectTab(NetworkConditionsTab.PROFILES)
         viewModel.selectGlobalProfile(NetworkConditionBuiltIns.STREAMING_100_KBPS.id)
@@ -525,8 +551,10 @@ class NetworkConditionsViewModelTest {
     @Test
     fun `quick profile activation synchronizes state and off preserves the selected global profile`() = runTest(dispatcher) {
         val repository = FakeRepository()
-        val viewModel = NetworkConditionsViewModel(repository, FakeTelemetry(),
-            PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository))
+        val viewModel = NetworkConditionsViewModel(com.devuloopers.knet.application.usecase.networkconditions.ManageNetworkConditionsUseCase(repository), FakeTelemetry(),
+            PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository),
+            protocolRules = com.devuloopers.knet.application.usecase.networkconditions.NetworkConditionProtocolRuleUseCase(com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolRegistry()),
+        )
         advanceUntilIdle()
         viewModel.activateGlobalProfile(NetworkConditionBuiltIns.STREAMING_100_KBPS.id)
         advanceUntilIdle()
@@ -548,8 +576,10 @@ class NetworkConditionsViewModelTest {
     @Test
     fun `stale quick profile selection reports an error and preserves the existing configuration`() = runTest(dispatcher) {
         val repository = FakeRepository()
-        val viewModel = NetworkConditionsViewModel(repository, FakeTelemetry(),
-            PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository))
+        val viewModel = NetworkConditionsViewModel(com.devuloopers.knet.application.usecase.networkconditions.ManageNetworkConditionsUseCase(repository), FakeTelemetry(),
+            PrepareNetworkConditionRuleUseCase(FakeTrafficQuery(exchange()), repository),
+            protocolRules = com.devuloopers.knet.application.usecase.networkconditions.NetworkConditionProtocolRuleUseCase(com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolRegistry()),
+        )
         advanceUntilIdle()
         val before = viewModel.state.value.configuration
         viewModel.activateGlobalProfile(NetworkConditionProfileId("removed-profile"))

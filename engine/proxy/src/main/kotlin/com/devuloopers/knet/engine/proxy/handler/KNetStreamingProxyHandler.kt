@@ -249,7 +249,7 @@ internal class KNetStreamingProxyHandler(
                 .getOrNull()
         }
         val streamTransformer = streamTransformerFactories.firstNotNullOfOrNull { factory ->
-            runCatching { factory.create(mappedRequest.request, streamId, capture) }
+            runCatching { factory.createForWorkspace(com.devuloopers.knet.engine.proxy.pipeline.policyWorkspace(context.channel()), mappedRequest.request, streamId, capture) }
                 .onFailure { failure ->
                     KNetLogger.warn(STREAMING_TAG) {
                         "Protocol stream transformer rejected request setup: ${failure::class.simpleName}"
@@ -267,7 +267,7 @@ internal class KNetStreamingProxyHandler(
                 .getOrNull()
         }
         val duplexTransformer = composeProxyDuplexTransformers(duplexTransformerFactories.mapNotNull { factory ->
-            runCatching { factory.create(mappedRequest.request, streamId, capture) }
+            runCatching { factory.createForWorkspace(com.devuloopers.knet.engine.proxy.pipeline.policyWorkspace(context.channel()), mappedRequest.request, streamId, capture) }
                 .onFailure { failure ->
                     KNetLogger.warn(STREAMING_TAG) {
                         "Duplex transformer rejected request setup: ${failure::class.simpleName}"
@@ -931,6 +931,7 @@ internal class KNetStreamingProxyHandler(
         val decision = runCatching {
             tlsInterceptionPolicy.decide(
                 TlsInterceptionRequest(
+                    workspace = com.devuloopers.knet.engine.proxy.pipeline.policyWorkspace(context.channel()),
                     connectHost = host,
                     connectPort = port,
                     sourceApplication = sourceApplication(context),
@@ -1032,6 +1033,7 @@ internal class KNetStreamingProxyHandler(
         metadata: TlsClientHelloMetadata,
     ): Future<ClassifiedConnectRoute> {
         val tlsRequest = TlsInterceptionRequest(
+                    workspace = com.devuloopers.knet.engine.proxy.pipeline.policyWorkspace(context.channel()),
                     connectHost = host,
                     connectPort = port,
                     serverName = metadata.serverName,

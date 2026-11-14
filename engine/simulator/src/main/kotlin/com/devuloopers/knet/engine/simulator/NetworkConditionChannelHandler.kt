@@ -33,6 +33,7 @@ class NetworkConditionChannelHandler(
     private val engine: NetworkConditionEngine,
     private val semanticResolver: NetworkConditionSemanticResolver? = null,
 ) : ChannelDuplexHandler() {
+    private var workspace: com.devuloopers.knet.domain.policy.PolicyWorkspace = com.devuloopers.knet.domain.policy.PolicyWorkspace.Other
     private var host: String? = null
     private var port: Int? = null
     private var sequence = 0L
@@ -72,7 +73,8 @@ class NetworkConditionChannelHandler(
     }
 
     override fun handlerAdded(context: ChannelHandlerContext) {
-        configurationSubscription = engine.observeConfigurationChanges {
+        workspace = com.devuloopers.knet.engine.proxy.pipeline.policyWorkspace(context.channel())
+        configurationSubscription = engine.observeConfigurationChanges(workspace) {
             context.executor().execute {
                 if (!closed && context.channel().isActive) {
                     refreshSelections()
@@ -83,7 +85,7 @@ class NetworkConditionChannelHandler(
     }
 
     override fun channelActive(context: ChannelHandlerContext) {
-        flow = engine.openFlow()
+        flow = engine.openFlow(workspace)
         context.fireChannelActive()
     }
 
@@ -149,20 +151,20 @@ class NetworkConditionChannelHandler(
         }
         context.channel().attr(ProxyChannelAttributes.APPLIED_NETWORK_CONDITION).set(
             selection?.effective?.let(engine::appliedCondition)
-                ?: engine.appliedCondition(destinationHost, destinationPort),
+                ?: engine.appliedCondition(destinationHost, destinationPort, workspace),
         )
         val bytes = readableBytes(message)
         val mtu = selection?.effective?.let(engine::virtualMtu)
-            ?: engine.virtualMtu(destinationHost, destinationPort)
+            ?: engine.virtualMtu(destinationHost, destinationPort, workspace)
         if (mtu != null && bytes > mtu &&
             splitAndShape(context, message, promise, direction, mtu, selection)
         ) return
         val plan = selection?.effective?.let { effective ->
-            engine.plan(effective, direction, bytes, ++sequence)
-        } ?: engine.plan(destinationHost, destinationPort, direction, bytes, ++sequence)
+            engine.plan(effective, direction, bytes, ++sequence, workspace)
+        } ?: engine.plan(destinationHost, destinationPort, direction, bytes, ++sequence, workspace)
         when (plan) {
             NetworkConditionPlan.PassThrough -> {
-                if (!engine.conditionsEnabled() && queue(direction).isNotEmpty()) {
+                if (!engine.conditionsEnabled(workspace) && queue(direction).isNotEmpty()) {
                     releaseQueuedImmediately(context, direction)
                     forward(context, message, promise, direction, flush = promise != null)
                 } else if (queue(direction).isEmpty()) {
@@ -260,8 +262,8 @@ class NetworkConditionChannelHandler(
         dueNanos: Long,
         selection: RequestSelection?,
     ) {
-        if (pendingBytes > MAXIMUM_FLOW_QUEUED_BYTES - bytes || !engine.tryQueue(bytes)) {
-            engine.recordFaultedFlow()
+        if (pendingBytes > MAXIMUM_FLOW_QUEUED_BYTES - bytes || !engine.tryQueue(bytes, workspace)) {
+            engine.recordFaultedFlow(workspace)
             fail(context, message, promise, NetworkFailureBehavior.ResetFlow)
             return
         }
@@ -301,7 +303,7 @@ class NetworkConditionChannelHandler(
             val completed = queue.removeFirst()
             if (completed.context.channel().isActive) {
                 pendingBytes = (pendingBytes - completed.bytes).coerceAtLeast(0L)
-                engine.releaseQueued(completed.bytes)
+                engine.releaseQueued(completed.bytes, workspace)
                 forward(
                     completed.context,
                     completed.message,
@@ -357,7 +359,7 @@ class NetworkConditionChannelHandler(
         while (queue.isNotEmpty()) {
             val pending = queue.removeFirst()
             pendingBytes = (pendingBytes - pending.bytes).coerceAtLeast(0L)
-            engine.releaseQueued(pending.bytes)
+            engine.releaseQueued(pending.bytes, workspace)
             forward(
                 pending.context,
                 pending.message,
@@ -374,7 +376,7 @@ class NetworkConditionChannelHandler(
 
     /** Re-reserves pending bytes after enable/profile/rule edits while preserving direction order. */
     private fun reapplyQueued(context: ChannelHandlerContext) {
-        if (!engine.conditionsEnabled()) {
+        if (!engine.conditionsEnabled(workspace)) {
             releaseQueuedImmediately(context, NetworkConditionDirection.UPLOAD)
             releaseQueuedImmediately(context, NetworkConditionDirection.DOWNLOAD)
             return
@@ -396,7 +398,7 @@ class NetworkConditionChannelHandler(
         }
         pending.forEach { item ->
             pendingBytes = (pendingBytes - item.bytes).coerceAtLeast(0L)
-            engine.abandon(item.bytes)
+            engine.abandon(item.bytes, workspace)
             shape(context, item.message, item.promise, direction, item.selection)
         }
         releaseTransportHoldIfIdle()
@@ -434,7 +436,7 @@ class NetworkConditionChannelHandler(
 
     private fun abandon(pending: PendingForward) {
         pendingBytes = (pendingBytes - pending.bytes).coerceAtLeast(0L)
-        engine.abandon(pending.bytes)
+        engine.abandon(pending.bytes, workspace)
         ReferenceCountUtil.release(pending.message)
         pending.promise?.tryFailure(IllegalStateException("Network-conditioned channel closed."))
     }
@@ -446,7 +448,7 @@ class NetworkConditionChannelHandler(
         direction: NetworkConditionDirection,
         flush: Boolean = false,
     ) {
-        engine.recordForwarded(direction, readableBytes(message))
+        engine.recordForwarded(direction, readableBytes(message), workspace)
         if (promise == null) {
             context.fireChannelRead(message)
         } else if (flush) {
@@ -514,13 +516,13 @@ class NetworkConditionChannelHandler(
         semanticInput: NetworkConditionHttpInspectionInput?,
     ): EffectiveNetworkCondition? = if (semanticInput != null && semanticResolver != null) {
         semanticResolver.resolveHttp(
-            configuration = engine.configurationSnapshot(),
+            configuration = engine.configurationSnapshot(workspace),
             host = destinationHost,
             port = destinationPort,
             input = semanticInput,
         )
     } else {
-        NetworkConditionMatcher.resolve(engine.configurationSnapshot(), destinationHost, destinationPort)
+        NetworkConditionMatcher.resolve(engine.configurationSnapshot(workspace), destinationHost, destinationPort)
     }
 
     /** Re-evaluates semantic criteria once after a live edit before queued units are replanned. */

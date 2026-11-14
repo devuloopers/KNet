@@ -37,6 +37,27 @@ import com.devuloopers.knet.traffic.model.message.MessageProtocolId
 import com.devuloopers.knet.traffic.model.message.ProtocolMessageKind
 import com.devuloopers.knet.traffic.model.message.ProtocolMessageSnapshot
 import com.devuloopers.knet.traffic.model.message.ProtocolMessageState
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolMessageBreakpointCandidate
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolMessageBreakpointDecision
+import com.devuloopers.knet.application.contract.breakpoint.ProtocolMessageBreakpointGate
+import com.devuloopers.knet.domain.policy.PolicyWorkspace
+import com.devuloopers.knet.domain.rules.model.BreakpointProtocolId
+import com.devuloopers.knet.identity.RegisteredDeviceId
+import com.devuloopers.knet.engine.proxy.capture.ProxyExchangeCapture
+import com.devuloopers.knet.engine.proxy.capture.ProxyBodyReservation
+import com.devuloopers.knet.engine.proxy.inspection.ProxyDuplexTransformResult
+import com.devuloopers.knet.engine.websocket.WebSocketBreakpointTransformerFactory
+import com.devuloopers.knet.engine.websocket.WebSocketFrameDecoder
+import com.devuloopers.knet.engine.websocket.WebSocketOpcode
+import com.devuloopers.knet.traffic.model.ExchangeTerminalOutcome
+import com.devuloopers.knet.traffic.model.ExchangeTimings
+import com.devuloopers.knet.traffic.model.TrafficTerminationReason
+import com.devuloopers.knet.traffic.model.body.ContentEncoding
+import kotlinx.coroutines.*
+import java.util.concurrent.TimeUnit
+import kotlin.test.assertContentEquals
+import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -45,6 +66,40 @@ import kotlin.test.assertTrue
 
 class GraphQLWebSocketLayeringTest {
     private val parser = GraphQLWebSocketEnvelopeParser()
+
+    @Test
+    fun `graphql websocket semantic route preserves admitted workspace and bypasses inactive sibling`() {
+        val owner = PolicyWorkspace.Device(RegisteredDeviceId("owner"))
+        val sibling = PolicyWorkspace.Device(RegisteredDeviceId("sibling"))
+        val seen = mutableListOf<ProtocolMessageBreakpointCandidate>()
+        val gate = object : ProtocolMessageBreakpointGate {
+            override fun mayInterceptMessage(request: HttpRequestSnapshot, protocolRoute: List<BreakpointProtocolId>, direction: TrafficDirection): Boolean =
+                error("Scoped factories must use authenticated workspace prefilters.")
+            override fun mayInterceptMessageFor(workspace: PolicyWorkspace, request: HttpRequestSnapshot,
+                protocolRoute: List<BreakpointProtocolId>, direction: TrafficDirection): Boolean =
+                workspace == owner && GraphQLWebSocketBreakpointProtocol.id in protocolRoute
+            override suspend fun interceptMessage(candidate: ProtocolMessageBreakpointCandidate): ProtocolMessageBreakpointDecision {
+                seen += candidate
+                return ProtocolMessageBreakpointDecision.ContinueUnchanged
+            }
+            override fun cancelProtocolMessages(exchangeId: ExchangeId) = Unit
+        }
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Unconfined)
+        try {
+            val factory = WebSocketBreakpointTransformerFactory(gate, scope, listOf(GraphQLWebSocketBreakpointLayer(parser)))
+            assertNull(factory.createForWorkspace(sibling, request(), null, WorkspaceCapture()))
+            val transformer = assertNotNull(factory.createForWorkspace(owner, request(), null, WorkspaceCapture()))
+            transformer.onEstablished(responseHead(), 0L)
+            val wire = WebSocketFrameDecoder.encode(WebSocketOpcode.TEXT, subscribe("one", "LivePrices").encodeToByteArray(), maskingKey=byteArrayOf(1,2,3,4))
+            val result = transformer.transform(TrafficDirection.CLIENT_TO_SERVER, wire, 1L).toCompletableFuture().get(1, TimeUnit.SECONDS)
+            assertContentEquals(wire, assertIs<ProxyDuplexTransformResult.Forward>(result).copyPayload())
+            assertEquals(owner, seen.single().workspace)
+            assertEquals(GraphQLWebSocketBreakpointProtocol.id, seen.single().primaryProtocolId)
+            transformer.cancel(null)
+        } finally { scope.cancel() }
+    }
+
+
 
     @Test
     fun `semantic decoder runs before raw websocket and falls back for invalid envelopes`() {
@@ -230,6 +285,8 @@ class GraphQLWebSocketLayeringTest {
         headers = listOf(
             HeaderField(HeaderName("connection"), "Upgrade"),
             HeaderField(HeaderName("upgrade"), "websocket"),
+            HeaderField(HeaderName("sec-websocket-version"), "13"),
+            HeaderField(HeaderName("sec-websocket-key"), "MDEyMzQ1Njc4OWFiY2RlZg=="),
             HeaderField(HeaderName("sec-websocket-protocol"), GRAPHQL_TRANSPORT_WS_SUBPROTOCOL),
         ),
     ))
@@ -269,4 +326,14 @@ class GraphQLWebSocketLayeringTest {
         val EXCHANGE_ID = ExchangeId("graphql-websocket-exchange")
         val CONNECTION_ID = ConnectionId("graphql-websocket-connection")
     }
+}
+
+/** Capture identity only; this test exercises framing and admission without retaining payloads. */
+private class WorkspaceCapture : ProxyExchangeCapture {
+    override val exchangeId = ExchangeId("workspace-graphql-ws")
+    override fun tryReserveBody(direction: TrafficDirection, contentEncoding: ContentEncoding?, requestedBytes: Int): ProxyBodyReservation? = null
+    override fun completeBody(direction: TrafficDirection, observedBytes: Long, occurredAtEpochMillis: Long) = Unit
+    override fun cancelBody(direction: TrafficDirection, observedBytes: Long, occurredAtEpochMillis: Long, reason: TrafficTerminationReason) = Unit
+    override fun observeResponse(response: ResponseHead, occurredAtEpochMillis: Long) = Unit
+    override fun terminate(outcome: ExchangeTerminalOutcome, timings: ExchangeTimings, occurredAtEpochMillis: Long) = Unit
 }

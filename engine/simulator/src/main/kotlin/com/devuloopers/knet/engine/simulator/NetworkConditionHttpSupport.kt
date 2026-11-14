@@ -32,7 +32,7 @@ class NetworkConditionRequestAggregator(
                     requestBodyComplete = false,
                 )
                 semanticResolver.requiresHttpBodyInspection(
-                    configuration = engine.configurationSnapshot(),
+                    configuration = engine.configurationSnapshot(com.devuloopers.knet.engine.proxy.pipeline.policyWorkspace(context.channel())),
                     host = destination.host,
                     port = destination.port,
                     input = headerInput,

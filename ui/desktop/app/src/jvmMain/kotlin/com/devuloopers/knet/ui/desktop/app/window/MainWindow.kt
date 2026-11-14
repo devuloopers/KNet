@@ -39,9 +39,11 @@ fun MainWindow(
     val devices by deviceWorkspaces.state.collectAsState()
     val traffic: com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficViewModel = koinViewModel()
     val trafficState by traffic.uiState.collectAsState()
+    val breakpointManager: com.devuloopers.knet.ui.desktop.breakpointmanager.viewmodel.BreakpointManagerViewModel = koinViewModel()
+    val interceptions by breakpointManager.uiState.collectAsState()
     KNetApplicationTheme {
         Column(modifier.fillMaxSize()) {
-            titleBarWrapper { DeviceWorkspaceTabs(devices, { source -> traffic.selectSource(source); deviceWorkspaces.select(source) },
+            titleBarWrapper { DeviceWorkspaceTabs(devices.copy(pendingCounts = interceptions.pendingByWorkspace), { source -> traffic.selectSource(source); deviceWorkspaces.select(source) },
                 Modifier.fillMaxWidth().padding(start = titleBarInsetStart), onTitleBarInteractiveBoundsChanged,
                 onClose = { id -> if (!trafficState.isClearingHistory) deviceWorkspaces.requestClose(id) },
                 closeInProgress = trafficState.isClearingHistory) }

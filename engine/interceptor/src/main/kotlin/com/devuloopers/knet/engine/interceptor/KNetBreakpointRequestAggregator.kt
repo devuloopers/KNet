@@ -19,8 +19,8 @@ class KNetBreakpointRequestAggregator(
     shouldAggregate = { context, message ->
         message is HttpRequest && message.method() != HttpMethod.CONNECT &&
             mapBreakpointRequest(context, message).request.let { request ->
-                breakpointGate.mayIntercept(request, BreakpointPhase.REQUEST) ||
-                    breakpointGate.mayIntercept(request, BreakpointPhase.RESPONSE)
+                breakpointGate.mayInterceptFor(com.devuloopers.knet.engine.proxy.pipeline.policyWorkspace(context.channel()), request, BreakpointPhase.REQUEST) ||
+                    breakpointGate.mayInterceptFor(com.devuloopers.knet.engine.proxy.pipeline.policyWorkspace(context.channel()), request, BreakpointPhase.RESPONSE)
             }
     }
 )

@@ -100,6 +100,7 @@ class KNetInterceptorHandler(
                     requestBody = boundedBody(readableBodyBytes) { copyContent(msg) },
                     requestObservedBodyBytes = readableBodyBytes.toLong(),
                     retainedTransportBytes = readableBodyBytes.toLong(),
+                    workspace = com.devuloopers.knet.engine.proxy.pipeline.policyWorkspace(context.channel()),
                     origin = requestContext.origin,
                     startedAtEpochMillis = requestContext.startedAtEpochMillis,
                 )
@@ -175,7 +176,8 @@ class KNetInterceptorHandler(
                         responseBody = boundedBody(readableBodyBytes) { copyContent(msg) },
                         responseObservedBodyBytes = readableBodyBytes.toLong(),
                         retainedTransportBytes = readableBodyBytes.toLong(),
-                        origin = requestContext.origin,
+                        workspace = com.devuloopers.knet.engine.proxy.pipeline.policyWorkspace(context.channel()),
+                    origin = requestContext.origin,
                         startedAtEpochMillis = requestContext.startedAtEpochMillis,
                     )
                 },

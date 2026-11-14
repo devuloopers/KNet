@@ -1,5 +1,7 @@
 package com.devuloopers.knet.ui.desktop.protectedtraffic.view
 
+import com.devuloopers.knet.ui.core.components.policy.RuleLibraryLocation
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -69,6 +71,7 @@ internal fun ProtectedRulesTable(state: ProtectedTrafficState, onEnabled: (Prote
                                     RuleColumn.DESTINATION -> Row(verticalAlignment = Alignment.CenterVertically,
                                         horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xs)) {
                                         KNetCell(rule.destination?.displayValue ?: "All destinations", Modifier.weight(1f))
+                                        KNetBadge(if (state.definitions.firstOrNull { it.rule.id == rule.id }?.availability == com.devuloopers.knet.domain.policy.RuleAvailability.Shared) RuleLibraryLocation.SHARED.label else RuleLibraryLocation.PRIVATE.label)
                                         if (rule.origin == ProtectedTrafficRuleOrigin.MIGRATED_PRESET) KNetBadge("IMPORTED")
                                     }
                                     RuleColumn.APPLICATION -> KNetCell(rule.sourceApplication?.value ?: "Any application")

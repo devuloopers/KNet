@@ -26,15 +26,14 @@ internal val networkConditionsBindings: Module = module {
     single { NetworkConditionProtocolRegistry(getAll<NetworkConditionProtocolExtension>()) }
     single { NetworkConditionSemanticResolver(get()) }
     factory { NetworkConditionProtocolRuleUseCase(get()) }
+    single<NetworkConditionsRepository> { get<com.devuloopers.knet.data.desktop.policy.PolicyRepositoryViews>().network() }
     single {
-        RoomNetworkConditionsRepository(get<KNetDatabase>(), get<CoroutineScope>())
-    } bind NetworkConditionsRepository::class
-    single {
-        val repository = get<NetworkConditionsRepository>()
-        NetworkConditionEngine(
-            configuration = repository.configuration,
-            scope = get<CoroutineScope>(),
-        )
+        val library = get<com.devuloopers.knet.application.contract.device.DevicePolicyLibrary>()
+        val policyMap = com.devuloopers.knet.application.contract.device.ProjectedStateFlow(library.snapshot) { state ->
+            state.settings.keys.associateWith(state::runtimeNetwork)
+        }
+        NetworkConditionEngine(configuration = { library.snapshot.value.runtimeNetwork(com.devuloopers.knet.domain.policy.PolicyWorkspace.Other) })
+            .also { it.bindWorkspaces(policyMap, get<CoroutineScope>()) }
     } bind NetworkConditionRuntimeTelemetry::class
     factory {
         PrepareNetworkConditionRuleUseCase(
@@ -45,6 +44,7 @@ internal val networkConditionsBindings: Module = module {
             inspectionAnnotations = get<InspectionAnnotationStore>(),
         )
     }
+    factory { com.devuloopers.knet.application.usecase.networkconditions.ManageNetworkConditionsUseCase(get()) }
     viewModel {
         NetworkConditionsViewModel(
             repository = get(),

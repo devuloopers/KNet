@@ -1,5 +1,10 @@
 package com.devuloopers.knet.ui.desktop.protectedtraffic.viewmodel
 
+import com.devuloopers.knet.ui.core.components.policy.RuleReplacementNoticeState
+import com.devuloopers.knet.ui.core.components.policy.RULE_REPLACEMENT_NOTICE_MILLIS
+import kotlinx.coroutines.delay
+import com.devuloopers.knet.domain.policy.*
+import kotlinx.coroutines.Job
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.application.usecase.protectedtraffic.DeleteProtectedTrafficRuleUseCase
@@ -25,7 +30,7 @@ import kotlinx.coroutines.launch
 
 /** Coordinates the protected-traffic policy workspace without exposing persistence details to Compose. */
 class ProtectedTrafficViewModel(
-    observeConfiguration: ObserveProtectedTrafficConfigurationUseCase,
+    private val observeConfiguration: ObserveProtectedTrafficConfigurationUseCase,
     private val setDefaultAction: SetProtectedTrafficDefaultActionUseCase,
     private val upsertRule: UpsertProtectedTrafficRuleUseCase,
     private val deleteRule: DeleteProtectedTrafficRuleUseCase,
@@ -35,10 +40,37 @@ class ProtectedTrafficViewModel(
     /** Current immutable workspace state. */
     val state: StateFlow<ProtectedTrafficState> = mutableState.asStateFlow()
 
-    init {
-        viewModelScope.launch {
-            observeConfiguration().collect { configuration ->
-                mutableState.update { current -> current.copy(configuration = configuration) }
+    private var replacementNoticeJob: kotlinx.coroutines.Job? = null
+
+    /** Uses the committed replacement result and original target, never the current tab or a pre-save guess. */
+    private fun confirmReplacement(result: RuleSaveResult, context: RuleEditContext, deviceName: String) {
+        if (!result.replacedExistingRule) return
+        replacementNoticeJob?.cancel()
+        mutableState.update { it.copy(replacementNotice = RuleReplacementNoticeState(context.editorId, deviceName)) }
+        replacementNoticeJob = viewModelScope.launch {
+            delay(RULE_REPLACEMENT_NOTICE_MILLIS)
+            mutableState.update { current -> if (current.replacementNotice?.commandId == context.editorId)
+                current.copy(replacementNotice = null) else current }
+        }
+    }
+
+    private var catalogJob: Job? = null
+    init { observeWorkspace(PolicyWorkspace.Other) }
+
+    /** Changes the manager view without retargeting an open editor or a pending operation. */
+    fun selectWorkspace(workspace: PolicyWorkspace) {
+        if (workspace == state.value.workspace) return
+        mutableState.update { it.copy(workspace = workspace,
+            workspaceName = it.workspaceNames[workspace] ?: if (workspace == PolicyWorkspace.Other) "Other traffic" else "Selected device", definitions = emptyList(),
+            configuration = com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficConfiguration(configurationReady = false)) }
+        observeWorkspace(workspace)
+    }
+    private fun observeWorkspace(workspace: PolicyWorkspace) {
+        catalogJob?.cancel()
+        catalogJob = viewModelScope.launch {
+            observeConfiguration.catalog(workspace).collect { catalog ->
+                mutableState.update { current -> if (current.workspace == workspace) current.copy(configuration = catalog.configuration,
+                    definitions = catalog.definitions, workspaceName = catalog.workspaceName, workspaceNames = catalog.workspaceNames) else current }
             }
         }
     }
@@ -49,14 +81,31 @@ class ProtectedTrafficViewModel(
     /** Persists the explicit proxy's supported fallback while preventing out-of-order duplicate writes. */
     fun selectDefaultHandling(handling: ProtectedTrafficDefaultHandling) {
         if (!state.value.configuration.configurationReady || state.value.isSettingDefault) return
+        val workspace = state.value.workspace
         mutableState.update { it.copy(isSettingDefault = true) }
-        mutate(onFinished = { mutableState.update { it.copy(isSettingDefault = false) } }) { setDefaultAction(handling) }
+        mutate(onFinished = { mutableState.update { it.copy(isSettingDefault = false) } }) { setDefaultAction(handling, workspace) }
+    }
+
+    /** Captures deletion identity/revision before displaying the affected workspaces. */
+    fun requestRuleDeletion(ruleId: ProtectedTrafficRuleId) {
+        val current = state.value
+        val definition = current.definitions.firstOrNull { it.rule.id == ruleId } ?: return
+        mutableState.update { it.copy(pendingDeletion = PolicyDeletionRequest(ruleId.value,
+            definition.editContext(current.workspace), definition.usageNames(current.workspaceNames))) }
+    }
+    /** Cancels deletion without changing definitions or activations. */
+    fun dismissRuleDeletion() { mutableState.update { it.copy(pendingDeletion = null) } }
+    /** Deletes exactly the acknowledged revision and original target. */
+    fun confirmRuleDeletion() {
+        val request = state.value.pendingDeletion ?: return
+        dismissRuleDeletion()
+        mutate { deleteRule.deleteDefinition(ProtectedTrafficRuleId(request.id), request.context, true) }
     }
 
     /** Opens an empty rule editor. */
     fun beginAddRule() {
         if (!state.value.configuration.configurationReady || state.value.isSaving) return
-        mutableState.update { it.copy(ruleDraft = ProtectedTrafficRuleDraft(), draftError = null) }
+        mutableState.update { it.copy(ruleDraft = ProtectedTrafficRuleDraft(context = RuleEditContext(it.workspace), workspaceName = it.workspaceName), draftError = null) }
     }
 
     /** Opens the latest saved rule by stable identity; stale or removed table rows cannot replace newer policy. */
@@ -68,6 +117,9 @@ class ProtectedTrafficViewModel(
         } ?: return
         mutableState.update { it.copy(ruleDraft = ProtectedTrafficRuleDraft(
             id = latest.id,
+            context = current.definitions.firstOrNull { it.rule.id == latest.id }?.editContext(current.workspace) ?: RuleEditContext(current.workspace),
+            workspaceName = current.workspaceName, originalRule = latest,
+            usageNames = current.definitions.firstOrNull { it.rule.id == latest.id }?.usageNames(current.workspaceNames).orEmpty(),
             sourceApplication = latest.sourceApplication?.value.orEmpty(),
             destination = when (val destination = latest.destination) {
                 is ProtectedDestinationSelector.Exact -> destination.value
@@ -102,7 +154,9 @@ class ProtectedTrafficViewModel(
         mutableState.update { it.copy(isSaving = true, draftError = null) }
         viewModelScope.launch {
             try {
-                val existing = draft.id?.let { id -> current.configuration.rules.firstOrNull { it.id == id }
+                if (draft.id != null && current.workspace == draft.context.workspace && current.configuration.rules.none { it.id == draft.id })
+                    error("This rule was removed. Close the editor and add a new rule.")
+                val existing = draft.id?.let { id -> draft.originalRule ?: current.configuration.rules.firstOrNull { it.id == id }
                     ?: error("This rule was removed. Close the editor and add a new rule.") }
                 val application = draft.sourceApplication.trim().takeIf(String::isNotEmpty)?.let(::ProtectedSourceApplicationId)
                 val destination = draft.destination.trim().takeIf(String::isNotEmpty)?.let(ProtectedDestinationSelector::parse)
@@ -117,8 +171,9 @@ class ProtectedTrafficViewModel(
                 val rule = if (existing?.origin == ProtectedTrafficRuleOrigin.MIGRATED_PRESET &&
                     (proposed.selectorKey != existing.selectorKey || proposed.action != existing.action))
                     proposed.copy(origin = ProtectedTrafficRuleOrigin.USER) else proposed
-                upsertRule(rule)
-                mutableState.update { it.copy(ruleDraft = null, draftError = null) }
+                val result = upsertRule.saveDefinition(rule, draft.context)
+                confirmReplacement(result, draft.context, draft.workspaceName)
+                mutableState.update { if (it.ruleDraft?.context?.editorId == draft.context.editorId) it.copy(ruleDraft = null, draftError = null) else it }
             } catch (failure: kotlinx.coroutines.CancellationException) { throw failure }
             catch (failure: Exception) { mutableState.update { it.copy(draftError = failure.message ?: "Unable to save this rule.") } }
             finally { mutableState.update { it.copy(isSaving = false) } }
@@ -126,10 +181,36 @@ class ProtectedTrafficViewModel(
     }
 
     /** Enables/disables the latest authoritative row, retaining selectors and imported provenance. */
-    fun setRuleEnabled(rule: ProtectedTrafficRule, enabled: Boolean) = mutateRule(rule.id) { latest -> upsertRule(latest.copy(enabled = enabled)) }
+    fun setRuleEnabled(rule: ProtectedTrafficRule, enabled: Boolean) {
+        val workspace = state.value.workspace
+        mutateRule(rule.id) { latest -> upsertRule(latest.copy(enabled = enabled), workspace) }
+    }
 
     /** Deletes a saved rule; repeat clicks cannot submit concurrent writes for the same identity. */
-    fun deleteRule(ruleId: ProtectedTrafficRuleId) = mutateRule(ruleId) { deleteRule.invoke(it.id) }
+    fun deleteRule(ruleId: ProtectedTrafficRuleId) {
+        val workspace = state.value.workspace
+        mutateRule(ruleId) { deleteRule.invoke(it.id, workspace) }
+    }
+
+    /** Shared availability never changes activation on another device. */
+    fun setDraftShared(shared: Boolean) {
+        val draft = state.value.ruleDraft ?: return
+        if (draft.id != null && draft.context.originalAvailability == RuleAvailability.Shared && !shared) return
+        updateRuleDraft(draft.copy(context = draft.context.copy(availability = if (shared) RuleAvailability.Shared else RuleAvailability.Private(draft.context.workspace))))
+    }
+
+    /** Creates a private variation while retaining the shared original. */
+    fun duplicateRule(rule: ProtectedTrafficRule) {
+        beginEditRule(rule)
+        val draft = state.value.ruleDraft ?: return
+        updateRuleDraft(draft.copy(id = null, originalRule = null, context = RuleEditContext(state.value.workspace), workspaceName = state.value.workspaceName))
+    }
+
+    /** Duplicates the current fields without retargeting an editor opened on another device. */
+    fun duplicateDraft() {
+        val draft = state.value.ruleDraft ?: return
+        updateRuleDraft(draft.copy(id = null, originalRule = null, usageNames = emptyList(), context = RuleEditContext(draft.context.workspace)))
+    }
 
     /** Dismisses a non-editor mutation error. */
     fun clearError(): Unit = mutableState.update { it.copy(errorMessage = null) }

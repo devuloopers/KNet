@@ -153,6 +153,8 @@ object FakeTrafficViewModelFactory {
         }
 
         val fakeRulesRepo = object : RulesRepository {
+            // Paging/scroll tests intentionally supply an empty policy for every source; real library tests cover activation.
+            override fun forWorkspace(workspace: com.devuloopers.knet.domain.policy.PolicyWorkspace): RulesRepository = this
             override val rulesFlow: Flow<List<BreakpointRule>> = flowOf(emptyList())
             override val isGlobalInterceptionEnabled: Flow<Boolean> = flowOf(true)
             override suspend fun saveRule(rule: BreakpointRule) {}

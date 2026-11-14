@@ -70,6 +70,8 @@ data class TlsInterceptionRequest(
     /** Automatic fallback is selected only after a bounded ClientHello classification, including absent SNI. */
     val clientHelloObserved: Boolean = false,
 
+    /** Authenticated routing identity, available even when capture is paused. */
+    val workspace: com.devuloopers.knet.domain.policy.PolicyWorkspace = com.devuloopers.knet.domain.policy.PolicyWorkspace.fromClient(clientContext?.client),
 ) {
     init {
         require(connectHost.isNotBlank()) { "CONNECT host must not be blank." }

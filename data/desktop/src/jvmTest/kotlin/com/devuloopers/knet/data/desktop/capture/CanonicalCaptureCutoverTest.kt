@@ -55,6 +55,51 @@ import kotlin.test.assertTrue
 /** Proves composition selects one persistence authority for a new proxy capture session. */
 class CanonicalCaptureCutoverTest {
 
+    @Test fun `source choices survive writer rotation and listener restart without resetting sibling TLS learning`() = runTest {
+        val root = Files.createTempDirectory("knet-source-capture-lifecycle-").toFile()
+        val database = DatabaseFactory.create(root.resolve("traffic.db"))
+        val bodyStore = FileBodyStore(root.resolve("bodies"))
+        val coordinator = BreakpointCoordinator()
+        val automatic = com.devuloopers.knet.data.desktop.protectedtraffic.InMemoryAutomaticTlsFallback(backgroundScope)
+        val repository = DesktopProxyRuntimeAdapter(ProxyRuntimeRepository(CertificateAuthority.generate(), CertificateCache(),
+            breakpointGate = coordinator), CanonicalCaptureSessionFactory(database, bodyStore, bodyStore), coordinator, automatic)
+        val first = com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(com.devuloopers.knet.identity.RegisteredDeviceId("first"))
+        val second = com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(com.devuloopers.knet.identity.RegisteredDeviceId("second"))
+        try {
+            assertIs<CaptureResumeResult.ProxyInactive>(repository.resume(first))
+            val started = assertIs<ProxyStartResult.Running>(repository.start(configuration(availableLoopbackPort())))
+            val session = assertIs<CaptureSessionState.Capturing>(repository.captureState.value).sessionId
+            assertIs<CaptureSessionState.Paused>(repository.workspaceCaptureState.value.stateFor(second))
+            repository.resume(second)
+            learnTemporary(automatic)
+            val learned = automatic.state.value.keys
+            assertEquals(CapturePauseResult.PAUSED, repository.pause(first))
+            assertEquals(CapturePauseResult.ALREADY_PAUSED, repository.pause(first))
+            assertEquals(session, assertIs<CaptureSessionState.Capturing>(repository.captureState.value).sessionId)
+            assertEquals(learned, automatic.state.value.keys)
+            assertEquals(session, automatic.state.value.sessionId)
+            assertEquals(started.handle.runtimeId,
+                assertIs<com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState.Running>(repository.state.value).handle.runtimeId)
+            repository.rotateForSourceTrafficClear()
+            assertTrue(automatic.state.value.keys.isNotEmpty())
+            assertIs<CaptureSessionState.Paused>(repository.workspaceCaptureState.value.stateFor(first))
+            assertIs<CaptureSessionState.Capturing>(repository.workspaceCaptureState.value.stateFor(second))
+            assertIs<CaptureSessionState.Paused>(repository.workspaceCaptureState.value.stateFor(com.devuloopers.knet.domain.policy.PolicyWorkspace.Other))
+            assertEquals(1, database.canonicalCaptureDao().countActiveSessions())
+            repository.stop(ProxyStopReason.CONFIGURATION_CHANGED)
+            assertIs<ProxyStartResult.Running>(repository.start(configuration(availableLoopbackPort())))
+            assertIs<CaptureSessionState.Paused>(repository.workspaceCaptureState.value.stateFor(first))
+            assertIs<CaptureSessionState.Capturing>(repository.workspaceCaptureState.value.stateFor(second))
+            repository.pause(second)
+            assertIs<com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState.Running>(repository.state.value)
+            repository.resume(com.devuloopers.knet.domain.policy.PolicyWorkspace.Other)
+            assertIs<CaptureSessionState.Capturing>(repository.workspaceCaptureState.value.stateFor(com.devuloopers.knet.domain.policy.PolicyWorkspace.Other))
+            assertIs<CaptureSessionState.Paused>(repository.workspaceCaptureState.value.stateFor(second))
+        } finally {
+            repository.stop(ProxyStopReason.APPLICATION_SHUTDOWN); repository.close(); database.close(); root.deleteRecursively()
+        }
+    }
+
     private fun learnTemporary(automatic: com.devuloopers.knet.application.contract.protectedtraffic.AutomaticTlsFallback) {
         val session = assertNotNull(automatic.state.value.sessionId)
         val epoch = assertNotNull(automatic.authorize(com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficConfiguration(), "fixture-ca"))

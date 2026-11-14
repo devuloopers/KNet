@@ -33,7 +33,6 @@ class TrafficSmartScrollInteractionTest {
     @Test fun `smart pauses on wheel scrolling and insertion preserves the visible row anchor`() = EventQueue.invokeAndWait {
         fixture { scene, state ->
             assertTrue(state.settings.value.follows(state.reading.value))
-            val list = scene.verticalList()
             scene.sendPointerEvent(PointerEventType.Scroll, Offset(350f, 140f), scrollDelta = Offset(0f, 5f))
             scene.frames()
             assertFalse(state.reading.value.atTop)
@@ -44,9 +43,10 @@ class TrafficSmartScrollInteractionTest {
             scene.frames()
             assertEquals(anchor, scene.eventLabels().first(), "Insertion must retain the same row and vertical offset")
             assertEquals("row-29", state.selected.value)
-            // A semantic scroll also exercises keyboard/accessibility navigation through the actual lazy list.
-            list.config[SemanticsActions.ScrollBy].action!!.invoke(0f, -10_000f)
-            scene.frames()
+            // Semantic Home navigation targets the first item explicitly rather than depending on
+            // an animated pixel scroll settling within a fixed number of headless render frames.
+            assertTrue(scene.verticalList().config[SemanticsActions.ScrollToIndex].action!!.invoke(0))
+            repeat(24) { if (!state.reading.value.atTop) scene.frameAfter(100) }
             assertTrue(state.reading.value.atTop)
             assertTrue(state.settings.value.follows(state.reading.value))
         }

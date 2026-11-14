@@ -19,6 +19,8 @@ import com.devuloopers.knet.traffic.id.ExchangeId
 import com.devuloopers.knet.traffic.id.OpaqueFlowId
 import com.devuloopers.knet.traffic.model.http.RequestTarget
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
+import com.devuloopers.knet.domain.policy.PolicyWorkspace
 
 public class ObserveNetworkConditionsUseCase(private val repository: NetworkConditionsRepository) {
     public fun execute(): StateFlow<NetworkConditionConfiguration> = repository.configuration
@@ -46,6 +48,9 @@ public sealed interface PrepareNetworkConditionRuleResult {
         public val existingRuleId: NetworkConditionRuleId?,
         public val suggestedProfileId: NetworkConditionProfileId,
         public val protocolCriteria: NetworkConditionProtocolCriteria,
+        public val workspace: PolicyWorkspace = PolicyWorkspace.Other,
+        public val workspaceName: String = "Other traffic",
+        public val definition: com.devuloopers.knet.domain.policy.PolicyDefinition<NetworkConditionRule>? = null,
     ) : PrepareNetworkConditionRuleResult
 
     public data object MissingExchange : PrepareNetworkConditionRuleResult
@@ -63,6 +68,9 @@ public class PrepareNetworkConditionRuleUseCase(
 ) {
     public suspend fun execute(exchangeId: ExchangeId): PrepareNetworkConditionRuleResult {
         val exchange = trafficQuery.getExchange(exchangeId)
+        val connectionId = exchange?.connectionId ?: trafficQuery.getOpaqueFlow(OpaqueFlowId(exchangeId.value))?.connectionId
+        val workspace = PolicyWorkspace.fromIngress(connectionId?.let { trafficQuery.getConnectionIngress(it)?.ingress })
+        val scoped = repository.forWorkspace(workspace)
         val destination = if (exchange != null) {
             when (val target = exchange.request.head.target) {
                 is RequestTarget.Absolute -> {
@@ -86,7 +94,8 @@ public class PrepareNetworkConditionRuleUseCase(
         val conditionTarget = runCatching {
             NetworkConditionTarget.parse(destination.first, destination.second)
         }.getOrElse { return PrepareNetworkConditionRuleResult.DestinationUnavailable }
-        val configuration = repository.configuration.value
+        val catalog = scoped.observeCatalog().first { it.ready }
+        val configuration = catalog.configuration
         val protocolCriteria = exchange?.let { captured ->
             when (val loaded = loadTrafficExchangeDetails.execute(exchangeId)) {
                 is LoadTrafficExchangeDetailsResult.Found -> protocolRegistry.suggestCriteria(
@@ -100,16 +109,20 @@ public class PrepareNetworkConditionRuleUseCase(
                 LoadTrafficExchangeDetailsResult.Missing -> null
             }
         } ?: NetworkConditionProtocolCriteria.TransportDefault
-        val existing = configuration.rules.firstOrNull { rule ->
+        val matchingRules = configuration.rules.asSequence().filter { rule ->
             rule.target == conditionTarget && rule.protocolCriteria == protocolCriteria
         }
+        // Replacement retains saved alternatives. Reopen the active choice for this device before
+        // falling back to an inactive definition; merely opening an inactive rule never enables it.
+        val existing = matchingRules.firstOrNull { it.enabled } ?: matchingRules.firstOrNull()
         val suggested = existing?.profileId
             ?: com.devuloopers.knet.domain.networkconditions.NetworkConditionBuiltIns.NO_THROTTLING.id
         return PrepareNetworkConditionRuleResult.Ready(
             target = conditionTarget,
             existingRuleId = existing?.id,
             suggestedProfileId = suggested,
-            protocolCriteria = protocolCriteria,
+            protocolCriteria = protocolCriteria, workspace = workspace, workspaceName = catalog.workspaceName,
+            definition = existing?.let { rule -> catalog.definitions.firstOrNull { it.rule.id == rule.id } },
         )
     }
 

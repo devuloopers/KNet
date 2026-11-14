@@ -52,14 +52,18 @@ class WebSocketNetworkConditionTransformerFactory(
         require(maximumMessageBytes > 0) { "Maximum WebSocket condition message bytes must be positive." }
     }
 
-    override fun create(
-        request: HttpRequestSnapshot,
-        streamId: StreamId?,
-        capture: ProxyExchangeCapture?,
-    ): ProxyDuplexTransformer? {
+    override fun create(request: HttpRequestSnapshot, streamId: StreamId?, capture: ProxyExchangeCapture?): ProxyDuplexTransformer? =
+        createBound(request, capture, com.devuloopers.knet.domain.policy.PolicyWorkspace.Other)
+
+    override fun createForWorkspace(workspace: com.devuloopers.knet.domain.policy.PolicyWorkspace,
+        request: HttpRequestSnapshot, streamId: StreamId?, capture: ProxyExchangeCapture?): ProxyDuplexTransformer? = createBound(request, capture, workspace)
+
+    private fun createBound(request: HttpRequestSnapshot, capture: ProxyExchangeCapture?,
+        workspace: com.devuloopers.knet.domain.policy.PolicyWorkspace): ProxyDuplexTransformer? {
         if (!WebSocketProtocol.isHandshake(request)) return null
         val destination = request.destination() ?: return null
         return WebSocketNetworkConditionTransformer(
+            workspace = workspace,
             request = request,
             exchangeId = capture?.exchangeId ?: newExchangeId(),
             host = destination.first,
@@ -80,6 +84,7 @@ class WebSocketNetworkConditionTransformerFactory(
 }
 
 private class WebSocketNetworkConditionTransformer(
+    private val workspace: com.devuloopers.knet.domain.policy.PolicyWorkspace,
     private val request: HttpRequestSnapshot,
     private val exchangeId: ExchangeId,
     private val host: String,
@@ -89,7 +94,7 @@ private class WebSocketNetworkConditionTransformer(
     private val scope: CoroutineScope,
     maximumMessageBytes: Int,
 ) : ProxyDuplexTransformer {
-    private val scheduler = NetworkConditionProtocolScheduler(engine)
+    private val scheduler = NetworkConditionProtocolScheduler(engine, workspace)
     private val flow = scheduler.openFlow()
     private val cancelled = AtomicBoolean(false)
     private val pendingTimeouts = ConcurrentHashMap.newKeySet<CompletableFuture<ProxyDuplexTransformResult>>()
@@ -261,7 +266,7 @@ private class WebSocketNetworkConditionTransformer(
         ): ProxyDuplexTransformResult? {
             val messageSequence = ++sequence
             val effective = semanticResolver.resolveMessage(
-                configuration = engine.configurationSnapshot(),
+                configuration = engine.configurationSnapshot(workspace),
                 host = host,
                 port = port,
                 input = NetworkConditionMessageInspectionInput(

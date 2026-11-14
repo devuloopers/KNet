@@ -40,11 +40,15 @@ class SseBreakpointTransformerFactory(
     private val scope: CoroutineScope,
     private val limits: SseLimits = SseLimits(),
 ) : ProxyStreamTransformerFactory {
-    override fun create(
-        request: HttpRequestSnapshot,
-        streamId: StreamId?,
-        capture: ProxyExchangeCapture?,
-    ): ProxyStreamTransformer? {
+    override fun create(request: HttpRequestSnapshot, streamId: StreamId?, capture: ProxyExchangeCapture?): ProxyStreamTransformer? =
+        createBound(request, streamId, capture, gate)
+
+    override fun createForWorkspace(workspace: com.devuloopers.knet.domain.policy.PolicyWorkspace,
+        request: HttpRequestSnapshot, streamId: StreamId?, capture: ProxyExchangeCapture?): ProxyStreamTransformer? =
+        createBound(request, streamId, capture, com.devuloopers.knet.application.contract.breakpoint.WorkspaceProtocolMessageGate(gate, workspace))
+
+    private fun createBound(request: HttpRequestSnapshot, streamId: StreamId?, capture: ProxyExchangeCapture?,
+        gate: ProtocolMessageBreakpointGate): ProxyStreamTransformer? {
         val admittedCapture = capture ?: return null
         if (!gate.mayInterceptMessage(
                 request,

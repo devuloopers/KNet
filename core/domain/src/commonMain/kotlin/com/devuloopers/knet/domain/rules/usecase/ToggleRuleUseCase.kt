@@ -13,8 +13,8 @@ class ToggleRuleUseCase(
     /**
      * Toggles a rule enabled / disabled state by ID.
      */
-    suspend fun execute(ruleId: String, enabled: Boolean) {
-        repository.toggleRule(ruleId, enabled)
+    suspend fun execute(ruleId: String, enabled: Boolean, workspace: com.devuloopers.knet.domain.policy.PolicyWorkspace = com.devuloopers.knet.domain.policy.PolicyWorkspace.Other) {
+        repository.forWorkspace(workspace).toggleRule(ruleId, enabled)
     }
 
     suspend operator fun invoke(ruleId: String, enabled: Boolean) {

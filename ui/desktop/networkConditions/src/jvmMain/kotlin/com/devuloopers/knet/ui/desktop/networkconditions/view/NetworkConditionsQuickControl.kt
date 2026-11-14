@@ -122,7 +122,7 @@ fun NetworkConditionsQuickControl(
                         verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.md)) {
                         Text("Network Conditions", style = KNetTheme.typography.titleMedium.copy(color = KNetTheme.colors.textPrimary))
                         KNetSwitch(configuration.enabled, onEnabledChange, label = "Enable Network Conditions")
-                        Text("Global profile", style = KNetTheme.typography.labelMedium.copy(color = KNetTheme.colors.textPrimary))
+                        Text("Network profile", style = KNetTheme.typography.labelMedium.copy(color = KNetTheme.colors.textPrimary))
                         KNetDropdown(
                             selectedItem = selected,
                             items = options,

@@ -27,9 +27,10 @@ sealed interface NetworkConditionProtocolScheduleResult {
  */
 class NetworkConditionProtocolScheduler(
     private val engine: NetworkConditionEngine,
+    private val workspace: com.devuloopers.knet.domain.policy.PolicyWorkspace = com.devuloopers.knet.domain.policy.PolicyWorkspace.Other,
 ) {
     /** Opens one telemetry flow owned by an upgraded protocol connection. */
-    fun openFlow(): AutoCloseable = engine.openFlow()
+    fun openFlow(): AutoCloseable = engine.openFlow(workspace)
 
     /** Applies [effective] to one directionally ordered unit containing [bytes] wire bytes. */
     suspend fun schedule(
@@ -38,10 +39,10 @@ class NetworkConditionProtocolScheduler(
         bytes: Int,
         sequence: Long,
     ): NetworkConditionProtocolScheduleResult = when (
-        val plan = engine.plan(effective, direction, bytes, sequence)
+        val plan = engine.plan(effective, direction, bytes, sequence, workspace)
     ) {
         NetworkConditionPlan.PassThrough -> {
-            engine.recordForwarded(direction, bytes)
+            engine.recordForwarded(direction, bytes, workspace)
             NetworkConditionProtocolScheduleResult.Forward
         }
 
@@ -51,17 +52,17 @@ class NetworkConditionProtocolScheduler(
         }
 
         is NetworkConditionPlan.Delay -> {
-            if (!engine.tryQueue(bytes)) {
-                engine.recordFaultedFlow()
+            if (!engine.tryQueue(bytes, workspace)) {
+                engine.recordFaultedFlow(workspace)
                 return NetworkConditionProtocolScheduleResult.DropConnection(NetworkFailureBehavior.ResetFlow)
             }
             try {
                 delay(plan.nanoseconds.nanoseconds)
-                engine.releaseQueued(bytes)
-                engine.recordForwarded(direction, bytes)
+                engine.releaseQueued(bytes, workspace)
+                engine.recordForwarded(direction, bytes, workspace)
                 NetworkConditionProtocolScheduleResult.Forward
             } catch (failure: Throwable) {
-                engine.abandon(bytes)
+                engine.abandon(bytes, workspace)
                 throw failure
             }
         }

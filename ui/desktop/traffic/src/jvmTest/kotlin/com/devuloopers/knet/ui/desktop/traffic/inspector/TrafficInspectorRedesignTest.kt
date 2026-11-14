@@ -368,6 +368,52 @@ class TrafficInspectorRedesignTest {
         }
     }
 
+    @Test fun `every protocol keeps header navigation and body controls mounted across first frame row changes`() = EventQueue.invokeAndWait {
+        val cases = listOf(
+            Triple("http", exchange(), RequestKindId.HTTP),
+            Triple("graphql", exchange(path = "/graphql"), RequestKindId.GRAPHQL),
+            Triple("grpc", exchange(headers = listOf(header("grpc-status", "0")), path = "/demo.Service/Read"), RequestKindId.GRPC),
+            Triple("websocket", exchange(101, state = ExchangeState.RESPONSE_STREAMING), RequestKindId.WEBSOCKET),
+            Triple("graphql-ws", exchange(101, listOf(header("sec-websocket-protocol", "graphql-transport-ws")),
+                ExchangeState.RESPONSE_STREAMING), RequestKindId.GRAPHQL_WEBSOCKET),
+            Triple("sse", exchange(headers = listOf(header("content-type", "text/event-stream")), state = ExchangeState.RESPONSE_STREAMING), RequestKindId.HTTP))
+        for ((name, original, kind) in cases) for (width in listOf(680, 360)) {
+            val selected = mutableStateOf(original)
+            val tab = mutableStateOf(InspectorTab.OVERVIEW)
+            ImageComposeScene(width, 900, content = { KNetTheme {
+                val current = selected.value
+                val streaming = name in listOf("grpc", "websocket", "graphql-ws", "sse")
+                val protocol = when (name) { "grpc" -> MessageProtocolId.GRPC; "sse" -> MessageProtocolId.SSE; else -> MessageProtocolId.WEBSOCKET }
+                val msg = message(protocol, "message-${current.id.value}").copy(exchangeId = current.id)
+                TrafficInspectorPanel(current.toTrafficRowUiState().copy(requestKind = kind), tab.value,
+                    preparedState = prepared(current),
+                    protocolMessages = if (streaming) ProtocolMessagesUiState(current.id.value, listOf(msg), 1,
+                        selectedMessageId = msg.id, selectedBodyBytes = "hello".encodeToByteArray()) else ProtocolMessagesUiState(),
+                    onTabSelected = {})
+            }}).use { scene ->
+                scene.frame()
+                val navigation = listOf("Overview", "Request", "Response", "Timeline")
+                fun nodes() = navigation.map { label -> scene.nodes().first { it.text() == label } }
+                    .map { it.id to it.boundsInRoot }
+                val stable = nodes()
+                val tabs = listOf(InspectorTab.OVERVIEW, InspectorTab.REQUEST, InspectorTab.RESPONSE, InspectorTab.TIMELINE) +
+                    if (name in listOf("grpc", "websocket", "graphql-ws", "sse")) listOf(InspectorTab.MESSAGES) else emptyList()
+                for (nextTab in tabs) {
+                    tab.value = nextTab; scene.frame()
+                    val stableForTab = nodes()
+                    assertEquals(stable.map { it.first }, stableForTab.map { it.first })
+                    selected.value = original.copy(id = ExchangeId("$name-${nextTab.name}"), connectionId = ConnectionId("next"))
+                    repeat(3) { frame ->
+                        nanos++
+                        scene.render(nanos * 1_000_000_000).close()
+                        assertEquals(stableForTab, nodes(), "$name/$nextTab navigation changed on frame $frame at width $width")
+                        assertEquals(1, scene.texts().count { it.startsWith("api.example.test") })
+                    }
+                }
+            }
+        }
+    }
+
     private fun scene(row: TrafficRowUiState, prepared: InspectorPreparedState, tab: InspectorTab,
         messages: ProtocolMessagesUiState = ProtocolMessagesUiState()) = ImageComposeScene(680, 900, content = { KNetTheme {
         TrafficInspectorPanel(row, tab, preparedState = prepared, protocolMessages = messages, onTabSelected = {})

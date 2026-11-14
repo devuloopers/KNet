@@ -227,7 +227,7 @@ class NetworkConditionsWorkspaceTest {
             }
         }).use { scene ->
             scene.frame()
-            assertVisible(scene, "Save rule", 420)
+            assertVisible(scene, "Save and enable", 420)
             assertVisible(scene, "Cancel", 420)
             assertTrue(scene.nodes().any { it.config.getOrNull(SemanticsActions.ScrollBy) != null })
             scene.save("rule-editor-overflow")
@@ -276,7 +276,7 @@ class NetworkConditionsWorkspaceTest {
             scene.clickText("Path prefix"); scene.frame()
             assertEquals("prefix", draft.value.protocolValues.single { it.fieldId == pathModeId }.value)
             assertVisible(scene, "Path prefix", 720)
-            assertVisible(scene, "Save rule", 720)
+            assertVisible(scene, "Save and enable", 720)
             scene.save("rule-editor-http")
         }
     }

@@ -397,13 +397,15 @@ private class StreamingExchangeCapture(
     private val lock = Any()
     private val bodies = mutableMapOf<TrafficDirection, StreamingBodyState>()
     private val completedBodies = mutableSetOf<TrafficDirection>()
+    // Framed children must end with their own exchange, not wait for the shared writer to retire.
+    private val messages = ConcurrentHashMap<ProtocolMessageId, StreamingMessageCapture>()
     private var version: Long = 0L
     private var terminal: Boolean = false
 
     override fun startMessage(metadata: ProxyMessageCaptureMetadata): ProxyMessageCapture? {
-        val admitted = synchronized(lock) {
+        return synchronized(lock) {
             if (terminal) return null
-            ingress.tryPublish(
+            val admitted = ingress.tryPublish(
                 CaptureEvent.ProtocolMessageStarted(
                     sessionId = sessionId,
                     connectionId = connectionId,
@@ -421,9 +423,8 @@ private class StreamingExchangeCapture(
                     compressionEncoding = metadata.compressionEncoding,
                 )
             ) is CapturePublishResult.Accepted
-        }
-        if (!admitted) return null
-        return StreamingMessageCapture(
+            if (!admitted) return null
+            StreamingMessageCapture(
             sessionId = sessionId,
             connectionId = connectionId,
             exchangeId = exchangeId,
@@ -432,7 +433,9 @@ private class StreamingExchangeCapture(
             limits = limits,
             nextSequence = nextSequence,
             publishGap = ::publishGap,
-        )
+            onTerminated = { messages.remove(metadata.messageId) },
+            ).also { messages[metadata.messageId] = it }
+        }
     }
 
     override fun tryReserveBody(
@@ -591,10 +594,30 @@ private class StreamingExchangeCapture(
         timings: ExchangeTimings,
         occurredAtEpochMillis: Long,
     ) {
-        val terminalVersion = synchronized(lock) {
+        val (terminalVersion, unfinishedBodies) = synchronized(lock) {
             if (terminal) return
             terminal = true
-            ++version
+            val unfinished = bodies.filterKeys { it !in completedBodies }.map { (direction, body) ->
+                Triple(direction, body, ++version)
+            }
+            ++version to unfinished
+        }
+        // A source cut cannot leave partial body writers alive until an unrelated device stops.
+        // Finalize retained prefixes before the terminal parent event, using fresh lifecycle versions.
+        for ((direction, body, bodyVersion) in unfinishedBodies) {
+            if (body.acceptedBytes == 0L) continue
+            addObservedBytes(direction, body.acceptedBytes)
+            ingress.tryCompleteBody(connectionId, exchangeId, bodyVersion, direction, body.bodyId,
+                body.acceptedBytes,
+                outcome.reason?.let { BodyCaptureOutcome.Failed(BodyFailure.Custom(it.code.value)) }
+                    ?: BodyCaptureOutcome.Truncated(body.acceptedBytes),
+                nextSequence(), occurredAtEpochMillis)
+        }
+        // Source-scoped pause keeps the writer alive for siblings. End this exchange's unfinished
+        // framed children now so they cannot remain permanently In Progress in retained history.
+        messages.values.toList().forEach { message ->
+            message.cancelForExchangeClose(outcome.reason ?: TrafficTerminationReason.Transport.DOWNSTREAM_CONNECTION_CLOSED,
+                occurredAtEpochMillis)
         }
         ingress.tryPublish(
             CaptureEvent.ExchangeTerminated(
@@ -660,6 +683,7 @@ private class StreamingMessageCapture(
     private val limits: CaptureIngressLimits,
     private val nextSequence: () -> Long,
     private val publishGap: (Long, Long) -> Unit,
+    private val onTerminated: () -> Unit,
 ) : ProxyMessageCapture {
     override val messageId: ProtocolMessageId = metadata.messageId
     private val lock = Any()
@@ -705,6 +729,12 @@ private class StreamingMessageCapture(
                 }
             }
         }
+    }
+
+    /** Cancels a partially captured message with its parent without inventing unobserved wire bytes. */
+    fun cancelForExchangeClose(reason: TrafficTerminationReason, occurredAtEpochMillis: Long) {
+        val captured = synchronized(lock) { acceptedBytes }
+        terminate(captured, ProtocolMessageState.CANCELLED, occurredAtEpochMillis, reason)
     }
 
     override fun complete(observedBytes: Long, occurredAtEpochMillis: Long) = terminate(
@@ -766,6 +796,7 @@ private class StreamingMessageCapture(
                 reason = reason,
             )
         )
+        onTerminated()
     }
 }
 

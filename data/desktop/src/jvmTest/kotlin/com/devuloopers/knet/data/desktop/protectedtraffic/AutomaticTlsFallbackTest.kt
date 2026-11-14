@@ -19,6 +19,36 @@ class AutomaticTlsFallbackTest {
         clientContext = TlsInterceptionClientContext(session, client), clientHelloObserved = true)
     private val rejected = TlsInspectionFailure(InspectionFailureReason.CERTIFICATE_REJECTED, TlsCertificatePresentation.PRESENTED)
 
+    @Test fun `workspace authorizations remain independent through alternating policies and manual resets`() = runTest {
+        val a = com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(com.devuloopers.knet.identity.RegisteredDeviceId("device-a"))
+        val b = com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(com.devuloopers.knet.identity.RegisteredDeviceId("device-b"))
+        val cache = InMemoryAutomaticTlsFallback(backgroundScope); cache.activateSession(session)
+        val configuration = ProtectedTrafficConfiguration()
+        val epochA = assertNotNull(cache.authorizeWorkspace(a, configuration, "ca"))
+        val epochB = assertNotNull(cache.authorizeWorkspace(b, configuration, "ca"))
+        val keyA = assertNotNull(automaticTlsFallbackKey(session, client, "api.example.com",443,null))
+        val clientB = TlsFallbackClientScope.Identified(IngressKind.CompanionDirect, ClientIdentity("device-b"))
+        val keyB = assertNotNull(automaticTlsFallbackKey(session, clientB, "api.example.com",443,null))
+        assertTrue(cache.record(keyA,epochA)); assertTrue(cache.record(keyB,epochB))
+        assertNull(cache.authorizeWorkspace(a, configuration.copy(defaultAction=ProtectedTrafficAction.BLOCK),"ca"))
+        assertEquals(setOf(keyB),cache.state.value.keys)
+        assertTrue(cache.record(keyB,epochB)); assertFalse(cache.record(keyA,epochA))
+        cache.clearWorkspace(a); assertEquals(setOf(keyB),cache.state.value.keys)
+        assertTrue(cache.record(keyB,epochB))
+    }
+
+    @Test fun `scoped policy uses verified request identity for same destination tunnel inspect and block`() = runTest {
+        val a = com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(com.devuloopers.knet.identity.RegisteredDeviceId("a"))
+        val b = com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(com.devuloopers.knet.identity.RegisteredDeviceId("b"))
+        val policy = ProtectedTrafficTlsInterceptionPolicy({ ProtectedTrafficConfiguration() },
+            configurationForWorkspace = { workspace -> ProtectedTrafficConfiguration(defaultAction = when(workspace) {
+                a -> ProtectedTrafficAction.TUNNEL; b -> ProtectedTrafficAction.BLOCK; else -> ProtectedTrafficAction.INSPECT
+            }) })
+        assertEquals(TlsInterceptionMode.TUNNEL,policy.decide(request.copy(workspace=a)).mode)
+        assertEquals(TlsInterceptionMode.BLOCK,policy.decide(request.copy(workspace=b)).mode)
+        assertEquals(TlsInterceptionMode.INSPECT,policy.decide(request.copy(workspace=com.devuloopers.knet.domain.policy.PolicyWorkspace.Other)).mode)
+    }
+
     @Test fun `source clear rotation preserves decisions and deadlines while fencing late evidence`() = runTest {
         val cache = InMemoryAutomaticTlsFallback(backgroundScope, lifetimeMillis = 1000, elapsedMillis = { testScheduler.currentTime })
         cache.activateSession(session)

@@ -44,14 +44,12 @@ internal val breakpointBindings: Module = module {
     single<ProtocolMessageBreakpointGate> { get<BreakpointCoordinator>() }
     single<ProtocolMessageBreakpointControl> { get<BreakpointCoordinator>() }
 
-    single {
-        RulesRepositoryImpl(
-            breakpointRuleDao = get<KNetDatabase>().breakpointRuleDao(),
-            breakpointControl = get(),
-            coroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
-        )
+    single<com.devuloopers.knet.application.contract.device.DevicePolicyLibrary> {
+        com.devuloopers.knet.data.desktop.policy.RoomDevicePolicyLibrary(get(), get())
     }
-    single<RulesRepository> { get<RulesRepositoryImpl>() }
+    single { com.devuloopers.knet.data.desktop.policy.PolicyRepositoryViews(get(), get(), get()) }
+    single<RulesRepository> { get<com.devuloopers.knet.data.desktop.policy.PolicyRepositoryViews>().rules() }
+
     factory { GetRulesUseCase(get()) }
     factory { ObserveRulesUseCase(get()) }
     factory { SaveRuleUseCase(get()) }

@@ -38,6 +38,8 @@ import kotlinx.coroutines.SupervisorJob
 import java.util.concurrent.TimeUnit
 import java.io.ByteArrayOutputStream
 import java.util.zip.Deflater
+import com.devuloopers.knet.domain.policy.PolicyWorkspace
+import com.devuloopers.knet.identity.RegisteredDeviceId
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -47,6 +49,28 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class WebSocketBreakpointRuntimeTest {
+    @Test
+    fun `workspace factory filters sibling before buffering and retains owner on framed message`() {
+        val owner = PolicyWorkspace.Device(RegisteredDeviceId("owner"))
+        val sibling = PolicyWorkspace.Device(RegisteredDeviceId("sibling"))
+        val recording = RecordingWebSocketGate()
+        val gate = object : ProtocolMessageBreakpointGate by recording {
+            override fun mayInterceptMessageFor(workspace: PolicyWorkspace, request: HttpRequestSnapshot,
+                protocolRoute: List<BreakpointProtocolId>, direction: TrafficDirection): Boolean =
+                workspace == owner && recording.mayInterceptMessage(request, protocolRoute, direction)
+        }
+        val factory = factory(gate)
+        kotlin.test.assertNull(factory.createForWorkspace(sibling, request(), null, Capture()))
+        kotlin.test.assertNull(factory.createForWorkspace(PolicyWorkspace.Other, request(), null, Capture()))
+        val transformer = assertNotNull(factory.createForWorkspace(owner, request(), null, Capture()))
+        val wire = WebSocketFrameDecoder.encode(WebSocketOpcode.TEXT, "hello".encodeToByteArray(), maskingKey = byteArrayOf(1,2,3,4))
+        transformer.onEstablished(switchingResponse(), 0L)
+        assertContentEquals(wire, transformer.transformClient(wire, 1L))
+        assertEquals(owner, recording.candidates.single().workspace)
+        transformer.cancel(null)
+    }
+
+
     @Test
     fun `compressed messages are decompressed before interception and unchanged wire is preserved`() {
         val gate = RecordingWebSocketGate()

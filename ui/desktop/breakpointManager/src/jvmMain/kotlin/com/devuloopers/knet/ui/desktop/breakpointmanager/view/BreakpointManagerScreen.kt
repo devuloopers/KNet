@@ -1,5 +1,8 @@
 package com.devuloopers.knet.ui.desktop.breakpointmanager.view
 
+import com.devuloopers.knet.ui.core.components.policy.*
+import com.devuloopers.knet.domain.policy.*
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -50,7 +53,7 @@ fun BreakpointManagerScreen(
     ) {
         KNetScreenLayout(
             title = "Intercepts",
-            subtitle = "Define rules to pause in-flight HTTP requests and responses.",
+            subtitle = "${state.workspaceName} · Rules pause matching traffic only for this device.",
             actions = {
                 Row(
                     modifier = Modifier
@@ -62,7 +65,7 @@ fun BreakpointManagerScreen(
                 ) {
                     val statusText = if (state.isGlobalInterceptionEnabled) "ENABLED" else "DISABLED"
                     Text(
-                        text = "Global Interception: $statusText",
+                        text = "Interception: $statusText",
                         style = typography.caption.copy(
                             color = themeColors.textPrimary,
                             fontWeight = FontWeight.Bold,
@@ -112,9 +115,10 @@ fun BreakpointManagerScreen(
             // Breakpoint Rules Data Table
             BreakpointRulesTable(
                 rules = state.filteredRules,
+                libraryLabel = { id -> if (state.definitions.firstOrNull { it.rule.id == id }?.availability == RuleAvailability.Shared) RuleLibraryLocation.SHARED.label else RuleLibraryLocation.PRIVATE.label },
                 onToggleStatus = { viewModel.toggleRuleStatus(it) },
                 onEditRule = { viewModel.openEditDrawer(it) },
-                onDeleteRule = { viewModel.deleteRule(it) },
+                onDeleteRule = { viewModel.requestRuleDeletion(it) },
                 modifier = Modifier.weight(1f).fillMaxWidth()
             )
         }
@@ -122,6 +126,14 @@ fun BreakpointManagerScreen(
         AddEditBreakpointRuleDrawer(
             visible = state.isAddEditDrawerVisible,
             rule = state.editingRule,
+            isEditingExistingRule = state.editingContext.expectedRevision != null,
+            libraryContent = {
+                RuleLibraryEditor(RuleLibraryEditorState(state.editingWorkspaceName,
+                    if (state.editingContext.availability == RuleAvailability.Shared) RuleLibraryLocation.SHARED else RuleLibraryLocation.PRIVATE,
+                    state.editingContext.expectedRevision != null, state.editingUsageNames, sharedDefinition = state.editingContext.originalAvailability == com.devuloopers.knet.domain.policy.RuleAvailability.Shared),
+                    viewModel::setDraftShared, viewModel::duplicateDraft)
+            },
+            saving = state.isSaving,
             protocolDefinitions = state.protocolDefinitions,
             initialProtocolValues = state.editingProtocolValues,
             onDismiss = viewModel::closeDrawer,
@@ -137,5 +149,12 @@ fun BreakpointManagerScreen(
                 )
             },
         )
+    }
+    state.pendingDeletion?.let { request ->
+        com.devuloopers.knet.ui.core.components.policy.RuleLibraryDeleteDialog(
+            request.affectedWorkspaceNames, viewModel::confirmRuleDeletion, viewModel::dismissRuleDeletion)
+    }
+    state.errorMessage?.let { error ->
+        com.devuloopers.knet.ui.core.components.dialog.AlertDialog("Intercepts", error, viewModel::clearError)
     }
 }

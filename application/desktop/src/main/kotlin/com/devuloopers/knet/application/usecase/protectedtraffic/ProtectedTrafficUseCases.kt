@@ -1,6 +1,7 @@
 package com.devuloopers.knet.application.usecase.protectedtraffic
 
 import com.devuloopers.knet.application.contract.protectedtraffic.AutomaticTlsFallback
+import com.devuloopers.knet.domain.policy.*
 import com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficDefaultHandling
 import com.devuloopers.knet.application.contract.protectedtraffic.ProtectedTrafficRepository
 import com.devuloopers.knet.application.contract.traffic.TrafficQuery
@@ -20,63 +21,75 @@ import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 /** Observes the validated protected-traffic policy snapshot. */
-public class ObserveProtectedTrafficConfigurationUseCase(
-    private val repository: ProtectedTrafficRepository,
-) {
-    /** Returns the hot configuration state shared with settings and transport composition. */
+public class ObserveProtectedTrafficConfigurationUseCase(private val repository: ProtectedTrafficRepository) {
+    /** Current Other traffic configuration for compatibility with existing callers. */
     public operator fun invoke(): StateFlow<ProtectedTrafficConfiguration> = repository.configuration
+    /** Manager projection includes availability and revision from the same committed snapshot. */
+    public fun catalog(workspace: PolicyWorkspace): kotlinx.coroutines.flow.Flow<com.devuloopers.knet.application.contract.protectedtraffic.ProtectionPolicyCatalog> =
+        repository.forWorkspace(workspace).observeCatalog()
 }
 
-/** Changes the global protected-traffic fallback action. */
-public class SetProtectedTrafficDefaultActionUseCase(
-    private val repository: ProtectedTrafficRepository,
-    private val automaticFallback: AutomaticTlsFallback? = null,
-) {
-    /** Persists [action] and publishes the resulting validated snapshot. */
-    public suspend operator fun invoke(action: ProtectedTrafficAction) {
-        repository.setDefaultAction(action)
-        automaticFallback?.clear()
-        awaitPolicy { it.defaultAction == action && !it.automaticTlsFallbackEnabled }
+/** Changes only the captured workspace's TLS fallback mode. */
+public class SetProtectedTrafficDefaultActionUseCase(private val repository: ProtectedTrafficRepository,
+    private val automaticFallback: AutomaticTlsFallback? = null) {
+    /** Persists an explicit action without automatic passthrough. */
+    public suspend operator fun invoke(action: ProtectedTrafficAction, workspace: PolicyWorkspace = PolicyWorkspace.Other) {
+        val scoped = repository.forWorkspace(workspace)
+        scoped.setDefaultAction(action)
+        automaticFallback?.clearWorkspace(workspace)
+        awaitPolicy(scoped) { it.defaultAction == action && !it.automaticTlsFallbackEnabled }
     }
-
-    /** Atomically persists the supported global mode and invalidates earlier automatic decisions. */
-    public suspend operator fun invoke(handling: ProtectedTrafficDefaultHandling) {
-        repository.setDefaultAction(handling.action, handling.automaticFallback)
-        automaticFallback?.clear()
-        awaitPolicy { it.defaultAction == handling.action && it.automaticTlsFallbackEnabled == handling.automaticFallback }
+    /** Persists the supported mode and invalidates learning only for this workspace. */
+    public suspend operator fun invoke(handling: ProtectedTrafficDefaultHandling, workspace: PolicyWorkspace = PolicyWorkspace.Other) {
+        val scoped = repository.forWorkspace(workspace)
+        scoped.setDefaultAction(handling.action, handling.automaticFallback)
+        automaticFallback?.clearWorkspace(workspace)
+        awaitPolicy(scoped) { it.defaultAction == handling.action && it.automaticTlsFallbackEnabled == handling.automaticFallback }
     }
-    private suspend fun awaitPolicy(matches: (ProtectedTrafficConfiguration) -> Boolean) {
-        withTimeoutOrNull(5_000) { repository.configuration.first { it.configurationReady && matches(it) } }
+    private suspend fun awaitPolicy(scoped: ProtectedTrafficRepository, matches: (ProtectedTrafficConfiguration) -> Boolean) {
+        withTimeoutOrNull(5_000) { scoped.configuration.first { it.configurationReady && matches(it) } }
             ?: error("The default was saved, but its current policy could not be confirmed.")
     }
 }
 
-/** Creates or replaces one explicit protected-traffic rule. */
-public class UpsertProtectedTrafficRuleUseCase(
-    private val repository: ProtectedTrafficRepository,
-    private val automaticFallback: AutomaticTlsFallback? = null,
-) {
-    /** Validates and persists [rule]. */
-    public suspend operator fun invoke(rule: ProtectedTrafficRule) {
-        repository.upsertRule(rule)
-        automaticFallback?.forget(rule)
-        withTimeoutOrNull(5_000) { repository.configuration.first { it.configurationReady && rule in it.rules } }
+/** Creates or replaces a definition, preserving independent device activation. */
+public class UpsertProtectedTrafficRuleUseCase(private val repository: ProtectedTrafficRepository,
+    private val automaticFallback: AutomaticTlsFallback? = null) {
+    /** Updates an existing row/activation through its fixed workspace adapter. */
+    public suspend operator fun invoke(rule: ProtectedTrafficRule, workspace: PolicyWorkspace = PolicyWorkspace.Other) {
+        val scoped = repository.forWorkspace(workspace)
+        scoped.upsertRule(rule)
+        automaticFallback?.forgetWorkspace(workspace, rule)
+        awaitRule(scoped, rule)
+    }
+    /** Saves the captured library target, revision and activation in one transaction. */
+    public suspend fun saveDefinition(rule: ProtectedTrafficRule, context: RuleEditContext): RuleSaveResult {
+        val scoped = repository.forWorkspace(context.workspace)
+        val result = scoped.saveDefinition(rule, context)
+        automaticFallback?.forgetWorkspace(context.workspace, rule)
+        awaitRule(scoped, rule)
+        return result
+    }
+    private suspend fun awaitRule(scoped: ProtectedTrafficRepository, rule: ProtectedTrafficRule) {
+        withTimeoutOrNull(5_000) { scoped.configuration.first { it.configurationReady && rule in it.rules } }
             ?: error("The rule was saved, but its current policy could not be confirmed.")
     }
 }
 
-/** Deletes one explicit protected-traffic rule. */
-public class DeleteProtectedTrafficRuleUseCase(
-    private val repository: ProtectedTrafficRepository,
-    private val automaticFallback: AutomaticTlsFallback? = null,
-) {
-    /** Removes [ruleId] when it identifies a user-authored rule. */
-    public suspend operator fun invoke(ruleId: ProtectedTrafficRuleId) {
-        val previous = repository.configuration.value.rules.firstOrNull { it.id == ruleId }
-        repository.deleteRule(ruleId)
-        previous?.let { automaticFallback?.forget(it) }
-        withTimeoutOrNull(5_000) { repository.configuration.first { it.configurationReady && it.rules.none { rule -> rule.id == ruleId } } }
-            ?: error("The rule was removed, but its current policy could not be confirmed.")
+/** Explicit definition deletion; Shared usage acknowledgement is separate from device activation. */
+public class DeleteProtectedTrafficRuleUseCase(private val repository: ProtectedTrafficRepository,
+    private val automaticFallback: AutomaticTlsFallback? = null) {
+    /** Compatibility entry point for scoped manager actions. */
+    public suspend operator fun invoke(ruleId: ProtectedTrafficRuleId, workspace: PolicyWorkspace = PolicyWorkspace.Other) {
+        val scoped = repository.forWorkspace(workspace)
+        val previous = scoped.configuration.value.rules.firstOrNull { it.id == ruleId }
+        scoped.deleteRule(ruleId)
+        previous?.let { automaticFallback?.forgetWorkspace(workspace, it) }
+    }
+    /** Deletes the captured revision only after the UI has presented any shared impact. */
+    public suspend fun deleteDefinition(id: ProtectedTrafficRuleId, context: RuleEditContext, acknowledgeSharedUsage: Boolean) {
+        repository.forWorkspace(context.workspace).deleteDefinition(id, context, acknowledgeSharedUsage)
+        automaticFallback?.clearWorkspace(context.workspace)
     }
 }
 
@@ -126,6 +139,8 @@ public class SetProtectedTrafficFlowActionUseCase(
         scope: ProtectedTrafficQuickRuleScope,
     ): SetProtectedTrafficFlowActionResult {
         val flow = trafficQuery.getOpaqueFlow(flowId) ?: return SetProtectedTrafficFlowActionResult.MissingFlow
+        val workspace = PolicyWorkspace.fromIngress(trafficQuery.getConnectionIngress(flow.connectionId)?.ingress)
+        val scoped = repository.forWorkspace(workspace)
         if (scope == ProtectedTrafficQuickRuleScope.DESTINATION && flow.destination.port == null)
             return SetProtectedTrafficFlowActionResult.DestinationUnavailable
         val application = when (scope) {
@@ -151,20 +166,18 @@ public class SetProtectedTrafficFlowActionUseCase(
                 OpaqueTransportProtocol.UDP -> ProtectedTransportProtocol.UDP
             },
         )
-        val configuration = withTimeoutOrNull(POLICY_PUBLICATION_TIMEOUT_MILLIS) {
-            repository.configuration.first { it.configurationReady }
-        } ?: error("Current connection handling could not be loaded. Try again when policy settings are ready.")
-        val existing = configuration.rules.firstOrNull { rule ->
-            rule.origin == com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficRuleOrigin.USER &&
-                rule.selectorKey == candidate.selectorKey
-        }
+        val catalog = withTimeoutOrNull(POLICY_PUBLICATION_TIMEOUT_MILLIS) { scoped.observeCatalog().first { it.ready } }
+            ?: error("Current connection handling could not be loaded. Try again when policy settings are ready.")
+        val existingDefinition = catalog.definitions.firstOrNull { it.availability == RuleAvailability.Private(workspace) &&
+            it.rule.origin == com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficRuleOrigin.USER && it.rule.selectorKey == candidate.selectorKey }
+        val existing = existingDefinition?.rule
         val saved = candidate.copy(id = existing?.id ?: candidate.id)
-        repository.upsertRule(saved)
-        automaticFallback?.forget(saved)
+        scoped.saveDefinition(saved, RuleEditContext(workspace, RuleAvailability.Private(workspace), existingDefinition?.revision, activateAfterSave = true))
+        automaticFallback?.forgetWorkspace(workspace, saved)
         // Room invalidation is asynchronous. A successful action includes observing the committed rule;
         // otherwise an immediately revisited row could still render the previous rule as actionable.
         withTimeoutOrNull(POLICY_PUBLICATION_TIMEOUT_MILLIS) {
-            repository.configuration.first { current -> current.configurationReady && saved in current.rules }
+            scoped.configuration.first { current -> current.configurationReady && saved in current.rules }
         } ?: error("The rule was saved, but its current policy could not be confirmed.")
         return SetProtectedTrafficFlowActionResult.Saved(saved)
     }
@@ -183,22 +196,24 @@ public class ResetProtectedTrafficFlowActionUseCase(
     /** Resolves retained admission metadata, removes the exact destination rule and confirms publication. */
     public suspend fun execute(flowId: OpaqueFlowId): SetProtectedTrafficFlowActionResult {
         val flow = trafficQuery.getOpaqueFlow(flowId) ?: return SetProtectedTrafficFlowActionResult.MissingFlow
+        val workspace = PolicyWorkspace.fromIngress(trafficQuery.getConnectionIngress(flow.connectionId)?.ingress)
+        val scoped = repository.forWorkspace(workspace)
         val destination = runCatching { ProtectedDestinationSelector.parse(flow.serverName ?: flow.destination.host) }
             .getOrNull() ?: return SetProtectedTrafficFlowActionResult.DestinationUnavailable
         val port = flow.destination.port ?: return SetProtectedTrafficFlowActionResult.DestinationUnavailable
         val transport = if (flow.transport == OpaqueTransportProtocol.TCP) ProtectedTransportProtocol.TCP else ProtectedTransportProtocol.UDP
-        val configuration = withTimeoutOrNull(5_000) { repository.configuration.first { it.configurationReady } }
+        val configuration = withTimeoutOrNull(5_000) { scoped.configuration.first { it.configurationReady } }
             ?: error("Current connection handling could not be loaded.")
         val matching = configuration.rules.filter { rule ->
             rule.origin == com.devuloopers.knet.domain.protectedtraffic.ProtectedTrafficRuleOrigin.USER &&
                 rule.sourceApplication == null && rule.destination == destination && rule.port == port &&
                 rule.transport == transport && rule.ipFamily == null
         }.map { it.id }.toSet()
-        matching.forEach { repository.deleteRule(it) }
-        automaticFallback.forget(ProtectedTrafficRule(ProtectedTrafficRuleId("reset-destination"), action = ProtectedTrafficAction.INSPECT,
+        matching.forEach { scoped.resetRule(it) }
+        automaticFallback.forgetWorkspace(workspace, ProtectedTrafficRule(ProtectedTrafficRuleId("reset-destination"), action = ProtectedTrafficAction.INSPECT,
             destination = destination, port = port, transport = transport))
         withTimeoutOrNull(5_000) {
-            repository.configuration.first { current -> current.configurationReady && current.rules.none { it.id in matching } }
+            scoped.configuration.first { current -> current.configurationReady && current.rules.none { it.enabled && it.id in matching } }
         } ?: error("The override was removed, but its current policy could not be confirmed.")
         return SetProtectedTrafficFlowActionResult.DefaultRestored
     }

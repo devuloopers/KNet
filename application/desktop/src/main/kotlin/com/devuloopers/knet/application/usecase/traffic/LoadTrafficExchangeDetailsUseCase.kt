@@ -55,6 +55,8 @@ public data class TrafficExchangeDetails(
     public val exchange: HttpExchangeSnapshot,
     public val requestBody: TrafficBodyPreview,
     public val responseBody: TrafficBodyPreview?,
+    /** Verified admission identity, independent of whichever UI tab is selected. */
+    public val workspace: com.devuloopers.knet.domain.policy.PolicyWorkspace = com.devuloopers.knet.domain.policy.PolicyWorkspace.Other,
 )
 
 /** Result of resolving traffic details by exchange identifier. */
@@ -104,6 +106,7 @@ public class LoadTrafficExchangeDetailsUseCase(
                 exchange = exchange,
                 requestBody = requestBody,
                 responseBody = responseBody,
+                workspace = com.devuloopers.knet.domain.policy.PolicyWorkspace.fromIngress(exchange.connectionId?.let { trafficQuery.getConnectionIngress(it)?.ingress }),
             ),
         )
     }

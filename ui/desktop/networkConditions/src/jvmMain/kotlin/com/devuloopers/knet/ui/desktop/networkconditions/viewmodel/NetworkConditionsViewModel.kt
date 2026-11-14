@@ -1,5 +1,8 @@
 package com.devuloopers.knet.ui.desktop.networkconditions.viewmodel
 
+import com.devuloopers.knet.ui.core.components.policy.RuleReplacementNoticeState
+import com.devuloopers.knet.ui.core.components.policy.RULE_REPLACEMENT_NOTICE_MILLIS
+import kotlinx.coroutines.delay
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaFieldDefinition
@@ -7,7 +10,7 @@ import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaFiel
 import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaValue
 import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolRegistry
 import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionRuntimeTelemetry
-import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionsRepository
+import com.devuloopers.knet.application.usecase.networkconditions.ManageNetworkConditionsUseCase
 import com.devuloopers.knet.application.usecase.networkconditions.NetworkConditionProtocolRuleUseCase
 import com.devuloopers.knet.application.usecase.networkconditions.PrepareNetworkConditionRuleResult
 import com.devuloopers.knet.application.usecase.networkconditions.PrepareNetworkConditionRuleUseCase
@@ -25,6 +28,8 @@ import com.devuloopers.knet.ui.desktop.networkconditions.model.NetworkConditions
 import com.devuloopers.knet.ui.desktop.networkconditions.model.networkConditionRuleDetails
 import com.devuloopers.knet.ui.desktop.networkconditions.model.NetworkThroughputHistory
 import com.devuloopers.knet.ui.desktop.networkconditions.model.NetworkThroughputSampler
+import com.devuloopers.knet.domain.policy.*
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,11 +41,10 @@ import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 class NetworkConditionsViewModel(
-    private val repository: NetworkConditionsRepository,
+    private val repository: ManageNetworkConditionsUseCase,
     private val runtimeTelemetry: NetworkConditionRuntimeTelemetry,
     private val prepareRule: PrepareNetworkConditionRuleUseCase,
-    private val protocolRules: NetworkConditionProtocolRuleUseCase =
-        NetworkConditionProtocolRuleUseCase(NetworkConditionProtocolRegistry()),
+    private val protocolRules: NetworkConditionProtocolRuleUseCase,
 ) : ViewModel() {
     private val mutableState = MutableStateFlow(
         NetworkConditionsState(protocolDefinitions = protocolRules.definitions()),
@@ -49,9 +53,59 @@ class NetworkConditionsViewModel(
     private val throughputSampler = NetworkThroughputSampler()
     private var runtimeMonitoringJob: Job? = null
 
-    init {
-        viewModelScope.launch {
-            repository.configuration.collect { configuration ->
+    private var replacementNoticeJob: kotlinx.coroutines.Job? = null
+
+    /** Uses the committed replacement result and original target, never the current tab or a pre-save guess. */
+    private fun confirmReplacement(result: RuleSaveResult, context: RuleEditContext, deviceName: String) {
+        if (!result.replacedExistingRule) return
+        replacementNoticeJob?.cancel()
+        mutableState.update { it.copy(replacementNotice = RuleReplacementNoticeState(context.editorId, deviceName)) }
+        replacementNoticeJob = viewModelScope.launch {
+            delay(RULE_REPLACEMENT_NOTICE_MILLIS)
+            mutableState.update { current -> if (current.replacementNotice?.commandId == context.editorId)
+                current.copy(replacementNotice = null) else current }
+        }
+    }
+
+    private var catalogJob: Job? = null
+
+    init { observeWorkspace(PolicyWorkspace.Other) }
+
+    /** Captures deletion identity/revision before displaying the affected workspaces. */
+    fun requestRuleDeletion(ruleId: NetworkConditionRuleId) {
+        val current = state.value
+        val definition = current.definitions.firstOrNull { it.rule.id == ruleId } ?: return
+        mutableState.update { it.copy(pendingDeletion = PolicyDeletionRequest(ruleId.value,
+            definition.editContext(current.workspace), definition.usageNames(current.workspaceNames))) }
+    }
+    /** Cancels deletion without changing definitions or activations. */
+    fun dismissRuleDeletion() { mutableState.update { it.copy(pendingDeletion = null) } }
+    /** Deletes exactly the acknowledged revision and original target. */
+    fun confirmRuleDeletion() {
+        val request = state.value.pendingDeletion ?: return
+        dismissRuleDeletion()
+        mutate(request.context.workspace) { scoped -> scoped.deleteDefinition(NetworkConditionRuleId(request.id), request.context, true) }
+    }
+
+    /** Switches presentation while preserving an already-open editor's immutable save target. */
+    fun selectWorkspace(workspace: PolicyWorkspace) {
+        if (workspace == state.value.workspace) return
+        val monitoring = runtimeMonitoringJob?.isActive == true
+        if (monitoring) stopRuntimeMonitoring()
+        mutableState.update { it.copy(workspace = workspace,
+            workspaceName = it.workspaceNames[workspace] ?: if (workspace == PolicyWorkspace.Other) "Other traffic" else "Selected device", configuration = com.devuloopers.knet.domain.networkconditions.NetworkConditionConfiguration(),
+            runtime = com.devuloopers.knet.application.contract.networkconditions.NetworkConditionRuntimeSnapshot(),
+            definitions = emptyList(), ruleDetails = emptyMap(), throughput = NetworkThroughputHistory()) }
+        observeWorkspace(workspace)
+        if (monitoring) startRuntimeMonitoring()
+    }
+
+    private fun observeWorkspace(workspace: PolicyWorkspace) {
+        catalogJob?.cancel()
+        catalogJob = viewModelScope.launch {
+            repository.forWorkspace(workspace).observeCatalog().collect { catalog ->
+                if (state.value.workspace != workspace) return@collect
+                val configuration = catalog.configuration
                 val definitions = protocolRules.definitions().associateBy { it.protocolId }
                 val details = configuration.rules.associate { rule ->
                     rule.id to networkConditionRuleDetails(
@@ -60,7 +114,7 @@ class NetworkConditionsViewModel(
                         transportOnly = rule.protocolCriteria.isTransportOnly,
                     )
                 }
-                mutableState.update { it.copy(configuration = configuration, ruleDetails = details) }
+                mutableState.update { it.copy(configuration = configuration, ruleDetails = details, definitions = catalog.definitions, workspaceName = catalog.workspaceName, workspaceNames = catalog.workspaceNames, profileUsage = catalog.profileUsage) }
             }
         }
     }
@@ -70,12 +124,13 @@ class NetworkConditionsViewModel(
         if (runtimeMonitoringJob?.isActive == true) return
         throughputSampler.reset()
         mutableState.update { it.copy(throughput = NetworkThroughputHistory()) }
+        val workspace = state.value.workspace
         runtimeMonitoringJob = viewModelScope.launch {
             // Ignore StateFlow's possibly stale retained value. The engine publishes a fresh baseline on subscribe.
-            runtimeTelemetry.snapshot.drop(1).collect { runtime ->
+            runtimeTelemetry.observeWorkspace(workspace).drop(1).collect { runtime ->
                 val throughput = throughputSampler.accept(runtime)
                 mutableState.update { current ->
-                    current.copy(
+                    if (current.workspace != workspace) current else current.copy(
                         runtime = runtime,
                         throughput = throughput ?: current.throughput,
                     )
@@ -91,36 +146,39 @@ class NetworkConditionsViewModel(
         throughputSampler.reset()
     }
 
-    fun setEnabled(enabled: Boolean) = mutate { repository.setEnabled(enabled) }
+    fun setEnabled(enabled: Boolean) = mutate { scoped -> scoped.setEnabled(enabled) }
 
     fun selectTab(tab: NetworkConditionsTab) = mutableState.update { it.copy(activeTab = tab) }
 
-    fun selectGlobalProfile(profileId: NetworkConditionProfileId?) = mutate {
-        repository.setGlobalProfile(profileId)
+    fun selectGlobalProfile(profileId: NetworkConditionProfileId?) = mutate { scoped ->
+        scoped.setGlobalProfile(profileId)
     }
 
     /** Traffic quick selection applies the chosen default and master enablement as one persisted change. */
-    fun activateGlobalProfile(profileId: NetworkConditionProfileId?) = mutate {
-        repository.activateGlobalProfile(profileId)
+    fun activateGlobalProfile(profileId: NetworkConditionProfileId?) = mutate { scoped ->
+        scoped.activateGlobalProfile(profileId)
     }
 
-    fun saveProfile(profile: NetworkConditionProfile) = mutate { repository.upsertProfile(profile) }
+    fun saveProfile(profile: NetworkConditionProfile) = mutate { scoped -> scoped.upsertProfile(profile) }
 
-    fun deleteProfile(profileId: NetworkConditionProfileId) = mutate {
-        if (!repository.deleteProfile(profileId)) error("Profile is still used by a global setting or domain rule.")
+    fun deleteProfile(profileId: NetworkConditionProfileId) = mutate { scoped ->
+        if (!scoped.deleteProfile(profileId)) error("Profile is still used by a global setting or domain rule.")
     }
 
-    fun deleteRule(ruleId: NetworkConditionRuleId) = mutate { repository.deleteRule(ruleId) }
+    fun deleteRule(ruleId: NetworkConditionRuleId) = mutate { scoped -> scoped.deleteRule(ruleId) }
 
-    fun setRuleEnabled(rule: NetworkConditionRule, enabled: Boolean) = mutate {
-        repository.upsertRule(rule.copy(enabled = enabled))
+    fun setRuleEnabled(rule: NetworkConditionRule, enabled: Boolean) = mutate { scoped ->
+        scoped.upsertRule(rule.copy(enabled = enabled))
     }
 
     fun beginAddRule() {
+        if (state.value.isSaving) return
         mutableState.update {
             it.copy(
                 activeTab = NetworkConditionsTab.RULES,
                 ruleDraft = NetworkConditionRuleDraft(
+                    context = RuleEditContext(it.workspace),
+                    workspaceName = it.workspaceName,
                     hostPattern = "",
                     port = "",
                     existingRuleId = null,
@@ -137,6 +195,9 @@ class NetworkConditionsViewModel(
             it.copy(
                 activeTab = NetworkConditionsTab.RULES,
                 ruleDraft = NetworkConditionRuleDraft(
+                    context = it.definitions.firstOrNull { entry -> entry.rule.id == rule.id }?.editContext(it.workspace) ?: RuleEditContext(it.workspace),
+                    workspaceName = it.workspaceName,
+                    usageNames = it.definitions.firstOrNull { entry -> entry.rule.id == rule.id }?.usageNames(it.workspaceNames).orEmpty(),
                     hostPattern = (if (rule.target.wildcard) "*." else "") + rule.target.normalizedHost,
                     port = rule.target.port?.toString().orEmpty(),
                     existingRuleId = rule.id,
@@ -155,18 +216,18 @@ class NetworkConditionsViewModel(
         viewModelScope.launch {
             when (val result = prepareRule.execute(ExchangeId(exchangeId))) {
                 is PrepareNetworkConditionRuleResult.Ready -> mutableState.update {
-                    val existingRule = result.existingRuleId?.let { ruleId ->
-                        it.configuration.rules.firstOrNull { rule -> rule.id == ruleId }
-                    }
+                    val existingRule = result.definition?.rule
                     it.copy(
                         activeTab = NetworkConditionsTab.RULES,
                         ruleDraft = NetworkConditionRuleDraft(
+                            context = result.definition?.editContext(result.workspace) ?: RuleEditContext(result.workspace),
+                            workspaceName = result.workspaceName,
                             hostPattern = (if (result.target.wildcard) "*." else "") +
                                 result.target.normalizedHost,
                             port = result.target.port?.toString().orEmpty(),
                             existingRuleId = result.existingRuleId,
                             profileId = result.suggestedProfileId,
-                            enabled = existingRule?.enabled ?: true,
+                            enabled = result.definition?.activeOn(result.workspace) ?: true,
                             priority = existingRule?.priority?.toString() ?: "0",
                             protocolId = result.protocolCriteria.protocolId,
                             protocolValues = protocolRules.editorValues(result.protocolCriteria),
@@ -186,6 +247,23 @@ class NetworkConditionsViewModel(
         mutableState.update { current ->
             current.copy(ruleDraft = current.ruleDraft?.copy(profileId = profileId))
         }
+    }
+
+    /** Availability is independent from the immutable activation target. */
+    fun setDraftShared(shared: Boolean) = updateDraft {
+        if (existingRuleId != null && context.originalAvailability == RuleAvailability.Shared && !shared) this
+        else copy(context = context.copy(availability = if (shared) RuleAvailability.Shared else RuleAvailability.Private(context.workspace)))
+    }
+
+    /** Starts an independent private variation; the original shared definition is untouched. */
+    fun duplicateRule(rule: NetworkConditionRule) {
+        beginEditRule(rule)
+        updateDraft { copy(existingRuleId = null, enabled = true, context = RuleEditContext(state.value.workspace), workspaceName = state.value.workspaceName) }
+    }
+
+    /** Duplicates the currently edited fields into its original workspace's private library. */
+    fun duplicateDraft() = updateDraft {
+        copy(existingRuleId = null, enabled = true, usageNames = emptyList(), context = RuleEditContext(context.workspace))
     }
 
     fun updateDraftHostPattern(hostPattern: String) = updateDraft { copy(hostPattern = hostPattern) }
@@ -224,8 +302,10 @@ class NetworkConditionsViewModel(
 
     @OptIn(ExperimentalUuidApi::class)
     fun confirmRuleDraft() {
+        if (state.value.isSaving) return
         val draft = state.value.ruleDraft ?: return
-        mutate {
+        mutableState.update { it.copy(isSaving = true) }
+        mutate(draft.context.workspace, onFinished = { mutableState.update { it.copy(isSaving = false) } }) { scoped ->
             val port = draft.port.trim().takeIf(String::isNotEmpty)?.toIntOrNull()
             if (draft.port.isNotBlank() && port == null) error("Domain rule port must be between 1 and 65535.")
             val priority = draft.priority.toIntOrNull()
@@ -233,34 +313,37 @@ class NetworkConditionsViewModel(
                 ?: error("Rule priority must be between 0 and ${NetworkConditionRule.MAXIMUM_PRIORITY}.")
             val protocolCriteria = protocolRules.createCriteria(draft.protocolId, draft.protocolValues)
                 ?: error("Protocol criteria are invalid.")
-            repository.upsertRule(
+            val result = scoped.saveDefinition(
                 NetworkConditionRule(
                     id = draft.existingRuleId ?: NetworkConditionRuleId("condition_${Uuid.random()}"),
                     target = NetworkConditionTarget.parse(draft.hostPattern, port),
                     profileId = draft.profileId,
-                    enabled = draft.enabled,
+                    enabled = if (draft.existingRuleId == null) true else draft.enabled,
                     priority = priority,
                     protocolCriteria = protocolCriteria,
-                ),
+                ), draft.context,
             )
-            repository.setLastQuickAddProfile(draft.profileId)
-            mutableState.update { it.copy(ruleDraft = null) }
+            scoped.setLastQuickAddProfile(draft.profileId)
+            confirmReplacement(result, draft.context, draft.workspaceName)
+            mutableState.update { if (it.ruleDraft?.context?.editorId == draft.context.editorId) it.copy(ruleDraft = null) else it }
         }
     }
 
     fun dismissRuleDraft() = mutableState.update { it.copy(ruleDraft = null) }
     fun clearError() = mutableState.update { it.copy(errorMessage = null) }
-    fun reset() = mutate { repository.resetShaping() }
+    fun reset() = mutate { scoped -> scoped.resetShaping() }
 
     private fun updateDraft(transform: NetworkConditionRuleDraft.() -> NetworkConditionRuleDraft) {
         mutableState.update { current -> current.copy(ruleDraft = current.ruleDraft?.transform()) }
     }
 
-    private fun mutate(block: suspend () -> Unit) {
+    private fun mutate(workspace: PolicyWorkspace = state.value.workspace, onFinished: () -> Unit = {}, block: suspend (ManageNetworkConditionsUseCase) -> Unit) {
+        val scoped = repository.forWorkspace(workspace)
         viewModelScope.launch {
-            runCatching { block() }.onFailure { failure ->
-                setError(failure.message ?: "Unable to update Network Conditions.")
-            }
+            try { block(scoped) }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { setError(failure.message ?: "Unable to update Network Conditions.") }
+            finally { onFinished() }
         }
     }
 

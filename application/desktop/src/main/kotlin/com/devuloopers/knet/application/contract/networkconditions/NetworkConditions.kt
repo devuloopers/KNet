@@ -6,9 +6,36 @@ import com.devuloopers.knet.domain.networkconditions.NetworkConditionProfileId
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionRule
 import com.devuloopers.knet.domain.networkconditions.NetworkConditionRuleId
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
+import com.devuloopers.knet.domain.policy.*
 
 /** Persistent source of the immutable Network Conditions snapshot consumed by data planes. */
 public interface NetworkConditionsRepository {
+    /** Deletes the definition with explicit shared-usage acknowledgement, rather than toggling a device. */
+    public suspend fun deleteDefinition(id: NetworkConditionRuleId, context: RuleEditContext, acknowledgeSharedUsage: Boolean = false) {
+        forWorkspace(context.workspace).deleteRule(id)
+    }
+
+    /** Atomic manager projection with availability, revisions and per-workspace activation. */
+    public fun observeCatalog(): Flow<NetworkPolicyCatalog> = configuration.map { config ->
+        NetworkPolicyCatalog(PolicyWorkspace.Other, "Other traffic", config, config.rules.map { rule ->
+            PolicyDefinition(rule, RuleAvailability.Private(PolicyWorkspace.Other), 1L,
+                if (rule.enabled) setOf(PolicyWorkspace.Other) else emptySet())
+        })
+    }
+
+    /** Selects an immutable execution workspace, independent of later UI navigation. */
+    public fun forWorkspace(workspace: com.devuloopers.knet.domain.policy.PolicyWorkspace): NetworkConditionsRepository {
+        require(workspace == com.devuloopers.knet.domain.policy.PolicyWorkspace.Other)
+        return this
+    }
+    /** Creates/edits availability and activates only the captured workspace. */
+    public suspend fun saveDefinition(rule: NetworkConditionRule, context: com.devuloopers.knet.domain.policy.RuleEditContext): RuleSaveResult {
+        require(context.workspace == com.devuloopers.knet.domain.policy.PolicyWorkspace.Other)
+        upsertRule(rule)
+        return RuleSaveResult()
+    }
     public val configuration: StateFlow<NetworkConditionConfiguration>
 
     public suspend fun setEnabled(enabled: Boolean)
@@ -46,6 +73,11 @@ public data class NetworkConditionRuntimeSnapshot(
  */
 public interface NetworkConditionRuntimeTelemetry {
     public val snapshot: StateFlow<NetworkConditionRuntimeSnapshot>
+    /** Scoped view over the existing single sample clock. */
+    public fun observeWorkspace(workspace: PolicyWorkspace): Flow<NetworkConditionRuntimeSnapshot> {
+        require(workspace == PolicyWorkspace.Other)
+        return snapshot
+    }
 }
 
 public enum class PacketConditionCapabilityState {
@@ -68,3 +100,16 @@ public interface PacketConditionController {
     public suspend fun apply(configuration: NetworkConditionConfiguration): Result<Unit>
     public suspend fun disable(): Result<Unit>
 }
+
+/** Consistent feature configuration and definition metadata for one editing workspace. */
+public data class NetworkPolicyCatalog(
+    public val workspace: PolicyWorkspace,
+    public val workspaceName: String,
+    public val configuration: NetworkConditionConfiguration,
+    public val definitions: List<PolicyDefinition<NetworkConditionRule>>,
+    public val ready: Boolean = true,
+    /** Display-only workspace names for impact diagnostics. */
+    public val workspaceNames: Map<PolicyWorkspace, String> = emptyMap(),
+    /** Shared profile definition impact across all workspaces. */
+    public val profileUsage: Map<NetworkConditionProfileId, com.devuloopers.knet.application.contract.device.PolicyProfileUsage> = emptyMap(),
+)

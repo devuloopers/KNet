@@ -16,7 +16,8 @@ internal class ProtectionFixture {
         uploadedBytes=0, downloadedBytes=0, state=OpaqueFlowState.FAILED,
         terminalOutcome=ExchangeTerminalOutcome.Failed(TrafficTerminationReason.Transport.DOWNSTREAM_TLS_HANDSHAKE_FAILED))
     var record: OpaqueFlowSnapshot? = captured
-    var context: TrafficConnectionIngress? = TrafficConnectionIngress(IngressContext(IngressKind.LanPairedDevice,ClientIdentity("device-a")),"127.0.0.1",true)
+    // Selector/presentation fixtures use Other traffic; authenticated identity is covered by real product/Room fixtures.
+    var context: TrafficConnectionIngress? = TrafficConnectionIngress(IngressContext(IngressKind.Local),"127.0.0.1",true)
     val fallbackState = MutableStateFlow(AutomaticTlsFallbackState())
     val fallback = object : AutomaticTlsFallback {
         override val state = fallbackState

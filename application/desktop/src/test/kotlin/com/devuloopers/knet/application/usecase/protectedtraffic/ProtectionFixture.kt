@@ -34,6 +34,16 @@ internal class ProtectionFixture {
     var writes=0
     val repository = Repository()
     inner class Repository : ProtectedTrafficRepository {
+        // This legacy selector fixture deliberately supplies one policy to every identity; dedicated device suites verify isolation.
+        override fun forWorkspace(workspace: com.devuloopers.knet.domain.policy.PolicyWorkspace): ProtectedTrafficRepository = object : ProtectedTrafficRepository by this {
+            override fun forWorkspace(workspace: com.devuloopers.knet.domain.policy.PolicyWorkspace): ProtectedTrafficRepository = this@Repository.forWorkspace(workspace)
+            override fun observeCatalog(): Flow<ProtectionPolicyCatalog> = configuration.map { config ->
+                ProtectionPolicyCatalog(workspace,"Fixture",config,config.rules.map { rule ->
+                    com.devuloopers.knet.domain.policy.PolicyDefinition(rule,com.devuloopers.knet.domain.policy.RuleAvailability.Private(workspace),1,
+                        if(rule.enabled) setOf(workspace) else emptySet()) })
+            }
+            override suspend fun saveDefinition(rule: ProtectedTrafficRule, context: com.devuloopers.knet.domain.policy.RuleEditContext): com.devuloopers.knet.domain.policy.RuleSaveResult { upsertRule(rule); return com.devuloopers.knet.domain.policy.RuleSaveResult() }
+        }
         override val configuration=MutableStateFlow(ProtectedTrafficConfiguration())
         override suspend fun setDefaultAction(action:ProtectedTrafficAction, automaticFallbackEnabled:Boolean) { configuration.value=configuration.value.copy(defaultAction=action, automaticTlsFallbackEnabled=automaticFallbackEnabled) }
         override suspend fun upsertRule(rule:ProtectedTrafficRule) { beforeSave(); writes++; configuration.value=configuration.value.copy(rules=configuration.value.rules.filterNot { it.id==rule.id }+rule) }

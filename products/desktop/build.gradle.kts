@@ -1,3 +1,4 @@
+import java.time.Duration
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 
 plugins {
@@ -54,6 +55,8 @@ dependencies {
     implementation(project(":storage"))
     implementation(project(":ui:core"))
 
+    // Align the composition root compile API with the Lifecycle version used by its UI modules at runtime.
+    implementation(libs.androidx.lifecycle.viewmodel)
     implementation(libs.jbr.api)
     implementation(libs.datastore.preferences)
     implementation(libs.kotlinx.coroutines.swing)
@@ -64,6 +67,7 @@ dependencies {
     testImplementation(libs.kotlin.test)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(project(":core:companion"))
+    testImplementation(project(":engine:interceptor"))
 }
 
 val appName: String = providers.gradleProperty("knet.app.name").getOrElse("KNet")
@@ -166,4 +170,22 @@ private fun String.toJPackageVersion(isMacOS: Boolean): String {
     } else {
         coreVersion
     }
+}
+
+/** Ordinary CI qualifies all deterministic scenarios without requiring attached user hardware. */
+tasks.named<Test>("test") {
+    useJUnit { excludeCategories("com.devuloopers.knet.products.desktop.policy.PhysicalDevicePolicyQualification") }
+}
+
+/** Explicit, opt-in two-device hardware qualification against disposable production listeners. */
+tasks.register<Test>("devicePolicyPhysicalQualification") {
+    group = "verification"
+    description = "Qualifies scoped speed and breakpoint ownership using two attached ADB devices."
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    useJUnit { includeCategories("com.devuloopers.knet.products.desktop.policy.PhysicalDevicePolicyQualification") }
+    maxParallelForks = 1
+    maxHeapSize = "512m"
+    timeout.set(Duration.ofMinutes(5))
+    outputs.upToDateWhen { false }
 }

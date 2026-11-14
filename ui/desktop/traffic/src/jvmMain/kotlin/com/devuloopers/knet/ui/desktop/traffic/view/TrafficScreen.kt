@@ -49,10 +49,16 @@ fun TrafficScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val protectionState by protectionViewModel.uiState.collectAsState()
-    androidx.compose.runtime.LaunchedEffect(state.selectedTransaction?.transactionId, state.selectedTransaction?.rowKind) {
-        protectionViewModel.selectFlow(state.selectedTransaction?.takeIf {
-            it.rowKind == com.devuloopers.knet.ui.desktop.traffic.model.TrafficRowKind.OPAQUE_FLOW
-        }?.transactionId?.let { com.devuloopers.knet.traffic.id.OpaqueFlowId(it) })
+    val selectedOpaque = state.selectedTransaction?.capturedOpaqueFlow
+    val presentedProtection = protectionViewModel.stateForSelection(selectedOpaque, state.source, protectionState)
+    val selectedProtectionId = state.selectedTransaction?.takeIf {
+        it.rowKind == com.devuloopers.knet.ui.desktop.traffic.model.TrafficRowKind.OPAQUE_FLOW
+    }?.transactionId?.let { com.devuloopers.knet.traffic.id.OpaqueFlowId(it) }
+    androidx.compose.runtime.LaunchedEffect(selectedProtectionId, selectedOpaque?.connectionId, selectedOpaque?.serverName,
+        selectedOpaque?.destination, selectedOpaque?.sourceApplicationId, selectedOpaque?.transport,
+        selectedOpaque?.security, state.source) {
+        if (selectedOpaque == null) protectionViewModel.selectFlow(selectedProtectionId)
+        else protectionViewModel.selectCapturedFlow(selectedOpaque, state.source)
     }
     val themeColors = KNetTheme.colors
     var inspectorSplitRatio by remember { mutableFloatStateOf(0.65f) }
@@ -60,6 +66,7 @@ fun TrafficScreen(
 
     val toolbarState =
         remember(
+            state.source,
             state.captureState,
             state.engineState,
             state.scrollSettings,
@@ -72,6 +79,7 @@ fun TrafficScreen(
                 scrollSettings = state.scrollSettings,
                 localIpAddress = state.localIpAddress,
                 isClearingHistory = state.isClearingHistory,
+                source = state.source,
             )
         }
 
@@ -216,10 +224,10 @@ fun TrafficScreen(
                 },
                 secondPane = { paneModifier ->
                     TrafficInspectorPanel(
-                        protectionState = protectionState,
+                        protectionState = presentedProtection,
                         protectionActions = com.devuloopers.knet.ui.desktop.traffic.model.TrafficProtectionActions(
-                            apply = protectionViewModel::applyDestinationAction,
-                            useDefault = protectionViewModel::useDefaultHandling,
+                            apply = { action -> protectionViewModel.applyDestinationAction(action, selectedProtectionId) },
+                            useDefault = { protectionViewModel.useDefaultHandling(selectedProtectionId) },
                         ),
                         selectedTransaction = state.selectedTransaction,
                         activeTab = state.activeInspectorTab,

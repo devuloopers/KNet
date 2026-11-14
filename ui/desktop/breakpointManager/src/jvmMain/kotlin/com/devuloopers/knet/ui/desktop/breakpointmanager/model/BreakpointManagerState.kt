@@ -4,6 +4,7 @@ import com.devuloopers.knet.application.contract.breakpoint.PendingBreakpoint
 import com.devuloopers.knet.application.contract.breakpoint.PendingProtocolMessageBreakpoint
 import com.devuloopers.knet.application.contract.breakpoint.BreakpointProtocolDefinition
 import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaValue
+import com.devuloopers.knet.domain.policy.*
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
 import com.devuloopers.knet.domain.rules.model.BreakpointPortCriteria
 import com.devuloopers.knet.domain.request.descriptor.RequestDescriptor
@@ -28,6 +29,19 @@ import com.devuloopers.knet.domain.request.descriptor.RequestDescriptor
  * @param activeMessageEvent Currently selected framed-message breakpoint.
  */
 data class BreakpointManagerState(
+    val workspace: PolicyWorkspace = PolicyWorkspace.Other,
+    val workspaceName: String = "Other traffic",
+    val workspaceNames: Map<PolicyWorkspace, String> = emptyMap(),
+    val pendingDeletion: PolicyDeletionRequest? = null,
+    /** Brief confirmation issued only from a committed exact-match replacement. */
+    val replacementNotice: com.devuloopers.knet.ui.core.components.policy.RuleReplacementNoticeState? = null,
+    val isSaving: Boolean = false,
+    val definitions: List<PolicyDefinition<BreakpointRule>> = emptyList(),
+    val editingContext: RuleEditContext = RuleEditContext(),
+    val editingWorkspaceName: String = "Other traffic",
+    val editingUsageNames: List<String> = emptyList(),
+    val pendingByWorkspace: Map<PolicyWorkspace, Int> = emptyMap(),
+    val errorMessage: String? = null,
     val isGlobalInterceptionEnabled: Boolean = true,
     val searchQuery: String = "",
     val rules: List<BreakpointRule> = emptyList(),

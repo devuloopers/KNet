@@ -169,6 +169,7 @@ class BreakpointManagerViewModelTest {
     @Test
     fun `rules and global state remain reactive`() = runTest {
         val viewModel = viewModel()
+        viewModel.openAddDrawer()
         viewModel.saveRule(
             ".*stripe.*",
             HttpMethod.POST,

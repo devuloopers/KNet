@@ -16,6 +16,7 @@ kotlin {
                 implementation(libs.kotlinx.serialization.json)
                 api(project(":core:logger"))
                 api(project(":core:traffic"))
+                api(project(":core:identity"))
                 api(project(":core:scripting"))
             }
         }

@@ -133,7 +133,7 @@ class RoomNetworkConditionsRepository(
     }
 }
 
-private fun NetworkConditionProfile.toEntity() = NetworkConditionProfileEntity(
+internal fun NetworkConditionProfile.toEntity() = NetworkConditionProfileEntity(
     id = id.value,
     name = name,
     downloadBitsPerSecond = download.bitsPerSecond,
@@ -157,7 +157,7 @@ private fun NetworkConditionProfile.toEntity() = NetworkConditionProfileEntity(
     packetReorderingPercent = packetReorderingPercent,
 )
 
-private fun NetworkConditionProfileEntity.toDomain() = NetworkConditionProfile(
+internal fun NetworkConditionProfileEntity.toDomain() = NetworkConditionProfile(
     id = NetworkConditionProfileId(id),
     name = name,
     download = NetworkDirectionCondition(downloadBitsPerSecond, downloadUtilizationPercent),
@@ -181,7 +181,7 @@ private fun NetworkConditionProfileEntity.toDomain() = NetworkConditionProfile(
     packetReorderingPercent = packetReorderingPercent,
 )
 
-private fun NetworkConditionRule.toEntity() = NetworkConditionRuleEntity(
+internal fun NetworkConditionRule.toEntity() = NetworkConditionRuleEntity(
     id = id.value,
     normalizedHost = target.normalizedHost,
     wildcard = target.wildcard,
@@ -193,7 +193,7 @@ private fun NetworkConditionRule.toEntity() = NetworkConditionRuleEntity(
     protocolCriteriaPayload = protocolCriteria.encodedPayload,
 )
 
-private fun NetworkConditionRuleEntity.toDomain() = NetworkConditionRule(
+internal fun NetworkConditionRuleEntity.toDomain() = NetworkConditionRule(
     id = NetworkConditionRuleId(id),
     target = NetworkConditionTarget.parse((if (wildcard) "*." else "") + normalizedHost, port),
     profileId = NetworkConditionProfileId(profileId),

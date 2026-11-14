@@ -39,6 +39,9 @@ data class TrafficToolbarState(
     val scrollSettings: TrafficAutoScrollSettings = TrafficAutoScrollSettings(),
     val localIpAddress: String = "127.0.0.1",
     val isClearingHistory: Boolean = false,
+    /** Source whose recording is controlled; the proxy listener itself remains shared. */
+    val source: com.devuloopers.knet.application.contract.traffic.TrafficSource =
+        com.devuloopers.knet.application.contract.traffic.TrafficSource.Other,
 )
 
 /**
@@ -71,6 +74,8 @@ fun TrafficToolbar(
     val isCapturing = state.captureState == CaptureState.CAPTURING
     val captureTransitioning = state.captureState == CaptureState.STARTING
     val canStartCapture = !isCapturing && !captureTransitioning
+    val captureScope = if (state.source is com.devuloopers.knet.application.contract.traffic.TrafficSource.Device)
+        "the selected device" else "Other traffic"
 
     KNetToolbar(
         modifier = modifier
@@ -87,6 +92,7 @@ fun TrafficToolbar(
                         .clip(shapes.small)
                         .background(if (canStartCapture) themeColors.accent else themeColors.border)
                         .clickable(enabled = canStartCapture) { actions.onStartCapture() }
+                        .semantics { contentDescription = "Start Capture for $captureScope" }
                         .padding(horizontal = spacing.md, vertical = spacing.xs)
                         .handCursor(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -115,6 +121,7 @@ fun TrafficToolbar(
                         .clip(shapes.small)
                         .background(if (isCapturing) themeColors.semantic.errorContainer else themeColors.border)
                         .clickable(enabled = isCapturing) { actions.onPauseCapture() }
+                        .semantics { contentDescription = "Pause Capture for $captureScope" }
                         .padding(horizontal = spacing.md, vertical = spacing.xs)
                         .handCursor(),
                     verticalAlignment = Alignment.CenterVertically,

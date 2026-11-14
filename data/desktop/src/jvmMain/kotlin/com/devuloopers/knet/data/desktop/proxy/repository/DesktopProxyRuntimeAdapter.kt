@@ -13,6 +13,9 @@ import com.devuloopers.knet.application.contract.traffic.CapturePauseResult
 import com.devuloopers.knet.application.contract.traffic.CaptureResumeResult
 import com.devuloopers.knet.application.contract.traffic.CaptureSessionControl
 import com.devuloopers.knet.application.contract.traffic.CaptureSessionState
+import com.devuloopers.knet.application.contract.traffic.CaptureAdmissionPolicy
+import com.devuloopers.knet.application.contract.traffic.WorkspaceCaptureSnapshot
+import com.devuloopers.knet.domain.policy.PolicyWorkspace
 import com.devuloopers.knet.connectivity.model.ProxyAccessRequirement
 import com.devuloopers.knet.connectivity.model.ProxyEndpoint
 import com.devuloopers.knet.connectivity.model.ProxyEndpointScope
@@ -63,6 +66,14 @@ class DesktopProxyRuntimeAdapter(
     override val state: StateFlow<ProxyRuntimeState> = _runtimeState.asStateFlow()
     private val _captureState = MutableStateFlow<CaptureSessionState>(CaptureSessionState.Inactive)
     override val captureState: StateFlow<CaptureSessionState> = _captureState.asStateFlow()
+    private val _workspaceCaptureState = MutableStateFlow(WorkspaceCaptureSnapshot())
+    override val workspaceCaptureState: StateFlow<WorkspaceCaptureSnapshot> = _workspaceCaptureState.asStateFlow()
+    private var scopedCaptureConfigured = false
+
+    private fun publishCaptureState(state: CaptureSessionState) {
+        _captureState.value = state
+        _workspaceCaptureState.value = _workspaceCaptureState.value.copy(sessionState = state)
+    }
     private val closed = AtomicBoolean(false)
     private val retirementOwner = CaptureSessionRetirementOwner()
     private val canonicalCallbackLock = Any()
@@ -89,15 +100,16 @@ class DesktopProxyRuntimeAdapter(
         }
 
         _runtimeState.value = ProxyRuntimeState.Starting
-        _captureState.value = CaptureSessionState.Starting
+        publishCaptureState(CaptureSessionState.Starting)
         try {
             val session = canonicalCaptureSessionFactory.openStreamingProxy(binding.port)
-            val captureSink = SwitchableProxyCaptureSink(session)
+            val captureSink = SwitchableProxyCaptureSink(session, _workspaceCaptureState.value.admission)
             synchronized(canonicalCallbackLock) {
                 canonicalCaptureSession = session
                 automaticTlsFallback?.activateSession(session.sessionId)
                 switchableCaptureSink = captureSink
             }
+            breakpointCaptureAvailability.setCaptureAdmission(_workspaceCaptureState.value.admission)
             breakpointCaptureAvailability.setCaptureAvailable(true)
             withContext(Dispatchers.IO) {
                 proxyRuntimeRepository.startProxy(
@@ -136,7 +148,7 @@ class DesktopProxyRuntimeAdapter(
                 ),
             )
             _runtimeState.value = ProxyRuntimeState.Running(handle)
-            _captureState.value = CaptureSessionState.Capturing(session.sessionId)
+            publishCaptureState(CaptureSessionState.Capturing(session.sessionId))
             KNetLogger.info(tag = LogTags.PROXY) {
                 "Proxy engine started on ${binding.host}:${binding.port} with strict upstream TLS=${configuration.verifyUpstreamTls}."
             }
@@ -157,7 +169,7 @@ class DesktopProxyRuntimeAdapter(
             KNetLogger.error(tag = LogTags.PROXY, throwable = failure) {
                 "Failed to start proxy engine on ${binding.host}:${binding.port}."
             }
-            _captureState.value = CaptureSessionState.Failed(CAPTURE_FAILURE_START)
+            publishCaptureState(CaptureSessionState.Failed(CAPTURE_FAILURE_START))
             failStart(START_FAILURE_RUNTIME)
         }
     }
@@ -167,7 +179,7 @@ class DesktopProxyRuntimeAdapter(
         if (_runtimeState.value is ProxyRuntimeState.Stopped) {
             breakpointCaptureAvailability.setCaptureAvailable(false)
             closeCanonicalCaptureSession(TrafficTerminationReason.Lifecycle.PROXY_STOPPED)
-            _captureState.value = CaptureSessionState.Inactive
+            publishCaptureState(CaptureSessionState.Inactive)
             return@withLock ProxyStopResult.Stopped
         }
 
@@ -180,7 +192,7 @@ class DesktopProxyRuntimeAdapter(
             }
             canonicalSession?.close(TrafficTerminationReason.Lifecycle.PROXY_STOPPED)
             _runtimeState.value = ProxyRuntimeState.Stopped
-            _captureState.value = CaptureSessionState.Inactive
+            publishCaptureState(CaptureSessionState.Inactive)
             KNetLogger.info(tag = LogTags.PROXY) { "Proxy engine stopped for reason ${reason.name}." }
             ProxyStopResult.Stopped
         } catch (failure: Exception) {
@@ -197,7 +209,7 @@ class DesktopProxyRuntimeAdapter(
                 code = STOP_FAILURE_RUNTIME,
                 recoverable = true,
             )
-            _captureState.value = CaptureSessionState.Failed(CAPTURE_FAILURE_STOP)
+            publishCaptureState(CaptureSessionState.Failed(CAPTURE_FAILURE_STOP))
             ProxyStopResult.Forced(listOf(STOP_FAILURE_RUNTIME))
         }
     }
@@ -205,7 +217,7 @@ class DesktopProxyRuntimeAdapter(
     /** Detaches canonical capture while the proxy continues forwarding existing connections. */
     override suspend fun pause(): CapturePauseResult = lifecycleMutex.withLock {
         if (_runtimeState.value !is ProxyRuntimeState.Running) {
-            _captureState.value = CaptureSessionState.Inactive
+            publishCaptureState(CaptureSessionState.Inactive)
             return@withLock CapturePauseResult.PROXY_INACTIVE
         }
         breakpointCaptureAvailability.setCaptureAvailable(false)
@@ -216,7 +228,7 @@ class DesktopProxyRuntimeAdapter(
             automaticTlsFallback?.activateSession(null)
             current
         }
-        _captureState.value = CaptureSessionState.Paused
+        publishCaptureState(CaptureSessionState.Paused)
         if (retiringSession == null) {
             CapturePauseResult.ALREADY_PAUSED
         } else {
@@ -225,20 +237,54 @@ class DesktopProxyRuntimeAdapter(
         }
     }
 
+    /** Enables the shared canonical writer for administrative callers, retaining source choices. */
+    override suspend fun resume(): CaptureResumeResult = lifecycleMutex.withLock { resumeLocked() }
+
+    /** Stops only this source's capture side output; transport and pending decisions remain alive. */
+    override suspend fun pause(workspace: PolicyWorkspace): CapturePauseResult = lifecycleMutex.withLock {
+        val wasEnabled = _workspaceCaptureState.value.admission.enabledOn(workspace)
+        updateWorkspaceAdmission(workspace, false)
+        if (_runtimeState.value !is ProxyRuntimeState.Running) return@withLock CapturePauseResult.PROXY_INACTIVE
+        // Capture close only enqueues termination. Acknowledgement includes durability of this cut,
+        // without retiring the shared writer or waiting for sibling transport completion.
+        synchronized(canonicalCallbackLock) { canonicalCaptureSession }?.flush()
+        if (wasEnabled) CapturePauseResult.PAUSED else CapturePauseResult.ALREADY_PAUSED
+    }
+
+    /** Prepares source admission before startup, or reuses the existing shared writer/listener. */
+    override suspend fun resume(workspace: PolicyWorkspace): CaptureResumeResult = lifecycleMutex.withLock {
+        updateWorkspaceAdmission(workspace, true)
+        resumeLocked()
+    }
+
+    private suspend fun updateWorkspaceAdmission(workspace: PolicyWorkspace, enabled: Boolean) {
+        val current = _workspaceCaptureState.value
+        // Product startup always prepares an explicit source first. Direct administrative startup
+        // keeps its legacy all-source behavior; subsequent device commands preserve sibling choices.
+        val previous = if (!scopedCaptureConfigured && _runtimeState.value !is ProxyRuntimeState.Running)
+            CaptureAdmissionPolicy(defaultEnabled = false) else current.admission
+        scopedCaptureConfigured = true
+        val policy = previous.copy(overrides = previous.overrides + (workspace to enabled))
+        if (!enabled) breakpointCaptureAvailability.setCaptureAdmission(policy)
+        switchableCaptureSink?.setAdmission(policy)
+        if (enabled) breakpointCaptureAvailability.setCaptureAdmission(policy)
+        _workspaceCaptureState.value = current.copy(admission = policy)
+    }
+
     /** Attaches a fresh canonical capture generation without rebinding the proxy listener. */
-    override suspend fun resume(): CaptureResumeResult = lifecycleMutex.withLock {
+    private suspend fun resumeLocked(): CaptureResumeResult {
         val running = _runtimeState.value as? ProxyRuntimeState.Running
-            ?: return@withLock CaptureResumeResult.ProxyInactive.also {
-                _captureState.value = CaptureSessionState.Inactive
+            ?: return CaptureResumeResult.ProxyInactive.also {
+                publishCaptureState(CaptureSessionState.Inactive)
             }
         synchronized(canonicalCallbackLock) { canonicalCaptureSession }?.let { session ->
-            return@withLock CaptureResumeResult.AlreadyCapturing(session.sessionId)
+            return CaptureResumeResult.AlreadyCapturing(session.sessionId)
         }
 
-        _captureState.value = CaptureSessionState.Starting
+        publishCaptureState(CaptureSessionState.Starting)
         val listenerPort = running.handle.endpoints.endpoints.singleOrNull()?.port
             ?: error("Capture resume requires one active listener endpoint.")
-        try {
+        return try {
             val replacement = canonicalCaptureSessionFactory.openStreamingProxy(listenerPort)
             synchronized(canonicalCallbackLock) {
                 checkNotNull(switchableCaptureSink) { "Running proxy must own a switchable capture sink." }
@@ -246,12 +292,13 @@ class DesktopProxyRuntimeAdapter(
                 canonicalCaptureSession = replacement
                 automaticTlsFallback?.activateSession(replacement.sessionId)
             }
+            breakpointCaptureAvailability.setCaptureAdmission(_workspaceCaptureState.value.admission)
             breakpointCaptureAvailability.setCaptureAvailable(true)
-            _captureState.value = CaptureSessionState.Capturing(replacement.sessionId)
+            publishCaptureState(CaptureSessionState.Capturing(replacement.sessionId))
             CaptureResumeResult.Capturing(replacement.sessionId)
         } catch (failure: Exception) {
             breakpointCaptureAvailability.setCaptureAvailable(false)
-            _captureState.value = CaptureSessionState.Failed(CAPTURE_FAILURE_RESUME)
+            publishCaptureState(CaptureSessionState.Failed(CAPTURE_FAILURE_RESUME))
             KNetLogger.error(tag = LogTags.PROXY, throwable = failure) {
                 "Failed to attach a new capture generation to the running proxy."
             }
@@ -291,7 +338,7 @@ class DesktopProxyRuntimeAdapter(
             else automaticTlsFallback?.activateSession(replacement.sessionId)
             current
         }
-        _captureState.value = CaptureSessionState.Capturing(replacement.sessionId)
+        publishCaptureState(CaptureSessionState.Capturing(replacement.sessionId))
         previous?.close()
         CaptureClearPreparation.CANONICAL_SESSION_ROTATED
     }
@@ -340,7 +387,7 @@ class DesktopProxyRuntimeAdapter(
             }
         }
         _runtimeState.value = ProxyRuntimeState.Stopped
-        _captureState.value = CaptureSessionState.Inactive
+        publishCaptureState(CaptureSessionState.Inactive)
     }
 
     /** Closes and forgets the canonical session after proxy callbacks have stopped. */

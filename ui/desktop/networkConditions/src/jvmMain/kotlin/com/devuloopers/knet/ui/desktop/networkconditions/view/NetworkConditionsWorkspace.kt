@@ -1,5 +1,7 @@
 package com.devuloopers.knet.ui.desktop.networkconditions.view
 
+import com.devuloopers.knet.ui.core.components.policy.RuleLibraryLocation
+
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.TooltipArea
@@ -92,7 +94,7 @@ internal fun NetworkConditionsWorkspace(
         val compact = windowInfo.heightSizeClass == WindowSizeClass.Compact
         val compactWidth = windowInfo.widthSizeClass == WindowSizeClass.Compact
         KNetScreenLayout(
-            title = "Network Conditions",
+            title = "Network Conditions · ${state.workspaceName}",
             subtitle = if (state.configuration.enabled) "Global conditions apply unless a rule overrides them."
                 else "Conditions bypassed. Saved profiles and rules are retained.",
             actions = {
@@ -152,7 +154,7 @@ private fun GlobalConditionToolbar(state: NetworkConditionsState, onSelectProfil
         Row(Modifier.fillMaxWidth().padding(if (compact) KNetTheme.spacing.md else KNetTheme.spacing.lg), verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.lg)) {
             Column(Modifier.weight(1.8f), verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xs)) {
-                SmallLabel(if (compactWidth && compact) "Global profile · $summary" else "Global profile")
+                SmallLabel(if (compactWidth && compact) "Network profile · $summary" else "Network profile")
                 KNetDropdown(
                     selectedItem = selected, items = options, onItemSelected = { onSelectProfile(it?.id) },
                     defaultItem = null, itemText = { it?.name ?: noThrottlingProfileName },
@@ -291,7 +293,10 @@ private fun RulesTable(
                     KNetSwitch(rule.enabled, { onEnabledChange(rule, it) },
                         modifier = Modifier.semantics { contentDescription = "Enable rule for ${rule.target.displayValue}" })
                 }
-                TableText(rule.target.displayValue, Modifier.weight(1f), color = textColor, code = true)
+                Column(Modifier.weight(1f)) {
+                    TableText(rule.target.displayValue, color = textColor, code = true)
+                    SmallLabel(if (state.definitions.firstOrNull { it.rule.id == rule.id }?.availability == com.devuloopers.knet.domain.policy.RuleAvailability.Shared) RuleLibraryLocation.SHARED.label else RuleLibraryLocation.PRIVATE.label)
+                }
                 Column(Modifier.weight(1.5f).padding(end = KNetTheme.spacing.md),
                     verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xs)) {
                     TableText(details?.protocol ?: "Unavailable protocol", color = textColor)

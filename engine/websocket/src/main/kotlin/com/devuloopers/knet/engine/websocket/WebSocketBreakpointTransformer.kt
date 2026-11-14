@@ -45,11 +45,15 @@ class WebSocketBreakpointTransformerFactory(
         require(maximumEditableMessageBytes > 0) { "Maximum editable WebSocket bytes must be positive." }
     }
 
-    override fun create(
-        request: HttpRequestSnapshot,
-        streamId: StreamId?,
-        capture: ProxyExchangeCapture?,
-    ): ProxyDuplexTransformer? {
+    override fun create(request: HttpRequestSnapshot, streamId: StreamId?, capture: ProxyExchangeCapture?): ProxyDuplexTransformer? =
+        createBound(request, streamId, capture, gate)
+
+    override fun createForWorkspace(workspace: com.devuloopers.knet.domain.policy.PolicyWorkspace,
+        request: HttpRequestSnapshot, streamId: StreamId?, capture: ProxyExchangeCapture?): ProxyDuplexTransformer? =
+        createBound(request, streamId, capture, com.devuloopers.knet.application.contract.breakpoint.WorkspaceProtocolMessageGate(gate, workspace))
+
+    private fun createBound(request: HttpRequestSnapshot, streamId: StreamId?, capture: ProxyExchangeCapture?,
+        gate: ProtocolMessageBreakpointGate): ProxyDuplexTransformer? {
         if (capture == null || !WebSocketProtocol.isHandshake(request)) return null
         val potentialRoute = semanticLayers
             .filter { layer -> layer.mayApply(request) }

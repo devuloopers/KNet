@@ -1,5 +1,7 @@
 package com.devuloopers.knet.ui.desktop.networkconditions.model
 
+import com.devuloopers.knet.domain.policy.*
+import com.devuloopers.knet.domain.networkconditions.NetworkConditionRule
 import com.devuloopers.knet.application.contract.breakpoint.ProtocolCriteriaValue
 import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionProtocolDefinition
 import com.devuloopers.knet.application.contract.networkconditions.NetworkConditionRuntimeSnapshot
@@ -17,9 +19,21 @@ data class NetworkConditionRuleDraft(
     val priority: String = "0",
     val protocolId: NetworkConditionProtocolId = NetworkConditionProtocolId.TRANSPORT,
     val protocolValues: List<ProtocolCriteriaValue> = emptyList(),
+    val context: RuleEditContext = RuleEditContext(),
+    val workspaceName: String = "Other traffic",
+    val usageNames: List<String> = emptyList(),
 )
 
 data class NetworkConditionsState(
+    val workspace: PolicyWorkspace = PolicyWorkspace.Other,
+    val workspaceName: String = "Other traffic",
+    val workspaceNames: Map<PolicyWorkspace, String> = emptyMap(),
+    val pendingDeletion: PolicyDeletionRequest? = null,
+    /** Brief confirmation issued only from a committed exact-match replacement. */
+    val replacementNotice: com.devuloopers.knet.ui.core.components.policy.RuleReplacementNoticeState? = null,
+    val isSaving: Boolean = false,
+    val profileUsage: Map<NetworkConditionProfileId, com.devuloopers.knet.application.contract.device.PolicyProfileUsage> = emptyMap(),
+    val definitions: List<PolicyDefinition<NetworkConditionRule>> = emptyList(),
     val configuration: NetworkConditionConfiguration = NetworkConditionConfiguration(),
     val runtime: NetworkConditionRuntimeSnapshot = NetworkConditionRuntimeSnapshot(),
     val throughput: NetworkThroughputHistory = NetworkThroughputHistory(),

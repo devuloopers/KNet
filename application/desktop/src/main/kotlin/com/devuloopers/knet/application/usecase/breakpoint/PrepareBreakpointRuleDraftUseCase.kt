@@ -29,6 +29,8 @@ import kotlin.uuid.Uuid
 public data class BreakpointRuleDraft(
     public val rule: BreakpointRule,
     public val protocolValues: List<ProtocolCriteriaValue>,
+    /** Original authenticated workspace; never inferred from the destination. */
+    public val workspace: com.devuloopers.knet.domain.policy.PolicyWorkspace = com.devuloopers.knet.domain.policy.PolicyWorkspace.Other,
 )
 
 /** Result of preparing a breakpoint rule draft from a captured exchange. */
@@ -76,7 +78,7 @@ public class PrepareBreakpointRuleDraftUseCase(
             is LoadTrafficExchangeDetailsResult.Found -> loaded.details.requestBody.toSource(
                 request = loaded.details.exchange.request,
                 response = loaded.details.exchange.response,
-            )
+            ).copy(workspace = loaded.details.workspace)
 
             LoadTrafficExchangeDetailsResult.Missing -> pendingCandidate
                 ?.takeIf { it.exchangeId == exchangeId }
@@ -111,6 +113,7 @@ public class PrepareBreakpointRuleDraftUseCase(
             BreakpointRuleDraft(
                 rule = rule,
                 protocolValues = protocolRegistry.editorValues(suggestedCriteria),
+                workspace = source.workspace,
             ),
         )
     }
@@ -146,6 +149,7 @@ public class PrepareBreakpointRuleDraftUseCase(
             response = response,
             body = retainedBody,
             bodyComplete = bodyComplete,
+            workspace = workspace,
         )
     }
 
@@ -157,6 +161,7 @@ public class PrepareBreakpointRuleDraftUseCase(
         val response: HttpResponseSnapshot? = null,
         val body: BreakpointBody?,
         val bodyComplete: Boolean,
+        val workspace: com.devuloopers.knet.domain.policy.PolicyWorkspace = com.devuloopers.knet.domain.policy.PolicyWorkspace.Other,
     )
 
     private companion object {

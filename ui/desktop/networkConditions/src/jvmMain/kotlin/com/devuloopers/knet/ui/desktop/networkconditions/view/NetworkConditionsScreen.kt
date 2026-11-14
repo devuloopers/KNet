@@ -1,5 +1,8 @@
 package com.devuloopers.knet.ui.desktop.networkconditions.view
 
+import com.devuloopers.knet.ui.core.components.policy.*
+import com.devuloopers.knet.domain.policy.*
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -85,7 +88,7 @@ fun NetworkConditionsScreen(
         onAddRule = viewModel::beginAddRule,
         onRuleEnabledChange = viewModel::setRuleEnabled,
         onEditRule = viewModel::beginEditRule,
-        onDeleteRule = viewModel::deleteRule,
+        onDeleteRule = viewModel::requestRuleDeletion,
         onNewProfile = {
             customProfileSeed = null
             showCustomProfileDialog = true
@@ -102,6 +105,7 @@ fun NetworkConditionsScreen(
         RuleDialog(
             draft = draft,
             profiles = state.configuration.profiles,
+            saving = state.isSaving,
             protocolDefinitions = state.protocolDefinitions,
             onHostChange = viewModel::updateDraftHostPattern,
             onPortChange = viewModel::updateDraftPort,
@@ -112,9 +116,19 @@ fun NetworkConditionsScreen(
             onProtocolValueChange = viewModel::updateDraftProtocolValue,
             onDismiss = viewModel::dismissRuleDraft,
             onSave = viewModel::confirmRuleDraft,
+            libraryContent = {
+                RuleLibraryEditor(RuleLibraryEditorState(draft.workspaceName,
+                    if (draft.context.availability == RuleAvailability.Shared) RuleLibraryLocation.SHARED else RuleLibraryLocation.PRIVATE,
+                    draft.existingRuleId != null, draft.usageNames, sharedDefinition = draft.context.originalAvailability == com.devuloopers.knet.domain.policy.RuleAvailability.Shared),
+                    viewModel::setDraftShared, viewModel::duplicateDraft)
+            },
         )
     }
 
+    state.pendingDeletion?.let { request ->
+        com.devuloopers.knet.ui.core.components.policy.RuleLibraryDeleteDialog(
+            request.affectedWorkspaceNames, viewModel::confirmRuleDeletion, viewModel::dismissRuleDeletion)
+    }
     state.errorMessage?.let { error ->
         AlertDialog(
             title = "Network Conditions",
@@ -126,6 +140,11 @@ fun NetworkConditionsScreen(
     if (showCustomProfileDialog) {
         CustomProfileDialog(
             initial = customProfileSeed,
+            usage = state.profileUsage[customProfileSeed?.id],
+            existing = state.configuration.customProfiles.any { it.id == customProfileSeed?.id },
+            onDuplicate = {
+                customProfileSeed = customProfileSeed?.copy(id = NetworkConditionProfileId("custom_${kotlin.uuid.Uuid.random()}"), name = "${customProfileSeed?.name} copy")
+            },
             onDismiss = { showCustomProfileDialog = false },
             onSave = { profile ->
                 viewModel.saveProfile(profile)
@@ -369,6 +388,8 @@ private fun RuleDialog(
     onProtocolValueChange: (ProtocolCriteriaFieldId, String) -> Unit,
     onDismiss: () -> Unit,
     onSave: () -> Unit,
+    libraryContent: @Composable () -> Unit = {},
+    saving: Boolean = false,
 ) {
     KNetDialog(
         onDismissRequest = onDismiss,
@@ -376,7 +397,7 @@ private fun RuleDialog(
     ) {
         NetworkConditionRuleEditor(
             draft, profiles, protocolDefinitions, onHostChange, onPortChange, onPriorityChange,
-            onEnabledChange, onProfileSelected, onProtocolSelected, onProtocolValueChange, onDismiss, onSave,
+            onEnabledChange, onProfileSelected, onProtocolSelected, onProtocolValueChange, onDismiss, onSave, libraryContent, saving,
         )
     }
 }
@@ -396,6 +417,8 @@ internal fun NetworkConditionRuleEditor(
     onProtocolValueChange: (ProtocolCriteriaFieldId, String) -> Unit,
     onDismiss: () -> Unit,
     onSave: () -> Unit,
+    libraryContent: @Composable () -> Unit = {},
+    saving: Boolean = false,
 ) {
     val scrollState = rememberScrollState()
     Column(Modifier.fillMaxWidth().heightIn(max = 560.dp),
@@ -405,6 +428,7 @@ internal fun NetworkConditionRuleEditor(
                 Modifier.fillMaxWidth().verticalScroll(scrollState).padding(end = KNetTheme.spacing.md),
                 verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.lg),
             ) {
+                libraryContent()
                 Column(verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xs)) {
                     FormFieldRow {
                         LabeledTextField(
@@ -451,17 +475,14 @@ internal fun NetworkConditionRuleEditor(
                         label = "Priority", value = draft.priority, onValueChange = onPriorityChange,
                         supportingText = "Higher priority wins.", modifier = Modifier.weight(1f),
                     )
-                    Box(Modifier.weight(1f).padding(top = KNetTheme.spacing.xxl)) {
-                        KNetSwitch(draft.enabled, onEnabledChange, label = "Rule enabled")
-                    }
                 }
             }
             KNetVerticalScrollbar(scrollState, Modifier.align(Alignment.CenterEnd).fillMaxHeight())
         }
         HorizontalDivider()
         DialogActions(
-            confirmText = "Save rule",
-            confirmEnabled = draft.hostPattern.isNotBlank() && profiles.any { it.id == draft.profileId } &&
+            confirmText = if (draft.existingRuleId == null) "Save and enable" else "Save rule",
+            confirmEnabled = !saving && draft.hostPattern.isNotBlank() && profiles.any { it.id == draft.profileId } &&
                 definitionAvailable(draft, protocolDefinitions),
             onDismiss = onDismiss,
             onConfirm = onSave,
@@ -523,6 +544,9 @@ private fun CustomProfileDialog(
     initial: NetworkConditionProfile?,
     onDismiss: () -> Unit,
     onSave: (NetworkConditionProfile) -> Unit,
+    usage: com.devuloopers.knet.application.contract.device.PolicyProfileUsage? = null,
+    existing: Boolean = initial != null,
+    onDuplicate: () -> Unit = {},
 ) {
     var name by remember(initial) { mutableStateOf(initial?.name ?: "Custom") }
     var download by remember(initial) {
@@ -581,7 +605,7 @@ private fun CustomProfileDialog(
 
     KNetDialog(
         onDismissRequest = onDismiss,
-        title = if (initial == null) "New custom profile" else "Edit ${initial.name}",
+        title = if (!existing) "New custom profile" else "Edit ${initial?.name}",
     ) {
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -593,6 +617,12 @@ private fun CustomProfileDialog(
                         .padding(end = KNetTheme.spacing.sm),
                     verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.lg),
                 ) {
+                    if (existing) {
+                        Text("${usage?.ruleCount ?: 0} saved rule(s) reference this shared profile.",
+                            style = KNetTheme.typography.bodySmall, maxLines = 1, softWrap = false)
+                        usage?.workspaceNames?.forEach { name -> Text(name, style = KNetTheme.typography.caption, maxLines = 1, softWrap = false) }
+                        KNetButton(onClick = onDuplicate, variant = ButtonVariant.Secondary) { Text("Duplicate profile", maxLines = 1, softWrap = false) }
+                    }
                     FormGroup(title = "Profile") {
                         LabeledTextField(
                             label = "Name",

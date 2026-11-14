@@ -1,5 +1,6 @@
 package com.devuloopers.knet.products.desktop.di.connectivity
 
+import com.devuloopers.knet.companion.model.PacketConditionConfiguration
 import kotlinx.coroutines.flow.map
 
 import com.devuloopers.knet.application.coordinator.connectivity.ConnectivityCoordinator
@@ -262,8 +263,10 @@ internal val connectivityBindings: Module = module {
             redemptionCodec = get(),
             invitationCodec = get(),
             endpointDescriptor = { discovery.load().endpointDescriptor() },
-            packetConditions = {
-                get<NetworkConditionsRepository>().configuration.value.toPacketConditionConfiguration()
+            packetConditions = { PacketConditionConfiguration.Disabled },
+            packetConditionsForDevice = { id ->
+                get<com.devuloopers.knet.application.contract.device.DevicePolicyLibrary>().snapshot.value
+                    .runtimeNetwork(com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(id)).toPacketConditionConfiguration()
             },
             nowEpochMillis = ::currentEpochMillis,
         )
@@ -273,7 +276,12 @@ internal val connectivityBindings: Module = module {
         com.devuloopers.knet.connectivity.desktop.gateway.KtorCompanionControlGateway(
             COMPANION_LAN_BIND_HOST, COMPANION_CONTROL_GATEWAY_PORT, identity.serverKeyStore,
             get<CompanionControlGateway>(), get(), get(),
-            get<NetworkConditionsRepository>().configuration.map { configuration -> configuration.toPacketConditionConfiguration() },
+            kotlinx.coroutines.flow.flowOf(PacketConditionConfiguration.Disabled),
+            policiesForDevice = { id ->
+                get<com.devuloopers.knet.application.contract.device.DevicePolicyLibrary>().snapshot.map { state ->
+                    state.runtimeNetwork(com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(id)).toPacketConditionConfiguration()
+                }
+            },
         )
     }
     single { CompanionControlGatewayRuntime(get<com.devuloopers.knet.connectivity.desktop.gateway.KtorCompanionControlGateway>()) }

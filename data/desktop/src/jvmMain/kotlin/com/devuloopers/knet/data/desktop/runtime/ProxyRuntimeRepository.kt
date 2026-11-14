@@ -129,8 +129,8 @@ class ProxyRuntimeRepository(
                 captureSink = captureSink,
                 ingressAttribution = ingressAttribution,
                 transferObserver = transferObserver,
-                requiresFullResponseAggregation = { request ->
-                    breakpointGate.mayIntercept(request, BreakpointPhase.RESPONSE)
+                requiresWorkspaceResponseAggregation = { workspace, request ->
+                    breakpointGate.mayInterceptFor(workspace, request, BreakpointPhase.RESPONSE)
                 },
                 streamInspectorFactories = streamInspectorFactories,
                 streamTransformerFactories = streamTransformerFactories,

@@ -31,6 +31,7 @@ class ProtectedTrafficTlsInterceptionPolicy(
     private val policy: ProtectedTrafficPolicy = ProtectedTrafficPolicy(),
     private val automaticFallback: AutomaticTlsFallback? = null,
     private val inspectionAuthorityIdentity: () -> String? = { null },
+    private val configurationForWorkspace: ((com.devuloopers.knet.domain.policy.PolicyWorkspace) -> ProtectedTrafficConfiguration)? = null,
 ) : TlsInterceptionPolicy {
     /** Evaluates one CONNECT route against the latest atomically published policy snapshot. */
     override fun decide(request: TlsInterceptionRequest): TlsInterceptionDecision {
@@ -39,8 +40,8 @@ class ProtectedTrafficTlsInterceptionPolicy(
         val address = (parsed as? ProtectedDestinationSelector.Exact)
             ?.takeIf(ProtectedDestinationSelector.Exact::isIpLiteral)
             ?.value
-        val activeConfiguration = configuration()
-        val generation = automaticFallback?.authorize(activeConfiguration, inspectionAuthorityIdentity())
+        val activeConfiguration = configurationForWorkspace?.invoke(request.workspace) ?: configuration()
+        val generation = automaticFallback?.authorizeWorkspace(request.workspace, activeConfiguration, inspectionAuthorityIdentity())
         val domainDecision = policy.evaluate(
             activeConfiguration,
             ProtectedTrafficRequest(

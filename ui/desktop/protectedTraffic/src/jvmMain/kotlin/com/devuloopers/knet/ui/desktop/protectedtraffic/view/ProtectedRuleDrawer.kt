@@ -1,5 +1,8 @@
 package com.devuloopers.knet.ui.desktop.protectedtraffic.view
 
+import com.devuloopers.knet.ui.core.components.policy.*
+import com.devuloopers.knet.domain.policy.*
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
@@ -23,7 +26,8 @@ import com.devuloopers.knet.ui.desktop.protectedtraffic.model.*
 /** Shared animated drawer shell with an independently scrolling form and fixed actions. */
 @Composable
 internal fun ProtectedRuleDrawer(state: ProtectedTrafficState, onChange: (ProtectedTrafficRuleDraft) -> Unit,
-    onDismiss: () -> Unit, onSave: () -> Unit) {
+    onDismiss: () -> Unit, onSave: () -> Unit,
+    onShared: (Boolean) -> Unit = {}, onDuplicate: () -> Unit = {}) {
     val draft = state.ruleDraft
     KNetSideDrawer(visible = draft != null, size = KNetSideDrawerSize.STANDARD) {
         // Keep the last draft visible through the shared exit animation; callbacks stay disabled once closed.
@@ -39,6 +43,9 @@ internal fun ProtectedRuleDrawer(state: ProtectedTrafficState, onChange: (Protec
             }
             key(shown.id) {
                 KNetInspectorContent(Modifier.weight(1f).fillMaxWidth()) {
+                    RuleLibraryEditor(RuleLibraryEditorState(shown.workspaceName,
+                        if (shown.context.availability == RuleAvailability.Shared) RuleLibraryLocation.SHARED else RuleLibraryLocation.PRIVATE,
+                        shown.id != null, shown.usageNames, sharedDefinition = shown.context.originalAvailability == com.devuloopers.knet.domain.policy.RuleAvailability.Shared), onShared, onDuplicate)
                     KNetInspectorParagraph("Match a destination, application, port or transport. Matching saved rules override the default TLS action.")
                     if (state.configuration.rules.any { it.id == shown.id && it.origin == ProtectedTrafficRuleOrigin.MIGRATED_PRESET })
                         KNetInspectorParagraph("Imported exception. Changing its match or action converts it to a user rule.")
@@ -78,7 +85,7 @@ internal fun ProtectedRuleDrawer(state: ProtectedTrafficState, onChange: (Protec
                 }
                 KNetButton(onClick = onSave, enabled = editable && shown.isPortValid && shown.id !in state.pendingRuleIds,
                     loading = state.isSaving, variant = ButtonVariant.Primary) {
-                    Text("Save rule", maxLines = 1, softWrap = false)
+                    Text(if (shown.id == null) "Save and enable" else "Save rule", maxLines = 1, softWrap = false)
                 }
             }
         }

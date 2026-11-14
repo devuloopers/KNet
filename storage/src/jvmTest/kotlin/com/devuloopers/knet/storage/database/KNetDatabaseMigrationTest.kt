@@ -13,6 +13,42 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class KNetDatabaseMigrationTest {
+    @Test fun `version 38 separates libraries without changing any existing device behavior`() = runBlocking {
+        for (deviceCount in listOf(0, 2)) {
+            val root = Files.createTempDirectory("knet-v38-library-").toFile()
+            val file = root.resolve("traffic.db")
+            try {
+                createDatabaseFromExportedSchema(file, 38)
+                BundledSQLiteDriver().open(file.absolutePath).use { connection ->
+                    repeat(deviceCount) { index -> connection.execSQL("INSERT INTO registered_devices VALUES ('device-$index','Same name','PAIRED_COMPANION',1,2,NULL)") }
+                    connection.execSQL("INSERT INTO network_condition_settings VALUES (1,1,NULL,NULL)")
+                    connection.execSQL("INSERT INTO protected_traffic_settings (singletonId,defaultAction,smartCompatibilityEnabled,automaticTlsFallbackEnabled) VALUES (1,'BLOCK',0,0)")
+                    for (enabled in 0..1) {
+                        connection.execSQL("INSERT INTO breakpoint_rules VALUES ('bp-$enabled','*/$enabled',443,'POST','BOTH',$enabled,7,'http',NULL)")
+                        connection.execSQL("INSERT INTO network_condition_rules (id,normalizedHost,wildcard,port,profileId,enabled,priority) VALUES ('nc-$enabled','example.test',0,443,'legacy-profile',$enabled,9)")
+                        connection.execSQL("INSERT INTO protected_traffic_rules (id,enabled,action,port,origin) VALUES ('pt-$enabled',$enabled,'TUNNEL',443,'USER')")
+                    }
+                }
+                var database = DatabaseFactory.create(file)
+                try {
+                    val dao = database.devicePolicyDao()
+                    assertEquals(deviceCount + 1, dao.workspaces().size)
+                    assertEquals(deviceCount + 1, dao.breakpointActivations().count { it.enabled })
+                    assertEquals(deviceCount + 1, dao.conditionActivations().count { it.enabled })
+                    assertEquals(deviceCount + 1, dao.protectionActivations().count { it.enabled })
+                    kotlin.test.assertTrue(dao.workspaces().all { it.networkEnabled && it.protectedAction == "BLOCK" && !it.automaticTlsFallback })
+                    kotlin.test.assertTrue(database.breakpointRuleDao().getAllRules().all { it.libraryOwnerKey == null && it.libraryRevision == 1L && it.priority == 7 })
+                    kotlin.test.assertTrue(database.networkConditionDao().getRules().all { it.libraryOwnerKey == null && it.priority == 9 })
+                    database.registeredDeviceDao().upsertRegisteredDevice(com.devuloopers.knet.storage.device.entity.RegisteredDeviceEntity("future", "Same name", "PAIRED_COMPANION", 3, 3, null))
+                    kotlin.test.assertTrue(dao.breakpointActivations().none { it.workspaceKey == "device:future" })
+                } finally { database.close() }
+                database = DatabaseFactory.create(file)
+                try { assertEquals((deviceCount + 1) * 2, database.devicePolicyDao().conditionActivations().size) }
+                finally { database.close() }
+            } finally { root.deleteRecursively() }
+        }
+    }
+
     @Test fun `version 35 enables new fallback while preserving legacy preferences explicit action and rules`() {
         val root = Files.createTempDirectory("knet-v35-auto-fallback-").toFile()
         val file = root.resolve("traffic.db")
@@ -37,7 +73,7 @@ class KNetDatabaseMigrationTest {
 
     @Test
     fun `every retained schema generation migrates without deleting canonical sessions`() {
-        listOf(13, 18, 22, 24, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37).forEach { version ->
+        listOf(13, 18, 22, 24, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37, 38).forEach { version ->
             val root = Files.createTempDirectory("knet-v$version-migration-").toFile()
             val databaseFile = root.resolve("traffic.db")
             try {

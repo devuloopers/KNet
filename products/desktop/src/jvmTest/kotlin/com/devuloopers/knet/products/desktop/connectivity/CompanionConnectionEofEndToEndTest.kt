@@ -133,8 +133,8 @@ class CompanionConnectionEofEndToEndTest {
                 }
             }
         }
-        private val proxy = KNetProxyServer(
-            port = ServerSocket(0).use { it.localPort },
+        private val proxy = startAvailableProxy { port -> KNetProxyServer(
+            port = port,
             serverTlsContextProvider = ServerTlsContextProvider { host, executor ->
                 cache.getAsync(host, authority, executor).thenApply { leaf ->
                     SslContextBuilder.forServer(leaf.keyPair.private, leaf.certificate).build()
@@ -151,7 +151,7 @@ class CompanionConnectionEofEndToEndTest {
                     context.fireUserEventTriggered(event)
                 }
             }) }),
-        ).apply { start() }
+        ) }
         private val gateway = AuthenticatedProxyGateway("127.0.0.1", 0, contexts.server.serverSocketFactory,
             { proxy.boundAddress() }, PairingCoordinator(DeviceStore(crypto.digest(credential)), crypto, System::currentTimeMillis),
             attributions).apply { start() }
@@ -222,6 +222,20 @@ class CompanionConnectionEofEndToEndTest {
 
     private data class Contexts(val server: SSLContext, val client: SSLContext)
     private companion object {
+        /** Retries only an OS port-allocation race and closes every rejected Netty owner. */
+        fun startAvailableProxy(factory: (Int) -> KNetProxyServer): KNetProxyServer {
+            var lastFailure: java.net.BindException? = null
+            repeat(5) {
+                val proxy = factory(ServerSocket(0).use { it.localPort })
+                try { proxy.start(); return proxy }
+                catch (failure: java.net.BindException) {
+                    runCatching { proxy.stop() }
+                    lastFailure = failure
+                }
+            }
+            throw checkNotNull(lastFailure)
+        }
+
         fun contexts(authority: CertificateAuthority): Contexts {
             val leaf = LeafCertificateGenerator.generate("127.0.0.1", authority)
             val keys = KeyStore.getInstance("PKCS12").apply { load(null); setKeyEntry("server", leaf.keyPair.private, charArrayOf(), arrayOf(leaf.certificate, authority.certificate)) }

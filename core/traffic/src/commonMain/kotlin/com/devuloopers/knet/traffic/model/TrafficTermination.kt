@@ -33,6 +33,8 @@ public sealed interface TrafficTerminationReason {
         PROCESS_INTERRUPTED(TrafficTerminationCode("process-interrupted")),
         CAPTURE_SESSION_CLOSED(TrafficTerminationCode("capture_session_closed")),
         CAPTURE_TARGET_ROTATED(TrafficTerminationCode("capture_target_rotated")),
+        /** The user paused this source's recording while its transport continued forwarding. */
+        CAPTURE_PAUSED(TrafficTerminationCode("capture_paused")),
     }
 
     /** Transport-level failure or peer lifecycle event. */

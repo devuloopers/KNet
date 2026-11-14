@@ -78,11 +78,27 @@ public interface CaptureSessionControl {
     /** Hot state of capture attachment, independent from proxy listener lifecycle. */
     public val captureState: StateFlow<CaptureSessionState>
 
+    /** Shared writer and per-source admission; legacy global adapters admit every source. */
+    public val workspaceCaptureState: StateFlow<WorkspaceCaptureSnapshot>
+        get() = com.devuloopers.knet.application.contract.device.ProjectedStateFlow(captureState) {
+            WorkspaceCaptureSnapshot(sessionState = it)
+        }
+
     /** Detaches capture without stopping forwarding or closing client connections. */
     public suspend fun pause(): CapturePauseResult
 
     /** Attaches a new canonical session without restarting the proxy listener. */
     public suspend fun resume(): CaptureResumeResult
+
+    /** Stops recording only [workspace], preserving forwarding and already pending interceptions. */
+    public suspend fun pause(workspace: com.devuloopers.knet.domain.policy.PolicyWorkspace): CapturePauseResult = pause()
+
+    /**
+     * Enables recording for [workspace], including before the shared listener is started.
+     * Returns [CaptureResumeResult.ProxyInactive] when startup is still required.
+     */
+    public suspend fun resume(workspace: com.devuloopers.knet.domain.policy.PolicyWorkspace): CaptureResumeResult =
+        if (captureState.value == CaptureSessionState.Inactive) CaptureResumeResult.ProxyInactive else resume()
 
     /**
      * Rotates active capture ownership for a clear operation.

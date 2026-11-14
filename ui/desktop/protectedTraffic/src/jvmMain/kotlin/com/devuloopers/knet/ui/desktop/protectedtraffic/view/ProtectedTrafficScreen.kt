@@ -34,6 +34,7 @@ fun ProtectedTrafficScreen(viewModel: ProtectedTrafficViewModel, modifier: Modif
         Box(Modifier.fillMaxSize()) {
             ProtectedTrafficWorkspace(headerActions = {
                 Column(verticalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xs)) {
+                    ManagerText(state.workspaceName, caption = true)
                     ManagerText("Default TLS handling", caption = true)
                     KNetDropdown(selectedItem = state.configuration.defaultHandling,
                         items = ProtectedTrafficDefaultHandling.entries,
@@ -54,12 +55,17 @@ fun ProtectedTrafficScreen(viewModel: ProtectedTrafficViewModel, modifier: Modif
                         RuleSearch(state.searchQuery, viewModel::updateSearchQuery, Modifier.weight(1f))
                         AddRuleButton(state.configuration.configurationReady && !state.isSaving, viewModel::beginAddRule)
                     }
-                    ProtectedRulesTable(state, viewModel::setRuleEnabled, viewModel::beginEditRule, viewModel::deleteRule,
+                    ProtectedRulesTable(state, viewModel::setRuleEnabled, viewModel::beginEditRule, viewModel::requestRuleDeletion,
                         onClearSearch = { viewModel.updateSearchQuery("") }, modifier = Modifier.weight(1f).fillMaxWidth())
                 }
             }
-            ProtectedRuleDrawer(state, viewModel::updateRuleDraft, viewModel::dismissRuleDraft, viewModel::saveRuleDraft)
+            ProtectedRuleDrawer(state, viewModel::updateRuleDraft, viewModel::dismissRuleDraft, viewModel::saveRuleDraft,
+                viewModel::setDraftShared, viewModel::duplicateDraft)
         }
+    }
+    state.pendingDeletion?.let { request ->
+        com.devuloopers.knet.ui.core.components.policy.RuleLibraryDeleteDialog(
+            request.affectedWorkspaceNames, viewModel::confirmRuleDeletion, viewModel::dismissRuleDeletion)
     }
     state.errorMessage?.let { error -> AlertDialog(title = "Protected Traffic", message = error, onDismissRequest = viewModel::clearError) }
 }

@@ -1,5 +1,8 @@
 package com.devuloopers.knet.storage.protectedtraffic.entity
 
+
+import androidx.room.ForeignKey
+import com.devuloopers.knet.storage.policy.entity.PolicyWorkspaceEntity
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -38,7 +41,9 @@ data class ProtectedTrafficSettingsEntity(
  */
 @Entity(
     tableName = "protected_traffic_rules",
+    foreignKeys = [ForeignKey(entity = PolicyWorkspaceEntity::class, parentColumns = ["key"], childColumns = ["libraryOwnerKey"], onDelete = ForeignKey.CASCADE)],
     indices = [
+        Index("libraryOwnerKey"),
         Index(
             value = [
                 "sourceApplication",
@@ -50,7 +55,7 @@ data class ProtectedTrafficSettingsEntity(
                 "ipFamily",
                 "origin",
             ],
-            unique = true,
+            unique = false,
         ),
     ],
 )
@@ -68,6 +73,8 @@ data class ProtectedTrafficRuleEntity(
     val ipFamily: String?,
     /** USER or MIGRATED_PRESET; imported exceptions retain their original lower precedence. */
     @ColumnInfo(defaultValue = "'USER'") val origin: String = "USER",
+    @ColumnInfo(defaultValue = "NULL") val libraryOwnerKey: String? = null,
+    @ColumnInfo(defaultValue = "1") val libraryRevision: Long = 1L,
 )
 
 /**

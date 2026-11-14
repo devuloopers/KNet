@@ -43,6 +43,7 @@ public class KtorCompanionControlGateway(
     private val presence: DevicePresenceCoordinator,
     private val policies: Flow<PacketConditionConfiguration>,
     private val maximumSessions: Int = 128,
+    private val policiesForDevice: ((com.devuloopers.knet.identity.RegisteredDeviceId) -> Flow<PacketConditionConfiguration>)? = null,
 ) : CompanionControlGatewayLifecycle {
     private val mutableState = MutableStateFlow<CompanionControlGatewayState>(CompanionControlGatewayState.Stopped)
     private val closed = AtomicBoolean(false)
@@ -152,7 +153,7 @@ public class KtorCompanionControlGateway(
             var currentPolicy: PacketConditionConfiguration? = null
             val policyLock = kotlinx.coroutines.sync.Mutex()
             val updater = launch {
-                policies.distinctUntilChanged().collect { configuration ->
+                (policiesForDevice?.invoke(authorization.deviceId) ?: policies).distinctUntilChanged().collect { configuration ->
                     policyLock.lock()
                     try {
                         check(revision < Long.MAX_VALUE)

@@ -124,6 +124,8 @@ data class TrafficRowUiState(
     val interception: TrafficInterceptionUiState = TrafficInterceptionUiState.None,
     /** Canonical insertion identity/order; absent for provisional breakpoint rows. */
     val readPoint: com.devuloopers.knet.application.contract.traffic.TrafficReadPoint? = null,
+    /** Bounded canonical opaque metadata for immediate policy presentation; contains no payload bytes. */
+    val capturedOpaqueFlow: OpaqueFlowSnapshot? = null,
 ) {
     val fullUrl: String
         get() = when {
@@ -159,6 +161,7 @@ internal fun OpaqueFlowSnapshot.toTrafficRowUiState(sequenceNumber: Long): Traff
         method = displayProtocol,
         displayMethod = displayProtocol,
         rowKind = TrafficRowKind.OPAQUE_FLOW,
+        capturedOpaqueFlow = this,
         scheme = HttpScheme.fromToken(schemeToken),
         host = buildString {
             append(serverName ?: destination.host)
@@ -316,6 +319,7 @@ internal fun ExchangeTerminalOutcome?.toTrafficStatusLabel(): String = when (thi
     is ExchangeTerminalOutcome.Cancelled -> when (reason) {
         TrafficTerminationReason.Lifecycle.PROXY_STOPPED -> "Proxy Stopped"
         TrafficTerminationReason.Lifecycle.CAPTURE_TARGET_ROTATED -> "Capture Cleared"
+        TrafficTerminationReason.Lifecycle.CAPTURE_PAUSED -> "Capture Paused"
         else -> "Cancelled"
     }
     is ExchangeTerminalOutcome.Failed -> when (reason) {

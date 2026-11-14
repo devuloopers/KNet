@@ -34,6 +34,7 @@ import androidx.compose.ui.unit.sp
 import com.devuloopers.knet.domain.rules.model.BreakpointPhase
 import com.devuloopers.knet.domain.rules.model.BreakpointPortCriteria
 import com.devuloopers.knet.domain.rules.model.BreakpointRule
+import com.devuloopers.knet.ui.core.components.policy.RuleLibraryLocation
 import com.devuloopers.knet.ui.core.components.switch.KNetSwitch
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.desktop.httppanel.theme.HttpMethodColors
@@ -48,7 +49,8 @@ fun BreakpointRulesTable(
     onToggleStatus: (String) -> Unit,
     onEditRule: (BreakpointRule) -> Unit,
     onDeleteRule: (String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    libraryLabel: (String) -> String = { RuleLibraryLocation.PRIVATE.label },
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -157,7 +159,7 @@ fun BreakpointRulesTable(
 
                             // URL Pattern (Monospace)
                             Text(
-                                text = rule.urlPattern,
+                                text = "${rule.urlPattern} · ${libraryLabel(rule.id)}",
                                 style = typography.bodyMedium.copy(
                                     color = if (rule.enabled) themeColors.textPrimary else themeColors.textMuted,
                                     fontFamily = FontFamily.Monospace,

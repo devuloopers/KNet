@@ -29,6 +29,8 @@ import com.devuloopers.knet.application.contract.breakpoint.PendingProtocolMessa
 import com.devuloopers.knet.application.usecase.inspection.ObserveInspectionAnnotationsUseCase
 import com.devuloopers.knet.application.contract.traffic.TrafficSortDirection
 import com.devuloopers.knet.application.contract.traffic.TrafficSource
+import com.devuloopers.knet.application.contract.traffic.captureWorkspace
+import com.devuloopers.knet.domain.policy.PolicyWorkspace
 import com.devuloopers.knet.application.contract.traffic.TrafficPageQuery
 import com.devuloopers.knet.application.contract.traffic.TrafficRecordFilter
 import com.devuloopers.knet.application.contract.traffic.TrafficFacetQuery
@@ -116,19 +118,16 @@ class TrafficViewModel(
     private val _uiState = MutableStateFlow(createInitialState())
     val uiState: StateFlow<TrafficState> = _uiState.asStateFlow()
     private val proxyRuntimeStates = observeProxyRuntimeStateUseCase.execute()
-    private val trafficCaptureStates = observeTrafficCaptureStateUseCase.execute()
+    private val trafficCaptureStates = observeTrafficCaptureStateUseCase.executeWorkspaces()
 
     private val preparedStateCache = InspectorPreparedCache(
         maximumEntries = MAX_PREPARED_INSPECTOR_ENTRIES,
         maximumRetainedBytes = MAX_PREPARED_INSPECTOR_BYTES,
     )
 
-    private val captureControlIntent = MutableStateFlow(
-        CaptureControlIntent(
-            shouldCapture = trafficCaptureStates.value is CaptureSessionState.Capturing,
-            revision = 0L,
-        ),
-    )
+    // One latest choice per source survives conflation when toolbar actions happen across rapid tab
+    // switches. The actor serializes listener changes and never substitutes the currently visible tab.
+    private val captureControlIntent = MutableStateFlow(CaptureControlIntent())
     private var sourceGeneration = 0L
     private var clearingSource: TrafficSource? = null
     private val sourceWorkspaces = object : LinkedHashMap<TrafficSource, TrafficState>(4, 0.75f, true) {
@@ -159,9 +158,10 @@ class TrafficViewModel(
         breakpointDraftJob?.cancel()
         durableAnnotationJob?.cancel()
         durableTransactions = restored.transactions.filter { row -> row.interception !is TrafficInterceptionUiState.Paused }
-        _uiState.value = restored.copy(source = source, sessionId = previous.sessionId, captureState = previous.captureState,
+        _uiState.value = restored.copy(source = source, sessionId = previous.sessionId,
+            captureState = trafficCaptureStates.value.stateFor(source.captureWorkspace()).toUiCaptureState(),
             engineState = previous.engineState, localIpAddress = previous.localIpAddress,
-            engineErrorMessage = previous.engineErrorMessage, activeBreakpointRules = previous.activeBreakpointRules,
+            engineErrorMessage = previous.engineErrorMessage, activeBreakpointRules = emptyList(),
             columnWidths = previous.columnWidths, columnVisibility = previous.columnVisibility,
             scrollSettings = previous.scrollSettings, readingEpoch = previous.readingEpoch + 1,
             newerPageBlocked = false,
@@ -443,8 +443,12 @@ class TrafficViewModel(
             .launchIn(viewModelScope)
 
         // Reactively observe active breakpoint rules from domain UseCase
-        observeRulesUseCase()
-            .onEach { rules ->
+        _uiState.map { it.source }.distinctUntilChanged().flatMapLatest { source ->
+            observeRulesUseCase(when (source) {
+                is TrafficSource.Device -> com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(source.id)
+                else -> com.devuloopers.knet.domain.policy.PolicyWorkspace.Other
+            })
+        }.onEach { rules ->
                 _uiState.update { it.copy(activeBreakpointRules = rules) }
                 schedulePendingRequestDescriptors()
             }
@@ -473,6 +477,7 @@ class TrafficViewModel(
             }
             .launchIn(viewModelScope)
 
+        var appliedCaptureChoices: Map<PolicyWorkspace, Boolean> = emptyMap()
         // Serialize desired capture state and dynamic port changes without cancelling lifecycle work.
         viewModelScope.launch {
             val proxyPorts = observeApplicationSettingsUseCase.execute()
@@ -480,17 +485,28 @@ class TrafficViewModel(
                 .distinctUntilChanged()
             combine(captureControlIntent, proxyPorts) { intent, port ->
                 CaptureCommand(
-                    shouldCapture = intent.shouldCapture,
+                    choices = intent.choices,
                     port = port,
                     revision = intent.revision,
                 )
             }
                 .distinctUntilChanged()
                 .collect { command ->
-                    if (command.shouldCapture) {
-                        startOrResumeCapture(command.port)
-                    } else {
-                        pauseTrafficCaptureUseCase.execute()
+                    try {
+                        for ((workspace, enabled) in command.choices) {
+                            val observed = trafficCaptureStates.value.stateFor(workspace)
+                            if (appliedCaptureChoices[workspace] == enabled &&
+                                (if (enabled) observed is CaptureSessionState.Capturing
+                                else observed !is CaptureSessionState.Capturing)) continue
+                            if (enabled) resumeTrafficCaptureUseCase.execute(workspace)
+                            else pauseTrafficCaptureUseCase.execute(workspace)
+                        }
+                        reconcileCaptureListener(command.port, command.choices.values.any { it })
+                        appliedCaptureChoices = command.choices
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        _uiState.update { it.copy(trafficErrorMessage = "Capture could not be changed. Try again.") }
                     }
                 }
         }
@@ -730,16 +746,11 @@ class TrafficViewModel(
 
         // 2. Observe capture attachment independently from the persistent forwarding listener.
         viewModelScope.launch {
-            trafficCaptureStates.collect { captureState ->
+            trafficCaptureStates.collect { snapshot ->
                 _uiState.update { current ->
+                    val captureState = snapshot.stateFor(current.source.captureWorkspace())
                     current.copy(
-                        captureState = when (captureState) {
-                            CaptureSessionState.Inactive -> CaptureState.STOPPED
-                            CaptureSessionState.Starting -> CaptureState.STARTING
-                            is CaptureSessionState.Capturing -> CaptureState.CAPTURING
-                            CaptureSessionState.Paused -> CaptureState.PAUSED
-                            is CaptureSessionState.Failed -> CaptureState.STOPPED
-                        },
+                        captureState = captureState.toUiCaptureState(),
                         trafficErrorMessage = when (captureState) {
                             is CaptureSessionState.Failed -> "Capture unavailable (${captureState.code})"
                             CaptureSessionState.Starting,
@@ -797,14 +808,16 @@ class TrafficViewModel(
     fun processIntent(intent: TrafficIntent) {
         when (intent) {
             is TrafficIntent.StartCapture -> {
+                val workspace = _uiState.value.source.captureWorkspace()
                 captureControlIntent.update { current ->
-                    CaptureControlIntent(shouldCapture = true, revision = current.revision + 1L)
+                    CaptureControlIntent(current.choices + (workspace to true), current.revision + 1L)
                 }
             }
 
             is TrafficIntent.PauseCapture -> {
+                val workspace = _uiState.value.source.captureWorkspace()
                 captureControlIntent.update { current ->
-                    CaptureControlIntent(shouldCapture = false, revision = current.revision + 1L)
+                    CaptureControlIntent(current.choices + (workspace to false), current.revision + 1L)
                 }
             }
 
@@ -991,18 +1004,17 @@ class TrafficViewModel(
         }
     }
 
-    /** Reconciles capture intent while preserving the listener unless its configured port changed. */
-    private suspend fun startOrResumeCapture(port: Int) {
+    /** Port changes reuse every source's prepared recording choice, including paused sources. */
+    private suspend fun reconcileCaptureListener(port: Int, recordingRequested: Boolean) {
         val runtimeState = proxyRuntimeStates.value
         if (runtimeState is ProxyRuntimeState.Running) {
             val activePort = runtimeState.handle.endpoints.endpoints.singleOrNull()?.port
-            if (activePort == port) {
-                resumeTrafficCaptureUseCase.execute()
-                return
-            }
+            if (activePort == port) return
             stopProxyRuntimeUseCase.execute(ProxyStopReason.CONFIGURATION_CHANGED)
+            startLoopbackProxyUseCase.execute(port)
+        } else if (recordingRequested) {
+            startLoopbackProxyUseCase.execute(port)
         }
-        startLoopbackProxyUseCase.execute(port)
     }
 
     private fun scheduleFilteredPageRefresh() {
@@ -1477,6 +1489,7 @@ class TrafficViewModel(
                 state.copy(
                     isBreakpointDrawerVisible = true,
                     prefilledBreakpointRule = draft.rule,
+                    breakpointWorkspace = draft.workspace,
                     prefilledBreakpointProtocolValues = draft.protocolValues,
                 )
             }
@@ -1532,15 +1545,15 @@ class TrafficViewModel(
 
     /** Conflatable desired capture command derived from settings and toolbar state. */
     private data class CaptureCommand(
-        val shouldCapture: Boolean,
+        val choices: Map<PolicyWorkspace, Boolean>,
         val port: Int,
         val revision: Long,
     )
 
     /** User capture intent with a revision so retries remain observable without transient states. */
     private data class CaptureControlIntent(
-        val shouldCapture: Boolean,
-        val revision: Long,
+        val choices: Map<PolicyWorkspace, Boolean> = emptyMap(),
+        val revision: Long = 0L,
     )
 }
 
@@ -1595,4 +1608,12 @@ private fun HttpVersionFilter.matches(row: TrafficRowUiState): Boolean = when (t
         row.upstreamProtocol == ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_2)
     HttpVersionFilter.HTTP_3 -> row.clientProtocol == ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_3) ||
         row.upstreamProtocol == ApplicationProtocol.Standard(StandardApplicationProtocol.HTTP_3)
+}
+
+/** Maps the current source's recording lifecycle without consulting another tab's cached UI state. */
+private fun CaptureSessionState.toUiCaptureState(): CaptureState = when (this) {
+    CaptureSessionState.Inactive, is CaptureSessionState.Failed -> CaptureState.STOPPED
+    CaptureSessionState.Starting -> CaptureState.STARTING
+    is CaptureSessionState.Capturing -> CaptureState.CAPTURING
+    CaptureSessionState.Paused -> CaptureState.PAUSED
 }

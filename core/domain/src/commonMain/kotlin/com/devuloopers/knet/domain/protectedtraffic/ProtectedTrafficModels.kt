@@ -248,7 +248,7 @@ data class ProtectedTrafficConfiguration(
     val automaticTlsFallbackEnabled: Boolean = true,
 ) {
     init {
-        val duplicate = rules.groupBy(ProtectedTrafficRule::selectorKey).entries.firstOrNull { it.value.size > 1 }
+        val duplicate = rules.filter { it.enabled }.groupBy(ProtectedTrafficRule::selectorKey).entries.firstOrNull { it.value.size > 1 }
         require(duplicate == null) { "Equivalent protected-traffic selectors are not allowed." }
         require(rules.map { it.id }.distinct().size == rules.size) { "Protected-traffic rule IDs must be unique." }
     }

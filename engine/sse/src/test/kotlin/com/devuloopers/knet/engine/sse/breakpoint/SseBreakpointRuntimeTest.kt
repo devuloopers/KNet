@@ -39,6 +39,8 @@ import java.io.ByteArrayOutputStream
 import java.util.concurrent.TimeUnit
 import java.util.zip.GZIPInputStream
 import java.util.zip.GZIPOutputStream
+import com.devuloopers.knet.domain.policy.PolicyWorkspace
+import com.devuloopers.knet.identity.RegisteredDeviceId
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -48,6 +50,28 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class SseBreakpointRuntimeTest {
+    @Test
+    fun `workspace factory filters sibling before buffering and retains owner on framed message`() {
+        val owner = PolicyWorkspace.Device(RegisteredDeviceId("owner"))
+        val sibling = PolicyWorkspace.Device(RegisteredDeviceId("sibling"))
+        val recording = RecordingSseGate(ArrayDeque(listOf(ProtocolMessageBreakpointDecision.ContinueUnchanged)))
+        val gate = object : ProtocolMessageBreakpointGate by recording {
+            override fun mayInterceptMessageFor(workspace: PolicyWorkspace, request: HttpRequestSnapshot,
+                protocolRoute: List<BreakpointProtocolId>, direction: TrafficDirection): Boolean =
+                workspace == owner && recording.mayInterceptMessage(request, protocolRoute, direction)
+        }
+        val factory = factory(gate)
+        kotlin.test.assertNull(factory.createForWorkspace(sibling, request(), null, Capture()))
+        kotlin.test.assertNull(factory.createForWorkspace(PolicyWorkspace.Other, request(), null, Capture()))
+        val transformer = assertNotNull(factory.createForWorkspace(owner, request(), null, Capture()))
+        val wire = "data: hello\n\n".encodeToByteArray()
+        transformer.onResponse(response(), 0L)
+        assertContentEquals(wire, transform(transformer, wire, true, 1L))
+        assertEquals(owner, recording.candidates.single().workspace)
+        transformer.cancel(null)
+    }
+
+
     @Test
     fun `compiled rule distinguishes event type id and data on one endpoint`() {
         val extension = SseBreakpointExtension()

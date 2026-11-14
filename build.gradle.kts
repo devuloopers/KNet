@@ -603,7 +603,7 @@ val allowedArchitectureDependencies = mapOf(
         ":core:identity",
         ":core:pairing",
     ),
-    ":core:domain" to setOf(":core:logger", ":core:traffic", ":core:scripting"),
+    ":core:domain" to setOf(":core:logger", ":core:traffic", ":core:scripting", ":core:identity"),
     ":core:scripting" to emptySet(),
     ":core:traffic" to emptySet(),
     ":core:identity" to emptySet(),
@@ -1248,4 +1248,45 @@ tasks.register<VerifyMultiDeviceReportsTask>("multiDeviceAppleQualification") {
     reportDirectories.from(project(":products:companion:iosPacketTunnel").layout.buildDirectory.dir("test-results/iosSimulatorArm64Test"))
     requiredSuites.set(listOf("com.devuloopers.knet.companion.packettunnel.network.NativeCompanionControlSessionTest"))
     summaryFile.set(layout.buildDirectory.file("reports/multi-device/apple-summary.json"))
+}
+
+/** Complete deterministic outputs for rule availability, per-device activation and existing protocol regressions. */
+val devicePolicyLibraryTestTasks = linkedMapOf(
+    // :core:identity has no test sources; its admission mapping is exercised by PolicyWorkspaceTest.
+    ":core:domain" to "jvmTest", ":core:http" to "jvmTest", ":core:traffic" to "jvmTest",
+    ":core:companion" to "jvmTest", ":application:desktop" to "test", ":application:companion" to "jvmTest",
+    ":connectivity:desktop" to "multiDeviceControlQualification", ":connectivity:companion" to "testAndroidHostTest",
+    ":data:desktop" to "jvmTest", ":storage" to "jvmTest", ":engine:proxy" to "test", ":engine:protocol" to "test",
+    ":engine:interceptor" to "test", ":engine:simulator" to "test", ":engine:grpc" to "test", ":engine:sse" to "test",
+    ":engine:websocket" to "test", ":engine:graphqlWebSocket" to "test", ":testingServer" to "test",
+    ":ui:core" to "jvmTest", ":ui:desktop:app" to "jvmTest", ":ui:desktop:traffic" to "jvmTest",
+    ":ui:desktop:httpPanel" to "jvmTest", ":ui:desktop:networkConditions" to "jvmTest",
+    ":ui:desktop:protectedTraffic" to "jvmTest", ":ui:desktop:breakpointManager" to "jvmTest",
+    ":ui:desktop:apiStudio" to "jvmTest", ":ui:desktop:apiStudio:websocket" to "jvmTest",
+    ":ui:desktop:apiStudio:graphqlWebSocket" to "jvmTest", ":ui:desktop:apiStudio:grpc" to "jvmTest",
+    ":products:desktop" to "test", ":products:companion:androidApp" to "testDebugUnitTest",
+    ":products:companion:di" to "testAndroidHostTest",
+)
+
+/** Reproducible acceptance gate; fails on any missing/failed/skipped deterministic output or absent new suite. */
+tasks.register<VerifyMultiDeviceReportsTask>("devicePolicyLibrariesQualification") {
+    group = "verification"
+    description = "Qualifies shared/private policy libraries, independent activation, authenticated runtime and complete protocol regressions."
+    dependsOn("verifyArchitectureFoundation", "verifyNetworkProtectionLedger")
+    dependsOn(devicePolicyLibraryTestTasks.map { (module, task) -> "$module:$task" })
+    reportDirectories.from(devicePolicyLibraryTestTasks.map { (module, task) -> project(module).layout.buildDirectory.dir("test-results/$task") })
+    requiredSuites.set(listOf(
+        "com.devuloopers.knet.domain.policy.PolicyWorkspaceTest",
+        "com.devuloopers.knet.data.desktop.policy.RoomDevicePolicyLibraryTest",
+        "com.devuloopers.knet.engine.simulator.DeviceNetworkConditionEngineTest",
+        "com.devuloopers.knet.products.desktop.policy.DevicePolicySocketEndToEndTest",
+        "com.devuloopers.knet.products.desktop.policy.DevicePolicyManagerEndToEndTest",
+        "com.devuloopers.knet.products.desktop.connectivity.CompanionH2cEndToEndTest",
+        "com.devuloopers.knet.ui.desktop.networkconditions.view.RuleLibraryEditorTest",
+        "com.devuloopers.knet.application.contract.traffic.WorkspaceCaptureTest",
+        "com.devuloopers.knet.data.desktop.capture.ScopedStreamingCaptureTest",
+        "com.devuloopers.knet.ui.desktop.traffic.TrafficDeviceCaptureTest",
+        "com.devuloopers.knet.products.desktop.policy.DeviceCaptureSocketEndToEndTest",
+    ))
+    summaryFile.set(layout.buildDirectory.file("reports/device-policy-libraries/summary.json"))
 }

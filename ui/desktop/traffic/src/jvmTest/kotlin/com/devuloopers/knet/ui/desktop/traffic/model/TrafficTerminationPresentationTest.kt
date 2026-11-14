@@ -7,6 +7,11 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class TrafficTerminationPresentationTest {
+    @Test fun `a source recording cut is labelled capture paused instead of a network failure`() {
+        assertEquals("Capture Paused", ExchangeTerminalOutcome.Cancelled(TrafficTerminationReason.Lifecycle.CAPTURE_PAUSED)
+            .toTrafficStatusLabel())
+    }
+
     @Test
     fun `lifecycle and timeout reasons have meaningful stable labels`() {
         assertEquals(

@@ -16,7 +16,7 @@ import androidx.compose.ui.semantics.*
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.use
-import com.devuloopers.knet.application.usecase.protectedtraffic.ProtectedTrafficFlowHandling
+import com.devuloopers.knet.application.usecase.protectedtraffic.*
 import com.devuloopers.knet.domain.protectedtraffic.*
 import com.devuloopers.knet.traffic.model.*
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
@@ -33,6 +33,59 @@ class OpaqueFlowInspectorTest {
     private var nanos=0L
     private fun ProtectionFixture.state()=TrafficProtectionState(captured.id,ProtectedTrafficFlowHandling(captured.id,
         ProtectedTrafficDecision(ProtectedTrafficAction.INSPECT,ProtectedTrafficDecisionEvidence.GlobalDefault),true))
+
+    @Test fun `same policy TLS row switches preserve action pixels bounds and nodes on every first frame`() = onUiThread {
+        val fixture = ProtectionFixture()
+        val rule = ProtectedTrafficRule(ProtectedTrafficRuleId("manual"), action = ProtectedTrafficAction.TUNNEL,
+            destination = ProtectedDestinationSelector.parse(fixture.captured.serverName!!), port = 443, transport = ProtectedTransportProtocol.TCP)
+        fixture.repository.configuration.value = fixture.repository.configuration.value.copy(rules = listOf(rule))
+        val viewModel = com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficProtectionViewModel(
+            ObserveProtectedTrafficFlowHandlingUseCase(fixture.query, fixture.repository, fixture.fallback),
+            SetProtectedTrafficFlowActionUseCase(fixture.query, fixture.repository, fixture.fallback),
+            ResetProtectedTrafficFlowActionUseCase(fixture.query, fixture.repository, fixture.fallback))
+        val original = fixture.captured.copy(state = OpaqueFlowState.CANCELLED,
+            terminalOutcome = ExchangeTerminalOutcome.Cancelled(TrafficTerminationReason.Transport.DOWNSTREAM_CANCELLED))
+        for (width in listOf(580, 900)) {
+            val selected = mutableStateOf(original)
+            ImageComposeScene(width, 1_000, content = { KNetTheme {
+                OpaqueFlowInspectorPanel(selected.value.toTrafficRowUiState(1),
+                    viewModel.stateForSelection(selected.value, com.devuloopers.knet.application.contract.traffic.TrafficSource.Other),
+                    TrafficProtectionActions({}, {}))
+            }}).use { scene ->
+                scene.frame()
+                val title = scene.nodes().single { it.text() == "Future connections" }
+                val technical = scene.nodes().first { it.text() == "Technical details" }
+                val top = title.boundsInRoot.top.toInt()
+                val bottom = technical.boundsInRoot.bottom.toInt()
+                val tags = listOf("Protection action TUNNEL", "Protection action INSPECT", "Protection action BLOCK", "Protection use default")
+                fun controls() = tags.map { tag -> scene.nodes().first { it.config.getOrNull(SemanticsProperties.TestTag) == tag } }
+                    .map { it.id to it.boundsInRoot }
+                fun pixels(): IntArray {
+                    nanos += 16_666_667
+                    val image = scene.render(nanos)
+                    val data = assertNotNull(image.encodeToData())
+                    val bitmap = javax.imageio.ImageIO.read(java.io.ByteArrayInputStream(data.bytes))
+                    data.close(); image.close()
+                    return bitmap.getRGB(0, top, width, bottom - top, null, 0, width)
+                }
+                val expectedControls = controls()
+                val expectedPixels = pixels()
+                repeat(4) { index ->
+                    selected.value = original.copy(id = com.devuloopers.knet.traffic.id.OpaqueFlowId("next-$index"),
+                        connectionId = com.devuloopers.knet.traffic.id.ConnectionId("next-connection-$index"))
+                    repeat(3) {
+                        val actualPixels = pixels()
+                        assertContentEquals(expectedPixels, actualPixels, "Future connections must not flash on the first rendered frame")
+                        assertEquals(expectedControls, controls())
+                        assertEquals(title.id, scene.nodes().single { it.text() == "Future connections" }.id)
+                        assertTrue(scene.nodes().any { it.text() == "Tunnelling enabled" })
+                        assertFalse(scene.nodes().any { it.text() == "Loading…" })
+                    }
+                }
+                scene.save("tls-policy-stable-$width")
+            }
+        }
+    }
 
     @Test fun `automatic tunnelling explains the previous rejection and offers explicit alternatives`() = onUiThread {
         val fixture = ProtectionFixture()

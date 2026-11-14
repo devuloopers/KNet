@@ -87,6 +87,7 @@ class ProtectedTrafficSettingsTest {
         ui.activate("Cancel")
         assertNull(ui.viewModel.state.value.ruleDraft)
         ui.activateDescription("Delete rule imported")
+        ui.activate("Delete rule")
         assertTrue(ui.repository.configuration.value.rules.isEmpty())
         ui.activate("Add rule")
         assertNotNull(ui.viewModel.state.value.ruleDraft)
@@ -98,17 +99,17 @@ class ProtectedTrafficSettingsTest {
     @Test fun `drawer validates in place and edits the same disabled rule without narrowing wildcard selectors`() = fixture { ui ->
         ui.frame(); ui.activate("Add rule")
         ui.setText("Protected rule Destination", "*.invalid")
-        ui.activate("Save rule")
+        ui.activate("Save and enable")
         assertNotNull(ui.viewModel.state.value.draftError)
         assertNotNull(ui.viewModel.state.value.ruleDraft)
         assertTrue(ui.nodes().any { it.config.getOrNull(SemanticsProperties.TestTag) == "Protected rule validation" })
         ui.setText("Protected rule Destination", "*.Video.Example.Test.")
         assertNull(ui.viewModel.state.value.draftError)
         ui.setText("Protected rule Port", "70000")
-        assertNotNull(ui.action("Save rule").config.getOrNull(SemanticsProperties.Disabled))
+        assertNotNull(ui.action("Save and enable").config.getOrNull(SemanticsProperties.Disabled))
         ui.setText("Protected rule Port", "443")
         ui.activateTag("Rule action"); ui.activate("Block")
-        ui.activate("Save rule")
+        ui.activate("Save and enable")
         val saved = ui.repository.configuration.value.rules.single()
         assertEquals(ProtectedDestinationSelector.parse("*.video.example.test"), saved.destination)
         assertEquals(ProtectedTrafficAction.BLOCK, saved.action)
@@ -166,7 +167,7 @@ class ProtectedTrafficSettingsTest {
         ui.activate("Add rule")
         val editor = ui.tag("Protected rule editor")
         assertTrue(editor.boundsInRoot.left >= 0 && editor.boundsInRoot.right <= 680)
-        for (label in listOf("Save rule", "Cancel")) {
+        for (label in listOf("Save and enable", "Cancel")) {
             val button = ui.action(label)
             assertTrue(button.boundsInRoot.bottom <= 560 && button.boundsInRoot.left >= 0)
         }

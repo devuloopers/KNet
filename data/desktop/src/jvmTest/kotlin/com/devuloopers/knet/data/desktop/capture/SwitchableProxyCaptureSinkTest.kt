@@ -26,8 +26,62 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class SwitchableProxyCaptureSinkTest {
+    @Test fun `source pause cuts only its handles and keep-alive resume retains the same writer`() {
+        val first = com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(com.devuloopers.knet.identity.RegisteredDeviceId("first"))
+        val second = com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(com.devuloopers.knet.identity.RegisteredDeviceId("second"))
+        val writer = RecordingSink(com.devuloopers.knet.traffic.id.CaptureSessionId("one-writer"))
+        val policy = com.devuloopers.knet.application.contract.traffic.CaptureAdmissionPolicy(false, mapOf(first to true, second to true))
+        val sink = SwitchableProxyCaptureSink(writer, policy)
+        fun metadata(identity: String) = connectionMetadata().copy(ingress = IngressContext(IngressKind.LanPairedDevice,
+            clientIdentity = com.devuloopers.knet.traffic.model.ClientIdentity(identity)))
+        val firstConnection = sink.openConnection(metadata("first"))
+        val secondConnection = sink.openConnection(metadata("second"))
+        // A local caller copying a device's name/identity string never becomes that authenticated device.
+        val unverified = sink.openConnection(metadata("first").copy(ingress = IngressContext(IngressKind.Local,
+            clientIdentity = com.devuloopers.knet.traffic.model.ClientIdentity("first"))))
+        assertNull(unverified.startExchange(ExchangeId("spoofed"), request(), 1))
+        assertNotNull(firstConnection.startExchange(ExchangeId("first-before"), request(), 1))
+        assertNotNull(secondConnection.startExchange(ExchangeId("second-before"), request(), 1))
+
+        sink.setAdmission(policy.copy(overrides = policy.overrides + (first to false)))
+        assertEquals("capture_paused", writer.connections[0].closeErrorCode)
+        assertEquals("not-closed", writer.connections[1].closeErrorCode)
+        assertNull(firstConnection.sessionId)
+        assertNull(firstConnection.startExchange(ExchangeId("first-paused"), request(), 2))
+        assertNotNull(secondConnection.startExchange(ExchangeId("second-after"), request(), 2))
+        assertEquals(2, writer.connections.size)
+
+        sink.setAdmission(policy)
+        assertNotNull(firstConnection.startExchange(ExchangeId("first-resumed"), request(), 3))
+        assertEquals(com.devuloopers.knet.traffic.id.CaptureSessionId("one-writer"), firstConnection.sessionId)
+        assertEquals(listOf("first-before", "second-before", "second-after", "first-resumed"), writer.exchangeIds)
+        assertEquals(3, writer.connections.size)
+        firstConnection.close(); secondConnection.close(); unverified.close()
+    }
+
+    @Test fun `writer rotation does not re-enable a paused source or newly connected peer`() {
+        val first = com.devuloopers.knet.domain.policy.PolicyWorkspace.Device(com.devuloopers.knet.identity.RegisteredDeviceId("first"))
+        val initial = RecordingSink()
+        val replacement = RecordingSink()
+        val sink = SwitchableProxyCaptureSink(initial,
+            com.devuloopers.knet.application.contract.traffic.CaptureAdmissionPolicy(false, mapOf(first to true)))
+        val metadata = connectionMetadata().copy(ingress = IngressContext(IngressKind.LanPairedDevice,
+            clientIdentity = com.devuloopers.knet.traffic.model.ClientIdentity("first")))
+        val connection = sink.openConnection(metadata)
+        assertNotNull(connection.startExchange(ExchangeId("before"), request(), 1))
+        sink.setAdmission(com.devuloopers.knet.application.contract.traffic.CaptureAdmissionPolicy(false))
+        sink.replaceTarget(replacement)
+        assertNull(connection.startExchange(ExchangeId("after"), request(), 2))
+        val newcomer = sink.openConnection(metadata.copy(ingress = metadata.ingress.copy(
+            clientIdentity = com.devuloopers.knet.traffic.model.ClientIdentity("new-device"))))
+        assertNull(newcomer.startExchange(ExchangeId("new-device"), request(), 3))
+        assertTrue(replacement.connections.isEmpty())
+        connection.close(); newcomer.close()
+    }
+
     @Test fun `TLS learning context follows replacement capture and disappears while paused or closed`() {
         val firstId = com.devuloopers.knet.traffic.id.CaptureSessionId("first")
         val secondId = com.devuloopers.knet.traffic.id.CaptureSessionId("second")

@@ -31,6 +31,13 @@ public data class AutomaticTlsFallbackState(
 
 /** Non-blocking temporary decision boundary shared by TLS composition and application workflows. */
 public interface AutomaticTlsFallback {
+    /** Changes one workspace's authorization epoch without invalidating another device's learned decisions. */
+    public fun authorizeWorkspace(workspace: com.devuloopers.knet.domain.policy.PolicyWorkspace,
+        configuration: ProtectedTrafficConfiguration, authorityIdentity: String?): Long? = authorize(configuration, authorityIdentity)
+    /** Clears temporary learning only in this execution workspace. */
+    public fun clearWorkspace(workspace: com.devuloopers.knet.domain.policy.PolicyWorkspace): Unit = clear()
+    /** Forgets matching temporary learning only in this execution workspace. */
+    public fun forgetWorkspace(workspace: com.devuloopers.knet.domain.policy.PolicyWorkspace, rule: ProtectedTrafficRule): Unit = forget(rule)
     /** Current active session and eligible decisions; expiry publishes removals. */
     public val state: StateFlow<AutomaticTlsFallbackState>
     /** Replaces session ownership and forgets every prior decision and in-flight learning token. */

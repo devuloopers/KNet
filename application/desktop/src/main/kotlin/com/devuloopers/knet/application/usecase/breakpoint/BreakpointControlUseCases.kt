@@ -47,6 +47,12 @@ public class ClearPendingBreakpointsUseCase(
     private val control: BreakpointControl,
 ) {
     public suspend fun execute(): Int = control.clear()
+
+    /** Drops only requests admitted for the captured workspace; later arrivals remain untouched. */
+    public suspend fun execute(workspace: com.devuloopers.knet.domain.policy.PolicyWorkspace): Int {
+        val ids = control.pendingBreakpoints.value.filter { it.candidate.workspace == workspace }.map { it.id }
+        return ids.count { control.resolve(it, BreakpointDecision.Drop) }
+    }
 }
 
 /** Observes pending framed-message breakpoints independently from HTTP exchange pauses. */

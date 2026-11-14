@@ -64,11 +64,48 @@ import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 import kotlin.io.encoding.Base64
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.runTest
 
 class CompanionControlGatewayTest {
+    @Test fun authenticatedDevicesReceiveIndependentPoliciesOnWssAndHttpsWithoutSiblingBroadcasts() = kotlinx.coroutines.runBlocking {
+        val a = RegisteredDeviceId("device-1"); val b = RegisteredDeviceId("device-2")
+        val slow = PacketConditionConfiguration(enabled = true, downloadBitsPerSecond = 100_000, uploadBitsPerSecond = 100_000)
+        val fast = PacketConditionConfiguration(enabled = true, downloadBitsPerSecond = 400_000)
+        val policies = MutableStateFlow(mapOf(a to slow, b to fast))
+        val fixture = ktorFixture(scopedPolicies = policies)
+        try {
+            val credentialB = pairDevice(fixture.pairing,setOf(DeviceScope.PROXY_STREAM),b.value)
+            val first = fixture.connect("Bearer ${a.value}:${fixture.credential}")
+            val second = fixture.connect("Bearer ${b.value}:$credentialB")
+            first.send(com.devuloopers.knet.companion.model.CompanionSessionMessageKind.START,1)
+            second.send(com.devuloopers.knet.companion.model.CompanionSessionMessageKind.START,1)
+            assertEquals("WELCOME",first.next().kind.name); assertEquals("WELCOME",second.next().kind.name)
+            assertEquals(slow,first.nextConfiguration().configuration); assertEquals(fast,second.nextConfiguration().configuration)
+            fun readPolicy(id: RegisteredDeviceId, credential: String): java.net.http.HttpResponse<ByteArray> {
+                val request = java.net.http.HttpRequest.newBuilder(java.net.URI("https://localhost:${fixture.port}${CompanionControlProtocol.NETWORK_CONDITIONS_PATH}"))
+                    .header("Authorization","Bearer ${id.value}:$credential").GET().build()
+                return fixture.client.send(request,java.net.http.HttpResponse.BodyHandlers.ofByteArray())
+            }
+            assertEquals(slow,PacketConditionConfigurationCodec.decode(readPolicy(a,fixture.credential).body()))
+            assertEquals(fast,PacketConditionConfigurationCodec.decode(readPolicy(b,credentialB).body()))
+            assertEquals(401,readPolicy(a,credentialB).statusCode())
+            policies.value = policies.value + (a to PacketConditionConfiguration.Disabled)
+            assertEquals(PacketConditionConfiguration.Disabled,first.nextConfiguration().configuration)
+            assertEquals(null,second.messages.poll(150,java.util.concurrent.TimeUnit.MILLISECONDS),"Unrelated device must not receive configuration revisions")
+            second.send(com.devuloopers.knet.companion.model.CompanionSessionMessageKind.HEARTBEAT,2)
+            eventually { fixture.presence.presence.value[b]?.status == com.devuloopers.knet.application.contract.device.DevicePresenceStatus.CONNECTED }
+            fixture.restart()
+            val reconnected = fixture.connect("Bearer ${b.value}:$credentialB")
+            reconnected.send(com.devuloopers.knet.companion.model.CompanionSessionMessageKind.START,1)
+            assertEquals("WELCOME",reconnected.next().kind.name)
+            assertEquals(fast,reconnected.nextConfiguration().configuration)
+        } finally { fixture.close() }
+    }
+
     @Test
     fun freshDesktopPresenceIsRestoredByAuthenticatedStartWithoutCaptureOrPairingAgain() = kotlinx.coroutines.runBlocking {
         val fixture = ktorFixture()
@@ -230,7 +267,7 @@ class CompanionControlGatewayTest {
         kotlinx.coroutines.withTimeout(5_000) { while (!predicate()) kotlinx.coroutines.delay(10) }
     }
 
-    private suspend fun ktorFixture(maximumSessions: Int = 8): KtorFixture {
+    private suspend fun ktorFixture(maximumSessions: Int = 8, scopedPolicies: MutableStateFlow<Map<RegisteredDeviceId, PacketConditionConfiguration>>? = null): KtorFixture {
         val authority = CertificateAuthority.generate()
         val leaf = LeafCertificateGenerator.generate("localhost", authority)
         val keyStore = KeyStore.getInstance("PKCS12").apply {
@@ -242,9 +279,11 @@ class CompanionControlGatewayTest {
         val policies = MutableStateFlow(PacketConditionConfiguration.Disabled)
         val presence = com.devuloopers.knet.application.coordinator.device.DevicePresenceCoordinator({ System.nanoTime() / 1_000_000 })
         val handler = CompanionControlGateway("127.0.0.1", 0, serverFactory(authority), { authority.certificate.encoded },
-            pairing, redemptionUseCase(), packetConditions = { policies.value }, nowEpochMillis = { 1_000L })
+            pairing, redemptionUseCase(), packetConditions = { policies.value }, nowEpochMillis = { 1_000L },
+            packetConditionsForDevice = scopedPolicies?.let { state -> { id -> state.value[id] ?: PacketConditionConfiguration.Disabled } })
         val gateway = com.devuloopers.knet.connectivity.desktop.gateway.KtorCompanionControlGateway("127.0.0.1", 0, keyStore,
-            handler, pairing, presence, policies, maximumSessions)
+            handler, pairing, presence, policies, maximumSessions,
+            policiesForDevice = scopedPolicies?.let { state -> { id -> state.map { it[id] ?: PacketConditionConfiguration.Disabled }.distinctUntilChanged() } })
         gateway.start()
         val listening = kotlinx.coroutines.withTimeout(10_000) {
             gateway.state.first { it is com.devuloopers.knet.connectivity.desktop.gateway.CompanionControlGatewayState.Listening }
@@ -255,7 +294,8 @@ class CompanionControlGatewayTest {
         val client = java.net.http.HttpClient.newBuilder().sslContext(tls).connectTimeout(5.seconds.toJavaDuration()).build()
         return KtorFixture(gateway, pairing, credential, policies, presence, listening.port, client) { freshPresence ->
             com.devuloopers.knet.connectivity.desktop.gateway.KtorCompanionControlGateway("127.0.0.1", listening.port,
-                keyStore, handler, pairing, freshPresence, policies, maximumSessions)
+                keyStore, handler, pairing, freshPresence, policies, maximumSessions,
+                policiesForDevice = scopedPolicies?.let { state -> { id -> state.map { it[id] ?: PacketConditionConfiguration.Disabled }.distinctUntilChanged() } })
         }
     }
 

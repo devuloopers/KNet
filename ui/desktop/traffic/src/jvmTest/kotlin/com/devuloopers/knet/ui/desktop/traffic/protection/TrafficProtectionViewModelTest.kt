@@ -17,6 +17,67 @@ class TrafficProtectionViewModelTest {
     private fun ProtectionFixture.viewModel()=TrafficProtectionViewModel(
         ObserveProtectedTrafficFlowHandlingUseCase(query,repository,fallback),SetProtectedTrafficFlowActionUseCase(query,repository,fallback), ResetProtectedTrafficFlowActionUseCase(query,repository,fallback))
 
+    @Test fun `equivalent TLS rows keep their live saved handling before and during delayed selection lookup`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val fixture = ProtectionFixture()
+        fixture.repository.setDefaultAction(ProtectedTrafficAction.TUNNEL)
+        val vm = fixture.viewModel(); val store = ViewModelStore().apply { put("vm", vm) }
+        val source = com.devuloopers.knet.application.contract.traffic.TrafficSource.Other
+        try {
+            vm.selectCapturedFlow(fixture.captured, source); runCurrent()
+            val next = fixture.captured.copy(id = OpaqueFlowId("next"), connectionId = com.devuloopers.knet.traffic.id.ConnectionId("next-connection"))
+            val gate = CompletableDeferred<Unit>(); fixture.beforeRead = { gate.await() }
+            val firstFrame = vm.stateForSelection(next, source)
+            assertEquals(next.id, firstFrame.handling?.flowId)
+            assertEquals(ProtectedTrafficAction.TUNNEL, firstFrame.handling?.decision?.action)
+            assertFalse(firstFrame.isLoading)
+            vm.selectCapturedFlow(next, source)
+            assertFalse(vm.uiState.value.isLoading)
+            runCurrent(); assertEquals(ProtectedTrafficAction.TUNNEL, vm.uiState.value.handling?.decision?.action)
+            fixture.repository.setDefaultAction(ProtectedTrafficAction.BLOCK); runCurrent()
+            assertEquals(ProtectedTrafficAction.BLOCK, vm.uiState.value.handling?.decision?.action)
+            gate.complete(Unit); runCurrent()
+            assertEquals(next.id, vm.uiState.value.handling?.flowId)
+            assertEquals(ProtectedTrafficAction.BLOCK, vm.uiState.value.handling?.decision?.action)
+            assertNull(vm.uiState.value.feedback)
+        } finally { store.clear(); Dispatchers.resetMain() }
+    }
+
+    @Test fun `previous row callbacks cannot mutate the newly selected destination`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val fixture = ProtectionFixture(); fixture.repository.setDefaultAction(ProtectedTrafficAction.TUNNEL)
+        val vm = fixture.viewModel(); val store = ViewModelStore().apply { put("vm", vm) }
+        try {
+            val source = com.devuloopers.knet.application.contract.traffic.TrafficSource.Other
+            vm.selectCapturedFlow(fixture.captured, source); runCurrent()
+            val next = fixture.captured.copy(id = OpaqueFlowId("next"), serverName = "different.test")
+            fixture.record = next; vm.selectCapturedFlow(next, source); runCurrent()
+            vm.applyDestinationAction(ProtectedTrafficAction.BLOCK, fixture.captured.id)
+            vm.useDefaultHandling(fixture.captured.id); runCurrent()
+            assertEquals(0, fixture.writes)
+            assertEquals(next.id, vm.uiState.value.flowId)
+            assertEquals(ProtectedTrafficAction.TUNNEL, vm.uiState.value.handling?.decision?.action)
+        } finally { store.clear(); Dispatchers.resetMain() }
+    }
+
+    @Test fun `canonical removal clears the immediate policy and same ID metadata changes restart observation`() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        val fixture = ProtectionFixture(); fixture.repository.setDefaultAction(ProtectedTrafficAction.TUNNEL)
+        val vm = fixture.viewModel(); val store = ViewModelStore().apply { put("vm", vm) }
+        try {
+            val source = com.devuloopers.knet.application.contract.traffic.TrafficSource.Other
+            vm.selectCapturedFlow(fixture.captured, source); runCurrent()
+            val changed = fixture.captured.copy(serverName = "changed.test")
+            fixture.record = null; vm.selectCapturedFlow(changed, source)
+            assertNotNull(vm.uiState.value.handling)
+            runCurrent(); assertNull(vm.uiState.value.handling)
+            assertIs<TrafficProtectionFeedback.Failed>(vm.uiState.value.feedback)
+            fixture.repository.setDefaultAction(ProtectedTrafficAction.BLOCK); runCurrent()
+            assertNull(vm.uiState.value.handling)
+            assertEquals(2, fixture.reads)
+        } finally { store.clear(); Dispatchers.resetMain() }
+    }
+
     @Test fun `automatic fallback can be overridden blocked and reset across selection changes`() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val fixture = ProtectionFixture()
@@ -216,6 +277,8 @@ class TrafficProtectionViewModelTest {
         var pending:ProtectedTrafficRule?=null
         var writes=0
         val repository=object:com.devuloopers.knet.application.contract.protectedtraffic.ProtectedTrafficRepository by fixture.repository {
+            override fun forWorkspace(workspace: com.devuloopers.knet.domain.policy.PolicyWorkspace) = this
+            override suspend fun saveDefinition(rule: ProtectedTrafficRule, context: com.devuloopers.knet.domain.policy.RuleEditContext): com.devuloopers.knet.domain.policy.RuleSaveResult { upsertRule(rule); return com.devuloopers.knet.domain.policy.RuleSaveResult() }
             override suspend fun upsertRule(rule:ProtectedTrafficRule) {writes++;pending=rule}
         }
         val vm=TrafficProtectionViewModel(ObserveProtectedTrafficFlowHandlingUseCase(fixture.query,repository),
@@ -239,6 +302,8 @@ class TrafficProtectionViewModelTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         val fixture=ProtectionFixture()
         val repository=object:com.devuloopers.knet.application.contract.protectedtraffic.ProtectedTrafficRepository by fixture.repository {
+            override fun forWorkspace(workspace: com.devuloopers.knet.domain.policy.PolicyWorkspace) = this
+            override suspend fun saveDefinition(rule: ProtectedTrafficRule, context: com.devuloopers.knet.domain.policy.RuleEditContext): com.devuloopers.knet.domain.policy.RuleSaveResult { upsertRule(rule); return com.devuloopers.knet.domain.policy.RuleSaveResult() }
             override suspend fun upsertRule(rule:ProtectedTrafficRule)=Unit
         }
         val vm=TrafficProtectionViewModel(ObserveProtectedTrafficFlowHandlingUseCase(fixture.query,repository),

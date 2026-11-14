@@ -23,6 +23,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.uuid.Uuid
+import com.devuloopers.knet.domain.policy.PolicyWorkspace
 
 /**
  * Application-owned breakpoint state machine with compiled immutable rules and bounded pause state.
@@ -37,6 +38,34 @@ public class BreakpointCoordinator(
     ProtocolMessageBreakpointControl {
     private val stateMutex = Mutex()
     private val compiledRules = MutableStateFlow<List<CompiledRule>>(emptyList())
+    private val workspaceRules = MutableStateFlow<Map<PolicyWorkspace, List<CompiledRule>>?>(null)
+
+    /** Publishes one complete scoped rule set, reusing compiled shared definitions across workspaces. */
+    public fun replaceWorkspaceRules(rules: Map<PolicyWorkspace, List<BreakpointRule>>) {
+        val compiled = compileRules(rules.values.flatten().distinctBy { it.id }).associateBy { it.definition.id }
+        workspaceRules.value = rules.mapValues { (_, definitions) ->
+            val activeIds = definitions.filter { it.enabled }.mapTo(mutableSetOf()) { it.id }
+            compiled.values.filter { it.definition.id in activeIds }
+        }
+        compiledRules.value = compiled.values.toList()
+        _requirements.value = requirementsFor(compiledRules.value, _enabled.value)
+    }
+
+    private fun rulesFor(workspace: PolicyWorkspace): List<CompiledRule> = workspaceRules.value?.get(workspace)
+        ?: if (workspaceRules.value == null) compiledRules.value else emptyList()
+
+    override fun mayInterceptFor(workspace: PolicyWorkspace, request: HttpRequestSnapshot, phase: BreakpointPhase): Boolean =
+        _enabled.value && captureAllowed(workspace) && rulesFor(workspace).any {
+            it.interceptionUnit == BreakpointInterceptionUnit.HTTP_EXCHANGE && it.matchesTransport(request, phase)
+        }
+
+    override fun mayInterceptMessageFor(workspace: PolicyWorkspace, request: HttpRequestSnapshot,
+        protocolRoute: List<BreakpointProtocolId>, direction: TrafficDirection): Boolean =
+        _enabled.value && captureAllowed(workspace) && rulesFor(workspace).any {
+            it.interceptionUnit == BreakpointInterceptionUnit.PROTOCOL_MESSAGE && it.protocolCriteria.protocolId in protocolRoute &&
+                it.matchesTransport(request, direction.toBreakpointPhase())
+        }
+
     private val _pending = MutableStateFlow<List<PendingEntry>>(emptyList())
     private val pendingProjection = MutableStateFlow<List<PendingBreakpoint>>(emptyList())
     private val _pendingProtocolMessages = MutableStateFlow<List<PendingMessageEntry>>(emptyList())
@@ -44,6 +73,15 @@ public class BreakpointCoordinator(
         MutableStateFlow<List<PendingProtocolMessageBreakpoint>>(emptyList())
     private val _enabled = MutableStateFlow(true)
     private val captureAvailable = MutableStateFlow(true)
+    private val captureAdmission = MutableStateFlow(com.devuloopers.knet.application.contract.traffic.CaptureAdmissionPolicy())
+
+    private fun captureAllowed(workspace: PolicyWorkspace): Boolean =
+        captureAvailable.value && captureAdmission.value.enabledOn(workspace)
+
+    /** New admissions follow recording for their own device; existing pending decisions stay owned. */
+    override suspend fun setCaptureAdmission(policy: com.devuloopers.knet.application.contract.traffic.CaptureAdmissionPolicy) {
+        stateMutex.withLock { captureAdmission.value = policy }
+    }
     private val protocolObservations =
         MutableStateFlow<Map<ExchangeId, Map<BreakpointProtocolId, ProtocolObservation>>>(emptyMap())
     private val decisionTimeoutMillis = MutableStateFlow(limits.decisionTimeoutMillis)
@@ -78,7 +116,13 @@ public class BreakpointCoordinator(
     }
 
     override fun replaceRules(rules: List<BreakpointRule>) {
-        val compiled = rules.asSequence()
+        workspaceRules.value = null
+        compiledRules.value = compileRules(rules)
+        _requirements.value = requirementsFor(compiledRules.value, _enabled.value)
+    }
+
+    private fun compileRules(rules: List<BreakpointRule>): List<CompiledRule> {
+        return rules.asSequence()
             .filter(BreakpointRule::enabled)
             .sortedWith(compareBy(BreakpointRule::priority, BreakpointRule::id))
             .mapNotNull { rule ->
@@ -92,8 +136,6 @@ public class BreakpointCoordinator(
                 }
             }
             .toList()
-        compiledRules.value = compiled
-        _requirements.value = requirementsFor(compiled, _enabled.value)
     }
 
     override suspend fun setEnabled(enabled: Boolean) {
@@ -141,7 +183,7 @@ public class BreakpointCoordinator(
     }
 
     override suspend fun intercept(candidate: BreakpointCandidate): BreakpointDecision {
-        if (!_enabled.value || !captureAvailable.value) {
+        if (!_enabled.value || !captureAllowed(candidate.workspace)) {
             if (candidate.phase == BreakpointPhase.RESPONSE) removeProtocolObservations(candidate.exchangeId)
             return BreakpointDecision.ContinueUnchanged
         }
@@ -151,7 +193,7 @@ public class BreakpointCoordinator(
             if (candidate.phase == BreakpointPhase.RESPONSE) removeProtocolObservations(candidate.exchangeId)
             return BreakpointDecision.ContinueUnchanged
         }
-        val rules = compiledRules.value.filter {
+        val rules = rulesFor(candidate.workspace).filter {
             it.interceptionUnit == BreakpointInterceptionUnit.HTTP_EXCHANGE
         }
         val observations = observeProtocols(candidate, rules)
@@ -169,9 +211,11 @@ public class BreakpointCoordinator(
         )
         val admitted = stateMutex.withLock {
             val current = _pending.value
-            val retained = current.sumOf { it.public.candidate.retainedBytes }
-            if (!_enabled.value || !captureAvailable.value || current.size >= limits.maxPendingConnections ||
-                retained + candidate.retainedBytes > limits.maxPendingBytes
+            val messages = _pendingProtocolMessages.value
+            val retained = current.sumOf { it.public.candidate.retainedBytes } + messages.sumOf { it.public.candidate.retainedBytes }
+            if (!_enabled.value || !captureAllowed(candidate.workspace) || current.size + messages.size >= limits.maxPendingConnections ||
+                retained + candidate.retainedBytes > limits.maxPendingBytes ||
+                !withinWorkspaceBudget(candidate.workspace, candidate.retainedBytes)
             ) {
                 false
             } else {
@@ -195,13 +239,13 @@ public class BreakpointCoordinator(
     override suspend fun interceptMessage(
         candidate: ProtocolMessageBreakpointCandidate,
     ): ProtocolMessageBreakpointDecision {
-        if (!_enabled.value || !captureAvailable.value) {
+        if (!_enabled.value || !captureAllowed(candidate.workspace)) {
             return ProtocolMessageBreakpointDecision.ContinueUnchanged
         }
         if (candidate.body.size > limits.maxEditableBodyBytes) {
             return ProtocolMessageBreakpointDecision.ContinueUnchanged
         }
-        val rules = compiledRules.value.filter { compiled ->
+        val rules = rulesFor(candidate.workspace).filter { compiled ->
             compiled.interceptionUnit == BreakpointInterceptionUnit.PROTOCOL_MESSAGE &&
                     compiled.protocolCriteria.protocolId in candidate.protocolRoute &&
                     compiled.matchesTransport(candidate.request, candidate.phase)
@@ -243,9 +287,10 @@ public class BreakpointCoordinator(
             val messagePending = _pendingProtocolMessages.value
             val retained = httpPending.sumOf { it.public.candidate.retainedBytes } +
                     messagePending.sumOf { it.public.candidate.retainedBytes }
-            if (!_enabled.value || !captureAvailable.value ||
+            if (!_enabled.value || !captureAllowed(candidate.workspace) ||
                 httpPending.size + messagePending.size >= limits.maxPendingConnections ||
-                retained + candidate.retainedBytes > limits.maxPendingBytes
+                retained + candidate.retainedBytes > limits.maxPendingBytes ||
+                !withinWorkspaceBudget(candidate.workspace, candidate.retainedBytes)
             ) {
                 false
             } else {
@@ -334,6 +379,14 @@ public class BreakpointCoordinator(
         entries.forEach { it.decision.complete(BreakpointDecision.Drop) }
         messageEntries.forEach { it.decision.complete(ProtocolMessageBreakpointDecision.DropStream) }
         entries.size + messageEntries.size
+    }
+
+    private fun withinWorkspaceBudget(workspace: PolicyWorkspace, extraBytes: Long): Boolean {
+        if (workspaceRules.value == null) return true
+        val requests = _pending.value.filter { it.public.candidate.workspace == workspace }
+        val messages = _pendingProtocolMessages.value.filter { it.public.candidate.workspace == workspace }
+        return requests.size + messages.size < maxOf(1, limits.maxPendingConnections / 2) &&
+            requests.sumOf { it.public.candidate.retainedBytes } + messages.sumOf { it.public.candidate.retainedBytes } + extraBytes <= maxOf(1L, limits.maxPendingBytes / 2)
     }
 
     private fun publishEntries(entries: List<PendingEntry>) {

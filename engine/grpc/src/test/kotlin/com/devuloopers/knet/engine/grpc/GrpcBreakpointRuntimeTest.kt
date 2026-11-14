@@ -36,6 +36,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import java.util.concurrent.TimeUnit
+import com.devuloopers.knet.domain.policy.PolicyWorkspace
+import com.devuloopers.knet.identity.RegisteredDeviceId
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -45,6 +47,28 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class GrpcBreakpointRuntimeTest {
+    @Test
+    fun `workspace factory filters sibling before buffering and retains owner on framed message`() {
+        val owner = PolicyWorkspace.Device(RegisteredDeviceId("owner"))
+        val sibling = PolicyWorkspace.Device(RegisteredDeviceId("sibling"))
+        val recording = RecordingGate()
+        val gate = object : ProtocolMessageBreakpointGate by recording {
+            override fun mayInterceptMessageFor(workspace: PolicyWorkspace, request: HttpRequestSnapshot,
+                protocolRoute: List<BreakpointProtocolId>, direction: TrafficDirection): Boolean =
+                workspace == owner && recording.mayInterceptMessage(request, protocolRoute, direction)
+        }
+        val factory = factory(gate)
+        kotlin.test.assertNull(factory.createForWorkspace(sibling, request(), null, Capture()))
+        kotlin.test.assertNull(factory.createForWorkspace(PolicyWorkspace.Other, request(), null, Capture()))
+        val transformer = assertNotNull(factory.createForWorkspace(owner, request(), null, Capture()))
+        val wire = frame("hello".encodeToByteArray())
+        val result = transformer.transform(TrafficDirection.CLIENT_TO_SERVER, wire, true, 1L).toCompletableFuture().get(1, TimeUnit.SECONDS)
+        assertContentEquals(wire, assertIs<ProxyStreamTransformResult.Forward>(result).payload)
+        assertEquals(owner, recording.candidates.single().workspace)
+        transformer.cancel(null)
+    }
+
+
     @Test
     fun `extension distinguishes operation direction and message sequence on one endpoint`() {
         val extension = GrpcBreakpointExtension()

@@ -1,6 +1,11 @@
 package com.devuloopers.knet.ui.desktop.breakpointmanager.viewmodel
 
+import com.devuloopers.knet.ui.core.components.policy.RuleReplacementNoticeState
+import com.devuloopers.knet.ui.core.components.policy.RULE_REPLACEMENT_NOTICE_MILLIS
+import kotlinx.coroutines.delay
 import com.devuloopers.knet.traffic.model.absoluteUrl
+import com.devuloopers.knet.domain.policy.*
+import kotlinx.coroutines.CancellationException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.devuloopers.knet.application.contract.breakpoint.BreakpointRequestEdit
@@ -37,8 +42,8 @@ import kotlinx.coroutines.withContext
  * All rule mutations and in-flight interception operations are delegated strictly to domain UseCases from `:core:domain`.
  */
 class BreakpointManagerViewModel(
-    getRulesUseCase: GetRulesUseCase,
-    observeGlobalInterceptionUseCase: ObserveGlobalInterceptionUseCase,
+    private val getRulesUseCase: GetRulesUseCase,
+    private val observeGlobalInterceptionUseCase: ObserveGlobalInterceptionUseCase,
     observePendingBreakpointsUseCase: ObservePendingBreakpointsUseCase,
     observePendingProtocolMessageBreakpointsUseCase: ObservePendingProtocolMessageBreakpointsUseCase,
     private val saveRuleUseCase: SaveRuleUseCase,
@@ -62,51 +67,85 @@ class BreakpointManagerViewModel(
     val uiState: StateFlow<BreakpointManagerState> = _uiState.asStateFlow()
     private var requestDescriptorJob: kotlinx.coroutines.Job? = null
 
-    init {
-        getRulesUseCase()
-            .onEach { rules ->
-                _uiState.update { it.copy(rules = rules) }
-                scheduleRequestDescriptors()
-            }
-            .launchIn(viewModelScope)
+    private var replacementNoticeJob: kotlinx.coroutines.Job? = null
 
-        observeGlobalInterceptionUseCase()
-            .onEach { isGlobalEnabled ->
-                _uiState.update { it.copy(isGlobalInterceptionEnabled = isGlobalEnabled) }
-            }
-            .launchIn(viewModelScope)
+    /** Uses the committed replacement result and original target, never the current tab or a pre-save guess. */
+    private fun confirmReplacement(result: RuleSaveResult, context: RuleEditContext, deviceName: String) {
+        if (!result.replacedExistingRule) return
+        replacementNoticeJob?.cancel()
+        _uiState.update { it.copy(replacementNotice = RuleReplacementNoticeState(context.editorId, deviceName)) }
+        replacementNoticeJob = viewModelScope.launch {
+            delay(RULE_REPLACEMENT_NOTICE_MILLIS)
+            _uiState.update { current -> if (current.replacementNotice?.commandId == context.editorId)
+                current.copy(replacementNotice = null) else current }
+        }
+    }
+
+    private var catalogJob: kotlinx.coroutines.Job? = null
+    private var allPending = emptyList<PendingBreakpoint>()
+    private var allPendingMessages = emptyList<com.devuloopers.knet.application.contract.breakpoint.PendingProtocolMessageBreakpoint>()
+
+    /** Captures deletion identity/revision before displaying the affected workspaces. */
+    fun requestRuleDeletion(ruleId: String) {
+        val current = uiState.value
+        val definition = current.definitions.firstOrNull { it.rule.id == ruleId } ?: return
+        _uiState.update { it.copy(pendingDeletion = PolicyDeletionRequest(ruleId,
+            definition.editContext(current.workspace), definition.usageNames(current.workspaceNames))) }
+    }
+    /** Cancels deletion without changing definitions or activations. */
+    fun dismissRuleDeletion() { _uiState.update { it.copy(pendingDeletion = null) } }
+    /** Deletes exactly the acknowledged revision and original target. */
+    fun confirmRuleDeletion() {
+        val request = uiState.value.pendingDeletion ?: return
+        dismissRuleDeletion()
+        mutate { deleteRuleUseCase.execute(request.id, request.context, true) }
+    }
+
+    /** Selects presentation only; saved rules and pending native connections keep their original owner. */
+    fun selectWorkspace(workspace: PolicyWorkspace) {
+        if (workspace == _uiState.value.workspace) return
+        _uiState.update { it.copy(workspace = workspace,
+            workspaceName = it.workspaceNames[workspace] ?: if (workspace == PolicyWorkspace.Other) "Other traffic" else "Selected device", rules = emptyList(), definitions = emptyList()) }
+        observeWorkspace(workspace)
+        publishPending()
+    }
+    private fun observeWorkspace(workspace: PolicyWorkspace) {
+        catalogJob?.cancel()
+        catalogJob = combine(getRulesUseCase.catalog(workspace), observeGlobalInterceptionUseCase(workspace)) { catalog, enabled -> catalog to enabled }
+            .onEach { (catalog, enabled) ->
+                _uiState.update { current -> if (current.workspace == workspace) current.copy(
+                    workspaceName = catalog.workspaceName, workspaceNames = catalog.workspaceNames, definitions = catalog.definitions,
+                    rules = catalog.definitions.map { it.rule.copy(enabled = it.activeOn(workspace)) }, isGlobalInterceptionEnabled = enabled) else current }
+                scheduleRequestDescriptors()
+            }.launchIn(viewModelScope)
+    }
+    private fun publishPending() {
+        _uiState.update { current ->
+            val events = allPending.filter { it.candidate.workspace == current.workspace }
+            val messages = allPendingMessages.filter { it.candidate.workspace == current.workspace }
+            val active = events.firstOrNull { it.id == current.activeEvent?.id } ?: events.firstOrNull()
+            current.copy(activeEvents = events, activeEvent = active,
+                activeMessageEvents = messages, activeMessageEvent = messages.firstOrNull { it.id == current.activeMessageEvent?.id } ?: messages.firstOrNull(),
+                resolvedPayloads = current.resolvedPayloads.filterKeys { it == active?.id },
+                requestDescriptors = current.requestDescriptors.filterKeys { id -> events.any { it.id == id } },
+                pendingByWorkspace = (allPending.map { it.candidate.workspace } + allPendingMessages.map { it.candidate.workspace }).groupingBy { it }.eachCount())
+        }
+        scheduleRequestDescriptors()
+    }
+
+    init {
+        observeWorkspace(PolicyWorkspace.Other)
 
         // Publish the pending queue before decoding. A breakpoint drawer must become actionable
         // immediately even when a large compressed or structured payload is expensive to inspect.
-        observePendingBreakpointsUseCase.execute()
-            .onEach { events ->
-                _uiState.update { current ->
-                    val stillSelected = events.find { it.id == current.activeEvent?.id }
-                    val activeEvent = stillSelected ?: events.firstOrNull()
-                    current.copy(
-                        activeEvents = events,
-                        activeEvent = activeEvent,
-                        resolvedPayloads = current.resolvedPayloads.filterKeys { it == activeEvent?.id },
-                        requestDescriptors = current.requestDescriptors.filterKeys { eventId ->
-                            events.any { it.id == eventId }
-                        },
-                    )
-                }
-                scheduleRequestDescriptors()
-            }
-            .launchIn(viewModelScope)
-
-        observePendingProtocolMessageBreakpointsUseCase.execute()
-            .onEach { events ->
-                _uiState.update { current ->
-                    current.copy(
-                        activeMessageEvents = events,
-                        activeMessageEvent = events.find { it.id == current.activeMessageEvent?.id }
-                            ?: events.firstOrNull(),
-                    )
-                }
-            }
-            .launchIn(viewModelScope)
+        observePendingBreakpointsUseCase.execute().onEach { events ->
+            allPending = events
+            publishPending()
+        }.launchIn(viewModelScope)
+        observePendingProtocolMessageBreakpointsUseCase.execute().onEach { events ->
+            allPendingMessages = events
+            publishPending()
+        }.launchIn(viewModelScope)
 
         // Resolve only the selected payload. mapLatest cancels obsolete work when the user moves
         // through the queue, while a one-entry cache keeps presentation memory strictly bounded.
@@ -177,8 +216,11 @@ class BreakpointManagerViewModel(
      * Drops and terminates all active in-flight suspended connections in the queue immediately.
      */
     fun dropAllEvents() {
+        val workspace = _uiState.value.workspace
+        val messages = allPendingMessages.filter { it.candidate.workspace == workspace }.map { it.id }
         viewModelScope.launch {
-            clearPendingBreakpointsUseCase.execute()
+            clearPendingBreakpointsUseCase.execute(workspace)
+            messages.forEach { resolveProtocolMessageBreakpointUseCase.dropStream(it) }
         }
     }
 
@@ -224,9 +266,9 @@ class BreakpointManagerViewModel(
     }
 
     fun toggleGlobalInterception(enabled: Boolean) {
-        viewModelScope.launch {
-            toggleGlobalInterceptionUseCase(enabled)
-            _uiState.update { it.copy(isGlobalInterceptionEnabled = enabled) }
+        val workspace = _uiState.value.workspace
+        mutate {
+            toggleGlobalInterceptionUseCase(enabled, workspace)
         }
     }
 
@@ -240,14 +282,9 @@ class BreakpointManagerViewModel(
     }
 
     private fun setRuleEnabled(ruleId: String, enabled: Boolean) {
-        val targetRule = _uiState.value.rules.find { it.id == ruleId } ?: return
-        val updated = targetRule.copy(enabled = enabled)
-        viewModelScope.launch {
-            toggleRuleUseCase(ruleId, enabled)
-            _uiState.update { state ->
-                state.copy(rules = state.rules.map { if (it.id == ruleId) updated else it })
-            }
-        }
+        val workspace = _uiState.value.workspace
+        if (_uiState.value.rules.none { it.id == ruleId }) return
+        mutate { toggleRuleUseCase.execute(ruleId, enabled, workspace) }
     }
 
     fun openAddDrawer() {
@@ -255,9 +292,17 @@ class BreakpointManagerViewModel(
             it.copy(
                 isAddEditDrawerVisible = true,
                 editingRule = null,
+                editingContext = RuleEditContext(it.workspace), editingWorkspaceName = it.workspaceName,
                 editingProtocolValues = emptyList(),
             )
         }
+    }
+
+    /** Hands a Traffic draft into the same editor, preserving the record's authenticated target. */
+    fun openPreparedDraft(rule: BreakpointRule, values: List<ProtocolCriteriaValue>, workspace: PolicyWorkspace) {
+        val name = _uiState.value.workspaceNames[workspace] ?: if (workspace == PolicyWorkspace.Other) "Other traffic" else "Saved device"
+        _uiState.update { it.copy(isAddEditDrawerVisible = true, editingRule = rule, editingProtocolValues = values,
+            editingContext = RuleEditContext(workspace), editingWorkspaceName = name, editingUsageNames = emptyList()) }
     }
 
     fun openEditDrawer(rule: BreakpointRule) {
@@ -265,6 +310,9 @@ class BreakpointManagerViewModel(
             it.copy(
                 isAddEditDrawerVisible = true,
                 editingRule = rule,
+                editingContext = it.definitions.firstOrNull { entry -> entry.rule.id == rule.id }?.editContext(it.workspace) ?: RuleEditContext(it.workspace),
+                editingWorkspaceName = it.workspaceName,
+                editingUsageNames = it.definitions.firstOrNull { entry -> entry.rule.id == rule.id }?.usageNames(it.workspaceNames).orEmpty(),
                 editingProtocolValues = breakpointProtocolRuleUseCase.editorValues(rule.protocolCriteria),
             )
         }
@@ -289,8 +337,11 @@ class BreakpointManagerViewModel(
         protocolId: BreakpointProtocolId = BreakpointProtocolId.HTTP,
         protocolValues: List<ProtocolCriteriaValue> = emptyList(),
     ) {
+        if (_uiState.value.isSaving || !_uiState.value.isAddEditDrawerVisible) return
         val protocolCriteria = breakpointProtocolRuleUseCase.createCriteria(protocolId, protocolValues)
             ?: return
+        val context = _uiState.value.editingContext
+        val deviceName = _uiState.value.editingWorkspaceName
         val currentEditing = _uiState.value.editingRule
         val targetId = currentEditing?.id ?: @OptIn(kotlin.uuid.ExperimentalUuidApi::class) kotlin.uuid.Uuid.random().toString()
 
@@ -301,37 +352,55 @@ class BreakpointManagerViewModel(
             portCriteria = portCriteria,
             method = method,
             phase = phase,
-            enabled = enabled,
+            enabled = if (currentEditing == null) true else enabled,
             priority = currentEditing?.priority ?: 0,
             protocolCriteria = protocolCriteria
         )
 
+        _uiState.update { it.copy(isSaving = true) }
+        mutate(onFinished = { _uiState.update { it.copy(isSaving = false) } }) {
+            val result = saveRuleUseCase.execute(rule, context)
+            confirmReplacement(result, context, deviceName)
+            _uiState.update { state -> if (state.editingContext == context) state.copy(
+                isAddEditDrawerVisible = false, editingRule = null, editingProtocolValues = emptyList()) else state }
+        }
+    }
+
+    /** Selects availability for this editor; changing it never changes the captured activation target. */
+    fun setDraftShared(shared: Boolean) {
+        _uiState.update { current ->
+            if (current.editingRule != null && current.editingContext.originalAvailability == RuleAvailability.Shared && !shared) current
+            else current.copy(editingContext = current.editingContext.copy(availability = if (shared) RuleAvailability.Shared else RuleAvailability.Private(current.editingContext.workspace)))
+        }
+    }
+    /** Starts an independent variation without modifying the shared original. */
+    fun duplicateRule(rule: BreakpointRule) {
+        openEditDrawer(rule)
+        _uiState.update { it.copy(editingRule = rule.copy(id = kotlin.uuid.Uuid.random().toString()),
+            editingContext = RuleEditContext(it.workspace), editingWorkspaceName = it.workspaceName) }
+    }
+    /** Duplicates the open definition while the drawer retains its locally edited matching fields. */
+    @OptIn(kotlin.uuid.ExperimentalUuidApi::class)
+    fun duplicateDraft() {
+        _uiState.update { it.copy(editingRule = it.editingRule?.copy(id = kotlin.uuid.Uuid.random().toString()),
+            editingUsageNames = emptyList(), editingContext = RuleEditContext(it.editingContext.workspace)) }
+    }
+    /** Dismisses persistence/validation errors without losing the current draft. */
+    fun clearError() { _uiState.update { it.copy(errorMessage = null) } }
+    private fun mutate(onFinished: () -> Unit = {}, operation: suspend () -> Unit) {
         viewModelScope.launch {
-            saveRuleUseCase.execute(rule)
-            _uiState.update { state ->
-                val existingIndex = state.rules.indexOfFirst { it.id == targetId }
-                val newRules = if (existingIndex >= 0) {
-                    state.rules.toMutableList().apply { set(existingIndex, rule) }
-                } else {
-                    state.rules + rule
-                }
-                state.copy(
-                    rules = newRules,
-                    isAddEditDrawerVisible = false,
-                    editingRule = null,
-                    editingProtocolValues = emptyList(),
-                )
-            }
+            try { operation() }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (failure: Exception) { _uiState.update { it.copy(errorMessage = failure.message ?: "Unable to update interception rules.") } }
+            finally { onFinished() }
         }
     }
 
     fun deleteRule(ruleId: String) {
-        viewModelScope.launch {
-            deleteRuleUseCase(ruleId)
-            _uiState.update { state ->
-                state.copy(rules = state.rules.filterNot { it.id == ruleId })
-            }
-        }
+        val current = _uiState.value
+        val definition = current.definitions.firstOrNull { it.rule.id == ruleId } ?: return
+        val context = definition.editContext(current.workspace)
+        mutate { deleteRuleUseCase.execute(ruleId, context) }
     }
 
     private fun resolvePayload(event: com.devuloopers.knet.application.contract.breakpoint.PendingBreakpoint):
