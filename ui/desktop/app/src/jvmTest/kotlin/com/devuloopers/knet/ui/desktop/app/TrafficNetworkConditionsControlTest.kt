@@ -101,7 +101,7 @@ class TrafficNetworkConditionsControlTest {
             scene.frame()
             val off = scene.quickAnchor().boundsInRoot
             scene.assertLabelFits("Conditions: Off")
-            val auto = scene.nodes().first { it.text().contains("Auto Scroll") }.boundsInRoot
+            val auto = scene.nodes().first { it.text().contains("Auto scroll") }.boundsInRoot
 
             configuration.value = configuration.value.copy(customProfiles = listOf(custom))
             scene.frame()
@@ -123,7 +123,7 @@ class TrafficNetworkConditionsControlTest {
             assertEquals(off.height, expanding.height)
             assertEquals(off.height, expanded.height)
             assertEquals(off.right, expanded.right)
-            assertEquals(auto, scene.nodes().first { it.text().contains("Auto Scroll") }.boundsInRoot)
+            assertEquals(auto, scene.nodes().first { it.text().contains("Auto scroll") }.boundsInRoot)
 
             configuration.value = configuration.value.copy(globalProfileId = custom.id)
             scene.frame()
@@ -146,7 +146,7 @@ class TrafficNetworkConditionsControlTest {
             assertEquals(off.height, contracting.height)
             assertEquals(off, scene.quickAnchor().boundsInRoot)
             scene.assertLabelFits("Conditions: Off")
-            assertEquals(auto, scene.nodes().first { it.text().contains("Auto Scroll") }.boundsInRoot)
+            assertEquals(auto, scene.nodes().first { it.text().contains("Auto scroll") }.boundsInRoot)
             scene.save("traffic-toolbar-off-selection")
         }
     }
@@ -197,9 +197,9 @@ class TrafficNetworkConditionsControlTest {
         }).use { scene ->
             scene.frame()
             val quick = scene.quickAnchor()
-            val auto = scene.nodes().first { it.text().contains("Auto Scroll") }
-            assertTrue(quick.boundsInRoot.right <= auto.boundsInRoot.left, "Global control must precede Auto Scroll")
-            assertTrue(auto.boundsInRoot.right <= 976, "Auto Scroll must stay inside the toolbar")
+            val auto = scene.nodes().first { it.text().contains("Auto scroll") }
+            assertTrue(quick.boundsInRoot.right <= auto.boundsInRoot.left, "Global control must precede Auto scroll")
+            assertTrue(auto.boundsInRoot.right <= 976, "Auto scroll must stay inside the toolbar")
             assertTrue(scene.nodes().any { it.text() == "Clear" && it.boundsInRoot.width > 0 })
             assertTrue(scene.nodes().first { it.text() == "Clear" }.boundsInRoot.right <= quick.boundsInRoot.left)
             assertTrue(scene.nodes().any { it.text() == "Start Capture" && it.boundsInRoot.width > 0 })

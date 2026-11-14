@@ -2,6 +2,7 @@ package com.devuloopers.knet.ui.core.components.dropdown
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.MutableTransitionState
@@ -43,6 +44,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.text
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -175,6 +179,7 @@ object KNetDropdownDefaults {
  * @param centeredAnchorContent Whether the selected label and chevron form one centered, compact group.
  * @param itemText Converts a value into visible text.
  * @param itemColor Optionally supplies a semantic text color for a value.
+ * @param animateSelection Crossfades label changes while retaining the same focusable anchor and popup owner.
  * @param itemDescription Optional contextual help for each option and the current selection. Blank values omit help.
  */
 @Composable
@@ -188,6 +193,7 @@ fun <T> KNetDropdown(
     enabled: Boolean = true,
     size: KNetDropdownSize = KNetDropdownSize.Standard,
     centeredAnchorContent: Boolean = false,
+    animateSelection: Boolean = false,
     itemText: (T) -> String = { it.toString() },
     itemColor: ((T) -> Color?)? = null,
     itemDescription: ((T) -> String?)? = null,
@@ -289,6 +295,7 @@ fun <T> KNetDropdown(
         KNetTooltipHost(selectedDescription, enabled = canExpand && !expanded) { interactionSource ->
             KNetDropdownAnchor(
                 text = displayText,
+                animateSelection = animateSelection,
                 expanded = expanded,
                 enabled = canExpand,
                 size = size,
@@ -383,6 +390,7 @@ internal fun KNetDropdownAnchor(
     interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
     description: String? = null,
     onExpandedKeyDown: ((Key) -> Boolean)? = null,
+    animateSelection: Boolean = false,
 ) {
     val colors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -471,13 +479,25 @@ internal fun KNetDropdownAnchor(
             },
             contentAlignment = Alignment.CenterStart
         ) {
-            Text(
-                text = text,
-                style = anchorTextStyle,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Ellipsis
-            )
+            if (animateSelection) {
+                // Animate only the label: replacing the whole dropdown would recreate focus and popup state.
+                Crossfade(
+                    targetState = text to anchorTextStyle,
+                    animationSpec = tween(duration, easing = motion.easingStandard),
+                    modifier = Modifier.clearAndSetSemantics { this.text = AnnotatedString(text) },
+                    label = "dropdownSelectionLabel",
+                ) { (label, style) ->
+                    Text(label, style = style, maxLines = 1, softWrap = false, overflow = TextOverflow.Ellipsis)
+                }
+            } else {
+                Text(
+                    text = text,
+                    style = anchorTextStyle,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
         }
         if (centeredContent) {
             Spacer(modifier = Modifier.width(KNetDropdownDefaults.AnchorContentSpacing))

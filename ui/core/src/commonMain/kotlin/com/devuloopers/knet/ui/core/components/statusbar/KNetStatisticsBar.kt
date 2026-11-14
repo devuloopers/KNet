@@ -20,10 +20,12 @@ import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
  * @param modifier Host-owned placement, without feature-specific minimum widths or resize thresholds.
  * @param borderEdges Standalone frame or horizontal separators for a shared split boundary.
  * @param leading Count or summary content at the starting edge.
+ * @param center Optional compact action between count and live statistics; overflow follows the same shared policy.
  * @param trailing Live statistics and totals at the ending edge.
  */
 @Composable
 fun KNetStatisticsBar(modifier: Modifier = Modifier, borderEdges: KNetBorderEdges = KNetBorderEdges.ALL, leading: @Composable RowScope.() -> Unit,
+    center: (@Composable RowScope.() -> Unit)? = null,
     trailing: @Composable RowScope.() -> Unit) {
     val horizontal = rememberScrollState()
     val spacing = KNetTheme.spacing
@@ -34,6 +36,7 @@ fun KNetStatisticsBar(modifier: Modifier = Modifier, borderEdges: KNetBorderEdge
             Row(Modifier.widthIn(min = contentWidth).fillMaxHeight(), verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween) {
                 Row(verticalAlignment = Alignment.CenterVertically, content = leading)
+                if (center != null) Row(Modifier.padding(start = spacing.lg), verticalAlignment = Alignment.CenterVertically, content = center)
                 Row(Modifier.padding(start = spacing.lg), verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(spacing.lg), content = trailing)
             }

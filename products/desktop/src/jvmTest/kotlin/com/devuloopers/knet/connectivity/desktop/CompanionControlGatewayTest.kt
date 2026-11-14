@@ -70,6 +70,24 @@ import kotlinx.coroutines.test.runTest
 
 class CompanionControlGatewayTest {
     @Test
+    fun freshDesktopPresenceIsRestoredByAuthenticatedStartWithoutCaptureOrPairingAgain() = kotlinx.coroutines.runBlocking {
+        val fixture = ktorFixture()
+        try {
+            repeat(3) {
+                assertTrue(fixture.presence.presence.value.isEmpty(), "Stored pairing cannot fabricate online presence")
+                val peer = fixture.connect("Bearer device-1:${fixture.credential}")
+                peer.send(com.devuloopers.knet.companion.model.CompanionSessionMessageKind.START, 1)
+                assertEquals("WELCOME", peer.next().kind.name)
+                assertEquals(1L, peer.nextConfiguration().revision)
+                eventually { fixture.presence.presence.value[RegisteredDeviceId("device-1")]?.status ==
+                    com.devuloopers.knet.application.contract.device.DevicePresenceStatus.CONNECTED }
+                assertEquals(setOf(RegisteredDeviceId("device-1")), fixture.presence.presence.value.keys)
+                fixture.restart()
+            }
+        } finally { fixture.close() }
+    }
+
+    @Test
     fun ktorCertificateChallengeReturnsBodyless204WithoutLengthAndRejectsReplay(): Unit = kotlinx.coroutines.runBlocking {
         val fixture = ktorFixture()
         try {
@@ -235,14 +253,29 @@ class CompanionControlGatewayTest {
         val managers = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm()).apply { init(trustStore) }
         val tls = SSLContext.getInstance("TLS").apply { init(null, managers.trustManagers, SecureRandom()) }
         val client = java.net.http.HttpClient.newBuilder().sslContext(tls).connectTimeout(5.seconds.toJavaDuration()).build()
-        return KtorFixture(gateway, pairing, credential, policies, presence, listening.port, client)
+        return KtorFixture(gateway, pairing, credential, policies, presence, listening.port, client) { freshPresence ->
+            com.devuloopers.knet.connectivity.desktop.gateway.KtorCompanionControlGateway("127.0.0.1", listening.port,
+                keyStore, handler, pairing, freshPresence, policies, maximumSessions)
+        }
     }
 
-    private class KtorFixture(val gateway: com.devuloopers.knet.connectivity.desktop.gateway.KtorCompanionControlGateway,
+    private class KtorFixture(var gateway: com.devuloopers.knet.connectivity.desktop.gateway.KtorCompanionControlGateway,
         val pairing: PairingCoordinator, val credential: String, val policies: MutableStateFlow<PacketConditionConfiguration>,
-        val presence: com.devuloopers.knet.application.coordinator.device.DevicePresenceCoordinator,
-        val port: Int, val client: java.net.http.HttpClient) : AutoCloseable {
+        var presence: com.devuloopers.knet.application.coordinator.device.DevicePresenceCoordinator,
+        val port: Int, val client: java.net.http.HttpClient,
+        val restartFactory: (com.devuloopers.knet.application.coordinator.device.DevicePresenceCoordinator) ->
+            com.devuloopers.knet.connectivity.desktop.gateway.KtorCompanionControlGateway) : AutoCloseable {
         private val peers = mutableListOf<TestWebSocket>()
+        suspend fun restart() {
+            gateway.close()
+            peers.forEach { it.socket.abort() }; peers.clear()
+            presence = com.devuloopers.knet.application.coordinator.device.DevicePresenceCoordinator({ System.nanoTime() / 1_000_000 })
+            gateway = restartFactory(presence)
+            gateway.start()
+            kotlinx.coroutines.withTimeout(10_000) {
+                gateway.state.first { it is com.devuloopers.knet.connectivity.desktop.gateway.CompanionControlGatewayState.Listening }
+            }
+        }
         fun connect(authorization: String, origin: String? = null): TestWebSocket {
             val listener = TestWebSocket()
             val builder = client.newWebSocketBuilder().header("Authorization", authorization)

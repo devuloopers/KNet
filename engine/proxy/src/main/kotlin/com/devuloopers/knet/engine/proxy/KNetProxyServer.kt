@@ -3,6 +3,7 @@ package com.devuloopers.knet.engine.proxy
 import com.devuloopers.knet.engine.proxy.handler.KNetStreamingProxyHandler
 import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureConnectionMetadata
 import com.devuloopers.knet.engine.proxy.capture.ProxyCaptureSink
+import com.devuloopers.knet.engine.proxy.pipeline.HttpTwoInputDrainHandler
 import com.devuloopers.knet.engine.proxy.pipeline.PipelineHandlerNames
 import com.devuloopers.knet.engine.proxy.pipeline.ProxyChannelAttributes
 import com.devuloopers.knet.engine.proxy.upstream.HttpTwoUpstreamConnectionPool
@@ -351,7 +352,7 @@ class KNetProxyServer(
             sourceCodec,
             HttpServerUpgradeHandler.UpgradeCodecFactory { protocol ->
                 if (AsciiString.contentEquals(Http2CodecUtil.HTTP_UPGRADE_PROTOCOL_NAME, protocol)) {
-                    Http2ServerUpgradeCodec(upgradeHttp2.frameCodec, upgradeHttp2.multiplexHandler)
+                    Http2ServerUpgradeCodec(upgradeHttp2.frameCodec, upgradeHttp2.inputDrainHandler, upgradeHttp2.multiplexHandler)
                 } else {
                     null
                 }
@@ -397,8 +398,10 @@ class KNetProxyServer(
         scope: CoroutineScope,
         cryptoExecutor: ThreadPoolExecutor,
         connectionCapture: com.devuloopers.knet.engine.proxy.capture.ProxyConnectionCapture?,
+        inputDrainHandler: HttpTwoInputDrainHandler,
     ): ChannelInitializer<Channel> = object : ChannelInitializer<Channel>() {
         override fun initChannel(channel: Channel) {
+            inputDrainHandler.attach(channel as Http2StreamChannel)
             channel.attr(ProxyChannelAttributes.CONNECTION_CAPTURE).set(connectionCapture)
             channel.attr(ProxyChannelAttributes.SOURCE_APPLICATION_ID).set(
                 parentChannel.attr(ProxyChannelAttributes.SOURCE_APPLICATION_ID).get(),
@@ -414,6 +417,9 @@ class KNetProxyServer(
             )
             channel.attr(ProxyChannelAttributes.PORT).set(parentChannel.attr(ProxyChannelAttributes.PORT).get())
             channel.attr(ProxyChannelAttributes.IS_SSL).set(parentChannel.attr(ProxyChannelAttributes.IS_SSL).get())
+            channel.attr(ProxyChannelAttributes.CLEARTEXT_HTTP2_TUNNEL).set(
+                parentChannel.attr(ProxyChannelAttributes.CLEARTEXT_HTTP2_TUNNEL).get(),
+            )
             channel.pipeline().addLast(
                 PipelineHandlerNames.HTTP2_STREAM_CODEC,
                 Http2StreamFrameToHttpObjectCodec(true),
@@ -453,8 +459,9 @@ class KNetProxyServer(
                 PipelineHandlerNames.HTTP2_CODEC,
                 components.frameCodec,
             )
+            channel.pipeline().addAfter(PipelineHandlerNames.HTTP2_CODEC, PipelineHandlerNames.HTTP2_INPUT_DRAIN, components.inputDrainHandler)
             channel.pipeline().addAfter(
-                PipelineHandlerNames.HTTP2_CODEC,
+                PipelineHandlerNames.HTTP2_INPUT_DRAIN,
                 PipelineHandlerNames.HTTP2_MULTIPLEX,
                 components.multiplexHandler,
             )
@@ -468,11 +475,9 @@ class KNetProxyServer(
         cryptoExecutor: ThreadPoolExecutor,
         connectionCapture: com.devuloopers.knet.engine.proxy.capture.ProxyConnectionCapture?,
     ): Http2Components {
+        val inputDrainHandler = HttpTwoInputDrainHandler()
         val childInitializer = createHttp2StreamInitializer(
-            parentChannel,
-            scope,
-            cryptoExecutor,
-            connectionCapture,
+            parentChannel, scope, cryptoExecutor, connectionCapture, inputDrainHandler,
         )
         val settings = Http2Settings()
             .maxConcurrentStreams(runtimePolicy.maximumHttp2ConcurrentStreams)
@@ -484,9 +489,10 @@ class KNetProxyServer(
             .build()
         return Http2Components(
             frameCodec = frameCodec,
+            inputDrainHandler = inputDrainHandler,
             multiplexHandler = Http2MultiplexHandler(
                 childInitializer,
-                createHttp2StreamInitializer(parentChannel, scope, cryptoExecutor, connectionCapture),
+                createHttp2StreamInitializer(parentChannel, scope, cryptoExecutor, connectionCapture, inputDrainHandler),
             ),
         )
     }
@@ -521,6 +527,16 @@ class KNetProxyServer(
         duplexInspectorFactories = duplexInspectorFactories,
         duplexTransformerFactories = duplexTransformerFactories,
         tlsInterceptionPolicy = tlsInterceptionPolicy,
+        installConnectHttpTwoProtocol = { pipeline, selectorName ->
+            val components = createHttp2Components(channel, scope, cryptoExecutor, connectionCapture)
+            pipeline.addAfter(selectorName, PipelineHandlerNames.HTTP2_CODEC, components.frameCodec)
+            pipeline.addAfter(PipelineHandlerNames.HTTP2_CODEC, PipelineHandlerNames.HTTP2_INPUT_DRAIN, components.inputDrainHandler)
+            pipeline.addAfter(
+                PipelineHandlerNames.HTTP2_INPUT_DRAIN,
+                PipelineHandlerNames.HTTP2_MULTIPLEX,
+                components.multiplexHandler,
+            )
+        },
         installTlsApplicationProtocol = { pipeline ->
             pipeline.addAfter(
                 PipelineHandlerNames.SSL,
@@ -540,8 +556,9 @@ class KNetProxyServer(
                                     PipelineHandlerNames.HTTP2_CODEC,
                                     components.frameCodec,
                                 )
+                                context.pipeline().addAfter(PipelineHandlerNames.HTTP2_CODEC, PipelineHandlerNames.HTTP2_INPUT_DRAIN, components.inputDrainHandler)
                                 context.pipeline().addAfter(
-                                    PipelineHandlerNames.HTTP2_CODEC,
+                                    PipelineHandlerNames.HTTP2_INPUT_DRAIN,
                                     PipelineHandlerNames.HTTP2_MULTIPLEX,
                                     components.multiplexHandler,
                                 )
@@ -561,6 +578,7 @@ class KNetProxyServer(
 
     private data class Http2Components(
         val frameCodec: Http2FrameCodec,
+        val inputDrainHandler: HttpTwoInputDrainHandler,
         val multiplexHandler: Http2MultiplexHandler,
     )
 

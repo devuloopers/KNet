@@ -14,6 +14,7 @@ import com.devuloopers.knet.engine.proxy.inspection.*
 import com.devuloopers.knet.engine.proxy.mapper.HttpMapper
 import com.devuloopers.knet.engine.proxy.pipeline.PipelineHandlerNames
 import com.devuloopers.knet.engine.proxy.pipeline.ProxyChannelAttributes
+import com.devuloopers.knet.engine.proxy.pipeline.ConnectHttpTwoPrefaceHandler
 import com.devuloopers.knet.engine.proxy.pipeline.SelectiveHttpObjectAggregator
 import com.devuloopers.knet.engine.proxy.ssl.ProxyTrustManager
 import com.devuloopers.knet.engine.proxy.timing.NetworkTimingCollector
@@ -43,6 +44,8 @@ import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.ChannelInboundHandlerAdapter
 import io.netty.channel.ChannelInitializer
 import io.netty.channel.socket.SocketChannel
+import io.netty.channel.socket.ChannelInputShutdownEvent
+import io.netty.handler.ssl.SslCloseCompletionEvent
 import io.netty.handler.codec.http.*
 import io.netty.handler.codec.http2.Http2StreamFrameToHttpObjectCodec
 import io.netty.handler.ssl.SslContextBuilder
@@ -94,6 +97,7 @@ internal class KNetStreamingProxyHandler(
     ),
     private val happyEyeballsDialer: HappyEyeballsDialer = HappyEyeballsDialer(runtimePolicy),
     private val installTlsApplicationProtocol: ((io.netty.channel.ChannelPipeline) -> Unit)? = null,
+    private val installConnectHttpTwoProtocol: ((io.netty.channel.ChannelPipeline, String) -> Unit)? = null,
     private val streamInspectorFactories: List<ProxyStreamInspectorFactory> = emptyList(),
     private val streamTransformerFactories: List<ProxyStreamTransformerFactory> = emptyList(),
     private val duplexInspectorFactories: List<ProxyDuplexInspectorFactory> = emptyList(),
@@ -119,6 +123,7 @@ internal class KNetStreamingProxyHandler(
     private var activeRequest: ActiveStreamingRequest? = null
     private var discardingConnectContent: Boolean = false
     private var connectTransitionStarted: Boolean = false
+    private var downstreamInputEnded: Boolean = false
 
     override fun channelRead(context: ChannelHandlerContext, message: Any) {
         val httpObject = message as? HttpObject
@@ -319,6 +324,7 @@ internal class KNetStreamingProxyHandler(
         active: ActiveStreamingRequest,
         content: HttpContent,
     ) {
+        if (content is LastHttpContent) active.requestEndObserved = true
         val transformer = active.streamTransformer
         if (transformer != null) {
             val payload = ByteArray(content.content().readableBytes())
@@ -509,7 +515,11 @@ internal class KNetStreamingProxyHandler(
                         )
                         return@execute
                     }
-                    if (active.target.isSsl && httpTwoUpstreamPool != null && !active.requestsDuplexUpgrade) {
+                    val preserveCleartextHttpTwo = context.channel()
+                        .attr(ProxyChannelAttributes.CLEARTEXT_HTTP2_TUNNEL).get() == true
+                    if ((active.target.isSsl || preserveCleartextHttpTwo) &&
+                        httpTwoUpstreamPool != null && !active.requestsDuplexUpgrade
+                    ) {
                         connectHttpTwo(context, active, route)
                     } else {
                         connectHttpOne(context, active, route)
@@ -518,21 +528,23 @@ internal class KNetStreamingProxyHandler(
             }
     }
 
-    /** Opens an isolated stream on a pooled TLS HTTP/2 parent. */
+    /** Opens an isolated stream on a pooled TLS/ALPN or cleartext prior-knowledge HTTP/2 parent. */
     private fun connectHttpTwo(
         context: ChannelHandlerContext,
         active: ActiveStreamingRequest,
         resolvedRoute: ResolvedUpstreamRoute,
     ) {
         val pool = checkNotNull(httpTwoUpstreamPool)
+        val transport = if (active.target.isSsl) HttpTwoUpstreamTransport.TLS else HttpTwoUpstreamTransport.CLEARTEXT
         active.timings.markTcpStart()
-        active.timings.markTlsStart()
-        val httpTwoRequest = createHttpTwoUpstreamRequest(active.outboundHead)
+        if (transport == HttpTwoUpstreamTransport.TLS) active.timings.markTlsStart()
+        val httpTwoRequest = createHttpTwoUpstreamRequest(active.outboundHead, transport)
         pool.openStream(
             eventLoop = context.channel().eventLoop(),
             route = HttpTwoUpstreamRoute(
                 host = active.target.tlsServerName,
                 resolvedRoute = resolvedRoute,
+                transport = transport,
             ),
             streamInitializer = object : ChannelInitializer<Channel>() {
                 override fun initChannel(channel: Channel) {
@@ -564,7 +576,7 @@ internal class KNetStreamingProxyHandler(
                     return@execute
                 }
                 active.timings.markTcpEnd()
-                active.timings.markTlsEnd()
+                if (transport == HttpTwoUpstreamTransport.TLS) active.timings.markTlsEnd()
                 if (failure == null && stream != null) {
                     active.upstreamChannel = stream
                     pumpRequestBody(context, active)
@@ -865,7 +877,7 @@ internal class KNetStreamingProxyHandler(
      * Netty deliberately represents one HTTP/2 stream with HTTP/1-shaped objects. The extension
      * scheme header supplies `:scheme`; connection-specific fields are removed before HPACK.
      */
-    private fun createHttpTwoUpstreamRequest(source: HttpRequest): HttpRequest {
+    private fun createHttpTwoUpstreamRequest(source: HttpRequest, transport: HttpTwoUpstreamTransport): HttpRequest {
         val request = DefaultHttpRequest(HttpVersion.HTTP_1_1, source.method(), source.uri())
         request.headers().set(source.headers())
         val nominatedConnectionHeaders = request.headers()
@@ -885,7 +897,10 @@ internal class KNetStreamingProxyHandler(
         if (teValue != null && !teValue.equals(HttpHeaderValues.TRAILERS.toString(), ignoreCase = true)) {
             request.headers().remove(HttpHeaderNames.TE)
         }
-        HttpTwoBridgeHeaders.prepareForHttpTwo(request.headers(), scheme = "https")
+        HttpTwoBridgeHeaders.prepareForHttpTwo(
+            request.headers(),
+            scheme = if (transport == HttpTwoUpstreamTransport.TLS) "https" else "http",
+        )
         return request
     }
 
@@ -957,20 +972,35 @@ internal class KNetStreamingProxyHandler(
                 }
                 try {
                     removeDownstreamHttpHandlers(context.pipeline())
-                    context.pipeline().addBefore(
-                        context.name(),
-                        TLS_CLIENT_HELLO_POLICY_HANDLER,
-                        TlsClientHelloPolicyHandler(
-                            maximumClientHelloBytes = runtimePolicy.maximumTlsClientHelloBytes,
-                            handshakeTimeoutMillis = runtimePolicy.tlsHandshakeTimeoutMillis,
-                            lookupRoute = { classifierContext, metadata ->
-                                prepareClassifiedConnectRoute(classifierContext, host, port, metadata)
-                            },
-                            installRoute = { classifierContext, route, metadata ->
-                                installClassifiedConnectRoute(classifierContext, host, route, metadata)
-                            },
-                        ),
-                    )
+                    if (installConnectHttpTwoProtocol != null) {
+                        context.pipeline().addBefore(
+                            context.name(),
+                            PipelineHandlerNames.CONNECT_HTTP2_PREFACE,
+                            ConnectHttpTwoPrefaceHandler(
+                                setupTimeoutMillis = runtimePolicy.tlsHandshakeTimeoutMillis,
+                                installTls = { selector ->
+                                    // Install ClientHello handling only after selection. Removing an
+                                    // already-armed SNI classifier can otherwise leave its timer alive.
+                                    selector.pipeline().addAfter(
+                                        selector.name(), TLS_CLIENT_HELLO_POLICY_HANDLER,
+                                        createConnectTlsClassifier(host, port),
+                                    )
+                                },
+                                installHttpTwo = { selector ->
+                                    // The authenticated Companion carrier also carries plaintext H2.
+                                    // Preserve destination/capture, with no certificate or H1 downgrade.
+                                    selector.channel().attr(ProxyChannelAttributes.IS_SSL).set(false)
+                                    selector.channel().attr(ProxyChannelAttributes.CLEARTEXT_HTTP2_TUNNEL).set(true)
+                                    installConnectHttpTwoProtocol.invoke(selector.pipeline(), selector.name())
+                                },
+                            ),
+                        )
+                    } else {
+                        context.pipeline().addBefore(
+                            context.name(), TLS_CLIENT_HELLO_POLICY_HANDLER,
+                            createConnectTlsClassifier(host, port),
+                        )
+                    }
                     context.channel().config().isAutoRead = true
                 } catch (failure: Exception) {
                     KNetLogger.error(STREAMING_TAG, failure) {
@@ -981,6 +1011,18 @@ internal class KNetStreamingProxyHandler(
             }
         }
     }
+
+    /** Builds the existing TLS policy decoder only when TLS selection needs its handshake timer. */
+    private fun createConnectTlsClassifier(host: String, port: Int) = TlsClientHelloPolicyHandler(
+        maximumClientHelloBytes = runtimePolicy.maximumTlsClientHelloBytes,
+        handshakeTimeoutMillis = runtimePolicy.tlsHandshakeTimeoutMillis,
+        lookupRoute = { classifierContext, metadata ->
+            prepareClassifiedConnectRoute(classifierContext, host, port, metadata)
+        },
+        installRoute = { classifierContext, route, metadata ->
+            installClassifiedConnectRoute(classifierContext, host, route, metadata)
+        },
+    )
 
     /** Evaluates SNI-aware policy and completes only after any raw upstream is ready. */
     private fun prepareClassifiedConnectRoute(
@@ -1614,6 +1656,7 @@ internal class KNetStreamingProxyHandler(
         }
         context.channel().attr(ProxyChannelAttributes.REQUEST_CONTEXT).set(null)
         drainPendingObjects(context)
+        closeAfterInputEnd(context)
         if (activeRequest == null && pendingObjects.isEmpty() && context.channel().isActive) {
             context.channel().config().isAutoRead = true
         }
@@ -1707,13 +1750,32 @@ internal class KNetStreamingProxyHandler(
         pendingContentBytes = 0L
     }
 
+    /** EOF prevents reuse, but a complete half-closed request still owns its pending response. */
+    override fun userEventTriggered(context: ChannelHandlerContext, event: Any) {
+        if ((event === ChannelInputShutdownEvent.INSTANCE || event is SslCloseCompletionEvent && event.isSuccess) &&
+            context.pipeline().get(io.netty.handler.codec.http2.Http2FrameCodec::class.java) == null
+        ) {
+            downstreamInputEnded = true
+            closeAfterInputEnd(context)
+        }
+        super.userEventTriggered(context, event)
+    }
+
+    private fun closeAfterInputEnd(context: ChannelHandlerContext) {
+        if (!downstreamInputEnded) return
+        val active = activeRequest
+        // LastHttpContent must have reached the wire decoder, not necessarily the asynchronous
+        // interceptor. Never cancel an accepted final body while its transform is still pending.
+        if (active == null || !active.requestEndObserved) context.close()
+    }
+
     override fun channelInactive(context: ChannelHandlerContext) {
-        activeRequest?.let { active ->
+        val endedRequest = activeRequest
+        activeRequest = null
+        endedRequest?.let { active ->
             releaseBodyQueue(active)
             active.transformQueue.clear()
             val reason = TrafficTerminationReason.Transport.DOWNSTREAM_CANCELLED
-            active.streamTransformer?.cancel(reason)
-            active.upstreamChannel?.close()
             if (active.exchangeCompleted.compareAndSet(false, true)) {
                 active.capture?.cancelBody(
                     direction = TrafficDirection.CLIENT_TO_SERVER,
@@ -1735,8 +1797,11 @@ internal class KNetStreamingProxyHandler(
                     }
                 }
             }
+            // Publish cancellation before closing the origin stream. Its synchronous inactive
+            // callback must not win canonical capture with an upstream-failure classification.
+            active.streamTransformer?.cancel(reason)
+            active.upstreamChannel?.close()
         }
-        activeRequest = null
         releasePendingObjects()
         super.channelInactive(context)
     }
@@ -1836,6 +1901,7 @@ internal class KNetStreamingProxyHandler(
         var writeInProgress: Boolean = false,
         var transformInProgress: Boolean = false,
         var requestEndReceived: Boolean = false,
+        var requestEndObserved: Boolean = false,
         var requestEndWritten: Boolean = false,
         var observedRequestBytes: Long = 0L,
     )

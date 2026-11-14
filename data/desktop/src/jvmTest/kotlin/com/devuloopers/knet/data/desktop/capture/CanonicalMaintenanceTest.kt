@@ -42,13 +42,14 @@ class CanonicalMaintenanceTest {
             repeat(300) { index -> dao.insertExchange(exchangeReferencingRequestBody(sharedId.value).copy(
                 id = "a-$index", sessionId = "shared", connectionId = "a", connectionSequence = index.toLong() + 1)) }
             dao.insertExchange(exchangeReferencingRequestBody(sharedId.value).copy(id = "b-0", sessionId = "shared", connectionId = "b"))
-            val maintenance = com.devuloopers.knet.data.desktop.traffic.repository.DesktopTrafficMaintenanceAdapter(database, store)
+            val maintenance = com.devuloopers.knet.data.desktop.traffic.repository.DesktopTrafficMaintenanceAdapter(database)
             fun source(id: String) = com.devuloopers.knet.application.contract.traffic.TrafficSource.Device(com.devuloopers.knet.identity.RegisteredDeviceId(id))
             maintenance.clearSourceTraffic(source("a"))
             assertTrue(dao.getSourceClearExchangeIds("DEVICE", "a", 256).isEmpty())
             assertNotNull(dao.getExchange("b-0"))
             assertNotNull(dao.getBody(sharedId.value))
             maintenance.clearSourceTraffic(source("b"))
+            BodyDeletionReconciler(dao, store).reconcile(1_000)
             assertNull(dao.getBody(sharedId.value))
             assertTrue(dao.getDeletionWork(256).isEmpty())
             assertNotNull(dao.getSession("shared"))

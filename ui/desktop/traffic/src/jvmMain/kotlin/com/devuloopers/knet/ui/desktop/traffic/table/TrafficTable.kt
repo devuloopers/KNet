@@ -1,5 +1,6 @@
 package com.devuloopers.knet.ui.desktop.traffic.table
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import com.devuloopers.knet.ui.core.foundation.border.KNetBorderEdges
 import com.devuloopers.knet.ui.core.foundation.border.knetBorder
@@ -27,6 +28,19 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.material3.Icon
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.size
+import com.devuloopers.knet.ui.desktop.traffic.model.TrafficVisibleRows
+import com.devuloopers.knet.ui.desktop.traffic.model.TrafficReadingState
+import com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Alignment
@@ -84,6 +98,18 @@ data class TrafficTableColumnResizeActions(
     val onReset: (TrafficColumn) -> Unit = {},
 )
 
+/** Reading interactions are scoped by the caller to the source that owns this table instance. */
+data class TrafficTableScrollActions(
+    /** Reports only user-driven row movement, including wheel, keyboard and scrollbar operations. */
+    val onUserViewportChanged: (TrafficViewport) -> Unit = {},
+    /** Reveals and acknowledges new arrivals without changing the Manual switch. */
+    val onJumpToLatest: () -> Unit = {},
+    /** Reports fully visible canonical row keys; clipping never counts a row as viewed. */
+    val onVisibleRowsChanged: (TrafficVisibleRows) -> Unit = {},
+    /** Requests adjacent rows above the current history window without a whole-batch acknowledgement. */
+    val onLoadNewer: () -> Unit = {},
+)
+
 /**
  * High-density virtualized traffic feed table using standardized UI-core table primitives and tokens.
  *
@@ -130,6 +156,10 @@ fun TrafficTable(
     viewportKey: String = "all",
     initialViewport: com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport = com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport(),
     onRetainViewport: (com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport) -> Unit = {},
+    reading: TrafficReadingState = TrafficReadingState(),
+    canLoadNewer: Boolean = false,
+    readingEpoch: Long = 0,
+    scrollActions: TrafficTableScrollActions = TrafficTableScrollActions(),
 ) {
     val themeColors = KNetTheme.colors
     val typography = KNetTheme.typography
@@ -146,8 +176,44 @@ fun TrafficTable(
                 listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset, horizontalScrollState.value)) }
         }
         val todayDateState = remember { mutableStateOf(KNetDateTime.currentDateKey()) }
+        val currentScrollActions = rememberUpdatedState(scrollActions)
+        val currentRetainViewport = rememberUpdatedState(onRetainViewport)
+        val programmaticScroll = remember(viewportKey) { mutableStateOf(false) }
+        fun viewport() = TrafficViewport(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset, horizontalScrollState.value)
+        val userScroll = remember(viewportKey, listState) { object : NestedScrollConnection {
+            override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+                if (source == NestedScrollSource.UserInput && consumed.y != 0f && !programmaticScroll.value)
+                    currentScrollActions.value.onUserViewportChanged(viewport())
+                return Offset.Zero
+            }
+        } }
+        LaunchedEffect(listState) {
+            var userWasScrolling = false
+            snapshotFlow { Triple(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset, listState.isScrollInProgress) }
+                .distinctUntilChanged().collect { (_, _, scrolling) ->
+                    if (!programmaticScroll.value && (scrolling || userWasScrolling))
+                        currentScrollActions.value.onUserViewportChanged(viewport())
+                    userWasScrolling = scrolling && !programmaticScroll.value
+                    currentRetainViewport.value(viewport())
+                }
+        }
+        LaunchedEffect(listState, readingEpoch) {
+            snapshotFlow {
+                val layout = listState.layoutInfo
+                TrafficVisibleRows(layout.visibleItemsInfo.filter { item ->
+                    item.offset >= layout.viewportStartOffset && item.offset + item.size <= layout.viewportEndOffset
+                }.mapNotNull { item -> item.key as? String },
+                    listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0)
+            }.distinctUntilChanged().collect { visible -> currentScrollActions.value.onVisibleRowsChanged(visible) }
+        }
+        LaunchedEffect(listState, canLoadNewer) {
+            snapshotFlow { listState.firstVisibleItemIndex }.distinctUntilChanged().collect { firstIndex ->
+                if (canLoadNewer && firstIndex <= 12) currentScrollActions.value.onLoadNewer()
+            }
+        }
         val lastAutoScrollSequence = remember(viewportKey) { mutableStateOf<Long?>(null) }
         val lastAutoScrollEnabled = remember(viewportKey) { mutableStateOf(false) }
+        val lastJumpRevision = remember(viewportKey) { mutableStateOf(reading.jumpRevision) }
 
         LaunchedEffect(Unit) {
             while (true) {
@@ -160,7 +226,7 @@ fun TrafficTable(
         }
 
         val newestSequence = transactions.maxOfOrNull { row -> maxOf(row.sequenceNumber, row.timestamp) }
-        LaunchedEffect(newestSequence, autoScroll) {
+        LaunchedEffect(newestSequence, autoScroll, reading.jumpRevision) {
             val previousSequence = lastAutoScrollSequence.value
             val wasEnabled = lastAutoScrollEnabled.value
             lastAutoScrollEnabled.value = autoScroll
@@ -171,7 +237,9 @@ fun TrafficTable(
             if (previousSequence == null || newestSequence > previousSequence) {
                 lastAutoScrollSequence.value = newestSequence
             }
-            if (
+            val explicitJump = lastJumpRevision.value != reading.jumpRevision
+            lastJumpRevision.value = reading.jumpRevision
+            if (explicitJump ||
                 shouldAutoScrollToNewest(
                     previousSequence = previousSequence,
                     currentSequence = newestSequence,
@@ -179,7 +247,8 @@ fun TrafficTable(
                     isEnabled = autoScroll,
                 )
             ) {
-                listState.scrollToItem(0)
+                programmaticScroll.value = true
+                try { listState.scrollToItem(0) } finally { programmaticScroll.value = false }
             }
         }
 
@@ -267,7 +336,8 @@ fun TrafficTable(
                                     state = listState,
                                     modifier = Modifier
                                         .width(columnLayout.tableWidthDp.dp)
-                                        .fillMaxHeight(),
+                                        .fillMaxHeight()
+                                        .nestedScroll(userScroll),
                                 ) {
                                     items(
                                         items = transactions,
@@ -394,7 +464,19 @@ fun TrafficTable(
                 maxLines = 1,
                 softWrap = false
             )
-        }, trailing = {
+        }, center = if (reading.newCount > 0L && !autoScroll) ({
+            Row(Modifier.clip(KNetTheme.shapes.pill).background(themeColors.accent)
+                .clickable(role = androidx.compose.ui.semantics.Role.Button, onClickLabel = "Show latest traffic", onClick = scrollActions.onJumpToLatest)
+                .padding(horizontal = KNetTheme.spacing.md, vertical = KNetTheme.spacing.xs)
+                .testTag("New traffic"),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(KNetTheme.spacing.xs)) {
+                Icon(Icons.Default.ArrowUpward, contentDescription = null,
+                    tint = themeColors.textPrimary, modifier = Modifier.size(KNetTheme.dimensions.iconSizeSmall))
+                Text("${reading.newCount} new ${if (reading.newCount == 1L) "request" else "requests"}",
+                    style = typography.caption, color = themeColors.textPrimary, maxLines = 1, softWrap = false)
+            }
+        }) else null, trailing = {
             if (throughputIndicator != null) {
                 throughputIndicator()
                 VerticalDivider(Modifier.height(KNetTheme.dimensions.iconSizeMedium))

@@ -39,6 +39,7 @@ import platform.NetworkExtension.NETunnelProviderProtocol
 import platform.NetworkExtension.NETunnelProviderSession
 import platform.NetworkExtension.NEVPNConnection
 import platform.NetworkExtension.NEVPNStatusConnected
+import platform.NetworkExtension.NEVPNStatusReasserting
 import platform.NetworkExtension.NEVPNStatusDidChangeNotification
 import platform.NetworkExtension.NEVPNStatusDisconnected
 import platform.NetworkExtension.NEVPNStatusInvalid
@@ -65,8 +66,8 @@ public class IosCompanionInspectionController(
         try {
             val manager = loadExistingManager()
             observeUnexpectedStatus(manager?.connection)
-            mutableState.value = if (manager?.connection?.status == NEVPNStatusConnected) {
-                restoredRunningState(manager)
+            mutableState.value = if (manager?.connection?.status in setOf(NEVPNStatusConnected, NEVPNStatusReasserting)) {
+                restoredRunningState(checkNotNull(manager)).copy(reconnecting = manager.connection.status == NEVPNStatusReasserting)
             } else {
                 CompanionInspectionState.Stopped
             }
@@ -111,6 +112,7 @@ public class IosCompanionInspectionController(
                 mode = configuration.mode,
                 startedAtEpochMillis = nowEpochMillis(),
                 fullHttpsInspection = configuration.fullHttpsInspection,
+                reconnecting = providerSession.status == NEVPNStatusReasserting,
             )
             CompanionInspectionStartResult.Started
         } catch (cancelled: CancellationException) {
@@ -158,12 +160,7 @@ public class IosCompanionInspectionController(
                 `object` = managedConnection,
                 queue = NSOperationQueue.mainQueue,
             ) {
-                if (
-                    managedConnection.status in setOf(NEVPNStatusDisconnected, NEVPNStatusInvalid) &&
-                    mutableState.value is CompanionInspectionState.Running
-                ) {
-                    mutableState.value = CompanionInspectionState.Failed(vpnStoppedUnexpectedlyFailure())
-                }
+                mutableState.value = mutableState.value.withIosVpnStatus(managedConnection.status)
             }
         }
     }
@@ -330,6 +327,17 @@ public class IosCompanionInspectionController(
         private const val START_TIMEOUT_MILLIS: Long = 15_000L
         private const val STOP_TIMEOUT_MILLIS: Long = 5_000L
         private const val PREFERENCES_TIMEOUT_MILLIS: Long = 10_000L
+    }
+}
+
+/** Projects native reconnect notifications without turning an enabled VPN into a stopped inspection. */
+internal fun CompanionInspectionState.withIosVpnStatus(status: platform.NetworkExtension.NEVPNStatus): CompanionInspectionState {
+    if (this !is CompanionInspectionState.Running) return this
+    return when (status) {
+        NEVPNStatusConnected -> copy(reconnecting = false)
+        NEVPNStatusReasserting -> copy(reconnecting = true)
+        NEVPNStatusDisconnected, NEVPNStatusInvalid -> CompanionInspectionState.Failed(vpnStoppedUnexpectedlyFailure())
+        else -> this
     }
 }
 

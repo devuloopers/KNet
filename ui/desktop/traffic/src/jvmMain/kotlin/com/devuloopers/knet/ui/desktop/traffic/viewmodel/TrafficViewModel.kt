@@ -27,6 +27,7 @@ import com.devuloopers.knet.application.usecase.breakpoint.PrepareBreakpointRule
 import com.devuloopers.knet.application.contract.breakpoint.PendingBreakpoint
 import com.devuloopers.knet.application.contract.breakpoint.PendingProtocolMessageBreakpoint
 import com.devuloopers.knet.application.usecase.inspection.ObserveInspectionAnnotationsUseCase
+import com.devuloopers.knet.application.contract.traffic.TrafficSortDirection
 import com.devuloopers.knet.application.contract.traffic.TrafficSource
 import com.devuloopers.knet.application.contract.traffic.TrafficPageQuery
 import com.devuloopers.knet.application.contract.traffic.TrafficRecordFilter
@@ -50,6 +51,8 @@ import com.devuloopers.knet.domain.request.descriptor.RequestKindId
 import com.devuloopers.knet.domain.request.usecase.DescribeRequestUseCase
 import com.devuloopers.knet.ui.desktop.httppanel.model.PayloadInspectionSpec
 import com.devuloopers.knet.domain.settings.usecase.ObserveApplicationSettingsUseCase
+import com.devuloopers.knet.domain.workspace.model.TrafficAutoScrollMode
+import com.devuloopers.knet.domain.workspace.model.TrafficAutoScrollSettings
 import com.devuloopers.knet.domain.workspace.model.TrafficTableColumnWidths
 import com.devuloopers.knet.domain.workspace.usecase.GetWorkspaceLayoutUseCase
 import com.devuloopers.knet.domain.workspace.usecase.UpdateWorkspaceLayoutUseCase
@@ -127,9 +130,17 @@ class TrafficViewModel(
         ),
     )
     private var sourceGeneration = 0L
+    private var clearingSource: TrafficSource? = null
     private val sourceWorkspaces = object : LinkedHashMap<TrafficSource, TrafficState>(4, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<TrafficSource, TrafficState>?): Boolean = size > 3
     }
+    // Reading checkpoints survive eviction of expensive dormant row windows.
+    private val sourceReadings = mutableMapOf<TrafficSource, TrafficReadingState>()
+    private val sourceViewports = mutableMapOf<TrafficSource, TrafficViewport>()
+    private val readingRefreshSignals = MutableSharedFlow<Unit>(extraBufferCapacity = 1,
+        onBufferOverflow = kotlinx.coroutines.channels.BufferOverflow.DROP_OLDEST)
+    private var scrollPreferenceRevision = 0L
+    private var scrollPreferenceJob: Job? = null
     private var pendingSources: Map<String, TrafficSource?> = emptyMap()
 
     /** Switches views synchronously, retaining at most four body-free row windows and bounded shared prepared data. */
@@ -137,8 +148,10 @@ class TrafficViewModel(
         val previous = _uiState.value
         if (source == previous.source) return
         sourceGeneration++
+        sourceReadings[previous.source] = previous.reading
+        sourceViewports[previous.source] = previous.viewport
         // Remove the target before admitting the departing view, preserving three dormant windows plus the active one.
-        val restored = sourceWorkspaces.remove(source) ?: TrafficState(source = source)
+        val restored = sourceWorkspaces.remove(source) ?: TrafficState(source = source, reading = sourceReadings[source] ?: TrafficReadingState(), viewport = sourceViewports[source] ?: TrafficViewport())
         sourceWorkspaces[previous.source] = previous.copy(preparedState = InspectorPreparedState(),
             protocolMessages = ProtocolMessagesUiState(), activeBreakpointRules = emptyList(),
             prefilledBreakpointRule = null, prefilledBreakpointProtocolValues = emptyList(), isBreakpointDrawerVisible = false)
@@ -150,8 +163,10 @@ class TrafficViewModel(
             engineState = previous.engineState, localIpAddress = previous.localIpAddress,
             engineErrorMessage = previous.engineErrorMessage, activeBreakpointRules = previous.activeBreakpointRules,
             columnWidths = previous.columnWidths, columnVisibility = previous.columnVisibility,
+            scrollSettings = previous.scrollSettings, readingEpoch = previous.readingEpoch + 1,
+            newerPageBlocked = false,
             preparedState = InspectorPreparedState(), protocolMessages = ProtocolMessagesUiState(),
-            nextPageCursor = null, isPageLoading = false, isClearingHistory = previous.isClearingHistory)
+            isPageLoading = false, isClearingHistory = previous.isClearingHistory)
         publishTrafficProjection()
         filterRefreshJob = viewModelScope.launch { loadTrafficPage(TrafficPageLoadMode.REFRESH_NEWEST) }
     }
@@ -163,13 +178,26 @@ class TrafficViewModel(
      */
     fun clearSource(clearedSource: TrafficSource) {
         if (_uiState.value.isClearingHistory) return
+        clearingSource = clearedSource
+        if (clearedSource == TrafficSource.All || _uiState.value.source == clearedSource) {
+            sourceGeneration++ // Invalidate a page started before this clear; it cannot republish old rows.
+            filterRefreshJob?.cancel()
+        }
         _uiState.update { state -> state.copy(isClearingHistory = true, trafficErrorMessage = null) }
         viewModelScope.launch {
             try {
                 clearTrafficHistoryUseCase.execute(clearedSource)
-                sourceWorkspaces.remove(clearedSource)
+                if (clearedSource == TrafficSource.All) {
+                    sourceReadings.clear()
+                    sourceViewports.clear()
+                    sourceWorkspaces.clear()
+                } else {
+                    sourceReadings.remove(clearedSource)
+                    sourceViewports.remove(clearedSource)
+                    sourceWorkspaces.remove(clearedSource)
+                }
                 val clearedCurrent = pageLoadMutex.withLock {
-                    if (_uiState.value.source != clearedSource) return@withLock false
+                    if (clearedSource != TrafficSource.All && _uiState.value.source != clearedSource) return@withLock false
                     durableAnnotationJob?.cancel()
                     durableTransactions = emptyList()
                     interceptionHistory.clear()
@@ -181,8 +209,13 @@ class TrafficViewModel(
                             selectedTransactionId = null,
                             preparedState = InspectorPreparedState(),
                             nextPageCursor = null,
+                            olderPageAnchor = null,
                             pageGeneration = 0L,
                             facetCounts = TrafficFacetCounts(),
+                            viewport = TrafficViewport(),
+                            readingEpoch = state.readingEpoch + 1,
+                            newerPageBlocked = false,
+                            reading = TrafficReadingState(jumpRevision = state.reading.jumpRevision + 1),
                         )
                     }
                     true
@@ -192,7 +225,7 @@ class TrafficViewModel(
                 preparedStateCache.clear()
                 if (clearedCurrent) {
                     publishTrafficProjection()
-                    loadTrafficPage(TrafficPageLoadMode.REPLACE, expectedSource = clearedSource)
+                    loadTrafficPage(TrafficPageLoadMode.REPLACE, allowDuringClear = true)
                 }
             } catch (error: CancellationException) {
                 throw error
@@ -201,16 +234,89 @@ class TrafficViewModel(
                 _uiState.update { state ->
                     state.copy(trafficErrorMessage = "Traffic history could not be cleared.")
                 }
+                // Rotation may already have changed the catalog, and earlier metadata batches may
+                // have committed. Reconcile the retained window/count once after a failed clear too.
+                if (_uiState.value.source == clearedSource) {
+                    loadTrafficPage(TrafficPageLoadMode.REFRESH_NEWEST, expectedSource = clearedSource, allowDuringClear = true)
+                }
             } finally {
+                clearingSource = null
                 _uiState.update { state -> state.copy(isClearingHistory = false) }
             }
         }
     }
 
-    /** Stores a departing viewport against its source even when Compose disposes it after selection changed. */
-    fun retainViewport(source: TrafficSource, viewport: com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport) {
-        if (_uiState.value.source == source) _uiState.update { it.copy(viewport = viewport) }
-        else sourceWorkspaces[source]?.let { sourceWorkspaces[source] = it.copy(viewport = viewport) }
+    /**
+     * Retains a source's viewport. Only an actual scroll operation changes Smart's live-edge intent;
+     * stable-key relocation caused by incoming data cannot switch Smart off.
+     */
+    fun retainViewport(source: TrafficSource, viewport: TrafficViewport, userScrolled: Boolean = false) {
+        sourceViewports[source] = viewport
+        val current = _uiState.value
+        if (current.source != source) {
+            sourceWorkspaces[source]?.let { sourceWorkspaces[source] = it.copy(viewport = viewport) }
+            return
+        }
+        val reading = current.reading
+        // Only a measured newest row may resume Smart. The top of an old frozen window is not the live edge.
+        val leftTop = userScrolled && !isTrafficAtTop(viewport.row, viewport.offset)
+        val updated = reading.copy(atTop = if (leftTop) false else reading.atTop,
+            windowThrough = if (leftTop && reading.windowThrough == null) reading.observed else reading.windowThrough)
+        _uiState.update { it.copy(viewport = viewport, reading = updated,
+            newerPageBlocked = if (userScrolled && viewport != current.viewport) false else it.newerPageBlocked) }
+    }
+
+    /**
+     * Advances a source's last-seen position from measured, fully visible canonical rows.
+     * Seeing a newer row acknowledges preceding arrivals. Only the actual newest row at the loaded
+     * top, or explicit Jump to latest, acknowledges the entire known insertion snapshot.
+     */
+    fun observeVisibleRows(source: TrafficSource, epoch: Long, visible: TrafficVisibleRows) {
+        val current = _uiState.value
+        if (current.source != source || current.readingEpoch != epoch || clearingSource == source || clearingSource == TrafficSource.All) return
+        val reading = current.reading
+        if (reading.acknowledged == null) return
+        val observed = reading.observed ?: return
+        val visibleIds = visible.transactionIds.toHashSet()
+        val points = current.filteredTransactions.asSequence().filter { it.transactionId in visibleIds }
+            .mapNotNull(TrafficRowUiState::readPoint).toList()
+        val reachedLatest = visible.atWindowTop && reading.latest != null && points.any { it == reading.latest }
+        if (reachedLatest) {
+            if (reading.atTop && reading.acknowledged == observed && reading.seenThrough == null && reading.newCount == 0L) return
+            _uiState.update { state -> state.copy(reading = reading.copy(atTop = true, acknowledged = observed,
+                seenThrough = null, windowThrough = null, newCount = 0, revision = reading.revision + 1)) }
+            return
+        }
+        val seen = reading.nextSeenCheckpoint(points) ?: return
+        _uiState.update { state -> state.copy(reading = reading.copy(
+            seenThrough = seen, revision = reading.revision + 1)) }
+        // Conflate progress updates independently of packet/lifecycle invalidations; never count per pixel.
+        readingRefreshSignals.tryEmit(Unit)
+    }
+
+    private fun changeScrollSettings(settings: TrafficAutoScrollSettings) {
+        val wasFollowing = _uiState.value.autoScroll
+        scrollPreferenceRevision++
+        _uiState.update { it.copy(scrollSettings = settings) }
+        // One writer serializes rapid clicks; every transform uses DataStore's latest workspace.
+        scrollPreferenceJob?.cancel()
+        scrollPreferenceJob = viewModelScope.launch {
+            updateWorkspaceLayoutUseCase.execute { it.copy(trafficAutoScroll = settings) }
+        }
+        if (!wasFollowing && _uiState.value.autoScroll) jumpToLatest()
+        else if (!_uiState.value.autoScroll) _uiState.update {
+            it.copy(reading = it.reading.copy(windowThrough = it.reading.observed))
+        }
+    }
+
+    private fun jumpToLatest() {
+        sourceGeneration++
+        val target = _uiState.value.source
+        _uiState.update { state -> state.copy(reading = state.reading.copy(atTop = true, windowThrough = null), readingEpoch = state.readingEpoch + 1) }
+        filterRefreshJob?.cancel()
+        filterRefreshJob = viewModelScope.launch {
+            loadTrafficPage(TrafficPageLoadMode.REPLACE, expectedSource = target, acknowledge = true)
+        }
     }
 
     private val pageLoadMutex = Mutex()
@@ -320,11 +426,19 @@ class TrafficViewModel(
     }
 
     init {
+        readingRefreshSignals.conflate().onEach { delay(75.milliseconds) }
+            .onEach { loadTrafficPage(TrafficPageLoadMode.REFRESH_NEWEST) }.launchIn(viewModelScope)
+        val preferenceRevisionAtStart = scrollPreferenceRevision
         getWorkspaceLayoutUseCase.execute()
-            .map { settings -> settings.trafficTableColumnWidths }
             .distinctUntilChanged()
-            .onEach { widths ->
-                _uiState.update { current -> current.copy(columnWidths = widths) }
+            .onEach { settings ->
+                _uiState.update { current ->
+                    val scrollSettings = if (preferenceRevisionAtStart == scrollPreferenceRevision)
+                        settings.trafficAutoScroll else current.scrollSettings
+                    current.copy(columnWidths = settings.trafficTableColumnWidths, scrollSettings = scrollSettings,
+                        reading = if (!scrollSettings.follows(current.reading) && current.reading.windowThrough == null)
+                            current.reading.copy(windowThrough = current.reading.observed) else current.reading)
+                }
             }
             .launchIn(viewModelScope)
 
@@ -655,13 +769,12 @@ class TrafficViewModel(
                     _uiState.update { current ->
                         current.copy(
                             sessionId = sessionId,
-                            nextPageCursor = null,
                             totalAvailableCount = 0L,
                             pageGeneration = 0L,
                         )
                     }
                     if (sessionId == null) return@collectLatest
-                    loadTrafficPage(TrafficPageLoadMode.REPLACE)
+                    loadTrafficPage(if (_uiState.value.reading.observed == null) TrafficPageLoadMode.REPLACE else TrafficPageLoadMode.REFRESH_NEWEST)
                     observeTrafficGenerationsUseCase.execute()
                         .filter { generation -> generation.sessionId == sessionId }
                         .conflate()
@@ -698,8 +811,12 @@ class TrafficViewModel(
             is TrafficIntent.ClearFeed -> clearSource(_uiState.value.source)
 
             is TrafficIntent.ToggleAutoScroll -> {
-                _uiState.update { it.copy(autoScroll = !it.autoScroll) }
+                val settings = _uiState.value.scrollSettings
+                changeScrollSettings(settings.copy(manualEnabled = !settings.manualEnabled))
             }
+
+            is TrafficIntent.SetAutoScrollMode -> changeScrollSettings(_uiState.value.scrollSettings.copy(mode = intent.mode))
+            TrafficIntent.JumpToLatest -> jumpToLatest()
 
             is TrafficIntent.DismissEngineError -> {
                 _uiState.update { it.copy(engineErrorMessage = null, trafficErrorMessage = null) }
@@ -707,6 +824,11 @@ class TrafficViewModel(
 
             is TrafficIntent.LoadNextPage -> {
                 viewModelScope.launch { loadTrafficPage(TrafficPageLoadMode.LOAD_OLDER) }
+            }
+
+            TrafficIntent.LoadNewerPage -> {
+                if (!_uiState.value.isPageLoading && _uiState.value.hasNewerTraffic)
+                    viewModelScope.launch { loadTrafficPage(TrafficPageLoadMode.LOAD_NEWER) }
             }
 
             is TrafficIntent.Search -> {
@@ -884,6 +1006,8 @@ class TrafficViewModel(
     }
 
     private fun scheduleFilteredPageRefresh() {
+        sourceGeneration++ // Discard any response for the previous filter before rebasing arrivals.
+        _uiState.update { it.copy(reading = TrafficReadingState(jumpRevision = it.reading.jumpRevision + 1), viewport = TrafficViewport(), readingEpoch = it.readingEpoch + 1, newerPageBlocked = false) }
         filterRefreshJob?.cancel()
         filterRefreshJob = viewModelScope.launch {
             delay(150.milliseconds)
@@ -1028,16 +1152,25 @@ class TrafficViewModel(
     }
 
     /** Loads one keyset page and never retains more than [MAX_TRAFFIC_ROWS] body-free rows. */
-    private suspend fun loadTrafficPage(mode: TrafficPageLoadMode, expectedSource: TrafficSource? = null) {
+    private suspend fun loadTrafficPage(
+        mode: TrafficPageLoadMode,
+        expectedSource: TrafficSource? = null,
+        allowDuringClear: Boolean = false,
+        acknowledge: Boolean = false,
+    ) {
         pageLoadMutex.withLock {
             val before = _uiState.value
+            // Batch invalidations during clear must not repeatedly count/filter the disappearing
+            // history. The explicit post-commit refresh includes new traffic in the replacement writer.
+            if (!allowDuringClear && (clearingSource == before.source || clearingSource == TrafficSource.All)) return
             if (expectedSource != null && before.source != expectedSource) return
             val requestedSourceGeneration = sourceGeneration
             val sessionId = before.sessionId ?: return
             val cursor = when (mode) {
                 TrafficPageLoadMode.REPLACE,
-                TrafficPageLoadMode.REFRESH_NEWEST -> null
-                TrafficPageLoadMode.LOAD_OLDER -> before.nextPageCursor ?: return
+                TrafficPageLoadMode.REFRESH_NEWEST,
+                TrafficPageLoadMode.LOAD_NEWER -> null
+                TrafficPageLoadMode.LOAD_OLDER -> if (before.olderPageAnchor != null) null else before.nextPageCursor ?: return
             }
             _uiState.update { it.copy(isPageLoading = true) }
             try {
@@ -1047,12 +1180,19 @@ class TrafficViewModel(
                         sessionId = null,
                         cursor = cursor,
                         limit = TRAFFIC_PAGE_SIZE,
+                        direction = if (mode == TrafficPageLoadMode.LOAD_NEWER) TrafficSortDirection.OLDEST_FIRST else TrafficSortDirection.NEWEST_FIRST,
+                        newerThan = if (mode == TrafficPageLoadMode.LOAD_NEWER) durableTransactions.mapNotNull(TrafficRowUiState::readPoint).maxOrNull() else null,
+                        olderThan = if (mode == TrafficPageLoadMode.LOAD_OLDER) before.olderPageAnchor else null,
+                        seenThrough = before.reading.seenThrough,
                         searchContains = before.searchQuery.trim().takeIf { it.isNotBlank() },
                         methods = before.selectedMethodFilter.toCanonicalMethods(),
                         statuses = before.selectedStatusFilter.toCanonicalStatuses(),
                         schemes = before.selectedSchemeFilter.toCanonicalSchemes(),
                         protocols = before.selectedHttpVersionFilter.toCanonicalProtocols(),
                         recordFilter = before.selectedTypeFilter.toCanonicalRecordFilter(),
+                        arrivalsAfter = before.reading.acknowledged,
+                        windowThrough = if (!before.autoScroll && (mode == TrafficPageLoadMode.LOAD_OLDER ||
+                            (mode == TrafficPageLoadMode.REFRESH_NEWEST && durableTransactions.isEmpty()))) before.reading.windowThrough else null,
                     ),
                 )
                 val facetCounts = if (mode == TrafficPageLoadMode.LOAD_OLDER) {
@@ -1073,18 +1213,27 @@ class TrafficViewModel(
                 if (latestState.sessionId != sessionId || latestState.source != before.source || sourceGeneration != requestedSourceGeneration) return
                 val httpRows = page.items.map { item ->
                     item.exchange
-                        .toTrafficRowUiState(item.historySequence.value)
+                        .toTrafficRowUiState(item.historySequence.value).copy(readPoint = item.readPoint)
                         .withDescriptor(describeRequestUseCase.execute(item.exchange.request))
                 }
                 val opaqueRows = page.opaqueItems.map { item ->
-                    item.flow.toTrafficRowUiState(item.historySequence.value)
+                    item.flow.toTrafficRowUiState(item.historySequence.value).copy(readPoint = item.readPoint)
                 }
                 val refreshedRows = (httpRows + opaqueRows).sortedWith(
                     compareByDescending<TrafficRowUiState>(TrafficRowUiState::timestamp)
                         .thenByDescending(TrafficRowUiState::sequenceNumber)
                         .thenByDescending(TrafficRowUiState::transactionId),
                 )
-                val sortedRows = mergePageRows(mode, refreshedRows)
+                // Paused windows never admit new rows, even after more than MAX_TRAFFIC_ROWS arrive.
+                // Refresh overlapping lifecycles and keep the reader's stable keys and older-page cursor.
+                val preserveWindow = mode == TrafficPageLoadMode.REFRESH_NEWEST && !latestState.autoScroll && !acknowledge
+                val trimmedOlderTail = !preserveWindow && mode != TrafficPageLoadMode.LOAD_OLDER && mode != TrafficPageLoadMode.REPLACE &&
+                    (refreshedRows.asSequence().map(TrafficRowUiState::transactionId) + durableTransactions.asSequence().map(TrafficRowUiState::transactionId))
+                        .distinct().take(MAX_TRAFFIC_ROWS + 1).count() > MAX_TRAFFIC_ROWS
+                val sortedRows = if (preserveWindow && durableTransactions.isNotEmpty()) {
+                    val refreshedById = refreshedRows.associateBy(TrafficRowUiState::transactionId)
+                    durableTransactions.map { refreshedById[it.transactionId] ?: it }
+                } else mergePageRows(mode, refreshedRows)
                 val filtersStillMatch = latestState.searchQuery == before.searchQuery &&
                     latestState.selectedTypeFilter == before.selectedTypeFilter &&
                     latestState.selectedSchemeFilter == before.selectedSchemeFilter &&
@@ -1095,15 +1244,40 @@ class TrafficViewModel(
                 durableTransactions = sortedRows
                 observeDurableRequestKinds()
                 _uiState.update { current ->
+                    val arrivals = page.arrivals
+                    val acknowledgeAll = acknowledge || current.reading.acknowledged == null
+                    val sameProgress = before.reading.revision == current.reading.revision
+                    val reading = current.reading.copy(
+                        observed = arrivals?.checkpoint ?: current.reading.observed,
+                        latest = page.latest,
+                        atTop = if (!current.autoScroll && page.latest != null &&
+                            page.latest != sortedRows.mapNotNull(TrafficRowUiState::readPoint).maxOrNull()) false else current.reading.atTop,
+                        acknowledged = if (acknowledgeAll) arrivals?.checkpoint ?: current.reading.acknowledged else current.reading.acknowledged,
+                        seenThrough = if (acknowledgeAll) null else current.reading.seenThrough,
+                        newCount = if (acknowledgeAll) 0 else if (sameProgress) arrivals?.count ?: current.reading.newCount else current.reading.newCount,
+                        windowThrough = if (acknowledgeAll && current.autoScroll) null else if (mode == TrafficPageLoadMode.LOAD_NEWER || acknowledge)
+                            arrivals?.checkpoint else current.reading.windowThrough ?: arrivals?.checkpoint,
+                        jumpRevision = current.reading.jumpRevision + if (acknowledge) 1 else 0,
+                        revision = current.reading.revision + if (acknowledgeAll) 1 else 0,
+                    )
                     current.copy(
+                        reading = reading,
+                        olderPageAnchor = when {
+                            mode == TrafficPageLoadMode.REPLACE || mode == TrafficPageLoadMode.LOAD_OLDER -> null
+                            trimmedOlderTail -> sortedRows.mapNotNull(TrafficRowUiState::readPoint).minOrNull()
+                            else -> current.olderPageAnchor
+                        },
+                        newerPageBlocked = if (page.latest != null && page.latest != current.reading.latest) false else current.newerPageBlocked,
                         nextPageCursor = when (mode) {
-                            TrafficPageLoadMode.REFRESH_NEWEST -> current.nextPageCursor ?: page.nextCursor
+                            TrafficPageLoadMode.REFRESH_NEWEST -> if (preserveWindow) current.nextPageCursor else current.nextPageCursor ?: page.nextCursor
+                            TrafficPageLoadMode.LOAD_NEWER -> current.nextPageCursor
                             TrafficPageLoadMode.REPLACE,
                             TrafficPageLoadMode.LOAD_OLDER -> page.nextCursor
                         },
                         totalAvailableCount = when (mode) {
                             TrafficPageLoadMode.REPLACE,
-                            TrafficPageLoadMode.REFRESH_NEWEST -> page.totalCount
+                            TrafficPageLoadMode.REFRESH_NEWEST,
+                            TrafficPageLoadMode.LOAD_NEWER -> page.totalCount
                             TrafficPageLoadMode.LOAD_OLDER -> current.totalAvailableCount
                         },
                         pageGeneration = maxOf(current.pageGeneration, page.generation),
@@ -1114,6 +1288,7 @@ class TrafficViewModel(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
+                if (mode == TrafficPageLoadMode.LOAD_NEWER) _uiState.update { it.copy(newerPageBlocked = true) }
                 KNetLogger.error("TrafficViewModel", error) {
                     "Traffic page query failed for session=${sessionId.value} mode=$mode"
                 }
@@ -1138,7 +1313,8 @@ class TrafficViewModel(
             )
         return when (mode) {
             TrafficPageLoadMode.REPLACE -> error("Replace pages are handled before merging.")
-            TrafficPageLoadMode.REFRESH_NEWEST -> sorted.take(MAX_TRAFFIC_ROWS)
+            TrafficPageLoadMode.REFRESH_NEWEST,
+            TrafficPageLoadMode.LOAD_NEWER -> sorted.take(MAX_TRAFFIC_ROWS)
             TrafficPageLoadMode.LOAD_OLDER -> sorted.takeLast(MAX_TRAFFIC_ROWS)
         }
     }
@@ -1333,7 +1509,6 @@ class TrafficViewModel(
             selectedHttpVersionFilter = HttpVersionFilter.ALL,
             selectedMethodFilter = MethodFilter.ALL,
             selectedStatusFilter = StatusFilter.ALL,
-            autoScroll = true,
             activeInspectorTab = InspectorTab.OVERVIEW,
         )
     }
@@ -1349,6 +1524,7 @@ class TrafficViewModel(
 
     /** Purpose of a persisted page query and its bounded-window merge policy. */
     private enum class TrafficPageLoadMode {
+        LOAD_NEWER,
         REPLACE,
         REFRESH_NEWEST,
         LOAD_OLDER,

@@ -77,7 +77,7 @@ public class KNetPacketTunnelRuntime {
                     controlSession = com.devuloopers.knet.companion.packettunnel.network.NativeCompanionControlSession(startOptions, onRevoked = {
                         provider.cancelTunnelWithError(TunnelFailure.PROXY_IDENTITY_REJECTED.exception().asNSError())
                         reset()
-                    }).also { control -> control.start() }
+                    }, onReconnecting = { reconnecting -> provider.reasserting = reconnecting }).also { control -> control.start() }
                     completionHandler(null)
                 } catch (error: TunnelException) {
                     fail("packet_engine", error, completionHandler)

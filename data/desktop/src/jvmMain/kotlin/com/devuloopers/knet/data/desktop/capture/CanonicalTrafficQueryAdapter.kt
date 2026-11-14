@@ -3,6 +3,10 @@ package com.devuloopers.knet.data.desktop.capture
 import com.devuloopers.knet.application.contract.traffic.BodyChunk
 import com.devuloopers.knet.application.contract.traffic.BodyRange
 import com.devuloopers.knet.application.contract.traffic.BodyStore
+import com.devuloopers.knet.application.contract.traffic.TrafficArrivalCheckpoint
+import com.devuloopers.knet.application.contract.traffic.TrafficArrivals
+import com.devuloopers.knet.application.contract.traffic.TrafficReadPoint
+import com.devuloopers.knet.application.contract.traffic.TrafficRecordId
 import com.devuloopers.knet.application.contract.traffic.TrafficGeneration
 import com.devuloopers.knet.application.contract.traffic.OpaqueTrafficPageItem
 import com.devuloopers.knet.application.contract.traffic.TrafficFacetCounts
@@ -72,9 +76,22 @@ internal class CanonicalTrafficQueryAdapter(
                 generation = currentGenerationValue(),
             )
         }
+        // Sample both tables together, then cap every count and page at that insertion boundary.
+        // A deleted highest row must not make the caller's acknowledged identity move backwards.
+        val sampled = dao.getTrafficArrivalCheckpoint()
+        val checkpoint = TrafficArrivalCheckpoint(
+            maxOf(sampled.exchanges, query.arrivalsAfter?.exchanges ?: 0, query.seenThrough?.observedAt?.exchanges ?: 0),
+            maxOf(sampled.opaqueFlows, query.arrivalsAfter?.opaqueFlows ?: 0, query.seenThrough?.observedAt?.opaqueFlows ?: 0),
+        )
+        val window = query.windowThrough?.let { frozen ->
+            TrafficArrivalCheckpoint(minOf(frozen.exchanges, checkpoint.exchanges), minOf(frozen.opaqueFlows, checkpoint.opaqueFlows))
+        } ?: checkpoint
         val selectedSessionId = query.sessionId ?: sessionId
         val scope = query.cursorScope()
-        val cursor = query.cursor?.let { CanonicalTrafficCursorCodec.decode(it, query.direction, scope) }
+        val suppliedCursor = query.cursor?.let { CanonicalTrafficCursorCodec.decode(it, query.direction, scope) }
+        val cursor = suppliedCursor ?: (query.newerThan ?: query.olderThan)?.let { point ->
+            CanonicalPageKey(point.startedAtEpochMillis, point.recordId.storageKey(), 0, query.direction, scope)
+        }
         val methods = query.methods.map { it.token }.ifEmpty { listOf(UNUSED_METHOD) }
         val statuses = query.statuses.map { it.code }.ifEmpty { listOf(UNUSED_STATUS) }
         val schemes = query.schemes.map { it.token }.ifEmpty { listOf(UNUSED_SCHEME) }
@@ -91,11 +108,17 @@ internal class CanonicalTrafficQueryAdapter(
             query.methods.isEmpty() && query.statuses.isEmpty() && query.protocols.isEmpty() &&
             (query.schemes.isEmpty() || query.schemes.any { it.token.equals("https", ignoreCase = true) })
         val opaqueRecordFilter = query.recordFilter.name
-        val totalCount = cursor?.totalCount ?: run {
+        suspend fun matchingCount(after: TrafficArrivalCheckpoint, applySeen: Boolean = false): Long {
+            val seen = query.seenThrough.takeIf { applySeen }
             val httpCount = if (includeHttpExchanges) {
                 dao.countExchangePageMatches(
-                sourceKind = query.source.storageKind(),
-                sourceDeviceId = (query.source as? TrafficSource.Device)?.id?.value,
+                    sourceKind = query.source.storageKind(),
+                    sourceDeviceId = (query.source as? TrafficSource.Device)?.id?.value,
+                    throughSequence = checkpoint.exchanges,
+                    afterSequence = after.exchanges,
+                    seenAtSequence = seen?.observedAt?.exchanges,
+                    seenAtTimestamp = seen?.position?.startedAtEpochMillis,
+                    seenAtStableKey = seen?.position?.recordId?.storageKey(),
                     sessionId = selectedSessionId?.value,
                     searchPattern = searchPattern,
                     filterMethods = filterMethods,
@@ -118,19 +141,27 @@ internal class CanonicalTrafficQueryAdapter(
                     opaqueRecordFilter,
                     query.source.storageKind(),
                     (query.source as? TrafficSource.Device)?.id?.value,
+                    throughSequence = checkpoint.opaqueFlows,
+                    afterSequence = after.opaqueFlows,
+                    seenAtSequence = seen?.observedAt?.opaqueFlows,
+                    seenAtTimestamp = seen?.position?.startedAtEpochMillis,
+                    seenAtStableKey = seen?.position?.recordId?.storageKey(),
                 )
             } else {
                 0L
             }
-            httpCount + opaqueCount
+            return httpCount + opaqueCount
         }
-        val exchangeRows = if (!includeHttpExchanges) emptyList() else when (query.direction) {
+        val totalCount = suppliedCursor?.totalCount ?: matchingCount(TrafficArrivalCheckpoint())
+        val arrivalCount = query.arrivalsAfter?.takeUnless { it == checkpoint }?.let { matchingCount(it, applySeen = true) } ?: 0L
+        suspend fun loadExchangeRows(direction: TrafficSortDirection, upper: TrafficArrivalCheckpoint, key: CanonicalPageKey?, limit: Int) = if (!includeHttpExchanges) emptyList() else when (direction) {
             TrafficSortDirection.NEWEST_FIRST -> dao.getNewestExchangeChronologicalPage(
                 sourceKind = query.source.storageKind(),
                 sourceDeviceId = (query.source as? TrafficSource.Device)?.id?.value,
+                throughSequence = upper.exchanges,
                 sessionId = selectedSessionId?.value,
-                cursorStartedAt = cursor?.startedAtEpochMillis,
-                cursorStableKey = cursor?.stableKey,
+                cursorStartedAt = key?.startedAtEpochMillis,
+                cursorStableKey = key?.stableKey,
                 searchPattern = searchPattern,
                 filterMethods = filterMethods,
                 methods = methods,
@@ -141,14 +172,15 @@ internal class CanonicalTrafficQueryAdapter(
                 filterProtocols = filterProtocols,
                 protocols = protocols,
                 failedOnly = if (query.recordFilter == TrafficRecordFilter.FAILED) 1 else 0,
-                limit = query.limit + 1,
+                limit = limit,
             )
             TrafficSortDirection.OLDEST_FIRST -> dao.getOldestExchangeChronologicalPage(
                 sourceKind = query.source.storageKind(),
                 sourceDeviceId = (query.source as? TrafficSource.Device)?.id?.value,
+                throughSequence = upper.exchanges,
                 sessionId = selectedSessionId?.value,
-                cursorStartedAt = cursor?.startedAtEpochMillis,
-                cursorStableKey = cursor?.stableKey,
+                cursorStartedAt = key?.startedAtEpochMillis,
+                cursorStableKey = key?.stableKey,
                 searchPattern = searchPattern,
                 filterMethods = filterMethods,
                 methods = methods,
@@ -159,35 +191,39 @@ internal class CanonicalTrafficQueryAdapter(
                 filterProtocols = filterProtocols,
                 protocols = protocols,
                 failedOnly = if (query.recordFilter == TrafficRecordFilter.FAILED) 1 else 0,
-                limit = query.limit + 1,
+                limit = limit,
             )
         }
-        val opaqueRows = if (includeOpaqueFlows) {
-            when (query.direction) {
+        suspend fun loadOpaqueRows(direction: TrafficSortDirection, upper: TrafficArrivalCheckpoint, key: CanonicalPageKey?, limit: Int) = if (includeOpaqueFlows) {
+            when (direction) {
                 TrafficSortDirection.NEWEST_FIRST -> dao.getNewestOpaqueFlowChronologicalPage(
                 sourceKind = query.source.storageKind(),
                 sourceDeviceId = (query.source as? TrafficSource.Device)?.id?.value,
+                    throughSequence = upper.opaqueFlows,
                     sessionId = selectedSessionId?.value,
-                    cursorStartedAt = cursor?.startedAtEpochMillis,
-                    cursorStableKey = cursor?.stableKey,
+                    cursorStartedAt = key?.startedAtEpochMillis,
+                    cursorStableKey = key?.stableKey,
                     searchPattern = searchPattern,
                     recordFilter = opaqueRecordFilter,
-                    limit = query.limit + 1,
+                    limit = limit,
                 )
                 TrafficSortDirection.OLDEST_FIRST -> dao.getOldestOpaqueFlowChronologicalPage(
                 sourceKind = query.source.storageKind(),
                 sourceDeviceId = (query.source as? TrafficSource.Device)?.id?.value,
+                    throughSequence = upper.opaqueFlows,
                     sessionId = selectedSessionId?.value,
-                    cursorStartedAt = cursor?.startedAtEpochMillis,
-                    cursorStableKey = cursor?.stableKey,
+                    cursorStartedAt = key?.startedAtEpochMillis,
+                    cursorStableKey = key?.stableKey,
                     searchPattern = searchPattern,
                     recordFilter = opaqueRecordFilter,
-                    limit = query.limit + 1,
+                    limit = limit,
                 )
             }
         } else {
             emptyList()
         }
+        val exchangeRows = loadExchangeRows(query.direction, window, cursor, query.limit + 1)
+        val opaqueRows = loadOpaqueRows(query.direction, window, cursor, query.limit + 1)
         val comparator = compareBy<CanonicalMergedTrafficRow>(
             CanonicalMergedTrafficRow::startedAtEpochMillis,
             CanonicalMergedTrafficRow::stableKey,
@@ -199,6 +235,13 @@ internal class CanonicalTrafficQueryAdapter(
                 opaqueRows.map(CanonicalMergedTrafficRow::Opaque)
             ).sortedWith(comparator)
         val selectedRows = mergedRows.take(query.limit)
+        val latest = if (query.direction == TrafficSortDirection.NEWEST_FIRST && cursor == null && window == checkpoint) {
+            mergedRows.firstOrNull()
+        } else {
+            (loadExchangeRows(TrafficSortDirection.NEWEST_FIRST, checkpoint, null, 1).map(CanonicalMergedTrafficRow::Exchange) +
+                loadOpaqueRows(TrafficSortDirection.NEWEST_FIRST, checkpoint, null, 1).map(CanonicalMergedTrafficRow::Opaque))
+                .maxWithOrNull(compareBy(CanonicalMergedTrafficRow::startedAtEpochMillis, CanonicalMergedTrafficRow::stableKey))
+        }
         val historySequences = selectedRows
             .map(CanonicalMergedTrafficRow::stableKey)
             .takeIf { stableKeys -> stableKeys.isNotEmpty() }
@@ -251,6 +294,8 @@ internal class CanonicalTrafficQueryAdapter(
             },
             totalCount = totalCount,
             generation = currentGenerationValue(),
+            arrivals = TrafficArrivals(checkpoint, arrivalCount),
+            latest = latest?.readPoint(),
         )
     }
 
@@ -414,4 +459,18 @@ private fun TrafficPageQuery.cursorScope(): String {
         protocols.map { protocol -> protocol.token }.sorted().joinToString(","), recordFilter.name)
     val framed = fields.joinToString("") { value -> "${value.length}:$value" }
     return Base64.UrlSafe.encode(java.security.MessageDigest.getInstance("SHA-256").digest(framed.encodeToByteArray()))
+}
+
+/** Namespaces retain the exact tie-break order used by the merged canonical SQL queries. */
+private fun TrafficRecordId.storageKey(): String = when (this) {
+    is TrafficRecordId.Exchange -> "http:${id.value}"
+    is TrafficRecordId.Opaque -> "opaque:${id.value}"
+}
+
+/** Carries only bounded, body-free positioning metadata into the application contract. */
+private fun CanonicalMergedTrafficRow.readPoint(): TrafficReadPoint = when (this) {
+    is CanonicalMergedTrafficRow.Exchange -> TrafficReadPoint(TrafficRecordId.Exchange(ExchangeId(row.exchange.id)),
+        startedAtEpochMillis, TrafficCaptureSequence(row.exchange.captureSequence))
+    is CanonicalMergedTrafficRow.Opaque -> TrafficReadPoint(TrafficRecordId.Opaque(OpaqueFlowId(row.flow.id)),
+        startedAtEpochMillis, TrafficCaptureSequence(row.flow.captureSequence))
 }

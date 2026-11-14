@@ -4,6 +4,7 @@ import com.devuloopers.knet.companion.application.contract.*
 import com.devuloopers.knet.companion.model.*
 import com.devuloopers.knet.companion.packettunnel.options.*
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.*
 import kotlin.test.*
 import kotlin.uuid.Uuid
@@ -24,7 +25,11 @@ class NativeCompanionControlSessionTest {
             configuration = PacketConditionConfiguration.Disabled))
         runCurrent()
         assertEquals(CompanionPolicyAcknowledgement.APPLIED, connection.sent.last().acknowledgement)
-        advanceTimeBy(15_000); runCurrent()
+        repeat(8) {
+            advanceTimeBy(2_000)
+            connection.frames.send(CompanionSessionMessage(CompanionSessionMessageKind.POLICY_RENEWAL, run, revision = 2))
+            runCurrent()
+        }
         assertTrue(connection.sent.any { it.kind == CompanionSessionMessageKind.HEARTBEAT })
         session.close(); runCurrent()
         assertTrue(connection.closed)
@@ -43,6 +48,47 @@ class NativeCompanionControlSessionTest {
         assertEquals(1, revoked); assertTrue(connection.closed)
         advanceTimeBy(30_000); runCurrent()
         assertEquals(1, attempts)
+        session.close()
+    }
+    @Test fun nativeSocketCancellationReconnectsButExplicitStopDoesNot() = runTest {
+        val connections = mutableListOf<Connection>()
+        val reconnecting = mutableListOf<Boolean>()
+        val session = NativeCompanionControlSession(options(), {}, CompanionSessionTransport { _, _ ->
+            Connection().also { connections += it }
+        }, backgroundScope, reconnecting::add)
+        session.start(); runCurrent()
+        val first = connections.single()
+        first.frames.cancel(CancellationException("Desktop stopped")); runCurrent()
+        assertEquals(true, reconnecting.last())
+        advanceTimeBy(1_000); runCurrent()
+        assertEquals(2, connections.size)
+        assertEquals(false, reconnecting.last())
+        assertEquals(first.sent.first().runId, connections.last().sent.first().runId)
+        session.close(); runCurrent()
+        advanceTimeBy(60_000); runCurrent()
+        assertEquals(2, connections.size)
+        assertTrue(connections.all { it.closed })
+    }
+    @Test fun nativeSilentPeerIsReplacedWithoutPacketShapingSupport() = runTest {
+        val connections = mutableListOf<Connection>()
+        val session = NativeCompanionControlSession(options(), {}, CompanionSessionTransport { _, _ ->
+            Connection().also { connections += it }
+        }, backgroundScope)
+        session.start(); runCurrent()
+        advanceTimeBy(12_000); runCurrent()
+        assertEquals(2, connections.size)
+        assertTrue(connections.first().closed)
+        session.close(); runCurrent()
+    }
+    @Test fun nativeUnauthorizedPairingDoesNotLoop() = runTest {
+        var attempts = 0
+        var revoked = 0
+        val session = NativeCompanionControlSession(options(), { revoked++ }, CompanionSessionTransport { _, _ ->
+            attempts++; throw CompanionSessionException(CompanionSessionFailure.UNAUTHORIZED)
+        }, backgroundScope)
+        session.start(); runCurrent()
+        advanceTimeBy(60_000); runCurrent()
+        assertEquals(1, attempts); assertEquals(1, revoked)
         session.close()
     }
     private class Connection : CompanionSessionConnection {

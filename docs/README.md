@@ -28,6 +28,9 @@ Use these documents when deciding what the repository currently owns or supports
 When prose and the runtime catalog disagree, use the more conservative status and correct the prose. A capability
 is not release-supported merely because source code or a simulator build exists.
 
+Traffic reading controls and arrival-count behavior are documented in
+[`traffic_auto_scroll.md`](traffic_auto_scroll.md).
+
 ## Companion status
 
 Android and iOS implementations now exist for pairing, protected state, discovery, certificate setup/readiness,
@@ -37,8 +40,13 @@ compile/test shared and platform boundaries, assemble the Android debug app, and
 The iOS/iPadOS app is `EXPERIMENTAL`; physical iOS packet-tunnel inspection remains `UNAVAILABLE` until a properly
 entitled build is qualified on devices.
 
+Cleartext HTTP/2 and native gRPC carrier behavior and qualification are documented in
+[`companion_h2c_forwarding.md`](companion_h2c_forwarding.md).
+
 See [`companion_connectivity_kmp.md`](companion_connectivity_kmp.md) and
 [`companion_certificate_readiness.md`](companion_certificate_readiness.md) for current implementation boundaries.
+See [`companion_desktop_restart_recovery.md`](companion_desktop_restart_recovery.md) for VPN-owned
+control recovery, presence and restart verification.
 
 ## Historical and planning records
 
@@ -49,6 +57,8 @@ inside them are not current capability claims:
 - [`target_architecture_and_implementation_plan.md`](target_architecture_and_implementation_plan.md)
 - [`implementation_plan.md`](implementation_plan.md)
 - [`multi_device_qualification.md`](multi_device_qualification.md) — multi-device automated evidence, resource bounds and hardware verification checklist.
+- [`protocol_qualification_2026-11-14.md`](protocol_qualification_2026-11-14.md) — 1,045-case protocol gate run, connected Android matrix, isolated TLS/WSS/gRPC controls and remaining release blockers.
+- [`physical_android_qualification_2026-11-14.md`](physical_android_qualification_2026-11-14.md) — connected Samsung results, measured global/per-host shaping, lifecycle recovery and open data-path defects.
 - [`multi_device_implementation_plan.md`](multi_device_implementation_plan.md) — implemented authenticated device
   presence, separate Traffic views and native-backed macOS device tabs; physical qualification remains pending.
 - [`network_conditions_implementation_plan.md`](network_conditions_implementation_plan.md)
@@ -66,3 +76,9 @@ checking the current module contracts, runtime catalog, and focused gate.
   dependency graph.
 - [`assets/knet-companion-setup-flow.svg`](assets/knet-companion-setup-flow.svg) describes the implemented
   pre-release setup path; it does not imply physical-device release qualification.
+
+- [Connection EOF cleanup and upgraded-flow qualification](connection_lifecycle_qualification.md) documents
+  keep-alive/admission cleanup, multiplexed response drain, and WebSocket close regression evidence.
+
+- [Traffic Clear performance](traffic_clear_performance.md) covers v38 reference indexes, metadata completion,
+  deferred file cleanup/retry, UI refresh coalescing, migration and scale-test evidence.

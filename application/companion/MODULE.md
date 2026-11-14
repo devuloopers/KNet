@@ -61,3 +61,9 @@ Endpoint recovery preserves selection when authenticating an inactive saved desk
 ## Multi-device workspace and control sessions (2026-11-13)
 
 MaintainCompanionSessionUseCase owns one VPN control run, bounded reconnects, identity-change cancellation, revisioned native policy acknowledgements and the independent policy safety lease. Older peers retain authenticated HTTPS policy recovery.
+
+Control liveness has a separate ten-second receive deadline even when native shaping is unsupported.
+Socket-local cancellation is recoverable; VPN cancellation and unchanged rejected credentials terminate
+the owner. `ObserveCompanionConnectionUseCase` combines run-fenced control observations with the carrier
+probe while inspection is running, without owning another background scope. See
+`docs/companion_desktop_restart_recovery.md` for restart qualification and physical checks.

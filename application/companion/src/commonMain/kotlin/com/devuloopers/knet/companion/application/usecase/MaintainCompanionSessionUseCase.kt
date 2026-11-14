@@ -4,6 +4,9 @@ import com.devuloopers.knet.companion.application.contract.*
 import com.devuloopers.knet.companion.model.*
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.random.Random
@@ -21,9 +24,20 @@ public class MaintainCompanionSessionUseCase(
     private val fallback: MaintainCompanionPacketPolicyUseCase,
     private val timeSource: TimeSource = TimeSource.Monotonic,
 ) {
+    private val mutableState = MutableStateFlow<CompanionSessionObservation?>(null)
+
+    /** Current VPN-owned control health. Idle and legacy HTTPS peers have no WebSocket observation. */
+    public val state: kotlinx.coroutines.flow.StateFlow<CompanionSessionObservation?> = mutableState.asStateFlow()
+
     /** Runs for the exact VPN identity until cancelled, switched, unauthorized or the native owner stops. */
     public suspend fun execute(registration: CompanionRegistration, runId: String,
         initiallyApplied: PacketConditionConfiguration, sink: CompanionPacketPolicySink): Unit = coroutineScope {
+        require(runId.isNotBlank())
+        mutableState.value = CompanionSessionObservation(registration.desktopId, runId, CompanionSessionPhase.CONNECTING)
+        var rejected = false
+        fun report(phase: CompanionSessionPhase) {
+            mutableState.update { observed -> if (observed?.runId == runId) observed.copy(phase = phase) else observed }
+        }
         val policyLock = Mutex()
         var applied = initiallyApplied
         var lastFresh = timeSource.markNow()
@@ -53,8 +67,10 @@ public class MaintainCompanionSessionUseCase(
                 if (!sameIdentity(registration, current)) return@coroutineScope
                 current!!
                 var connection: CompanionSessionConnection? = null
+                var attemptedCredential: String? = null
                 try {
                     val credential = credentials.read(current.credentialReference) ?: return@coroutineScope
+                    attemptedCredential = credential
                     connection = withTimeout(10_000L) { transport.connect(CompanionSessionAccess.fromRegistration(current), credential) }
                     val session = connection
                     policyLock.withLock { currentConnection = session }
@@ -70,6 +86,7 @@ public class MaintainCompanionSessionUseCase(
                         send(CompanionSessionMessageKind.START)
                         val welcome = withTimeout(10_000L) { session.receive() }
                         require(welcome.kind == CompanionSessionMessageKind.WELCOME && welcome.runId == runId)
+                        report(CompanionSessionPhase.CONNECTED)
                         val connectedAt = timeSource.markNow()
                         var revision = 0L
                         val identityWatcher = launch {
@@ -88,7 +105,9 @@ public class MaintainCompanionSessionUseCase(
                         }
                         try {
                             while (isActive) {
-                                val message = session.receive()
+                                // The policy lease can be disabled by UNSUPPORTED. Control liveness must still
+                                // detect a half-open connection and perform a fresh START after desktop restart.
+                                val message = withTimeout(CompanionSessionProtocol.RECEIVE_TIMEOUT_MILLIS) { session.receive() }
                                 require(message.runId == runId)
                                 if (registrations.activeRegistration.value != current) break
                                 when (message.kind) {
@@ -111,6 +130,7 @@ public class MaintainCompanionSessionUseCase(
                                                 releasePolicy(sink)
                                                 applied = PacketConditionConfiguration.Disabled
                                                 leaseValid = false
+                                                revision = message.revision
                                             }
                                             result
                                         }
@@ -128,7 +148,7 @@ public class MaintainCompanionSessionUseCase(
                                     }
                                     CompanionSessionMessageKind.REVOKED -> {
                                         if (credentials.read(current.credentialReference) != credential) break
-                                        throw SessionStopped()
+                                        throw SessionStopped(rejected = true)
                                     }
                                     else -> throw CompanionSessionException(CompanionSessionFailure.INVALID_MESSAGE)
                                 }
@@ -142,13 +162,27 @@ public class MaintainCompanionSessionUseCase(
                             }
                         } }
                     }
-                } catch (_: SessionStopped) { return@coroutineScope }
+                } catch (stopped: SessionStopped) {
+                    rejected = stopped.rejected
+                    if (rejected) report(CompanionSessionPhase.REJECTED)
+                    return@coroutineScope
+                }
                 catch (_: TimeoutCancellationException) { /* Bounded handshake or send expired; reconnect below. */ }
-                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: CancellationException) {
+                    // Ktor/native socket jobs can cancel their receive channel without cancelling the VPN.
+                    // Preserve actual owner cancellation; a connection-local cancellation is recoverable.
+                    currentCoroutineContext().ensureActive()
+                }
                 catch (failure: CompanionSessionException) {
-                    if (failure.reason == CompanionSessionFailure.UNAUTHORIZED) return@coroutineScope
+                    if (failure.reason == CompanionSessionFailure.UNAUTHORIZED &&
+                        credentials.read(current.credentialReference) == attemptedCredential) {
+                        rejected = true
+                        report(CompanionSessionPhase.REJECTED)
+                        return@coroutineScope
+                    }
                     if (failure.reason == CompanionSessionFailure.UNSUPPORTED) {
                         watchdog.cancelAndJoin()
+                        mutableState.update { observed -> observed?.takeUnless { it.runId == runId } }
                         fallback.execute(current, applied, sink)
                         return@coroutineScope
                     }
@@ -158,6 +192,7 @@ public class MaintainCompanionSessionUseCase(
                     connection?.let { releaseConnection(it) }
                 } }
                 if (isActive) {
+                    report(CompanionSessionPhase.RECONNECTING)
                     val backoff = minOf(5000L, 500L shl minOf(attempt++, 3))
                     delay(backoff + Random.nextLong(0L, 251L))
                 }
@@ -165,10 +200,11 @@ public class MaintainCompanionSessionUseCase(
         } finally { withContext(NonCancellable) {
             watchdog.cancelAndJoin()
             releasePolicy(sink)
+            if (!rejected) mutableState.update { observed -> observed?.takeUnless { it.runId == runId } }
         } }
     }
 
-    private class SessionStopped : Exception()
+    private class SessionStopped(val rejected: Boolean = false) : Exception()
 
     private suspend fun releaseConnection(connection: CompanionSessionConnection) = withContext(NonCancellable) {
         runCatching { withTimeoutOrNull(1_000L) { connection.close() } }

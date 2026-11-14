@@ -11,14 +11,21 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.devuloopers.knet.application.contract.proxy.ProxyRuntimeState
 import com.devuloopers.knet.ui.core.components.switch.KNetSwitch
+import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdown
+import com.devuloopers.knet.ui.core.components.dropdown.KNetDropdownSize
+import com.devuloopers.knet.domain.workspace.model.TrafficAutoScrollSettings
+import com.devuloopers.knet.domain.workspace.model.TrafficAutoScrollMode
 import com.devuloopers.knet.ui.core.components.toolbar.KNetToolbar
 import com.devuloopers.knet.ui.core.components.toolbar.ToolbarGroup
+import com.devuloopers.knet.ui.core.foundation.animation.InlineRevealAnimation
 import com.devuloopers.knet.ui.core.foundation.pointer.handCursor
 import com.devuloopers.knet.ui.core.foundation.theme.KNetTheme
 import com.devuloopers.knet.ui.desktop.traffic.model.CaptureState
@@ -29,7 +36,7 @@ import com.devuloopers.knet.ui.desktop.traffic.model.CaptureState
 data class TrafficToolbarState(
     val captureState: CaptureState = CaptureState.STOPPED,
     val engineState: ProxyRuntimeState = ProxyRuntimeState.Stopped,
-    val autoScroll: Boolean = true,
+    val scrollSettings: TrafficAutoScrollSettings = TrafficAutoScrollSettings(),
     val localIpAddress: String = "127.0.0.1",
     val isClearingHistory: Boolean = false,
 )
@@ -41,7 +48,8 @@ data class TrafficToolbarActions(
     val onStartCapture: () -> Unit = {},
     val onPauseCapture: () -> Unit = {},
     val onClearFeed: () -> Unit = {},
-    val onAutoScrollToggle: () -> Unit = {}
+    val onAutoScrollToggle: () -> Unit = {},
+    val onAutoScrollModeSelected: (TrafficAutoScrollMode) -> Unit = {},
 )
 
 /**
@@ -208,14 +216,41 @@ fun TrafficToolbar(
                     Box(Modifier.widthIn(max = maximumConditionsWidth)) {
                         networkConditionsControl()
                     }
-                    KNetSwitch(
-                        checked = state.autoScroll,
-                        onCheckedChange = { actions.onAutoScrollToggle() },
-                        label = "Auto Scroll"
-                    )
+                    TrafficAutoScrollControl(state.scrollSettings, actions.onAutoScrollModeSelected, actions.onAutoScrollToggle)
                 }
             }
         },
         content = {},
     )
+}
+
+/** Shared-theme Auto scroll selector; the Manual strategy exposes its explicit switch beside the mode. */
+@Composable
+internal fun TrafficAutoScrollControl(
+    settings: TrafficAutoScrollSettings,
+    onModeSelected: (TrafficAutoScrollMode) -> Unit,
+    onManualToggle: () -> Unit,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Text("Auto scroll", modifier = Modifier.padding(end = KNetTheme.spacing.sm), style = KNetTheme.typography.bodySmall, color = KNetTheme.colors.textSecondary,
+            maxLines = 1, softWrap = false)
+        KNetDropdown(selectedItem = settings.mode, items = TrafficAutoScrollMode.entries,
+            onItemSelected = onModeSelected, size = KNetDropdownSize.Compact, animateSelection = true,
+            itemText = { mode -> when (mode) { TrafficAutoScrollMode.SMART -> "Smart"; TrafficAutoScrollMode.MANUAL -> "Manual" } },
+            itemDescription = { mode -> when (mode) {
+                TrafficAutoScrollMode.SMART -> "Follows new traffic at the top. Scrolling into history pauses it; returning to the top resumes it."
+                TrafficAutoScrollMode.MANUAL -> "Use the switch to turn auto scroll on or off. Jumping to new traffic leaves the switch unchanged."
+            } })
+        InlineRevealAnimation(visible = settings.mode == TrafficAutoScrollMode.MANUAL) {
+            Box(Modifier.padding(start = KNetTheme.spacing.sm)) {
+                KNetSwitch(
+                    checked = settings.manualEnabled,
+                    onCheckedChange = { if (settings.mode == TrafficAutoScrollMode.MANUAL) onManualToggle() },
+                    enabled = settings.mode == TrafficAutoScrollMode.MANUAL,
+                    modifier = Modifier.semantics { contentDescription = "Manual auto scroll" },
+                    label = if (settings.manualEnabled) "On" else "Off",
+                )
+            }
+        }
+    }
 }

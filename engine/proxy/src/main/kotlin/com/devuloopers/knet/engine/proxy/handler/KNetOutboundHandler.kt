@@ -23,6 +23,8 @@ import io.netty.buffer.Unpooled
 import io.netty.channel.Channel
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.SimpleChannelInboundHandler
+import io.netty.channel.socket.ChannelInputShutdownEvent
+import io.netty.handler.ssl.SslCloseCompletionEvent
 import io.netty.handler.codec.http.DefaultFullHttpResponse
 import io.netty.handler.codec.http.DefaultHttpContent
 import io.netty.handler.codec.http.DefaultHttpResponse
@@ -85,6 +87,7 @@ internal class KNetOutboundHandler(
     private val completionPublished = AtomicBoolean(false)
     private var lastClientWrite: io.netty.channel.ChannelFuture? = null
     private var responseComplete: Boolean = false
+    private var responseEndObserved: Boolean = false
     private var provisionalResponseInProgress: Boolean = false
     private var responseObservedBytes: Long = 0L
     private var responseContentEncoding: ContentEncoding? = null
@@ -144,6 +147,7 @@ internal class KNetOutboundHandler(
             acceptValidatedUpgradeResponse(context, response)
             return
         }
+        responseEndObserved = true
         if (streamTransformer != null) {
             val head = DefaultHttpResponse(response.protocolVersion(), response.status())
             head.headers().set(response.headers())
@@ -318,6 +322,7 @@ internal class KNetOutboundHandler(
             if (content is LastHttpContent) provisionalResponseInProgress = false
             return
         }
+        if (content is LastHttpContent) responseEndObserved = true
         val transformer = streamTransformer
         if (transformer != null) {
             val payload = ByteArray(content.content().readableBytes())
@@ -405,7 +410,7 @@ internal class KNetOutboundHandler(
         }
         downstreamWrite.addListener { future ->
             context.executor().execute {
-                if (future.isSuccess && context.channel().isActive && !responseComplete) {
+                if (future.isSuccess && (context.channel().isActive || responseEndObserved) && !responseComplete) {
                     processNextResponseTransform(context)
                 } else if (!future.isSuccess) {
                     terminateTransformedResponse(
@@ -519,7 +524,21 @@ internal class KNetOutboundHandler(
         context.close()
     }
 
+    /** A transport EOF is terminal unless the decoder already accepted the entire final response. */
+    override fun userEventTriggered(context: ChannelHandlerContext, event: Any) {
+        if ((event === ChannelInputShutdownEvent.INSTANCE || event is SslCloseCompletionEvent && event.isSuccess) &&
+            !responseEndObserved && !responseComplete
+        ) exceptionCaught(context, IOException("Upstream input ended before a complete response."))
+        super.userEventTriggered(context, event)
+    }
+
     override fun channelInactive(context: ChannelHandlerContext) {
+        // A complete wire response can still be waiting for an asynchronous interception decision
+        // or a downstream write. Transport close must not discard that already accepted response.
+        if (responseEndObserved) {
+            super.channelInactive(context)
+            return
+        }
         streamTransformer?.cancel(TrafficTerminationReason.Transport.UPSTREAM_RESPONSE_FAILED)
         transformQueue.clear()
         if (!responseComplete && !completionPublished.get()) {

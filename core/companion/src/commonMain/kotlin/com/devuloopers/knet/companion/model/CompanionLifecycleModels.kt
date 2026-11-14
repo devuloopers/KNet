@@ -57,6 +57,8 @@ public sealed interface CompanionInspectionState {
         public val mode: CompanionInspectionMode,
         public val startedAtEpochMillis: Long,
         public val fullHttpsInspection: Boolean,
+        /** Native extension is restoring its desktop connection while the VPN interface stays enabled. */
+        public val reconnecting: Boolean = false,
     ) : CompanionInspectionState
 
     public data object Stopping : CompanionInspectionState

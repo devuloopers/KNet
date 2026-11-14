@@ -28,11 +28,20 @@ object PipelineHandlerNames {
     /** TLS application-protocol negotiation handler selecting HTTP/1 or HTTP/2. */
     const val ALPN = "alpn"
 
+    /** Bounded CONNECT preface selector preceding the existing ClientHello policy handler. */
+    const val CONNECT_HTTP2_PREFACE = "connectHttp2Preface"
+
     /** Connection-scoped HTTP/2 frame codec and stream multiplexer. */
     const val HTTP2_CODEC = "http2Codec"
 
     /** Connection-scoped dispatcher that creates one child channel per HTTP/2 stream. */
     const val HTTP2_MULTIPLEX = "http2Multiplex"
+
+    /** Parent EOF owner preserving complete HTTP/2 requests while their responses drain. */
+    const val HTTP2_INPUT_DRAIN = "http2InputDrain"
+
+    /** Child write/close accounting paired with the parent EOF owner. */
+    const val HTTP2_STREAM_DRAIN = "http2StreamDrain"
 
     /** Stream-scoped adapter between HTTP/2 frames and canonical Netty HTTP objects. */
     const val HTTP2_STREAM_CODEC = "http2StreamCodec"

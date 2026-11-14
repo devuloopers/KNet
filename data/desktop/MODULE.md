@@ -125,3 +125,8 @@ No wall-clock or per-direction sequence is used to correlate multiplexed operati
 Canonical SQL adapters scope history, facets, cursors and bounded crash-safe deletion by verified source. Primitive SourceTrafficMeters observe real proxy socket bytes independently of capture admission. Workspace selection uses existing DataStore preferences.
 
 `DesktopDeviceTrafficHistoryAdapter` observes indexed Room existence projections for device tab eligibility across all retained sessions. Membership includes zero-byte TLS records, deduplicates identities and loads no traffic payloads or filtered page windows.
+
+Traffic Clear completes after durable metadata removal/outbox admission; file convergence belongs to the
+process-scoped reactive BodyDeletionWorker. It drains bounded batches, acknowledges successful files together,
+persists failed-file retry deadlines, and shares serialization with startup recovery. See
+[Traffic Clear performance](../../docs/traffic_clear_performance.md).

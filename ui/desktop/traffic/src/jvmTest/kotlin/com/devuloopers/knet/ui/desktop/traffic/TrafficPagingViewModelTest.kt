@@ -636,6 +636,452 @@ class TrafficPagingViewModelTest {
         } finally { owner.clear() }
     }
 
+    @Test
+    fun `clear coalesces batch invalidations and refreshes replacement traffic once`() = runTest(dispatcher) {
+        val changes = MutableSharedFlow<TrafficGeneration>(extraBufferCapacity = 2_048)
+        var rows = listOf(snapshot("before-clear", 1))
+        var reads = 0
+        val port = object : TrafficQuery by FakePagedPort(0) {
+            override val generations: Flow<TrafficGeneration> = changes
+            override suspend fun query(query: TrafficPageQuery): TrafficPage {
+                reads++
+                return TrafficPage(rows.map { TrafficPageItem(TrafficCaptureSequence(1), TrafficHistorySequence(1), it) },
+                    nextCursor = null, totalCount = rows.size.toLong(), generation = 0)
+            }
+        }
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val maintenance = object : TrafficMaintenance {
+            override suspend fun clearTerminalTraffic() { entered.complete(Unit); release.await(); rows = listOf(snapshot("new-live", 2)) }
+        }
+        val owner = androidx.lifecycle.ViewModelStore()
+        try {
+            val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = port, customTrafficMaintenance = maintenance)
+            owner.put("traffic", viewModel)
+            advanceUntilIdle()
+            val before = reads
+            viewModel.processIntent(TrafficIntent.ClearFeed)
+            runCurrent(); entered.await()
+            repeat(20) { index -> changes.emit(TrafficGeneration(CaptureSessionId("fake-session"), index.toLong() + 2)) }
+            advanceUntilIdle()
+            assertEquals(before, reads, "Clear batch invalidations must not requery disappearing history")
+            release.complete(Unit)
+            advanceUntilIdle()
+            assertEquals(before + 1, reads)
+            assertEquals("new-live", viewModel.uiState.value.transactions.single().transactionId)
+            assertEquals(false, viewModel.uiState.value.isClearingHistory)
+        } finally { owner.clear() }
+    }
+
+    @Test
+    fun `failed clear refreshes counts when capture rotation already changed the catalog`() = runTest(dispatcher) {
+        val latest = MutableStateFlow<CaptureSessionId?>(CaptureSessionId("fake-session"))
+        val catalog = object : TrafficSessionCatalog { override val latestSessionId: Flow<CaptureSessionId?> = latest }
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val maintenance = object : TrafficMaintenance {
+            override suspend fun clearTerminalTraffic() {
+                latest.value = CaptureSessionId("replacement")
+                entered.complete(Unit)
+                release.await()
+                error("Synthetic metadata failure after rotation")
+            }
+        }
+        val owner = androidx.lifecycle.ViewModelStore()
+        try {
+            val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = FakePagedPort(2),
+                customSessionCatalogPort = catalog, customTrafficMaintenance = maintenance)
+            owner.put("traffic", viewModel)
+            advanceUntilIdle()
+            viewModel.processIntent(TrafficIntent.ClearFeed)
+            runCurrent(); entered.await(); runCurrent()
+            assertEquals(CaptureSessionId("replacement"), viewModel.uiState.value.sessionId)
+            release.complete(Unit); advanceUntilIdle()
+            assertEquals(2L, viewModel.uiState.value.totalAvailableCount)
+            assertEquals(2, viewModel.uiState.value.transactions.size)
+            assertNotNull(viewModel.uiState.value.trafficErrorMessage)
+            assertEquals(false, viewModel.uiState.value.isClearingHistory)
+        } finally { owner.clear() }
+    }
+
+    @Test
+    fun `stored manual off is applied before later arrivals and rapid controls persist the final selection`() = runTest(dispatcher) {
+        val manual = com.devuloopers.knet.domain.workspace.model.TrafficAutoScrollMode.MANUAL
+        val smart = com.devuloopers.knet.domain.workspace.model.TrafficAutoScrollMode.SMART
+        val saved = MutableStateFlow(com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings(
+            trafficAutoScroll = com.devuloopers.knet.domain.workspace.model.TrafficAutoScrollSettings(manual, false)))
+        val preferences = object : com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository {
+            override val settingsFlow = saved
+            override suspend fun updateSettings(transform: (com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings) -> com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings) {
+                saved.value = transform(saved.value)
+            }
+        }
+        val port = LiveTrafficPort(CaptureSessionId("fake-session"), listOf(snapshot("old", 1_000)))
+        val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = port, customWorkspacePreferencesRepository = preferences)
+        advanceUntilIdle()
+        assertEquals(false, viewModel.uiState.value.autoScroll)
+        port.record(snapshot("new", 2_000)); advanceUntilIdle()
+        assertEquals(1L, viewModel.uiState.value.reading.newCount)
+        assertEquals(listOf("old"), viewModel.uiState.value.transactions.map { it.transactionId })
+        repeat(10) { viewModel.processIntent(TrafficIntent.SetAutoScrollMode(smart)); viewModel.processIntent(TrafficIntent.SetAutoScrollMode(manual)) }
+        viewModel.processIntent(TrafficIntent.ToggleAutoScroll)
+        advanceUntilIdle()
+        assertEquals(manual, saved.value.trafficAutoScroll.mode)
+        assertTrue(saved.value.trafficAutoScroll.manualEnabled)
+        assertEquals(viewModel.uiState.value.scrollSettings, saved.value.trafficAutoScroll)
+    }
+
+    @Test
+    fun `pausing during an in flight refresh keeps the old window and counts the new row`() = runTest(dispatcher) {
+        val delegate = LiveTrafficPort(CaptureSessionId("fake-session"), listOf(snapshot("old", 1_000)))
+        var gate: CompletableDeferred<Unit>? = null
+        val port = object : TrafficQuery by delegate {
+            override suspend fun query(query: TrafficPageQuery): TrafficPage {
+                val result = delegate.query(query)
+                gate?.await()
+                return result
+            }
+        }
+        val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = port)
+        advanceUntilIdle()
+        gate = CompletableDeferred()
+        delegate.record(snapshot("new", 2_000))
+        testScheduler.advanceTimeBy(100)
+        runCurrent()
+        assertTrue(viewModel.uiState.value.isPageLoading)
+        viewModel.retainViewport(TrafficSource.All, com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport(0, 7), userScrolled = true)
+        gate!!.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(listOf("old"), viewModel.uiState.value.transactions.map { it.transactionId })
+        assertEquals(1L, viewModel.uiState.value.reading.newCount)
+        assertEquals(false, viewModel.uiState.value.autoScroll)
+    }
+
+    @Test
+    fun `smart pauses at a partial first row counts arrivals and preserves selection and window`() = runTest(dispatcher) {
+        val port = LiveTrafficPort(CaptureSessionId("fake-session"), listOf(snapshot("first", 1_000), snapshot("second", 2_000)))
+        val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = port)
+        advanceUntilIdle()
+        viewModel.processIntent(TrafficIntent.SelectTransaction("first"))
+        viewModel.retainViewport(TrafficSource.All, com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport(0, 5), userScrolled = true)
+        assertEquals(false, viewModel.uiState.value.autoScroll)
+        port.record(snapshot("third", 3_000)); advanceUntilIdle()
+        assertEquals(1L, viewModel.uiState.value.reading.newCount)
+        assertEquals(listOf("second", "first"), viewModel.uiState.value.transactions.map { it.transactionId })
+        assertEquals("first", viewModel.uiState.value.selectedTransactionId)
+        // Lifecycle-only invalidations must never increment the insertion counter.
+        port.invalidate(); advanceUntilIdle()
+        assertEquals(1L, viewModel.uiState.value.reading.newCount)
+        viewModel.retainViewport(TrafficSource.All, com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport(), userScrolled = true)
+        advanceUntilIdle()
+        assertEquals(false, viewModel.uiState.value.autoScroll)
+        viewModel.processIntent(TrafficIntent.LoadNewerPage); advanceUntilIdle()
+        viewModel.observeVisibleRows(TrafficSource.All, viewModel.uiState.value.readingEpoch,
+            com.devuloopers.knet.ui.desktop.traffic.model.TrafficVisibleRows(listOf("third"), true))
+        advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.autoScroll)
+        assertEquals(0L, viewModel.uiState.value.reading.newCount)
+        assertEquals("third", viewModel.uiState.value.transactions.first().transactionId)
+    }
+
+    @Test
+    fun `manual off survives a one time jump and mode changes preserve the manual switch`() = runTest(dispatcher) {
+        val port = LiveTrafficPort(CaptureSessionId("fake-session"), listOf(snapshot("first", 1_000)))
+        val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = port)
+        advanceUntilIdle()
+        val manual = com.devuloopers.knet.domain.workspace.model.TrafficAutoScrollMode.MANUAL
+        val smart = com.devuloopers.knet.domain.workspace.model.TrafficAutoScrollMode.SMART
+        viewModel.processIntent(TrafficIntent.SetAutoScrollMode(manual))
+        viewModel.processIntent(TrafficIntent.ToggleAutoScroll); advanceUntilIdle()
+        port.record(snapshot("second", 2_000)); advanceUntilIdle()
+        assertEquals(1L, viewModel.uiState.value.reading.newCount)
+        viewModel.processIntent(TrafficIntent.JumpToLatest); advanceUntilIdle()
+        assertEquals("second", viewModel.uiState.value.transactions.first().transactionId)
+        assertEquals(0L, viewModel.uiState.value.reading.newCount)
+        assertEquals(false, viewModel.uiState.value.autoScroll)
+        port.record(snapshot("third", 3_000)); advanceUntilIdle()
+        assertEquals(1L, viewModel.uiState.value.reading.newCount)
+        viewModel.processIntent(TrafficIntent.SetAutoScrollMode(smart)); advanceUntilIdle()
+        assertEquals(false, viewModel.uiState.value.autoScroll)
+        viewModel.processIntent(TrafficIntent.LoadNewerPage); advanceUntilIdle()
+        reportVisible(viewModel, listOf("third"), true); advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.autoScroll)
+        viewModel.processIntent(TrafficIntent.SetAutoScrollMode(manual)); advanceUntilIdle()
+        assertEquals(false, viewModel.uiState.value.autoScroll)
+        viewModel.processIntent(TrafficIntent.ToggleAutoScroll); advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.autoScroll)
+        assertEquals("third", viewModel.uiState.value.transactions.first().transactionId)
+        assertEquals(0L, viewModel.uiState.value.reading.newCount)
+    }
+
+    @Test
+    fun `history window and exact count survive a burst larger than the row memory limit`() = runTest(dispatcher) {
+        val port = LiveTrafficPort(CaptureSessionId("fake-session"), listOf(snapshot("anchor", 1_000)))
+        val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = port)
+        advanceUntilIdle()
+        viewModel.retainViewport(TrafficSource.All, com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport(0, 1), userScrolled = true)
+        repeat(1_500) { port.record(snapshot("burst-$it", 2_000L + it)) }
+        advanceUntilIdle()
+        assertEquals(1_500L, viewModel.uiState.value.reading.newCount)
+        assertEquals(listOf("anchor"), viewModel.uiState.value.transactions.map { it.transactionId })
+        assertTrue(port.queryCalls < 10, "A burst must coalesce rather than query per arrival")
+        viewModel.processIntent(TrafficIntent.JumpToLatest); advanceUntilIdle()
+        assertEquals("burst-1499", viewModel.uiState.value.transactions.first().transactionId)
+        assertEquals(0L, viewModel.uiState.value.reading.newCount)
+    }
+
+    @Test
+    fun `filter changes rebase unread arrivals and clear resets only the selected source`() = runTest(dispatcher) {
+        val port = LiveTrafficPort(CaptureSessionId("fake-session"), listOf(snapshot("old", 1_000)))
+        val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = port)
+        advanceUntilIdle()
+        viewModel.retainViewport(TrafficSource.All, com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport(0, 1), userScrolled = true)
+        port.record(snapshot("new", 2_000)); advanceUntilIdle()
+        assertEquals(1L, viewModel.uiState.value.reading.newCount)
+        viewModel.processIntent(TrafficIntent.Search("new")); advanceUntilIdle()
+        assertEquals(0L, viewModel.uiState.value.reading.newCount)
+        assertTrue(viewModel.uiState.value.autoScroll)
+        viewModel.clearSource(TrafficSource.All); advanceUntilIdle()
+        assertEquals(0L, viewModel.uiState.value.reading.newCount)
+        assertEquals(com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport(), viewModel.uiState.value.viewport)
+    }
+
+    @Test
+    fun `source readings remain independent and survive row cache eviction`() = runTest(dispatcher) {
+        val port = LiveTrafficPort(CaptureSessionId("fake-session"), listOf(snapshot("old", 1_000)))
+        val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = port)
+        advanceUntilIdle()
+        val sourceA = TrafficSource.Device(RegisteredDeviceId("a"))
+        viewModel.selectSource(sourceA); advanceUntilIdle()
+        viewModel.retainViewport(sourceA, com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport(0, 3), userScrolled = true)
+        for (id in listOf("b", "c", "d", "e")) { viewModel.selectSource(TrafficSource.Device(RegisteredDeviceId(id))); advanceUntilIdle() }
+        assertTrue(viewModel.uiState.value.autoScroll)
+        port.record(snapshot("new", 2_000)); advanceUntilIdle()
+        viewModel.selectSource(sourceA); advanceUntilIdle()
+        assertEquals(false, viewModel.uiState.value.autoScroll)
+        assertEquals(1L, viewModel.uiState.value.reading.newCount)
+        assertEquals(listOf("old"), viewModel.uiState.value.transactions.map { it.transactionId })
+    }
+
+    @Test
+    fun `nineteen arrivals decrease with last seen rows and old window top never acknowledges the batch`() = runTest(dispatcher) {
+        val port = LiveTrafficPort(CaptureSessionId("fake-session"), listOf(snapshot("old-100", 100_000)))
+        val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = port)
+        advanceUntilIdle()
+        viewModel.retainViewport(TrafficSource.All, com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport(0, 1), true)
+        for (number in 101..119) port.record(snapshot("new-$number", number * 1_000L))
+        advanceUntilIdle()
+        assertEquals(19L, viewModel.uiState.value.reading.newCount)
+        viewModel.retainViewport(TrafficSource.All, com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport(), true)
+        reportVisible(viewModel, listOf("old-100"), true); advanceUntilIdle()
+        assertEquals(19L, viewModel.uiState.value.reading.newCount)
+        assertEquals(false, viewModel.uiState.value.autoScroll)
+        assertEquals(listOf("old-100"), viewModel.uiState.value.transactions.map { it.transactionId })
+        viewModel.processIntent(TrafficIntent.LoadNewerPage); advanceUntilIdle()
+        assertEquals(19L, viewModel.uiState.value.reading.newCount)
+        assertEquals(false, viewModel.uiState.value.autoScroll, "Loading newer data must not force a jump")
+        reportVisible(viewModel, listOf("new-101")); advanceUntilIdle()
+        assertEquals(18L, viewModel.uiState.value.reading.newCount)
+        reportVisible(viewModel, listOf("new-102", "new-101")); advanceUntilIdle()
+        assertEquals(17L, viewModel.uiState.value.reading.newCount)
+        val calls = port.queryCalls
+        reportVisible(viewModel, listOf("new-101")); reportVisible(viewModel, listOf("new-102")); advanceUntilIdle()
+        assertEquals(calls, port.queryCalls, "Repeated and older visibility cannot reread or move the checkpoint backwards")
+        viewModel.processIntent(TrafficIntent.SelectTransaction("new-119")); advanceUntilIdle()
+        assertEquals(17L, viewModel.uiState.value.reading.newCount, "Selection alone is not visibility")
+        reportVisible(viewModel, listOf("new-119", "new-118"), true); advanceUntilIdle()
+        assertEquals(0L, viewModel.uiState.value.reading.newCount)
+        assertTrue(viewModel.uiState.value.autoScroll)
+        assertNull(viewModel.uiState.value.reading.seenThrough)
+    }
+
+    @Test
+    fun `jump to latest clears a partially read batch while manual remains off`() = runTest(dispatcher) {
+        val port = LiveTrafficPort(CaptureSessionId("fake-session"), listOf(snapshot("old", 1_000)))
+        val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = port)
+        advanceUntilIdle()
+        viewModel.processIntent(TrafficIntent.SetAutoScrollMode(com.devuloopers.knet.domain.workspace.model.TrafficAutoScrollMode.MANUAL))
+        viewModel.processIntent(TrafficIntent.ToggleAutoScroll); advanceUntilIdle()
+        repeat(19) { port.record(snapshot("new-$it", 2_000L + it)) }; advanceUntilIdle()
+        viewModel.processIntent(TrafficIntent.LoadNewerPage); advanceUntilIdle()
+        reportVisible(viewModel, listOf("new-0")); advanceUntilIdle()
+        assertEquals(18L, viewModel.uiState.value.reading.newCount)
+        viewModel.processIntent(TrafficIntent.JumpToLatest); advanceUntilIdle()
+        assertEquals(0L, viewModel.uiState.value.reading.newCount)
+        assertNull(viewModel.uiState.value.reading.seenThrough)
+        assertEquals(false, viewModel.uiState.value.autoScroll)
+        port.record(snapshot("after-jump", 3_000)); advanceUntilIdle()
+        assertEquals(1L, viewModel.uiState.value.reading.newCount)
+        assertEquals(false, viewModel.uiState.value.reading.atTop, "An old loaded top is no longer the actual live edge")
+    }
+
+    @Test
+    fun `fifteen hundred newer arrivals page adjacently within the row bound and older eviction has no paging gap`() = runTest(dispatcher) {
+        val port = LiveTrafficPort(CaptureSessionId("fake-session"), listOf(snapshot("old", 1_000)))
+        val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = port)
+        advanceUntilIdle()
+        viewModel.retainViewport(TrafficSource.All, com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport(0, 1), true)
+        repeat(1_500) { port.record(snapshot("burst-$it", 2_000L + it)) }; advanceUntilIdle()
+        val loaded = mutableSetOf<String>()
+        repeat(8) { block ->
+            viewModel.processIntent(TrafficIntent.LoadNewerPage); advanceUntilIdle()
+            val rows = viewModel.uiState.value.transactions
+            assertTrue(rows.size <= 1_000)
+            loaded += rows.map { it.transactionId }
+            val lastInPage = minOf((block + 1) * 200 - 1, 1_499)
+            assertEquals("burst-$lastInPage", rows.first().transactionId, "Newer paging must load the adjacent block")
+            reportVisible(viewModel, listOf("burst-${block * 200}")); advanceUntilIdle()
+            assertEquals(1_499L - block * 200, viewModel.uiState.value.reading.newCount)
+            assertEquals(false, viewModel.uiState.value.autoScroll)
+        }
+        assertEquals((0 until 1_500).map { "burst-$it" }.toSet() + "old", loaded)
+        reportVisible(viewModel, listOf("burst-1499"), true); advanceUntilIdle()
+        assertEquals(0L, viewModel.uiState.value.reading.newCount)
+        assertTrue(viewModel.uiState.value.autoScroll)
+        assertNotNull(viewModel.uiState.value.olderPageAnchor)
+        viewModel.retainViewport(TrafficSource.All, com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport(990, 0), true)
+        viewModel.processIntent(TrafficIntent.LoadNextPage); advanceUntilIdle()
+        assertEquals("burst-300", viewModel.uiState.value.transactions.last().transactionId)
+        assertEquals("burst-1299", viewModel.uiState.value.transactions.first().transactionId)
+        assertTrue(viewModel.uiState.value.hasNewerTraffic)
+        viewModel.processIntent(TrafficIntent.LoadNewerPage); advanceUntilIdle()
+        assertEquals("burst-1499", viewModel.uiState.value.transactions.first().transactionId)
+    }
+
+    @Test
+    fun `stale progress query cannot overwrite a newer visible checkpoint`() = runTest(dispatcher) {
+        val delegate = LiveTrafficPort(CaptureSessionId("fake-session"), listOf(snapshot("old", 1_000)))
+        var gate: CompletableDeferred<Unit>? = null
+        val port = object : TrafficQuery by delegate {
+            override suspend fun query(query: TrafficPageQuery): TrafficPage {
+                val result = delegate.query(query)
+                gate?.await()
+                return result
+            }
+        }
+        val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = port)
+        advanceUntilIdle()
+        viewModel.retainViewport(TrafficSource.All, com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport(0, 1), true)
+        repeat(19) { delegate.record(snapshot("new-$it", 2_000L + it)) }; advanceUntilIdle()
+        viewModel.processIntent(TrafficIntent.LoadNewerPage); advanceUntilIdle()
+        gate = CompletableDeferred()
+        reportVisible(viewModel, listOf("new-0"))
+        testScheduler.advanceTimeBy(100); runCurrent()
+        assertTrue(viewModel.uiState.value.isPageLoading)
+        reportVisible(viewModel, listOf("new-1"))
+        gate!!.complete(Unit); gate = null; advanceUntilIdle()
+        assertEquals(17L, viewModel.uiState.value.reading.newCount)
+        assertEquals("new-1", (viewModel.uiState.value.reading.seenThrough!!.position.recordId as
+            com.devuloopers.knet.application.contract.traffic.TrafficRecordId.Exchange).id.value)
+    }
+
+    @Test
+    fun `source filter and clear replacement reject stale visibility callbacks`() = runTest(dispatcher) {
+        val port = LiveTrafficPort(CaptureSessionId("fake-session"), listOf(snapshot("old", 1_000)))
+        val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = port)
+        advanceUntilIdle()
+        val sourceA = TrafficSource.Device(RegisteredDeviceId("progress-a"))
+        viewModel.selectSource(sourceA); advanceUntilIdle()
+        viewModel.retainViewport(sourceA, com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport(0, 1), true)
+        repeat(19) { port.record(snapshot("new-$it", 2_000L + it)) }; advanceUntilIdle()
+        viewModel.processIntent(TrafficIntent.LoadNewerPage); advanceUntilIdle()
+        val oldEpoch = viewModel.uiState.value.readingEpoch
+        val sourceB = TrafficSource.Device(RegisteredDeviceId("progress-b"))
+        viewModel.selectSource(sourceB); advanceUntilIdle()
+        viewModel.observeVisibleRows(sourceA, oldEpoch, com.devuloopers.knet.ui.desktop.traffic.model.TrafficVisibleRows(listOf("new-18"), true))
+        viewModel.selectSource(sourceA); advanceUntilIdle()
+        assertEquals(19L, viewModel.uiState.value.reading.newCount)
+        reportVisible(viewModel, listOf("new-0")); advanceUntilIdle()
+        assertEquals(18L, viewModel.uiState.value.reading.newCount)
+        val beforeFilter = viewModel.uiState.value.readingEpoch
+        viewModel.processIntent(TrafficIntent.Search("new")); advanceUntilIdle()
+        viewModel.observeVisibleRows(sourceA, beforeFilter, com.devuloopers.knet.ui.desktop.traffic.model.TrafficVisibleRows(listOf("new-18"), true))
+        assertNull(viewModel.uiState.value.reading.seenThrough)
+        val beforeClear = viewModel.uiState.value.readingEpoch
+        viewModel.clearSource(sourceA); advanceUntilIdle()
+        viewModel.observeVisibleRows(sourceA, beforeClear, com.devuloopers.knet.ui.desktop.traffic.model.TrafficVisibleRows(listOf("new-18"), true))
+        assertEquals(0L, viewModel.uiState.value.reading.newCount)
+        assertNull(viewModel.uiState.value.reading.seenThrough)
+    }
+
+    @Test
+    fun `failed newer paging is blocked until a user scroll permits retry`() = runTest(dispatcher) {
+        val delegate = LiveTrafficPort(CaptureSessionId("fake-session"), listOf(snapshot("old", 1_000)))
+        var fail = false
+        val port = object : TrafficQuery by delegate {
+            override suspend fun query(query: TrafficPageQuery): TrafficPage {
+                if (fail && query.newerThan != null) error("newer-page-test-failure")
+                return delegate.query(query)
+            }
+        }
+        val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = port)
+        advanceUntilIdle()
+        viewModel.retainViewport(TrafficSource.All, com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport(0, 1), true)
+        delegate.record(snapshot("new", 2_000)); advanceUntilIdle()
+        fail = true
+        viewModel.processIntent(TrafficIntent.LoadNewerPage); advanceUntilIdle()
+        assertTrue(viewModel.uiState.value.newerPageBlocked)
+        assertEquals(1L, viewModel.uiState.value.reading.newCount)
+        viewModel.retainViewport(TrafficSource.All, com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport(0, 2), true)
+        assertEquals(false, viewModel.uiState.value.newerPageBlocked)
+        fail = false
+        viewModel.processIntent(TrafficIntent.LoadNewerPage); advanceUntilIdle()
+        assertEquals("new", viewModel.uiState.value.transactions.first().transactionId)
+    }
+
+    @Test
+    fun `a paused paged source retains its older continuation when switching device tabs`() = runTest(dispatcher) {
+        val port = LiveTrafficPort(CaptureSessionId("fake-session"), (1..1_250).map { snapshot("row-$it", it * 1_000L) })
+        val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = port)
+        advanceUntilIdle()
+        val source = TrafficSource.Device(RegisteredDeviceId("paged-reader"))
+        viewModel.selectSource(source); advanceUntilIdle()
+        viewModel.retainViewport(source, com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport(0, 1), true)
+        viewModel.processIntent(TrafficIntent.LoadNextPage); advanceUntilIdle()
+        assertEquals(400, viewModel.uiState.value.transactions.size)
+        val cursor = assertNotNull(viewModel.uiState.value.nextPageCursor)
+        viewModel.selectSource(TrafficSource.Other); advanceUntilIdle()
+        viewModel.selectSource(source); advanceUntilIdle()
+        assertEquals(cursor, viewModel.uiState.value.nextPageCursor)
+        viewModel.processIntent(TrafficIntent.LoadNextPage); advanceUntilIdle()
+        assertEquals(600, viewModel.uiState.value.transactions.size)
+        assertEquals("row-651", viewModel.uiState.value.transactions.last().transactionId)
+    }
+
+    @Test
+    fun `clearing a background device does not suspend the active device last seen progress`() = runTest(dispatcher) {
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val maintenance = object : TrafficMaintenance {
+            override suspend fun clearTerminalTraffic() = error("Expected scoped clear")
+            override suspend fun clearSourceTraffic(source: TrafficSource) { entered.complete(Unit); release.await() }
+        }
+        val port = LiveTrafficPort(CaptureSessionId("fake-session"), listOf(snapshot("old", 1_000)))
+        val viewModel = FakeTrafficViewModelFactory.create(customTrafficQueryPort = port, customTrafficMaintenance = maintenance)
+        advanceUntilIdle()
+        val active = TrafficSource.Device(RegisteredDeviceId("active-reader"))
+        viewModel.selectSource(active); advanceUntilIdle()
+        viewModel.retainViewport(active, com.devuloopers.knet.ui.desktop.traffic.model.TrafficViewport(0, 1), true)
+        repeat(19) { port.record(snapshot("new-$it", 2_000L + it)) }; advanceUntilIdle()
+        viewModel.processIntent(TrafficIntent.LoadNewerPage); advanceUntilIdle()
+        viewModel.clearSource(TrafficSource.Device(RegisteredDeviceId("background-device")))
+        runCurrent(); entered.await()
+        assertTrue(viewModel.uiState.value.isClearingHistory)
+        reportVisible(viewModel, listOf("new-0"))
+        testScheduler.advanceTimeBy(100); runCurrent()
+        assertEquals(18L, viewModel.uiState.value.reading.newCount)
+        release.complete(Unit); advanceUntilIdle()
+        assertEquals(18L, viewModel.uiState.value.reading.newCount)
+        assertEquals(active, viewModel.uiState.value.source)
+    }
+
+    private fun reportVisible(viewModel: com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficViewModel,
+        ids: List<String>, atTop: Boolean = false) {
+        val state = viewModel.uiState.value
+        viewModel.observeVisibleRows(state.source, state.readingEpoch,
+            com.devuloopers.knet.ui.desktop.traffic.model.TrafficVisibleRows(ids, atTop))
+    }
+
     private class FakePagedPort(rowCount: Int) : TrafficQuery {
         private val snapshots = List(rowCount) { index -> snapshot("exchange-$index", 10_000L - index) }
         val requestedLimits = mutableListOf<Int>()
@@ -674,7 +1120,7 @@ class TrafficPagingViewModelTest {
         initialSnapshots: List<HttpExchangeSnapshot>,
         private val honorFilters: Boolean = false,
     ) : TrafficQuery {
-        private val mutableGenerations = MutableSharedFlow<TrafficGeneration>(extraBufferCapacity = 64)
+        private val mutableGenerations = MutableSharedFlow<TrafficGeneration>(extraBufferCapacity = 2_048)
         private val snapshots = initialSnapshots.toMutableList()
         private var generation = 1L
         var queryCalls: Int = 0
@@ -693,19 +1139,34 @@ class TrafficPagingViewModelTest {
                 .filter { snapshot -> query.statuses.isEmpty() || snapshot.response?.head?.status in query.statuses }
                 .toList()
             else snapshots
-            val orderedSnapshots = candidates.asSequence()
-                .sortedByDescending { snapshot -> snapshot.startedAtEpochMillis }
-                .toList()
+            fun point(snapshot: HttpExchangeSnapshot) = com.devuloopers.knet.application.contract.traffic.TrafficReadPoint(
+                com.devuloopers.knet.application.contract.traffic.TrafficRecordId.Exchange(snapshot.id), snapshot.startedAtEpochMillis,
+                sequenceById.getValue(snapshot.id))
+            val anchor = query.newerThan ?: query.olderThan ?: query.cursor?.let { cursor ->
+                snapshots.firstOrNull { it.id.value == cursor.value }?.let(::point)
+            }
+            val eligible = candidates.filter { snapshot ->
+                (query.windowThrough == null || sequenceById.getValue(snapshot.id).value <= query.windowThrough!!.exchanges) &&
+                    (anchor == null || if (query.direction == com.devuloopers.knet.application.contract.traffic.TrafficSortDirection.OLDEST_FIRST)
+                        point(snapshot) > anchor else point(snapshot) < anchor)
+            }.sortedWith(compareBy<HttpExchangeSnapshot> { point(it) }.let {
+                if (query.direction == com.devuloopers.knet.application.contract.traffic.TrafficSortDirection.NEWEST_FIRST) it.reversed() else it
+            })
+            val selected = eligible.take(query.limit)
             return TrafficPage(
-                items = orderedSnapshots.map { snapshot ->
+                arrivals = com.devuloopers.knet.application.contract.traffic.TrafficArrivals(
+                    com.devuloopers.knet.application.contract.traffic.TrafficArrivalCheckpoint(snapshots.size.toLong(), 0),
+                    query.arrivalsAfter?.let { checkpoint -> candidates.count { snapshot ->
+                        val seen = query.seenThrough
+                        point(snapshot).isAfter(checkpoint) && (seen == null ||
+                            point(snapshot).captureSequence.value > seen.observedAt.exchanges || point(snapshot) > seen.position)
+                    }.toLong() } ?: 0),
+                latest = candidates.map(::point).maxOrNull(),
+                items = selected.map { snapshot ->
                     val sequence = sequenceById.getValue(snapshot.id)
-                    TrafficPageItem(
-                        captureSequence = sequence,
-                        historySequence = TrafficHistorySequence(sequence.value),
-                        exchange = snapshot,
-                    )
+                    TrafficPageItem(captureSequence = sequence, historySequence = TrafficHistorySequence(sequence.value), exchange = snapshot)
                 },
-                nextCursor = null,
+                nextCursor = selected.lastOrNull()?.takeIf { eligible.size > query.limit }?.let { TrafficPageCursor(it.id.value) },
                 totalCount = candidates.size.toLong(),
                 generation = generation,
             )
@@ -716,6 +1177,11 @@ class TrafficPagingViewModelTest {
 
         override suspend fun readBody(bodyId: BodyId, range: BodyRange): BodyChunk =
             error("Live traffic rows must not read bodies.")
+
+        fun invalidate() {
+            generation++
+            check(mutableGenerations.tryEmit(TrafficGeneration(sessionId, generation)))
+        }
 
         fun record(snapshot: HttpExchangeSnapshot) {
             snapshots += snapshot

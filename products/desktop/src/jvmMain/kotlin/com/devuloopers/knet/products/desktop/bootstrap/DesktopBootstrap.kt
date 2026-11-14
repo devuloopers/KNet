@@ -194,6 +194,7 @@ object DesktopBootstrap {
         val policyScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
         ApplicationLifecycle.registerResource("startup-policy-scope", CoroutineScopeShutdownResource(policyScope))
         koin.get<ApplicationSettingsRuntimeSynchronizer>().start(policyScope)
+        koin.get<com.devuloopers.knet.data.desktop.capture.BodyDeletionWorker>().start(policyScope)
         policyScope.launch {
             try {
                 val settings = koin.get<ObserveApplicationSettingsUseCase>().execute().first()

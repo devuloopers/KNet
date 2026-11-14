@@ -32,10 +32,17 @@ import java.util.concurrent.TimeUnit
 
 private const val HTTP_TWO_POOL_TAG: String = "ProxyEngine"
 
+/** Wire security and negotiation for an origin; plaintext and TLS never share pooled parents. */
+internal enum class HttpTwoUpstreamTransport {
+    TLS,
+    CLEARTEXT,
+}
+
 /** Immutable origin identity used to prevent cross-origin HTTP/2 connection reuse. */
 internal data class HttpTwoUpstreamRoute(
     val host: String,
     val resolvedRoute: ResolvedUpstreamRoute,
+    val transport: HttpTwoUpstreamTransport = HttpTwoUpstreamTransport.TLS,
 ) {
     val port: Int
         get() = resolvedRoute.port
@@ -50,7 +57,7 @@ internal class HttpTwoPoolSaturatedException(message: String) : IOException(mess
 /**
  * Server-owned, origin-keyed HTTP/2 connection pool.
  *
- * Parent TCP/TLS channels are admitted once and reused. Every exchange receives an independent
+ * Parent TCP channels, optionally using TLS/ALPN, are admitted once and reused. Every exchange receives an independent
  * [io.netty.handler.codec.http2.Http2StreamChannel], so cancellation, flow control, interception,
  * and capture ownership cannot leak across sibling streams. GOAWAY marks only that parent as
  * draining; new streams select or create a replacement within the configured bounds.
@@ -75,7 +82,7 @@ internal class HttpTwoUpstreamConnectionPool(
         val result = CompletableFuture<Channel>()
         // A transparent CONNECT tunnel can preserve one TLS hostname while DNS changes its
         // candidate set. Pooling retains both identities without depending on response order.
-        val key = OriginKey(route.host, route.resolvedRoute.addressSetKey, route.port)
+        val key = OriginKey(route.host, route.resolvedRoute.addressSetKey, route.port, route.transport)
         val entry = synchronized(lock) {
             if (closed) {
                 result.completeExceptionally(IOException("HTTP/2 upstream pool is closed."))
@@ -136,7 +143,7 @@ internal class HttpTwoUpstreamConnectionPool(
         return result
     }
 
-    /** Creates one TLS parent and completes [PooledConnection.ready] only after ALPN selects h2. */
+    /** Creates one origin parent, negotiating h2 with ALPN only for TLS routes. */
     private fun createConnection(
         eventLoop: EventLoop,
         key: OriginKey,
@@ -177,7 +184,7 @@ internal class HttpTwoUpstreamConnectionPool(
         return entry
     }
 
-    /** Adds TLS/ALPN only after one dual-stack TCP candidate has won the race. */
+    /** Selects prior-knowledge H2 or TLS/ALPN after one dual-stack TCP candidate wins the race. */
     private fun configureConnectedChannel(
         key: OriginKey,
         entry: PooledConnection,
@@ -193,6 +200,10 @@ internal class HttpTwoUpstreamConnectionPool(
             PipelineHandlerNames.WRITE_TIMEOUT,
             WriteTimeoutHandler(runtimePolicy.writeIdleTimeoutMillis, TimeUnit.MILLISECONDS),
         )
+        if (route.transport == HttpTwoUpstreamTransport.CLEARTEXT) {
+            installHttpTwoPipeline(channel, PipelineHandlerNames.WRITE_TIMEOUT, key, entry)
+            return
+        }
         val sslBuilder = SslContextBuilder.forClient()
             .trustManager(ProxyTrustManager.getTrustManagerFactory(verifyUpstreamTls))
             .applicationProtocolConfig(
@@ -232,33 +243,34 @@ internal class HttpTwoUpstreamConnectionPool(
                         )
                         return
                     }
-                    val settings = Http2Settings()
-                        .pushEnabled(false)
-                        .maxHeaderListSize(runtimePolicy.maximumHttp2HeaderListBytes)
-                        .initialWindowSize(runtimePolicy.http2InitialWindowBytes)
-                    val frameCodec = Http2FrameCodecBuilder.forClient()
-                        .initialSettings(settings)
-                        .gracefulShutdownTimeoutMillis(runtimePolicy.gracefulShutdownTimeoutMillis)
-                        .build()
-                    context.pipeline().addAfter(
-                        PipelineHandlerNames.ALPN,
-                        PipelineHandlerNames.HTTP2_CODEC,
-                        frameCodec,
-                    )
-                    context.pipeline().addAfter(
-                        PipelineHandlerNames.HTTP2_CODEC,
-                        HTTP_TWO_LIFECYCLE_HANDLER,
-                        HttpTwoParentLifecycleHandler { markDraining(key, entry) },
-                    )
-                    context.pipeline().addAfter(
-                        HTTP_TWO_LIFECYCLE_HANDLER,
-                        PipelineHandlerNames.HTTP2_MULTIPLEX,
-                        Http2MultiplexHandler(RejectServerPushHandler()),
-                    )
-                    entry.ready.complete(context.channel())
+                    installHttpTwoPipeline(context.channel(), PipelineHandlerNames.ALPN, key, entry)
                 }
             },
         )
+    }
+
+    /** Shares exactly the same bounded stream, flow-control and GOAWAY ownership on both wire modes. */
+    private fun installHttpTwoPipeline(channel: Channel, anchor: String, key: OriginKey, entry: PooledConnection) {
+        val settings = Http2Settings()
+            .pushEnabled(false)
+            .maxHeaderListSize(runtimePolicy.maximumHttp2HeaderListBytes)
+            .initialWindowSize(runtimePolicy.http2InitialWindowBytes)
+        val frameCodec = Http2FrameCodecBuilder.forClient()
+            .initialSettings(settings)
+            .gracefulShutdownTimeoutMillis(runtimePolicy.gracefulShutdownTimeoutMillis)
+            .build()
+        channel.pipeline().addAfter(anchor, PipelineHandlerNames.HTTP2_CODEC, frameCodec)
+        channel.pipeline().addAfter(
+            PipelineHandlerNames.HTTP2_CODEC,
+            HTTP_TWO_LIFECYCLE_HANDLER,
+            HttpTwoParentLifecycleHandler { markDraining(key, entry) },
+        )
+        channel.pipeline().addAfter(
+            HTTP_TWO_LIFECYCLE_HANDLER,
+            PipelineHandlerNames.HTTP2_MULTIPLEX,
+            Http2MultiplexHandler(RejectServerPushHandler()),
+        )
+        entry.ready.complete(channel)
     }
 
     /** Stops assigning new streams after GOAWAY and closes the parent after its last child. */
@@ -321,6 +333,7 @@ internal class HttpTwoUpstreamConnectionPool(
         val host: String,
         val resolvedAddressSet: List<String>,
         val port: Int,
+        val transport: HttpTwoUpstreamTransport,
     )
 
     private class PooledConnection(

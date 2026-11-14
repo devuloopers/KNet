@@ -68,7 +68,7 @@ import com.devuloopers.knet.storage.protectedtraffic.entity.ProtectedTrafficSett
         ProtectedTrafficRuleEntity::class,
         ProtectedServiceGroupEntity::class,
     ],
-    version = 37,
+    version = 38,
     autoMigrations = [
         AutoMigration(from = 13, to = 14, spec = Migration13To14::class),
         AutoMigration(from = 14, to = 15),

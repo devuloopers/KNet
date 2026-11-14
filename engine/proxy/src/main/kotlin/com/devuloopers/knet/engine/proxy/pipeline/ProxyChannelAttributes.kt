@@ -31,6 +31,9 @@ object ProxyChannelAttributes {
     /** Whether this client channel has entered the decrypted TLS pipeline. */
     val IS_SSL: AttributeKey<Boolean> = AttributeKey.valueOf("knet.ssl")
 
+    /** CONNECT carried an HTTP/2 prior-knowledge preface; preserve cleartext H2 to that origin. */
+    val CLEARTEXT_HTTP2_TUNNEL: AttributeKey<Boolean> = AttributeKey.valueOf("knet.cleartextHttp2Tunnel")
+
     /** Fresh canonical request context for the request currently crossing the pipeline. */
     val REQUEST_CONTEXT: AttributeKey<ProxyRequestContext> = AttributeKey.valueOf("knet.request")
 

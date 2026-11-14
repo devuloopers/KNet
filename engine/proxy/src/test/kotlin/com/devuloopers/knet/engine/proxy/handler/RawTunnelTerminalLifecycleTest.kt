@@ -51,6 +51,23 @@ class RawTunnelTerminalLifecycleTest {
         } finally { workers.shutdownNow() }
     }
 
+    @Test fun `terminal EOF releases both half closed transport channels`() {
+        val capture = Capture()
+        val owner = RawTunnelLifecycle(capture)
+        val client = io.netty.channel.embedded.EmbeddedChannel()
+        val server = io.netty.channel.embedded.EmbeddedChannel()
+        try {
+            owner.attach(client, server)
+            owner.writeStarted()
+            owner.observeInputShutdown(TrafficDirection.CLIENT_TO_SERVER)
+            owner.observeInputShutdown(TrafficDirection.SERVER_TO_CLIENT)
+            assertTrue(client.isActive && server.isActive)
+            owner.writeFinished(true)
+            assertFalse(client.isActive || server.isActive)
+            assertEquals(listOf<ExchangeTerminalOutcome>(ExchangeTerminalOutcome.Completed), capture.outcomes.toList())
+        } finally { client.finishAndReleaseAll(); server.finishAndReleaseAll() }
+    }
+
     private class Capture : ProxyOpaqueFlowCapture {
         val outcomes = CopyOnWriteArrayList<ExchangeTerminalOutcome>()
         override fun observeBytes(direction: TrafficDirection, byteCount: Int, occurredAtEpochMillis: Long) = Unit

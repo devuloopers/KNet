@@ -55,3 +55,16 @@ public class CompanionSessionException(
     /** Closed reason suitable for workflow decisions. */
     public val reason: CompanionSessionFailure,
 ) : Exception("Companion control session failed: $reason")
+
+/** Authenticated control-channel health, independent of whether the native VPN interface remains enabled. */
+public enum class CompanionSessionPhase { CONNECTING, CONNECTED, RECONNECTING, REJECTED }
+
+/** One VPN run's observation; run identity fences late cleanup from a replaced control owner. */
+public data class CompanionSessionObservation(
+    /** Paired desktop whose control channel is observed. */
+    public val desktopId: com.devuloopers.knet.companion.model.CompanionDesktopId,
+    /** Opaque VPN ownership token, never an authenticator. */
+    public val runId: String,
+    /** Last confirmed lifecycle phase. Connected requires an authenticated WELCOME. */
+    public val phase: CompanionSessionPhase,
+)

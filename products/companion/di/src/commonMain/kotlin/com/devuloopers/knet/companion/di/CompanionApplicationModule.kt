@@ -46,7 +46,7 @@ internal fun companionApplicationModule(): Module = module {
     single { MaintainCompanionEndpointUseCase(get(), get(), get(), get(), get()) }
     single { ConnectCompanionUseCase(get(), get(), get(), get(), ::currentEpochMillis, get()) }
     single { DisconnectCompanionUseCase(get()) }
-    single { ObserveCompanionConnectionUseCase(get()) }
+    single { ObserveCompanionConnectionUseCase(get(), get<com.devuloopers.knet.companion.application.usecase.MaintainCompanionSessionUseCase>().state, get()) }
     single { ObserveCompanionNetworkUseCase(get()) }
     single { ObserveCompanionDiscoveryUseCase(get()) }
     single { DownloadCompanionRootCertificateUseCase(get(), get(), get(), ::currentEpochMillis) }

@@ -83,7 +83,6 @@ class CanonicalCaptureCutoverTest {
         )
         val trafficRepository = DesktopTrafficMaintenanceAdapter(
             database = database,
-            canonicalBodyStore = bodyStore,
         )
         try {
             assertIs<ProxyStartResult.Running>(repository.start(configuration(availableLoopbackPort())))
@@ -185,7 +184,7 @@ class CanonicalCaptureCutoverTest {
             canonicalCaptureSessionFactory = CanonicalCaptureSessionFactory(database, bodyStore, bodyStore),
             breakpointCaptureAvailability = breakpointCoordinator,
         )
-        val maintenance = DesktopTrafficMaintenanceAdapter(database, bodyStore)
+        val maintenance = DesktopTrafficMaintenanceAdapter(database)
         try {
             assertIs<ProxyStartResult.Running>(repository.start(configuration(availableLoopbackPort())))
             val pausedSessionId = assertNotNull(database.canonicalCaptureDao().observeLatestSessionId().first())

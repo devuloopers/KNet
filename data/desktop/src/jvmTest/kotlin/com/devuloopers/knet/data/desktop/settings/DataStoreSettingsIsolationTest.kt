@@ -1,5 +1,7 @@
 package com.devuloopers.knet.data.desktop.settings
 
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import com.devuloopers.knet.data.desktop.workspace.repository.WidgetPreferencesRepositoryImpl
 import com.devuloopers.knet.domain.settings.model.ProxyPort
@@ -23,6 +25,35 @@ import kotlin.time.Duration.Companion.minutes
 /** Verifies that application preferences and workspace layout have independent atomic ownership. */
 @OptIn(ExperimentalCoroutinesApi::class)
 class DataStoreSettingsIsolationTest {
+
+    @Test
+    fun `scrolling defaults to smart and manual preference survives reopening and unrelated changes`() = runTest {
+        val directory = createTempDirectory("knet-scroll-preferences")
+        var scope = CoroutineScope(SupervisorJob() + UnconfinedTestDispatcher(testScheduler))
+        fun store() = PreferenceDataStoreFactory.createWithPath(scope = scope,
+            produceFile = { directory.resolve("settings.preferences_pb").toString().toPath() })
+        var dataStore = store()
+        try {
+            var repository = WidgetPreferencesRepositoryImpl(dataStore)
+            assertEquals(com.devuloopers.knet.domain.workspace.model.TrafficAutoScrollSettings(), repository.settingsFlow.first().trafficAutoScroll)
+            val manual = com.devuloopers.knet.domain.workspace.model.TrafficAutoScrollSettings(
+                com.devuloopers.knet.domain.workspace.model.TrafficAutoScrollMode.MANUAL, false)
+            repository.updateSettings { it.copy(trafficAutoScroll = manual) }
+            repository.updateSettings { it.copy(trafficFeedWidthDp = 730f) }
+            assertEquals(manual, repository.settingsFlow.first().trafficAutoScroll)
+            scope.coroutineContext[kotlinx.coroutines.Job]!!.cancel()
+            scope.coroutineContext[kotlinx.coroutines.Job]!!.join()
+            scope = CoroutineScope(SupervisorJob() + UnconfinedTestDispatcher(testScheduler))
+            dataStore = store()
+            repository = WidgetPreferencesRepositoryImpl(dataStore)
+            assertEquals(manual, repository.settingsFlow.first().trafficAutoScroll)
+            assertEquals(730f, repository.settingsFlow.first().trafficFeedWidthDp)
+            dataStore.edit { it[stringPreferencesKey("traffic_auto_scroll_mode")] = "FUTURE_UNKNOWN" }
+            assertEquals(com.devuloopers.knet.domain.workspace.model.TrafficAutoScrollMode.SMART,
+                repository.settingsFlow.first().trafficAutoScroll.mode)
+            assertEquals(false, repository.settingsFlow.first().trafficAutoScroll.manualEnabled)
+        } finally { scope.cancel(); directory.toFile().deleteRecursively() }
+    }
 
     @Test
     fun `concurrent application and workspace updates preserve both setting groups`() = runTest {

@@ -14,8 +14,10 @@ Owns the live traffic table, filtering, selection, inspector coordination, and t
   labels yield width to the shared controls.
 - A shell-composed actual-throughput slot in the existing statistics footer, next to the visible-row byte total.
   UI core owns fixed-height overflow. Traffic filters and capture attachment never manufacture or reset rate values.
-- Stable storage-owned serial numbers, separate loaded-versus-available counts, and auto-scroll policy that
-  reacts to a genuinely newer sequence rather than a page-size change.
+- Stable storage-owned serial numbers, separate loaded-versus-available counts, and Auto scroll Smart/Manual
+  modes. Smart follows only at the exact top; Manual exposes a persisted switch. Per-source reading checkpoints
+  and a compact new-arrival footer action preserve history and selection while new traffic arrives. Fully visible
+  rows advance a per-source last-seen checkpoint; explicit Jump to latest acknowledges the remaining batch.
 - Separate transport and semantic method presentation: filters retain the canonical HTTP method while the
   table renders the shared request descriptor label such as `POST` or `GQL`.
 - Optional Protocol, Stream, and Source columns backed by canonical exchange data; Source distinguishes API Studio from
@@ -70,7 +72,11 @@ and dismissal behavior.
 
 The rolling list holds at most 1,000 metadata-only rows while keyset cursors continue through larger stored
 history. Loading a page never renumbers retained rows; the footer distinguishes the loaded window from the
-exact matching total. Live invalidations are conflated with a bounded refresh interval instead of debounced indefinitely.
+exact matching total. Paused windows freeze admission of new rows; indexed insertion checkpoints count matching
+HTTP and opaque arrivals beyond the loaded window without counting lifecycle updates. Fully visible rows advance
+one stable last-seen position; near the old window head, adjacent newer paging preserves the visible anchor and
+loads every intermediate block. Smart resumes only at the actual newest matching record, and typed older anchors
+preserve paging after row-window trimming. Live invalidations are conflated with a bounded refresh interval instead of debounced indefinitely.
 The virtualized table overlays the shared theme-aware vertical scrollbar only while its measured rows overflow the
 viewport. Header separators use the UI-core resize handle while this feature owns typed widths and constraints.
 Header and rows resolve one layout and share a finite horizontal scroll state, whose scrollbar appears only when
@@ -168,3 +174,6 @@ See the scrollbar follow-up in `docs/traffic_inspector_redesign.md`.
 Traffic ViewModel scopes every query/provisional row and fences asynchronous page/export work with a source generation. At most four body-free workspace windows retain filters, selection and scroll; prepared payloads remain in the existing bounded cache.
 
 The shell routes offline Clear through the same confirmation as tab Close. `clearSource` accepts an explicit target so a background tab can be cleared without selecting it, changing current filters or reloading a sibling workspace. Repeated clicks while clearing are ignored; failures surface through the existing error banner and retained history remains available for retry.
+
+Auto scroll behavior, ownership and automated qualification are documented in
+[`docs/traffic_auto_scroll.md`](../../../docs/traffic_auto_scroll.md).

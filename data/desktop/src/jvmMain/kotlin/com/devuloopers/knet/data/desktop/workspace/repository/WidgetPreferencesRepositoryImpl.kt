@@ -6,6 +6,8 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import com.devuloopers.knet.domain.workspace.model.TrafficAutoScrollMode
+import com.devuloopers.knet.domain.workspace.model.TrafficAutoScrollSettings
 import com.devuloopers.knet.domain.workspace.model.WorkspaceLayoutSettings
 import com.devuloopers.knet.domain.workspace.model.TrafficTableColumnWidths
 import com.devuloopers.knet.domain.workspace.repository.WidgetPreferencesRepository
@@ -24,6 +26,8 @@ class WidgetPreferencesRepositoryImpl(
 ) : WidgetPreferencesRepository {
 
     private companion object {
+        private val keyAutoScrollMode = stringPreferencesKey("traffic_auto_scroll_mode")
+        private val keyManualScrollEnabled = booleanPreferencesKey("traffic_manual_scroll_enabled")
         private val keyTrafficFeed = booleanPreferencesKey("is_traffic_feed_visible")
         private val keyInspector = booleanPreferencesKey("is_inspector_visible")
         private val keyRulesConsole = booleanPreferencesKey("is_rules_console_visible")
@@ -57,6 +61,8 @@ class WidgetPreferencesRepositoryImpl(
     ) {
         dataStore.edit { preferences ->
             val settings = transform(readWorkspaceLayout(preferences))
+            preferences[keyAutoScrollMode] = settings.trafficAutoScroll.mode.name
+            preferences[keyManualScrollEnabled] = settings.trafficAutoScroll.manualEnabled
             preferences[keyTrafficFeed] = settings.isTrafficFeedVisible
             preferences[keyInspector] = settings.isInspectorVisible
             preferences[keyRulesConsole] = settings.isRulesConsoleVisible
@@ -135,6 +141,11 @@ class WidgetPreferencesRepositoryImpl(
                     defaultColumnWidths.durationDp,
                 ),
                 typeDp = preferences.positiveWidthOrDefault(keyTrafficTypeWidth, defaultColumnWidths.typeDp),
+            ),
+            trafficAutoScroll = TrafficAutoScrollSettings(
+                mode = TrafficAutoScrollMode.entries.firstOrNull { mode -> mode.name == preferences[keyAutoScrollMode] }
+                    ?: TrafficAutoScrollMode.SMART,
+                manualEnabled = preferences[keyManualScrollEnabled] ?: true,
             ),
             activeRequestSubTab = preferences[keyRequestSubTab] ?: "BODY",
             activeScriptPhase = preferences[keyScriptPhase] ?: "PRE_REQUEST",

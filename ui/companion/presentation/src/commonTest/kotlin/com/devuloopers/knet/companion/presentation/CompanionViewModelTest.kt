@@ -1132,7 +1132,7 @@ class CompanionViewModelTest {
                                 CompanionEndpointResolver { switchResolution(it) },
                                 verifyCertificate,
                                 StartCompanionInspectionUseCase(repository, connect, verifyCertificate, inspection, transport)),
-                            observeConnection = ObserveCompanionConnectionUseCase(transport),
+                            observeConnection = ObserveCompanionConnectionUseCase(transport, MutableStateFlow(null), inspection),
                             observeNetwork = ObserveCompanionNetworkUseCase(network),
                             observeDiscovery = ObserveCompanionDiscoveryUseCase(discovery),
                             maintainEndpoint = MaintainCompanionEndpointUseCase(

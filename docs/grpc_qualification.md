@@ -30,6 +30,7 @@ composition test suites. CI runs the same task on macOS, Windows, and Linux.
 
 | Area | Evidence |
 |---|---|
+| Authenticated cleartext transport | `CompanionH2cEndToEndTest` exercises the real gateway/proxy, every cardinality, bidi before half-close, trailers, cancellation, source identity and plaintext/TLS pool isolation; see [Companion H2C forwarding](companion_h2c_forwarding.md) for physical evidence |
 | Framing and classification | split/coalesced envelopes, gzip, size bounds, truncation, terminal state, and unrelated-traffic rejection in `GrpcStreamInspectorTest` |
 | Durable messages | schema-v23 write/query/recovery/retention/clear coverage in data and storage tests |
 | Descriptors | bounded import, dependency resolution, decode, and malformed input in `GrpcDescriptorRegistryTest` |

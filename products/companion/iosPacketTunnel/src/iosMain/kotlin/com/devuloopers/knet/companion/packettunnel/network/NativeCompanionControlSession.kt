@@ -18,6 +18,7 @@ internal class NativeCompanionControlSession(
     private val onRevoked: () -> Unit,
     private val transport: CompanionSessionTransport = createIosCompanionSessionTransport(),
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
+    private val onReconnecting: (Boolean) -> Unit = {},
 ) {
     private var job: Job? = null
 
@@ -32,6 +33,7 @@ internal class NativeCompanionControlSession(
         val runId = kotlin.uuid.Uuid.random().toString()
         job = scope.launch {
             var attempt = 0
+            onReconnecting(true)
             while (isActive) {
                 var connection: CompanionSessionConnection? = null
                 try {
@@ -47,14 +49,15 @@ internal class NativeCompanionControlSession(
                         send(CompanionSessionMessageKind.START)
                         val welcome = withTimeout(10_000L) { session.receive() }
                         require(welcome.kind == CompanionSessionMessageKind.WELCOME && welcome.runId == runId)
-                        attempt = 0
+                        onReconnecting(false)
+                        val connectedAt = kotlin.time.TimeSource.Monotonic.markNow()
                         val heartbeat = launch {
                             while (isActive) { delay(CompanionSessionProtocol.HEARTBEAT_MILLIS); send(CompanionSessionMessageKind.HEARTBEAT) }
                         }
                         try {
                             var revision = 0L
                             while (isActive) {
-                                val message = session.receive()
+                                val message = withTimeout(CompanionSessionProtocol.RECEIVE_TIMEOUT_MILLIS) { session.receive() }
                                 require(message.runId == runId)
                                 when (message.kind) {
                                     CompanionSessionMessageKind.CONFIGURATION -> if (message.revision > revision) {
@@ -70,17 +73,19 @@ internal class NativeCompanionControlSession(
                             }
                         } finally { withContext(NonCancellable) {
                             heartbeat.cancelAndJoin()
+                            if (connectedAt.elapsedNow().inWholeMilliseconds >= CompanionSessionProtocol.HEARTBEAT_MILLIS) attempt = 0
                             withContext(NonCancellable) { runCatching { withTimeout(500L) { send(CompanionSessionMessageKind.STOP) } } }
                         } }
                     }
                 } catch (_: Revoked) { return@launch }
                 catch (_: TimeoutCancellationException) { /* Retry a bounded handshake or send. */ }
-                catch (cancelled: CancellationException) { throw cancelled }
+                catch (_: CancellationException) { currentCoroutineContext().ensureActive() }
                 catch (failure: CompanionSessionException) {
                     if (failure.reason == CompanionSessionFailure.UNAUTHORIZED) { onRevoked(); return@launch }
                     if (failure.reason == CompanionSessionFailure.UNSUPPORTED) return@launch
                 } catch (_: Exception) { /* Recovery remains bounded; no credential-bearing errors are logged. */ }
                 finally { withContext(NonCancellable) { runCatching { withTimeoutOrNull(1000L) { connection?.close() } } } }
+                onReconnecting(true)
                 delay(minOf(5000L, 500L shl minOf(attempt++, 3)) + kotlin.random.Random.nextLong(0L, 251L))
             }
         }

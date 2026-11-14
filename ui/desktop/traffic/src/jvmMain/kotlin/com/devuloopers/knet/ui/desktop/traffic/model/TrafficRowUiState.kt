@@ -122,6 +122,8 @@ data class TrafficRowUiState(
     /** First observed close evidence; absent in historical/unobserved flows. */
     val closure: com.devuloopers.knet.traffic.model.OpaqueFlowClosure? = null,
     val interception: TrafficInterceptionUiState = TrafficInterceptionUiState.None,
+    /** Canonical insertion identity/order; absent for provisional breakpoint rows. */
+    val readPoint: com.devuloopers.knet.application.contract.traffic.TrafficReadPoint? = null,
 ) {
     val fullUrl: String
         get() = when {

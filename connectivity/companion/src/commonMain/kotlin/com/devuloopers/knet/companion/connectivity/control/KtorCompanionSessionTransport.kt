@@ -9,6 +9,8 @@ import io.ktor.http.URLProtocol
 import io.ktor.websocket.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
@@ -32,7 +34,11 @@ internal class KtorCompanionSessionTransport(private val provider: CompanionKtor
                 header("Authorization", "Bearer ${authorization.deviceId.value}:${authorization.credential()}")
             }
             return Connection(session, handle)
-        } catch (cancelled: CancellationException) { handle.close(); throw cancelled }
+        } catch (_: CancellationException) {
+            handle.close()
+            currentCoroutineContext().ensureActive()
+            throw CompanionSessionException(CompanionSessionFailure.UNAVAILABLE)
+        }
         catch (failure: Throwable) {
             handle.close()
             val status = (failure as? WebSocketException)?.message.orEmpty()
@@ -48,15 +54,28 @@ internal class KtorCompanionSessionTransport(private val provider: CompanionKtor
     private class Connection(private val session: DefaultClientWebSocketSession,
         private val handle: CompanionKtorClientHandle) : CompanionSessionConnection {
         private val closed = kotlinx.coroutines.flow.MutableStateFlow(false)
-        override suspend fun send(message: CompanionSessionMessage) {
-            check(!closed.value)
+        override suspend fun send(message: CompanionSessionMessage): Unit = exchange {
+            if (closed.value) throw CompanionSessionException(CompanionSessionFailure.UNAVAILABLE)
             session.send(Frame.Text(CompanionSessionProtocol.encode(message)))
         }
         override suspend fun receive(): CompanionSessionMessage {
-            val frame = session.incoming.receive() as? Frame.Text
+            val frame = exchange { session.incoming.receive() } as? Frame.Text
                 ?: throw CompanionSessionException(CompanionSessionFailure.INVALID_MESSAGE)
-            require(frame.data.size <= CompanionSessionProtocol.MAXIMUM_MESSAGE_BYTES)
-            return CompanionSessionProtocol.decode(frame.readText())
+            if (frame.data.size > CompanionSessionProtocol.MAXIMUM_MESSAGE_BYTES) {
+                throw CompanionSessionException(CompanionSessionFailure.INVALID_MESSAGE)
+            }
+            return try { CompanionSessionProtocol.decode(frame.readText()) }
+            catch (_: Exception) { throw CompanionSessionException(CompanionSessionFailure.INVALID_MESSAGE) }
+        }
+        private suspend fun <T> exchange(operation: suspend () -> T): T = try {
+            operation()
+        } catch (_: CancellationException) {
+            currentCoroutineContext().ensureActive()
+            throw CompanionSessionException(CompanionSessionFailure.UNAVAILABLE)
+        } catch (failure: CompanionSessionException) {
+            throw failure
+        } catch (_: Exception) {
+            throw CompanionSessionException(CompanionSessionFailure.UNAVAILABLE)
         }
         override suspend fun close() {
             if (!closed.compareAndSet(false, true)) return

@@ -91,6 +91,8 @@ data class TrafficConnectionEntity(
         Index(value = ["sessionId", "protocol", "captureSequence"], name = "index_exchange_session_protocol_sequence"),
         Index(value = ["startedAtEpochMillis", "id"], name = "index_exchange_chronological_id"),
         Index(value = ["connectionId", "connectionSequence"], name = "index_exchange_connection_sequence"),
+        Index(value = ["requestBodyId"], name = "index_exchange_request_body"),
+        Index(value = ["responseBodyId"], name = "index_exchange_response_body"),
     ],
 )
 data class CanonicalExchangeEntity(
@@ -252,6 +254,7 @@ data class BodyObjectEntity(
     tableName = "duplex_messages",
     indices = [
         Index(value = ["connectionId", "captureSequence"], name = "index_duplex_connection_sequence"),
+        Index(value = ["bodyId"], name = "index_duplex_body"),
         Index(
             value = ["exchangeId", "direction", "messageSequence"],
             unique = true,
@@ -342,12 +345,14 @@ data class CaptureGapEntity(
  * @property createdAtEpochMillis Work creation timestamp.
  * @property attemptCount Failed attempt count.
  * @property lastErrorCode Optional safe failure code.
+ * @property nextAttemptAtEpochMillis Durable retry deadline; unattempted work is due immediately.
  */
 @Entity(
     tableName = "deletion_outbox",
     indices = [
         Index(value = ["sessionId", "createdAtEpochMillis"], name = "index_deletion_session_created"),
         Index(value = ["bodyId"], unique = true, name = "index_deletion_body"),
+        Index(value = ["nextAttemptAtEpochMillis", "id"], name = "index_deletion_due_id"),
     ],
 )
 data class DeletionOutboxEntity(
@@ -358,4 +363,6 @@ data class DeletionOutboxEntity(
     val createdAtEpochMillis: Long,
     val attemptCount: Int,
     val lastErrorCode: String?,
+    /** Durable retry deadline; zero admits pre-migration/unattempted work immediately. */
+    @ColumnInfo(defaultValue = "0") val nextAttemptAtEpochMillis: Long = 0L,
 )

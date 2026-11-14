@@ -23,6 +23,8 @@ data class WorkspaceLayoutSettings(
     val sidebarWidthDp: Float = 260f,
     val bottomTrayHeightDp: Float = 180f,
     val trafficTableColumnWidths: TrafficTableColumnWidths = TrafficTableColumnWidths(),
+    /** Global scrolling preference shared by device workspaces. */
+    val trafficAutoScroll: TrafficAutoScrollSettings = TrafficAutoScrollSettings(),
     val activeRequestSubTab: String = "BODY",
     val activeScriptPhase: String = "PRE_REQUEST",
     val activeResponseSubTab: String = "BODY",

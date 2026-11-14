@@ -134,7 +134,7 @@ class ProxyEngineStreamingCaptureTest {
 
                 ClearTrafficHistoryUseCase(
                     captureSessionControl = fixture.repository,
-                    trafficMaintenance = DesktopTrafficMaintenanceAdapter(fixture.database, fixture.bodyStore),
+                    trafficMaintenance = DesktopTrafficMaintenanceAdapter(fixture.database),
                 ).execute()
 
                 writeProxyRequest(client, authority, "/after-clear", close = true)

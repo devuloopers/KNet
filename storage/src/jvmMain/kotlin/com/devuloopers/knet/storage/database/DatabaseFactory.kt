@@ -23,7 +23,7 @@ object DatabaseFactory {
             factory = { KNetDatabase_Impl() }
         )
         builder.setDriver(BundledSQLiteDriver())
-        builder.addMigrations(Migration18To19, Migration22To23, Migration32To33, Migration33To34, Migration34To35, Migration35To36, Migration36To37)
+        builder.addMigrations(Migration18To19, Migration22To23, Migration32To33, Migration33To34, Migration34To35, Migration35To36, Migration36To37, Migration37To38)
         return builder.build()
     }
 }

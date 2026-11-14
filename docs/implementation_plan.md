@@ -1,5 +1,105 @@
 # KNet Implementation Plan
 
+## Traffic Clear performance and deferred cleanup (2026-11-14) [COMPLETED]
+
+Remove full-table body-reference scans with a preserved-data migration, batch deletion acknowledgements,
+and run durable file cleanup in one bounded process-owned worker with retries and startup recovery.
+Keep capture rotation and metadata deletion crash-safe, preserve sibling devices and new traffic, avoid
+redundant page refreshes during clear, and verify distinct-body/large-stream scale plus concurrency edges.
+Record measured before/after results without clearing or migrating the user's running database.
+
+Schema v38 now adds indexed body references and durable retry deadlines. Clear commits metadata/outbox work
+without filesystem waits or whole-session body-ID lists. One startup-owned reactive worker drains all batches,
+uses batched acknowledgements and bounded retry backoff, and shares serialization with startup recovery.
+Targeted migration, cleanup, large-stream, blocked-file and UI tests pass; the actual Room 5,000-exchange clear
+measured 291 ms (258 ms in the full suite). All 1,560 feature-gate cases across 30 tasks,
+architecture/ledger checks and desktop packaging passed. The additional 100,000-row query/storage baseline
+passed, bringing the total to 1,561 cases across 31 tasks with zero failures/errors/skips. Packaged storage,
+data, Traffic UI and product classes match tested output. Fourteen new regression methods cover migration,
+retry/cancellation/acknowledgement failure, real files, large streams, blocked cleanup and UI invalidations.
+The running app/database were left unchanged; rebuild/restart activates v38 and the process worker. See
+[Traffic Clear performance](traffic_clear_performance.md) for measured scope and the updated distributable.
+
+## Connection EOF cleanup and upgraded-flow completion (2026-11-14) [COMPLETED]
+
+Fix retained peer-closed HTTP/TLS/gateway connections and incorrect normal WebSocket/GraphQL WS terminal
+failures. Preserve legitimate half-close responses, drain pending writes and asynchronous transforms before
+completion, and release sockets/admission exactly once. Add failing EOF, delayed-response and write-failure
+regressions, run real authenticated-carrier end-to-end churn, then repeat the connected-phone checks.
+
+Implemented HTTP/TLS EOF retirement, selected HTTP/2 parent/child response drain, and upgraded/raw relay
+socket release. Added 19 regressions covering delayed writes/transforms, failure races, duplicate EOF,
+HTTP/HTTPS keep-alive, secure WebSocket close and multiplexed responses. All 1,546 automated cases
+across 30 tasks passed with zero failures/errors/skips, as did architecture checks and desktop packaging.
+The repaired desktop's 167 packaged engine classes matched the tested output; it remains open at the user's
+request. The connected phone passed 199 client assertions: 150 persistent closes, 20 repeated WebSocket/GraphQL
+WS closes, the 25-case protocol matrix, and HTTP/2 concurrency/cancellation/recovery. All 223 generated LAN
+connections closed; persistent HTTP post-response close was at most 35 ms; the upgraded rows stayed COMPLETED
+past the previous timeout window. Removed the disposable client and origins, retaining capture, pairing and
+certificates; Companion remains connected with conditions off and zero rules. See
+[connection lifecycle qualification](connection_lifecycle_qualification.md). Longer soak, multiple physical
+devices and the excluded platform/UI matrix remain separate qualification.
+
+
+## Companion cleartext HTTP/2 and gRPC repair (2026-11-14) [COMPLETED]
+
+Repair the authenticated Companion CONNECT path so a cleartext HTTP/2 preface selects the existing H2
+pipeline instead of TLS inspection. Preserve destination/device attribution, canonical stream capture,
+gRPC framing/trailers and ordinary HTTPS behavior. Add fragmented/coalesced/truncated-preface regressions,
+exercise the authenticated gateway end to end and repeat all-cardinality checks on the attached phone.
+
+Implemented bounded CONNECT preface selection and a security-keyed cleartext H2 upstream pool. Targeted
+preface and authenticated gateway/gRPC cases passed, including live bidi response, trailers and cancellation.
+The fixed distributable is open at the user's request. All six formerly failing phone cases passed, as did
+24 concurrent H2C requests, live bidi cancellation/recovery and the 25-case protocol transport matrix.
+Room retained 39 cleartext H2 exchanges with HTTP/2 on both legs, zero TLS time and correct device identity;
+36 native gRPC message records and status/trailer metadata were retained. All five protocol gates plus GraphQL/
+formatter suites passed 1,054 cases (nine new regressions), zero failures/errors/skips, along with architecture
+checks and desktop distribution creation. Removed the test client/origins and left the repaired build open,
+Companion connected and conditions off. See [repair evidence](companion_h2c_forwarding.md).
+No Companion reinstallation or pairing change is needed.
+
+
+## Supported-protocol qualification (2026-11-14) [COMPLETED WITH FINDINGS]
+
+Run the current HTTP/1.x, HTTPS/CONNECT, HTTP/2, GraphQL HTTP/persisted query, SSE, WebSocket,
+GraphQL WebSocket and native gRPC qualification matrix. Extend the attached-device transport checks
+with independent controls where available. Keep experimental maturity, known EOF/admission failures,
+desktop-UI limitations and unavailable HTTP/3/QUIC/WebTransport support explicit in the final report.
+
+Automated protocol gates completed: 1,045 tests across 21 tasks, zero failures/errors/skips. The new
+25-case Companion matrix passed 19; six H2C/gRPC cases failed and passed independent VPN-off phone
+controls. All 16 isolated TLS/H2/WSS/gRPC controls and all 16 direct-origin controls passed after correcting
+reset/oversize-close harness expectations. A separate 120-second SSE codec churn check passed 2,949,837
+byte-exact streams. Restored VPN, verified recovery traffic/control WSS, removed disposable fixtures/client,
+and retained user settings/data. The three data-path release blockers remain open. See
+[protocol qualification](protocol_qualification_2026-11-14.md) for protocol boundaries, evidence and exclusions.
+
+## Connected Android qualification (2026-11-14) [COMPLETED WITH FINDINGS]
+
+Exercise the attached physical Companion against the available desktop: authenticated WSS lifecycle,
+background/lock and reconnect behavior, repeated VPN stop/start, real traffic/source attribution, and
+controlled upload/download shaping where accessible. Preserve pairing, certificates and existing captures;
+record observed results, defects and unavailable multi-device/iOS/native-window scenarios separately.
+
+Reran 892 multi-device automated cases and all eight retained real-LAN Wi-Fi fixtures. Physical checks passed
+the eight core transfer/protocol cases, GraphQL WebSocket subscription delivery, five VPN cycles, Wi-Fi and
+desktop restart recovery, Companion process recreation, five-minute control observation, screen-off connection
+continuity, real global bandwidth/Offline behavior and an exact host/port override. Found retained data sockets,
+incorrect WebSocket terminal outcomes, and a clear-text HTTP/2/gRPC VPN failure confirmed against direct phone
+controls. An isolated new duplex EOF regression fails against the unchanged implementation. See
+[physical qualification](physical_android_qualification_2026-11-14.md) for evidence and remaining scope.
+
+## Connected-device data-path defects (2026-11-14) [COMPLETED]
+
+Repair and regress EOF/TLS-close cleanup across the actual authenticated gateway and internal proxy; prevent
+retained closed-peer sockets from exhausting shared loopback admission. Correct normal WebSocket/GraphQL
+WebSocket closure outcomes and handle both-input EOF without waiting for an IO error. Companion clear-text
+HTTP/2/gRPC forwarding was repaired and physically verified in the completed phase above. Repeat lifecycle
+qualification and longer soak before promoting overall stability. The EOF and upgraded-flow lifecycle
+defects were repaired and requalified in the completed connection cleanup phase above; longer release
+soak and the excluded physical platform/device matrix remain separate qualification.
+
 ## Companion VPN stop crash (2026-11-13) [COMPLETED]
 
 Investigate the connected Android device's crash during VPN stop, repair the transport lifecycle at its
@@ -4077,6 +4177,25 @@ exit, dragging from the invisible target through pointer capture, keyboard limit
 Traffic table/header/footer/inspector composition. Wide/compact and interaction renders were reviewed.
 Final log: `/tmp/knet-traffic-divider-check.log`. No product installation or user database access was required.
 
+## Smart and manual Traffic auto scroll (2026-11-14) [COMPLETED]
+
+Replace the Auto Scroll toggle with an Auto scroll mode selector (Smart by default, Manual with
+an explicit switch). Smart follows at the exact top and preserves the viewport while browsing
+history. Show a source/filter-scoped new-traffic count in the existing footer with a jump-to-latest
+action. Keep source workspaces, inspector selection, clearing, paging and saved preferences stable.
+Verified exact-top and partial-row policy, real wheel and scrollbar dragging, Manual on/off and one-time
+jumps, stable history/selection/footer, saved settings, rapid controls and in-flight refresh races. Room
+fixtures cover independent HTTP/opaque sequences, filters/source scoping, equal/backdated timestamps,
+deletions, lifecycle-only updates, and 1,500 new arrivals beyond the UI row bound. Lightweight reading
+checkpoints survive row-cache eviction; no body bytes or additional collectors are retained.
+
+Qualification: Traffic 144 tests, app shell 38, application 76, domain 95, storage 7, data 138 (with focused
+history/settings reruns), and UI core 32 passed with zero failures/errors/skips. Desktop compilation and all
+six architecture checks passed, along with shared UI-core Android/iOS Simulator compilation.
+Details are in `docs/traffic_auto_scroll.md`; final log:
+`/tmp/knet-smart-scroll-final.log`. Rendered Smart/Manual interactions ran in isolated offscreen scenes;
+the running desktop and user database were not modified.
+
 ## Traffic scrollbar content clearance (2026-11-13) [COMPLETED]
 
 Reserve a shared UI-core scrollbar gutter before measuring/scrolling Traffic columns. Clip header and rows to
@@ -4136,3 +4255,63 @@ updates, stale-edge removal, and an untouched scrollbar gutter. All 125 Traffic 
 failures/errors/skips, along with desktop compilation and all six architecture checks. Reviewed
 `/tmp/knet-traffic-scrollbar-complete-selection-680.png` and the 1200 px render.
 Build log: `/tmp/knet-traffic-selection-check.log`.
+
+## Auto scroll mode transition polish (2026-11-14) [COMPLETED]
+
+Animated the selected label inside the existing dropdown anchor and added a shared inline width/fade
+reveal for the Manual switch, including its spacing and On/Off width changes. The outgoing switch is
+disabled during exit, saved behavior is retained, and reduced motion uses immediate transitions.
+
+All 217 UI regressions passed (Traffic 147, app shell 38, UI core 32), including three new frame-level
+cases for intermediate enter/exit widths, fixed height/right edge and anchor identity, rapid reversal,
+and reduced motion. Desktop, Android shared UI and iOS Simulator compilation and all six architecture
+checks passed. Log: `/tmp/knet-auto-scroll-motion-final.log`. The running app was not relaunched.
+
+## Progressive Traffic last-seen tracking (2026-11-14) [COMPLETED]
+
+Implemented progressive last-seen checkpoints from fully visible canonical rows. Counts decrease while
+browsing (19 to 18 to 17); explicit Jump to latest and reaching the actual newest row acknowledge the
+remaining batch. The top of an old loaded window pages newer records adjacently without jumping.
+Typed chronological anchors preserve both paging directions across the 1,000-row window bound and tab
+switches. Insertion snapshots keep late/backdated admissions unread until viewed or acknowledged.
+Viewport epochs and read revisions fence stale UI/count results; background device clearing does not
+block the active reader. Smart/Manual mode and motion behavior remain intact.
+
+All 421 automated cases passed: Traffic 158, app shell 38, application 77, data 141, storage 7, with zero
+failures/errors/skips. Coverage includes the exact 19-request scenario, partial rows, one-time jump in
+Manual off, mixed HTTP/opaque equal-time ordering, backdated/deleted records, 1,500-arrival traversal,
+older-tail eviction, source/filter/clear replacement, tab restoration, in-flight count races, failure
+retry suppression and rendered anchor/visibility interactions. Desktop compilation and all six
+architecture checks passed. Logs: `/tmp/knet-progressive-read-qualification.log` and
+`/tmp/knet-progressive-read-final.log`. No running app or user database was modified.
+
+## Companion recovery after desktop restart (2026-11-14) [COMPLETED]
+
+Reproduce and repair VPN-owned authenticated control-session recovery after graceful/abrupt desktop
+shutdown, keep retry ownership alive until explicit stop or revocation, and project reconnecting versus
+confirmed connected status accurately. Reuse existing credentials, device identity, heartbeat protocol
+and capture-independent desktop control service. Qualify real socket restart recovery, cancellation,
+missing replies, repeated/long outages, revocation, identity switches and platform owners.
+
+Reproduced both failure paths with failing regression tests: connection-local cancellation terminated
+the VPN's retry worker, and UNSUPPORTED packet shaping disabled the only silence watchdog. Implemented
+typed socket-loss normalization, independent receive deadlines, credential-rotation handling,
+run-fenced Android connection projection and iOS native reasserting projection.
+
+Final qualification passed 306 tests with zero failures, errors or skips: application 69, Android
+connectivity 99, presentation 65, Android DI one, Android product 13, iOS connectivity 31, iOS packet
+extension 13 and desktop control gateway 15. Added 17 test cases plus EOF assertions in the existing
+native socket test. The real Android TLS client recovers to a newly bound listener with the same pin,
+credential and VPN run; three fresh desktop presence instances regain the existing device on START
+without capture or enrollment. Virtual-time tests cover socket cancellation at connect/send/receive,
+silence with unsupported shaping, repeated restarts, a ten-minute outage, true owner cancellation,
+identity switches, credential rotation and terminal revocation. Native status tests cover iOS recovery,
+reconnection completion and late notifications after stop.
+
+Android debug assembly, iOS device compilation, Simulator framework linking, desktop compilation and
+all six architecture checks passed. Logs: `/tmp/knet-companion-recovery-reproduction.log`,
+`/tmp/knet-companion-recovery-tests.log` and `/tmp/knet-companion-recovery-qualification.log`.
+The user subsequently confirmed that Companion recovery after desktop restart is working on their
+device. The broader physical restart/long-outage matrix and signed iOS verification remain [PENDING].
+Automated qualification did not change the running desktop, installed Companion or real user database.
+See `docs/companion_desktop_restart_recovery.md` for the procedure.

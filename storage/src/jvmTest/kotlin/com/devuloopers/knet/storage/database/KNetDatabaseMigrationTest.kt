@@ -37,7 +37,7 @@ class KNetDatabaseMigrationTest {
 
     @Test
     fun `every retained schema generation migrates without deleting canonical sessions`() {
-        listOf(13, 18, 22, 24, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36).forEach { version ->
+        listOf(13, 18, 22, 24, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36, 37).forEach { version ->
             val root = Files.createTempDirectory("knet-v$version-migration-").toFile()
             val databaseFile = root.resolve("traffic.db")
             try {
@@ -193,6 +193,39 @@ class KNetDatabaseMigrationTest {
                 assertEquals(60100L, row.completedAtEpochMillis)
                 assertEquals(null, row.closureInitiator); assertEquals(null, row.closureReason)
                 assertEquals(null, row.closureObservedAtEpochMillis)
+            } finally { database.close() }
+        } finally { root.deleteRecursively() }
+    }
+
+    @Test fun `version 37 preserves queued cleanup and adds indexed reference and retry lookups`() {
+        val root = Files.createTempDirectory("knet-v38-clear-indexes-").toFile()
+        val file = root.resolve("traffic.db")
+        try {
+            createDatabaseFromExportedSchema(file, 37)
+            BundledSQLiteDriver().open(file.absolutePath).use { connection ->
+                connection.execSQL("INSERT INTO deletion_outbox (sessionId,bodyId,operation,createdAtEpochMillis,attemptCount,lastErrorCode) VALUES ('old-session','pending-body','DELETE_BODY',123,3,'body-delete-failed')")
+            }
+            val database = DatabaseFactory.create(file)
+            try {
+                val pending = runBlocking { database.canonicalCaptureDao().getDeletionWork(10).single() }
+                assertEquals("pending-body", pending.bodyId)
+                assertEquals(3, pending.attemptCount)
+                assertEquals("body-delete-failed", pending.lastErrorCode)
+                assertEquals(0L, pending.nextAttemptAtEpochMillis)
+                BundledSQLiteDriver().open(file.absolutePath).use { connection ->
+                    val names = mutableSetOf<String>()
+                    connection.prepare("SELECT name FROM sqlite_master WHERE type='index'").use { statement ->
+                        while (statement.step()) names += statement.getText(0)
+                    }
+                    kotlin.test.assertTrue(names.containsAll(setOf("index_exchange_request_body", "index_exchange_response_body", "index_duplex_body", "index_deletion_due_id")))
+                    val plan = mutableListOf<String>()
+                    connection.prepare("EXPLAIN QUERY PLAN SELECT id FROM traffic_exchanges WHERE requestBodyId='body' OR responseBodyId='body'").use { statement ->
+                        while (statement.step()) plan += statement.getText(3)
+                    }
+                    kotlin.test.assertTrue(plan.any { it.contains("index_exchange_request_body") })
+                    kotlin.test.assertTrue(plan.any { it.contains("index_exchange_response_body") })
+                    kotlin.test.assertFalse(plan.any { it.contains("SCAN traffic_exchanges") })
+                }
             } finally { database.close() }
         } finally { root.deleteRecursively() }
     }

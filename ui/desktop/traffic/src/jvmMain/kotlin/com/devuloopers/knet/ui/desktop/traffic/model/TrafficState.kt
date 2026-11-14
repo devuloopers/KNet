@@ -117,7 +117,7 @@ data class TrafficViewport(val row: Int = 0, val offset: Int = 0, val horizontal
  * @property selectedHttpVersionFilter Active negotiated HTTP-version filter.
  * @property selectedMethodFilter Active HTTP method dropdown filter (e.g., [MethodFilter.ALL], [MethodFilter.GET], [MethodFilter.POST]).
  * @property selectedStatusFilter Active HTTP status dropdown filter (e.g., [StatusFilter.ALL], [StatusFilter.STATUS_2XX], [StatusFilter.STATUS_3XX]).
- * @property autoScroll Whether auto-scrolling to newest transaction is enabled.
+ * @property scrollSettings Saved Smart/Manual controls, shared across source workspaces.
  * @property activeInspectorTab Currently selected inspection tab.
  * @property activeRequestSubTab Currently selected request sub-tab (Headers, Query, Body).
  * @property activeResponseSubTab Currently selected response sub-tab (Headers, Body).
@@ -134,8 +134,14 @@ data class TrafficState(
     val totalAvailableCount: Long = 0L,
     val sessionId: CaptureSessionId? = null,
     val nextPageCursor: TrafficPageCursor? = null,
+    /** Reconnects older paging to the retained tail after newer rows evict older metadata. */
+    val olderPageAnchor: com.devuloopers.knet.application.contract.traffic.TrafficReadPoint? = null,
     val pageGeneration: Long = 0L,
     val isPageLoading: Boolean = false,
+    /** Prevents an automatic retry loop after an adjacent-newer page failure. A user scroll permits retry. */
+    val newerPageBlocked: Boolean = false,
+    /** Invalidates viewport observations after source/filter/clear replacement. */
+    val readingEpoch: Long = 0,
     val isClearingHistory: Boolean = false,
     val selectedTransactionId: String? = null,
     val captureState: CaptureState = CaptureState.STOPPED,
@@ -149,7 +155,9 @@ data class TrafficState(
     val selectedMethodFilter: MethodFilter = MethodFilter.ALL,
     val selectedStatusFilter: StatusFilter = StatusFilter.ALL,
     val facetCounts: TrafficFacetCounts = TrafficFacetCounts(),
-    val autoScroll: Boolean = true,
+    val scrollSettings: com.devuloopers.knet.domain.workspace.model.TrafficAutoScrollSettings = com.devuloopers.knet.domain.workspace.model.TrafficAutoScrollSettings(),
+    /** Per-source live-edge position and durable arrival bookkeeping. */
+    val reading: TrafficReadingState = TrafficReadingState(),
     val activeInspectorTab: InspectorTab = InspectorTab.OVERVIEW,
     val activeRequestSubTab: InspectorSubTab = InspectorSubTab.BODY,
     val activeResponseSubTab: InspectorSubTab = InspectorSubTab.BODY,
@@ -163,6 +171,16 @@ data class TrafficState(
     val prefilledBreakpointRule: BreakpointRule? = null,
     val prefilledBreakpointProtocolValues: List<ProtocolCriteriaValue> = emptyList(),
 ) {
+    /** Effective follow state for the active source; never persisted as a guessed viewport position. */
+    val autoScroll: Boolean get() = scrollSettings.follows(reading)
+
+    /** True when more recent matching records exist above the retained row window. */
+    val hasNewerTraffic: Boolean get() {
+        val latest = reading.latest ?: return false
+        val loaded = transactions.mapNotNull(TrafficRowUiState::readPoint).maxOrNull()
+        return loaded == null || loaded < latest
+    }
+
     /**
      * Selected transaction UI model matching [selectedTransactionId].
      */

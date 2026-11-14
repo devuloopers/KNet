@@ -11,9 +11,16 @@ sealed interface TrafficIntent {
     data object StartCapture : TrafficIntent
     data object PauseCapture : TrafficIntent
     data object ClearFeed : TrafficIntent
+    /** Toggles the explicit Manual control without changing modes. */
     data object ToggleAutoScroll : TrafficIntent
+    /** Selects the saved Smart or Manual scrolling strategy. */
+    data class SetAutoScrollMode(val mode: com.devuloopers.knet.domain.workspace.model.TrafficAutoScrollMode) : TrafficIntent
+    /** Reveals and acknowledges latest traffic without changing the Manual switch. */
+    data object JumpToLatest : TrafficIntent
     data object DismissEngineError : TrafficIntent
     data object LoadNextPage : TrafficIntent
+    /** Loads the next adjacent block toward the actual newest record, preserving the visible anchor. */
+    data object LoadNewerPage : TrafficIntent
 
     data class Search(val query: String) : TrafficIntent
     data class FilterByType(val type: TrafficTypeFilter) : TrafficIntent

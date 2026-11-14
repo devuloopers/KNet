@@ -69,8 +69,25 @@ public data class TrafficPageQuery(
     public val recordFilter: TrafficRecordFilter = TrafficRecordFilter.ALL,
     /** Source restriction evaluated by storage before pagination and aggregate counts. */
     public val source: TrafficSource = TrafficSource.All,
+    /** Last acknowledged insertion boundary, used only for the new-traffic summary. */
+    public val arrivalsAfter: TrafficArrivalCheckpoint? = null,
+    /** Optional frozen history boundary; arrival counts still include newer matching records. */
+    public val windowThrough: TrafficArrivalCheckpoint? = null,
+    /** Progressive read boundary; only rows known at that snapshot are acknowledged. */
+    public val seenThrough: TrafficSeenCheckpoint? = null,
+    /** Exclusive lower key for ascending adjacent-newer paging; independent of deletions and row ordinals. */
+    public val newerThan: TrafficReadPoint? = null,
+    /** Exclusive upper key for older paging after the bounded UI window drops its old tail. */
+    public val olderThan: TrafficReadPoint? = null,
 ) {
     init {
+        require(newerThan == null || olderThan == null) { "Traffic paging cannot specify both newer and older anchors." }
+        require(olderThan == null || (cursor == null && direction == TrafficSortDirection.NEWEST_FIRST)) {
+            "Adjacent older paging requires newest-first order without a continuation cursor."
+        }
+        require(newerThan == null || (cursor == null && direction == TrafficSortDirection.OLDEST_FIRST)) {
+            "Adjacent newer paging requires oldest-first order without a continuation cursor."
+        }
         require(limit in 1..1_000) { "Traffic page limit must be between 1 and 1000." }
     }
 }
@@ -115,7 +132,10 @@ public data class TrafficPageItem(
     public val captureSequence: TrafficCaptureSequence,
     public val historySequence: TrafficHistorySequence,
     public val exchange: HttpExchangeSnapshot,
-)
+) {
+    /** Stable read/paging position for this canonical exchange. */
+    public val readPoint: TrafficReadPoint get() = TrafficReadPoint(TrafficRecordId.Exchange(exchange.id), exchange.startedAtEpochMillis, captureSequence)
+}
 
 /**
  * One canonical payload-opaque flow with storage-owned ordering metadata.
@@ -128,7 +148,10 @@ public data class OpaqueTrafficPageItem(
     public val captureSequence: TrafficCaptureSequence,
     public val historySequence: TrafficHistorySequence,
     public val flow: OpaqueFlowSnapshot,
-)
+) {
+    /** Stable read/paging position for this canonical opaque transport. */
+    public val readPoint: TrafficReadPoint get() = TrafficReadPoint(TrafficRecordId.Opaque(flow.id), flow.startedAtEpochMillis, captureSequence)
+}
 
 /**
  * One bounded page of canonical exchange snapshots and storage-owned paging metadata.
@@ -145,6 +168,10 @@ public data class TrafficPage(
     public val nextCursor: TrafficPageCursor?,
     public val totalCount: Long,
     public val generation: Long,
+    /** Exact insertions since the acknowledged boundary, independent of the loaded window. */
+    public val arrivals: TrafficArrivals? = null,
+    /** Actual newest matching retained record at this page's insertion snapshot, independent of page direction/window. */
+    public val latest: TrafficReadPoint? = null,
 ) {
     init {
         require(totalCount >= 0L) { "Traffic page total count must not be negative." }

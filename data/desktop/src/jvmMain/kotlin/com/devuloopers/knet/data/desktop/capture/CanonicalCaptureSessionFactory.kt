@@ -23,6 +23,7 @@ import kotlin.uuid.Uuid
  * @property bodyStore Opaque atomic body store shared by writer, query, and maintenance adapters.
  * @property bodyStoreMaintenance Finalized-object inventory and storage-key boundary.
  * @property limits Pre-allocation metadata and byte limits applied to every opened session.
+ * @property deletionReconciler Shared process cleanup serialization used by startup recovery and deferred deletion.
  */
 @OptIn(ExperimentalUuidApi::class)
 class CanonicalCaptureSessionFactory(
@@ -30,6 +31,7 @@ class CanonicalCaptureSessionFactory(
     private val bodyStore: BodyStore,
     private val bodyStoreMaintenance: BodyStoreMaintenance,
     private val limits: CaptureIngressLimits = DEFAULT_LIMITS,
+    private val deletionReconciler: BodyDeletionReconciler = BodyDeletionReconciler(database.canonicalCaptureDao(), bodyStore),
 ) {
     private val startupRecoveryMutex = Mutex()
     private val sessionTimestampMutex = Mutex()
@@ -78,6 +80,7 @@ class CanonicalCaptureSessionFactory(
                 dao = database.canonicalCaptureDao(),
                 bodyStore = bodyStore,
                 bodyStoreMaintenance = bodyStoreMaintenance,
+                deletionReconciler = deletionReconciler,
             ).recover(
                 recoveredAtEpochMillis = recoveredAtEpochMillis,
             )

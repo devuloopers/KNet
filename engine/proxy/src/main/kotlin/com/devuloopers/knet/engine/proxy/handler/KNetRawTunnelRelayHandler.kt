@@ -18,6 +18,7 @@ import io.netty.channel.socket.DuplexChannel
 import io.netty.util.ReferenceCountUtil
 import io.netty.handler.timeout.ReadTimeoutException
 import io.netty.handler.timeout.WriteTimeoutException
+import java.util.concurrent.CopyOnWriteArraySet
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Clock
@@ -26,7 +27,15 @@ import kotlin.time.Clock
 internal class RawTunnelLifecycle(
     private val capture: ProxyOpaqueFlowCapture?,
 ) {
+    private val channels = CopyOnWriteArraySet<Channel>()
     private val terminated = AtomicBoolean(false)
+
+    /** Registers transport ownership so terminal half-closes release both admitted sockets. */
+    fun attach(channel: Channel, peer: Channel) {
+        channels.add(channel)
+        channels.add(peer)
+        if (terminated.get()) { channel.close(); peer.close() }
+    }
     private val closureMonitor = Any()
     private var closure: OpaqueFlowClosure? = null
     private val inputShutdowns = AtomicInteger(0)
@@ -86,7 +95,11 @@ internal class RawTunnelLifecycle(
     fun terminate(outcome: ExchangeTerminalOutcome) {
         synchronized(closureMonitor) {
             if (!terminated.compareAndSet(false, true)) return
-            capture?.terminate(outcome, Clock.System.now().toEpochMilliseconds())
+            try {
+                capture?.terminate(outcome, Clock.System.now().toEpochMilliseconds())
+            } finally {
+                channels.forEach { channel -> channel.close() }
+            }
         }
     }
 }
@@ -112,6 +125,7 @@ internal class KNetRawTunnelRelayHandler(
     override fun handlerAdded(context: ChannelHandlerContext) {
         // ClientHello classification reads automatically until route selection. Every raw relay must
         // take ownership of read admission, including the SNI-classified route, before cumulation is replayed.
+        lifecycle.attach(context.channel(), peer)
         context.channel().config().isAutoRead = false
     }
 

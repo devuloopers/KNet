@@ -62,14 +62,14 @@ fun TrafficScreen(
         remember(
             state.captureState,
             state.engineState,
-            state.autoScroll,
+            state.scrollSettings,
             state.localIpAddress,
             state.isClearingHistory,
         ) {
             TrafficToolbarState(
                 captureState = state.captureState,
                 engineState = state.engineState,
-                autoScroll = state.autoScroll,
+                scrollSettings = state.scrollSettings,
                 localIpAddress = state.localIpAddress,
                 isClearingHistory = state.isClearingHistory,
             )
@@ -80,7 +80,8 @@ fun TrafficScreen(
             onStartCapture = { viewModel.processIntent(TrafficIntent.StartCapture) },
             onPauseCapture = { viewModel.processIntent(TrafficIntent.PauseCapture) },
             onClearFeed = onClearFeed ?: { viewModel.processIntent(TrafficIntent.ClearFeed) },
-            onAutoScrollToggle = { viewModel.processIntent(TrafficIntent.ToggleAutoScroll) }
+            onAutoScrollToggle = { viewModel.processIntent(TrafficIntent.ToggleAutoScroll) },
+            onAutoScrollModeSelected = { viewModel.processIntent(TrafficIntent.SetAutoScrollMode(it)) },
         )
     }
 
@@ -195,11 +196,20 @@ fun TrafficScreen(
                             clipboardManager.setText(AnnotatedString(destination))
                         },
                         activeRules = state.activeBreakpointRules,
-                        canLoadMore = state.nextPageCursor != null && !state.isPageLoading,
+                        canLoadMore = (state.nextPageCursor != null || state.olderPageAnchor != null) && !state.isPageLoading,
                         onLoadMore = { viewModel.processIntent(TrafficIntent.LoadNextPage) },
                         throughputIndicator = throughputIndicator,
                         viewportKey = state.source.preferenceKey,
                         initialViewport = state.viewport,
+                        reading = state.reading,
+                        readingEpoch = state.readingEpoch,
+                        canLoadNewer = state.hasNewerTraffic && !state.isPageLoading && !state.newerPageBlocked,
+                        scrollActions = com.devuloopers.knet.ui.desktop.traffic.table.TrafficTableScrollActions(
+                            onUserViewportChanged = { viewModel.retainViewport(state.source, it, userScrolled = true) },
+                            onJumpToLatest = { viewModel.processIntent(TrafficIntent.JumpToLatest) },
+                            onVisibleRowsChanged = { viewModel.observeVisibleRows(state.source, state.readingEpoch, it) },
+                            onLoadNewer = { viewModel.processIntent(TrafficIntent.LoadNewerPage) },
+                        ),
                         onRetainViewport = { viewModel.retainViewport(state.source, it) },
                         modifier = paneModifier
                     )

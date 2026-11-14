@@ -21,6 +21,8 @@ import com.devuloopers.knet.application.usecase.traffic.ResumeTrafficCaptureUseC
 import com.devuloopers.knet.data.desktop.traffic.repository.DesktopTrafficMaintenanceAdapter
 import com.devuloopers.knet.data.desktop.traffic.repository.DesktopTrafficQueryAdapter
 import com.devuloopers.knet.storage.database.KNetDatabase
+import com.devuloopers.knet.data.desktop.capture.BodyDeletionReconciler
+import com.devuloopers.knet.data.desktop.capture.BodyDeletionWorker
 import com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficViewModel
 import com.devuloopers.knet.ui.desktop.traffic.viewmodel.TrafficProtectionViewModel
 import org.koin.core.module.Module
@@ -31,12 +33,9 @@ import org.koin.dsl.module
 internal val trafficBindings: Module = module {
     factory { com.devuloopers.knet.application.usecase.traffic.ResolveCapturedTrafficSourceUseCase(get()) }
     viewModel { TrafficProtectionViewModel(get(), get(), get()) }
-    single {
-        DesktopTrafficMaintenanceAdapter(
-            database = get(),
-            canonicalBodyStore = get(),
-        )
-    }
+    single { BodyDeletionReconciler(get<KNetDatabase>().canonicalCaptureDao(), get()) }
+    single { BodyDeletionWorker(get()) }
+    single { DesktopTrafficMaintenanceAdapter(database = get()) }
     single<TrafficMaintenance> { get<DesktopTrafficMaintenanceAdapter>() }
     single {
         DesktopTrafficQueryAdapter(

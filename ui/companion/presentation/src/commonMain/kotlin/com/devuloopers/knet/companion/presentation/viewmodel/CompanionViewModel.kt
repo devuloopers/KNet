@@ -59,7 +59,7 @@ public class CompanionViewModel(
             certificateEnrollment = dependencies.observeRegistrations.activeRegistration.value?.let { registration ->
                 dependencies.observeCertificateEnrollments.enrollments.value.firstOrNull { it.matches(registration) }
             },
-            connection = dependencies.observeConnection.state.value,
+            connection = dependencies.observeConnection.currentState,
             inspection = dependencies.observeInspection.state.value,
             network = dependencies.observeNetwork.state.value,
             discovery = dependencies.observeDiscovery.state.value,

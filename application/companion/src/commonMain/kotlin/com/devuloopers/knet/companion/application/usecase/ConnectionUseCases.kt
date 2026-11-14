@@ -13,6 +13,13 @@ import com.devuloopers.knet.companion.model.CompanionFailureCode
 import com.devuloopers.knet.companion.model.CompanionNetworkState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
+import com.devuloopers.knet.companion.application.contract.CompanionInspectionController
+import com.devuloopers.knet.companion.application.contract.CompanionSessionObservation
+import com.devuloopers.knet.companion.application.contract.CompanionSessionPhase
+import com.devuloopers.knet.companion.model.CompanionInspectionState
 
 /** Connects the authenticated transport using a credential read only at the adapter boundary. */
 public class ConnectCompanionUseCase(
@@ -118,9 +125,30 @@ public class DisconnectCompanionUseCase(
 
 /** Provides connection state without exposing a concrete carrier. */
 public class ObserveCompanionConnectionUseCase(
-    transport: CompanionTransport,
+    private val transport: CompanionTransport,
+    private val session: StateFlow<CompanionSessionObservation?>,
+    private val inspection: CompanionInspectionController,
 ) {
-    public val state: StateFlow<CompanionConnectionState> = transport.state
+    /** Synchronous initial projection; collecting [state] owns no additional background scope. */
+    public val currentState: CompanionConnectionState
+        get() = project(transport.state.value, session.value, inspection.state.value)
+
+    /** Control health overrides the initial proxy-readiness probe only while its matching VPN is running. */
+    public val state: Flow<CompanionConnectionState> = combine(transport.state, session, inspection.state, ::project)
+        .distinctUntilChanged()
+
+    private fun project(carrier: CompanionConnectionState, observation: CompanionSessionObservation?,
+        capture: CompanionInspectionState): CompanionConnectionState {
+        if (capture !is CompanionInspectionState.Running || carrier !is CompanionConnectionState.Connected ||
+            observation?.desktopId != carrier.desktopId) return carrier
+        return when (observation.phase) {
+            CompanionSessionPhase.CONNECTED -> carrier
+            CompanionSessionPhase.CONNECTING, CompanionSessionPhase.RECONNECTING ->
+                CompanionConnectionState.Reconnecting(carrier.desktopId, attempt = 1)
+            CompanionSessionPhase.REJECTED -> CompanionConnectionState.Failed(CompanionFailure(
+                CompanionFailureCode.PAIRING_REJECTED, "The desktop no longer accepts this VPN session. Reconnect after checking pairing.", false))
+        }
+    }
 }
 
 /** Provides platform network state without exposing ConnectivityManager or Network.framework. */

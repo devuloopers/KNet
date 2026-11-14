@@ -67,6 +67,8 @@ public object CompanionSessionProtocol {
     public const val POLICY_LEASE_MILLIS: Long = 5000L
     /** VPN lifecycle application heartbeat; transport ping/pong cannot replace it. */
     public const val HEARTBEAT_MILLIS: Long = 15_000L
+    /** A healthy desktop sends policy renewals every two seconds, including when shaping is unsupported. */
+    public const val RECEIVE_TIMEOUT_MILLIS: Long = 10_000L
 
     private val json: Json = Json { encodeDefaults = true; ignoreUnknownKeys = false; isLenient = false }
 

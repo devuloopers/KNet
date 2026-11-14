@@ -35,6 +35,21 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class CompanionHomeUiStateTest {
+    @Test fun enabledVpnShowsReconnectingUntilDesktopControlReturns() {
+        val state = CompanionUiState(activeRegistration = registration(),
+            connection = CompanionConnectionState.Reconnecting(DESKTOP_ID, 1),
+            inspection = CompanionInspectionState.Running(CompanionInspectionMode.DEVICE_VPN, 2_000L, true))
+        val home = state.toCompanionHomeUiState()
+        assertEquals(CompanionHomeTunnelStatus.RECONNECTING, home.tunnelStatus)
+        assertEquals(CompanionHomeDesktopStatus.UNAVAILABLE, home.desktopStatus)
+        assertEquals(CompanionHomeInspectionControl.Stop, home.inspectionControl)
+        val native = state.copy(connection = CompanionConnectionState.Connected(DESKTOP_ID, CompanionTransportKind.DIRECT_LAN, 2_000L),
+            inspection = CompanionInspectionState.Running(CompanionInspectionMode.DEVICE_VPN, 2_000L, true, reconnecting = true))
+        assertEquals(CompanionHomeTunnelStatus.RECONNECTING, native.toCompanionHomeUiState().tunnelStatus)
+        assertEquals(CompanionHomeTunnelStatus.ACTIVE, native.copy(inspection = CompanionInspectionState.Running(
+            CompanionInspectionMode.DEVICE_VPN, 2_000L, true)).toCompanionHomeUiState().tunnelStatus)
+    }
+
     @Test
     fun restoredHomeShowsCheckingWhileLiveTrustVerificationIsPending() {
         val home = CompanionUiState(

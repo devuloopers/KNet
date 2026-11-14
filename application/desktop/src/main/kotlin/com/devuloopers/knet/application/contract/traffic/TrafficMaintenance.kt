@@ -97,10 +97,10 @@ public interface CaptureSessionControl {
 
 /** Application boundary for deleting terminal traffic metadata and owned body objects. */
 public interface TrafficMaintenance {
-    /** Clears terminal canonical sessions while preserving any active session. */
+    /** Commits terminal metadata removal and durable body-cleanup work while preserving active capture. */
     public suspend fun clearTerminalTraffic()
 
-    /** Removes only one source's terminal history after the active capture writer has been rotated/drained. */
+    /** Removes one source's terminal metadata after capture rotation/drain; file cleanup may finish asynchronously. */
     public suspend fun clearSourceTraffic(source: TrafficSource) {
         require(source == TrafficSource.All) { "This maintenance adapter does not implement source-scoped clearing." }
         clearTerminalTraffic()

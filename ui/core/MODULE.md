@@ -8,6 +8,8 @@ components. Production code targets JVM desktop, Android, iOS ARM64, and iOS Sim
 ## Owns
 
 - Design tokens, palettes, typography, responsive layout primitives, and generic UI components.
+- Theme-governed inline control reveal/exit motion and opt-in dropdown label crossfades that retain the same
+  keyboard/popup owner, preserve single-value accessibility semantics, and respect reduced motion.
 - A shared manager-screen layout and header with matching page insets, title/subtitle typography, stable
   heading baselines and minimum height. Measured controls move below the title and flow within narrow viewports;
   feature modules supply action behavior without owning header resize rules.

@@ -174,3 +174,14 @@ internal object Migration36To37 : Migration(36, 37) {
         connection.execSQL("CREATE INDEX IF NOT EXISTS index_connection_source_identity ON traffic_connections (ingressKind, clientIdentity, id)")
     }
 }
+
+/** Adds reference lookups and a durable, indexed cleanup retry deadline without rewriting capture data. */
+internal object Migration37To38 : Migration(37, 38) {
+    override fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("CREATE INDEX IF NOT EXISTS index_exchange_request_body ON traffic_exchanges(requestBodyId)")
+        connection.execSQL("CREATE INDEX IF NOT EXISTS index_exchange_response_body ON traffic_exchanges(responseBodyId)")
+        connection.execSQL("CREATE INDEX IF NOT EXISTS index_duplex_body ON duplex_messages(bodyId)")
+        connection.execSQL("ALTER TABLE deletion_outbox ADD COLUMN nextAttemptAtEpochMillis INTEGER NOT NULL DEFAULT 0")
+        connection.execSQL("CREATE INDEX IF NOT EXISTS index_deletion_due_id ON deletion_outbox(nextAttemptAtEpochMillis, id)")
+    }
+}

@@ -4,6 +4,7 @@ import com.devuloopers.knet.companion.model.CompanionCertificateState
 import com.devuloopers.knet.companion.model.CompanionConnectionState
 import com.devuloopers.knet.companion.model.CompanionDesktopAvailability
 import com.devuloopers.knet.companion.model.CompanionFailure
+import com.devuloopers.knet.companion.model.CompanionFailureCode
 import com.devuloopers.knet.companion.model.CompanionInspectionMode
 import com.devuloopers.knet.companion.model.CompanionInspectionState
 import com.devuloopers.knet.companion.model.CompanionNetworkState
@@ -129,7 +130,16 @@ public fun CompanionUiState.toCompanionHomeUiState(): CompanionHomeUiState {
         }
         desktopId == activeRegistration?.desktopId
     } ?: CompanionDesktopAvailability.Idle
+    val reconnecting = connection is CompanionConnectionState.Reconnecting ||
+        (inspection as? CompanionInspectionState.Running)?.reconnecting == true
     val desktopStatus = when {
+        reconnecting -> CompanionHomeDesktopStatus.UNAVAILABLE
+        connection is CompanionConnectionState.Failed -> when (connection.failure.code) {
+            CompanionFailureCode.PAIRING_REJECTED, CompanionFailureCode.CREDENTIAL_NOT_FOUND,
+            CompanionFailureCode.CREDENTIAL_EXPIRED, CompanionFailureCode.TRANSPORT_IDENTITY_MISMATCH,
+            CompanionFailureCode.DESKTOP_IDENTITY_CONFLICT -> CompanionHomeDesktopStatus.SECURITY_FAILURE
+            else -> CompanionHomeDesktopStatus.UNAVAILABLE
+        }
         inspection is CompanionInspectionState.Running || connection is CompanionConnectionState.Connected ->
             CompanionHomeDesktopStatus.AVAILABLE
         availability is CompanionDesktopAvailability.Available -> CompanionHomeDesktopStatus.AVAILABLE
@@ -138,6 +148,8 @@ public fun CompanionUiState.toCompanionHomeUiState(): CompanionHomeUiState {
         else -> CompanionHomeDesktopStatus.CHECKING
     }
     val tunnelStatus = when {
+        reconnecting -> CompanionHomeTunnelStatus.RECONNECTING
+        connection is CompanionConnectionState.Failed -> CompanionHomeTunnelStatus.FAILED
         inspection is CompanionInspectionState.Running -> CompanionHomeTunnelStatus.ACTIVE
         connection is CompanionConnectionState.Connecting -> CompanionHomeTunnelStatus.CONNECTING
         connection is CompanionConnectionState.Connected -> CompanionHomeTunnelStatus.ACTIVE

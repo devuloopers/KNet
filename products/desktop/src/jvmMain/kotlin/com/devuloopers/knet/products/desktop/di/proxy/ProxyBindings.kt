@@ -93,6 +93,7 @@ internal val proxyBindings: Module = module {
     single {
         CanonicalCaptureSessionFactory(
             database = get(),
+            deletionReconciler = get(),
             bodyStore = get(),
             bodyStoreMaintenance = get(),
         )

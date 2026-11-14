@@ -65,6 +65,14 @@ uses that name for upstream TLS while retaining the CONNECT IP for the upstream 
 HTTP/2 authority metadata remains visible to capture and breakpoint matching. Missing SNI falls back to the
 validated CONNECT host, malformed SNI fails only that child connection, and HTTP/2 pooling keys include both TLS
 identity and resolved route so a parent cannot be reused for a different transparent destination IP.
+An inspected CONNECT can also carry the Companion's cleartext HTTP/2 prior-knowledge stream. A bounded
+24-byte preface selector preserves fragmented and coalesced bytes before installing either H2 or the existing
+ClientHello pipeline; the unused TLS timer is never armed. H2 children retain CONNECT destination and verified
+source attribution and require prior-knowledge H2 on the origin leg. Upstream pooling distinguishes cleartext
+from TLS at the same authority/address/port, retains the correct scheme and records zero TLS time for H2C.
+Native gRPC therefore keeps its streaming messages, status and trailers instead of entering TLS or HTTP/1.
+See `docs/companion_h2c_forwarding.md` for authenticated end-to-end and physical-device evidence.
+
 HTTP/2 streams reuse the canonical HTTP object/capture/breakpoint boundary after Netty's frame codec maps
 pseudo-headers, DATA, and trailers. Each child has its own forwarding state, body queue, capture handle, timeout,
 and breakpoint gate; no multiplexed connection shares an HTTP/1 response deque. TLS origins prefer pooled HTTP/2
@@ -117,3 +125,12 @@ see `docs/opaque_flow_closure_attribution.md` for signal ownership and qualifica
 ## Multi-device workspace and control sessions (2026-11-13)
 
 A duplex admission-boundary handler counts inbound bytes and only successful downstream writes, without retaining buffers. All protocol decoders and opaque tunnels inherit the same verified source. Control endpoint traffic bypasses this pipeline.
+
+## EOF and final delivery ownership
+
+HTTP/1 EOF drains complete requests and releases idle connections. `HttpTwoInputDrainHandler` owns selected
+HTTP/2 parent EOF, preserving complete stream responses while retiring incomplete requests and admission.
+Upgraded relays fence accepted transforms/writes and directional TCP/TLS shutdown before terminal capture;
+protected raw tunnels release both sockets after their shared drain decision. The authenticated carrier keeps
+its reverse copy alive for legitimate half-closed responses. See
+[`connection_lifecycle_qualification.md`](../../docs/connection_lifecycle_qualification.md) for regressions and evidence.
