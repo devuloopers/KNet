@@ -1,5 +1,45 @@
 # KNet Implementation Plan
 
+## Automatic website delivery through Coolify (2026-11-15) [COMPLETED]
+
+Adapt Giot's verified-release delivery pattern: website pushes/manual runs on `master` build and
+verify a production candidate, publish its immutable image, recheck the current branch head before
+promotion and the authenticated Coolify request, and validate the queued resource response. Keep
+PR verification isolated, credentials in `website-production`, and add redacted webhook/guard tests.
+
+The workflow and standard-library helpers are implemented. All 30 deployment-tool tests passed,
+including a real synthetic loopback POST, redacted failure/redirect/bounded-response cases and
+current/superseded release guards. actionlint passed. Use repository variable `KNET_SITE_ORIGIN`
+and `website-production` environment secrets `COOLIFY_WEBHOOK`/`COOLIFY_TOKEN`; see
+[`website.md`](website.md#exact-github-configuration). Registry publication and a real Coolify request
+remain unexecuted until the changes are pushed and the destination is configured.
+
+## Website Releases destination (2026-11-15) [COMPLETED]
+
+Use the user-supplied `https://github.com/devuloopers/KNet/releases` URL for both download actions
+and the footer Releases link. Remove the desktop filter from public configuration, container
+verification and website documentation. The production build and all three existing navigation
+cases passed in Chromium, Firefox and WebKit using this exact destination.
+
+## Public React/Vite website (2026-11-15) [COMPLETED]
+
+Implement the selected minimal dark homepage in an independent `products/website` npm product using
+React, strict TypeScript and Vite. Reuse KNet branding, show one real product screenshot and three
+short feature labels, and route downloads exclusively to GitHub Releases. Follow Aajubaju's static
+Node-build/non-root-Nginx container and GitHub Actions/GHCR/Coolify delivery pattern without its
+Kotlin/JS or authenticated backend runtime. Cover responsive/accessible behavior, static metadata,
+asset budgets, browser checks and packaged hosting; keep domain configuration and live deployment
+explicit. The detailed [website implementation plan](website_implementation_plan.md) records seven
+phases, acceptance criteria and the agreed scope. Implementation and local qualification are complete;
+public-domain configuration and actual registry/Coolify delivery remain pending.
+
+The page is rendered with React at build time and ships no production JavaScript. Local verification
+covers 20 metadata/unit cases, 39 Chromium/Firefox/WebKit cases, real headless Compose artwork and a
+read-only/non-root Nginx container including browser/CSP checks. Lighthouse's local mobile audit scored
+100 in performance, accessibility, best practices and SEO, with zero layout shift. The measured payload
+is 1,650 gzip bytes of CSS and a 55,798-byte default WebP image. See
+[`website_qualification.md`](website_qualification.md) for evidence and live-delivery boundaries.
+
 ## Companion capture-readiness bottom sheet (2026-11-15) [COMPLETED]
 
 Replace the centered capture notice with the Companion's themed modal bottom-sheet presentation.

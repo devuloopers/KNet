@@ -1,0 +1,10 @@
+dist
+.prerender
+.generated
+public
+node_modules
+test-results
+playwright-report
+package-lock.json
+artwork
+.env*

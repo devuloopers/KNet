@@ -1,0 +1,18 @@
+/* Mirrors :ui:core/foundation/color/Colors.kt; browser dimensions are owned by this web product. */
+:root {
+  color-scheme: dark;
+  --background: #0b1016;
+  --surface: #111827;
+  --border: #1f2937;
+  --text: #e5e7eb;
+  --secondary: #9ca3af;
+  --accent: #3b82f6;
+  --link: #73adff;
+  --button: #2563eb;
+  --button-hover: #1d4ed8;
+  --content-width: 1200px;
+  --gutter: clamp(20px, 4vw, 56px);
+  --radius: 8px;
+  --font:
+    -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+}

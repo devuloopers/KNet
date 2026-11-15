@@ -1,0 +1,201 @@
+name: KNet website
+
+on:
+  pull_request:
+    paths:
+      - 'products/website/**'
+      - 'desktopBrand/**'
+      - 'tools/deployment/**'
+      - '.dockerignore'
+      - '.github/workflows/website-deployment.yml'
+  push:
+    branches: [master]
+    paths:
+      - 'products/website/**'
+      - 'desktopBrand/**'
+      - 'tools/deployment/**'
+      - '.dockerignore'
+      - '.github/workflows/website-deployment.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+# Keep publication, promotion and its webhook serialized. PRs use independent verification groups.
+concurrency:
+  group: ${{ github.event_name == 'pull_request' && format('website-pr-{0}', github.event.pull_request.number) || 'website-release' }}
+  cancel-in-progress: false
+
+env:
+  KNET_SITE_ENV: ${{ github.event_name == 'pull_request' && 'preview' || 'production' }}
+  KNET_SITE_ORIGIN: ${{ vars.KNET_SITE_ORIGIN }}
+  KNET_WEBSITE_IMAGE: knet-website:verification
+
+jobs:
+  verify:
+    name: Verify and package website
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          persist-credentials: false
+      - name: Verify deployment request and release guards
+        run: python3 -m unittest discover -s tools/deployment -p 'test_*.py'
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: products/website/package-lock.json
+      - name: Install locked dependencies
+        working-directory: products/website
+        run: npm ci
+      - name: Build and check web product
+        working-directory: products/website
+        run: |
+          npm run build
+          npm run lint
+          npm run typecheck
+          npm run test
+          npm audit --audit-level=moderate
+      - name: Install browser engines
+        working-directory: products/website
+        run: npx playwright install --with-deps chromium firefox webkit
+      - name: Verify real browser behavior
+        working-directory: products/website
+        run: npm run test:e2e
+      - name: Verify production-shaped container
+        working-directory: products/website
+        run: npm run test:container
+      - name: Save the verified image
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+        run: docker save "$KNET_WEBSITE_IMAGE" | gzip > "$RUNNER_TEMP/knet-website-image.tar.gz"
+      - name: Retain verified image for publication without rebuilding
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/master'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: verified-website-image
+          path: ${{ runner.temp }}/knet-website-image.tar.gz
+          retention-days: 2
+      - name: Retain browser and asset evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: website-qualification
+          path: |
+            products/website/playwright-report/
+            products/website/test-results/
+            products/website/dist/asset-budget.json
+
+  publish:
+    name: Publish and promote verified website
+    needs: verify
+    if: >-
+      github.ref == 'refs/heads/master' &&
+      (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+    outputs:
+      promoted: ${{ steps.promote.outputs.promoted }}
+      source-sha: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Reject superseded publication
+        id: current
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/deployment/release_guard.py >> "$GITHUB_OUTPUT"
+      - name: Select immutable image identity
+        if: steps.current.outputs.current == 'true'
+        id: metadata
+        env:
+          IMAGE_OWNER: ${{ github.repository_owner }}
+        run: |
+          echo "image=ghcr.io/${IMAGE_OWNER,,}/knet-website" >> "$GITHUB_OUTPUT"
+          echo "tag=sha-${GITHUB_SHA}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" >> "$GITHUB_OUTPUT"
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        if: steps.current.outputs.current == 'true'
+        with:
+          name: verified-website-image
+          path: image
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069
+        if: steps.current.outputs.current == 'true'
+      - uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6
+        if: steps.current.outputs.current == 'true'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish exact checked candidate without rebuilding
+        if: steps.current.outputs.current == 'true'
+        env:
+          IMAGE: ${{ steps.metadata.outputs.image }}
+          TAG: ${{ steps.metadata.outputs.tag }}
+        run: |
+          docker load --input image/knet-website-image.tar.gz
+          docker tag "$KNET_WEBSITE_IMAGE" "$IMAGE:$TAG"
+          docker push "$IMAGE:$TAG"
+      - name: Recheck current source before production promotion
+        if: steps.current.outputs.current == 'true'
+        id: promotion-current
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/deployment/release_guard.py >> "$GITHUB_OUTPUT"
+      - name: Promote the verified current image
+        if: steps.promotion-current.outputs.current == 'true'
+        id: promote
+        env:
+          IMAGE: ${{ steps.metadata.outputs.image }}
+          TAG: ${{ steps.metadata.outputs.tag }}
+        run: |
+          website_digest="$(docker buildx imagetools inspect "$IMAGE:$TAG" --format '{{.Manifest.Digest}}')"
+          if [[ ! "$website_digest" =~ ^sha256:[a-f0-9]{64}$ ]]; then
+            echo 'The candidate digest is invalid; no production promotion requested.' >&2
+            exit 1
+          fi
+          docker buildx imagetools create --tag "$IMAGE:production" "$IMAGE@$website_digest"
+          echo 'promoted=true' >> "$GITHUB_OUTPUT"
+          {
+            echo '### Published KNet website'
+            echo "- Source: \`$GITHUB_SHA\`"
+            echo "- Candidate: \`$IMAGE:$TAG\`"
+            echo "- Immutable image: \`$IMAGE@$website_digest\`"
+            echo "- Coolify tracking tag: \`$IMAGE:production\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Deploy website through Coolify
+    needs: publish
+    if: needs.publish.outputs.promoted == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    environment: website-production
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ needs.publish.outputs.source-sha }}
+          persist-credentials: false
+      - name: Reject superseded deployment
+        id: current
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 tools/deployment/release_guard.py >> "$GITHUB_OUTPUT"
+      - name: Request one authenticated website deployment
+        if: steps.current.outputs.current == 'true'
+        env:
+          COOLIFY_WEBHOOK: ${{ secrets.COOLIFY_WEBHOOK }}
+          COOLIFY_TOKEN: ${{ secrets.COOLIFY_TOKEN }}
+        run: python3 tools/deployment/coolify.py | tee -a "$GITHUB_STEP_SUMMARY"

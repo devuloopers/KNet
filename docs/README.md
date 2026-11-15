@@ -49,6 +49,13 @@ shared themed menu and native/SSE copies are documented in [`api_studio_copy.md`
 Traffic reading controls and arrival-count behavior are documented in
 [`traffic_auto_scroll.md`](traffic_auto_scroll.md).
 
+## Public website
+
+The independent React/Vite landing page, GitHub-only download links, branding/artwork provenance,
+local commands and static Docker/Coolify delivery are documented in [`website.md`](website.md).
+Executed browser/container evidence and remaining public-domain setup are tracked in
+[`website_qualification.md`](website_qualification.md).
+
 ## Companion status
 
 Android and iOS implementations now exist for pairing, protected state, discovery, certificate setup/readiness,
@@ -74,6 +81,8 @@ inside them are not current capability claims:
 - [`deep_architecture_scalability_engineering_audit.md`](deep_architecture_scalability_engineering_audit.md)
 - [`target_architecture_and_implementation_plan.md`](target_architecture_and_implementation_plan.md)
 - [`implementation_plan.md`](implementation_plan.md)
+- [`website_implementation_plan.md`](website_implementation_plan.md) — implemented minimal React/Vite
+  website and local qualification; public-domain configuration and actual deployment remain pending.
 - [`traffic_api_studio_export_plan.md`](traffic_api_studio_export_plan.md) — completed export-only workflow
   for Traffic and API Studio, response gating, portable archives/HAR and qualification matrix.
 - [`device_policy_libraries_implementation_plan.md`](device_policy_libraries_implementation_plan.md) — implemented

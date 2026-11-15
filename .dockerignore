@@ -1,0 +1,22 @@
+# The website build context includes only public website and brand sources.
+**
+!products/
+!products/website/
+!products/website/**
+!desktopBrand/
+!desktopBrand/svg/
+!desktopBrand/svg/**
+!desktopBrand/kit/
+!desktopBrand/kit/icon-180.png
+!desktopBrand/kit/og-image.png
+!desktopBrand/kit/icon-512.png
+!desktopBrand/kit/icon-192.png
+products/website/node_modules/
+products/website/dist/
+products/website/.generated/
+products/website/.prerender/
+products/website/public/
+products/website/test-results/
+products/website/playwright-report/
+products/website/.env*
+products/website/*.tsbuildinfo

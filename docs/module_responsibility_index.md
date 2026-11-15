@@ -15,6 +15,10 @@ Gradle enforces four rules through `verifyArchitectureFoundation`:
 
 ## Grouping projects
 
+The independent npm [`products/website`](../products/website/MODULE.md) product owns the public
+React/Vite landing page and static hosting. It is outside the Gradle dependency graph; its optional
+headless artwork fixture consumes existing UI only during explicit regeneration.
+
 - [`:products`](../products/MODULE.md) — executable product composition roots.
 - [`:connectivity`](../connectivity/MODULE.md) — platform connectivity implementations.
 - [`:core`](../core/MODULE.md) — stable contracts and low-level utilities.
